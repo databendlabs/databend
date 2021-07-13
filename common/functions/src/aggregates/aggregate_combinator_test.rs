@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use bumpalo::Bump;
 use common_datavalues::prelude::*;
 use common_datavalues::DFBooleanArray;
 use common_datavalues::DFInt64Array;
@@ -101,29 +102,26 @@ fn test_aggregate_combinator_function() -> Result<()> {
     for t in tests {
         let rows = t.columns[0].len();
 
+        let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
-            let mut func1 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            func1.accumulate(&t.columns, rows)?;
-            let state1 = func1.accumulate_result()?;
+            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let place1 = func.allocate_state(&arena);
+            func.accumulate(place1, &t.columns, rows)?;
 
             // Second.
-            let mut func2 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            func2.accumulate(&t.columns, rows)?;
-            let state2 = func2.accumulate_result()?;
+            let place2 = func.allocate_state(&arena);
+            func.accumulate(place2, &t.columns, rows)?;
 
-            let mut final_func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            final_func.merge(&*state1)?;
-            final_func.merge(&*state2)?;
-
-            let result = final_func.merge_result()?;
+            func.merge(place1, place2)?;
+            let result = func.merge_result(place1)?;
             assert_eq!(
                 format!("{:?}", t.expect),
                 format!("{:?}", result),
                 "{}",
                 t.name
             );
-            assert_eq!(t.display, format!("{:}", final_func), "{}", t.name);
+            assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())
         };
 
@@ -225,29 +223,26 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
     for t in tests {
         let rows = t.columns[0].len();
 
+        let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
-            let mut func1 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            func1.accumulate(&t.columns, rows)?;
-            let state1 = func1.accumulate_result()?;
+            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let place1 = func.allocate_state(&arena);
+            func.accumulate(place1, &t.columns, rows)?;
 
             // Second.
-            let mut func2 = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            func2.accumulate(&t.columns, rows)?;
-            let state2 = func2.accumulate_result()?;
+            let place2 = func.allocate_state(&arena);
+            func.accumulate(place2, &t.columns, rows)?;
+            func.merge(place1, place2)?;
 
-            let mut final_func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            final_func.merge(&*state1)?;
-            final_func.merge(&*state2)?;
-
-            let result = final_func.merge_result()?;
+            let result = func.merge_result(place1)?;
             assert_eq!(
                 format!("{:?}", t.expect),
                 format!("{:?}", result),
                 "{}",
                 t.name
             );
-            assert_eq!(t.display, format!("{:}", final_func), "{}", t.name);
+            assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())
         };
 

@@ -10,18 +10,17 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::FactoryFunc;
 use crate::aggregates::AggregateFunction;
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-struct DataGroupValues(Vec<DataGroupValue>);
+use crate::aggregates::AggregateFunctionRef;
 
 #[derive(Clone)]
 pub struct AggregateIfCombinator {
     name: String,
     argument_len: usize,
     nested_name: String,
-    nested: Box<dyn AggregateFunction>,
+    nested: AggregateFunctionRef,
 }
 
 impl AggregateIfCombinator {
@@ -29,7 +28,7 @@ impl AggregateIfCombinator {
         nested_name: &str,
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
-    ) -> Result<Box<dyn AggregateFunction>> {
+    ) -> Result<AggregateFunctionRef> {
         let name = format!("IfCombinator({})", nested_name);
         let argument_len = arguments.len();
 
@@ -53,7 +52,7 @@ impl AggregateIfCombinator {
         let nested_arguments = &arguments[0..argument_len - 1];
         let nested = nested_creator(nested_name, nested_arguments.to_vec())?;
 
-        Ok(Box::new(AggregateIfCombinator {
+        Ok(Arc::new(AggregateIfCombinator {
             name,
             argument_len,
             nested_name: nested_name.to_owned(),
@@ -79,7 +78,16 @@ impl AggregateFunction for AggregateIfCombinator {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
+    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
+        self.nested.allocate_state(arena)
+    }
+
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[DataColumn],
+        _input_rows: usize,
+    ) -> Result<()> {
         if columns.is_empty() {
             return Ok(());
         };
@@ -125,20 +133,29 @@ impl AggregateFunction for AggregateIfCombinator {
                 column_array[0].len()
             }
         };
-        self.nested.accumulate(column_array.as_slice(), row_size)?;
+        self.nested
+            .accumulate(place, column_array.as_slice(), row_size)?;
         Ok(())
     }
 
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        self.nested.accumulate_result()
+    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
+        self.nested.accumulate_row(place, row, columns)
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        self.nested.merge(states)
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+        self.nested.serialize(place, writer)
     }
 
-    fn merge_result(&self) -> Result<DataValue> {
-        self.nested.merge_result()
+    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+        self.nested.deserialize(place, reader)
+    }
+
+    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        self.nested.merge(place, rhs)
+    }
+
+    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+        self.nested.merge_result(place)
     }
 }
 

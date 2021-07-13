@@ -4,7 +4,7 @@
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeListArray;
+use common_arrow::arrow::array::ListArray;
 use common_arrow::arrow::array::StringArray;
 
 use crate::prelude::DataArray;
@@ -176,14 +176,14 @@ impl<'a> IntoIterator for &'a DFListArray {
 }
 
 pub struct ListIterNoNull<'a> {
-    array: &'a LargeListArray,
+    array: &'a ListArray,
     current: usize,
     current_end: usize,
 }
 
 impl<'a> ListIterNoNull<'a> {
     /// create a new iterator
-    pub fn new(array: &'a LargeListArray) -> Self {
+    pub fn new(array: &'a ListArray) -> Self {
         ListIterNoNull {
             array,
             current: 0,

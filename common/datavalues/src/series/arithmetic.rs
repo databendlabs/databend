@@ -76,7 +76,7 @@ impl Rem for &Series {
         )?;
 
         let (lhs, rhs) = coerce_lhs_rhs_no_op(self, rhs)?;
-        let result = lhs.remainder(&rhs)?;
+        let result = lhs.remainder(&rhs, &dtype)?;
 
         // then cast back to the lowest types
         if result.data_type() != dtype {
@@ -122,7 +122,8 @@ pub trait NumOpsDispatch: Debug {
             self, rhs
         )))
     }
-    fn remainder(&self, rhs: &Series) -> Result<Series> {
+
+    fn remainder(&self, rhs: &Series, _dtype: &DataType) -> Result<Series> {
         Err(ErrorCode::BadDataValueType(format!(
             "remainder operation not supported for {:?} and {:?}",
             self, rhs
@@ -140,13 +141,16 @@ pub trait NumOpsDispatch: Debug {
 impl<T> NumOpsDispatch for DataArray<T>
 where
     T: DFNumericType,
+
     T::Native: ops::Add<Output = T::Native>
         + ops::Sub<Output = T::Native>
         + ops::Mul<Output = T::Native>
         + ops::Div<Output = T::Native>
         + ops::Rem<Output = T::Native>
         + num::Zero
-        + num::One,
+        + num::One
+        + num::ToPrimitive
+        + num::NumCast,
     DataArray<T>: IntoSeries,
 {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
@@ -169,10 +173,9 @@ where
         let out = (self / rhs)?;
         Ok(out.into_series())
     }
-    fn remainder(&self, rhs: &Series) -> Result<Series> {
+    fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
-        let out = (self % rhs)?;
-        Ok(out.into_series())
+        self.rem(rhs, dtype)
     }
 
     fn negative(&self) -> Result<Series> {

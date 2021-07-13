@@ -26,6 +26,7 @@ use sqlparser::tokenizer::Whitespace;
 
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
+use crate::sql::DfDescribeTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
@@ -128,6 +129,14 @@ impl<'a> DfParser<'a> {
                     Keyword::CREATE => {
                         self.parser.next_token();
                         self.parse_create()
+                    }
+                    Keyword::DESC => {
+                        self.parser.next_token();
+                        self.parse_describe()
+                    }
+                    Keyword::DESCRIBE => {
+                        self.parser.next_token();
+                        self.parse_describe()
                     }
                     Keyword::DROP => {
                         self.parser.next_token();
@@ -319,6 +328,12 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::CreateDatabase(create))
+    }
+
+    fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
+        let table_name = self.parser.parse_object_name()?;
+        let desc = DfDescribeTable { name: table_name };
+        Ok(DfStatement::DescribeTable(desc))
     }
 
     /// Drop database/table.
