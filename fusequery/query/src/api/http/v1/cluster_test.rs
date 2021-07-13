@@ -2,15 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_management::cluster::ClusterClient;
 use common_runtime::tokio;
+
+use crate::api::http::v1::cluster::*;
+use crate::configs::Config;
 
 #[tokio::test]
 async fn test_cluser() -> common_exception::Result<()> {
-    use common_management::cluster::ClusterClient;
-
-    use crate::api::http::v1::cluster::*;
-    use crate::configs::Config;
-
     let conf = Config::default();
     let cluster_client = ClusterClient::create(conf.clone().cluster_meta_server_uri);
     let filter = cluster_handler(conf, cluster_client);

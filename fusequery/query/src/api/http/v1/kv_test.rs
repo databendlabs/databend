@@ -4,12 +4,12 @@
 
 use common_runtime::tokio;
 
+use crate::api::http::v1::kv::kv_handler;
+use crate::api::http::v1::kv::KvRequest;
+use crate::api::http::v1::kv::KvStore;
+
 #[tokio::test]
 async fn test_kvs() -> common_exception::Result<()> {
-    use crate::api::http::v1::kv::kv_handler;
-    use crate::api::http::v1::kv::KvRequest;
-    use crate::api::http::v1::kv::KvStore;
-
     let store = KvStore::create();
     let filter = kv_handler(store);
 
