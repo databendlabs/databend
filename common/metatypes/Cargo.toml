@@ -11,5 +11,5 @@ serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0.26"
 
 [dev-dependencies]
-anyhow = "1.0.41"
+anyhow = "1.0.42"
 pretty_assertions = "0.7"

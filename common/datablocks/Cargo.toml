@@ -18,5 +18,5 @@ common-infallible = {path = "../infallible"}
 
 # Crates.io dependencies
 ahash = "0.7.4"
-anyhow = "1.0.41"
+anyhow = "1.0.42"
 prettytable-rs = { version = "0.8.0"}
