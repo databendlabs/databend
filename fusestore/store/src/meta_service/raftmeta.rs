@@ -167,6 +167,7 @@ impl MetaStore {
             log,
             sm,
             hs,
+            // TODO(xp): need to reload state
             snapshot_idx: Arc::new(Mutex::new(0)),
             current_snapshot,
         }
