@@ -28,9 +28,39 @@ fn test_cast_function() -> Result<()> {
             display: "CAST",
             nullable: false,
             columns: vec![Series::new(vec![4i64, 3, 2, 4]).into()],
-            func: CastFunction::create("cast".to_string(),DataType::Int8),
+            func: CastFunction::create("toint8".to_string(), DataType::Int8),
+            cast_type: DataType::Int8,
+            expect: Series::new(vec![4i8, 3, 2, 4]),
+            error: "",
+        },
+        Test {
+            name: "cast-string-to-int8-passed",
+            display: "CAST",
+            nullable: false,
+            columns: vec![Series::new(vec!["4", "3", "2", "4"]).into()],
+            func: CastFunction::create("toint8".to_string(), DataType::Int8),
+            cast_type: DataType::Int8,
+            expect: Series::new(vec![4i8, 3, 2, 4]),
+            error: "",
+        },
+        Test {
+            name: "cast-string-to-int32-passed",
+            display: "CAST",
+            nullable: false,
+            columns: vec![Series::new(vec!["4", "3", "2", "4"]).into()],
+            func: CastFunction::create("toint32".to_string(), DataType::Int8),
             cast_type: DataType::Int8,
             expect: Series::new(vec![4i32, 3, 2, 4]),
+            error: "",
+        },
+        Test {
+            name: "cast-string-to-int64-passed",
+            display: "CAST",
+            nullable: false,
+            columns: vec![Series::new(vec!["4", "3", "2", "4"]).into()],
+            func: CastFunction::create("toint64".to_string(), DataType::Int8),
+            cast_type: DataType::Int8,
+            expect: Series::new(vec![4i64, 3, 2, 4]),
             error: "",
         },
         Test {
@@ -44,7 +74,6 @@ fn test_cast_function() -> Result<()> {
             error: "",
         },
     ];
-
     for t in tests {
         let rows = t.columns[0].len();
         let func = t.func.unwrap();
@@ -66,9 +95,13 @@ fn test_cast_function() -> Result<()> {
         let args = vec![t.cast_type];
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
+        println!("expected_type {:?}", expect_type);
+        println!("actual_type {:?}", actual_type);
         assert_eq!(expect_type, actual_type);
 
         let c: DataColumn = t.expect.into();
+        println!("c :{:?}", c);
+        println!("v :{:?}", v);
         assert_eq!(v, &c);
     }
     Ok(())

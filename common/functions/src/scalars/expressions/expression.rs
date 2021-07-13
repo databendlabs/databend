@@ -17,13 +17,13 @@ impl ToCastFunction {
             CastFunction::create(display_name.to_string(), DataType::Int8)
         });
         map.insert("toint16", |display_name| {
-            CastFunction::create(display_name.to_string(), DataType::Int8)
+            CastFunction::create(display_name.to_string(), DataType::Int16)
         });
         map.insert("toint32", |display_name| {
-            CastFunction::create(display_name.to_string(), DataType::Int8)
+            CastFunction::create(display_name.to_string(), DataType::Int32)
         });
         map.insert("toint64", |display_name| {
-            CastFunction::create(display_name.to_string(), DataType::Int8)
+            CastFunction::create(display_name.to_string(), DataType::Int64)
         });
         Ok(())
     }
