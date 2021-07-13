@@ -7,8 +7,8 @@ mod cast_test;
 mod expression;
 
 mod cast;
-mod to_int8;
+mod cast_function_template;
 
-pub use expression::ToCastFunction;
 pub use cast::CastFunction;
-pub use to_int8::ToInt8Function;
+pub use cast_function_template::CastFunctionTemplate;
+pub use expression::ToCastFunction;

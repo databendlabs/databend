@@ -16,8 +16,8 @@ use crate::scalars::Function;
 use crate::scalars::HashesFunction;
 use crate::scalars::LogicFunction;
 use crate::scalars::StringFunction;
-use crate::scalars::UdfFunction;
 use crate::scalars::ToCastFunction;
+use crate::scalars::UdfFunction;
 
 pub struct FunctionFactory;
 pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn Function>>;
