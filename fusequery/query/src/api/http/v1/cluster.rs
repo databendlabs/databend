@@ -22,8 +22,10 @@ pub struct ClusterExtra {
 pub struct ClusterNodeRequest {}
 
 pub fn cluster_handler(
-    extra: ClusterExtra,
+    cfg: Config,
+    client: ClusterClientRef,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    let extra = ClusterExtra { cfg, client };
     cluster_list_node(extra.clone())
         .or(cluster_add_node(extra.clone()))
         .or(cluster_remove_node(extra))

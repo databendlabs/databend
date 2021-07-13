@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-#[common_runtime::tokio::test]
+use common_runtime::tokio;
+
+#[tokio::test]
 async fn test_kvs() -> common_exception::Result<()> {
     use crate::api::http::v1::kv::kv_handler;
     use crate::api::http::v1::kv::KvRequest;

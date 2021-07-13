@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 pub mod cluster;
+mod cluster_test;
 pub mod config;
 pub mod hello;
 pub mod kv;
