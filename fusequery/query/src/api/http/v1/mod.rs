@@ -6,3 +6,4 @@ pub mod cluster;
 pub mod config;
 pub mod hello;
 pub mod kv;
+mod kv_test;

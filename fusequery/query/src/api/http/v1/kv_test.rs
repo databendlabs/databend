@@ -1,0 +1,90 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
+#[common_runtime::tokio::test]
+async fn test_kvs() -> common_exception::Result<()> {
+    use crate::api::http::v1::kv::kv_handler;
+    use crate::api::http::v1::kv::KvRequest;
+    use crate::api::http::v1::kv::KvStore;
+
+    let store = KvStore::create();
+    let filter = kv_handler(store);
+
+    // Add node.
+    {
+        let res = warp::test::request()
+            .method("POST")
+            .path("/v1/kv/put")
+            .json(&KvRequest {
+                key: "n1/k1".to_string(),
+                value: "v1".to_string(),
+            })
+            .reply(&filter);
+        assert_eq!(200, res.await.status());
+
+        let res = warp::test::request()
+            .method("POST")
+            .path("/v1/kv/put")
+            .json(&KvRequest {
+                key: "n1/k2".to_string(),
+                value: "v2".to_string(),
+            })
+            .reply(&filter);
+        assert_eq!(200, res.await.status());
+    }
+
+    // Get.
+    {
+        let res = warp::test::request()
+            .method("POST")
+            .path("/v1/kv/get")
+            .json(&KvRequest {
+                key: "n1/k1".to_string(),
+                value: "".to_string(),
+            })
+            .reply(&filter);
+        assert_eq!("\"v1\"", res.await.body());
+    }
+
+    // List.
+    {
+        let res = warp::test::request()
+            .method("POST")
+            .path("/v1/kv/list")
+            .json(&KvRequest {
+                key: "n1".to_string(),
+                value: "".to_string(),
+            })
+            .reply(&filter);
+        assert_eq!("[[\"n1/k1\",\"v1\"],[\"n1/k2\",\"v2\"]]", res.await.body());
+    }
+
+    // Del.
+    {
+        let res = warp::test::request()
+            .method("POST")
+            .path("/v1/kv/remove")
+            .json(&KvRequest {
+                key: "n1/k1".to_string(),
+                value: "".to_string(),
+            })
+            .reply(&filter);
+        assert_eq!(200, res.await.status());
+    }
+
+    // List.
+    {
+        let res = warp::test::request()
+            .method("POST")
+            .path("/v1/kv/list")
+            .json(&KvRequest {
+                key: "n1".to_string(),
+                value: "".to_string(),
+            })
+            .reply(&filter);
+        assert_eq!("[[\"n1/k2\",\"v2\"]]", res.await.body());
+    }
+
+    Ok(())
+}

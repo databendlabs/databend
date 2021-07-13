@@ -76,7 +76,7 @@ fn kv_del(
         .and(warp::post())
         .and(json_body())
         .and(with_store(store))
-        .and_then(handlers::del)
+        .and_then(handlers::remove)
 }
 
 fn with_store(
@@ -128,11 +128,11 @@ mod handlers {
     }
 
     // Delete by key.
-    pub async fn del(
+    pub async fn remove(
         req: KvRequest,
         store: KvStoreRef,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        info!("kv del: {:?}", req);
+        info!("kv remove: {:?}", req);
         store.db.remove(req.key).await.unwrap();
         Ok(warp::http::StatusCode::OK)
     }
