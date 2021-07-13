@@ -93,10 +93,15 @@ where T: DFNumericType
         F: Fn(T::Native) -> S::Native + Copy,
         S: DFNumericType,
     {
-        let vec: AlignedVec<_> = self.data_views().map(|c| f(*c)).collect();
-        let (_, buffer) = self.null_bits();
+        let mut av = AlignedVec::<S::Native>::with_capacity_len_aligned(self.len());
 
-        let array = Arc::new(vec.into_primitive_array::<S>(buffer)) as ArrayRef;
+        let values = self.as_ref().values();
+        av.iter_mut().zip(values.iter()).for_each(|(num, n)| {
+            *num = f(*n);
+        });
+
+        let (_, buffer) = self.null_bits();
+        let array = Arc::new(av.into_primitive_array::<S>(buffer)) as ArrayRef;
         array.into()
     }
 
@@ -105,14 +110,14 @@ where T: DFNumericType
         F: Fn(Option<T::Native>) -> S::Native + Copy,
         S: DFNumericType,
     {
+        let mut av = AlignedVec::<S::Native>::with_capacity_len_aligned(self.len());
         let array = self.downcast_ref();
         let (_, buffer) = self.null_bits();
-
-        let av: AlignedVec<_> = if array.null_count() == 0 {
-            array.values().iter().map(|&v| f(Some(v))).collect()
-        } else {
-            array.into_iter().map(f).collect()
-        };
+        av.iter_mut()
+            .zip(array.values().iter())
+            .for_each(|(num, n)| {
+                *num = f(Some(*n));
+            });
 
         let array = Arc::new(av.into_primitive_array::<S>(buffer)) as ArrayRef;
         array.into()
@@ -120,10 +125,14 @@ where T: DFNumericType
 
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(T::Native) -> T::Native + Copy {
-        let vec: AlignedVec<_> = self.data_views().map(|c| f(*c)).collect();
-        let (_, buffer) = self.null_bits();
+        let mut av = AlignedVec::<T::Native>::with_capacity_len_aligned(self.len());
+        let values = self.as_ref().values();
+        av.iter_mut().zip(values.iter()).for_each(|(num, n)| {
+            *num = f(*n);
+        });
 
-        let array = Arc::new(vec.into_primitive_array::<T>(buffer)) as ArrayRef;
+        let (_, buffer) = self.null_bits();
+        let array = Arc::new(av.into_primitive_array::<T>(buffer)) as ArrayRef;
         array.into()
     }
 

@@ -19,6 +19,7 @@ xx_yyyy_[test_name]
 * 07 -- for Use tests, [example](07_0000_use_database.sql)
 * 08 -- for Optimizer tests, [example](08_0000_optimizer.sql)
 * 09 -- for Remote engine tests, [example](09_0000_remote_create_table.sql)
+* 10 -- for Describe tests, [example](10_0000_describe_table.sql)
 
 Note: If your test is not in the above category, please add it.
 

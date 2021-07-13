@@ -79,6 +79,8 @@ tonic = "0.4"
 walkdir = "2.3.2"
 warp = "0.3.1"
 uuid = { version = "0.8", features = ["serde", "v4"] }
+bumpalo = "3.7.0"
+
 
 [dev-dependencies]
 pretty_assertions = "0.7"

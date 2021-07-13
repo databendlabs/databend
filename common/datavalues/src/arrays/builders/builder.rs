@@ -115,6 +115,15 @@ where T: DFNumericType
     }
 }
 
+pub type DFUInt8ArrayBuilder = PrimitiveArrayBuilder<UInt8Type>;
+pub type DFInt8ArrayBuilder = PrimitiveArrayBuilder<Int8Type>;
+pub type DFUInt16ArrayBuilder = PrimitiveArrayBuilder<UInt16Type>;
+pub type DFInt16ArrayBuilder = PrimitiveArrayBuilder<Int16Type>;
+pub type DFUInt32ArrayBuilder = PrimitiveArrayBuilder<UInt32Type>;
+pub type DFInt32ArrayBuilder = PrimitiveArrayBuilder<Int32Type>;
+pub type DFUInt64ArrayBuilder = PrimitiveArrayBuilder<UInt64Type>;
+pub type DFInt64ArrayBuilder = PrimitiveArrayBuilder<Int64Type>;
+
 pub struct Utf8ArrayBuilder {
     pub builder: StringBuilder,
     pub capacity: usize,

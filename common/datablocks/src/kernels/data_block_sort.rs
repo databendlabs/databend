@@ -35,7 +35,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         let indices = compute::lexsort_to_indices(&order_columns, limit)?;
-        DataBlock::block_take_by_indices(block, indices.values())
+        DataBlock::block_take_by_indices(block, &[], indices.values())
     }
 
     pub fn merge_sort_block(

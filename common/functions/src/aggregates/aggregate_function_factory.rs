@@ -11,18 +11,17 @@ use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
-use crate::aggregates::AggregateFunction;
+use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
 pub struct AggregateFunctionFactory;
-pub type FactoryFunc =
-    fn(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn AggregateFunction>>;
+pub type FactoryFunc = fn(name: &str, arguments: Vec<DataField>) -> Result<AggregateFunctionRef>;
 
 pub type FactoryCombinatorFunc = fn(
     name: &str,
     arguments: Vec<DataField>,
     nested_func: FactoryFunc,
-) -> Result<Box<dyn AggregateFunction>>;
+) -> Result<AggregateFunctionRef>;
 
 pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
 pub type FactoryCombinatorFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryCombinatorFunc>>>;
@@ -42,7 +41,7 @@ lazy_static! {
 }
 
 impl AggregateFunctionFactory {
-    pub fn get(name: &str, arguments: Vec<DataField>) -> Result<Box<dyn AggregateFunction>> {
+    pub fn get(name: &str, arguments: Vec<DataField>) -> Result<AggregateFunctionRef> {
         let not_found_error = || -> ErrorCode {
             ErrorCode::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
         };

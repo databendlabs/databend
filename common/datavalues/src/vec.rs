@@ -5,6 +5,7 @@
 use std::iter::FromIterator;
 use std::mem;
 use std::mem::ManuallyDrop;
+use std::slice::IterMut;
 
 use common_arrow::arrow::alloc;
 use common_arrow::arrow::array::ArrayData;
@@ -97,6 +98,15 @@ impl<T> AlignedVec<T> {
         }
     }
 
+    // with_capacity_aligned and set len = capacity
+    pub fn with_capacity_len_aligned(size: usize) -> Self {
+        let mut av = Self::with_capacity_aligned(size);
+        unsafe {
+            av.set_len(av.capacity());
+        }
+        av
+    }
+
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
@@ -139,6 +149,10 @@ impl<T> AlignedVec<T> {
     unsafe fn into_inner(mut self) -> Vec<T> {
         self.taken = true;
         mem::take(&mut self.inner)
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+        self.inner.iter_mut()
     }
 
     /// Push at the end of the Vec. This is unsafe because a push when the capacity of the
@@ -243,12 +257,14 @@ impl<T> AlignedVec<T> {
         let iter = iter.into_iter();
         let cap = iter.size_hint().1.expect("a trusted length iterator");
         let (extra_cap, overflow) = cap.overflowing_sub(self.capacity());
+
         if extra_cap > 0 && !overflow {
             self.reserve(extra_cap);
         }
         let len_before = self.len();
         self.inner.extend(iter);
         let added = self.len() - len_before;
+
         assert_eq!(added, cap)
     }
 }

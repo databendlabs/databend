@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeListArray;
+use common_arrow::arrow::array::ListArray;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::array::UInt32Array;
@@ -268,7 +268,7 @@ impl<'a> TakeRandom for BoolTakeRandom<'a> {
 }
 
 pub struct ListTakeRandom<'a> {
-    arr: &'a LargeListArray,
+    arr: &'a ListArray,
 }
 
 impl<'a> TakeRandom for ListTakeRandom<'a> {

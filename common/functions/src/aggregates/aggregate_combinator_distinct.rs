@@ -7,11 +7,14 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
+use std::io::Cursor;
 
+use bytes::Buf;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::GetState;
+use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::FactoryFunc;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateCountFunction;
@@ -20,21 +23,56 @@ use crate::aggregates::AggregateFunction;
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
 
+pub struct AggregateDistinctState {
+    set: HashSet<DataGroupValues, RandomState>,
+    nested_addr: StateAddr,
+}
+
+impl AggregateDistinctState {
+    pub fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        let mut vs = Vec::with_capacity(self.set.len());
+        for entry in self.set.iter() {
+            let array = entry.0.iter().map(DataValue::from).collect::<Vec<_>>();
+            vs.push(array);
+        }
+
+        serde_json::to_writer(writer, &vs)?;
+        Ok(())
+    }
+
+    pub fn deserialize(&mut self, reader: &[u8]) -> Result<()> {
+        self.set.clear();
+        let reader = Cursor::new(reader).reader();
+        let vs: Vec<Vec<DataValue>> = serde_json::from_reader(reader)?;
+
+        for array in vs.iter() {
+            let v = array
+                .iter()
+                .map(DataGroupValue::try_from)
+                .collect::<Result<Vec<_>>>()?;
+
+            self.set.insert(DataGroupValues(v));
+        }
+        Ok(())
+    }
+}
+
+impl<'a> GetState<'a, AggregateDistinctState> for AggregateDistinctState {}
+
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator {
     name: String,
 
     nested_name: String,
     arguments: Vec<DataField>,
-    nested: Box<dyn AggregateFunction>,
-    state: HashSet<DataGroupValues, RandomState>,
+    nested: Arc<dyn AggregateFunction>,
 }
 
 impl AggregateDistinctCombinator {
     pub fn try_create_uniq(
         nested_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn AggregateFunction>> {
+    ) -> Result<Arc<dyn AggregateFunction>> {
         AggregateDistinctCombinator::try_create(
             nested_name,
             arguments,
@@ -46,7 +84,7 @@ impl AggregateDistinctCombinator {
         nested_name: &str,
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
-    ) -> Result<Box<dyn AggregateFunction>> {
+    ) -> Result<Arc<dyn AggregateFunction>> {
         let name = format!("DistinctCombinator({})", nested_name);
         assert_variadic_arguments(&name, arguments.len(), (1, 32))?;
 
@@ -56,12 +94,11 @@ impl AggregateDistinctCombinator {
         };
 
         let nested = nested_creator(nested_name, nested_arguments)?;
-        Ok(Box::new(AggregateDistinctCombinator {
+        Ok(Arc::new(AggregateDistinctCombinator {
             nested_name: nested_name.to_owned(),
             arguments,
             nested,
             name,
-            state: HashSet::new(),
         }))
     }
 }
@@ -83,9 +120,25 @@ impl AggregateFunction for AggregateDistinctCombinator {
         self
     }
 
-    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        if !values.iter().any(|v| v.is_null()) {
-            self.state.insert(DataGroupValues(
+    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
+        let addr = self.nested.allocate_state(arena);
+        let state = arena.alloc(AggregateDistinctState {
+            set: HashSet::new(),
+            nested_addr: addr,
+        });
+
+        (state as *mut AggregateDistinctState) as StateAddr
+    }
+
+    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
+        let state = AggregateDistinctState::get(place);
+
+        let values = columns
+            .iter()
+            .map(|c| c.try_get(row))
+            .collect::<Result<Vec<_>>>()?;
+        if !values.iter().any(|c| c.is_null()) {
+            state.set.insert(DataGroupValues(
                 values
                     .iter()
                     .map(DataGroupValue::try_from)
@@ -95,61 +148,27 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
-    // serialize as Vec<DataValue::List>
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        let mut results = self
-            .arguments
-            .iter()
-            .map(|f| DataValue::List(Some(vec![]), f.data_type().clone()))
-            .collect::<Vec<_>>();
-
-        let mut vecs = results
-            .iter_mut()
-            .map(|result| match result {
-                DataValue::List(Some(ref mut vec), _) => vec,
-                _ => unreachable!(),
-            })
-            .collect::<Vec<_>>();
-
-        self.state.iter().for_each(|group_values| {
-            group_values
-                .0
-                .iter()
-                .enumerate()
-                .for_each(|(col_index, group_value)| {
-                    vecs[col_index].push(DataValue::from(group_value));
-                })
-        });
-
-        Ok(results)
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+        let state = AggregateDistinctState::get(place);
+        state.serialize(writer)
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        if states.is_empty() {
-            return Ok(());
-        }
-
-        let col_values = states
-            .iter()
-            .map(|value| match value {
-                DataValue::List(Some(values), _) => Ok(values),
-                _ => Err(ErrorCode::BadDataValueType(format!(
-                    "Unexpceted accumulate state type: {}",
-                    value.data_type()
-                ))),
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        (0..col_values[0].len()).try_for_each(|row_index| {
-            let row_values = col_values
-                .iter()
-                .map(|col| col[row_index].clone())
-                .collect::<Vec<_>>();
-            self.accumulate_scalar(&row_values)
-        })
+    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+        let state = AggregateDistinctState::get(place);
+        state.deserialize(reader)
     }
 
-    fn merge_result(&self) -> Result<DataValue> {
+    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = AggregateDistinctState::get(place);
+        let rhs = AggregateDistinctState::get(rhs);
+
+        state.set.extend(rhs.set.clone());
+        Ok(())
+    }
+
+    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+        let state = AggregateDistinctState::get(place);
+
         // faster path for count
         if self
             .nested
@@ -157,19 +176,44 @@ impl AggregateFunction for AggregateDistinctCombinator {
             .downcast_ref::<AggregateCountFunction>()
             .is_some()
         {
-            Ok(DataValue::UInt64(Some(self.state.len() as u64)))
+            Ok(DataValue::UInt64(Some(state.set.len() as u64)))
         } else {
-            // accumulate_scalar
-            let mut nested = self.nested.clone();
+            if state.set.is_empty() {
+                return self.nested.merge_result(state.nested_addr);
+            }
+            let mut results = Vec::with_capacity(state.set.len());
 
-            // todo: make it parallelized
-            self.state.iter().try_for_each(|group_values| {
-                let values = group_values.0.iter().map(|v| v.into()).collect::<Vec<_>>();
-                nested.accumulate_scalar(&values)
-            })?;
+            state.set.iter().for_each(|group_values| {
+                let mut v = Vec::with_capacity(group_values.0.len());
+                group_values.0.iter().for_each(|group_value| {
+                    v.push(DataValue::from(group_value));
+                });
 
+                results.push(v);
+            });
+
+            let results = (0..self.arguments.len())
+                .map(|i| {
+                    results
+                        .iter()
+                        .map(|inner| inner[i].clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            let columns = results
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    DataValue::try_into_data_array(v, self.arguments[i].data_type())
+                        .map(DataColumn::Array)
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            self.nested
+                .accumulate(state.nested_addr, &columns, state.set.len())?;
             // merge_result
-            nested.merge_result()
+            self.nested.merge_result(state.nested_addr)
         }
     }
 }
