@@ -5,10 +5,10 @@
 // The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
 
 pub use http_service::HttpService;
+pub use rpc::FlightAction;
 pub use rpc::FlightClient;
 pub use rpc::FlightTicket;
 pub use rpc::ShuffleAction;
-pub use rpc::FlightAction;
 pub use rpc_service::RpcService;
 
 mod http;

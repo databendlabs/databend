@@ -2,15 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::FilterPlan;
-use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -61,7 +58,7 @@ impl Interpreter for SelectInterpreter {
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
         for (index, (node, action)) in scheduled_actions.remote_actions.iter().enumerate() {
             let mut flight_client = node.get_flight_client().await?;
-            let prepare_query_stage = flight_client.prepare_query_stage(action.clone(), timeout);
+            let prepare_query_stage = flight_client.execute_action(action.clone(), timeout);
             if let Err(error) = prepare_query_stage.await {
                 return prepare_error_handler(error, index);
             }

@@ -21,7 +21,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
-use common_planners::SubQueriesSetsPlan;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContext;

@@ -4,6 +4,8 @@
 
 use std::result::Result;
 
+use common_exception::ErrorCode;
+
 use crate::PlanNode;
 use crate::PlanVisitor;
 
@@ -19,21 +21,23 @@ struct PreOrderWalker<'a, E> {
 }
 
 impl<'a, E> PlanVisitor for PreOrderWalker<'a, E> {
-    fn visit_plan_node(&mut self, node: &PlanNode) {
+    fn visit_plan_node(&mut self, node: &PlanNode) -> Result<(), ErrorCode> {
         if let PlanNode::Empty(_) = node {
-            return;
+            return Ok(());
         }
         match (self.callback)(node) {
             Ok(true) => {
                 for n in node.inputs() {
-                    self.visit_plan_node(n.as_ref());
+                    self.visit_plan_node(n.as_ref())?;
                 }
             }
-            Ok(false) => {}
+            Ok(false) => return Ok(()),
             Err(e) => {
                 self.state = Result::Err(e);
             }
-        }
+        };
+
+        Ok(())
     }
 }
 
@@ -56,16 +60,18 @@ struct PostOrderWalker<'a, E> {
 }
 
 impl<'a, E> PlanVisitor for PostOrderWalker<'a, E> {
-    fn visit_plan_node(&mut self, node: &PlanNode) {
+    fn visit_plan_node(&mut self, node: &PlanNode) -> Result<(), ErrorCode> {
         if let PlanNode::Empty(_) = node {
-            return;
+            return Ok(());
         }
         for n in node.inputs() {
-            self.visit_plan_node(n.as_ref());
+            self.visit_plan_node(n.as_ref())?;
         }
         if let Ok(true) = self.state {
             self.state = (self.callback)(node);
         }
+
+        Ok(())
     }
 }
 

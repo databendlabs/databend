@@ -50,14 +50,14 @@ impl PlanBuilder {
     }
 
     pub fn create(schema: DataSchemaRef) -> Self {
-        Self::from(&PlanNode::Empty(EmptyPlan { schema }))
+        Self::from(&PlanNode::Empty(EmptyPlan::create_with_schema(schema)))
     }
 
     /// Create an empty relation.
     pub fn empty() -> Self {
-        Self::from(&PlanNode::Empty(EmptyPlan {
-            schema: DataSchemaRef::new(DataSchema::empty()),
-        }))
+        Self::from(&PlanNode::Empty(EmptyPlan::create_with_schema(
+            DataSchemaRef::new(DataSchema::empty())
+        )))
     }
 
     /// Apply a expression and merge the fields with exprs.

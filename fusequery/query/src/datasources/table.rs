@@ -13,6 +13,7 @@ use common_planners::ScanPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::sessions::FuseQueryContextRef;
+use std::sync::Arc;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -48,3 +49,5 @@ pub trait Table: Sync + Send {
         )))
     }
 }
+
+pub type TablePtr = Arc<dyn Table>;

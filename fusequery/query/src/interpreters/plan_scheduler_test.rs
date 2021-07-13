@@ -13,6 +13,7 @@ use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::FuseQueryContextRef;
 use crate::tests::try_create_cluster_context;
 use crate::tests::ClusterNode;
+use crate::api::FlightAction;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
@@ -25,64 +26,6 @@ async fn test_scheduler_plan_without_stage() -> Result<()> {
         scheduled_actions.local_plan,
         PlanNode::Empty(EmptyPlan::create())
     );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_scheduler_plan_with_one_normal_stage() -> Result<()> {
-    let context = create_env().await?;
-    let reschedule_res = PlanScheduler::reschedule(
-        context.clone(),
-        &PlanNode::Stage(StagePlan {
-            kind: StageKind::Normal,
-            scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
-            input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
-        }),
-    );
-
-    match reschedule_res {
-        Ok(_) => assert!(
-            false,
-            "test_scheduler_plan_with_one_normal_stage must be failure!"
-        ),
-        Err(error_code) => {
-            assert_eq!(error_code.code(), 32);
-            assert_eq!(
-                error_code.message(),
-                "The final stage plan must be convergent"
-            );
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_scheduler_plan_with_one_expansive_stage() -> Result<()> {
-    let context = create_env().await?;
-    let reschedule_res = PlanScheduler::reschedule(
-        context.clone(),
-        &PlanNode::Stage(StagePlan {
-            kind: StageKind::Expansive,
-            scatters_expr: Expression::Literal(DataValue::UInt64(Some(1))),
-            input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
-        }),
-    );
-
-    match reschedule_res {
-        Ok(_) => assert!(
-            false,
-            "test_scheduler_plan_with_one_expansive_stage must be failure!"
-        ),
-        Err(error_code) => {
-            assert_eq!(error_code.code(), 32);
-            assert_eq!(
-                error_code.message(),
-                "The final stage plan must be convergent"
-            );
-        }
-    }
 
     Ok(())
 }
@@ -111,42 +54,28 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
         &PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
             scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-            input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+            input: Arc::new(PlanNode::Empty(EmptyPlan::cluster())),
         }),
     )?;
 
-    assert_eq!(scheduled_actions.remote_actions.len(), 2);
-    assert_eq!(
-        scheduled_actions.remote_actions[0].0.name,
-        String::from("dummy_local")
-    );
-    assert_eq!(scheduled_actions.remote_actions[0].1.sinks, vec![
-        String::from("dummy_local")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[0].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(0)))
-    );
-    assert_eq!(
-        scheduled_actions.remote_actions[0].1.plan,
-        PlanNode::Empty(EmptyPlan::create())
-    );
+    let mut remote_actions = vec![];
+    for (node, remote_action) in scheduled_actions.remote_actions {
+        match remote_action {
+            FlightAction::PrepareShuffleAction(action) =>
+                remote_actions.push((node, action))
+        }
+    }
 
-    assert_eq!(
-        scheduled_actions.remote_actions[1].0.name,
-        String::from("dummy")
-    );
-    assert_eq!(scheduled_actions.remote_actions[1].1.sinks, vec![
-        String::from("dummy_local")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[1].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(0)))
-    );
-    assert_eq!(
-        scheduled_actions.remote_actions[1].1.plan,
-        PlanNode::Empty(EmptyPlan::create())
-    );
+    assert_eq!(remote_actions.len(), 2);
+    assert_eq!(remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[0].1.sinks, vec![String::from("dummy_local")]);
+    assert_eq!(remote_actions[0].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(0))));
+    assert_eq!(remote_actions[0].1.plan, PlanNode::Empty(EmptyPlan::cluster()));
+
+    assert_eq!(remote_actions[1].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
+    assert_eq!(remote_actions[1].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(0))));
+    assert_eq!(remote_actions[1].1.plan, PlanNode::Empty(EmptyPlan::cluster()));
 
     match scheduled_actions.local_plan {
         PlanNode::Remote(plan) => {
@@ -199,55 +128,31 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         }),
     )?;
 
-    assert_eq!(scheduled_actions.remote_actions.len(), 3);
-    assert_eq!(
-        scheduled_actions.remote_actions[0].0.name,
-        String::from("dummy_local")
-    );
-    assert_eq!(scheduled_actions.remote_actions[0].1.sinks, vec![
-        String::from("dummy_local"),
-        String::from("dummy")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[0].1.scatters_expression,
-        Expression::ScalarFunction {
-            op: String::from("blockNumber"),
-            args: vec![],
+    let mut remote_actions = vec![];
+    for (node, remote_action) in scheduled_actions.remote_actions {
+        match remote_action {
+            FlightAction::PrepareShuffleAction(action) =>
+                remote_actions.push((node, action))
         }
-    );
-    assert_eq!(
-        scheduled_actions.remote_actions[0].1.plan,
-        PlanNode::Empty(EmptyPlan::create())
-    );
+    }
+    assert_eq!(remote_actions.len(), 3);
+    assert_eq!(remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[0].1.sinks, vec![String::from("dummy_local"), String::from("dummy")]);
+    assert_eq!(remote_actions[0].1.scatters_expression, Expression::ScalarFunction { op: String::from("blockNumber"), args: vec![] });
+    assert_eq!(remote_actions[0].1.plan, PlanNode::Empty(EmptyPlan::create()));
 
-    assert_eq!(
-        scheduled_actions.remote_actions[1].0.name,
-        String::from("dummy_local")
-    );
-    assert_eq!(scheduled_actions.remote_actions[1].1.sinks, vec![
-        String::from("dummy_local")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[1].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(0)))
-    );
+    assert_eq!(remote_actions[1].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
+    assert_eq!(remote_actions[1].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(0))));
 
-    assert_eq!(
-        scheduled_actions.remote_actions[2].0.name,
-        String::from("dummy")
-    );
-    assert_eq!(scheduled_actions.remote_actions[2].1.sinks, vec![
-        String::from("dummy_local")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[2].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(0)))
-    );
+    assert_eq!(remote_actions[2].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[2].1.sinks, vec![String::from("dummy_local")]);
+    assert_eq!(remote_actions[2].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(0))));
 
     // Perform the same plan in different nodes
     match (
-        &scheduled_actions.remote_actions[1].1.plan,
-        &scheduled_actions.remote_actions[2].1.plan,
+        &remote_actions[1].1.plan,
+        &remote_actions[2].1.plan,
         &scheduled_actions.local_plan,
     ) {
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {
@@ -300,76 +205,44 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
                     input: Arc::new(PlanNode::Stage(StagePlan {
                         kind: StageKind::Normal,
                         scatters_expr: Expression::Literal(DataValue::UInt64(Some(0))),
-                        input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
+                        input: Arc::new(PlanNode::Empty(EmptyPlan::cluster())),
                     })),
                 })),
             })),
         }),
     )?;
 
-    assert_eq!(scheduled_actions.remote_actions.len(), 4);
-    assert_eq!(
-        scheduled_actions.remote_actions[0].0.name,
-        String::from("dummy_local")
-    );
-    assert_eq!(scheduled_actions.remote_actions[0].1.sinks, vec![
-        String::from("dummy_local"),
-        String::from("dummy")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[0].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(0)))
-    );
-    assert_eq!(
-        scheduled_actions.remote_actions[0].1.plan,
-        PlanNode::Empty(EmptyPlan::create())
-    );
+    let mut remote_actions = vec![];
+    for (node, remote_action) in scheduled_actions.remote_actions {
+        match remote_action {
+            FlightAction::PrepareShuffleAction(action) =>
+                remote_actions.push((node, action))
+        }
+    }
 
-    assert_eq!(
-        scheduled_actions.remote_actions[2].0.name,
-        String::from("dummy")
-    );
-    assert_eq!(scheduled_actions.remote_actions[2].1.sinks, vec![
-        String::from("dummy_local"),
-        String::from("dummy")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[2].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(0)))
-    );
-    assert_eq!(
-        scheduled_actions.remote_actions[2].1.plan,
-        PlanNode::Empty(EmptyPlan::create())
-    );
+    assert_eq!(remote_actions.len(), 4);
+    assert_eq!(remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[0].1.sinks, vec![String::from("dummy_local"), String::from("dummy")]);
+    assert_eq!(remote_actions[0].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(0))));
+    assert_eq!(remote_actions[0].1.plan, PlanNode::Empty(EmptyPlan::cluster()));
 
-    assert_eq!(
-        scheduled_actions.remote_actions[1].0.name,
-        String::from("dummy_local")
-    );
-    assert_eq!(scheduled_actions.remote_actions[1].1.sinks, vec![
-        String::from("dummy_local")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[1].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(1)))
-    );
+    assert_eq!(remote_actions[2].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[2].1.sinks, vec![String::from("dummy_local"), String::from("dummy")]);
+    assert_eq!(remote_actions[2].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(0))));
+    assert_eq!(remote_actions[2].1.plan, PlanNode::Empty(EmptyPlan::cluster()));
 
-    assert_eq!(
-        scheduled_actions.remote_actions[3].0.name,
-        String::from("dummy")
-    );
-    assert_eq!(scheduled_actions.remote_actions[3].1.sinks, vec![
-        String::from("dummy_local")
-    ]);
-    assert_eq!(
-        scheduled_actions.remote_actions[3].1.scatters_expression,
-        Expression::Literal(DataValue::UInt64(Some(1)))
-    );
+    assert_eq!(remote_actions[1].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
+    assert_eq!(remote_actions[1].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(1))));
+
+    assert_eq!(remote_actions[3].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[3].1.sinks, vec![String::from("dummy_local")]);
+    assert_eq!(remote_actions[3].1.scatters_expression, Expression::Literal(DataValue::UInt64(Some(1))));
 
     // Perform the same plan in different nodes
     match (
-        &scheduled_actions.remote_actions[1].1.plan,
-        &scheduled_actions.remote_actions[3].1.plan,
+        &remote_actions[1].1.plan,
+        &remote_actions[3].1.plan,
         &scheduled_actions.local_plan,
     ) {
         (PlanNode::Select(left), PlanNode::Select(right), PlanNode::Select(finalize)) => {

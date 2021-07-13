@@ -7,7 +7,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -127,19 +126,19 @@ pub trait PlanRewriter {
                     args: self.rewrite_exprs(schema, args)?,
                 })
             }
-            Expression::Sort { expr, asc, nulls_first } => {
-                Ok(Expression::Sort {
-                    expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
-                    asc: *asc,
-                    nulls_first: *nulls_first,
-                })
-            },
-            Expression::Cast { expr, data_type } => {
-                Ok(Expression::Cast {
-                    expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
-                    data_type: data_type.clone(),
-                })
-            },
+            Expression::Sort {
+                expr,
+                asc,
+                nulls_first,
+            } => Ok(Expression::Sort {
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                asc: *asc,
+                nulls_first: *nulls_first,
+            }),
+            Expression::Cast { expr, data_type } => Ok(Expression::Cast {
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                data_type: data_type.clone(),
+            }),
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
             Expression::Literal(value) => Ok(Expression::Literal(value.clone())),
@@ -161,7 +160,11 @@ pub trait PlanRewriter {
     }
 
     // TODO: Move it to ExpressionsRewrite trait
-    fn rewrite_exprs(&mut self, schema: &DataSchemaRef, exprs: &[Expression]) -> Result<Expressions> {
+    fn rewrite_exprs(
+        &mut self,
+        schema: &DataSchemaRef,
+        exprs: &[Expression],
+    ) -> Result<Expressions> {
         exprs
             .iter()
             .map(|expr| Self::rewrite_expr(self, schema, expr))

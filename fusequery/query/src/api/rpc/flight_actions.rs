@@ -44,6 +44,7 @@ impl TryInto<Vec<u8>> for ShuffleAction {
     }
 }
 
+#[derive(Clone)]
 pub enum FlightAction {
     PrepareShuffleAction(ShuffleAction),
 }

@@ -43,8 +43,7 @@ impl FlightClient {
         Ok(Box::pin(FlightDataStream::from_remote(schema, inner)))
     }
 
-    pub async fn prepare_query_stage(&mut self, action: ShuffleAction, timeout: u64) -> Result<()> {
-        let action = FlightAction::PrepareShuffleAction(action);
+    pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
         self.do_action(action, timeout).await?;
         Ok(())
     }

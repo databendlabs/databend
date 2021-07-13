@@ -10,25 +10,409 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::EmptyPlan;
+use common_planners::{EmptyPlan, AggregatorPartialPlan, AggregatorFinalPlan, BroadcastPlan, ProjectionPlan, ExpressionPlan, SubQueriesSetsPlan, FilterPlan, HavingPlan, SortPlan, LimitPlan, LimitByPlan, ScanPlan, SelectPlan, Part};
 use common_planners::Partitions;
 use common_planners::PlanNode;
+use common_planners::PlanVisitor;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 use common_tracing::tracing;
 
+use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::clusters::Node;
 use crate::sessions::FuseQueryContextRef;
+use crate::datasources::{Table, TablePtr};
 
 pub struct PlanScheduler;
 
 pub struct ScheduledActions {
     pub local_plan: PlanNode,
-    pub remote_actions: Vec<(Arc<Node>, ShuffleAction)>,
+    pub remote_actions: Vec<(Arc<Node>, FlightAction)>,
 }
+
+#[derive(Clone)]
+enum ScheduleTask {
+    Scheduling(PlanNode),
+    Scheduled(FlightAction),
+}
+
+struct PlanSchedulerImpl {
+    stage_id: String,
+    local_node: String,
+    cluster_nodes: Vec<String>,
+    query_context: FuseQueryContextRef,
+
+    plan_cluster_tasks: HashMap<String, Vec<ScheduleTask>>,
+}
+
+impl PlanSchedulerImpl {
+    fn local_node_name(&self) -> String {
+        self.local_node.clone()
+    }
+
+    fn all_cluster_names(&self) -> Vec<String> {
+        self.cluster_nodes.clone()
+    }
+
+    fn normal_action(&self, stage: &StagePlan, task: ScheduleTask) -> Result<ScheduleTask> {
+        match task {
+            ScheduleTask::Scheduled(_) => Err(ErrorCode::LogicalError("")),
+            ScheduleTask::Scheduling(schedule_plan) => Ok(ScheduleTask::Scheduled(
+                FlightAction::PrepareShuffleAction(ShuffleAction {
+                    stage_id: self.stage_id.clone(),
+                    query_id: self.query_context.get_id(),
+                    plan: schedule_plan,
+                    sinks: self.all_cluster_names(),
+                    scatters_expression: stage.scatters_expr.clone(),
+                }),
+            )),
+        }
+    }
+
+    fn normal_remote_plan(&self, node_name: &str, task: &ScheduleTask) -> Result<PlanNode> {
+        match task {
+            ScheduleTask::Scheduled(FlightAction::PrepareShuffleAction(action)) => {
+                Ok(PlanNode::Remote(RemotePlan {
+                    schema: action.plan.schema(),
+                    query_id: action.query_id.clone(),
+                    stage_id: action.stage_id.clone(),
+                    stream_id: node_name.to_string(),
+                    fetch_nodes: self.all_cluster_names(),
+                }))
+            }
+            _ => Err(ErrorCode::LogicalError("")),
+        }
+    }
+
+    fn schedule_normal_tasks(&mut self, stage: &StagePlan) -> Result<()> {
+        for node_name in &self.cluster_nodes {
+            let scheduling_task = self.plan_cluster_tasks
+                .get_mut(node_name)
+                .and_then(|tasks| tasks.pop());
+
+            assert!(scheduling_task.is_some());
+            if let Some(scheduling_task) = scheduling_task {
+                let scheduled_task = self.normal_action(stage, scheduling_task)?;
+                let remote_plan = self.normal_remote_plan(node_name, &scheduled_task)?;
+                if let Some(tasks) = self.plan_cluster_tasks.get_mut(node_name) {
+                    tasks.push(scheduled_task);
+                    tasks.push(ScheduleTask::Scheduling(remote_plan));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn expansive_action(&self, stage: &StagePlan, task: ScheduleTask) -> Result<ScheduleTask> {
+        match task {
+            ScheduleTask::Scheduled(_) => Err(ErrorCode::LogicalError("")),
+            ScheduleTask::Scheduling(schedule_plan) => Ok(ScheduleTask::Scheduled(
+                FlightAction::PrepareShuffleAction(ShuffleAction {
+                    stage_id: self.stage_id.clone(),
+                    query_id: self.query_context.get_id(),
+                    plan: schedule_plan,
+                    sinks: self.all_cluster_names(),
+                    scatters_expression: stage.scatters_expr.clone(),
+                }),
+            )),
+        }
+    }
+
+    fn expansive_remote_plan(&self, node_name: &str, task: &ScheduleTask) -> Result<PlanNode> {
+        match task {
+            ScheduleTask::Scheduled(FlightAction::PrepareShuffleAction(action)) => {
+                Ok(PlanNode::Remote(RemotePlan {
+                    schema: action.plan.schema(),
+                    query_id: action.query_id.clone(),
+                    stage_id: action.stage_id.clone(),
+                    stream_id: node_name.to_string(),
+                    fetch_nodes: vec![self.local_node_name()],
+                }))
+            }
+            _ => Err(ErrorCode::LogicalError("")),
+        }
+    }
+
+    fn schedule_expansive_tasks(&mut self, stage: &StagePlan) -> Result<()> {
+        let local_node_name = self.local_node_name();
+        let local_scheduling_task = self.plan_cluster_tasks
+            .get_mut(&local_node_name)
+            .and_then(|tasks| tasks.pop());
+
+        assert!(local_scheduling_task.is_some());
+        if let Some(local_scheduling_task) = local_scheduling_task {
+            let local_scheduled_task = self.expansive_action(stage, local_scheduling_task)?;
+            if let Some(tasks) = self.plan_cluster_tasks.get_mut(&local_node_name) {
+                tasks.push(local_scheduled_task.clone());
+            }
+
+            for node_name in &self.cluster_nodes {
+                let remote_plan = self.expansive_remote_plan(node_name, &local_scheduled_task)?;
+                if let Some(tasks) = self.plan_cluster_tasks.get_mut(node_name) {
+                    tasks.push(ScheduleTask::Scheduling(remote_plan))
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn converge_action(&self, stage: &StagePlan, task: ScheduleTask) -> Result<ScheduleTask> {
+        match task {
+            ScheduleTask::Scheduled(_) => Err(ErrorCode::LogicalError("")),
+            ScheduleTask::Scheduling(schedule_plan) => Ok(ScheduleTask::Scheduled(
+                FlightAction::PrepareShuffleAction(ShuffleAction {
+                    stage_id: self.stage_id.clone(),
+                    query_id: self.query_context.get_id(),
+                    plan: schedule_plan,
+                    sinks: vec![self.local_node_name()],
+                    scatters_expression: stage.scatters_expr.clone(),
+                }),
+            )),
+        }
+    }
+
+    fn converge_remote_plan(&self, node_name: &str, task: &ScheduleTask) -> Result<PlanNode> {
+        match task {
+            ScheduleTask::Scheduled(FlightAction::PrepareShuffleAction(action)) => {
+                Ok(PlanNode::Remote(RemotePlan {
+                    schema: action.plan.schema(),
+                    query_id: action.query_id.clone(),
+                    stage_id: action.stage_id.clone(),
+                    stream_id: node_name.to_string(),
+                    fetch_nodes: self.all_cluster_names(),
+                }))
+            }
+            _ => Err(ErrorCode::LogicalError("")),
+        }
+    }
+
+    fn schedule_converge_tasks(&mut self, stage: &StagePlan) -> Result<()> {
+        for node_name in &self.cluster_nodes {
+            let scheduling_task = self.plan_cluster_tasks
+                .get_mut(node_name)
+                .and_then(|tasks| tasks.pop());
+
+            assert!(scheduling_task.is_some());
+            if let Some(scheduling_task) = scheduling_task {
+                let scheduled_task = self.converge_action(stage, scheduling_task)?;
+                if let Some(tasks) = self.plan_cluster_tasks.get_mut(node_name) {
+                    tasks.push(scheduled_task);
+                }
+            }
+        }
+
+        let local_node_name = self.local_node_name();
+        let local_last_task = self.plan_cluster_tasks
+            .get_mut(&local_node_name)
+            .and_then(|tasks| tasks.last())
+            .map(Clone::clone);
+
+        assert!(local_last_task.is_some());
+        let remote_plan = self.converge_remote_plan(&local_node_name, &local_last_task.unwrap())?;
+        if let Some(local_tasks) = self.plan_cluster_tasks.get_mut(&local_node_name) {
+            local_tasks.push(ScheduleTask::Scheduling(remote_plan))
+        }
+
+        Ok(())
+    }
+
+    fn schedule_plan_node<F: Fn(PlanNode) -> PlanNode>(&mut self, f: F) -> Result<()> {
+        for node_name in &self.cluster_nodes {
+            let schedule_task = self.plan_cluster_tasks
+                .get_mut(node_name)
+                .and_then(|tasks| tasks.pop());
+
+            assert!(schedule_task.is_some());
+            if let Some(schedule_task) = schedule_task {
+                let schedule_task = match schedule_task {
+                    ScheduleTask::Scheduled(action) => ScheduleTask::Scheduled(action),
+                    ScheduleTask::Scheduling(input) => ScheduleTask::Scheduling(f(input)),
+                };
+
+                if let Some(tasks) = self.plan_cluster_tasks.get_mut(node_name) {
+                    tasks.push(schedule_task);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl PlanVisitor for PlanSchedulerImpl {
+    fn visit_subquery_plan(&mut self, subquery_plan: &PlanNode) -> Result<()> {
+        // TODO: subquery and scalar subquery
+        self.visit_plan_node(subquery_plan)
+    }
+
+    fn visit_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::AggregatorPartial(
+            AggregatorPartialPlan {
+                schema: plan.schema(),
+                aggr_expr: plan.aggr_expr.clone(),
+                group_expr: plan.group_expr.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::AggregatorFinal(
+            AggregatorFinalPlan {
+                schema: plan.schema.clone(),
+                aggr_expr: plan.aggr_expr.clone(),
+                group_expr: plan.group_expr.clone(),
+                schema_before_group_by: plan.schema_before_group_by.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_empty(&mut self, plan: &EmptyPlan) -> Result<()> {
+        match plan.is_cluster {
+            true => self.cluster_empty_plan(plan),
+            false => self.local_empty_plan(plan),
+        }
+    }
+
+    fn visit_stage(&mut self, stage: &StagePlan) -> Result<()> {
+        self.visit_plan_node(stage.input.as_ref())?;
+
+        // Entering new stage
+        self.stage_id = uuid::Uuid::new_v4().to_string();
+
+        match stage.kind {
+            StageKind::Normal => self.schedule_normal_tasks(stage),
+            StageKind::Expansive => self.schedule_expansive_tasks(stage),
+            StageKind::Convergent => self.schedule_converge_tasks(stage),
+        }
+    }
+
+    fn visit_broadcast(&mut self, plan: &BroadcastPlan) -> Result<()> {
+        // TODO: broadcast action
+        self.visit_plan_node(plan.input.as_ref())
+    }
+
+    fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::Projection(
+            ProjectionPlan {
+                expr: plan.expr.clone(),
+                schema: plan.schema.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::Expression(
+            ExpressionPlan {
+                desc: plan.desc.clone(),
+                exprs: plan.exprs.clone(),
+                schema: plan.schema.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_sub_queries_sets(&mut self, plan: &SubQueriesSetsPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_exprs(&plan.expressions)?;
+
+        // TODO: merge multiple expression and input into sub_queries_sets
+        self.schedule_plan_node(|input| PlanNode::SubQueryExpression(
+            SubQueriesSetsPlan {
+                expressions: plan.expressions.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_filter(&mut self, plan: &FilterPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::Filter(
+            FilterPlan {
+                schema: plan.schema.clone(),
+                predicate: plan.predicate.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_having(&mut self, plan: &HavingPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::Having(
+            HavingPlan {
+                schema: plan.schema.clone(),
+                predicate: plan.predicate.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_sort(&mut self, plan: &SortPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::Sort(
+            SortPlan {
+                schema: plan.schema.clone(),
+                order_by: plan.order_by.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_limit(&mut self, plan: &LimitPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::Limit(
+            LimitPlan {
+                n: plan.n.clone(),
+                offset: plan.offset.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_limit_by(&mut self, plan: &LimitByPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::LimitBy(
+            LimitByPlan {
+                limit: plan.limit.clone(),
+                limit_by: plan.limit_by.clone(),
+                input: Arc::new(input),
+            }
+        ))
+    }
+
+    fn visit_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
+        let table = self.query_context.get_table(&plan.db, &plan.table)?;
+
+        match table.is_local() {
+            true => self.local_read_data_source(plan),
+            false => {
+                let cluster_source = self.cluster_source(&plan.scan_plan, table)?;
+                self.cluster_read_data_source(&cluster_source)
+            }
+        }
+    }
+
+    fn visit_select(&mut self, plan: &SelectPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.schedule_plan_node(|input| PlanNode::Select(
+            SelectPlan {
+                input: Arc::new(input),
+            }
+        ))
+    }
+}
+
 
 impl PlanScheduler {
     /// Schedule the plan to Local or Remote mode.
@@ -43,334 +427,144 @@ impl PlanScheduler {
             });
         }
 
-        let mut last_stage = None;
+        let mut scheduler = PlanSchedulerImpl::create(ctx)?;
+        scheduler.visit_plan_node(plan)?;
+
+        let local_execute_plan = scheduler.plan_cluster_tasks
+            .get_mut(&scheduler.local_node)
+            .and_then(|tasks| tasks.pop());
+
+        match local_execute_plan {
+            Some(ScheduleTask::Scheduling(local_plan)) => {
+                let mut remote_actions = vec![];
+                for node_name in scheduler.cluster_nodes {
+                    let node = cluster.get_node_by_name(node_name.clone())?;
+                    if let Some(node_tasks) = scheduler.plan_cluster_tasks.remove(&node_name) {
+                        for node_task in node_tasks {
+                            match node_task {
+                                ScheduleTask::Scheduling(_) => return Err(ErrorCode::LogicalError("")),
+                                ScheduleTask::Scheduled(action) => remote_actions.push((node.clone(), action)),
+                            };
+                        }
+                    }
+                }
+
+                Ok(ScheduledActions {
+                    local_plan,
+                    remote_actions,
+                })
+            }
+            _ => Err(ErrorCode::LogicalError(""))
+        }
+    }
+}
+
+impl PlanSchedulerImpl {
+    fn create(context: FuseQueryContextRef) -> Result<PlanSchedulerImpl> {
+        let cluster = context.try_get_cluster()?;
         let cluster_nodes = cluster.get_nodes()?;
-        let mut builders = vec![];
-        let mut get_node_plan: Arc<Box<dyn GetNodePlan>> = Arc::new(Box::new(EmptyGetNodePlan));
 
-        plan.walk_postorder(|node: &PlanNode| -> Result<bool> {
-            match node {
-                PlanNode::Stage(plan) => {
-                    let stage_id = uuid::Uuid::new_v4().to_string();
+        let mut local_node = String::from("");
+        let mut cluster_tasks = HashMap::new();
+        let mut cluster_nodes_name = Vec::with_capacity(cluster_nodes.len());
 
-                    last_stage = Some(plan.clone());
-                    builders.push(ExecutionPlanBuilder::create(
-                        ctx.get_id(),
-                        stage_id.clone(),
-                        plan,
-                        &get_node_plan,
-                    ));
-                    get_node_plan = RemoteGetNodePlan::create(ctx.get_id(), stage_id, plan);
-                }
-                PlanNode::ReadSource(plan) => {
-                    get_node_plan =
-                        ReadSourceGetNodePlan::create(&ctx, plan, &get_node_plan, &cluster_nodes)?;
-                }
-                _ => {
-                    get_node_plan = Arc::new(Box::new(DefaultGetNodePlan(
-                        node.clone(),
-                        get_node_plan.clone(),
-                    )))
-                }
-            };
+        for cluster_node in cluster_nodes {
+            cluster_nodes_name.push(cluster_node.name.clone());
+            cluster_tasks.insert(cluster_node.name.clone(), vec![]);
 
-            Ok(true)
-        })?;
-
-        if let Some(stage_plan) = last_stage {
-            if stage_plan.kind != StageKind::Convergent {
-                return Result::Err(ErrorCode::PlanScheduleError(
-                    "The final stage plan must be convergent",
-                ));
+            if cluster_node.is_local() {
+                local_node = cluster_node.name.clone();
             }
         }
 
-        let local_node = (&cluster_nodes).iter().find(|node| node.local);
-
-        if local_node.is_none() {
-            return Result::Err(ErrorCode::NotFoundLocalNode(
-                "The PlanScheduler must be in the query cluster",
-            ));
-        }
-
-        let local_plan = get_node_plan.get_plan(&local_node.unwrap().name, &cluster_nodes)?;
-        let mut remote_actions = vec![];
-        for node in &cluster_nodes {
-            for builder in &builders {
-                if let Some(action) = builder.build(&node.name, &cluster_nodes)? {
-                    remote_actions.push((node.clone(), action));
-                }
-            }
-        }
-
-        Ok(ScheduledActions {
-            local_plan,
-            remote_actions,
+        Ok(PlanSchedulerImpl {
+            local_node,
+            stage_id: String::from(""),
+            cluster_nodes: cluster_nodes_name,
+            query_context: context,
+            plan_cluster_tasks: cluster_tasks,
         })
     }
-}
 
-trait GetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode>;
-}
-
-struct EmptyGetNodePlan;
-
-struct RemoteGetNodePlan(String, String, StagePlan);
-
-struct DefaultGetNodePlan(PlanNode, Arc<Box<dyn GetNodePlan>>);
-
-struct LocalReadSourceGetNodePlan(ReadDataSourcePlan, Arc<Box<dyn GetNodePlan>>);
-
-struct RemoteReadSourceGetNodePlan(
-    ReadDataSourcePlan,
-    Arc<HashMap<String, Partitions>>,
-    Arc<Box<dyn GetNodePlan>>,
-);
-
-struct ReadSourceGetNodePlan(Arc<Box<dyn GetNodePlan>>);
-
-impl GetNodePlan for DefaultGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
-        let mut clone_node = self.0.clone();
-        clone_node.set_inputs(vec![&self.1.get_plan(node_name, cluster_nodes)?])?;
-        Ok(clone_node)
+    fn cluster_source(&mut self, node: &ScanPlan, table: TablePtr) -> Result<ReadDataSourcePlan> {
+        let nodes = self.cluster_nodes.clone();
+        let context = self.query_context.clone();
+        let settings = context.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+        table.read_plan(context, node, max_threads * nodes.len())
     }
-}
 
-impl GetNodePlan for EmptyGetNodePlan {
-    fn get_plan(&self, _node_name: &str, _cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
-        Ok(PlanNode::Empty(EmptyPlan {
-            schema: Arc::new(DataSchema::empty()),
-        }))
-    }
-}
+    fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<Partitions> {
+        // We always put adjacent partitions in the same node
+        let nodes = self.cluster_nodes.clone();
+        let cluster_parts = &cluster_source.parts;
+        let parts_pre_node = cluster_parts.len() / nodes.len();
 
-impl RemoteGetNodePlan {
-    pub fn create(
-        query_id: String,
-        stage_id: String,
-        plan: &StagePlan,
-    ) -> Arc<Box<dyn GetNodePlan>> {
-        Arc::new(Box::new(RemoteGetNodePlan(
-            query_id,
-            stage_id,
-            plan.clone(),
-        )))
-    }
-}
+        let mut nodes_parts = Vec::with_capacity(nodes.len());
+        for index in 0..nodes.len() {
+            let begin = parts_pre_node * index;
+            let end = parts_pre_node * (index + 1);
+            let node_parts = cluster_parts[begin..end].to_vec();
 
-impl GetNodePlan for RemoteGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
-        match self.2.kind {
-            StageKind::Expansive => {
-                for cluster_node in cluster_nodes {
-                    if cluster_node.local {
-                        return Ok(PlanNode::Remote(RemotePlan {
-                            schema: self.2.schema(),
-                            query_id: self.0.clone(),
-                            stage_id: self.1.clone(),
-                            stream_id: node_name.to_string(),
-                            fetch_nodes: vec![cluster_node.name.clone()],
-                        }));
-                    }
-                }
-
-                Err(ErrorCode::NotFoundLocalNode(
-                    "The PlanScheduler must be in the query cluster",
-                ))
-            }
-            _ => {
-                let all_nodes_name = cluster_nodes
-                    .iter()
-                    .map(|node| node.name.clone())
-                    .collect::<Vec<_>>();
-                Ok(PlanNode::Remote(RemotePlan {
-                    schema: self.2.schema(),
-                    query_id: self.0.clone(),
-                    stage_id: self.1.clone(),
-                    stream_id: node_name.to_string(),
-                    fetch_nodes: all_nodes_name,
-                }))
+            if !node_parts.is_empty() {
+                nodes_parts.push(node_parts);
             }
         }
-    }
-}
 
-impl GetNodePlan for LocalReadSourceGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
-        match cluster_nodes
-            .iter()
-            .filter(|node| node.name == node_name && node.local)
-            .count()
-        {
-            0 => Result::Err(ErrorCode::NotFoundLocalNode(
-                "The PlanScheduler must be in the query cluster",
-            )),
-            _ => Ok(PlanNode::ReadSource(self.0.clone())),
-        }
-    }
-}
-
-impl GetNodePlan for RemoteReadSourceGetNodePlan {
-    fn get_plan(&self, node_name: &str, _: &[Arc<Node>]) -> Result<PlanNode> {
-        let partitions = self.1.get(node_name).map(Clone::clone).unwrap_or_default();
-        Ok(PlanNode::ReadSource(ReadDataSourcePlan {
-            db: self.0.db.clone(),
-            table: self.0.table.clone(),
-            schema: self.0.schema.clone(),
-            parts: partitions,
-            statistics: self.0.statistics.clone(),
-            description: self.0.description.clone(),
-            scan_plan: self.0.scan_plan.clone(),
-            remote: self.0.remote,
-        }))
-    }
-}
-
-impl ReadSourceGetNodePlan {
-    pub fn create(
-        ctx: &FuseQueryContextRef,
-        plan: &ReadDataSourcePlan,
-        nest_getter: &Arc<Box<dyn GetNodePlan>>,
-        cluster_nodes: &[Arc<Node>],
-    ) -> Result<Arc<Box<dyn GetNodePlan>>> {
-        let table = ctx.get_table(&plan.db, &plan.table)?;
-
-        if !table.is_local() {
-            let max_threads = ctx.get_settings().get_max_threads()? as usize;
-            let new_partitions_size = max_threads * cluster_nodes.len();
-            let new_source_plan =
-                table.read_plan(ctx.clone(), &*plan.scan_plan, new_partitions_size)?;
-
-            // We always put adjacent partitions in the same node
-            let new_partitions = &new_source_plan.parts;
-            let mut nodes_partitions = HashMap::new();
-            let partitions_pre_node = new_partitions.len() / cluster_nodes.len();
-
-            for (node_index, node) in cluster_nodes.iter().enumerate() {
-                let mut node_partitions = vec![];
-                let node_partitions_offset = partitions_pre_node * node_index;
-
-                for partition_index in 0..partitions_pre_node {
-                    node_partitions
-                        .push((new_partitions[node_partitions_offset + partition_index]).clone());
-                }
-
-                if !node_partitions.is_empty() {
-                    nodes_partitions.insert(node.name.clone(), node_partitions);
-                }
-            }
-
-            // For some irregular partitions, we assign them to the head nodes
-            let offset = partitions_pre_node * cluster_nodes.len();
-            for index in 0..(new_partitions.len() % cluster_nodes.len()) {
-                let node_name = &cluster_nodes[index].name;
-                match nodes_partitions.entry(node_name.clone()) {
-                    Vacant(entry) => {
-                        let node_partitions = vec![new_partitions[offset + index].clone()];
-                        entry.insert(node_partitions);
-                    }
-                    Occupied(mut entry) => {
-                        entry.get_mut().push(new_partitions[offset + index].clone());
-                    }
-                }
-            }
-
-            let nested_getter = RemoteReadSourceGetNodePlan(
-                new_source_plan,
-                Arc::new(nodes_partitions),
-                nest_getter.clone(),
-            );
-            return Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(
-                Box::new(nested_getter),
-            )))));
+        // For some irregular partitions, we assign them to the head nodes
+        let mut begin = parts_pre_node * nodes.len();
+        let remain_cluster_parts = &cluster_parts[begin..];
+        for index in 0..remain_cluster_parts.len() {
+            nodes_parts[index].push(remain_cluster_parts[index].clone());
         }
 
-        let nested_getter = LocalReadSourceGetNodePlan(plan.clone(), nest_getter.clone());
-        Ok(Arc::new(Box::new(ReadSourceGetNodePlan(Arc::new(
-            Box::new(nested_getter),
-        )))))
-    }
-}
-
-impl GetNodePlan for ReadSourceGetNodePlan {
-    fn get_plan(&self, node_name: &str, cluster_nodes: &[Arc<Node>]) -> Result<PlanNode> {
-        self.0.get_plan(node_name, cluster_nodes)
-    }
-}
-
-struct ExecutionPlanBuilder(String, String, StagePlan, Arc<Box<dyn GetNodePlan>>);
-
-impl ExecutionPlanBuilder {
-    pub fn create(
-        query_id: String,
-        stage_id: String,
-        plan: &StagePlan,
-        node_plan_getter: &Arc<Box<dyn GetNodePlan>>,
-    ) -> Arc<Box<ExecutionPlanBuilder>> {
-        Arc::new(Box::new(ExecutionPlanBuilder(
-            query_id,
-            stage_id,
-            plan.clone(),
-            node_plan_getter.clone(),
-        )))
+        nodes_parts
     }
 
-    pub fn build(
-        &self,
-        node_name: &str,
-        cluster_nodes: &[Arc<Node>],
-    ) -> Result<Option<ShuffleAction>> {
-        match self.2.kind {
-            StageKind::Expansive => {
-                let all_nodes_name = cluster_nodes
-                    .iter()
-                    .map(|node| node.name.clone())
-                    .collect::<Vec<_>>();
-                for cluster_node in cluster_nodes {
-                    if cluster_node.name == *node_name && cluster_node.local {
-                        return Ok(Some(ShuffleAction {
-                            query_id: self.0.clone(),
-                            stage_id: self.1.clone(),
-                            plan: self.3.get_plan(node_name, cluster_nodes)?,
-                            sinks: all_nodes_name,
-                            scatters_expression: self.2.scatters_expr.clone(),
-                        }));
-                    }
-                }
-                Ok(None)
-            }
-            StageKind::Convergent => {
-                for cluster_node in cluster_nodes {
-                    if cluster_node.local {
-                        return Ok(Some(ShuffleAction {
-                            query_id: self.0.clone(),
-                            stage_id: self.1.clone(),
-                            plan: self.3.get_plan(node_name, cluster_nodes)?,
-                            sinks: vec![cluster_node.name.clone()],
-                            scatters_expression: self.2.scatters_expr.clone(),
-                        }));
-                    }
-                }
+    fn cluster_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
+        let nodes = self.cluster_nodes.clone();
+        let nodes_parts = self.repartition(&plan);
 
-                Result::Err(ErrorCode::NotFoundLocalNode(
-                    "The PlanScheduler must be in the query cluster",
-                ))
-            }
-            StageKind::Normal => {
-                let all_nodes_name = cluster_nodes
-                    .iter()
-                    .map(|node| node.name.clone())
-                    .collect::<Vec<_>>();
-                Ok(Some(ShuffleAction {
-                    query_id: self.0.clone(),
-                    stage_id: self.1.clone(),
-                    plan: self.3.get_plan(node_name, cluster_nodes)?,
-                    sinks: all_nodes_name,
-                    scatters_expression: self.2.scatters_expr.clone(),
-                }))
+        for index in 0..nodes.len() {
+            assert!(self.plan_cluster_tasks.contains_key(&nodes[index]));
+            if let Some(node_tasks) = self.plan_cluster_tasks.get_mut(&nodes[index]) {
+                let mut read_plan = plan.clone();
+
+                read_plan.parts = nodes_parts[index].clone();
+                node_tasks.push(ScheduleTask::Scheduling(PlanNode::ReadSource(read_plan)));
             }
         }
+
+        Ok(())
+    }
+
+    fn local_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
+        let local_node_name = self.local_node_name();
+        if let Some(tasks) = self.plan_cluster_tasks.get_mut(&local_node_name) {
+            tasks.push(ScheduleTask::Scheduling(PlanNode::ReadSource(plan.clone())));
+        }
+
+        Ok(())
+    }
+
+    fn cluster_empty_plan(&mut self, plan: &EmptyPlan) -> Result<()> {
+        let nodes = self.cluster_nodes.clone();
+        for index in 0..nodes.len() {
+            assert!(self.plan_cluster_tasks.contains_key(&nodes[index]));
+            if let Some(node_tasks) = self.plan_cluster_tasks.get_mut(&nodes[index]) {
+                node_tasks.push(ScheduleTask::Scheduling(PlanNode::Empty(plan.clone())));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn local_empty_plan(&mut self, plan: &EmptyPlan) -> Result<()> {
+        let local_node_name = self.local_node_name();
+        if let Some(tasks) = self.plan_cluster_tasks.get_mut(&local_node_name) {
+            tasks.push(ScheduleTask::Scheduling(PlanNode::Empty(plan.clone())));
+        }
+
+        Ok(())
     }
 }

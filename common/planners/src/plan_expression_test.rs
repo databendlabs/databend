@@ -16,10 +16,11 @@ fn test_expression_plan_format() -> anyhow::Result<()> {
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
 
+    let empty_plan = EmptyPlan::create_with_schema(schema.clone());
     let expression = PlanNode::Expression(ExpressionPlan {
         exprs: vec![col("a")],
         schema: schema.clone(),
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
         desc: "".to_string(),
     });
     let _ = expression.schema();
