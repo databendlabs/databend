@@ -13,14 +13,17 @@ use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct CastFunction {
+    display_name: String,
     /// The data type to cast to
     cast_type: DataType,
 }
 
 impl CastFunction {
-
-    pub fn create(cast_type: DataType) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Self { cast_type }))
+    pub fn create(display_name: String, cast_type: DataType) -> Result<Box<dyn Function>> {
+        Ok(Box::new(Self {
+            display_name,
+            cast_type,
+        }))
     }
 }
 
