@@ -6,8 +6,8 @@ use common_exception::Result;
 use url::Url;
 
 use crate::backends::Backend;
+use crate::backends::HttpBackend;
 use crate::backends::LocalBackend;
-use crate::backends::MemoryBackend;
 use crate::backends::StoreBackend;
 
 pub struct BackendClient {
@@ -32,7 +32,7 @@ impl BackendClient {
             // Use local sled as backend.
             "local" => Box::new(LocalBackend::create(new_address)),
             // Use http api as backend.
-            "memory" => Box::new(MemoryBackend::create(new_address)),
+            "http" => Box::new(HttpBackend::create(new_address)),
             // Use store as backend.
             _ => Box::new(StoreBackend::create(new_address)),
         };

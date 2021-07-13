@@ -163,7 +163,7 @@ pub struct Config {
     #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "")]
     pub cluster_namespace: String,
 
-    #[structopt(long, env = CLUSTER_META_SERVER_URI, default_value = "memory://127.0.0.1:8080")]
+    #[structopt(long, env = CLUSTER_META_SERVER_URI, default_value = "http://127.0.0.1:8080")]
     pub cluster_meta_server_uri: String,
 
     #[structopt(long, env = EXECUTOR_NAME, default_value = "")]

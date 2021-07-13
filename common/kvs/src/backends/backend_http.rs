@@ -14,12 +14,11 @@ struct Request {
     value: String,
 }
 
-#[allow(dead_code)]
-pub struct MemoryBackend {
+pub struct HttpBackend {
     addr: String,
 }
 
-impl MemoryBackend {
+impl HttpBackend {
     pub fn create(addr: String) -> Self {
         let addr = format!("http://{}/{}", addr, "v1/kv");
         Self { addr }
@@ -27,7 +26,7 @@ impl MemoryBackend {
 }
 
 #[async_trait]
-impl Backend for MemoryBackend {
+impl Backend for HttpBackend {
     async fn get(&self, key: String) -> Result<Option<String>> {
         let req = Request {
             key,
