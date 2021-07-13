@@ -17,6 +17,7 @@ use crate::scalars::HashesFunction;
 use crate::scalars::LogicFunction;
 use crate::scalars::StringFunction;
 use crate::scalars::UdfFunction;
+use crate::scalars::ToCastFunction;
 
 pub struct FunctionFactory;
 pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn Function>>;
@@ -32,6 +33,7 @@ lazy_static! {
         StringFunction::register(map.clone()).unwrap();
         UdfFunction::register(map.clone()).unwrap();
         HashesFunction::register(map.clone()).unwrap();
+        ToCastFunction::register(map.clone()).unwrap();
         map
     };
 }
