@@ -4,7 +4,6 @@
 
 use common_exception::Result;
 use common_management::cluster::ClusterClient;
-use common_management::cluster::ClusterClientRef;
 use warp::Filter;
 
 use crate::api::http::v1::cluster::ClusterExtra;

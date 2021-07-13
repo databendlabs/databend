@@ -26,7 +26,7 @@ pub fn cluster_handler(
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     cluster_list_node(extra.clone())
         .or(cluster_add_node(extra.clone()))
-        .or(cluster_remove_node(extra.clone()))
+        .or(cluster_remove_node(extra))
 }
 
 /// GET /v1/cluster/list
@@ -72,28 +72,33 @@ fn json_body() -> impl Filter<Extract = (ClusterNodeRequest,), Error = warp::Rej
 }
 
 mod handlers {
-    use common_management::cluster::ClusterClientRef;
 
     use crate::api::http::v1::cluster::ClusterExtra;
     use crate::api::http::v1::cluster::ClusterNodeRequest;
-    use crate::api::http::v1::cluster::NoBacktraceErrorCode;
-    use crate::configs::Config;
 
     pub async fn list_node(
-        _extra: ClusterExtra,
+        extra: ClusterExtra,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        // TODO(BohuTANG): error handler
-        todo!()
+        let results = extra
+            .client
+            .get_executors_by_namespace(extra.cfg.cluster_namespace)
+            .await
+            .unwrap();
+        Ok(warp::reply::json(&results))
     }
 
-    pub async fn add_node(_extra: ClusterExtra) -> Result<impl warp::Reply, warp::Rejection> {
-        todo!()
+    pub async fn add_node(
+        _req: ClusterNodeRequest,
+        _extra: ClusterExtra,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        Ok(warp::reply::json(&vec![""]))
     }
 
     pub async fn remove_node(
+        _req: ClusterNodeRequest,
         _extra: ClusterExtra,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        todo!()
+        Ok(warp::reply::json(&vec![""]))
     }
 }
 

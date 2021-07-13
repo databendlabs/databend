@@ -265,7 +265,7 @@ impl Config {
             store_api_password: Password {
                 store_api_password: "root".to_string(),
             },
-            cluster_namespace: "".to_string(),
+            cluster_namespace: "n1".to_string(),
             cluster_meta_server_uri: "memory://127.0.0.1:8080".to_string(),
             executor_name: "".to_string(),
             executor_priority: 0,

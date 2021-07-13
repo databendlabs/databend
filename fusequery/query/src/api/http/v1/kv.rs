@@ -112,6 +112,7 @@ mod handlers {
         req: KvRequest,
         store: KvStoreRef,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        info!("kv list: {:?}", req);
         let values = store.db.get_from_prefix(req.key).await.unwrap();
         Ok(warp::reply::json(&values))
     }

@@ -21,7 +21,7 @@ pub struct MemoryBackend {
 
 impl MemoryBackend {
     pub fn create(addr: String) -> Self {
-        let addr = format!("http://{}/{}", addr, "/v1/kv");
+        let addr = format!("http://{}/{}", addr, "v1/kv");
         Self { addr }
     }
 }
@@ -43,8 +43,19 @@ impl Backend for MemoryBackend {
         Ok(Some(res))
     }
 
-    async fn get_from_prefix(&self, _prefix: String) -> Result<Vec<(String, String)>> {
-        todo!()
+    async fn get_from_prefix(&self, prefix: String) -> Result<Vec<(String, String)>> {
+        let req = Request {
+            key: prefix,
+            value: "".to_string(),
+        };
+        let res: Vec<(String, String)> = reqwest::Client::new()
+            .post(format!("{}/list", self.addr))
+            .json(&&req)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Ok(res)
     }
 
     async fn put(&self, key: String, value: String) -> Result<()> {

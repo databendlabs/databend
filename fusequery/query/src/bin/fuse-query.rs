@@ -6,7 +6,6 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use common_exception::ErrorCode;
-use common_management::cluster::ClusterClient;
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
@@ -54,7 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut services: Vec<AbortableServer> = vec![];
     let session_mgr = SessionMgr::from_conf(conf.clone())?;
-    let cluster_mgr = ClusterClient::create(conf.cluster_meta_server_uri.clone());
 
     // MySQL handler.
     {
@@ -116,16 +114,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("RPC API server listening on {}", conf.flight_api_address);
     }
 
-    // Register the executor to the namespace.
-    {
-        cluster_mgr
-            .register(
-                conf.cluster_namespace.clone(),
-                &conf.executor_from_config()?,
-            )
-            .await?;
-    }
-
     // Ctrl + C 100 times in five seconds
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     ctrlc::set_handler(move || {
@@ -135,8 +123,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     })
     .expect("Error setting Ctrl-C handler");
-
-    // TODO: unregister the executor from the namespace?
 
     let cloned_services = services.clone();
     tokio::spawn(async move {
