@@ -28,13 +28,8 @@ impl HttpBackend {
 #[async_trait]
 impl Backend for HttpBackend {
     async fn get(&self, key: String) -> Result<Option<String>> {
-        let req = Request {
-            key,
-            value: "".to_owned(),
-        };
         let res: String = reqwest::Client::new()
-            .post(format!("{}/get", self.addr))
-            .json(&req)
+            .post(format!("{}/get/{}", self.addr, key))
             .send()
             .await?
             .json()
@@ -43,13 +38,8 @@ impl Backend for HttpBackend {
     }
 
     async fn get_from_prefix(&self, prefix: String) -> Result<Vec<(String, String)>> {
-        let req = Request {
-            key: prefix,
-            value: "".to_string(),
-        };
         let res: Vec<(String, String)> = reqwest::Client::new()
-            .post(format!("{}/list", self.addr))
-            .json(&req)
+            .get(format!("{}/list/{}", self.addr, prefix))
             .send()
             .await?
             .json()

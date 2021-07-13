@@ -19,7 +19,7 @@ async fn test_kvs() -> common_exception::Result<()> {
             .method("POST")
             .path("/v1/kv/put")
             .json(&KvRequest {
-                key: "n1/k1".to_string(),
+                key: "n1_k1".to_string(),
                 value: "v1".to_string(),
             })
             .reply(&filter);
@@ -29,7 +29,7 @@ async fn test_kvs() -> common_exception::Result<()> {
             .method("POST")
             .path("/v1/kv/put")
             .json(&KvRequest {
-                key: "n1/k2".to_string(),
+                key: "n1_k2".to_string(),
                 value: "v2".to_string(),
             })
             .reply(&filter);
@@ -39,12 +39,8 @@ async fn test_kvs() -> common_exception::Result<()> {
     // Get.
     {
         let res = warp::test::request()
-            .method("POST")
-            .path("/v1/kv/get")
-            .json(&KvRequest {
-                key: "n1/k1".to_string(),
-                value: "".to_string(),
-            })
+            .method("GET")
+            .path("/v1/kv/get/n1_k1")
             .reply(&filter);
         assert_eq!("\"v1\"", res.await.body());
     }
@@ -52,14 +48,10 @@ async fn test_kvs() -> common_exception::Result<()> {
     // List.
     {
         let res = warp::test::request()
-            .method("POST")
-            .path("/v1/kv/list")
-            .json(&KvRequest {
-                key: "n1".to_string(),
-                value: "".to_string(),
-            })
+            .method("GET")
+            .path("/v1/kv/list/n1")
             .reply(&filter);
-        assert_eq!("[[\"n1/k1\",\"v1\"],[\"n1/k2\",\"v2\"]]", res.await.body());
+        assert_eq!("[[\"n1_k1\",\"v1\"],[\"n1_k2\",\"v2\"]]", res.await.body());
     }
 
     // Del.
@@ -68,7 +60,7 @@ async fn test_kvs() -> common_exception::Result<()> {
             .method("POST")
             .path("/v1/kv/remove")
             .json(&KvRequest {
-                key: "n1/k1".to_string(),
+                key: "n1_k1".to_string(),
                 value: "".to_string(),
             })
             .reply(&filter);
@@ -78,14 +70,10 @@ async fn test_kvs() -> common_exception::Result<()> {
     // List.
     {
         let res = warp::test::request()
-            .method("POST")
-            .path("/v1/kv/list")
-            .json(&KvRequest {
-                key: "n1".to_string(),
-                value: "".to_string(),
-            })
+            .method("GET")
+            .path("/v1/kv/list/n1")
             .reply(&filter);
-        assert_eq!("[[\"n1/k2\",\"v2\"]]", res.await.body());
+        assert_eq!("[[\"n1_k2\",\"v2\"]]", res.await.body());
     }
 
     Ok(())

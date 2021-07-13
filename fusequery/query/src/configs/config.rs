@@ -158,13 +158,13 @@ pub struct Config {
     pub store_api_password: Password,
 
     // Namespace.
-    #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "", help = "Namespace of this executor\n")]
+    #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "namespace_", help = "Namespace of this executor\n")]
     pub cluster_namespace: String,
 
     #[structopt(long, env = CLUSTER_META_SERVER_URI, default_value = "http://127.0.0.1:8080", help = "Cluster registry center URI, 'http://':fuse-query, 'local://': local sled, 'store://': fuse-store\n")]
     pub cluster_meta_server_uri: String,
 
-    #[structopt(long, env = CLUSTER_EXECUTOR_NAME, default_value = "", help = "Executor unique name in the namespace\n")]
+    #[structopt(long, env = CLUSTER_EXECUTOR_NAME, default_value = "executor_", help = "Executor unique name in the namespace\n")]
     pub cluster_executor_name: String,
 
     #[structopt(long, env = CLUSTER_EXECUTOR_PRIORITY, default_value = "0")]

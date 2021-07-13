@@ -35,16 +35,15 @@ pub fn kv_handler(
     kv_list(store.clone())
         .or(kv_get(store.clone()))
         .or(kv_put(store.clone()))
-        .or(kv_del(store))
+        .or(kv_remove(store))
 }
 
 /// GET /v1/kv/list
 fn kv_list(
     store: KvStoreRef,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "kv" / "list")
-        .and(warp::post())
-        .and(json_body())
+    warp::path!("v1" / "kv" / "list" / String)
+        .and(warp::get())
         .and(with_store(store))
         .and_then(handlers::list)
 }
@@ -52,9 +51,8 @@ fn kv_list(
 fn kv_get(
     store: KvStoreRef,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "kv" / "get")
-        .and(warp::post())
-        .and(json_body())
+    warp::path!("v1" / "kv" / "get" / String)
+        .and(warp::get())
         .and(with_store(store))
         .and_then(handlers::get)
 }
@@ -69,10 +67,10 @@ fn kv_put(
         .and_then(handlers::put)
 }
 
-fn kv_del(
+fn kv_remove(
     store: KvStoreRef,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "kv" / "del")
+    warp::path!("v1" / "kv" / "remove")
         .and(warp::post())
         .and(json_body())
         .and(with_store(store))
@@ -100,20 +98,20 @@ mod handlers {
 
     // Get value by key.
     pub async fn get(
-        req: KvRequest,
+        key: String,
         store: KvStoreRef,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        let v = store.db.get(req.key).await.unwrap();
+        let v = store.db.get(key).await.unwrap();
         Ok(warp::reply::json(&v))
     }
 
     // List all the key/value paris.
     pub async fn list(
-        req: KvRequest,
+        prefix: String,
         store: KvStoreRef,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        info!("kv list: {:?}", req);
-        let values = store.db.get_from_prefix(req.key).await.unwrap();
+        info!("kv list: {:?}", prefix);
+        let values = store.db.get_from_prefix(prefix).await.unwrap();
         Ok(warp::reply::json(&values))
     }
 
