@@ -20,7 +20,7 @@ use common_planners::RemotePlan;
 use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
-use common_planners::SubQueriesSetsPlan;
+use common_planners::SubQueriesSetPlan;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::Pipeline;
@@ -295,7 +295,7 @@ impl PipelineBuilder {
         Ok(pipeline)
     }
 
-    fn visit_create_sets(&mut self, plan: &SubQueriesSetsPlan) -> Result<Pipeline> {
+    fn visit_create_sets(&mut self, plan: &SubQueriesSetPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*plan.input)?;
         let schema = plan.schema();
         let context = self.ctx.clone();

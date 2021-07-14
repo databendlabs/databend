@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -13,7 +14,6 @@ use common_planners::ScanPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::sessions::FuseQueryContextRef;
-use std::sync::Arc;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {

@@ -11,6 +11,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::FuseQueryFlightDispatcher;
+use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
 use crate::tests::try_create_sessions;
@@ -43,13 +44,16 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
         let sessions = try_create_sessions()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
-        flight_dispatcher.run_shuffle_action(rpc_session, ShuffleAction {
-            query_id: query_id.clone(),
-            stage_id: stage_id.clone(),
-            plan: parse_query("SELECT number FROM numbers(5)")?,
-            sinks: vec![stream_id.clone()],
-            scatters_expression: Expression::Literal(DataValue::UInt64(Some(1))),
-        })?;
+        flight_dispatcher.shuffle_action(
+            rpc_session,
+            FlightAction::PrepareShuffleAction(ShuffleAction {
+                query_id: query_id.clone(),
+                stage_id: stage_id.clone(),
+                plan: parse_query("SELECT number FROM numbers(5)")?,
+                sinks: vec![stream_id.clone()],
+                scatters_expression: Expression::Literal(DataValue::UInt64(Some(1))),
+            }),
+        )?;
 
         let receiver = flight_dispatcher.get_stream(&query_id, &stage_id, &stream_id)?;
         let receiver_stream = ReceiverStream::new(receiver);
@@ -81,13 +85,16 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
         let sessions = try_create_sessions()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
-        flight_dispatcher.run_shuffle_action(rpc_session, ShuffleAction {
-            query_id: query_id.clone(),
-            stage_id: stage_id.clone(),
-            plan: parse_query("SELECT number FROM numbers(5)")?,
-            sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
-            scatters_expression: Expression::Column("number".to_string()),
-        })?;
+        flight_dispatcher.shuffle_action(
+            rpc_session,
+            FlightAction::PrepareShuffleAction(ShuffleAction {
+                query_id: query_id.clone(),
+                stage_id: stage_id.clone(),
+                plan: parse_query("SELECT number FROM numbers(5)")?,
+                sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
+                scatters_expression: Expression::Column("number".to_string()),
+            }),
+        )?;
 
         let receiver = flight_dispatcher.get_stream(&query_id, &stage_id, "stream_1")?;
         let receiver_stream = ReceiverStream::new(receiver);

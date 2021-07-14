@@ -9,7 +9,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
-use crate::plan_subqueries_set_create::SubQueriesSetsPlan;
+use crate::plan_subqueries_set_create::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -64,7 +64,7 @@ pub enum PlanNode {
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
-    SubQueryExpression(SubQueriesSetsPlan),
+    SubQueryExpression(SubQueriesSetPlan),
 }
 
 impl PlanNode {

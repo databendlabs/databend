@@ -6,7 +6,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
-use crate::plan_subqueries_set_create::SubQueriesSetsPlan;
+use crate::plan_subqueries_set_create::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -173,7 +173,7 @@ pub trait PlanVisitor {
         self.visit_exprs(&plan.exprs)
     }
 
-    fn visit_sub_queries_sets(&mut self, plan: &SubQueriesSetsPlan) -> Result<()> {
+    fn visit_sub_queries_sets(&mut self, plan: &SubQueriesSetPlan) -> Result<()> {
         self.visit_plan_node(plan.input.as_ref())?;
         self.visit_exprs(&plan.expressions)
     }

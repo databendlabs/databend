@@ -4,9 +4,16 @@ use common_datavalues::DataSchemaRef;
 
 use crate::PlanNode;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum BroadcastKind {
+    OneNode,
+    EachNode,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct BroadcastPlan {
     pub input: Arc<PlanNode>,
+    pub kind: BroadcastKind,
 }
 
 impl BroadcastPlan {

@@ -128,13 +128,21 @@ impl FlightService for FuseQueryFlightService {
         let flight_action: FlightAction = action.try_into()?;
 
         let do_flight_action = || -> common_exception::Result<FlightResult> {
-            match flight_action {
+            match &flight_action {
+                FlightAction::BroadcastAction(action) => {
+                    let session_id = action.query_id.clone();
+                    let is_aborted = self.dispatcher.is_aborted();
+                    let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+
+                    self.dispatcher.broadcast_action(session, flight_action)?;
+                    Ok(FlightResult { body: vec![] })
+                }
                 FlightAction::PrepareShuffleAction(action) => {
                     let session_id = action.query_id.clone();
                     let is_aborted = self.dispatcher.is_aborted();
                     let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
 
-                    self.dispatcher.run_shuffle_action(session, action)?;
+                    self.dispatcher.shuffle_action(session, flight_action)?;
                     Ok(FlightResult { body: vec![] })
                 }
             }

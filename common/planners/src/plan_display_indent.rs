@@ -16,7 +16,7 @@ use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::SortPlan;
 use crate::StagePlan;
-use crate::SubQueriesSetsPlan;
+use crate::SubQueriesSetPlan;
 
 pub struct PlanNodeIndentFormatDisplay<'a> {
     indent: usize,
@@ -177,7 +177,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         }
     }
 
-    fn format_subquery_expr(f: &mut Formatter, plan: &SubQueriesSetsPlan) -> fmt::Result {
+    fn format_subquery_expr(f: &mut Formatter, plan: &SubQueriesSetPlan) -> fmt::Result {
         let mut names = Vec::with_capacity(plan.expressions.len());
         for expression in &plan.expressions {
             match expression {

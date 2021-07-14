@@ -13,7 +13,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::col;
-use crate::plan_subqueries_set_create::SubQueriesSetsPlan;
+use crate::plan_subqueries_set_create::SubQueriesSetPlan;
 use crate::validate_expression;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -56,7 +56,7 @@ impl PlanBuilder {
     /// Create an empty relation.
     pub fn empty() -> Self {
         Self::from(&PlanNode::Empty(EmptyPlan::create_with_schema(
-            DataSchemaRef::new(DataSchema::empty())
+            DataSchemaRef::new(DataSchema::empty()),
         )))
     }
 
@@ -306,7 +306,7 @@ impl PlanBuilder {
         let sub_queries = RewriteHelper::collect_exprs_sub_queries(exprs)?;
         match sub_queries.is_empty() {
             true => Ok(Arc::new(input.clone())),
-            false => Ok(Arc::new(PlanNode::SubQueryExpression(SubQueriesSetsPlan {
+            false => Ok(Arc::new(PlanNode::SubQueryExpression(SubQueriesSetPlan {
                 expressions: sub_queries,
                 input: Arc::new(input.clone()),
             }))),

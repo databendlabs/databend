@@ -10,6 +10,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
+use common_planners::BroadcastKind;
 use common_planners::BroadcastPlan;
 use common_planners::Expression;
 use common_planners::LimitByPlan;
@@ -206,9 +207,18 @@ impl PlanRewriter for ScattersOptimizerImpl {
             (RunningMode::Standalone, RunningMode::Cluster) => {
                 Ok(Self::convergent_shuffle_stage(rewritten_subquery)?)
             }
-            (RunningMode::Cluster, _) => Ok(PlanNode::Broadcast(BroadcastPlan {
-                input: Arc::new(rewritten_subquery),
-            })),
+            (RunningMode::Cluster, RunningMode::Standalone) => {
+                Ok(PlanNode::Broadcast(BroadcastPlan {
+                    kind: BroadcastKind::OneNode,
+                    input: Arc::new(rewritten_subquery),
+                }))
+            }
+            (RunningMode::Cluster, RunningMode::Cluster) => {
+                Ok(PlanNode::Broadcast(BroadcastPlan {
+                    kind: BroadcastKind::EachNode,
+                    input: Arc::new(rewritten_subquery),
+                }))
+            }
         }
     }
 

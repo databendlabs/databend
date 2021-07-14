@@ -12,7 +12,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
-use crate::plan_subqueries_set_create::SubQueriesSetsPlan;
+use crate::plan_subqueries_set_create::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -191,6 +191,7 @@ pub trait PlanRewriter {
 
     fn rewrite_broadcast(&mut self, plan: &BroadcastPlan) -> Result<PlanNode> {
         Ok(PlanNode::Broadcast(BroadcastPlan {
+            kind: plan.kind.clone(),
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
         }))
     }
@@ -213,7 +214,7 @@ pub trait PlanRewriter {
             .build()
     }
 
-    fn rewrite_sub_queries_sets(&mut self, plan: &SubQueriesSetsPlan) -> Result<PlanNode> {
+    fn rewrite_sub_queries_sets(&mut self, plan: &SubQueriesSetPlan) -> Result<PlanNode> {
         // We don't touch expressions, it should be rebuilt by a new expressions
         self.rewrite_plan_node(plan.input.as_ref())
     }
