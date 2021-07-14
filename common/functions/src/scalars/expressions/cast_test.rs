@@ -16,7 +16,6 @@ fn test_cast_function() -> Result<()> {
         display: &'static str,
         nullable: bool,
         columns: Vec<DataColumn>,
-        cast_type: DataType,
         expect: Series,
         error: &'static str,
         func: Result<Box<dyn Function>>,
@@ -29,7 +28,6 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             columns: vec![Series::new(vec![4i64, 3, 2, 4]).into()],
             func: CastFunction::create("toint8".to_string(), DataType::Int8),
-            cast_type: DataType::Int8,
             expect: Series::new(vec![4i8, 3, 2, 4]),
             error: "",
         },
@@ -39,7 +37,6 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             columns: vec![Series::new(vec!["4", "3", "2", "4"]).into()],
             func: CastFunction::create("toint8".to_string(), DataType::Int8),
-            cast_type: DataType::Int8,
             expect: Series::new(vec![4i8, 3, 2, 4]),
             error: "",
         },
@@ -49,7 +46,6 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             columns: vec![Series::new(vec!["4", "3", "2", "4"]).into()],
             func: CastFunction::create("toint16".to_string(), DataType::Int16),
-            cast_type: DataType::Int16,
             expect: Series::new(vec![4i16, 3, 2, 4]),
             error: "",
         },
@@ -59,7 +55,6 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             columns: vec![Series::new(vec!["4", "3", "2", "4"]).into()],
             func: CastFunction::create("toint32".to_string(), DataType::Int32),
-            cast_type: DataType::Int32,
             expect: Series::new(vec![4i32, 3, 2, 4]),
             error: "",
         },
@@ -69,7 +64,6 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             columns: vec![Series::new(vec!["4", "3", "2", "4"]).into()],
             func: CastFunction::create("toint64".to_string(), DataType::Int64),
-            cast_type: DataType::Int64,
             expect: Series::new(vec![4i64, 3, 2, 4]),
             error: "",
         },
@@ -79,7 +73,6 @@ fn test_cast_function() -> Result<()> {
             nullable: false,
             columns: vec![Series::new(vec!["20210305", "20211024"]).into()],
             func: CastFunction::create("cast".to_string(), DataType::Int32),
-            cast_type: DataType::Date32,
             expect: Series::new(vec![20210305i32, 20211024]),
             error: "",
         },
@@ -102,16 +95,11 @@ fn test_cast_function() -> Result<()> {
 
         let ref v = func.eval(&t.columns, rows)?;
         // Type check.
-        let args = vec![t.cast_type];
-        let expect_type = func.return_type(&args)?;
+        let expect_type = func.return_type(&vec![t.columns[0].data_type()])?;
         let actual_type = v.data_type();
-        println!("expected_type {:?}", expect_type);
-        println!("actual_type {:?}", actual_type);
         assert_eq!(expect_type, actual_type);
 
         let c: DataColumn = t.expect.into();
-        println!("c :{:?}", c);
-        println!("v :{:?}", v);
         assert_eq!(v, &c);
     }
     Ok(())
