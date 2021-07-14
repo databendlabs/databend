@@ -69,7 +69,6 @@ impl ExpressionChain {
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-            // maybe use Function is better
             Expression::InList(inlist_expr) => {
                 self.add_expr(inlist_expr.expr())?;
                 let mut val_list = Vec::new();
