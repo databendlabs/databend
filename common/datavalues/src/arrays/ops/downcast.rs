@@ -8,7 +8,7 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::LargeListArray;
+use common_arrow::arrow::array::ListArray;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::array::StructArray;
@@ -22,6 +22,14 @@ use crate::DFListArray;
 use crate::DFPrimitiveType;
 use crate::DFStructArray;
 use crate::DFUtf8Array;
+
+impl<T> AsRef<PrimitiveArray<T>> for DataArray<T>
+where T: DFPrimitiveType
+{
+    fn as_ref(&self) -> &PrimitiveArray<T> {
+        self.downcast_ref()
+    }
+}
 
 impl<T> DataArray<T>
 where T: DFPrimitiveType
@@ -47,6 +55,12 @@ where T: DFPrimitiveType
     }
 }
 
+impl AsRef<BooleanArray> for DFBooleanArray {
+    fn as_ref(&self) -> &BooleanArray {
+        self.downcast_ref()
+    }
+}
+
 impl DFBooleanArray {
     pub fn downcast_ref(&self) -> &BooleanArray {
         let arr = &*self.array;
@@ -66,6 +80,12 @@ impl DFBooleanArray {
     pub fn from_arrow_array(array: BooleanArray) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
+    }
+}
+
+impl AsRef<StringArray> for DFUtf8Array {
+    fn as_ref(&self) -> &StringArray {
+        self.downcast_ref()
     }
 }
 
@@ -91,22 +111,34 @@ impl DFUtf8Array {
     }
 }
 
+impl AsRef<ListArray> for DFListArray {
+    fn as_ref(&self) -> &ListArray {
+        self.downcast_ref()
+    }
+}
+
 impl DFListArray {
-    pub fn downcast_ref(&self) -> &LargeListArray {
+    pub fn downcast_ref(&self) -> &ListArray {
         let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const LargeListArray) }
+        unsafe { &*(arr as *const dyn Array as *const ListArray) }
     }
 
     pub fn downcast_iter(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator {
         let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const LargeListArray) };
+        let arr = unsafe { &*(arr as *const dyn Array as *const ListArray) };
 
         arr.iter().map(|a| a.map(|a| a.into_series()))
     }
 
-    pub fn from_arrow_array(array: LargeListArray) -> Self {
+    pub fn from_arrow_array(array: ListArray) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
+    }
+}
+
+impl AsRef<BinaryArray> for DFBinaryArray {
+    fn as_ref(&self) -> &BinaryArray {
+        self.downcast_ref()
     }
 }
 
@@ -122,6 +154,11 @@ impl DFBinaryArray {
     }
 }
 
+impl AsRef<StructArray> for DFStructArray {
+    fn as_ref(&self) -> &StructArray {
+        self.downcast_ref()
+    }
+}
 impl DFStructArray {
     pub fn downcast_ref(&self) -> &StructArray {
         let arr = &*self.array;

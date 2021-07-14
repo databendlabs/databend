@@ -135,6 +135,8 @@ nav:
           - DROP DATABASE: sqlstatement/data-definition-language-ddl/ddl-drop-database.md
       - Data Manipulation Language:
           - SELECT: sqlstatement/data-manipulation-language-dml/dml-select.md
+      - Describe Commands:
+          - DESCRIBE TABLE: sqlstatement/describe-commands/describe-table.md
       - Show Commands:
           - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
           - SHOW TABLES: sqlstatement/show-commands/show-tables.md

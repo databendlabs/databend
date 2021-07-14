@@ -1,28 +1,12 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
-use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
-use std::hash::Hash;
-use std::hash::Hasher;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::NumCast;
 
-use super::ArrayCast;
-use crate::arrays::DataArray;
-use crate::prelude::*;
-use crate::DFBinaryArray;
-use crate::DFBooleanArray;
-use crate::DFFloat32Array;
-use crate::DFFloat64Array;
-use crate::DFIntegerType;
-use crate::DFListArray;
-use crate::DFNullArray;
-use crate::DFStructArray;
-use crate::DFUInt64Array;
-use crate::DFUtf8Array;
+use crate::*;
 
 // Read more:
 //  https://www.cockroachlabs.com/blog/vectorized-hash-joiner/
@@ -30,62 +14,192 @@ use crate::DFUtf8Array;
 
 pub trait GroupHash: Debug {
     /// Compute the hash for all values in the array.
-    fn group_hash(&self) -> Result<DFUInt64Array> {
+    fn group_hash(&self, _ptr: usize, _step: usize) -> Result<()> {
         Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported apply group_hash operation for {:?}",
+            "Unsupported apply  fn group_hash operation for {:?}",
             self,
         )))
     }
 }
 
-impl<T> GroupHash for DataArray<T>
-where
-    T: DFIntegerType,
-    T::Native: Hash,
-    T::Native: NumCast,
-{
-    fn group_hash(&self) -> Result<DFUInt64Array> {
-        self.cast()
+impl GroupHash for DFUInt8Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const u8, ptr as *mut u8, 1);
+            }
+            ptr += step;
+        }
+
+        Ok(())
     }
 }
 
-impl GroupHash for DFUtf8Array {
-    fn group_hash(&self) -> Result<DFUInt64Array> {
-        Ok(self.apply_cast_numeric(|v| {
-            let mut hasher = DefaultHasher::new();
-            hasher.write(v.as_bytes());
+impl GroupHash for DFInt8Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
 
-            hasher.finish()
-        }))
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const i8 as *const u8, ptr as *mut u8, 1);
+            }
+            ptr += step;
+        }
+
+        Ok(())
     }
 }
 
+impl GroupHash for DFUInt16Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const u16 as *const u8, ptr as *mut u8, 2);
+            }
+            ptr += step;
+        }
+
+        Ok(())
+    }
+}
+
+impl GroupHash for DFInt16Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const i16 as *const u8, ptr as *mut u8, 2);
+            }
+            ptr += step;
+        }
+
+        Ok(())
+    }
+}
+
+impl GroupHash for DFInt32Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const i32 as *const u8, ptr as *mut u8, 4);
+            }
+            ptr += step;
+        }
+
+        Ok(())
+    }
+}
+
+impl GroupHash for DFUInt32Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const u32 as *const u8, ptr as *mut u8, 4);
+            }
+            ptr += step;
+        }
+
+        Ok(())
+    }
+}
 impl GroupHash for DFBooleanArray {
-    fn group_hash(&self) -> Result<DFUInt64Array> {
-        self.cast()
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+        let rows = self.len();
+        unsafe {
+            for i in 0..rows {
+                let value = array.value_unchecked(i) as u8;
+                std::ptr::copy_nonoverlapping(&value as *const u8, ptr as *mut u8, 1);
+
+                ptr += step;
+            }
+        }
+
+        Ok(())
     }
 }
 
 impl GroupHash for DFFloat32Array {
-    fn group_hash(&self) -> Result<DFUInt64Array> {
-        Ok(self.apply_cast_numeric(|v| {
-            let mut hasher = DefaultHasher::new();
-            hasher.write_u32(v.to_bits());
-            hasher.finish()
-        }))
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                let bits = value.to_bits();
+                std::ptr::copy_nonoverlapping(&bits as *const u32 as *const u8, ptr as *mut u8, 4);
+            }
+            ptr += step;
+        }
+
+        Ok(())
     }
 }
 impl GroupHash for DFFloat64Array {
-    fn group_hash(&self) -> Result<DFUInt64Array> {
-        Ok(self.apply_cast_numeric(|v| {
-            let mut hasher = DefaultHasher::new();
-            hasher.write_u64(v.to_bits());
-            hasher.finish()
-        }))
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                let bits = value.to_bits();
+                std::ptr::copy_nonoverlapping(&bits as *const u64 as *mut u8, ptr as *mut u8, 8);
+            }
+            ptr += step;
+        }
+
+        Ok(())
+    }
+}
+
+impl GroupHash for DFUInt64Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const u64 as *mut u8, ptr as *mut u8, 8);
+            }
+            ptr += step;
+        }
+
+        Ok(())
+    }
+}
+impl GroupHash for DFInt64Array {
+    fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+        let mut ptr = ptr;
+        let array = self.downcast_ref();
+
+        for value in array.values() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(value as *const i64 as *mut u8, ptr as *mut u8, 8);
+            }
+            ptr += step;
+        }
+
+        Ok(())
     }
 }
 
 impl GroupHash for DFListArray {}
+impl GroupHash for DFUtf8Array {}
 impl GroupHash for DFBinaryArray {}
 impl GroupHash for DFNullArray {}
 impl GroupHash for DFStructArray {}

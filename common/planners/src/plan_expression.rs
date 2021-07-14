@@ -15,8 +15,8 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
 use lazy_static::lazy_static;
 
@@ -175,10 +175,7 @@ impl Expression {
         }
     }
 
-    pub fn to_aggregate_function(
-        &self,
-        schema: &DataSchemaRef,
-    ) -> Result<Box<dyn AggregateFunction>> {
+    pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {
         match self {
             Expression::AggregateFunction { op, distinct, args } => {
                 let mut func_name = op.clone();

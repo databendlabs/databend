@@ -18,6 +18,10 @@ pub use crate::arrays::ArrayScatter;
 pub use crate::arrays::ArrayTake;
 pub use crate::arrays::ArrayTakeEvery;
 pub use crate::arrays::BooleanArrayBuilder;
+pub use crate::arrays::DFUInt16ArrayBuilder;
+pub use crate::arrays::DFUInt32ArrayBuilder;
+pub use crate::arrays::DFUInt64ArrayBuilder;
+pub use crate::arrays::DFUInt8ArrayBuilder;
 pub use crate::arrays::DataArray;
 pub use crate::arrays::GetValues;
 pub use crate::arrays::IntoTakeRandom;
@@ -31,6 +35,7 @@ pub use crate::arrays::Utf8ArrayBuilder;
 pub use crate::columns::DataColumn;
 pub use crate::columns::DataColumnCommon;
 pub use crate::data_array_filter::*;
+pub use crate::data_type_coercion::*;
 // series
 pub use crate::series::IntoSeries;
 pub use crate::series::Series;

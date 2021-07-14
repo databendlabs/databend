@@ -18,7 +18,7 @@ common-arrow = {path = "../arrow"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.41"
+anyhow = "1.0.42"
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3"
 lazy_static = "1.4.0"
