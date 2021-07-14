@@ -36,7 +36,7 @@ common-tracing = {path = "../../common/tracing"}
 anyhow = "1.0.42"
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.5" }
 async-trait = "0.1"
-env_logger = "0.8"
+env_logger = "0.9"
 futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
