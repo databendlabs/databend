@@ -89,9 +89,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.41"
+version = "1.0.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15af2628f6890fe2609a3b91bef4c83450512802e59489f9c1cb1fa5df064a61"
+checksum = "595d3cfa7a60d4555cb5067b99f07142a08ea778de5cf993f7b75c7d8fabc486"
 
 [[package]]
 name = "arbitrary"
@@ -450,16 +450,6 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "206fdffcfa2df7cbe15601ef46c813fce0965eb3286db6b56c583b814b51c81c"
-dependencies = [
- "byteorder",
- "iovec",
-]
-
-[[package]]
-name = "bytes"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
@@ -705,7 +695,7 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "num",
- "ordered-float 2.6.0",
+ "ordered-float 2.7.0",
  "paste",
  "pretty_assertions",
  "prettytable-rs",
@@ -764,7 +754,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bumpalo",
- "bytes 0.4.12",
+ "bytes 1.0.1",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -2168,15 +2158,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iovec"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "ipconfig"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2588,7 +2569,7 @@ dependencies = [
  "indexmap",
  "metrics",
  "num_cpus",
- "ordered-float 2.6.0",
+ "ordered-float 2.7.0",
  "parking_lot",
  "quanta",
  "radix_trie",
@@ -2646,9 +2627,9 @@ dependencies = [
 
 [[package]]
 name = "mockall"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfd9a2de7b4bd932854c776ce60880caf8fa41095a7907e3accc52ef6678895b"
+checksum = "6ab571328afa78ae322493cacca3efac6a0f2e0a67305b4df31fd439ef129ac0"
 dependencies = [
  "cfg-if 1.0.0",
  "downcast",
@@ -2661,9 +2642,9 @@ dependencies = [
 
 [[package]]
 name = "mockall_derive"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d07174e9c5ffb2ff849187641c48fc66f5588f012f1d248e55c3a68cd462bd29"
+checksum = "e7e25b214433f669161f414959594216d8e6ba83b6679d3db96899c0b4639033"
 dependencies = [
  "cfg-if 1.0.0",
  "proc-macro2",
@@ -3117,9 +3098,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "2.6.0"
+version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dea6388d3d5498ec651701f14edbaf463c924b5d8829fb2848ccf0bcc7b3c69"
+checksum = "039f02eb0f69271f26abe3202189275d7aa2258b903cb0281b5de710a2570ff3"
 dependencies = [
  "num-traits",
 ]
@@ -4651,18 +4632,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.25"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa6f76457f59514c7eeb4e59d891395fab0b2fd1d40723ae737d64153392e9c6"
+checksum = "93119e4feac1cbe6c798c34d3a53ea0026b0b1de6a120deef895137c0529bfe2"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.25"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a36768c0fbf1bb15eca10defa29526bda730a2376c2ab4393ccfa16fb1a318d"
+checksum = "060d69a0afe7796bf42e9e2ff91f5ee691fb15c53d38b4b62a9a53eb23164745"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5254,9 +5235,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.12"
+version = "5.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f710158a7c9449f400cf734e97cb417a09a7b5f0cf54b133718b6b2951c9f79"
+checksum = "542f37b4798c879409865dde7908e746d836f77839c3a6bea5c8b4e4dcf6620b"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
