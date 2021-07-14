@@ -10,6 +10,7 @@ pub mod meta_service_impl;
 pub mod placement;
 pub mod raft_txid;
 pub mod raftmeta;
+pub mod snapshot;
 pub mod state_machine;
 
 pub use applied_state::AppliedState;
@@ -24,6 +25,7 @@ pub use raft_txid::RaftTxId;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
 pub use raftmeta::Network;
+pub use snapshot::Snapshot;
 pub use state_machine::Node;
 pub use state_machine::Slot;
 pub use state_machine::StateMachine;
