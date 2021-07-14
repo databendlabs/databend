@@ -37,6 +37,7 @@ use common_planners::SettingPlan;
 use common_planners::ShowCreateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
+use common_planners::RewriteHelper;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArg;
@@ -446,6 +447,8 @@ impl PlanParser {
         // Aliases replacement for group by, having, sorting
         // In example: Aliases=[("id", (number % 3))]
         let aliases = extract_aliases(&projection_exprs);
+
+        let projection_exprs = RewriteHelper::rewrite_projection_aliases(&projection_exprs)?;
 
         // Group By expression after against aliases
         // In example: GroupBy=[(number % 3)]
