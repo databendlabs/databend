@@ -181,6 +181,11 @@ build_exceptions! {
 
     InvalidConfig(2301),
 
+    // meta store errors
+
+    MetaStoreDamaged(2401),
+    MetaStoreAlreadyExists(2402),
+
 
     // TODO
     // We may need to separate front-end errors from API errors (and system errors?)

@@ -21,7 +21,7 @@ use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
-use crate::tests::Seq;
+use crate::tests::service::new_test_context;
 
 // test cases fro Cmd::IncrSeq:
 // case_name, txid, key, want
@@ -153,8 +153,10 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let addr = new_addr();
-    let resp = MetaNode::boot(0, addr.clone()).await;
+    let tc = new_test_context();
+    let addr = tc.config.meta_api_addr();
+
+    let resp = MetaNode::boot(0, &tc.config).await;
     assert!(resp.is_ok());
 
     let mn = resp.unwrap();
@@ -478,10 +480,11 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
     // asserts states are consistent
 
     let nid = 0;
-    let addr = new_addr();
+    let tc = new_test_context();
+    let addr = tc.config.meta_api_addr();
 
     // boot up a single-node cluster
-    let mn = MetaNode::boot(nid, addr.clone()).await?;
+    let mn = MetaNode::boot(nid, &tc.config).await?;
 
     {
         assert_meta_connection(&addr).await?;
@@ -502,9 +505,10 @@ async fn setup_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
 ) -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
-    let addr = new_addr();
+    let tc = new_test_context();
+    let addr = tc.config.meta_api_addr();
 
-    let mn = MetaNode::boot_non_voter(id, &addr).await?;
+    let mn = MetaNode::boot_non_voter(id, &tc.config).await?;
 
     {
         // add node to cluster as a non-voter
@@ -615,10 +619,4 @@ where T: Fn(&RaftMetrics) -> bool + Send {
 /// Make a default timeout for wait() for test.
 fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(2000))
-}
-
-fn new_addr() -> String {
-    let addr = format!("127.0.0.1:{}", 19000 + *Seq::default());
-    tracing::info!("new_addr: {}", addr);
-    addr
 }

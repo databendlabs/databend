@@ -32,11 +32,12 @@ use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
 use common_runtime::tokio::sync::RwLock;
-use common_runtime::tokio::sync::RwLockReadGuard;
 use common_runtime::tokio::sync::RwLockWriteGuard;
 use common_runtime::tokio::task::JoinHandle;
 use common_tracing::tracing;
 
+use crate::configs;
+use crate::meta_service::raft_state::RaftState;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -53,16 +54,36 @@ use crate::meta_service::StateMachine;
 const ERR_INCONSISTENT_LOG: &str =
     "a query was received which was expecting data to be in place which does not exist in the log";
 
-/// An in-memory storage system implementing the `async_raft::RaftStorage` trait.
+/// An storage system implementing the `async_raft::RaftStorage` trait.
+///
+/// Trees:
+///   state:
+///       id
+///       hard_state
+///   log
+///   state_machine
+/// TODO(xp): MetaNode recovers persisted state when restarted.
 pub struct MetaStore {
-    /// The ID of the Raft node for which this memory storage instances is configured.
+    /// The ID of the Raft node for which this storage instances is configured.
+    /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
     pub id: NodeId,
+
+    /// The sled db for log and raft_state.
+    /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
+    /// This db is also used to generate a locally unique id.
+    /// Currently the id is used to create a unique snapshot id.
+    _db: sled::Db,
+
+    // Raft state includes:
+    // id: NodeId,
+    // current_term,
+    // voted_for
+    pub raft_state: RaftState,
+
     /// The Raft log.
     pub log: RwLock<BTreeMap<u64, Entry<LogEntry>>>,
     /// The Raft state machine.
     pub state_machine: RwLock<StateMachine>,
-    /// The current hard state.
-    pub hard_state: RwLock<Option<HardState>>,
 
     pub snapshot_index: Arc<Mutex<u64>>,
 
@@ -70,46 +91,51 @@ pub struct MetaStore {
     pub current_snapshot: RwLock<Option<Snapshot>>,
 }
 
+// TODO(xp): the following is a draft struct when meta storage is migrated to sled based impl.
+//           keep it until the migration is done.
+// /// Impl a raft store.
+// /// Includes:
+// /// - raft state, e.g., node-id, current_term and which node it has voted-for.
+// /// - raft log: distributed logs
+// /// - raft state machine.
+// pub struct C {
+//     /// The Raft log.
+//     pub log: sled::Tree,
+//
+//     /// The Raft state machine.
+//     /// State machine is a relatively standalone component in raft.
+//     /// In our impl a state machine has its own sled db.
+//     pub state_machine: RwLock<StateMachine>,
+//
+//     /// The current snapshot of the state machine.
+//     /// Currently snapshot data is a complete backup of the state machine and is not persisted on disk.
+//     /// When server restarts, a new snapshot is created on demand.
+//     pub current_snapshot: RwLock<Option<Snapshot>>,
+// }
+
 impl MetaStore {
     /// Create a new `MetaStore` instance.
-    pub fn new(id: NodeId) -> Self {
+    pub async fn new(id: NodeId, config: &configs::Config) -> common_exception::Result<MetaStore> {
+        let db = sled::open(&config.meta_dir)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("opening sled db: {}", config.meta_dir)
+            })?;
+
+        let raft_state = RaftState::create(&db, &id).await?;
+
         let log = RwLock::new(BTreeMap::new());
         let sm = RwLock::new(StateMachine::default());
-        let hs = RwLock::new(None);
         let current_snapshot = RwLock::new(None);
 
-        Self {
+        Ok(Self {
             id,
+            _db: db,
+            raft_state,
             log,
             state_machine: sm,
-            hard_state: hs,
             snapshot_index: Arc::new(Mutex::new(0)),
             current_snapshot,
-        }
-    }
-
-    /// Create a new `MetaStore` instance with some existing state (for testing).
-    #[cfg(test)]
-    pub fn new_with_state(
-        id: NodeId,
-        log: BTreeMap<u64, Entry<LogEntry>>,
-        sm: StateMachine,
-        hs: Option<HardState>,
-        current_snapshot: Option<Snapshot>,
-    ) -> Self {
-        let log = RwLock::new(log);
-        let sm = RwLock::new(sm);
-        let hs = RwLock::new(hs);
-        let current_snapshot = RwLock::new(current_snapshot);
-        Self {
-            id,
-            log,
-            state_machine: sm,
-            hard_state: hs,
-            // TODO(xp): need to reload state
-            snapshot_index: Arc::new(Mutex::new(0)),
-            current_snapshot,
-        }
+        })
     }
 
     /// Get a handle to the log for testing purposes.
@@ -122,9 +148,8 @@ impl MetaStore {
         self.state_machine.write().await
     }
 
-    /// Get a handle to the current hard state for testing purposes.
-    pub async fn read_hard_state(&self) -> RwLockReadGuard<'_, Option<HardState>> {
-        self.hard_state.read().await
+    pub async fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
+        self.raft_state.read_hard_state().await
     }
 }
 
@@ -176,11 +201,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
     async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
+        let hard_state = self.raft_state.read_hard_state().await?;
+
         let membership = self.get_membership_config().await?;
-        let mut hs = self.hard_state.write().await;
         let log = self.log.read().await;
         let sm = self.state_machine.read().await;
-        match &mut *hs {
+
+        match hard_state {
             Some(inner) => {
                 let last_log_id = match log.values().rev().next() {
                     Some(log) => log.log_id,
@@ -190,7 +217,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                 let st = InitialState {
                     last_log_id,
                     last_applied_log,
-                    hard_state: inner.clone(),
+                    hard_state: inner,
                     membership,
                 };
                 tracing::info!("build initial state from storage: {:?}", st);
@@ -199,7 +226,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             None => {
                 let new = InitialState::new_initial(self.id);
                 tracing::info!("create initial state: {:?}", new);
-                *hs = Some(new.hard_state.clone());
+                self.raft_state.write_hard_state(&new.hard_state).await?;
                 Ok(new)
             }
         }
@@ -207,7 +234,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
     #[tracing::instrument(level = "info", skip(self, hs), fields(myid=self.id))]
     async fn save_hard_state(&self, hs: &HardState) -> anyhow::Result<()> {
-        *self.hard_state.write().await = Some(hs.clone());
+        self.raft_state.write_hard_state(hs).await?;
         Ok(())
     }
 
@@ -589,12 +616,15 @@ impl MetaNode {
 
     /// Start a MetaStore node from initialized store.
     #[tracing::instrument(level = "info")]
-    pub async fn new(node_id: NodeId) -> Arc<MetaNode> {
-        let b = MetaNode::builder()
-            .node_id(node_id)
-            .sto(Arc::new(MetaStore::new(node_id)));
+    pub async fn new(
+        node_id: NodeId,
+        config: &configs::Config,
+    ) -> common_exception::Result<Arc<MetaNode>> {
+        let sto = MetaStore::new(node_id, config).await?;
+        let sto = Arc::new(sto);
+        let b = MetaNode::builder().node_id(node_id).sto(sto);
 
-        b.build().await.expect("can not fail")
+        b.build().await
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -684,8 +714,11 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     /// When a node is initialized with boot or boot_non_voter, start it with MetaStore::new().
     #[tracing::instrument(level = "info")]
-    pub async fn boot(node_id: NodeId, addr: String) -> common_exception::Result<Arc<MetaNode>> {
-        let mn = MetaNode::boot_non_voter(node_id, &addr).await?;
+    pub async fn boot(
+        node_id: NodeId,
+        config: &configs::Config,
+    ) -> common_exception::Result<Arc<MetaNode>> {
+        let mn = MetaNode::boot_non_voter(node_id, config).await?;
 
         let mut cluster_node_ids = HashSet::new();
         cluster_node_ids.insert(node_id);
@@ -697,6 +730,8 @@ impl MetaNode {
             .map_err(|x| ErrorCode::MetaServiceError(format!("{:?}", x)))?;
 
         tracing::info!("booted, rst: {:?}", rst);
+
+        let addr = config.meta_api_addr();
         mn.add_node(node_id, addr).await?;
 
         Ok(mn)
@@ -708,7 +743,7 @@ impl MetaNode {
     #[tracing::instrument(level = "info")]
     pub async fn boot_non_voter(
         node_id: NodeId,
-        addr: &str,
+        config: &configs::Config,
     ) -> common_exception::Result<Arc<MetaNode>> {
         // TODO test MetaNode::new() on a booted store.
         // TODO: Before calling this func, the node should be added as a non-voter to leader.
@@ -716,7 +751,7 @@ impl MetaNode {
 
         // When booting, there is addr stored in local store.
         // Thus we need to start grpc manually.
-        let sto = MetaStore::new(node_id);
+        let sto = MetaStore::new(node_id, config).await?;
 
         let b = MetaNode::builder()
             .node_id(node_id)
@@ -725,11 +760,13 @@ impl MetaNode {
 
         let mn = b.build().await?;
 
+        let addr = config.meta_api_addr();
+
         // Manually start the grpc, since no addr is stored yet.
         // We can not use the startup routine for initialized node.
-        MetaNode::start_grpc(mn.clone(), addr).await?;
+        MetaNode::start_grpc(mn.clone(), &addr).await?;
 
-        tracing::info!("booted non-voter: {}={}", node_id, addr);
+        tracing::info!("booted non-voter: {}={}", node_id, &addr);
 
         Ok(mn)
     }

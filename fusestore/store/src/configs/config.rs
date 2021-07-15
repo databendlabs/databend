@@ -89,4 +89,8 @@ impl Config {
     pub fn empty() -> Self {
         Self::from_iter(&Vec::<&'static str>::new())
     }
+
+    pub fn meta_api_addr(&self) -> String {
+        format!("{}:{}", self.meta_api_host, self.meta_api_port)
+    }
 }

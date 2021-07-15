@@ -18,7 +18,7 @@ use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::tests::assert_meta_connection;
-use crate::tests::rand_local_addr;
+use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_distributed_fs_single_node_read_all() -> anyhow::Result<()> {
@@ -113,8 +113,10 @@ async fn bring_up_dfs(root: &TempDir, files: HashMap<&str, &str>) -> anyhow::Res
     let root = root.path().to_str().unwrap().to_string();
     let fs = LocalFS::try_create(root)?;
 
-    let meta_addr = rand_local_addr();
-    let mn = MetaNode::boot(0, meta_addr.clone()).await?;
+    let tc = new_test_context();
+    let meta_addr = tc.config.meta_api_addr();
+
+    let mn = MetaNode::boot(0, &tc.config).await?;
     assert_meta_connection(&meta_addr).await?;
 
     let dfs = Dfs::create(fs, mn);
