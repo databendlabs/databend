@@ -11,11 +11,11 @@ common-arrow = {path = "../arrow"}
 
 anyhow = "1.0.41"
 backtrace = "0.3.60"
-reqwest = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0.25"
 tonic = "0.4.3"
+ureq =  "2.1.1"
 
 # Github dependencies
 sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0db7cfa"}

@@ -313,8 +313,8 @@ impl From<std::io::Error> for ErrorCode {
     }
 }
 
-impl From<reqwest::Error> for ErrorCode {
-    fn from(error: reqwest::Error) -> Self {
+impl From<ureq::Error> for ErrorCode {
+    fn from(error: ureq::Error) -> Self {
         ErrorCode::from_std_error(error)
     }
 }

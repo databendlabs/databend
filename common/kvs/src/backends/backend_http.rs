@@ -28,32 +28,23 @@ impl HttpBackend {
 #[async_trait]
 impl Backend for HttpBackend {
     async fn get(&self, key: String) -> Result<Option<String>> {
-        let res: String = reqwest::Client::new()
-            .post(format!("{}/get/{}", self.addr, key))
-            .send()
-            .await?
-            .json()
-            .await?;
+        let res = ureq::get(format!("{}/get/{}", self.addr, key).as_str())
+            .call()?
+            .into_string()?;
         Ok(Some(res))
     }
 
     async fn get_from_prefix(&self, prefix: String) -> Result<Vec<(String, String)>> {
-        let res: Vec<(String, String)> = reqwest::Client::new()
-            .get(format!("{}/list/{}", self.addr, prefix))
-            .send()
-            .await?
-            .json()
-            .await?;
-        Ok(res)
+        let body: Vec<(String, String)> =
+            ureq::get(format!("{}/list/{}", self.addr, prefix).as_str())
+                .call()?
+                .into_json()?;
+        Ok(body)
     }
 
     async fn put(&self, key: String, value: String) -> Result<()> {
         let req = Request { key, value };
-        reqwest::Client::new()
-            .post(format!("{}/put", self.addr))
-            .json(&req)
-            .send()
-            .await?;
+        ureq::post(format!("{}/put", self.addr).as_str()).send_json(ureq::json!(req))?;
         Ok(())
     }
 
@@ -62,11 +53,7 @@ impl Backend for HttpBackend {
             key,
             value: "".to_string(),
         };
-        reqwest::Client::new()
-            .post(format!("{}/remove", self.addr))
-            .json(&req)
-            .send()
-            .await?;
+        ureq::post(format!("{}/remove", self.addr).as_str()).send_json(ureq::json!(req))?;
         Ok(())
     }
 
