@@ -71,7 +71,7 @@ const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 
 // Cluster.
 const CLUSTER_NAMESPACE: &str = "CLUSTER_NAMESPACE";
-const CLUSTER_META_SERVER_URI: &str = "CLUSTER_META_SERVER_URI";
+const CLUSTER_REGISTRY_URI: &str = "CLUSTER_REGISTRY_URI";
 const CLUSTER_EXECUTOR_NAME: &str = "CLUSTER_EXECUTOR_NAME";
 const CLUSTER_EXECUTOR_PRIORITY: &str = "CLUSTER_EXECUTOR_PRIORITY";
 
@@ -161,8 +161,8 @@ pub struct Config {
     #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "namespace_", help = "Namespace of this executor\n")]
     pub cluster_namespace: String,
 
-    #[structopt(long, env = CLUSTER_META_SERVER_URI, default_value = "http://127.0.0.1:8080", help = "Cluster registry center URI, 'http://':fuse-query, 'local://': local sled, 'store://': fuse-store\n")]
-    pub cluster_meta_server_uri: String,
+    #[structopt(long, env = CLUSTER_REGISTRY_URI, default_value = "http://127.0.0.1:8080", help = "Cluster registry center URI, 'http://':fuse-query, 'local://': local sled, 'store://': fuse-store\n")]
+    pub cluster_registry_uri: String,
 
     #[structopt(long, env = CLUSTER_EXECUTOR_NAME, default_value = "executor_", help = "Executor unique name in the namespace\n")]
     pub cluster_executor_name: String,
@@ -264,7 +264,7 @@ impl Config {
                 store_api_password: "root".to_string(),
             },
             cluster_namespace: "n1".to_string(),
-            cluster_meta_server_uri: "http://127.0.0.1:8080".to_string(),
+            cluster_registry_uri: "http://127.0.0.1:8080".to_string(),
             cluster_executor_name: "".to_string(),
             cluster_executor_priority: 0,
             config_file: "".to_string(),
@@ -348,9 +348,9 @@ impl Config {
         env_helper!(mut_config, cluster_namespace, String, CLUSTER_NAMESPACE);
         env_helper!(
             mut_config,
-            cluster_meta_server_uri,
+            cluster_registry_uri,
             String,
-            CLUSTER_META_SERVER_URI
+            CLUSTER_REGISTRY_URI
         );
 
         // Executor.

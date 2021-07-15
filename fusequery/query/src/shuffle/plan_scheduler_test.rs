@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_flights::Address;
+use common_management::cluster::ClusterExecutor;
 use common_planners::*;
 use common_runtime::tokio;
 
@@ -410,5 +412,27 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
 
 async fn create_env() -> Result<FuseQueryContextRef> {
     let ctx = crate::tests::try_create_context()?;
+    let registry = crate::tests::start_cluster_registry().await?;
+    let namespace = ctx.get_config().cluster_namespace;
+    crate::tests::register_one_executor_to_namespace(
+        registry.clone(),
+        namespace.clone(),
+        &ClusterExecutor {
+            name: "dummy_local".to_string(),
+            priority: 1,
+            address: Address::create("localhost:9090")?,
+            local: false,
+            sequence: 0,
+        },
+    )
+    .await?;
+    crate::tests::register_one_executor_to_namespace(registry, namespace, &ClusterExecutor {
+        name: "dummy".to_string(),
+        priority: 1,
+        address: Address::create("github:9090")?,
+        local: false,
+        sequence: 0,
+    })
+    .await?;
     Ok(ctx)
 }

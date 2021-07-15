@@ -16,12 +16,9 @@ use crate::sessions::SessionMgrRef;
 /// Start services and return the random address.
 pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
     let mut results = vec![];
-    let (conf, _) = start_one_service("".to_string()).await?;
-    let meta_service_uri = conf.cluster_meta_server_uri.clone();
-    results.push(conf.flight_api_address.clone());
-
-    for _ in 0..nums - 1 {
-        let (conf, _) = start_one_service(meta_service_uri.clone()).await?;
+    let registry = start_cluster_registry().await?;
+    for _ in 0..nums {
+        let (conf, _) = start_one_service(registry.clone()).await?;
         results.push(conf.flight_api_address.clone());
     }
     tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
@@ -34,6 +31,19 @@ pub async fn try_start_service_with_session_mgr() -> Result<(String, SessionMgrR
     let (conf, mgr) = start_one_service("".to_string()).await?;
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     Ok((conf.flight_api_address, mgr))
+}
+
+// Start a server as registry.
+pub async fn start_cluster_registry() -> Result<String> {
+    let conf = Config::default();
+
+    let session_manager = SessionMgr::try_create(100)?;
+    let srv = RpcService::create(conf.clone(), session_manager.clone());
+    tokio::spawn(async move {
+        srv.make_server().await?;
+        Result::Ok(())
+    });
+    Ok(conf.cluster_registry_uri)
 }
 
 // Register an executor to the namespace.
@@ -54,14 +64,7 @@ async fn start_one_service(meta_service_uri: String) -> Result<(Config, SessionM
     let port: u32 = rng.gen_range(10000..11000);
     let flight_api_address = format!("127.0.0.1:{}", port);
     conf.flight_api_address = flight_api_address.clone();
-
-    if meta_service_uri.is_empty() {
-        let port: u32 = rng.gen_range(10000..11000);
-        let meta_service_uri = format!("http://127.0.0.1:{}", port);
-        conf.cluster_meta_server_uri = meta_service_uri.clone();
-    } else {
-        conf.cluster_meta_server_uri = meta_service_uri.clone();
-    }
+    conf.cluster_registry_uri = meta_service_uri.clone();
 
     let session_manager = SessionMgr::try_create(100)?;
     let srv = RpcService::create(conf.clone(), session_manager.clone());
@@ -76,7 +79,7 @@ async fn start_one_service(meta_service_uri: String) -> Result<(Config, SessionM
         let executor = conf_cloned.executor_from_config()?;
         register_one_executor_to_namespace(
             conf_cloned.cluster_namespace,
-            conf_cloned.cluster_meta_server_uri,
+            conf_cloned.cluster_registry_uri,
             &executor,
         )
         .await?;

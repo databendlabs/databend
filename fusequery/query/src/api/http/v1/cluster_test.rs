@@ -14,9 +14,9 @@ async fn test_cluster() -> common_exception::Result<()> {
     conf.cluster_namespace = "n1".to_string();
     conf.cluster_executor_name = "e1".to_string();
     // make the backend uri to local sled store.
-    conf.cluster_meta_server_uri = "local://xx".to_string();
+    conf.cluster_registry_uri = "local://xx".to_string();
 
-    let cluster_client = ClusterClient::create(conf.clone().cluster_meta_server_uri);
+    let cluster_client = ClusterClient::create(conf.clone().cluster_registry_uri);
     let filter = cluster_handler(conf, cluster_client);
 
     // Register.

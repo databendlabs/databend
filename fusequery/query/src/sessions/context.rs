@@ -51,13 +51,13 @@ pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
     pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
-        let executor_backend_uri = conf.cluster_meta_server_uri.clone();
+        let cluster_registry_uri = conf.cluster_registry_uri.clone();
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
-            cluster: ClusterClient::create(executor_backend_uri),
+            cluster: ClusterClient::create(cluster_registry_uri),
             datasource: Arc::new(DataSource::try_create()?),
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
@@ -81,7 +81,7 @@ impl FuseQueryContext {
         default_database: String,
         datasource: Arc<DataSource>,
     ) -> Result<FuseQueryContextRef> {
-        let executor_backend_uri = conf.cluster_meta_server_uri.clone();
+        let executor_backend_uri = conf.cluster_registry_uri.clone();
 
         Ok(Arc::new(FuseQueryContext {
             conf,

@@ -36,7 +36,7 @@ fn test_config() -> Result<()> {
                 store_api_password: "root".to_string(),
             },
             cluster_namespace: "n1".to_string(),
-            cluster_meta_server_uri: "http://127.0.0.1:8080".to_string(),
+            cluster_registry_uri: "http://127.0.0.1:8080".to_string(),
             cluster_executor_name: "".to_string(),
             cluster_executor_priority: 0,
             config_file: "".to_string(),

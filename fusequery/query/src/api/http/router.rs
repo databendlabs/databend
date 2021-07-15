@@ -20,7 +20,7 @@ pub struct Router {
 impl Router {
     pub fn create(cfg: Config) -> Self {
         let kv = KvStore::create();
-        let cluster_client = ClusterClient::create(cfg.clone().cluster_meta_server_uri);
+        let cluster_client = ClusterClient::create(cfg.clone().cluster_registry_uri);
         Router {
             cfg,
             kv,
