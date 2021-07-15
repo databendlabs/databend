@@ -147,8 +147,8 @@ macro_rules! impl_dyn_arrays {
                 cast_and_apply!(self, vec_hash, hasher)
             }
 
-            fn group_hash(&self) -> Result<DFUInt64Array> {
-                cast_and_apply!(self, group_hash,)
+            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+                cast_and_apply!(self, group_hash, ptr, step)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {
@@ -163,8 +163,8 @@ macro_rules! impl_dyn_arrays {
             fn divide(&self, rhs: &Series) -> Result<Series> {
                 try_physical_dispatch!(self, divide, rhs)
             }
-            fn remainder(&self, rhs: &Series) -> Result<Series> {
-                try_physical_dispatch!(self, remainder, rhs)
+            fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series> {
+                try_physical_dispatch!(self, remainder, rhs, dtype)
             }
             fn negative(&self) -> Result<Series> {
                 try_physical_dispatch!(self, negative,)

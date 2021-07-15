@@ -33,10 +33,10 @@ common-tracing = {path = "../../common/tracing"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.41"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.1" }
+anyhow = "1.0.42"
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.5" }
 async-trait = "0.1"
-env_logger = "0.8"
+env_logger = "0.9"
 futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
@@ -53,7 +53,7 @@ serde_json = "1.0"
 structopt = "0.3"
 structopt-toml = "0.4.5"
 tempfile = "3.2.0"
-thiserror = "1.0.25"
+thiserror = "1.0.26"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
 tonic = "0.4.3"

@@ -32,15 +32,15 @@ pub unsafe fn take_no_null_primitive<T: DFNumericType>(
     let array_values = arr.values();
     let index_values = indices.values();
 
-    let mut values = AlignedVec::<T::Native>::with_capacity_aligned(data_len);
-    let iter = index_values
-        .iter()
-        .map(|idx| *array_values.get_unchecked(*idx as usize));
-    values.extend(iter);
+    let mut av = AlignedVec::<T::Native>::with_capacity_len_aligned(data_len);
+    av.iter_mut()
+        .zip(index_values.iter())
+        .for_each(|(num, idx)| {
+            *num = *array_values.get_unchecked(*idx as usize);
+        });
 
     let nulls = indices.data_ref().null_buffer().cloned();
-
-    let arr = values.into_primitive_array::<T>(nulls);
+    let arr = av.into_primitive_array::<T>(nulls);
     Arc::new(arr)
 }
 
@@ -55,14 +55,15 @@ pub unsafe fn take_no_null_primitive_iter_unchecked<
     indices: I,
 ) -> Arc<PrimitiveArray<T>> {
     assert_eq!(arr.null_count(), 0);
-
+    let indices_iter = indices.into_iter();
+    let data_len = indices_iter.size_hint().0;
     let array_values = arr.values();
 
-    let av = indices
-        .into_iter()
-        .map(|idx| *array_values.get_unchecked(idx))
-        .collect::<AlignedVec<_>>();
+    let mut av = AlignedVec::<T::Native>::with_capacity_len_aligned(data_len);
 
+    av.iter_mut().zip(indices_iter).for_each(|(num, idx)| {
+        *num = *array_values.get_unchecked(idx);
+    });
     let arr = av.into_primitive_array::<T>(None);
     Arc::new(arr)
 }

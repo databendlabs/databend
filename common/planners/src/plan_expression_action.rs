@@ -7,8 +7,8 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionFactory;
@@ -84,12 +84,12 @@ impl ActionFunction {
         }
 
         match self.func_name.as_str() {
-            "cast" => Ok(CastFunction::create(self.return_type.clone())),
+            "cast" => CastFunction::create(self.func_name.clone(), self.return_type.clone()),
             _ => FunctionFactory::get(&self.func_name),
         }
     }
 
-    pub fn to_aggregate_function(&self) -> Result<Box<dyn AggregateFunction>> {
+    pub fn to_aggregate_function(&self) -> Result<AggregateFunctionRef> {
         if !self.is_aggregated {
             return Err(ErrorCode::LogicalError(
                 "Action must be aggregated function",

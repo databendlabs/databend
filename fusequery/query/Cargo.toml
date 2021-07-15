@@ -48,14 +48,14 @@ sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0
 
 # Crates.io dependencies
 ahash = "0.7.4"
-anyhow = "1.0.41"
+anyhow = "1.0.42"
 async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 clickhouse-srv = "0.2.1"
 crossbeam-queue = "0.3.2"
-env_logger = "0.8"
+env_logger = "0.9"
 futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
@@ -80,6 +80,8 @@ tonic = "0.4"
 walkdir = "2.3.2"
 warp = "0.3.1"
 uuid = { version = "0.8", features = ["serde", "v4"] }
+bumpalo = "3.7.0"
+
 
 [dev-dependencies]
 pretty_assertions = "0.7"

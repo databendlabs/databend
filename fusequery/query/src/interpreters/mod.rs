@@ -7,6 +7,8 @@ mod interpreter_database_create_test;
 #[cfg(test)]
 mod interpreter_database_drop_test;
 #[cfg(test)]
+mod interpreter_describe_table_test;
+#[cfg(test)]
 mod interpreter_explain_test;
 #[cfg(test)]
 mod interpreter_select_test;
@@ -24,6 +26,7 @@ mod interpreter_use_database_test;
 mod interpreter;
 mod interpreter_database_create;
 mod interpreter_database_drop;
+mod interpreter_describe_table;
 mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_insert_into;
@@ -38,6 +41,7 @@ pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
 pub use interpreter_database_drop::DropDatabaseInterpreter;
+pub use interpreter_describe_table::DescribeTableInterpreter;
 pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_insert_into::InsertIntoInterpreter;

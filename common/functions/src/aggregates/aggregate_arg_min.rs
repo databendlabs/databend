@@ -9,13 +9,15 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
+use crate::aggregates::AggregateSingeValueState;
+use crate::aggregates::GetState;
 
 #[derive(Clone)]
 pub struct AggregateArgMinFunction {
     display_name: String,
-    state: DataValue,
     arguments: Vec<DataField>,
 }
 
@@ -23,15 +25,11 @@ impl AggregateArgMinFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn AggregateFunction>> {
+    ) -> Result<Arc<dyn AggregateFunction>> {
         assert_binary_arguments(display_name, arguments.len())?;
 
-        Ok(Box::new(AggregateArgMinFunction {
+        Ok(Arc::new(AggregateArgMinFunction {
             display_name: display_name.to_string(),
-            state: DataValue::Struct(vec![
-                DataValue::from(arguments[0].data_type()),
-                DataValue::from(arguments[1].data_type()),
-            ]),
             arguments,
         }))
     }
@@ -54,7 +52,23 @@ impl AggregateFunction for AggregateArgMinFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
+    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
+        let state = arena.alloc(AggregateSingeValueState {
+            value: DataValue::Struct(vec![
+                DataValue::from(self.arguments[0].data_type()),
+                DataValue::from(self.arguments[1].data_type()),
+            ]),
+        });
+
+        (state as *mut AggregateSingeValueState) as StateAddr
+    }
+
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[DataColumn],
+        _input_rows: usize,
+    ) -> Result<()> {
         if columns[0].is_empty() {
             return Ok(());
         }
@@ -76,13 +90,15 @@ impl AggregateFunction for AggregateArgMinFunction {
 
             let min_arg = columns[0].try_get(index as usize)?;
 
-            if let DataValue::Struct(old_min_arg_val) = self.state.clone() {
+            let state = AggregateSingeValueState::get(place);
+
+            if let DataValue::Struct(old_min_arg_val) = state.value.clone() {
                 let old_min_arg = old_min_arg_val[0].clone();
                 let old_min_val = old_min_arg_val[1].clone();
 
                 let new_min_val = DataValue::agg(Min, old_min_val.clone(), min_val)?;
 
-                self.state = DataValue::Struct(vec![
+                state.value = DataValue::Struct(vec![
                     if new_min_val == old_min_val {
                         old_min_arg
                     } else {
@@ -95,18 +111,20 @@ impl AggregateFunction for AggregateArgMinFunction {
         Ok(())
     }
 
-    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        if let DataValue::Struct(old_min_arg_val) = self.state.clone() {
+    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+
+        if let DataValue::Struct(old_min_arg_val) = state.value.clone() {
             let old_min_arg = old_min_arg_val[0].clone();
             let old_min_val = old_min_arg_val[1].clone();
 
-            let new_min_val = DataValue::agg(Min, old_min_val.clone(), values[1].clone())?;
+            let new_min_val = DataValue::agg(Min, old_min_val.clone(), columns[1].try_get(row)?)?;
 
-            self.state = DataValue::Struct(vec![
+            state.value = DataValue::Struct(vec![
                 if new_min_val == old_min_val {
                     old_min_arg
                 } else {
-                    values[0].clone()
+                    columns[0].try_get(row)?
                 },
                 new_min_val,
             ]);
@@ -114,22 +132,30 @@ impl AggregateFunction for AggregateArgMinFunction {
         Ok(())
     }
 
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        Ok(vec![self.state.clone()])
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+        state.serialize(writer)
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let arg_val = states[0].clone();
-        if let (DataValue::Struct(new_states), DataValue::Struct(old_states)) =
-            (arg_val, self.state.clone())
+    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+        state.deserialize(reader)
+    }
+
+    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+        let rhs = AggregateSingeValueState::get(rhs);
+
+        if let (DataValue::Struct(current), DataValue::Struct(other)) =
+            (state.value.clone(), rhs.value.clone())
         {
-            let new_min_val = DataValue::agg(Min, new_states[1].clone(), old_states[1].clone())?;
+            let new_min_val = DataValue::agg(Min, current[1].clone(), other[1].clone())?;
 
-            self.state = DataValue::Struct(vec![
-                if new_min_val == old_states[1] {
-                    old_states[0].clone()
+            state.value = DataValue::Struct(vec![
+                if new_min_val == other[1] {
+                    other[0].clone()
                 } else {
-                    new_states[0].clone()
+                    current[0].clone()
                 },
                 new_min_val,
             ]);
@@ -137,11 +163,12 @@ impl AggregateFunction for AggregateArgMinFunction {
         Ok(())
     }
 
-    fn merge_result(&self) -> Result<DataValue> {
-        Ok(if let DataValue::Struct(state) = self.state.clone() {
+    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+        let state = AggregateSingeValueState::get(place);
+        Ok(if let DataValue::Struct(state) = state.value.clone() {
             state[0].clone()
         } else {
-            self.state.clone()
+            state.value.clone()
         })
     }
 }

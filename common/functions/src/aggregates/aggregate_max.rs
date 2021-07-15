@@ -8,13 +8,16 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::GetState;
+use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
+use crate::aggregates::AggregateFunctionRef;
+use crate::aggregates::AggregateSingeValueState;
 
 #[derive(Clone)]
 pub struct AggregateMaxFunction {
     display_name: String,
-    state: DataValue,
     arguments: Vec<DataField>,
 }
 
@@ -22,12 +25,11 @@ impl AggregateMaxFunction {
     pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
-    ) -> Result<Box<dyn AggregateFunction>> {
+    ) -> Result<AggregateFunctionRef> {
         assert_unary_arguments(display_name, arguments.len())?;
 
-        Ok(Box::new(AggregateMaxFunction {
+        Ok(Arc::new(AggregateMaxFunction {
             display_name: display_name.to_string(),
-            state: DataValue::from(arguments[0].data_type()),
             arguments,
         }))
     }
@@ -50,32 +52,56 @@ impl AggregateFunction for AggregateMaxFunction {
         self
     }
 
-    fn accumulate(&mut self, columns: &[DataColumn], _input_rows: usize) -> Result<()> {
+    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
+        let state = arena.alloc(AggregateSingeValueState {
+            value: DataValue::from(self.arguments[0].data_type()),
+        });
+
+        (state as *mut AggregateSingeValueState) as StateAddr
+    }
+
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[DataColumn],
+        _input_rows: usize,
+    ) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
         let value = Self::max_batch(&columns[0])?;
-        self.state = DataValue::agg(Max, self.state.clone(), value)?;
-
+        state.value = DataValue::agg(Max, state.value.clone(), value)?;
         Ok(())
     }
 
-    fn accumulate_scalar(&mut self, values: &[DataValue]) -> Result<()> {
-        self.state = DataValue::agg(Max, self.state.clone(), values[0].clone())?;
+    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+        let value = columns[0].try_get(row)?;
 
+        state.value = DataValue::agg(Max, state.value.clone(), value)?;
         Ok(())
     }
 
-    fn accumulate_result(&self) -> Result<Vec<DataValue>> {
-        Ok(vec![self.state.clone()])
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+        state.serialize(writer)
     }
 
-    fn merge(&mut self, states: &[DataValue]) -> Result<()> {
-        let value = states[0].clone();
-        self.state = DataValue::agg(Max, self.state.clone(), value)?;
+    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+        state.deserialize(reader)
+    }
 
+    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = AggregateSingeValueState::get(place);
+        let rhs = AggregateSingeValueState::get(rhs);
+
+        state.value = DataValue::agg(Max, state.value.clone(), rhs.value.clone())?;
         Ok(())
     }
 
-    fn merge_result(&self) -> Result<DataValue> {
-        Ok(self.state.clone())
+    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+        let state = AggregateSingeValueState::get(place);
+
+        Ok(state.value.clone())
     }
 }
 

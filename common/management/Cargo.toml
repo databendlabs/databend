@@ -23,5 +23,5 @@ sha2 = "0.9.5"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
-mockall = "0.10.1"
+mockall = "0.10.2"
 common-metatypes = {path = "../metatypes"}
