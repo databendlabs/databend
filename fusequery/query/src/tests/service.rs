@@ -3,22 +3,26 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use common_management::cluster::ClusterClient;
+use common_management::cluster::ClusterExecutor;
 use common_runtime::tokio;
 use rand::Rng;
 
 use crate::api::RpcService;
 use crate::configs::Config;
-use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionMgr;
 use crate::sessions::SessionMgrRef;
 
 /// Start services and return the random address.
 pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
     let mut results = vec![];
+    let (conf, _) = start_one_service("".to_string()).await?;
+    let meta_service_uri = conf.cluster_meta_server_uri.clone();
+    results.push(conf.flight_api_address.clone());
 
-    for _ in 0..nums {
-        let (addr, _) = start_one_service().await?;
-        results.push(addr.clone());
+    for _ in 0..nums - 1 {
+        let (conf, _) = start_one_service(meta_service_uri.clone()).await?;
+        results.push(conf.flight_api_address.clone());
     }
     tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
@@ -27,53 +31,55 @@ pub async fn try_start_service(nums: usize) -> Result<Vec<String>> {
 
 // Start service and return the session manager for create his own contexts.
 pub async fn try_start_service_with_session_mgr() -> Result<(String, SessionMgrRef)> {
-    let (addr, mgr) = start_one_service().await?;
+    let (conf, mgr) = start_one_service("".to_string()).await?;
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    Ok((addr, mgr))
+    Ok((conf.flight_api_address, mgr))
 }
 
-// Start a cluster and return the context who has the cluster info.
-pub async fn try_create_context_with_nodes(nums: usize) -> Result<FuseQueryContextRef> {
-    let addrs = try_start_service(nums).await?;
-    let ctx = crate::tests::try_create_context()?;
-    for (i, addr) in addrs.iter().enumerate() {
-        ctx.register_one_executor(format!("executor{}", i), 10, addr.clone())
-            .await?;
-    }
-    Ok(ctx)
-}
-
-// Start a cluster and return the context who has the cluster info.
-pub async fn try_create_context_with_nodes_and_priority(
-    nums: usize,
-    p: &[u8],
-) -> Result<FuseQueryContextRef> {
-    // p is the priority array of the nodes.
-    // Its length of it should be nums.
-    assert_eq!(nums, p.len());
-    let addrs = try_start_service(nums).await?;
-    let ctx = crate::tests::try_create_context()?;
-    for (i, addr) in addrs.iter().enumerate() {
-        ctx.register_one_executor(format!("executor{}", i), p[i], addr.clone())
-            .await?;
-    }
-    Ok(ctx)
+// Register an executor to the namespace.
+pub async fn register_one_executor_to_namespace(
+    meta_service_uri: String,
+    namespace: String,
+    executor: &ClusterExecutor,
+) -> Result<()> {
+    let cluster_client = ClusterClient::create(meta_service_uri);
+    cluster_client.register(namespace, executor).await
 }
 
 // Start one random service and get the session manager.
-async fn start_one_service() -> Result<(String, SessionMgrRef)> {
+async fn start_one_service(meta_service_uri: String) -> Result<(Config, SessionMgrRef)> {
+    let mut conf = Config::default();
+
     let mut rng = rand::thread_rng();
     let port: u32 = rng.gen_range(10000..11000);
-    let addr = format!("127.0.0.1:{}", port);
+    let flight_api_address = format!("127.0.0.1:{}", port);
+    conf.flight_api_address = flight_api_address.clone();
 
-    let mut conf = Config::default();
-    conf.flight_api_address = addr.clone();
+    if meta_service_uri.is_empty() {
+        let port: u32 = rng.gen_range(10000..11000);
+        let meta_service_uri = format!("http://127.0.0.1:{}", port);
+        conf.cluster_meta_server_uri = meta_service_uri.clone();
+    } else {
+        conf.cluster_meta_server_uri = meta_service_uri.clone();
+    }
 
     let session_manager = SessionMgr::try_create(100)?;
-    let srv = RpcService::create(conf, session_manager.clone());
+    let srv = RpcService::create(conf.clone(), session_manager.clone());
     tokio::spawn(async move {
         srv.make_server().await?;
         Result::Ok(())
     });
-    Ok((addr, session_manager))
+
+    // Register to the namespace.
+    {
+        let conf_cloned = conf.clone();
+        let executor = conf_cloned.executor_from_config()?;
+        register_one_executor_to_namespace(
+            conf_cloned.cluster_namespace,
+            conf_cloned.cluster_meta_server_uri,
+            &executor,
+        )
+        .await?;
+    }
+    Ok((conf, session_manager))
 }

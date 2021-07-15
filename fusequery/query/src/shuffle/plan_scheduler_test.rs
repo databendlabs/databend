@@ -410,14 +410,5 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
 
 async fn create_env() -> Result<FuseQueryContextRef> {
     let ctx = crate::tests::try_create_context()?;
-    ctx.register_one_executor(
-        String::from("dummy_local"),
-        1,
-        String::from("localhost:9090"),
-    )
-    .await?;
-    ctx.register_one_executor(String::from("dummy"), 1, String::from("github.com:9090"))
-        .await?;
-
     Ok(ctx)
 }

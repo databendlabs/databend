@@ -5,11 +5,9 @@
 mod context;
 mod number;
 mod service;
-mod service_new;
 
 pub use context::try_create_context;
 pub use number::NumberTestData;
-pub use service::try_create_context_with_nodes;
-pub use service::try_create_context_with_nodes_and_priority;
+pub use service::register_one_executor_to_namespace;
 pub use service::try_start_service;
 pub use service::try_start_service_with_session_mgr;

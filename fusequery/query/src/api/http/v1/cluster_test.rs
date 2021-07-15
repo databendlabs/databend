@@ -13,7 +13,7 @@ async fn test_cluster() -> common_exception::Result<()> {
     let mut conf = Config::default();
     conf.cluster_namespace = "n1".to_string();
     conf.cluster_executor_name = "e1".to_string();
-    // make the backend url to local sled store.
+    // make the backend uri to local sled store.
     conf.cluster_meta_server_uri = "local://xx".to_string();
 
     let cluster_client = ClusterClient::create(conf.clone().cluster_meta_server_uri);

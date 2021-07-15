@@ -198,21 +198,6 @@ impl FuseQueryContext {
             .await
     }
 
-    /// Register a new executor to the namespace.
-    pub async fn register_one_executor(
-        &self,
-        executor_name: String,
-        priority: u8,
-        address: String,
-    ) -> Result<()> {
-        let executor =
-            ClusterExecutor::create(executor_name, priority, Address::create(address.as_str())?)?;
-        self.cluster
-            .register(self.conf.cluster_namespace.clone(), &executor)
-            .await?;
-        Ok(())
-    }
-
     /// Get the flight client from address.
     pub async fn get_flight_client(&self, address: Address) -> Result<FlightClient> {
         let channel =

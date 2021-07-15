@@ -155,8 +155,6 @@ async fn test_scatter_optimizer() -> Result<()> {
 
     for test in tests {
         let ctx = crate::tests::try_create_context()?;
-        ctx.register_one_executor("Github".to_string(), 1, "www.github.com:9090".to_string())
-            .await?;
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
 
         let mut optimizer = ScattersOptimizer::create(ctx);
