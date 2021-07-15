@@ -66,6 +66,14 @@ pub struct Config {
 
     #[structopt(
         long,
+        env = "FUSE_STORE_META_DIR",
+        default_value = "./_meta",
+        help = "The dir to store persisted meta state, including raft logs, state machine etc."
+    )]
+    pub meta_dir: String,
+
+    #[structopt(
+        long,
         env = "FUSE_STORE_BOOT",
         help = "Whether to boot up a new cluster. If already booted, it is ignored"
     )]

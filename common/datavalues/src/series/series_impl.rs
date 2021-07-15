@@ -66,7 +66,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn add_to(&self, rhs: &Series) -> Result<Series>;
     fn multiply(&self, rhs: &Series) -> Result<Series>;
     fn divide(&self, rhs: &Series) -> Result<Series>;
-    fn remainder(&self, rhs: &Series) -> Result<Series>;
+    fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series>;
     fn negative(&self) -> Result<Series>;
 
     fn sum(&self) -> Result<DataValue>;

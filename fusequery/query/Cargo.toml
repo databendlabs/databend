@@ -48,13 +48,13 @@ clickhouse-srv = { git = "https://github.com/zhang2014/clickhouse-srv", branch =
 
 # Crates.io dependencies
 ahash = "0.7.4"
-anyhow = "1.0.41"
+anyhow = "1.0.42"
 async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 crossbeam-queue = "0.3.2"
-env_logger = "0.8"
+env_logger = "0.9"
 futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"

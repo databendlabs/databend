@@ -8,6 +8,7 @@ use std::io;
 use std::io::prelude::*;
 use std::io::BufWriter;
 use std::io::Read;
+use std::net::ToSocketAddrs;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -119,7 +120,16 @@ async fn main() -> Result<()> {
 
     // First load configs from args.
     let conf = Config::load_from_args();
-    let database_url = format!("tcp://{}:{}?compression=lz4", conf.host, conf.port);
+    let address = format!("{}:{}", conf.host, conf.port)
+        .to_socket_addrs()
+        .expect("unable to resolve address")
+        .next()
+        .expect("unable to process address");
+    let database_url = format!(
+        "tcp://{}:{}?compression=lz4",
+        address.ip().to_string(),
+        address.port().to_string()
+    );
     let queries = read_queries(&conf.query)?;
 
     let bench = Arc::new(Benchmark::new(conf, queries, database_url));

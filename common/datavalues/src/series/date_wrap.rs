@@ -167,8 +167,8 @@ macro_rules! impl_dyn_arrays {
             fn divide(&self, rhs: &Series) -> Result<Series> {
                 try_physical_dispatch!(self, divide, rhs)
             }
-            fn remainder(&self, rhs: &Series) -> Result<Series> {
-                try_physical_dispatch!(self, remainder, rhs)
+            fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series> {
+                try_physical_dispatch!(self, remainder, rhs, dtype)
             }
             fn negative(&self) -> Result<Series> {
                 try_physical_dispatch!(self, negative,)

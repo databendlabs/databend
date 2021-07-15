@@ -4,7 +4,9 @@
 
 #[cfg(test)]
 mod cast_test;
+mod expression;
 
 mod cast;
 
 pub use cast::CastFunction;
+pub use expression::ToCastFunction;

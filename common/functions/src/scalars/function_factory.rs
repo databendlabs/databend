@@ -16,6 +16,7 @@ use crate::scalars::Function;
 use crate::scalars::HashesFunction;
 use crate::scalars::LogicFunction;
 use crate::scalars::StringFunction;
+use crate::scalars::ToCastFunction;
 use crate::scalars::UdfFunction;
 
 pub struct FunctionFactory;
@@ -32,6 +33,7 @@ lazy_static! {
         StringFunction::register(map.clone()).unwrap();
         UdfFunction::register(map.clone()).unwrap();
         HashesFunction::register(map.clone()).unwrap();
+        ToCastFunction::register(map.clone()).unwrap();
         map
     };
 }

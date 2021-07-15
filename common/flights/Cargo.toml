@@ -22,7 +22,7 @@ common-store-api= {path = "../store-api"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.41"
+anyhow = "1.0.42"
 futures = "0.3"
 jwt-simple = "0.10.1"
 log = "0.4"
