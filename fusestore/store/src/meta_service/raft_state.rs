@@ -5,11 +5,9 @@
 use async_raft::storage::HardState;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use sled::IVec;
 
 use crate::meta_service::NodeId;
+use crate::meta_service::SledSerde;
 
 /// Raft state stores everything else other than log and state machine, which includes:
 /// id: NodeId,
@@ -26,25 +24,6 @@ pub struct RaftState {
 const K_RAFT_STATE: &str = "raft_state";
 const K_ID: &str = "id";
 const K_HARD_STATE: &str = "hard_state";
-
-/// Serialize/deserialize(ser/de) for RaftState.
-trait RaftStateSerde {
-    fn ser(&self) -> Result<IVec, ErrorCode>;
-    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, ErrorCode>
-    where Self: Sized;
-}
-
-impl<SD: Serialize + DeserializeOwned + Sized> RaftStateSerde for SD {
-    fn ser(&self) -> Result<IVec, ErrorCode> {
-        let x = serde_json::to_vec(self)?;
-        Ok(x.into())
-    }
-
-    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, ErrorCode> {
-        let s = serde_json::from_slice(v.as_ref())?;
-        Ok(s)
-    }
-}
 
 impl RaftState {
     /// Create a new sled db backed RaftState.
