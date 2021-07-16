@@ -138,6 +138,30 @@ impl MetaStore {
         })
     }
 
+    /// Open an existent `MetaStore` instance.
+    pub async fn open(config: &configs::Config) -> common_exception::Result<MetaStore> {
+        let db = sled::open(&config.meta_dir)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("opening sled db: {}", config.meta_dir)
+            })?;
+
+        let raft_state = RaftState::open(&db)?;
+
+        let log = RwLock::new(BTreeMap::new());
+        let sm = RwLock::new(StateMachine::default());
+        let current_snapshot = RwLock::new(None);
+
+        Ok(Self {
+            id: raft_state.id,
+            _db: db,
+            raft_state,
+            log,
+            state_machine: sm,
+            snapshot_index: Arc::new(Mutex::new(0)),
+            current_snapshot,
+        })
+    }
+
     /// Get a handle to the log for testing purposes.
     pub async fn get_log(&self) -> RwLockWriteGuard<'_, BTreeMap<u64, Entry<LogEntry>>> {
         self.log.write().await

@@ -41,6 +41,8 @@ pub use crate::protobuf::RaftMes;
 #[cfg(test)]
 mod meta_service_impl_test;
 #[cfg(test)]
+mod meta_store_test;
+#[cfg(test)]
 mod placement_test;
 mod raft_state;
 #[cfg(test)]
