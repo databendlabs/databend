@@ -22,7 +22,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
     // 1. Service starts.
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -99,7 +99,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     tracing::info!("init logging");
 
     // 1. Service starts.
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -213,7 +213,7 @@ async fn test_do_append() -> anyhow::Result<()> {
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
@@ -283,7 +283,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
@@ -359,7 +359,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
 async fn test_flight_generic_kv() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 

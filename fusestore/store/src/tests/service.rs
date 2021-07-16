@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use common_runtime::tokio;
 use common_tracing::tracing;
@@ -12,11 +14,12 @@ use tempfile::TempDir;
 use crate::api::StoreServer;
 use crate::configs;
 use crate::meta_service::GetReq;
+use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::tests::Seq;
 
 // Start one random service and get the session manager.
-pub async fn start_store_server() -> Result<String> {
+pub async fn start_store_server() -> Result<(StoreTestContext, String)> {
     let mut tc = new_test_context();
 
     let addr = rand_local_addr();
@@ -34,7 +37,7 @@ pub async fn start_store_server() -> Result<String> {
     // TODO(xp): some times the MetaNode takes more than 200 ms to startup, with disk-backed store.
     //           Find out why and using some kind of waiting routine to ensure service is on.
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    Ok(addr)
+    Ok((tc, addr))
 }
 
 pub fn next_port() -> u32 {
@@ -47,6 +50,7 @@ pub struct StoreTestContext {
     #[allow(dead_code)]
     meta_temp_dir: TempDir,
     pub config: configs::Config,
+    pub meta_nodes: Vec<Arc<MetaNode>>,
 }
 
 /// Create a new Config for test, with unique port assigned
@@ -62,6 +66,7 @@ pub fn new_test_context() -> StoreTestContext {
         // hold the TempDir until being dropped.
         meta_temp_dir: t,
         config,
+        meta_nodes: vec![],
     }
 }
 
