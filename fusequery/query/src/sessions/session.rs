@@ -17,6 +17,7 @@ use crate::datasources::DataSource;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
+use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
@@ -98,14 +99,17 @@ impl Session {
     }
 
     pub fn create_context(self: &Arc<Self>) -> FuseQueryContextRef {
-        let state_guard = self.mutable_state.lock();
+        let mut state_guard = self.mutable_state.lock();
+
+        if state_guard.context_shared.is_none() {
+            let config = self.config.clone();
+            let shared = FuseQueryContextShared::try_create(config, self.clone());
+            state_guard.context_shared = Some(shared);
+        }
 
         match &state_guard.context_shared {
             Some(shared) => FuseQueryContext::from_shared(shared.clone()),
-            None => FuseQueryContext::from_shared(FuseQueryContextShared::try_create(
-                self.config.clone(),
-                self.clone(),
-            )),
+            None => unreachable!(),
         }
     }
 
@@ -140,6 +144,10 @@ impl Session {
 
     pub fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
         Ok(self.sessions.get_cluster())
+    }
+
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.sessions.processes_info()
     }
 
     pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {

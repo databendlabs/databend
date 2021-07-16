@@ -37,6 +37,7 @@ pub struct FuseQueryContextShared {
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
+    pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
 }
 
 impl FuseQueryContextShared {
@@ -51,6 +52,7 @@ impl FuseQueryContextShared {
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
+            running_query: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -108,6 +110,11 @@ impl FuseQueryContextShared {
                 Ok(runtime)
             }
         }
+    }
+
+    pub fn attach_query_info(&self, query: &str) {
+        let mut running_query = self.running_query.write();
+        *running_query = Some(query.to_string());
     }
 
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {

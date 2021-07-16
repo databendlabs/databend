@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use crate::sessions::FuseQueryContextRef;
+use crate::sessions::ProcessInfo;
 use crate::sessions::Session;
 
 /// SessionRef is the ptr of session.
@@ -41,6 +42,10 @@ impl SessionRef {
 
     pub fn attach<F: FnOnce() + Send + 'static>(&self, host: Option<SocketAddr>, io_shutdown: F) {
         self.session.attach(host, io_shutdown)
+    }
+
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.session.processes_info()
     }
 }
 

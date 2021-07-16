@@ -41,6 +41,7 @@ pub use functions_table::FunctionsTable;
 pub use numbers_stream::NumbersStream;
 pub use numbers_table::NumbersTable;
 pub use one_table::OneTable;
+pub use processes_table::ProcessesTable;
 pub use settings_table::SettingsTable;
 pub use system_database::SystemDatabase;
 pub use system_factory::SystemFactory;

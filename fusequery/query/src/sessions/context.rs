@@ -27,6 +27,7 @@ use crate::datasources::DataSource;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::context_shared::FuseQueryContextShared;
+use crate::sessions::ProcessInfo;
 use crate::sessions::Settings;
 
 pub struct FuseQueryContext {
@@ -225,6 +226,14 @@ impl FuseQueryContext {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
         format!("_subquery_{}", index)
     }
+
+    pub fn attach_query_info(&self, query: &str) {
+        self.shared.attach_query_info(query);
+    }
+
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.shared.session.processes_info()
+    }
 }
 
 impl std::fmt::Debug for FuseQueryContext {
@@ -243,7 +252,7 @@ impl FuseQueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            log::debug!("Destroy FuseQueryContext");
+            log::info!("Destroy FuseQueryContext");
             self.session.destroy_context_shared();
         }
     }

@@ -92,6 +92,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         let start = Instant::now();
         let context = self.session.create_context();
 
+        context.attach_query_info(query);
         DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))?;
 
         histogram!(

@@ -25,12 +25,12 @@ use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
 pub struct SessionManager {
-    conf: Config,
-    cluster: ClusterRef,
-    datasource: Arc<DataSource>,
+    pub(in crate::sessions) conf: Config,
+    pub(in crate::sessions) cluster: ClusterRef,
+    pub(in crate::sessions) datasource: Arc<DataSource>,
 
-    max_sessions: usize,
-    active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
+    pub(in crate::sessions) max_sessions: usize,
+    pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
 }
 
 pub type SessionManagerRef = Arc<SessionManager>;
