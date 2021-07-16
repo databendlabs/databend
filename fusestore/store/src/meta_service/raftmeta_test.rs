@@ -222,25 +222,10 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, tc0) = setup_leader().await?;
-    let mn0 = tc0.meta_nodes[0].clone();
+    let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+    let all = test_context_nodes(&tcs);
 
-    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?; // follower
-    let (_nid2, tc2) = setup_non_voter(mn0.clone(), 2).await?; // follower
-    let (_nid3, tc3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
-
-    let mn1 = tc1.meta_nodes[0].clone();
-    let mn2 = tc2.meta_nodes[0].clone();
-    let mn3 = tc3.meta_nodes[0].clone();
-
-    mn0.raft.change_membership(hashset![0, 1, 2]).await?;
-
-    let all = vec![mn0.clone(), mn1.clone(), mn2.clone(), mn3.clone()];
-
-    // ensure cluster works
-    assert_set_file_synced(all.clone(), "foo").await?;
-
-    let leader_id = mn0.raft.metrics().borrow().current_leader.unwrap();
+    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
 
     // test writing to leader and non-leader
     let key = "t-non-leader-write";
@@ -276,51 +261,22 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_node_set_file() -> anyhow::Result<()> {
-    // - Start a leader, 2 followers and a non-voter;
+    // - Start a leader, 2 followers and 2 non-voter;
     // - Write to the raft node on every node, expect Ok.
 
     // TODO: test MetaNode.write during leader changes.
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, tc0) = setup_leader().await?;
-    let mn0 = tc0.meta_nodes[0].clone();
-    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?; // follower
-    let (_nid2, tc2) = setup_non_voter(mn0.clone(), 2).await?; // follower
-    let (_nid3, tc3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
+    let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+    let all = test_context_nodes(&tcs);
 
-    let mn1 = tc1.meta_nodes[0].clone();
-    let mn2 = tc2.meta_nodes[0].clone();
-    let mn3 = tc3.meta_nodes[0].clone();
-
-    mn0.raft.change_membership(hashset![0, 1, 2]).await?;
-
-    let all = vec![mn0.clone(), mn1.clone(), mn2.clone(), mn3.clone()];
-
-    // ensure cluster works
-    assert_set_file_synced(all.clone(), "foo").await?;
-
-    // test writing
+    // test writing on every node
     for id in 0u64..4 {
         let key = format!("t-write-{}", id);
         let mn = &all[id as usize];
 
-        let last_applied = mn.raft.metrics().borrow().last_applied;
-
-        let rst = mn
-            .write(LogEntry {
-                txid: None,
-                cmd: Cmd::SetFile {
-                    key: key.to_string(),
-                    value: key.to_string(),
-                },
-            })
-            .await;
-
-        assert!(rst.is_ok());
-
-        assert_applied_index(all.clone(), last_applied + 1).await?;
-        assert_get_file(all.clone(), &key, &key).await?;
+        assert_set_file_on_specified_node_synced(all.clone(), mn.clone(), &key).await?;
     }
 
     Ok(())
@@ -333,7 +289,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let all_tc = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+    let (_nlog, all_tc) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
     let all = all_tc
         .iter()
         .map(|tc| tc.meta_nodes[0].clone())
@@ -382,39 +338,16 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-async fn test_meta_node_3_members() -> anyhow::Result<()> {
-    // - Bring a leader online.
-    // - Add 2 node to the cluster.
+async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
+    // - Bring up a cluster with 1 leader, 2 followers and 2 non-voters.
     // - Write to leader, check data is replicated.
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, tc0) = setup_leader().await?;
-    let mn0 = tc0.meta_nodes[0].clone();
+    let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+    let all = test_context_nodes(&tcs);
 
-    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?;
-    let (_nid2, tc2) = setup_non_voter(mn0.clone(), 2).await?;
-
-    let mn1 = tc1.meta_nodes[0].clone();
-    let mn2 = tc2.meta_nodes[0].clone();
-
-    let mut nlog = 1 + 3; // leader add a blank log, adding a node commits one log.
-
-    nlog += assert_set_file_synced(vec![mn0.clone(), mn1.clone(), mn2.clone()], "foo-1").await?;
-
-    // add node 1 and 2 as follower
-    mn0.raft.change_membership(hashset![0, 1, 2]).await?;
-    nlog += 2; // joint consensus commits 2 logs
-
-    wait_for_state(&mn1, State::Follower).await?;
-    wait_for_state(&mn2, State::Follower).await?;
-    wait_for_state(&mn0, State::Leader).await?;
-
-    wait_for_log(&mn0, nlog).await?;
-    wait_for_log(&mn1, nlog).await?;
-    wait_for_log(&mn2, nlog).await?;
-
-    assert_set_file_synced(vec![mn0.clone(), mn1.clone(), mn2.clone()], "foo-2").await?;
+    _nlog += assert_set_file_synced(all.clone(), "foo-1").await?;
 
     Ok(())
 }
@@ -426,6 +359,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Restart them.
     // - Check old data an new written data.
 
+    // TODO(xp): this only tests for in-memory storage.
     common_tracing::init_default_tracing();
 
     let (_nid0, tc0) = setup_leader().await?;
@@ -474,7 +408,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 async fn setup_cluster(
     voters: HashSet<NodeId>,
     non_voters: HashSet<NodeId>,
-) -> anyhow::Result<Vec<StoreTestContext>> {
+) -> anyhow::Result<(u64, Vec<StoreTestContext>)> {
     // TODO(xp): use setup_cluster if possible in tests. Get rid of boilerplate snippets.
     // leader is always node-0
     assert!(voters.contains(&0));
@@ -486,23 +420,57 @@ async fn setup_cluster(
     let leader = tc0.meta_nodes[0].clone();
     rst.push(tc0);
 
+    // blank log and add node
+    let mut nlog = 2;
+    wait_for_log(&leader, nlog).await?;
+
     for id in voters.iter() {
         // leader is already created.
         if *id == 0 {
             continue;
         }
         let (_id, tc) = setup_non_voter(leader.clone(), *id).await?;
+
+        // Adding a node to store
+        nlog += 1;
+        wait_for_log(&tc.meta_nodes[0], nlog).await?;
+
         rst.push(tc);
     }
 
     for id in non_voters.iter() {
         let (_id, tc) = setup_non_voter(leader.clone(), *id).await?;
+
+        // Adding a node to store
+        nlog += 1;
+        wait_for_log(&tc.meta_nodes[0], nlog).await?;
+
         rst.push(tc);
     }
 
-    leader.raft.change_membership(voters).await?;
+    leader.raft.change_membership(voters.clone()).await?;
+    nlog += 2;
 
-    Ok(rst)
+    tracing::info!("--- check node roles");
+    {
+        wait_for_state(&leader, State::Leader).await?;
+
+        for i in 1..voters.len() {
+            wait_for_state(&rst[i].meta_nodes[0], State::Follower).await?;
+        }
+        for i in voters.len()..(voters.len() + non_voters.len()) {
+            wait_for_state(&rst[i].meta_nodes[0], State::NonVoter).await?;
+        }
+    }
+
+    tracing::info!("--- check node logs");
+    {
+        for i in 0..rst.len() {
+            wait_for_log(&rst[i].meta_nodes[0], nlog).await?;
+        }
+    }
+
+    Ok((nlog, rst))
 }
 
 async fn setup_leader() -> anyhow::Result<(NodeId, StoreTestContext)> {
@@ -589,6 +557,36 @@ async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> an
     Ok(1)
 }
 
+/// Write one log on every node, check all nodes replicated the log.
+/// Returns the number log committed.
+async fn assert_set_file_on_specified_node_synced(
+    meta_nodes: Vec<Arc<MetaNode>>,
+    write_to: Arc<MetaNode>,
+    key: &str,
+) -> anyhow::Result<u64> {
+    let leader = meta_nodes[0].clone();
+
+    let last_applied = leader.raft.metrics().borrow().last_applied;
+    tracing::info!("leader: last_applied={}", last_applied);
+
+    {
+        write_to
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::SetFile {
+                    key: key.to_string(),
+                    value: key.to_string(),
+                },
+            })
+            .await?;
+    }
+
+    assert_applied_index(meta_nodes.clone(), last_applied + 1).await?;
+    assert_get_file(meta_nodes.clone(), key, key).await?;
+
+    Ok(1)
+}
+
 /// Wait nodes for applied index to be upto date: applied >= at_least.
 async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> anyhow::Result<()> {
     for (_i, mn) in meta_nodes.iter().enumerate() {
@@ -651,4 +649,10 @@ where T: Fn(&RaftMetrics) -> bool + Send {
 /// Make a default timeout for wait() for test.
 fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(2000))
+}
+
+fn test_context_nodes(tcs: &Vec<StoreTestContext>) -> Vec<Arc<MetaNode>> {
+    tcs.iter()
+        .map(|tc| tc.meta_nodes[0].clone())
+        .collect::<Vec<_>>()
 }
