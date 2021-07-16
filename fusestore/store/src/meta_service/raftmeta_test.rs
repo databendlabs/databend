@@ -22,6 +22,7 @@ use crate::meta_service::RaftTxId;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
+use crate::tests::service::StoreTestContext;
 
 // test cases fro Cmd::IncrSeq:
 // case_name, txid, key, want
@@ -173,7 +174,8 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, mn0) = setup_leader().await?;
+    let (_nid0, tc) = setup_leader().await?;
+    let mn0 = tc.meta_nodes[0].clone();
 
     let mut rx0 = mn0.raft.metrics();
 
@@ -201,8 +203,11 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
+    let (_nid0, tc0) = setup_leader().await?;
+    let mn0 = tc0.meta_nodes[0].clone();
+
+    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?;
+    let mn1 = tc1.meta_nodes[0].clone();
 
     assert_set_file_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
 
@@ -217,10 +222,16 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?; // follower
-    let (_nid2, mn2) = setup_non_voter(mn0.clone(), 2).await?; // follower
-    let (_nid3, mn3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
+    let (_nid0, tc0) = setup_leader().await?;
+    let mn0 = tc0.meta_nodes[0].clone();
+
+    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?; // follower
+    let (_nid2, tc2) = setup_non_voter(mn0.clone(), 2).await?; // follower
+    let (_nid3, tc3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
+
+    let mn1 = tc1.meta_nodes[0].clone();
+    let mn2 = tc2.meta_nodes[0].clone();
+    let mn3 = tc3.meta_nodes[0].clone();
 
     mn0.raft.change_membership(hashset![0, 1, 2]).await?;
 
@@ -272,10 +283,15 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?; // follower
-    let (_nid2, mn2) = setup_non_voter(mn0.clone(), 2).await?; // follower
-    let (_nid3, mn3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
+    let (_nid0, tc0) = setup_leader().await?;
+    let mn0 = tc0.meta_nodes[0].clone();
+    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?; // follower
+    let (_nid2, tc2) = setup_non_voter(mn0.clone(), 2).await?; // follower
+    let (_nid3, tc3) = setup_non_voter(mn0.clone(), 3).await?; // non-voter
+
+    let mn1 = tc1.meta_nodes[0].clone();
+    let mn2 = tc2.meta_nodes[0].clone();
+    let mn3 = tc3.meta_nodes[0].clone();
 
     mn0.raft.change_membership(hashset![0, 1, 2]).await?;
 
@@ -317,7 +333,11 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let all = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+    let all_tc = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+    let all = all_tc
+        .iter()
+        .map(|tc| tc.meta_nodes[0].clone())
+        .collect::<Vec<_>>();
 
     // ensure cluster works
     assert_set_file_synced(all.clone(), "foo").await?;
@@ -369,9 +389,14 @@ async fn test_meta_node_3_members() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
-    let (_nid2, mn2) = setup_non_voter(mn0.clone(), 2).await?;
+    let (_nid0, tc0) = setup_leader().await?;
+    let mn0 = tc0.meta_nodes[0].clone();
+
+    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?;
+    let (_nid2, tc2) = setup_non_voter(mn0.clone(), 2).await?;
+
+    let mn1 = tc1.meta_nodes[0].clone();
+    let mn2 = tc2.meta_nodes[0].clone();
 
     let mut nlog = 1 + 3; // leader add a blank log, adding a node commits one log.
 
@@ -403,8 +428,12 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, mn0) = setup_leader().await?;
-    let (_nid1, mn1) = setup_non_voter(mn0.clone(), 1).await?;
+    let (_nid0, tc0) = setup_leader().await?;
+    let mn0 = tc0.meta_nodes[0].clone();
+
+    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?;
+    let mn1 = tc1.meta_nodes[0].clone();
+
     let sto0 = mn0.sto.clone();
     let sto1 = mn1.sto.clone();
 
@@ -445,29 +474,30 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 async fn setup_cluster(
     voters: HashSet<NodeId>,
     non_voters: HashSet<NodeId>,
-) -> anyhow::Result<Vec<Arc<MetaNode>>> {
+) -> anyhow::Result<Vec<StoreTestContext>> {
+    // TODO(xp): use setup_cluster if possible in tests. Get rid of boilerplate snippets.
     // leader is always node-0
     assert!(voters.contains(&0));
     assert!(!non_voters.contains(&0));
 
     let mut rst = vec![];
 
-    let (_id, mn) = setup_leader().await?;
-    rst.push(mn.clone());
-    let leader = mn;
+    let (_id, tc0) = setup_leader().await?;
+    let leader = tc0.meta_nodes[0].clone();
+    rst.push(tc0);
 
     for id in voters.iter() {
         // leader is already created.
         if *id == 0 {
             continue;
         }
-        let (_id, mn) = setup_non_voter(leader.clone(), *id).await?;
-        rst.push(mn);
+        let (_id, tc) = setup_non_voter(leader.clone(), *id).await?;
+        rst.push(tc);
     }
 
     for id in non_voters.iter() {
-        let (_id, mn) = setup_non_voter(leader.clone(), *id).await?;
-        rst.push(mn);
+        let (_id, tc) = setup_non_voter(leader.clone(), *id).await?;
+        rst.push(tc);
     }
 
     leader.raft.change_membership(voters).await?;
@@ -475,16 +505,17 @@ async fn setup_cluster(
     Ok(rst)
 }
 
-async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
+async fn setup_leader() -> anyhow::Result<(NodeId, StoreTestContext)> {
     // Setup a cluster in which there is a leader and a non-voter.
     // asserts states are consistent
 
     let nid = 0;
-    let tc = new_test_context();
+    let mut tc = new_test_context();
     let addr = tc.config.meta_api_addr();
 
     // boot up a single-node cluster
     let mn = MetaNode::boot(nid, &tc.config).await?;
+    tc.meta_nodes.push(mn.clone());
 
     {
         assert_meta_connection(&addr).await?;
@@ -496,7 +527,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
         wait_for_state(&mn, State::Leader).await?;
         wait_for_current_leader(&mn, 0).await?;
     }
-    Ok((nid, mn))
+    Ok((nid, tc))
 }
 
 /// Start a NonVoter and setup replication from leader to it.
@@ -504,11 +535,12 @@ async fn setup_leader() -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
 async fn setup_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
-) -> anyhow::Result<(NodeId, Arc<MetaNode>)> {
-    let tc = new_test_context();
+) -> anyhow::Result<(NodeId, StoreTestContext)> {
+    let mut tc = new_test_context();
     let addr = tc.config.meta_api_addr();
 
     let mn = MetaNode::boot_non_voter(id, &tc.config).await?;
+    tc.meta_nodes.push(mn.clone());
 
     {
         // add node to cluster as a non-voter
@@ -529,7 +561,7 @@ async fn setup_non_voter(
         wait_for_current_leader(&mn, 0).await?;
     }
 
-    Ok((id, mn))
+    Ok((id, tc))
 }
 
 /// Write one log on leader, check all nodes replicated the log.
