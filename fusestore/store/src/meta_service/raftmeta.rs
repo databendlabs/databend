@@ -9,16 +9,10 @@ use std::sync::Arc;
 
 use async_raft::async_trait::async_trait;
 use async_raft::config::Config;
-use async_raft::raft::AppendEntriesRequest;
-use async_raft::raft::AppendEntriesResponse;
 use async_raft::raft::ClientWriteRequest;
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
-use async_raft::raft::InstallSnapshotRequest;
-use async_raft::raft::InstallSnapshotResponse;
 use async_raft::raft::MembershipConfig;
-use async_raft::raft::VoteRequest;
-use async_raft::raft::VoteResponse;
 use async_raft::storage::CurrentSnapshotData;
 use async_raft::storage::HardState;
 use async_raft::storage::InitialState;
@@ -28,7 +22,6 @@ use async_raft::LogId;
 use async_raft::NodeId;
 use async_raft::Raft;
 use async_raft::RaftMetrics;
-use async_raft::RaftNetwork;
 use async_raft::RaftStorage;
 use async_raft::SnapshotMeta;
 use common_exception::prelude::ErrorCode;
@@ -39,133 +32,110 @@ use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
 use common_runtime::tokio::sync::RwLock;
-use common_runtime::tokio::sync::RwLockReadGuard;
 use common_runtime::tokio::sync::RwLockWriteGuard;
 use common_runtime::tokio::task::JoinHandle;
 use common_tracing::tracing;
-use serde::Deserialize;
-use serde::Serialize;
-use tonic::transport::channel::Channel;
 
+use crate::configs;
+use crate::meta_service::raft_state::RaftState;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
+use crate::meta_service::Network;
 use crate::meta_service::Node;
-use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
 use crate::meta_service::ShutdownError;
+use crate::meta_service::Snapshot;
 use crate::meta_service::StateMachine;
 
 const ERR_INCONSISTENT_LOG: &str =
     "a query was received which was expecting data to be in place which does not exist in the log";
 
-impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<LogEntry> {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
-        };
-        tonic::Request::new(mes)
-    }
-}
-impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
-        };
-        tonic::Request::new(mes)
-    }
-}
-impl tonic::IntoRequest<RaftMes> for VoteRequest {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
-        };
-        tonic::Request::new(mes)
-    }
-}
-
-impl From<RetryableError> for RaftMes {
-    fn from(err: RetryableError) -> Self {
-        let error = serde_json::to_string(&err).expect("fail to serialize");
-        RaftMes {
-            data: "".to_string(),
-            error,
-        }
-    }
-}
-
-/// The application snapshot type which the `MetaStore` works with.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MetaStoreSnapshot {
-    pub meta: SnapshotMeta,
-
-    /// The data of the state machine at the time of this snapshot.
-    pub data: Vec<u8>,
-}
-
-/// An in-memory storage system implementing the `async_raft::RaftStorage` trait.
+/// An storage system implementing the `async_raft::RaftStorage` trait.
+///
+/// Trees:
+///   state:
+///       id
+///       hard_state
+///   log
+///   state_machine
+/// TODO(xp): MetaNode recovers persisted state when restarted.
 pub struct MetaStore {
-    /// The ID of the Raft node for which this memory storage instances is configured.
-    id: NodeId,
-    /// The Raft log.
-    log: RwLock<BTreeMap<u64, Entry<LogEntry>>>,
-    /// The Raft state machine.
-    sm: RwLock<StateMachine>,
-    /// The current hard state.
-    hs: RwLock<Option<HardState>>,
+    /// The ID of the Raft node for which this storage instances is configured.
+    /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
+    pub id: NodeId,
 
-    snapshot_idx: Arc<Mutex<u64>>,
+    /// The sled db for log and raft_state.
+    /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
+    /// This db is also used to generate a locally unique id.
+    /// Currently the id is used to create a unique snapshot id.
+    _db: sled::Db,
+
+    // Raft state includes:
+    // id: NodeId,
+    // current_term,
+    // voted_for
+    pub raft_state: RaftState,
+
+    /// The Raft log.
+    pub log: RwLock<BTreeMap<u64, Entry<LogEntry>>>,
+    /// The Raft state machine.
+    pub state_machine: RwLock<StateMachine>,
+
+    pub snapshot_index: Arc<Mutex<u64>>,
 
     /// The current snapshot.
-    current_snapshot: RwLock<Option<MetaStoreSnapshot>>,
+    pub current_snapshot: RwLock<Option<Snapshot>>,
 }
+
+// TODO(xp): the following is a draft struct when meta storage is migrated to sled based impl.
+//           keep it until the migration is done.
+// /// Impl a raft store.
+// /// Includes:
+// /// - raft state, e.g., node-id, current_term and which node it has voted-for.
+// /// - raft log: distributed logs
+// /// - raft state machine.
+// pub struct C {
+//     /// The Raft log.
+//     pub log: sled::Tree,
+//
+//     /// The Raft state machine.
+//     /// State machine is a relatively standalone component in raft.
+//     /// In our impl a state machine has its own sled db.
+//     pub state_machine: RwLock<StateMachine>,
+//
+//     /// The current snapshot of the state machine.
+//     /// Currently snapshot data is a complete backup of the state machine and is not persisted on disk.
+//     /// When server restarts, a new snapshot is created on demand.
+//     pub current_snapshot: RwLock<Option<Snapshot>>,
+// }
 
 impl MetaStore {
     /// Create a new `MetaStore` instance.
-    pub fn new(id: NodeId) -> Self {
+    pub async fn new(id: NodeId, config: &configs::Config) -> common_exception::Result<MetaStore> {
+        let db = sled::open(&config.meta_dir)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("opening sled db: {}", config.meta_dir)
+            })?;
+
+        let raft_state = RaftState::create(&db, &id).await?;
+
         let log = RwLock::new(BTreeMap::new());
         let sm = RwLock::new(StateMachine::default());
-        let hs = RwLock::new(None);
         let current_snapshot = RwLock::new(None);
 
-        Self {
+        Ok(Self {
             id,
+            _db: db,
+            raft_state,
             log,
-            sm,
-            hs,
-            snapshot_idx: Arc::new(Mutex::new(0)),
+            state_machine: sm,
+            snapshot_index: Arc::new(Mutex::new(0)),
             current_snapshot,
-        }
-    }
-
-    /// Create a new `MetaStore` instance with some existing state (for testing).
-    #[cfg(test)]
-    pub fn new_with_state(
-        id: NodeId,
-        log: BTreeMap<u64, Entry<LogEntry>>,
-        sm: StateMachine,
-        hs: Option<HardState>,
-        current_snapshot: Option<MetaStoreSnapshot>,
-    ) -> Self {
-        let log = RwLock::new(log);
-        let sm = RwLock::new(sm);
-        let hs = RwLock::new(hs);
-        let current_snapshot = RwLock::new(current_snapshot);
-        Self {
-            id,
-            log,
-            sm,
-            hs,
-            // TODO(xp): need to reload state
-            snapshot_idx: Arc::new(Mutex::new(0)),
-            current_snapshot,
-        }
+        })
     }
 
     /// Get a handle to the log for testing purposes.
@@ -175,12 +145,11 @@ impl MetaStore {
 
     /// Get a handle to the state machine for testing purposes.
     pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, StateMachine> {
-        self.sm.write().await
+        self.state_machine.write().await
     }
 
-    /// Get a handle to the current hard state for testing purposes.
-    pub async fn read_hard_state(&self) -> RwLockReadGuard<'_, Option<HardState>> {
-        self.hs.read().await
+    pub async fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
+        self.raft_state.read_hard_state().await
     }
 }
 
@@ -232,11 +201,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
     async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
+        let hard_state = self.raft_state.read_hard_state().await?;
+
         let membership = self.get_membership_config().await?;
-        let mut hs = self.hs.write().await;
         let log = self.log.read().await;
-        let sm = self.sm.read().await;
-        match &mut *hs {
+        let sm = self.state_machine.read().await;
+
+        match hard_state {
             Some(inner) => {
                 let last_log_id = match log.values().rev().next() {
                     Some(log) => log.log_id,
@@ -246,7 +217,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                 let st = InitialState {
                     last_log_id,
                     last_applied_log,
-                    hard_state: inner.clone(),
+                    hard_state: inner,
                     membership,
                 };
                 tracing::info!("build initial state from storage: {:?}", st);
@@ -255,7 +226,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             None => {
                 let new = InitialState::new_initial(self.id);
                 tracing::info!("create initial state: {:?}", new);
-                *hs = Some(new.hard_state.clone());
+                self.raft_state.write_hard_state(&new.hard_state).await?;
                 Ok(new)
             }
         }
@@ -263,7 +234,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
     #[tracing::instrument(level = "info", skip(self, hs), fields(myid=self.id))]
     async fn save_hard_state(&self, hs: &HardState) -> anyhow::Result<()> {
-        *self.hs.write().await = Some(hs.clone());
+        self.raft_state.write_hard_state(hs).await?;
         Ok(())
     }
 
@@ -320,7 +291,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         index: &u64,
         data: &LogEntry,
     ) -> anyhow::Result<AppliedState> {
-        let mut sm = self.sm.write().await;
+        let mut sm = self.state_machine.write().await;
         let resp = sm.apply(*index, data)?;
         Ok(resp)
     }
@@ -330,7 +301,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         &self,
         entries: &[(&u64, &LogEntry)],
     ) -> anyhow::Result<()> {
-        let mut sm = self.sm.write().await;
+        let mut sm = self.state_machine.write().await;
         for (index, data) in entries {
             sm.apply(**index, data)?;
         }
@@ -342,7 +313,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         let (data, last_applied_log);
         {
             // Serialize the data of the state machine.
-            let sm = self.sm.read().await;
+            let sm = self.state_machine.read().await;
             data = serde_json::to_vec(&*sm)?;
             last_applied_log = sm.last_applied_log;
         } // Release state machine read lock.
@@ -352,7 +323,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         let membership_config = self.get_membership_from_log(Some(last_applied_log)).await?;
 
         let snapshot_idx = {
-            let mut l = self.snapshot_idx.lock().await;
+            let mut l = self.snapshot_index.lock().await;
             *l += 1;
             *l
         };
@@ -380,7 +351,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                 membership: membership_config.clone(),
             };
 
-            let snapshot = MetaStoreSnapshot {
+            let snapshot = Snapshot {
                 meta: meta.clone(),
                 data: data.clone(),
             };
@@ -415,7 +386,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             "decoding snapshot for installation"
         );
 
-        let new_snapshot = MetaStoreSnapshot {
+        let new_snapshot = Snapshot {
             meta: meta.clone(),
             data: snapshot.into_inner(),
         };
@@ -440,7 +411,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         // Update the state machine.
         {
             let new_sm: StateMachine = serde_json::from_slice(&new_snapshot.data)?;
-            let mut sm = self.sm.write().await;
+            let mut sm = self.state_machine.write().await;
             *sm = new_sm;
         }
 
@@ -467,84 +438,6 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     }
 }
 
-pub struct Network {
-    sto: Arc<MetaStore>,
-}
-
-impl Network {
-    pub fn new(sto: Arc<MetaStore>) -> Network {
-        Network { sto }
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
-    pub async fn make_client(
-        &self,
-        node_id: &NodeId,
-    ) -> anyhow::Result<MetaServiceClient<Channel>> {
-        let addr = self.sto.get_node_addr(node_id).await?;
-        tracing::info!("connect: id={}: {}", node_id, addr);
-        let client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-        tracing::info!("connected: id={}: {}", node_id, addr);
-        Ok(client)
-    }
-}
-
-#[async_trait]
-impl RaftNetwork<LogEntry> for Network {
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
-    async fn append_entries(
-        &self,
-        target: NodeId,
-        rpc: AppendEntriesRequest<LogEntry>,
-    ) -> anyhow::Result<AppendEntriesResponse> {
-        tracing::debug!("append_entries req to: id={}: {:?}", target, rpc);
-
-        let mut client = self.make_client(&target).await?;
-        let resp = client.append_entries(rpc).await;
-        tracing::debug!("append_entries resp from: id={}: {:?}", target, resp);
-
-        let resp = resp?;
-        let mes = resp.into_inner();
-        let resp = serde_json::from_str(&mes.data)?;
-
-        Ok(resp)
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
-    async fn install_snapshot(
-        &self,
-        target: NodeId,
-        rpc: InstallSnapshotRequest,
-    ) -> anyhow::Result<InstallSnapshotResponse> {
-        tracing::debug!("install_snapshot req to: id={}", target);
-
-        let mut client = self.make_client(&target).await?;
-        let resp = client.install_snapshot(rpc).await;
-        tracing::debug!("install_snapshot resp from: id={}: {:?}", target, resp);
-
-        let resp = resp?;
-        let mes = resp.into_inner();
-        let resp = serde_json::from_str(&mes.data)?;
-
-        Ok(resp)
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
-    async fn vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
-        tracing::debug!("vote req to: id={} {:?}", target, rpc);
-
-        let mut client = self.make_client(&target).await?;
-        let resp = client.vote(rpc).await;
-        tracing::info!("vote: resp from id={} {:?}", target, resp);
-
-        let resp = resp?;
-        let mes = resp.into_inner();
-        let resp = serde_json::from_str(&mes.data)?;
-
-        Ok(resp)
-    }
-}
-
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
 pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaStore>;
 
@@ -561,7 +454,7 @@ pub struct MetaNode {
 
 impl MetaStore {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        let sm = self.sm.read().await;
+        let sm = self.state_machine.read().await;
 
         sm.get_node(node_id)
     }
@@ -579,7 +472,7 @@ impl MetaStore {
     /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.
     pub async fn list_non_voters(&self) -> HashSet<NodeId> {
         let mut rst = HashSet::new();
-        let sm = self.sm.read().await;
+        let sm = self.state_machine.read().await;
         let ms = self
             .get_membership_config()
             .await
@@ -723,12 +616,15 @@ impl MetaNode {
 
     /// Start a MetaStore node from initialized store.
     #[tracing::instrument(level = "info")]
-    pub async fn new(node_id: NodeId) -> Arc<MetaNode> {
-        let b = MetaNode::builder()
-            .node_id(node_id)
-            .sto(Arc::new(MetaStore::new(node_id)));
+    pub async fn new(
+        node_id: NodeId,
+        config: &configs::Config,
+    ) -> common_exception::Result<Arc<MetaNode>> {
+        let sto = MetaStore::new(node_id, config).await?;
+        let sto = Arc::new(sto);
+        let b = MetaNode::builder().node_id(node_id).sto(sto);
 
-        b.build().await.expect("can not fail")
+        b.build().await
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -818,8 +714,11 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     /// When a node is initialized with boot or boot_non_voter, start it with MetaStore::new().
     #[tracing::instrument(level = "info")]
-    pub async fn boot(node_id: NodeId, addr: String) -> common_exception::Result<Arc<MetaNode>> {
-        let mn = MetaNode::boot_non_voter(node_id, &addr).await?;
+    pub async fn boot(
+        node_id: NodeId,
+        config: &configs::Config,
+    ) -> common_exception::Result<Arc<MetaNode>> {
+        let mn = MetaNode::boot_non_voter(node_id, config).await?;
 
         let mut cluster_node_ids = HashSet::new();
         cluster_node_ids.insert(node_id);
@@ -831,6 +730,8 @@ impl MetaNode {
             .map_err(|x| ErrorCode::MetaServiceError(format!("{:?}", x)))?;
 
         tracing::info!("booted, rst: {:?}", rst);
+
+        let addr = config.meta_api_addr();
         mn.add_node(node_id, addr).await?;
 
         Ok(mn)
@@ -842,7 +743,7 @@ impl MetaNode {
     #[tracing::instrument(level = "info")]
     pub async fn boot_non_voter(
         node_id: NodeId,
-        addr: &str,
+        config: &configs::Config,
     ) -> common_exception::Result<Arc<MetaNode>> {
         // TODO test MetaNode::new() on a booted store.
         // TODO: Before calling this func, the node should be added as a non-voter to leader.
@@ -850,7 +751,7 @@ impl MetaNode {
 
         // When booting, there is addr stored in local store.
         // Thus we need to start grpc manually.
-        let sto = MetaStore::new(node_id);
+        let sto = MetaStore::new(node_id, config).await?;
 
         let b = MetaNode::builder()
             .node_id(node_id)
@@ -859,11 +760,13 @@ impl MetaNode {
 
         let mn = b.build().await?;
 
+        let addr = config.meta_api_addr();
+
         // Manually start the grpc, since no addr is stored yet.
         // We can not use the startup routine for initialized node.
-        MetaNode::start_grpc(mn.clone(), addr).await?;
+        MetaNode::start_grpc(mn.clone(), &addr).await?;
 
-        tracing::info!("booted non-voter: {}={}", node_id, addr);
+        tracing::info!("booted non-voter: {}={}", node_id, &addr);
 
         Ok(mn)
     }
@@ -893,7 +796,7 @@ impl MetaNode {
     pub async fn get_file(&self, key: &str) -> Option<String> {
         // inconsistent get: from local state machine
 
-        let sm = self.sto.sm.read().await;
+        let sm = self.sto.state_machine.read().await;
         sm.get_file(key)
     }
 
@@ -901,7 +804,7 @@ impl MetaNode {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.sto.sm.read().await;
+        let sm = self.sto.state_machine.read().await;
         sm.get_node(node_id)
     }
 
@@ -935,7 +838,7 @@ impl MetaNode {
     pub async fn get_database(&self, name: &str) -> Option<Database> {
         // inconsistent get: from local state machine
 
-        let sm = self.sto.sm.read().await;
+        let sm = self.sto.state_machine.read().await;
         sm.get_database(name)
     }
 
@@ -943,7 +846,7 @@ impl MetaNode {
     pub async fn get_kv(&self, key: &str) -> Option<SeqValue> {
         // inconsistent get: from local state machine
 
-        let sm = self.sto.sm.read().await;
+        let sm = self.sto.state_machine.read().await;
         sm.get_kv(key)
     }
 
@@ -953,14 +856,14 @@ impl MetaNode {
         keys: &[impl AsRef<str> + std::fmt::Debug],
     ) -> Vec<Option<SeqValue>> {
         // inconsistent get: from local state machine
-        let sm = self.sto.sm.read().await;
+        let sm = self.sto.state_machine.read().await;
         sm.mget_kv(keys)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
         // inconsistent get: from local state machine
-        let sm = self.sto.sm.read().await;
+        let sm = self.sto.state_machine.read().await;
         sm.prefix_list_kv(prefix)
     }
 

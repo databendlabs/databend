@@ -16,15 +16,16 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
-use crate::tests::rand_local_addr;
+use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_add_file() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let addr = rand_local_addr();
+    let tc = new_test_context();
+    let addr = tc.config.meta_api_addr();
 
-    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    let _mn = MetaNode::boot(0, &tc.config).await?;
     assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
@@ -61,9 +62,10 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
 async fn test_meta_server_set_file() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let addr = rand_local_addr();
+    let tc = new_test_context();
+    let addr = tc.config.meta_api_addr();
 
-    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    let _mn = MetaNode::boot(0, &tc.config).await?;
     assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
@@ -102,9 +104,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let addr = rand_local_addr();
+    let tc = new_test_context();
+    let addr = tc.config.meta_api_addr();
 
-    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    let _mn = MetaNode::boot(0, &tc.config).await?;
     assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
@@ -196,9 +199,10 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let addr = rand_local_addr();
+    let tc = new_test_context();
+    let addr = tc.config.meta_api_addr();
 
-    let _mn = MetaNode::boot(0, addr.clone()).await?;
+    let _mn = MetaNode::boot(0, &tc.config).await?;
     assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
@@ -234,15 +238,18 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let addr0 = rand_local_addr();
-    let addr1 = rand_local_addr();
+    let tc0 = new_test_context();
+    let tc1 = new_test_context();
 
-    let mn0 = MetaNode::boot(0, addr0.clone()).await?;
+    let addr0 = tc0.config.meta_api_addr();
+    let addr1 = tc1.config.meta_api_addr();
+
+    let mn0 = MetaNode::boot(0, &tc0.config).await?;
     assert_meta_connection(&addr0).await?;
 
     {
         // add node 1 as non-voter
-        let mn1 = MetaNode::boot_non_voter(1, &addr1).await?;
+        let mn1 = MetaNode::boot_non_voter(1, &tc1.config).await?;
         assert_meta_connection(&addr0).await?;
 
         let resp = mn0.add_node(1, addr1.clone()).await?;

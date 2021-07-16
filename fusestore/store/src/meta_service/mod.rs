@@ -7,9 +7,11 @@ pub mod cmd;
 pub mod errors;
 pub mod log_entry;
 pub mod meta_service_impl;
+pub mod network;
 pub mod placement;
 pub mod raft_txid;
 pub mod raftmeta;
+pub mod snapshot;
 pub mod state_machine;
 
 pub use applied_state::AppliedState;
@@ -19,11 +21,12 @@ pub use errors::RetryableError;
 pub use errors::ShutdownError;
 pub use log_entry::LogEntry;
 pub use meta_service_impl::MetaServiceImpl;
+pub use network::Network;
 pub use placement::Placement;
 pub use raft_txid::RaftTxId;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
-pub use raftmeta::Network;
+pub use snapshot::Snapshot;
 pub use state_machine::Node;
 pub use state_machine::Slot;
 pub use state_machine::StateMachine;
@@ -39,6 +42,9 @@ pub use crate::protobuf::RaftMes;
 mod meta_service_impl_test;
 #[cfg(test)]
 mod placement_test;
+mod raft_state;
+#[cfg(test)]
+mod raft_state_test;
 #[cfg(test)]
 mod raftmeta_test;
 #[cfg(test)]
