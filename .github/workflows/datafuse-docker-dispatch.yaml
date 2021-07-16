@@ -26,7 +26,7 @@ jobs:
         mkdir -p /tmp/python2.7
         sudo python2.7 -m pip install coscmd --taget /tmp/python2.7
         /tmp/python2.7/bin/coscmd --version
-        /tmp/python2.7/bin/coscmdconfig -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
+        /tmp/python2.7/bin/coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
     - name: Update status to pending
       run: |
         echo "update github pr status"
