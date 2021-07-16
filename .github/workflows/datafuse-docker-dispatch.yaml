@@ -23,9 +23,10 @@ jobs:
       run: |
         sudo apt install python2.7
         sudo apt install python-pip
-        sudo python2.7 -m pip install coscmd
-        coscmd --version
-        coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
+        mkdir -p /tmp/python2.7
+        sudo python2.7 -m pip install coscmd --taget /tmp/python2.7
+        /tmp/python2.7/bin/coscmd --version
+        /tmp/python2.7/bin/coscmdconfig -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
     - name: Update status to pending
       run: |
         echo "update github pr status"
@@ -36,7 +37,7 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "PENDING"}' > status.json
-        coscmd upload status.json status/$UUID/status.json
+        /tmp/python2.7/bin/coscmd upload status.json status/$UUID/status.json
 
     - uses: actions/checkout@v2
       with:
@@ -82,7 +83,7 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "FAIL"}' > status.json
-        coscmd upload status.json status/$UUID/status.json
+        /tmp/python2.7/bin/coscmd upload status.json status/$UUID/status.json
     - name: Update status to success
       if: success()
       run: |
@@ -93,4 +94,4 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "SUCCESS"}' > status.json
-        coscmd upload status.json status/$UUID/status.json
+        /tmp/python2.7/bin/coscmd upload status.json status/$UUID/status.json
