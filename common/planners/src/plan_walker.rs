@@ -4,6 +4,8 @@
 
 use std::result::Result;
 
+use common_exception::ErrorCode;
+
 use crate::PlanNode;
 use crate::PlanVisitor;
 
@@ -18,22 +20,24 @@ struct PreOrderWalker<'a, E> {
     state: Result<(), E>,
 }
 
-impl<'plan, 'a, E> PlanVisitor<'plan> for PreOrderWalker<'a, E> {
-    fn visit_plan_node(&mut self, node: &PlanNode) {
+impl<'a, E> PlanVisitor for PreOrderWalker<'a, E> {
+    fn visit_plan_node(&mut self, node: &PlanNode) -> Result<(), ErrorCode> {
         if let PlanNode::Empty(_) = node {
-            return;
+            return Ok(());
         }
         match (self.callback)(node) {
             Ok(true) => {
                 for n in node.inputs() {
-                    self.visit_plan_node(n.as_ref());
+                    self.visit_plan_node(n.as_ref())?;
                 }
             }
-            Ok(false) => {}
+            Ok(false) => return Ok(()),
             Err(e) => {
                 self.state = Result::Err(e);
             }
-        }
+        };
+
+        Ok(())
     }
 }
 
@@ -55,17 +59,19 @@ struct PostOrderWalker<'a, E> {
     state: Result<bool, E>,
 }
 
-impl<'plan, 'a, E> PlanVisitor<'plan> for PostOrderWalker<'a, E> {
-    fn visit_plan_node(&mut self, node: &PlanNode) {
+impl<'a, E> PlanVisitor for PostOrderWalker<'a, E> {
+    fn visit_plan_node(&mut self, node: &PlanNode) -> Result<(), ErrorCode> {
         if let PlanNode::Empty(_) = node {
-            return;
+            return Ok(());
         }
         for n in node.inputs() {
-            self.visit_plan_node(n.as_ref());
+            self.visit_plan_node(n.as_ref())?;
         }
         if let Ok(true) = self.state {
             self.state = (self.callback)(node);
         }
+
+        Ok(())
     }
 }
 
@@ -91,12 +97,12 @@ impl PlanNode {
         match order {
             WalkOrder::PreOrder => {
                 let mut visitor = PreOrderWalker::<'a, E>::new(callback);
-                visitor.visit_plan_node(node);
+                let _ = visitor.visit_plan_node(node);
                 visitor.finalize()
             }
             WalkOrder::PostOrder => {
                 let mut visitor = PostOrderWalker::<'a, E>::new(callback);
-                visitor.visit_plan_node(node);
+                let _ = visitor.visit_plan_node(node);
                 visitor.finalize()
             }
         }

@@ -14,13 +14,13 @@ use crate::datasources::*;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_settings_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
-    ctx.set_max_threads(2)?;
+    ctx.get_settings().set_max_threads(2)?;
 
     let table = SettingsTable::create();
     let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
-        ctx.get_max_threads()? as usize,
+        ctx.get_settings().get_max_threads()? as usize,
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;

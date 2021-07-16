@@ -22,12 +22,20 @@ pub struct Optimizers {
 
 impl Optimizers {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
-        let optimizers: Vec<Box<dyn Optimizer>> = vec![
-            Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
-            Box::new(ScattersOptimizer::create(ctx.clone())),
-            Box::new(StatisticsExactOptimizer::create(ctx)),
-        ];
-        Optimizers { inner: optimizers }
+        let mut optimizers = Self::without_scatters(ctx.clone());
+        optimizers
+            .inner
+            .push(Box::new(ScattersOptimizer::create(ctx)));
+        optimizers
+    }
+
+    pub fn without_scatters(ctx: FuseQueryContextRef) -> Self {
+        Optimizers {
+            inner: vec![
+                Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
+                Box::new(StatisticsExactOptimizer::create(ctx)),
+            ],
+        }
     }
 
     pub fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {

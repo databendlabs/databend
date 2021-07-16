@@ -41,7 +41,7 @@ impl Interpreter for SettingInterpreter {
                 "sql_mode" | "autocommit" => {}
                 "max_threads" => {
                     let threads: u64 = var.value.parse()?;
-                    self.ctx.set_max_threads(threads)?;
+                    self.ctx.get_settings().set_max_threads(threads)?;
                 }
                 _ => {
                     self.ctx

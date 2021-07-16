@@ -13,6 +13,7 @@ mod version_test;
 
 mod crash_me;
 mod database;
+mod exists;
 mod sleep;
 mod to_type_name;
 mod udf;

@@ -8,7 +8,6 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -52,11 +51,7 @@ impl ExpressionExecutor {
         Ok(())
     }
 
-    pub fn execute(
-        &self,
-        block: &DataBlock,
-        exists_res: Option<&HashMap<String, bool>>,
-    ) -> Result<DataBlock> {
+    pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
         tracing::debug!(
             "({:#}) execute, actions: {:?}",
             self.description,
@@ -76,12 +71,6 @@ impl ExpressionExecutor {
         }
 
         let rows = block.num_rows();
-        if let Some(map) = exists_res {
-            for (name, b) in map {
-                let b = DataColumn::Constant(DataValue::Boolean(Some(*b)), rows).to_array()?;
-                column_map.insert(name.to_string(), DataColumn::Array(b));
-            }
-        }
 
         for action in self.chain.actions.iter() {
             if let ExpressionAction::Alias(alias) = action {
@@ -122,14 +111,6 @@ impl ExpressionExecutor {
                 ExpressionAction::Constant(constant) => {
                     let column = DataColumn::Constant(constant.value.clone(), rows);
                     column_map.insert(constant.name.clone(), column);
-                }
-                ExpressionAction::Exists(exists) => {
-                    let res = column_map.get(&exists.name);
-                    if res.is_none() {
-                        return Err(ErrorCode::LogicalError(
-                            "Exist subquery must be prepared before the main query's execution",
-                        ));
-                    }
                 }
                 _ => {}
             }

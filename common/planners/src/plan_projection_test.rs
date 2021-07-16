@@ -13,11 +13,12 @@ fn test_projection_plan() -> anyhow::Result<()> {
     use pretty_assertions::assert_eq;
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
+    let empty_plan = EmptyPlan::create_with_schema(schema.clone());
 
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
     });
     let _ = projection.schema();
     let expect = "Projection: a:Utf8";

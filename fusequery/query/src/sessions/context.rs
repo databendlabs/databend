@@ -4,6 +4,8 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
+use std::sync::atomic::Ordering;
+use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -11,139 +13,110 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::Part;
 use common_planners::Partitions;
+use common_planners::PlanNode;
 use common_planners::Statistics;
-use common_progress::Progress;
 use common_progress::ProgressCallback;
 use common_progress::ProgressValues;
 use common_runtime::tokio::task::JoinHandle;
-use common_runtime::Runtime;
-use uuid::Uuid;
+use common_streams::AbortStream;
+use common_streams::SendableDataBlockStream;
 
-use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
+use crate::sessions::context_shared::FuseQueryContextShared;
+use crate::sessions::ProcessInfo;
 use crate::sessions::Settings;
 
-#[derive(Clone)]
 pub struct FuseQueryContext {
-    conf: Config,
-    uuid: Arc<RwLock<String>>,
-    settings: Arc<Settings>,
-    cluster: Arc<RwLock<ClusterRef>>,
-    datasource: Arc<DataSource>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
-    current_database: Arc<RwLock<String>>,
-    progress: Arc<Progress>,
-    runtime: Arc<RwLock<Runtime>>,
     version: String,
+    shared: Arc<FuseQueryContextShared>,
 }
 
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
-        let settings = Settings::try_create()?;
-        let ctx = FuseQueryContext {
-            conf,
-            uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
-            settings: settings.clone(),
-            cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(DataSource::try_create()?),
+    pub fn try_create(_conf: Config) -> Result<FuseQueryContextRef> {
+        // let settings = Settings::try_create()?;
+        // let ctx = FuseQueryContext {
+        //     conf,
+        //     uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+        //     settings: settings.clone(),
+        //     cluster: Arc::new(RwLock::new(Cluster::empty())),
+        //     datasource: Arc::new(DataSource::try_create()?),
+        //     statistics: Arc::new(RwLock::new(Statistics::default())),
+        //     partition_queue: Arc::new(RwLock::new(VecDeque::new())),
+        //     current_database: Arc::new(RwLock::new(String::from("default"))),
+        //     progress: Arc::new(Progress::create()),
+        //     runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
+        //         settings.get_max_threads()? as usize,
+        //     )?)),
+        //     version: format!(
+        //         "FuseQuery v-{}",
+        //         *crate::configs::config::FUSE_COMMIT_VERSION
+        //     ),
+        // };
+
+        // Ok(Arc::new(ctx))
+        unimplemented!();
+    }
+
+    pub fn new(other: FuseQueryContextRef) -> FuseQueryContextRef {
+        FuseQueryContext::from_shared(other.shared.clone())
+    }
+
+    pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> FuseQueryContextRef {
+        shared.increment_ref_count();
+
+        Arc::new(FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            current_database: Arc::new(RwLock::new(String::from("default"))),
-            progress: Arc::new(Progress::create()),
-            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
-                settings.get_max_threads()? as usize,
-            )?)),
             version: format!(
                 "FuseQuery v-{}",
                 *crate::configs::config::FUSE_COMMIT_VERSION
             ),
-        };
-
-        Ok(Arc::new(ctx))
-    }
-
-    pub fn from_settings(
-        conf: Config,
-        settings: Arc<Settings>,
-        default_database: String,
-        datasource: Arc<DataSource>,
-    ) -> Result<FuseQueryContextRef> {
-        Ok(Arc::new(FuseQueryContext {
-            conf,
-            uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
-            settings: settings.clone(),
-            cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource,
-            statistics: Arc::new(RwLock::new(Statistics::default())),
-            partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            current_database: Arc::new(RwLock::new(default_database)),
-            progress: Arc::new(Progress::create()),
-            runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
-                settings.get_max_threads()? as usize,
-            )?)),
-            version: format!(
-                "FuseQuery v-{}",
-                *crate::configs::config::FUSE_COMMIT_VERSION
-            ),
-        }))
-    }
-
-    pub fn with_cluster(&self, cluster: ClusterRef) -> Result<FuseQueryContextRef> {
-        *self.cluster.write() = cluster;
-        Ok(Arc::new(self.clone()))
-    }
-
-    pub fn with_id(&self, uuid: &str) -> Result<FuseQueryContextRef> {
-        *self.uuid.write() = uuid.to_string();
-        Ok(Arc::new(self.clone()))
-    }
-
-    /// ctx.reset will reset the necessary variables in the session
-    pub fn reset(&self) -> Result<()> {
-        self.progress.reset();
-        self.statistics.write().clear();
-        self.partition_queue.write().clear();
-        Ok(())
+            shared,
+        })
     }
 
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    pub fn execute_task<T>(&self, task: T) -> JoinHandle<T::Output>
+    pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.runtime.read().spawn(task)
+        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 
     /// Set progress callback to context.
     /// By default, it is called for leaf sources, after each block
     /// Note that the callback can be called from different threads.
     pub fn progress_callback(&self) -> Result<ProgressCallback> {
-        let current_progress = self.progress.clone();
+        let current_progress = self.shared.progress.clone();
         Ok(Box::new(move |value: &ProgressValues| {
             current_progress.incr(value);
         }))
     }
 
     pub fn get_progress_value(&self) -> ProgressValues {
-        self.progress.as_ref().get_values()
+        self.shared.progress.as_ref().get_values()
     }
 
     pub fn get_and_reset_progress_value(&self) -> ProgressValues {
-        self.progress.as_ref().get_and_reset()
+        self.shared.progress.as_ref().get_and_reset()
     }
 
     // Some table can estimate the approx total rows, such as NumbersTable
     pub fn add_total_rows_approx(&self, total_rows: usize) {
-        self.progress.as_ref().add_total_rows_approx(total_rows);
+        self.shared
+            .progress
+            .as_ref()
+            .add_total_rows_approx(total_rows);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
@@ -180,16 +153,15 @@ impl FuseQueryContext {
     }
 
     pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        let cluster = self.cluster.read();
-        Ok(cluster.clone())
+        self.shared.try_get_cluster()
     }
 
     pub fn get_datasource(&self) -> Arc<DataSource> {
-        self.datasource.clone()
+        self.shared.get_datasource()
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        self.datasource.get_table(db_name, table_name)
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        self.get_datasource().get_table(database, table)
     }
 
     // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
@@ -197,47 +169,45 @@ impl FuseQueryContext {
     // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
     // Implementation of fetching remote table involves async operations which is not
     // straight forward (but not infeasible) to do in a non-async method.
-    pub async fn get_remote_table(
-        &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.datasource.get_remote_table(db_name, table_name).await
+    pub async fn get_remote_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        self.get_datasource()
+            .get_remote_table(database, table)
+            .await
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn TableFunction>> {
-        self.datasource.get_table_function(function_name)
+        self.get_datasource().get_table_function(function_name)
     }
 
     pub fn get_id(&self) -> String {
-        self.uuid.as_ref().read().clone()
+        self.shared.init_query_id.as_ref().read().clone()
+    }
+
+    pub fn try_create_abortable(&self, input: SendableDataBlockStream) -> Result<AbortStream> {
+        let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
+        self.shared.add_source_abort_handle(abort_handle);
+        Ok(abort_stream)
     }
 
     pub fn get_current_database(&self) -> String {
-        self.current_database.as_ref().read().clone()
+        self.shared.get_current_database()
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        self.datasource
+        match self
+            .get_datasource()
             .get_database(new_database_name.as_str())
-            .map(|_| {
-                *self.current_database.write() = new_database_name.to_string();
-            })
-            .map_err(|_| {
-                ErrorCode::UnknownDatabase(format!(
-                    "Database {}  doesn't exist.",
-                    new_database_name
-                ))
-            })
-    }
+        {
+            Ok(_) => self.shared.set_current_database(new_database_name),
+            Err(_) => {
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Cannot USE '{}', because the '{}' doesn't exist",
+                    new_database_name, new_database_name
+                )));
+            }
+        };
 
-    pub fn get_max_threads(&self) -> Result<u64> {
-        self.settings.get_max_threads()
-    }
-
-    pub fn set_max_threads(&self, threads: u64) -> Result<()> {
-        *self.runtime.write() = Runtime::with_worker_threads(threads as usize)?;
-        self.settings.set_max_threads(threads)
+        Ok(())
     }
 
     pub fn get_fuse_version(&self) -> String {
@@ -245,16 +215,49 @@ impl FuseQueryContext {
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
-        self.settings.clone()
+        self.shared.get_settings()
     }
 
     pub fn get_config(&self) -> Config {
-        self.conf.clone()
+        self.shared.conf.clone()
+    }
+
+    pub fn get_subquery_name(&self, _query: &PlanNode) -> String {
+        let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
+        format!("_subquery_{}", index)
+    }
+
+    pub fn attach_query_info(&self, query: &str) {
+        self.shared.attach_query_info(query);
+    }
+
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.shared.session.processes_info()
     }
 }
 
 impl std::fmt::Debug for FuseQueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.settings)
+        write!(f, "{:?}", self.get_settings())
+    }
+}
+
+impl Drop for FuseQueryContext {
+    fn drop(&mut self) {
+        self.shared.destroy_context_ref()
+    }
+}
+
+impl FuseQueryContextShared {
+    pub(in crate::sessions) fn destroy_context_ref(&self) {
+        if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
+            std::sync::atomic::fence(Acquire);
+            log::info!("Destroy FuseQueryContext");
+            self.session.destroy_context_shared();
+        }
+    }
+
+    pub(in crate::sessions) fn increment_ref_count(&self) {
+        self.ref_count.fetch_add(1, Ordering::Relaxed);
     }
 }

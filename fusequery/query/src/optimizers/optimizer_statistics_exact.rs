@@ -2,8 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
@@ -22,11 +25,8 @@ pub struct StatisticsExactOptimizer {
     ctx: FuseQueryContextRef,
 }
 
-impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
-    fn rewrite_aggregate_partial(
-        &mut self,
-        plan: &'plan AggregatorPartialPlan,
-    ) -> Result<PlanNode> {
+impl PlanRewriter for StatisticsExactImpl<'_> {
+    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
         let new_plan = match (
             &plan.group_expr[..],
             &plan.aggr_expr[..],
@@ -60,7 +60,7 @@ impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
                                         .read_plan(
                                             self.ctx.clone(),
                                             dummy_scan_plan,
-                                            self.ctx.get_max_threads()? as usize,
+                                            self.ctx.get_settings().get_max_threads()? as usize,
                                         )
                                         .map(PlanNode::ReadSource),
                                     _unreachable_plan => {
@@ -85,6 +85,16 @@ impl<'plan> PlanRewriter<'plan> for StatisticsExactImpl<'_> {
         };
         Ok(new_plan)
     }
+
+    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
+            schema: plan.schema.clone(),
+            schema_before_group_by: plan.schema_before_group_by.clone(),
+            aggr_expr: plan.aggr_expr.clone(),
+            group_expr: plan.group_expr.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
+    }
 }
 
 impl Optimizer for StatisticsExactOptimizer {
@@ -93,6 +103,14 @@ impl Optimizer for StatisticsExactOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+        /*
+            TODO:
+                SELECT COUNT(1), COUNT(1) FROM (
+                    SELECT COUNT(1) FROM (
+                        SELECT * FROM system.settings LIMIT 1
+                    )
+                )
+        */
         let mut visitor = StatisticsExactImpl { ctx: &self.ctx };
         visitor.rewrite_plan_node(plan)
     }

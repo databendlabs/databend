@@ -17,7 +17,7 @@ async fn test_tables_table() -> Result<()> {
     let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
-        ctx.get_max_threads()? as usize,
+        ctx.get_settings().get_max_threads()? as usize,
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;
@@ -37,6 +37,7 @@ async fn test_tables_table() -> Result<()> {
         "| system   | numbers_local | SystemNumbersLocal |",
         "| system   | numbers_mt    | SystemNumbersMt    |",
         "| system   | one           | SystemOne          |",
+        "| system   | processes     | SystemProcesses    |",
         "| system   | settings      | SystemSettings     |",
         "| system   | tables        | SystemTables       |",
         "| system   | tracing       | SystemTracing      |",

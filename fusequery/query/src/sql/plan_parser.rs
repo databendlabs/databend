@@ -123,6 +123,9 @@ impl PlanParser {
                 .as_str(),
             ),
             DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
+            DfStatement::ShowProcessList(_) => {
+                self.build_from_sql("SELECT * FROM system.processes")
+            }
         }
     }
 
@@ -631,7 +634,7 @@ impl PlanParser {
                         .read_plan(
                             self.ctx.clone(),
                             dummy_scan_plan,
-                            self.ctx.get_max_threads()? as usize,
+                            self.ctx.get_settings().get_max_threads()? as usize,
                         )
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
@@ -696,9 +699,10 @@ impl PlanParser {
                 };
 
                 // TODO: Move ReadSourcePlan to SelectInterpreter
+                let partitions = self.ctx.get_settings().get_max_threads()? as usize;
                 scan.and_then(|scan| match scan {
                     PlanNode::Scan(ref scan) => table
-                        .read_plan(self.ctx.clone(), scan, self.ctx.get_max_threads()? as usize)
+                        .read_plan(self.ctx.clone(), scan, partitions)
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
@@ -841,9 +845,11 @@ impl PlanParser {
                 op: format!("{}", op),
                 expr: Box::new(self.sql_to_rex(expr, schema, select)?),
             }),
-            sqlparser::ast::Expr::Exists(q) => {
-                Ok(Expression::Exists(Arc::new(self.query_to_plan(q)?)))
-            }
+            sqlparser::ast::Expr::Exists(q) => Ok(Expression::ScalarFunction {
+                op: "EXISTS".to_lowercase(),
+                args: vec![self.subquery_to_rex(q)?],
+            }),
+            sqlparser::ast::Expr::Subquery(q) => Ok(self.scalar_subquery_to_rex(q)?),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
                 self.process_compound_ident(ids.as_slice(), select)
@@ -953,6 +959,24 @@ impl PlanParser {
                 expr, other
             ))),
         }
+    }
+
+    pub fn subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
+        let subquery = self.query_to_plan(subquery)?;
+        let subquery_name = self.ctx.get_subquery_name(&subquery);
+        Ok(Expression::Subquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
+        })
+    }
+
+    pub fn scalar_subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
+        let subquery = self.query_to_plan(subquery)?;
+        let subquery_name = self.ctx.get_subquery_name(&subquery);
+        Ok(Expression::ScalarSubquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
+        })
     }
 
     pub fn set_variable_to_plan(

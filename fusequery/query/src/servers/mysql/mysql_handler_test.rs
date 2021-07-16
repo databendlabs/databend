@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::thread::JoinHandle;
@@ -22,9 +23,10 @@ use crate::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
 
-    let runnable_server = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let runnable_server = handler.start(listening).await?;
     let mut connection = create_connection(runnable_server.port())?;
     let received_data: Vec<String> = query(&mut connection, "SELECT database()")?;
     assert_eq!(received_data, vec!["default"]);
@@ -37,16 +39,17 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
 
-    let listener_addr = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = handler.start(listening).await?;
 
     {
         // Accepted connection
-        let conn = create_connection(listener_addr.port())?;
+        let conn = create_connection(listening.port())?;
 
         // Rejected connection
-        match create_connection(listener_addr.port()) {
+        match create_connection(listening.port()) {
             Ok(_) => assert!(false, "Expected rejected connection"),
             Err(error) => {
                 assert_eq!(error.code(), 1000);
@@ -60,7 +63,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     // Wait for the connection to be destroyed
     std::thread::sleep(Duration::from_secs(5));
     // Accepted connection
-    create_connection(listener_addr.port())?;
+    create_connection(listening.port())?;
 
     Ok(())
 }
@@ -94,9 +97,10 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
 
-    let listener_addr = handler.start(("0.0.0.0".to_string(), 0_u16)).await?;
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = handler.start(listening).await?;
 
     let start_barriers = Arc::new(Barrier::new(3));
     let destroy_barriers = Arc::new(Barrier::new(3));
@@ -107,7 +111,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         let destroy_barrier = destroy_barriers.clone();
 
         join_handlers.push(connect_server(
-            listener_addr.port(),
+            listening.port(),
             start_barrier,
             destroy_barrier,
         ));

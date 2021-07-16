@@ -21,10 +21,9 @@ fn test_config() -> Result<()> {
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
-            mysql_handler_thread_num: 256,
+            max_active_sessions: 256,
             clickhouse_handler_host: "127.0.0.1".to_string(),
             clickhouse_handler_port: 9000,
-            clickhouse_handler_thread_num: 256,
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
@@ -76,10 +75,9 @@ fn test_config() -> Result<()> {
         std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
         std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
         std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_PORT", "3306");
-        std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM", "255");
+        std::env::set_var("FUSE_QUERY_MAX_ACTIVE_SESSIONS", "255");
         std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
         std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
-        std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM", "255");
         std::env::set_var("FUSE_QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
         std::env::set_var("FUSE_QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
         std::env::set_var("FUSE_QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
@@ -92,10 +90,9 @@ fn test_config() -> Result<()> {
         assert_eq!("DEBUG", configured.log_level);
         assert_eq!("0.0.0.0", configured.mysql_handler_host);
         assert_eq!(3306, configured.mysql_handler_port);
-        assert_eq!(255, configured.mysql_handler_thread_num);
+        assert_eq!(255, configured.max_active_sessions);
         assert_eq!("1.2.3.4", configured.clickhouse_handler_host);
         assert_eq!(9000, configured.clickhouse_handler_port);
-        assert_eq!(255, configured.clickhouse_handler_thread_num);
 
         assert_eq!("1.2.3.4:9091", configured.flight_api_address);
         assert_eq!("1.2.3.4:8081", configured.http_api_address);

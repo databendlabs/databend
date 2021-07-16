@@ -3,14 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio;
-use common_streams::AbortStream;
 use metrics::histogram;
 use msql_srv::ErrorKind;
 use msql_srv::InitWriter;
@@ -23,25 +21,23 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::ISession;
+use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionRef;
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
 
-struct InteractiveWorkerBase<W: std::io::Write> {
-    session: Arc<Box<dyn ISession>>,
-    phantom_data: PhantomData<W>,
-}
+struct InteractiveWorkerBase<W: std::io::Write>(PhantomData<W>);
 
 pub struct InteractiveWorker<W: std::io::Write> {
     base: InteractiveWorkerBase<W>,
-    session: Arc<Box<dyn ISession>>,
+    session: SessionRef,
 }
 
 impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -52,7 +48,8 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base.do_prepare(query, writer)
+        self.base
+            .do_prepare(query, writer, self.session.create_context())
     }
 
     fn on_execute(
@@ -61,7 +58,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         param: ParamParser,
         writer: QueryResultWriter<W>,
     ) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -72,15 +69,16 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base.do_execute(id, param, writer)
+        self.base
+            .do_execute(id, param, writer, self.session.create_context())
     }
 
     fn on_close(&mut self, id: u32) {
-        self.base.do_close(id)
+        self.base.do_close(id, self.session.create_context());
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -92,9 +90,10 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         }
 
         let start = Instant::now();
-        self.session.get_status().lock().enter_query(query);
-        DFQueryResultWriter::create(writer).write(self.base.do_query(query))?;
-        self.session.get_status().lock().exit_query()?;
+        let context = self.session.create_context();
+
+        context.attach_query_info(query);
+        DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))?;
 
         histogram!(
             super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
@@ -105,7 +104,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
-        if self.session.get_status().lock().is_aborting() {
+        if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
                 "Aborting this connection. because we are try aborting server.".as_bytes(),
@@ -116,12 +115,18 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        DFInitResultWriter::create(writer).write(self.base.do_init(database_name))
+        let context = self.session.create_context();
+        DFInitResultWriter::create(writer).write(self.base.do_init(database_name, context))
     }
 }
 
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
-    fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
+    fn do_prepare(
+        &mut self,
+        _: &str,
+        writer: StatementMetaWriter<'_, W>,
+        _: FuseQueryContextRef,
+    ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
             "Prepare is not support in DataFuse.".as_bytes(),
@@ -134,6 +139,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: u32,
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
+        _: FuseQueryContextRef,
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
@@ -142,30 +148,18 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         Ok(())
     }
 
-    fn do_close(&mut self, _: u32) {}
+    fn do_close(&mut self, _: u32, _: FuseQueryContextRef) {}
 
-    fn do_query(&mut self, query: &str) -> Result<Vec<DataBlock>> {
+    fn do_query(&mut self, query: &str, context: FuseQueryContextRef) -> Result<Vec<DataBlock>> {
         log::debug!("{}", query);
 
         let runtime = Self::build_runtime()?;
-        let context = self.session.try_create_context()?;
-
         let (plan, hints) = PlanParser::create(context.clone()).build_with_hint_from_sql(query);
 
         let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
-            let query_plan = plan?;
-            self.session
-                .get_status()
-                .lock()
-                .enter_interpreter(&query_plan);
-            let interpreter = InterpreterFactory::get(context, query_plan)?;
+            let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
             let data_stream = runtime.block_on(interpreter.execute())?;
-
-            let (abort_handle, abort_stream) = AbortStream::try_create(data_stream)?;
-            self.session
-                .get_status()
-                .lock()
-                .enter_pipeline_executor(abort_handle);
+            let abort_stream = context.try_create_abortable(data_stream)?;
 
             runtime.block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
         };
@@ -195,17 +189,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    fn do_init(&mut self, database_name: &str) -> Result<()> {
-        let context = self.session.try_create_context()?;
-        context
-            .get_datasource()
-            .get_database(database_name)
-            .map(|_| {
-                self.session
-                    .get_status()
-                    .lock()
-                    .update_database(database_name.to_string());
-            })
+    fn do_init(&mut self, database_name: &str, context: FuseQueryContextRef) -> Result<()> {
+        self.do_query(&format!("USE {};", database_name), context)?;
+        Ok(())
     }
 
     fn build_runtime() -> Result<tokio::runtime::Runtime> {
@@ -217,13 +203,10 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorker<W> {
-    pub fn create(session: Arc<Box<dyn ISession>>) -> InteractiveWorker<W> {
+    pub fn create(session: SessionRef) -> InteractiveWorker<W> {
         InteractiveWorker::<W> {
-            session: session.clone(),
-            base: InteractiveWorkerBase::<W> {
-                session,
-                phantom_data: PhantomData::<W>,
-            },
+            session,
+            base: InteractiveWorkerBase::<W>(PhantomData::<W>),
         }
     }
 }
