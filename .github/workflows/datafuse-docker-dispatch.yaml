@@ -22,7 +22,6 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt install python2.7
-        sudo apt install python-pip
         mkdir -p /tmp/python2.7
         sudo python2.7 -m pip install coscmd --taget /tmp/python2.7
         /tmp/python2.7/bin/coscmd --version
