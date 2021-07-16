@@ -129,7 +129,7 @@ impl Expression {
         Ok(false)
     }
 
-    pub fn to_subquery_type(&self, subquery_plan: &PlanNode) -> DataType {
+    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataType {
         let subquery_schema = subquery_plan.schema();
         let mut columns_field = Vec::with_capacity(subquery_schema.fields().len());
 
@@ -151,7 +151,7 @@ impl Expression {
         }
     }
 
-    pub fn to_scalar_subquery_type(&self, subquery_plan: &PlanNode) -> DataType {
+    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataType {
         let subquery_schema = subquery_plan.schema();
 
         match subquery_schema.fields().len() {
@@ -165,9 +165,9 @@ impl Expression {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::Literal(v) => Ok(v.data_type()),
-            Expression::Subquery { query_plan, .. } => Ok(self.to_subquery_type(query_plan)),
+            Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
-                Ok(self.to_scalar_subquery_type(query_plan))
+                Ok(Self::to_scalar_subquery_type(query_plan))
             }
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![

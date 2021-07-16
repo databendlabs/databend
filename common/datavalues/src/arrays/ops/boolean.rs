@@ -10,7 +10,7 @@ use crate::arrays::TakeRandom;
 use crate::DFBooleanArray;
 
 impl DFBooleanArray {
-    pub fn and(&self, rhs: &DFBooleanArray) -> Result<Self> {
+    pub fn and_kleene(&self, rhs: &DFBooleanArray) -> Result<Self> {
         match (self.len(), rhs.len()) {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {
@@ -49,7 +49,7 @@ impl DFBooleanArray {
         }
     }
 
-    pub fn or(&self, rhs: &DFBooleanArray) -> Result<Self> {
+    pub fn or_kleene(&self, rhs: &DFBooleanArray) -> Result<Self> {
         match (self.len(), rhs.len()) {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {

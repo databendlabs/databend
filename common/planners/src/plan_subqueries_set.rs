@@ -24,11 +24,11 @@ impl SubQueriesSetPlan {
         for expression in &self.expressions {
             match expression {
                 Expression::Subquery { name, query_plan } => {
-                    let subquery_field_type = expression.to_subquery_type(query_plan);
+                    let subquery_field_type = Expression::to_subquery_type(query_plan);
                     schema_fields.push(DataField::new(name, subquery_field_type, false));
                 }
                 Expression::ScalarSubquery { name, query_plan } => {
-                    let subquery_field_type = expression.to_scalar_subquery_type(query_plan);
+                    let subquery_field_type = Expression::to_scalar_subquery_type(query_plan);
                     schema_fields.push(DataField::new(name, subquery_field_type, false));
                 }
                 _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery"),

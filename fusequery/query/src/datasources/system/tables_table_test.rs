@@ -37,6 +37,7 @@ async fn test_tables_table() -> Result<()> {
         "| system   | numbers_local | SystemNumbersLocal |",
         "| system   | numbers_mt    | SystemNumbersMt    |",
         "| system   | one           | SystemOne          |",
+        "| system   | processes     | SystemProcesses    |",
         "| system   | settings      | SystemSettings     |",
         "| system   | tables        | SystemTables       |",
         "| system   | tracing       | SystemTracing      |",
