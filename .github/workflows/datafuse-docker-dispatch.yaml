@@ -6,7 +6,7 @@ jobs:
   run_funcbench:
     name: Running build_docker
     if: github.event.action == 'build_docker'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ github.token }}
       GITHUB_ORG: zhihanz
@@ -15,14 +15,31 @@ jobs:
       SHA: ${{ github.event.client_payload.REF }}
       PR_NUMBER: ${{ github.event.client_payload.PR_NUMBER }} 
       LAST_COMMIT_SHA: ${{ github.event.client_payload.LAST_COMMIT_SHA }}
+      UUID: ${{ github.event.client_payload.REF }}
+      REGION: ${{ github.event.client_payload.REGION }}
+      BUCKET: ${{ github.event.client_payload.BUCKET }}
     steps:
+    - name: Install dependencies
+      run: |
+        sudo apt install python2.7
+        sudo apt install python-pip
+        echo "export PATH=\"`python2.7 -m site --user-base`/bin:\$PATH\"" >> ~/.bashrc
+        source ~/.bashrc
+        python2.7 -m pip install coscmd
+        coscmd --version
+        coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
     - name: Update status to pending
-      run: >-
-        curl -i -X POST
-        -H "Authorization: Bearer $GITHUB_TOKEN"
-        -H "Content-Type: application/json"
-        --data '{"state":"pending","context":"build-docker-status","target_url":"'$GITHUB_STATUS_TARGET_URL'"}'
+      run: |
+        echo "update github pr status"
+        curl -i -X POST \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data '{"state":"pending","context":"build-docker-status","target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+        echo "sync status to S3"
+        echo '{"uuid": "$UUID", "status": "PENDING"}' > status.json
+        coscmd upload status.json status/$UUID/status.json
+
     - uses: actions/checkout@v2
       with:
         ref: ${{ env.SHA }}
@@ -46,7 +63,7 @@ jobs:
       uses: docker/build-push-action@v2
       with:
         push: true
-        tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/fuse-query:${{ env.SHA }}
+        tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }}
         context: .
         file: ./docker/Dockerfile
 
@@ -59,17 +76,23 @@ jobs:
 
     - name: Update status to failure
       if: failure()
-      run: >-
-        curl -i -X POST
-        -H "Authorization: Bearer $GITHUB_TOKEN"
-        -H "Content-Type: application/json"
-        --data '{"state":"failure","context":"build-docker-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}'
+      run: |
+        curl -i -X POST \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data '{"state":"failure","context":"build-docker-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+        echo "sync status to S3"
+        echo '{"uuid": "$UUID", "status": "FAIL"}' > status.json
+        coscmd upload status.json status/$UUID/status.json
     - name: Update status to success
       if: success()
-      run: >-
-        curl -i -X POST
-        -H "Authorization: Bearer $GITHUB_TOKEN"
-        -H "Content-Type: application/json"
-        --data '{"state":"success","context":"build-docker-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}'
+      run: |
+        curl -i -X POST \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Content-Type: application/json" \
+        --data '{"state":"success","context":"build-docker-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+        echo "sync status to S3"
+        echo '{"uuid": "$UUID", "status": "SUCCESS"}' > status.json
+        coscmd upload status.json status/$UUID/status.json
