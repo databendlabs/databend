@@ -23,7 +23,9 @@ pub struct Optimizers {
 impl Optimizers {
     pub fn create(ctx: FuseQueryContextRef) -> Self {
         let mut optimizers = Self::without_scatters(ctx.clone());
-        optimizers.inner.push(Box::new(ScattersOptimizer::create(ctx)));
+        optimizers
+            .inner
+            .push(Box::new(ScattersOptimizer::create(ctx)));
         optimizers
     }
 
@@ -32,7 +34,7 @@ impl Optimizers {
             inner: vec![
                 Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
                 Box::new(StatisticsExactOptimizer::create(ctx)),
-            ]
+            ],
         }
     }
 

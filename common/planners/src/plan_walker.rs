@@ -97,12 +97,12 @@ impl PlanNode {
         match order {
             WalkOrder::PreOrder => {
                 let mut visitor = PreOrderWalker::<'a, E>::new(callback);
-                visitor.visit_plan_node(node);
+                let _ = visitor.visit_plan_node(node);
                 visitor.finalize()
             }
             WalkOrder::PostOrder => {
                 let mut visitor = PostOrderWalker::<'a, E>::new(callback);
-                visitor.visit_plan_node(node);
+                let _ = visitor.visit_plan_node(node);
                 visitor.finalize()
             }
         }

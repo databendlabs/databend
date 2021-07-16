@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::any::Any;
 use std::sync::Arc;
 
@@ -92,7 +96,8 @@ impl Processor for CreateSetsTransform {
     }
 
     fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
-        Ok(self.input = input)
+        self.input = input;
+        Ok(())
     }
 
     fn inputs(&self) -> Vec<Arc<dyn Processor>> {
@@ -194,6 +199,7 @@ impl<'a> SubQueriesPuller<'a> {
             while let Some(data_block) = stream.next().await {
                 let data_block = data_block?;
 
+                #[allow(clippy::needless_range_loop)]
                 for column_index in 0..data_block.num_columns() {
                     let series = data_block.column(column_index).to_array()?;
                     let mut values = series.to_values()?;

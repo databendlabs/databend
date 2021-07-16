@@ -52,6 +52,7 @@ impl SubQueriesSetPlan {
         inputs
     }
 
+    #[allow(clippy::needless_range_loop)]
     pub fn set_inputs(&mut self, inputs: Vec<&PlanNode>) {
         assert_eq!(self.expressions.len(), inputs.len() - 1);
         for index in 0..self.expressions.len() {

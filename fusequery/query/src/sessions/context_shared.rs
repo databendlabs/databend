@@ -35,7 +35,7 @@ pub struct FuseQueryContextShared {
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
-    pub(in crate::sessions) ref_count: Arc<RwLock<usize>>,
+    pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
 }
 
@@ -49,7 +49,7 @@ impl FuseQueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             cluster_cache: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
-            ref_count: Arc::new(RwLock::new(0)),
+            ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
         })
     }

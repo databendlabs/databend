@@ -42,12 +42,12 @@ impl Function for ExistsFunction {
             )),
             DataColumn::Constant(values, size) => match values {
                 DataValue::List(Some(values), _) => Ok(DataColumn::Constant(
-                    DataValue::Boolean(Some(values.len() != 0)),
+                    DataValue::Boolean(Some(!values.is_empty())),
                     *size,
                 )),
                 DataValue::Struct(fields) if !fields.is_empty() => match &fields[0] {
                     DataValue::List(Some(values), _) => Ok(DataColumn::Constant(
-                        DataValue::Boolean(Some(values.len() != 0)),
+                        DataValue::Boolean(Some(!values.is_empty())),
                         *size,
                     )),
                     _ => Err(ErrorCode::LogicalError(

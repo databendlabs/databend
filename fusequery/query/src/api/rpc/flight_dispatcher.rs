@@ -18,11 +18,9 @@ use common_runtime::tokio::sync::*;
 use common_streams::AbortStream;
 use tokio_stream::StreamExt;
 
-use crate::api::rpc::flight_actions::ShuffleAction;
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
-use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;

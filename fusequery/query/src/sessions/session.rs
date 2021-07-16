@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -23,9 +24,9 @@ pub(in crate::sessions) struct MutableStatus {
     pub(in crate::sessions) abort: bool,
     pub(in crate::sessions) current_database: String,
     pub(in crate::sessions) session_settings: Arc<Settings>,
+    #[allow(unused)]
     pub(in crate::sessions) client_host: Option<SocketAddr>,
     pub(in crate::sessions) io_shutdown_tx: Option<Sender<Sender<()>>>,
-    pub(in crate::sessions) ref_count: usize,
     pub(in crate::sessions) context_shared: Option<Arc<FuseQueryContextShared>>,
 }
 
@@ -34,6 +35,7 @@ pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) config: Config,
     pub(in crate::sessions) sessions: SessionManagerRef,
+    pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) mutable_state: Arc<Mutex<MutableStatus>>,
 }
 
@@ -47,13 +49,13 @@ impl Session {
             id,
             config,
             sessions,
+            ref_count: Arc::new(AtomicUsize::new(0)),
             mutable_state: Arc::new(Mutex::new(MutableStatus {
                 abort: false,
                 current_database: String::from("default"),
                 session_settings: Settings::try_create()?,
                 client_host: None,
                 io_shutdown_tx: None,
-                ref_count: 0,
                 context_shared: None,
             })),
         }))
@@ -74,8 +76,10 @@ impl Session {
         if let Some(io_shutdown) = mutable_state.io_shutdown_tx.take() {
             if mutable_state.context_shared.is_none() {
                 let (tx, rx) = oneshot::channel();
-                io_shutdown.send(tx).is_ok();
-                futures::executor::block_on(rx);
+                if io_shutdown.send(tx).is_ok() {
+                    // We ignore this error because the receiver is return cancelled error.
+                    let _ = futures::executor::block_on(rx);
+                }
             }
         }
     }

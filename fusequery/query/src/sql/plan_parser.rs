@@ -961,7 +961,7 @@ impl PlanParser {
         }
     }
 
-    pub fn subquery_to_rex(&self, subquery: &Box<Query>) -> Result<Expression> {
+    pub fn subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
         let subquery = self.query_to_plan(subquery)?;
         let subquery_name = self.ctx.get_subquery_name(&subquery);
         Ok(Expression::Subquery {
@@ -970,7 +970,7 @@ impl PlanParser {
         })
     }
 
-    pub fn scalar_subquery_to_rex(&self, subquery: &Box<Query>) -> Result<Expression> {
+    pub fn scalar_subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
         let subquery = self.query_to_plan(subquery)?;
         let subquery_name = self.ctx.get_subquery_name(&subquery);
         Ok(Expression::ScalarSubquery {

@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::fmt::Debug;
 
 use common_arrow::arrow::array::Array;
@@ -287,8 +291,8 @@ impl ToValues for DFStructArray {
 
         for index in 0..self.len() {
             let mut struct_fields = Vec::with_capacity(columns_values.len());
-            for column in 0..columns_values.len() {
-                struct_fields.push(columns_values[column][index].clone())
+            for column_values in &columns_values {
+                struct_fields.push(column_values[index].clone())
             }
 
             values.push(DataValue::Struct(struct_fields))

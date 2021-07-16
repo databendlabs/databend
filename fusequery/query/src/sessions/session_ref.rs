@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
+use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use crate::sessions::FuseQueryContextRef;
@@ -50,24 +52,14 @@ impl Drop for SessionRef {
 
 impl Session {
     pub fn destroy_session_ref(self: &Arc<Self>) {
-        if self.decrement_ref_count() {
+        if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
+            std::sync::atomic::fence(Acquire);
             log::debug!("Destroy session {}", self.id);
             self.sessions.destroy_session(&self.id);
         }
     }
 
     pub fn increment_ref_count(self: &Arc<Self>) {
-        let mut mutable_status = self.mutable_state.lock();
-        mutable_status.ref_count += 1;
-    }
-
-    fn decrement_ref_count(self: &Arc<Self>) -> bool {
-        let mut mutable_status = self.mutable_state.lock();
-
-        if mutable_status.ref_count > 0 {
-            mutable_status.ref_count -= 1;
-        }
-
-        mutable_status.ref_count == 0
+        self.ref_count.fetch_add(1, Ordering::Relaxed);
     }
 }

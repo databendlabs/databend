@@ -40,7 +40,7 @@ impl Interpreter for SelectInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
 
-        let mut scheduler = PlanScheduler::try_create(self.ctx.clone())?;
+        let scheduler = PlanScheduler::try_create(self.ctx.clone())?;
         let scheduled_tasks = scheduler.reschedule(&plan)?;
         let remote_actions = scheduled_tasks.get_tasks()?;
 

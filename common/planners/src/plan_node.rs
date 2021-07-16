@@ -9,7 +9,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
-use crate::plan_subqueries_set_create::SubQueriesSetPlan;
+use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;

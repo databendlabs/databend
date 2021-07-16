@@ -13,7 +13,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::col;
-use crate::plan_subqueries_set_create::SubQueriesSetPlan;
+use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::validate_expression;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -235,7 +235,7 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
             predicate: expr.clone(),
             schema: self.plan.schema(),
-            input: self.wrap_subquery_plan(&[expr.clone()])?,
+            input: self.wrap_subquery_plan(&[expr])?,
         })))
     }
 
@@ -245,7 +245,7 @@ impl PlanBuilder {
         Ok(Self::from(&PlanNode::Having(HavingPlan {
             predicate: expr.clone(),
             schema: self.plan.schema(),
-            input: self.wrap_subquery_plan(&[expr.clone()])?,
+            input: self.wrap_subquery_plan(&[expr])?,
         })))
     }
 

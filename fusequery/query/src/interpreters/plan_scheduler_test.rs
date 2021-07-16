@@ -22,7 +22,10 @@ async fn test_scheduler_plan_without_stage() -> Result<()> {
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Empty(EmptyPlan::create()))?;
 
     assert!(scheduled_tasks.get_tasks()?.is_empty());
-    assert_eq!(scheduled_tasks.get_local_task(), PlanNode::Empty(EmptyPlan::create()));
+    assert_eq!(
+        scheduled_tasks.get_local_task(),
+        PlanNode::Empty(EmptyPlan::create())
+    );
 
     Ok(())
 }

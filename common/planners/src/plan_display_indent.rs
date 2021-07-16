@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -51,7 +55,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::Having(plan) => write!(f, "Having: {:?}", plan.predicate),
             PlanNode::Sort(plan) => Self::format_sort(f, plan),
             PlanNode::Limit(plan) => Self::format_limit(f, plan),
-            PlanNode::SubQueryExpression(plan) => Self::format_subquery_expr(f, &plan),
+            PlanNode::SubQueryExpression(plan) => Self::format_subquery_expr(f, plan),
             PlanNode::ReadSource(plan) => Self::format_read_source(f, plan),
             PlanNode::CreateDatabase(plan) => Self::format_create_database(f, plan),
             PlanNode::DropDatabase(plan) => Self::format_drop_database(f, plan),

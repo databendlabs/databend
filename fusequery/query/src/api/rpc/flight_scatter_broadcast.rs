@@ -1,17 +1,13 @@
-use std::sync::Arc;
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct BroadcastFlightScatter {
     scattered_size: usize,

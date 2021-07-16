@@ -5,6 +5,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::atomic::Ordering;
+use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -240,23 +241,14 @@ impl Drop for FuseQueryContext {
 
 impl FuseQueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
-        if self.decrement_ref_count() {
+        if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
+            std::sync::atomic::fence(Acquire);
             log::debug!("Destroy FuseQueryContext");
             self.session.destroy_context_shared();
         }
     }
 
     pub(in crate::sessions) fn increment_ref_count(&self) {
-        *self.ref_count.write() += 1;
-    }
-
-    pub(in crate::sessions) fn decrement_ref_count(&self) -> bool {
-        let mut ref_count = self.ref_count.write();
-
-        if *ref_count > 0 {
-            *ref_count -= 1;
-        }
-
-        *ref_count == 0
+        self.ref_count.fetch_add(1, Ordering::Relaxed);
     }
 }

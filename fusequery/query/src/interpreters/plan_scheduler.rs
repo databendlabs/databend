@@ -3,19 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::hash_map::Entry;
-use std::collections::hash_map::Entry::Occupied;
-use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
-use common_planners::BroadcastKind;
 use common_planners::BroadcastPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
@@ -25,10 +20,8 @@ use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitByPlan;
 use common_planners::LimitPlan;
-use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
-use common_planners::PlanVisitor;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
@@ -44,7 +37,6 @@ use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::clusters::Node;
-use crate::datasources::Table;
 use crate::datasources::TablePtr;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
@@ -90,9 +82,9 @@ impl PlanScheduler {
 
         Ok(PlanScheduler {
             local_pos,
+            nodes_plan,
             stage_id: uuid::Uuid::new_v4().to_string(),
-            nodes_plan: nodes_plan,
-            query_context: context.clone(),
+            query_context: context,
             subqueries_expressions: vec![],
             cluster_nodes: cluster_nodes_name,
             running_mode: RunningMode::Standalone,
@@ -104,7 +96,7 @@ impl PlanScheduler {
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
         let cluster = context.try_get_cluster()?;
-        let mut tasks = Tasks::create(context.clone());
+        let mut tasks = Tasks::create(context);
 
         match cluster.is_empty()? {
             true => tasks.finalize(plan),
@@ -149,6 +141,7 @@ impl Tasks {
         Ok(tasks)
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn add_task(&mut self, node_name: &String, action: FlightAction) {
         match self.actions.entry(node_name.to_string()) {
             Entry::Occupied(mut entry) => entry.get_mut().push_back(action),
@@ -193,11 +186,9 @@ impl PlanScheduler {
             let node_name = &self.cluster_nodes[index];
             let shuffle_action = self.normal_action(stage, &self.nodes_plan[index]);
             let remote_plan_node = self.normal_remote_plan(node_name, &shuffle_action);
+            let shuffle_flight_action = FlightAction::PrepareShuffleAction(shuffle_action);
 
-            tasks.add_task(
-                &node_name,
-                FlightAction::PrepareShuffleAction(shuffle_action),
-            );
+            tasks.add_task(node_name, shuffle_flight_action);
             self.nodes_plan[index] = PlanNode::Remote(remote_plan_node);
         }
 
@@ -277,11 +268,9 @@ impl PlanScheduler {
         for index in 0..self.nodes_plan.len() {
             let node_name = &self.cluster_nodes[index];
             let shuffle_action = self.converge_action(stage, &self.nodes_plan[index]);
+            let shuffle_flight_action = FlightAction::PrepareShuffleAction(shuffle_action);
 
-            tasks.add_task(
-                &node_name,
-                FlightAction::PrepareShuffleAction(shuffle_action),
-            );
+            tasks.add_task(node_name, shuffle_flight_action);
         }
 
         self.running_mode = RunningMode::Standalone;
@@ -474,7 +463,7 @@ impl PlanScheduler {
             let action = self.broadcast_action(&self.nodes_plan[index]);
             let remote_plan_node = self.broadcast_remote(node_name, &action);
 
-            tasks.add_task(&node_name, FlightAction::BroadcastAction(action));
+            tasks.add_task(node_name, FlightAction::BroadcastAction(action));
             self.nodes_plan[index] = PlanNode::Remote(remote_plan_node);
         }
     }
@@ -642,7 +631,7 @@ impl PlanScheduler {
     fn visit_subquery(&mut self, plan: &PlanNode, tasks: &mut Tasks) -> Result<Vec<PlanNode>> {
         let subquery_context = FuseQueryContext::new(self.query_context.clone());
         let mut subquery_scheduler = PlanScheduler::try_create(subquery_context)?;
-        subquery_scheduler.visit_plan_node(plan, tasks);
+        subquery_scheduler.visit_plan_node(plan, tasks)?;
         Ok(subquery_scheduler.nodes_plan)
     }
 
@@ -738,7 +727,7 @@ impl PlanScheduler {
 
     fn visit_local_limit(&mut self, plan: &LimitPlan) {
         self.nodes_plan[self.local_pos] = PlanNode::Limit(LimitPlan {
-            n: plan.n.clone(),
+            n: plan.n,
             offset: plan.offset,
             input: Arc::new(self.nodes_plan[self.local_pos].clone()),
         });
@@ -747,7 +736,7 @@ impl PlanScheduler {
     fn visit_cluster_limit(&mut self, plan: &LimitPlan) {
         for index in 0..self.nodes_plan.len() {
             self.nodes_plan[index] = PlanNode::Limit(LimitPlan {
-                n: plan.n.clone(),
+                n: plan.n,
                 offset: plan.offset,
                 input: Arc::new(self.nodes_plan[index].clone()),
             });
@@ -795,12 +784,13 @@ impl PlanScheduler {
 
     fn visit_local_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
         self.running_mode = RunningMode::Standalone;
-        Ok(self.nodes_plan[self.local_pos] = PlanNode::ReadSource(plan.clone()))
+        self.nodes_plan[self.local_pos] = PlanNode::ReadSource(plan.clone());
+        Ok(())
     }
 
     fn visit_cluster_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
         self.running_mode = RunningMode::Cluster;
-        let nodes_parts = self.repartition(&plan);
+        let nodes_parts = self.repartition(plan);
 
         for index in 0..self.nodes_plan.len() {
             let mut read_plan = plan.clone();
@@ -860,7 +850,7 @@ impl PlanScheduler {
         }
 
         // For some irregular partitions, we assign them to the head nodes
-        let mut begin = parts_pre_node * nodes.len();
+        let begin = parts_pre_node * nodes.len();
         let remain_cluster_parts = &cluster_parts[begin..];
         for index in 0..remain_cluster_parts.len() {
             nodes_parts[index].push(remain_cluster_parts[index].clone());

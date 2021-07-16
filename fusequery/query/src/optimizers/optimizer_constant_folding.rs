@@ -25,7 +25,6 @@ fn is_boolean_type(schema: &DataSchemaRef, expr: &Expression) -> Result<bool> {
 }
 
 struct ConstantFoldingImpl {
-    expression_schema: Option<DataSchemaRef>,
     before_group_by_schema: Option<DataSchemaRef>,
 }
 
@@ -151,7 +150,6 @@ impl PlanRewriter for ConstantFoldingImpl {
 impl ConstantFoldingImpl {
     pub fn new() -> ConstantFoldingImpl {
         ConstantFoldingImpl {
-            expression_schema: None,
             before_group_by_schema: None,
         }
     }

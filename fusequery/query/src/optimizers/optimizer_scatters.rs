@@ -10,7 +10,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
-use common_planners::BroadcastKind;
 use common_planners::BroadcastPlan;
 use common_planners::Expression;
 use common_planners::LimitByPlan;
@@ -185,12 +184,12 @@ impl ScattersOptimizerImpl {
     fn normal_shuffle_stage(key: impl Into<String>, input: PlanNode) -> Result<PlanNode> {
         let scatters_expr = Expression::ScalarFunction {
             op: String::from("sipHash"),
-            args: vec![Expression::Column(String::from(key.into()))],
+            args: vec![Expression::Column(key.into())],
         };
 
         Ok(PlanNode::Stage(StagePlan {
+            scatters_expr,
             kind: StageKind::Normal,
-            scatters_expr: scatters_expr,
             input: Arc::new(input),
         }))
     }
@@ -209,13 +208,11 @@ impl PlanRewriter for ScattersOptimizerImpl {
             }
             (RunningMode::Cluster, RunningMode::Standalone) => {
                 Ok(PlanNode::Broadcast(BroadcastPlan {
-                    kind: BroadcastKind::OneNode,
                     input: Arc::new(rewritten_subquery),
                 }))
             }
             (RunningMode::Cluster, RunningMode::Cluster) => {
                 Ok(PlanNode::Broadcast(BroadcastPlan {
-                    kind: BroadcastKind::EachNode,
                     input: Arc::new(rewritten_subquery),
                 }))
             }

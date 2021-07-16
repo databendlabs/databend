@@ -2,17 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_exception::{Result, ErrorCode};
+use common_exception::Result;
 use common_planners::ExplainPlan;
 use common_planners::ExplainType;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -47,7 +45,6 @@ impl Interpreter for ExplainInterpreter {
         self.explain.schema()
     }
 }
-
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: FuseQueryContextRef, explain: ExplainPlan) -> Result<InterpreterPtr> {
