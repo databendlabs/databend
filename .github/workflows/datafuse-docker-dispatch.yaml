@@ -22,10 +22,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt install python2.7
-        sudo apt install python-pip
-        echo "export PATH=\"`python2.7 -m site --user-base`/bin:\$PATH\"" >> ~/.bashrc
-        source ~/.bashrc
-        python2.7 -m pip install coscmd
+        wget https://bootstrap.pypa.io/get-pip.py
+        sudo python2.7 get-pip.py
+        pip install coscmd
         coscmd --version
         coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
     - name: Update status to pending
@@ -39,7 +38,6 @@ jobs:
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "PENDING"}' > status.json
         coscmd upload status.json status/$UUID/status.json
-
     - uses: actions/checkout@v2
       with:
         ref: ${{ env.SHA }}
