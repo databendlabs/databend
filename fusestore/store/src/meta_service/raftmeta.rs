@@ -138,6 +138,30 @@ impl MetaStore {
         })
     }
 
+    /// Open an existent `MetaStore` instance.
+    pub async fn open(config: &configs::Config) -> common_exception::Result<MetaStore> {
+        let db = sled::open(&config.meta_dir)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("opening sled db: {}", config.meta_dir)
+            })?;
+
+        let raft_state = RaftState::open(&db)?;
+
+        let log = RwLock::new(BTreeMap::new());
+        let sm = RwLock::new(StateMachine::default());
+        let current_snapshot = RwLock::new(None);
+
+        Ok(Self {
+            id: raft_state.id,
+            _db: db,
+            raft_state,
+            log,
+            state_machine: sm,
+            snapshot_index: Arc::new(Mutex::new(0)),
+            current_snapshot,
+        })
+    }
+
     /// Get a handle to the log for testing purposes.
     pub async fn get_log(&self) -> RwLockWriteGuard<'_, BTreeMap<u64, Entry<LogEntry>>> {
         self.log.write().await
@@ -616,13 +640,10 @@ impl MetaNode {
 
     /// Start a MetaStore node from initialized store.
     #[tracing::instrument(level = "info")]
-    pub async fn new(
-        node_id: NodeId,
-        config: &configs::Config,
-    ) -> common_exception::Result<Arc<MetaNode>> {
-        let sto = MetaStore::new(node_id, config).await?;
+    pub async fn open(config: &configs::Config) -> common_exception::Result<Arc<MetaNode>> {
+        let sto = MetaStore::open(config).await?;
         let sto = Arc::new(sto);
-        let b = MetaNode::builder().node_id(node_id).sto(sto);
+        let b = MetaNode::builder().node_id(sto.id).sto(sto);
 
         b.build().await
     }
@@ -718,6 +739,10 @@ impl MetaNode {
         node_id: NodeId,
         config: &configs::Config,
     ) -> common_exception::Result<Arc<MetaNode>> {
+        // 1. Bring a node up as non voter, start the grpc service for raft communication.
+        // 2. Initialize itself as leader, because it is the only one in the new cluster.
+        // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
+
         let mn = MetaNode::boot_non_voter(node_id, config).await?;
 
         let mut cluster_node_ids = HashSet::new();
@@ -739,7 +764,7 @@ impl MetaNode {
 
     /// Boot a node that is going to join an existent cluster.
     /// For every node this should be called exactly once.
-    /// When successfully initialized(e.g. received logs from raft leader), a node should be started with MetaNode::new().
+    /// When successfully initialized(e.g. received logs from raft leader), a node should be started with MetaNode::open().
     #[tracing::instrument(level = "info")]
     pub async fn boot_non_voter(
         node_id: NodeId,
@@ -747,7 +772,7 @@ impl MetaNode {
     ) -> common_exception::Result<Arc<MetaNode>> {
         // TODO test MetaNode::new() on a booted store.
         // TODO: Before calling this func, the node should be added as a non-voter to leader.
-        // TODO: check raft initialState to see if the store is clean.
+        // TODO(xp): what if fill in the node info into an empty state-machine, then MetaNode can be started without delaying grpc.
 
         // When booting, there is addr stored in local store.
         // Thus we need to start grpc manually.
