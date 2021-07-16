@@ -23,6 +23,8 @@ jobs:
       run: |
         sudo apt install python2.7
         mkdir -p /tmp/python2.7
+        wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
+        sudo python2.7 get-pip.py
         sudo python2.7 -m pip install coscmd --taget /tmp/python2.7
         /tmp/python2.7/bin/coscmd --version
         /tmp/python2.7/bin/coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
