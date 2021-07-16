@@ -48,7 +48,6 @@ clickhouse-srv = { git = "https://github.com/zhang2014/clickhouse-srv", branch =
 
 # Crates.io dependencies
 ahash = "0.7.4"
-anyhow = "1.0.42"
 async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
