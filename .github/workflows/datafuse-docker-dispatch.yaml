@@ -15,7 +15,7 @@ jobs:
       SHA: ${{ github.event.client_payload.REF }}
       PR_NUMBER: ${{ github.event.client_payload.PR_NUMBER }} 
       LAST_COMMIT_SHA: ${{ github.event.client_payload.LAST_COMMIT_SHA }}
-      UUID: ${{ github.event.client_payload.REF }}
+      UUID: ${{ github.event.client_payload.UUID }}
       REGION: ${{ github.event.client_payload.REGION }}
       BUCKET: ${{ github.event.client_payload.BUCKET }}
     steps:
