@@ -19,15 +19,6 @@ jobs:
       REGION: ${{ github.event.client_payload.REGION }}
       BUCKET: ${{ github.event.client_payload.BUCKET }}
     steps:
-    - name: Install dependencies
-      run: |
-        sudo apt install python2.7
-        sudo apt install python-pip
-        echo "export PATH=\"`python2.7 -m site --user-base`/bin:\$PATH\"" >> ~/.bashrc
-        source ~/.bashrc
-        python2.7 -m pip install coscmd
-        coscmd --version
-        coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
     - name: Update status to pending
       run: |
         echo "update github pr status"
@@ -39,6 +30,14 @@ jobs:
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "PENDING"}' > status.json
         coscmd upload status.json status/$UUID/status.json
+    - name: Install dependencies
+      run: |
+        sudo apt install python2.7
+        wget https://bootstrap.pypa.io/get-pip.py
+        sudo python2.7 get-pip.py
+        pip install coscmd
+        coscmd --version
+        coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
 
     - uses: actions/checkout@v2
       with:
