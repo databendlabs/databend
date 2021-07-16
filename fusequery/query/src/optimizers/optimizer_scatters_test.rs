@@ -4,6 +4,7 @@
 
 use common_exception::Result;
 use common_runtime::tokio;
+use pretty_assertions::assert_eq;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;
