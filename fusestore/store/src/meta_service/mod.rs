@@ -11,6 +11,7 @@ pub mod network;
 pub mod placement;
 pub mod raft_txid;
 pub mod raftmeta;
+pub mod sled_serde;
 pub mod snapshot;
 pub mod state_machine;
 
@@ -26,6 +27,7 @@ pub use placement::Placement;
 pub use raft_txid::RaftTxId;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
+pub use sled_serde::SledSerde;
 pub use snapshot::Snapshot;
 pub use state_machine::Node;
 pub use state_machine::Slot;
