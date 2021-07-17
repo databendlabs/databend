@@ -70,6 +70,24 @@ pub fn new_test_context() -> StoreTestContext {
     }
 }
 
+pub struct SledTestContext {
+    #[allow(dead_code)]
+    temp_dir: TempDir,
+    pub db: sled::Db,
+}
+
+/// Create a new context for testing sled
+pub fn new_sled_test_context() -> SledTestContext {
+    let t = tempdir().expect("create temp dir to store meta");
+    let tmpdir = t.path().to_str().unwrap().to_string();
+
+    SledTestContext {
+        // hold the TempDir until being dropped.
+        temp_dir: t,
+        db: sled::open(tmpdir).expect("open sled db"),
+    }
+}
+
 pub fn rand_local_addr() -> String {
     let mut rng = rand::thread_rng();
     let port: u32 = rng.gen_range(10000..11000);
