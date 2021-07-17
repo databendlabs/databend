@@ -1,13 +1,14 @@
-use common_datavalues::prelude::*;
-
-use crate::DataBlock;
-
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_datavalues::prelude::*;
+use common_exception::Result;
+
+use crate::DataBlock;
+
 #[test]
-fn test_data_block() -> anyhow::Result<()> {
+fn test_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);

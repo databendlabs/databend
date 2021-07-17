@@ -5,11 +5,12 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
+use common_exception::Result;
 
 use crate::*;
 
 #[test]
-fn test_projection_plan() -> anyhow::Result<()> {
+fn test_projection_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);

@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_datavalues::prelude::*;
+use common_exception::Result;
 
 use crate::*;
 
 #[test]
-fn test_data_block_group_by() -> anyhow::Result<()> {
+fn test_data_block_group_by() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int8, false),
         DataField::new("b", DataType::Utf8, false),
