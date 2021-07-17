@@ -4,30 +4,29 @@
 
 use async_raft::storage::HardState;
 use common_runtime::tokio;
-use tempfile::tempdir;
 
 use crate::meta_service::raft_state::RaftState;
+use crate::tests::service::new_sled_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_create() -> anyhow::Result<()> {
     // - create a raft state
     // - creating another raft state in the same sled db should fail
 
-    let dir = tempdir()?;
-    let root = dir.path();
-    let db = sled::open(root)?;
-    let rs = RaftState::create(&db, &3).await?;
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let rs = RaftState::create(db, &3).await?;
 
     assert_eq!(3, rs.id);
 
-    let res = RaftState::create(&db, &4).await;
+    let res = RaftState::create(db, &4).await;
     assert!(res.is_err());
     assert_eq!(
         "Code: 2402, displayText = exist: id=Ok(3).",
         res.unwrap_err().to_string()
     );
 
-    let res = RaftState::create(&db, &3).await;
+    let res = RaftState::create(db, &3).await;
     assert!(res.is_err());
     assert_eq!(
         "Code: 2402, displayText = exist: id=Ok(3).",
@@ -40,14 +39,13 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
     // - create a raft state
     // - open it.
 
-    let dir = tempdir()?;
-    let root = dir.path();
-    let db = sled::open(root)?;
-    let rs = RaftState::create(&db, &3).await?;
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let rs = RaftState::create(db, &3).await?;
 
     assert_eq!(3, rs.id);
 
-    let rs = RaftState::open(&db)?;
+    let rs = RaftState::open(db)?;
     assert_eq!(3, rs.id);
     Ok(())
 }
@@ -57,10 +55,9 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
     // - create a raft state
     // - write hard_state and the read it.
 
-    let dir = tempdir()?;
-    let root = dir.path();
-    let db = sled::open(root)?;
-    let rs = RaftState::create(&db, &3).await?;
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let rs = RaftState::create(db, &3).await?;
 
     assert_eq!(3, rs.id);
 
