@@ -146,11 +146,13 @@ impl SessionManager {
     }
 
     fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
-        let active_session_guard = sessions.read();
+        // Read lock does not support reentrant
+        // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
+        let active_sessions_read_guard = sessions.read();
 
         // First try to kill the idle session
-        active_session_guard.values().for_each(Session::kill);
-        let active_sessions = sessions.read().len();
+        active_sessions_read_guard.values().for_each(Session::kill);
+        let active_sessions = active_sessions_read_guard.len();
 
         match active_sessions {
             0 => true,
