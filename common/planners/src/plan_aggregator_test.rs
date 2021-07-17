@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::test::Test;
 use crate::*;
-use common_exception::Result;
 
 #[test]
 fn test_aggregator_plan() -> Result<()> {

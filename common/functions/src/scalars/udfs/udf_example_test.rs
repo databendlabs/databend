@@ -11,7 +11,6 @@ use common_exception::Result;
 
 use crate::scalars::*;
 
-
 #[test]
 fn test_udf_example_function() -> Result<()> {
     #[allow(dead_code)]

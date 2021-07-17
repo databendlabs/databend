@@ -6,10 +6,10 @@ use std::sync::Arc;
 
 use common_datablocks::*;
 use common_datavalues::prelude::*;
+use common_exception::Result;
 use common_progress::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
-use common_exception::Result;
 
 use crate::*;
 

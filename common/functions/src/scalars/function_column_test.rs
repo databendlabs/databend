@@ -4,9 +4,9 @@
 
 use common_datablocks::*;
 use common_datavalues::prelude::*;
+use common_exception::Result;
 
 use crate::scalars::*;
-use common_exception::Result;
 
 #[test]
 fn test_column_function() -> Result<()> {

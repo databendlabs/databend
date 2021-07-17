@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
-use common_exception::Result;
 
 use common_datavalues::prelude::*;
+use common_exception::Result;
 
 use crate::*;
 

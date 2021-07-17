@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-exception = { path = "../exception" }
 
 # Github dependencies
 

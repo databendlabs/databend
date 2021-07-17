@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::*;
-use common_exception::Result;
 
 #[test]
 fn test_plan_extras() -> Result<()> {

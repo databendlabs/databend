@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_datavalues::prelude::*;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::scalars::*;
-use common_exception::Result;
 
 #[test]
 fn test_version_function() -> Result<()> {

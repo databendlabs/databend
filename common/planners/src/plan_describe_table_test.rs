@@ -5,8 +5,8 @@
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use pretty_assertions::assert_eq;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
 
 use crate::*;
 
