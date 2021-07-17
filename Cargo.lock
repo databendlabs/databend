@@ -1641,6 +1641,7 @@ dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
+ "byteorder",
  "common-arrow",
  "common-building",
  "common-datablocks",
