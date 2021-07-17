@@ -1,17 +1,19 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::Result;
 
 use crate::scalars::*;
 
-// Copyright 2020-2021 The Datafuse Authors.
-//
-// SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn test_udf_example_function() -> anyhow::Result<()> {
+fn test_udf_example_function() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,

@@ -14,5 +14,4 @@ edition = "2018"
 # Crates.io dependencies
 
 [dev-dependencies]
-anyhow = "1.0.42"
 pretty_assertions = "0.7"

@@ -14,7 +14,6 @@ common-exception = {path = "../exception"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.42"
 paste = "^1.0"
 num = "^0.4"
 unsafe_unwrap = "^0.1.0"

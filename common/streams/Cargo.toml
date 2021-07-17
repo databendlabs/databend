@@ -17,7 +17,6 @@ common-progress = {path = "../progress"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.42"
 crossbeam = "0.8"
 futures = "0.3"
 pin-project-lite = "^0.2"

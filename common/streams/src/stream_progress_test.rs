@@ -9,11 +9,12 @@ use common_datavalues::prelude::*;
 use common_progress::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
+use common_exception::Result;
 
 use crate::*;
 
 #[tokio::test]
-async fn test_progress_stream() -> anyhow::Result<()> {
+async fn test_progress_stream() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
     let block =

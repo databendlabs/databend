@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
+use common_exception::Result;
 
 use common_datavalues::prelude::*;
 
 use crate::*;
 
 #[test]
-fn test_projection_plan() -> anyhow::Result<()> {
+fn test_projection_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);

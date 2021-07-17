@@ -8,9 +8,10 @@ use pretty_assertions::assert_eq;
 
 use crate::test::Test;
 use crate::*;
+use common_exception::Result;
 
 #[test]
-fn test_aggregator_plan() -> anyhow::Result<()> {
+fn test_aggregator_plan() -> Result<()> {
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
         .aggregate_partial(&[sum(col("number")).alias("sumx")], &[])?

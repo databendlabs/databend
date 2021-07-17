@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
+use common_exception::Result;
 
 use crate::*;
 
 #[test]
-fn test_limit_plan() -> anyhow::Result<()> {
+fn test_limit_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let limit = PlanNode::Limit(LimitPlan {

@@ -6,9 +6,10 @@ use common_datablocks::*;
 use common_datavalues::prelude::*;
 
 use crate::scalars::*;
+use common_exception::Result;
 
 #[test]
-fn test_column_function() -> anyhow::Result<()> {
+fn test_column_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
         true, true, true, false,

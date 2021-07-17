@@ -688,7 +688,6 @@ name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
- "anyhow",
  "common-arrow",
  "common-datavalues",
  "common-exception",
@@ -701,7 +700,6 @@ name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
- "anyhow",
  "common-arrow",
  "common-exception",
  "num",
@@ -762,7 +760,6 @@ dependencies = [
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "bumpalo",
  "bytes 1.0.1",
  "common-arrow",
@@ -814,7 +811,6 @@ dependencies = [
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -839,7 +835,6 @@ dependencies = [
 name = "common-progress"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "pretty_assertions",
 ]
 
@@ -847,7 +842,6 @@ dependencies = [
 name = "common-runtime"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "common-exception",
  "tokio",
 ]
@@ -872,7 +866,6 @@ dependencies = [
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",

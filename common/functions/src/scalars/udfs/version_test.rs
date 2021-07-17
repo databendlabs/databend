@@ -6,9 +6,10 @@ use common_datavalues::prelude::*;
 use pretty_assertions::assert_eq;
 
 use crate::scalars::*;
+use common_exception::Result;
 
 #[test]
-fn test_version_function() -> anyhow::Result<()> {
+fn test_version_function() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,

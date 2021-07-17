@@ -4,12 +4,13 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use common_exception::Result;
 
 use crate::test::Test;
 use crate::*;
 
 #[test]
-fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
+fn test_rewrite_projection_alias_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     #[allow(dead_code)]
@@ -136,7 +137,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
+fn test_rewrite_expressions_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
@@ -196,7 +197,7 @@ impl PlanRewriter for DefaultRewriter {
 }
 
 #[test]
-fn test_plan_rewriter_1() -> anyhow::Result<()> {
+fn test_plan_rewriter_1() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::*;
