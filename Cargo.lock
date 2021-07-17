@@ -2511,20 +2511,20 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c0a7fa53d812d26e59d2baf7a6f77442041454ab32908eb304447f00f0dd4de"
+checksum = "a00f42f354a2ed4894db863b3a4db47aef2d2e4435b937221749bd37a8a7aaa8"
 dependencies = [
+ "ahash 0.7.4",
  "metrics-macros",
  "proc-macro-hack",
- "t1ha",
 ]
 
 [[package]]
 name = "metrics-exporter-prometheus"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "423ac561fc3300388e62947ce7f944ba6d40468afe9916ce5b7774171d8b38b8"
+checksum = "9db7052a7cb0b0c0922a1ce499c9e78576763b1d47499ba980a4fe731b96909d"
 dependencies = [
  "hyper",
  "ipnet",
@@ -2552,10 +2552,11 @@ dependencies = [
 
 [[package]]
 name = "metrics-util"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0c93306cf63ff153c57963151a011194af0f33c91fe30ec30faf98732350a1a"
+checksum = "a58e622a425b7308e73e4390c68b8cb3df4443f2a57495e391b978412531638c"
 dependencies = [
+ "ahash 0.7.4",
  "aho-corasick",
  "atomic-shim",
  "crossbeam-epoch 0.9.5",
@@ -2570,7 +2571,6 @@ dependencies = [
  "quanta",
  "radix_trie",
  "sketches-ddsketch",
- "t1ha",
 ]
 
 [[package]]
@@ -4489,18 +4489,6 @@ dependencies = [
  "ntapi",
  "once_cell",
  "winapi",
-]
-
-[[package]]
-name = "t1ha"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa44aa51ae1a544e2c35a38831ba54ae40591f21384816f531b84f3e984b9ccc"
-dependencies = [
- "cfg-if 0.1.10",
- "lazy_static",
- "num-traits",
- "rustc_version 0.2.3",
 ]
 
 [[package]]
