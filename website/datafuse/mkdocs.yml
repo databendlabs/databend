@@ -138,9 +138,10 @@ nav:
       - Describe Commands:
           - DESCRIBE TABLE: sqlstatement/describe-commands/describe-table.md
       - Show Commands:
-          - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
-          - SHOW TABLES: sqlstatement/show-commands/show-tables.md
           - SHOW CREATE TABLE: sqlstatement/show-commands/show-create-table.md
+          - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
+          - SHOW PROCESSLIST: sqlstatement/show-commands/show-processlist.md
+          - SHOW TABLES: sqlstatement/show-commands/show-tables.md
       - Aggregate Functions:
           - AVG: sqlstatement/aggregate-functions/aggregate-avg.md
           - COUNT: sqlstatement/aggregate-functions/aggregate-count.md
