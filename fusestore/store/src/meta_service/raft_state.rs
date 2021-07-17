@@ -6,6 +6,7 @@ use async_raft::storage::HardState;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 
+use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::NodeId;
 use crate::meta_service::SledSerde;
 
@@ -24,6 +25,8 @@ pub struct RaftState {
 const K_RAFT_STATE: &str = "raft_state";
 const K_ID: &str = "id";
 const K_HARD_STATE: &str = "hard_state";
+
+impl SledSerde for HardState {}
 
 impl RaftState {
     /// Create a new sled db backed RaftState.
