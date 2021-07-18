@@ -5,7 +5,7 @@
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
+use common_planners::{AggregatorFinalPlan, Expressions};
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
@@ -14,107 +14,102 @@ use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
+use common_functions::scalars::FunctionFactory;
+use crate::pipelines::transforms::ExpressionExecutor;
+use common_datablocks::DataBlock;
 
 pub struct ConstantFoldingOptimizer {}
-
-fn is_boolean_type(schema: &DataSchemaRef, expr: &Expression) -> Result<bool> {
-    if let DataType::Boolean = expr.to_data_field(schema)?.data_type() {
-        return Ok(true);
-    }
-    Ok(false)
-}
 
 struct ConstantFoldingImpl {
     before_group_by_schema: Option<DataSchemaRef>,
 }
 
-fn constant_folding(schema: &DataSchemaRef, expr: Expression) -> Result<Expression> {
-    let new_expr = match expr {
-        Expression::BinaryExpression { left, op, right } => match op.as_str() {
-            "=" => match (left.as_ref(), right.as_ref()) {
-                (
-                    Expression::Literal(DataValue::Boolean(l)),
-                    Expression::Literal(DataValue::Boolean(r)),
-                ) => match (l, r) {
-                    (Some(l), Some(r)) => Expression::Literal(DataValue::Boolean(Some(l == r))),
-                    _ => Expression::Literal(DataValue::Boolean(None)),
-                },
-                (Expression::Literal(DataValue::Boolean(b)), _)
-                    if is_boolean_type(schema, &right)? =>
-                {
-                    match b {
-                        Some(true) => *right,
-                        // Fix this after we implement NOT
-                        Some(false) => Expression::BinaryExpression { left, op, right },
-                        None => Expression::Literal(DataValue::Boolean(None)),
-                    }
-                }
-                (_, Expression::Literal(DataValue::Boolean(b)))
-                    if is_boolean_type(schema, &left)? =>
-                {
-                    match b {
-                        Some(true) => *left,
-                        // Fix this after we implement NOT
-                        Some(false) => Expression::BinaryExpression { left, op, right },
-                        None => Expression::Literal(DataValue::Boolean(None)),
-                    }
-                }
-                _ => Expression::BinaryExpression {
-                    left,
-                    op: "=".to_string(),
-                    right,
-                },
-            },
-            "!=" => match (left.as_ref(), right.as_ref()) {
-                (
-                    Expression::Literal(DataValue::Boolean(l)),
-                    Expression::Literal(DataValue::Boolean(r)),
-                ) => match (l, r) {
-                    (Some(l), Some(r)) => Expression::Literal(DataValue::Boolean(Some(l != r))),
-                    _ => Expression::Literal(DataValue::Boolean(None)),
-                },
-                (Expression::Literal(DataValue::Boolean(b)), _)
-                    if is_boolean_type(schema, &right)? =>
-                {
-                    match b {
-                        Some(true) => Expression::BinaryExpression { left, op, right },
-                        Some(false) => *right,
-                        None => Expression::Literal(DataValue::Boolean(None)),
-                    }
-                }
-                (_, Expression::Literal(DataValue::Boolean(b)))
-                    if is_boolean_type(schema, &left)? =>
-                {
-                    match b {
-                        Some(true) => Expression::BinaryExpression { left, op, right },
-                        Some(false) => *left,
-                        None => Expression::Literal(DataValue::Boolean(None)),
-                    }
-                }
-                _ => Expression::BinaryExpression {
-                    left,
-                    op: "!=".to_string(),
-                    right,
-                },
-            },
-            _ => Expression::BinaryExpression { left, op, right },
-        },
-        expr => {
-            // do nothing
-            expr
+impl ConstantFoldingImpl {
+    fn rewrite_alias(alias: &str, expr: Expression) -> Result<Expression> {
+        Ok(Expression::Alias(alias.to_string(), Box::new(expr)))
+    }
+
+    fn constants_arguments(args: &[Expression]) -> bool {
+        !args.iter().any(|expr| !matches!(expr, Expression::Literal(_)))
+    }
+
+    fn rewrite_function(name: &str, args: Expressions) -> Result<Expression> {
+        println!("rewrite function");
+        let function = FunctionFactory::get(name)?;
+        match function.is_deterministic() {
+            true => Self::rewrite_deterministic_function(name, args),
+            false => Ok(Expression::ScalarFunction {
+                op: name.to_string(),
+                args: args.to_vec(),
+            })
         }
-    };
-    Ok(new_expr)
+    }
+
+    fn rewrite_deterministic_function(name: &str, args: Expressions) -> Result<Expression> {
+        println!("rewrite deterministic function");
+        match ConstantFoldingImpl::constants_arguments(&args) {
+            true => Self::rewrite_const_deterministic_function(name, args),
+            false => Ok(Expression::ScalarFunction { op: name.to_string(), args })
+        }
+    }
+
+    fn expr_executor(schema: &DataSchemaRef, expr: Expression) -> Result<ExpressionExecutor> {
+        let output_fields = vec![expr.to_data_field(&schema)?];
+        let output_schema = DataSchemaRefExt::create(output_fields);
+        ExpressionExecutor::try_create(
+            "Constant folding optimizer.",
+            schema.clone(),
+            output_schema,
+            vec![expr],
+            false,
+        )
+    }
+
+    fn rewrite_const_deterministic_function(name: &str, args: Expressions) -> Result<Expression> {
+        println!("rewrite const deterministic function");
+        let input_fields = vec![DataField::new("_dummy", DataType::UInt8, false)];
+        let input_schema = Arc::new(DataSchema::new(input_fields));
+
+        let expression = Expression::ScalarFunction { op: name.to_string(), args };
+        let expression_executor = ConstantFoldingImpl::expr_executor(&input_schema, expression)?;
+        let dummy_columns = vec![DataColumn::Constant(DataValue::UInt8(Some(1)), 1)];
+        let data_block = DataBlock::create(input_schema, dummy_columns);
+        let executed_data_block = expression_executor.execute(&data_block)?;
+
+        assert_eq!(executed_data_block.num_rows(), 1);
+        assert_eq!(executed_data_block.num_columns(), 1);
+        Ok(Expression::Literal(executed_data_block.column(0).to_values()?[0].clone()))
+    }
 }
 
 impl PlanRewriter for ConstantFoldingImpl {
     fn rewrite_expr(&mut self, schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
-        /* TODO: Recursively optimize constant expressions.
-         *  such as:
-         *      subquery,
-         *      a + (1 + (2 + 3)) => a + 6
-         */
-        constant_folding(schema, expr.clone())
+        println!("rewrite_expr");
+        match expr {
+            Expression::Alias(alias, expr) => {
+                Self::rewrite_alias(alias, self.rewrite_expr(schema, expr)?)
+            },
+            Expression::ScalarFunction { op, args } => {
+                Ok(Expression::Alias(expr.column_name(), Box::new(Self::rewrite_function(op, args
+                    .iter()
+                    .map(|expr| Self::rewrite_expr(self, schema, expr))
+                    .collect::<Result<Vec<_>>>()?)?
+                )))
+            }
+            Expression::UnaryExpression { op, expr } => {
+                Ok(Expression::Alias(expr.column_name(), Box::new(
+                    Self::rewrite_function(op, vec![self.rewrite_expr(schema, expr)?])?
+                )))
+            }
+            Expression::BinaryExpression { op, left, right } => {
+                Ok(Expression::Alias(expr.column_name(), Box::new(Self::rewrite_function(op, vec![
+                    self.rewrite_expr(schema, left)?,
+                    self.rewrite_expr(schema, right)?
+                ])?)))
+            },
+
+            _ => Ok(expr.clone()),
+        }
     }
 
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
