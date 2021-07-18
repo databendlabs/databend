@@ -4,11 +4,11 @@
 
 use common_exception::Result;
 
-use crate::prelude::*;
-use crate::DFUInt16Array;
-use crate::DFBooleanArray;
-use crate::DFUtf8Array;
 use crate::arrays::ops::agg::ArrayAgg;
+use crate::prelude::*;
+use crate::DFBooleanArray;
+use crate::DFUInt16Array;
+use crate::DFUtf8Array;
 
 #[test]
 fn test_array_agg() -> Result<()> {
@@ -31,7 +31,7 @@ fn test_array_agg() -> Result<()> {
 
     let len = value.len();
     for i in 0..len {
-        assert_eq!(value[i], expected[i]);   
+        assert_eq!(value[i], expected[i]);
     }
     Ok(())
 }
@@ -52,12 +52,18 @@ fn test_boolean_array_agg() -> Result<()> {
         DataValue::UInt32(Some(2)),
         DataValue::UInt32(Some(1)),
         DataValue::UInt32(Some(0)),
-        DataValue::Struct(vec![DataValue::UInt64(Some(1)), DataValue::Boolean(Some(false))]),
-        DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::Boolean(Some(true))]),
+        DataValue::Struct(vec![
+            DataValue::UInt64(Some(1)),
+            DataValue::Boolean(Some(false)),
+        ]),
+        DataValue::Struct(vec![
+            DataValue::UInt64(Some(0)),
+            DataValue::Boolean(Some(true)),
+        ]),
     ];
     let len = value.len();
     for i in 0..len {
-        assert_eq!(value[i], expected[i]);   
+        assert_eq!(value[i], expected[i]);
     }
     Ok(())
 }
@@ -76,12 +82,18 @@ fn test_utf8_array_agg() -> Result<()> {
     let expected = [
         DataValue::Utf8(Some("o".to_string())),
         DataValue::Utf8(Some("e".to_string())),
-        DataValue::Struct(vec![DataValue::UInt64(Some(1)), DataValue::Utf8(Some("e".to_string()))]),
-        DataValue::Struct(vec![DataValue::UInt64(Some(3)), DataValue::Utf8(Some("o".to_string()))]),
+        DataValue::Struct(vec![
+            DataValue::UInt64(Some(1)),
+            DataValue::Utf8(Some("e".to_string())),
+        ]),
+        DataValue::Struct(vec![
+            DataValue::UInt64(Some(3)),
+            DataValue::Utf8(Some("o".to_string())),
+        ]),
     ];
     let len = value.len();
     for i in 0..len {
-        assert_eq!(value[i], expected[i]);   
+        assert_eq!(value[i], expected[i]);
     }
     Ok(())
 }
