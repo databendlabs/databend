@@ -8,9 +8,11 @@ use byteorder::ByteOrder;
 
 use crate::meta_service::sled_serde::SledOrderedSerde;
 
-/// NodeId need to be serialized with order preserved, for listing.
-/// This is required by `SledSerde` when saving node id into sled db.
-impl SledOrderedSerde for NodeId {
+pub type LogIndex = u64;
+pub type Term = u64;
+
+/// NodeId, LogIndex and Term need to be serialized with order preserved, for listing items.
+impl SledOrderedSerde for u64 {
     fn order_preserved_serialize(&self, buf: &mut [u8]) {
         BigEndian::write_u64(buf, *self);
     }
