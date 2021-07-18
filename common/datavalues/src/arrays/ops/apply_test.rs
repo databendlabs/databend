@@ -4,18 +4,39 @@
 
 use common_exception::Result;
 
-use crate::arrays::ops::agg::ArrayAgg;
-use crate::arrays::ArrayBuilder;
+use crate::arrays::ops::apply::ArrayApply;
+use crate::arrays::ops::apply::ArrayApplyKernel;
 use crate::prelude::*;
 use crate::DFBooleanArray;
 use crate::DFUInt16Array;
 use crate::DFUtf8Array;
+use crate::UInt16Type;
+use common_arrow::arrow::compute;
+use crate::arrays::DataArray;
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::PrimitiveArray;
 
 
 #[test]
 fn test_array_apply() -> Result<()> {
-    let array = DFUInt16Array::new_from_iter(1u16..4u16);
-    array.append_null();
+    let mut builder = PrimitiveArrayBuilder::<UInt16Type>::new(5);
+ 
+    (0..5).for_each(|index| {
+        if index % 2 == 0 {
+            builder.append_null();
+        } else {
+            builder.append_value(index as u16);
+        }
+    });
 
-    OK(())
+    let array  = builder.finish();
+    let res = array.apply(|arr| arr + 10);
+
+    let values = res.downcast_ref();
+
+    for index in 0..res.len() {
+        println!("res={:?}", values.value(index));
+    }
+
+    Ok(())
 }
