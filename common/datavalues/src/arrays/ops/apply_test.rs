@@ -35,8 +35,11 @@ fn test_array_apply() -> Result<()> {
     let values = res.downcast_ref();
 
     for index in 0..res.len() {
-        println!("res={:?}", values.value(index));
+        if index % 2 == 0 {
+            assert_eq!(DataValue::UInt64(Some(10)), values.value(index));
+        } else {
+            assert_eq!(DataValue::UInt64(Some(10+index)), values.value(index));
+        }
     }
-
     Ok(())
 }
