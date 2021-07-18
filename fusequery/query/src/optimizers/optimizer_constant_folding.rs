@@ -5,7 +5,7 @@
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, Expressions};
+use common_planners::{AggregatorFinalPlan, Expressions, SchemaChanges};
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
@@ -33,23 +33,21 @@ impl ConstantFoldingImpl {
         !args.iter().any(|expr| !matches!(expr, Expression::Literal(_)))
     }
 
-    fn rewrite_function(name: &str, args: Expressions) -> Result<Expression> {
-        println!("rewrite function");
-        let function = FunctionFactory::get(name)?;
+    fn rewrite_function(op: &str, args: Expressions) -> Result<Option<Expression>> {
+        let function = FunctionFactory::get(op)?;
         match function.is_deterministic() {
-            true => Self::rewrite_deterministic_function(name, args),
-            false => Ok(Expression::ScalarFunction {
-                op: name.to_string(),
-                args: args.to_vec(),
-            })
+            true => Self::rewrite_deterministic_function(op, args),
+            false => Ok(None)
         }
     }
 
-    fn rewrite_deterministic_function(name: &str, args: Expressions) -> Result<Expression> {
-        println!("rewrite deterministic function");
+    fn rewrite_deterministic_function(op: &str, args: Expressions) -> Result<Option<Expression>> {
         match ConstantFoldingImpl::constants_arguments(&args) {
-            true => Self::rewrite_const_deterministic_function(name, args),
-            false => Ok(Expression::ScalarFunction { op: name.to_string(), args })
+            false => Ok(None),
+            true => ConstantFoldingImpl::execute_expression(Expression::ScalarFunction {
+                op: op.to_string(),
+                args: args,
+            }),
         }
     }
 
@@ -65,49 +63,80 @@ impl ConstantFoldingImpl {
         )
     }
 
-    fn rewrite_const_deterministic_function(name: &str, args: Expressions) -> Result<Expression> {
-        println!("rewrite const deterministic function");
+    fn execute_expression(expression: Expression) -> Result<Option<Expression>> {
         let input_fields = vec![DataField::new("_dummy", DataType::UInt8, false)];
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
-        let expression = Expression::ScalarFunction { op: name.to_string(), args };
-        let expression_executor = ConstantFoldingImpl::expr_executor(&input_schema, expression)?;
+        let expression_executor = Self::expr_executor(&input_schema, expression)?;
         let dummy_columns = vec![DataColumn::Constant(DataValue::UInt8(Some(1)), 1)];
-        let data_block = DataBlock::create(input_schema, dummy_columns);
+        let data_block = DataBlock::create(input_schema.clone(), dummy_columns);
         let executed_data_block = expression_executor.execute(&data_block)?;
 
         assert_eq!(executed_data_block.num_rows(), 1);
         assert_eq!(executed_data_block.num_columns(), 1);
-        Ok(Expression::Literal(executed_data_block.column(0).to_values()?[0].clone()))
+        Ok(Some(Expression::Literal(executed_data_block.column(0).to_values()?[0].clone())))
     }
 }
 
 impl PlanRewriter for ConstantFoldingImpl {
-    fn rewrite_expr(&mut self, schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
-        println!("rewrite_expr");
+    fn rewrite_expr(&mut self, changes: &SchemaChanges, expr: &Expression) -> Result<Expression> {
         match expr {
             Expression::Alias(alias, expr) => {
-                Self::rewrite_alias(alias, self.rewrite_expr(schema, expr)?)
+                Self::rewrite_alias(alias, self.rewrite_expr(changes, expr)?)
             },
             Expression::ScalarFunction { op, args } => {
-                Ok(Expression::Alias(expr.column_name(), Box::new(Self::rewrite_function(op, args
+                let new_args = args
                     .iter()
-                    .map(|expr| Self::rewrite_expr(self, schema, expr))
-                    .collect::<Result<Vec<_>>>()?)?
-                )))
+                    .map(|expr| Self::rewrite_expr(self, changes, expr))
+                    .collect::<Result<Vec<_>>>()?;
+
+                match Self::rewrite_function(op, new_args.clone())? {
+                    Some(new_expr) => Ok(new_expr),
+                    None => Ok(Expression::ScalarFunction {
+                        op: op.clone(),
+                        args: new_args,
+                    }),
+                }
             }
-            Expression::UnaryExpression { op, expr } => {
-                Ok(Expression::Alias(expr.column_name(), Box::new(
-                    Self::rewrite_function(op, vec![self.rewrite_expr(schema, expr)?])?
-                )))
+            Expression::UnaryExpression { op, expr: inner_expr } => {
+                let new_expr = self.rewrite_expr(changes, inner_expr)?;
+                match Self::rewrite_function(op, vec![new_expr.clone()])? {
+                    Some(new_expr) => Ok(new_expr),
+                    None => Ok(Expression::UnaryExpression {
+                        op: op.clone(),
+                        expr: Box::new(new_expr),
+                    }),
+                }
             }
             Expression::BinaryExpression { op, left, right } => {
-                Ok(Expression::Alias(expr.column_name(), Box::new(Self::rewrite_function(op, vec![
-                    self.rewrite_expr(schema, left)?,
-                    self.rewrite_expr(schema, right)?
-                ])?)))
+                let new_left = self.rewrite_expr(changes, left)?;
+                let new_right = self.rewrite_expr(changes, right)?;
+                match Self::rewrite_function(op, vec![new_left.clone(), new_right.clone()])? {
+                    Some(new_expr) => Ok(new_expr),
+                    None => Ok(Expression::BinaryExpression {
+                        op: op.clone(),
+                        left: Box::new(new_left),
+                        right: Box::new(new_right),
+                    }),
+                }
             },
-
+            Expression::Cast { expr, data_type } => {
+                let new_expr = self.rewrite_expr(changes, expr)?;
+                match &new_expr {
+                    Expression::Literal(_) => Ok(Self::execute_expression(
+                        Expression::Cast {
+                            expr: Box::new(new_expr),
+                            data_type: data_type.clone(),
+                        }
+                    )?.unwrap()),
+                    _ => Ok(new_expr)
+                }
+            }
+            Expression::Column(column_name) => {
+                let field_pos = changes.before_input_schema.index_of(column_name)?;
+                let new_field = changes.after_input_schema.field(field_pos);
+                Ok(Expression::Column(new_field.name().to_string()))
+            }
             _ => Ok(expr.clone()),
         }
     }

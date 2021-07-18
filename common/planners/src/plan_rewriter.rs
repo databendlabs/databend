@@ -13,7 +13,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::{AggregatorFinalPlan, rebase_expr_from_input};
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -100,30 +100,30 @@ pub trait PlanRewriter {
     }
 
     // TODO: Move it to ExpressionsRewrite trait
-    fn rewrite_expr(&mut self, schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
+    fn rewrite_expr(&mut self, changes: &SchemaChanges, expr: &Expression) -> Result<Expression> {
         match expr {
             Expression::Alias(alias, input) => Ok(Expression::Alias(
                 alias.clone(),
-                Box::new(self.rewrite_expr(schema, input.as_ref())?),
+                Box::new(self.rewrite_expr(changes, input.as_ref())?),
             )),
             Expression::UnaryExpression { op, expr } => Ok(Expression::UnaryExpression {
                 op: op.clone(),
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                expr: Box::new(self.rewrite_expr(changes, expr.as_ref())?),
             }),
             Expression::BinaryExpression { op, left, right } => Ok(Expression::BinaryExpression {
                 op: op.clone(),
-                left: Box::new(self.rewrite_expr(schema, left.as_ref())?),
-                right: Box::new(self.rewrite_expr(schema, right.as_ref())?),
+                left: Box::new(self.rewrite_expr(changes, left.as_ref())?),
+                right: Box::new(self.rewrite_expr(changes, right.as_ref())?),
             }),
             Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
                 op: op.clone(),
-                args: self.rewrite_exprs(schema, args)?,
+                args: self.rewrite_exprs(changes, args)?,
             }),
             Expression::AggregateFunction { op, distinct, args } => {
                 Ok(Expression::AggregateFunction {
                     op: op.clone(),
                     distinct: *distinct,
-                    args: self.rewrite_exprs(schema, args)?,
+                    args: self.rewrite_exprs(changes, args)?,
                 })
             }
             Expression::Sort {
@@ -131,12 +131,12 @@ pub trait PlanRewriter {
                 asc,
                 nulls_first,
             } => Ok(Expression::Sort {
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                expr: Box::new(self.rewrite_expr(changes, expr.as_ref())?),
                 asc: *asc,
                 nulls_first: *nulls_first,
             }),
             Expression::Cast { expr, data_type } => Ok(Expression::Cast {
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                expr: Box::new(self.rewrite_expr(changes, expr.as_ref())?),
                 data_type: data_type.clone(),
             }),
             Expression::Wildcard => Ok(Expression::Wildcard),
@@ -162,12 +162,12 @@ pub trait PlanRewriter {
     // TODO: Move it to ExpressionsRewrite trait
     fn rewrite_exprs(
         &mut self,
-        schema: &DataSchemaRef,
+        changes: &SchemaChanges,
         exprs: &[Expression],
     ) -> Result<Expressions> {
         exprs
             .iter()
-            .map(|expr| Self::rewrite_expr(self, schema, expr))
+            .map(|expr| Self::rewrite_expr(self, changes, expr))
             .collect::<Result<Vec<_>>>()
     }
 
@@ -201,13 +201,15 @@ pub trait PlanRewriter {
 
     fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_exprs = self.rewrite_exprs(&new_input.schema(), &plan.expr)?;
+        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
+        let new_exprs = self.rewrite_exprs(&schema_change, &plan.expr)?;
         PlanBuilder::from(&new_input).project(&new_exprs)?.build()
     }
 
     fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_exprs = self.rewrite_exprs(&new_input.schema(), &plan.exprs)?;
+        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
+        let new_exprs = self.rewrite_exprs(&schema_change, &plan.exprs)?;
         PlanBuilder::from(&new_input)
             .expression(&new_exprs, &plan.desc)?
             .build()
@@ -220,19 +222,22 @@ pub trait PlanRewriter {
 
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_predicate = self.rewrite_expr(&new_input.schema(), &plan.predicate)?;
+        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
+        let new_predicate = self.rewrite_expr(&schema_change, &plan.predicate)?;
         PlanBuilder::from(&new_input).filter(new_predicate)?.build()
     }
 
     fn rewrite_having(&mut self, plan: &HavingPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_predicate = self.rewrite_expr(&new_input.schema(), &plan.predicate)?;
+        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
+        let new_predicate = self.rewrite_expr(&schema_change, &plan.predicate)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_order_by = self.rewrite_exprs(&new_input.schema(), &plan.order_by)?;
+        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
+        let new_order_by = self.rewrite_exprs(&schema_change, &plan.order_by)?;
         PlanBuilder::from(&new_input).sort(&new_order_by)?.build()
     }
 
@@ -316,6 +321,20 @@ pub trait PlanRewriter {
 
     fn rewrite_show_create_table(&mut self, plan: &ShowCreateTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowCreateTable(plan.clone()))
+    }
+}
+
+pub struct SchemaChanges {
+    pub before_input_schema: DataSchemaRef,
+    pub after_input_schema: DataSchemaRef,
+}
+
+impl SchemaChanges {
+    pub fn new(before: &DataSchemaRef, after: &DataSchemaRef) -> SchemaChanges {
+        SchemaChanges {
+            before_input_schema: before.clone(),
+            after_input_schema: after.clone(),
+        }
     }
 }
 

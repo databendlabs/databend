@@ -10,7 +10,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
+use common_planners::{AggregatorFinalPlan, SchemaChanges};
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
@@ -76,24 +76,27 @@ impl PlanRewriter for ProjectionPushDownImpl {
         self.collect_column_names_from_expr_vec(plan.expr.as_slice())?;
         self.has_projection = true;
         let new_input = self.rewrite_plan_node(&plan.input)?;
+        let schema_changes = SchemaChanges::new(&plan.schema, &new_input.schema());
         PlanBuilder::from(&new_input)
-            .project(&self.rewrite_exprs(&new_input.schema(), &plan.expr)?)?
+            .project(&self.rewrite_exprs(&schema_changes, &plan.expr)?)?
             .build()
     }
 
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr(&plan.predicate)?;
         let new_input = self.rewrite_plan_node(&plan.input)?;
+        let schema_changes = SchemaChanges::new(&plan.schema, &new_input.schema());
         PlanBuilder::from(&new_input)
-            .filter(self.rewrite_expr(&new_input.schema(), &plan.predicate)?)?
+            .filter(self.rewrite_expr(&schema_changes, &plan.predicate)?)?
             .build()
     }
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr_vec(plan.order_by.as_slice())?;
         let new_input = self.rewrite_plan_node(&plan.input)?;
+        let schema_changes = SchemaChanges::new(&plan.schema, &new_input.schema());
         PlanBuilder::from(&new_input)
-            .sort(&self.rewrite_exprs(&new_input.schema(), &plan.order_by)?)?
+            .sort(&self.rewrite_exprs(&schema_changes, &plan.order_by)?)?
             .build()
     }
 
