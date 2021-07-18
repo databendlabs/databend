@@ -14,7 +14,7 @@ mod test {
     use common_arrow::arrow::ipc::writer::IpcWriteOptions;
     use common_arrow::arrow::record_batch::RecordBatch;
     use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
-    use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
+    use common_arrow::arrow_flight::SchemaAsIpc;
     use common_arrow::parquet::arrow::ArrowReader;
     use common_arrow::parquet::arrow::ParquetFileArrowReader;
     use common_arrow::parquet::file::reader::SerializedFileReader;
@@ -70,7 +70,7 @@ mod test {
         let appender = Appender::new(Arc::new(fs));
 
         let default_ipc_write_opt = IpcWriteOptions::default();
-        let flight_schema = flight_data_from_arrow_schema(&schema, &default_ipc_write_opt);
+        let flight_schema = SchemaAsIpc::new(&schema, &default_ipc_write_opt).into();
 
         let req = futures::stream::iter(vec![
             flight_schema,
