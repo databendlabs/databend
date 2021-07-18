@@ -34,7 +34,7 @@ fn test_array_apply() -> Result<()> {
         array.apply_with_idx(|(_, arr)| arr + 10),
         array.apply_with_idx_on_opt(|(_, arr)| match arr {
             Some(v) => Some(v + 20),
-            None => Some(5),
+            None => Some(0),
         }),
         array.apply_cast_numeric(|arr| arr + 30),
         array.branch_apply_cast_numeric_no_null(|arr| match arr {
@@ -57,7 +57,7 @@ fn test_array_apply() -> Result<()> {
         if index % 2 == 0 {
             assert_eq!(10 as u16, values[0].value(index));
             assert_eq!(0 as u16, values[1].value(index));
-            assert_eq!(5 as u16, values[2].value(index));
+            assert_eq!(0 as u16, values[2].value(index));
             assert_eq!(30 as u16, values[3].value(index));
             assert_eq!(40 as u16, values[4].value(index));
         } else {
