@@ -17,6 +17,8 @@ mod to_values;
 mod vec_hash;
 
 #[cfg(test)]
+mod agg_test;
+#[cfg(test)]
 mod cast_test;
 
 pub use agg::*;
