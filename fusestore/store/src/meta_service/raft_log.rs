@@ -144,7 +144,6 @@ impl RaftLog {
 
             let k = index.ser()?;
             let v = log.ser()?;
-            // let v = SledSerde::ser(log)?;
 
             batch.insert(k, v);
         }
@@ -152,6 +151,25 @@ impl RaftLog {
         self.tree
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch log insert")?;
+
+        self.tree
+            .flush_async()
+            .await
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush log insert")?;
+
+        Ok(())
+    }
+
+    /// Insert a single log.
+    pub async fn insert(&self, log: &Entry<LogEntry>) -> common_exception::Result<()> {
+        let index = log.log_id.index;
+
+        let k = index.ser()?;
+        let v = log.ser()?;
+
+        self.tree
+            .insert(k, v)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "log insert")?;
 
         self.tree
             .flush_async()
