@@ -78,8 +78,8 @@ impl Table for NumbersTable {
     ) -> Result<ReadDataSourcePlan> {
         let mut total = None;
         let ScanPlan { table_args, .. } = scan.clone();
-        if let Some(Expression::Literal(v)) = table_args {
-            total = Some(v.as_u64()?);
+        if let Some(Expression::Literal { value, .. }) = table_args {
+            total = Some(value.as_u64()?);
         }
 
         let total = total.ok_or_else(|| {

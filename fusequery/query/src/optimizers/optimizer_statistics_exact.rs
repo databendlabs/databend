@@ -41,7 +41,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                 }],
                 PlanNode::Expression(ExpressionPlan { input, .. }),
             ) if op == "count" && args.len() == 1 => match (&args[0], input.as_ref()) {
-                (Expression::Literal(_), PlanNode::ReadSource(read_source_plan))
+                (Expression::Literal { .. }, PlanNode::ReadSource(read_source_plan))
                     if read_source_plan.statistics.is_exact =>
                 {
                     let db_name = "system";
@@ -73,7 +73,9 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let ser = serde_json::to_string(&states)?;
                     PlanBuilder::from(&dummy_read_plan)
                         .expression(
-                            &[Expression::Literal(DataValue::Utf8(Some(ser.clone())))],
+                            &[Expression::create_literal(DataValue::Utf8(Some(
+                                ser.clone(),
+                            )))],
                             "Exact Statistics",
                         )?
                         .project(&[Expression::Column(ser).alias("count(0)")])?

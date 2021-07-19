@@ -96,10 +96,6 @@ pub type DataSchemaRef = Arc<DataSchema>;
 
 pub struct DataSchemaRefExt;
 impl DataSchemaRefExt {
-    pub fn empty() -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-
     pub fn create(fields: Vec<DataField>) -> DataSchemaRef {
         Arc::new(DataSchema::new(fields))
     }

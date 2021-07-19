@@ -7,7 +7,8 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
-use crate::optimizers::{ProjectionPushDownOptimizer, ConstantFoldingOptimizer};
+use crate::optimizers::ConstantFoldingOptimizer;
+use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::sessions::FuseQueryContextRef;
 

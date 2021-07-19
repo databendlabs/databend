@@ -136,7 +136,6 @@ pub use plan_projection::ProjectionPlan;
 pub use plan_read_datasource::ReadDataSourcePlan;
 pub use plan_remote::RemotePlan;
 pub use plan_rewriter::PlanRewriter;
-pub use plan_rewriter::SchemaChanges;
 pub use plan_rewriter::RewriteHelper;
 pub use plan_scan::ScanPlan;
 pub use plan_select::SelectPlan;

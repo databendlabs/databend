@@ -19,7 +19,7 @@ async fn test_number_table() -> Result<()> {
     let scan = &ScanPlan {
         schema_name: "scan_test".to_string(),
         table_schema: DataSchemaRefExt::create(vec![]),
-        table_args: Some(Expression::Literal(DataValue::UInt64(Some(8)))),
+        table_args: Some(Expression::create_literal(DataValue::UInt64(Some(8)))),
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "number",
             DataType::UInt64,

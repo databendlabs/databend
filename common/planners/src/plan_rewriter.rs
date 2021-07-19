@@ -100,30 +100,30 @@ pub trait PlanRewriter {
     }
 
     // TODO: Move it to ExpressionsRewrite trait
-    fn rewrite_expr(&mut self, changes: &SchemaChanges, expr: &Expression) -> Result<Expression> {
+    fn rewrite_expr(&mut self, schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
         match expr {
             Expression::Alias(alias, input) => Ok(Expression::Alias(
                 alias.clone(),
-                Box::new(self.rewrite_expr(changes, input.as_ref())?),
+                Box::new(self.rewrite_expr(schema, input.as_ref())?),
             )),
             Expression::UnaryExpression { op, expr } => Ok(Expression::UnaryExpression {
                 op: op.clone(),
-                expr: Box::new(self.rewrite_expr(changes, expr.as_ref())?),
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
             }),
             Expression::BinaryExpression { op, left, right } => Ok(Expression::BinaryExpression {
                 op: op.clone(),
-                left: Box::new(self.rewrite_expr(changes, left.as_ref())?),
-                right: Box::new(self.rewrite_expr(changes, right.as_ref())?),
+                left: Box::new(self.rewrite_expr(schema, left.as_ref())?),
+                right: Box::new(self.rewrite_expr(schema, right.as_ref())?),
             }),
             Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
                 op: op.clone(),
-                args: self.rewrite_exprs(changes, args)?,
+                args: self.rewrite_exprs(schema, args)?,
             }),
             Expression::AggregateFunction { op, distinct, args } => {
                 Ok(Expression::AggregateFunction {
                     op: op.clone(),
                     distinct: *distinct,
-                    args: self.rewrite_exprs(changes, args)?,
+                    args: self.rewrite_exprs(schema, args)?,
                 })
             }
             Expression::Sort {
@@ -131,17 +131,20 @@ pub trait PlanRewriter {
                 asc,
                 nulls_first,
             } => Ok(Expression::Sort {
-                expr: Box::new(self.rewrite_expr(changes, expr.as_ref())?),
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
                 asc: *asc,
                 nulls_first: *nulls_first,
             }),
             Expression::Cast { expr, data_type } => Ok(Expression::Cast {
-                expr: Box::new(self.rewrite_expr(changes, expr.as_ref())?),
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
                 data_type: data_type.clone(),
             }),
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
-            Expression::Literal(value) => Ok(Expression::Literal(value.clone())),
+            Expression::Literal { value, column_name } => Ok(Expression::Literal {
+                value: value.clone(),
+                column_name: column_name.clone(),
+            }),
             Expression::Subquery { name, query_plan } => {
                 let new_subquery = self.rewrite_subquery_plan(query_plan)?;
                 Ok(Expression::Subquery {
@@ -162,12 +165,12 @@ pub trait PlanRewriter {
     // TODO: Move it to ExpressionsRewrite trait
     fn rewrite_exprs(
         &mut self,
-        changes: &SchemaChanges,
+        schema: &DataSchemaRef,
         exprs: &[Expression],
     ) -> Result<Expressions> {
         exprs
             .iter()
-            .map(|expr| Self::rewrite_expr(self, changes, expr))
+            .map(|expr| Self::rewrite_expr(self, schema, expr))
             .collect::<Result<Vec<_>>>()
     }
 
@@ -201,15 +204,13 @@ pub trait PlanRewriter {
 
     fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
-        let new_exprs = self.rewrite_exprs(&schema_change, &plan.expr)?;
+        let new_exprs = self.rewrite_exprs(&new_input.schema(), &plan.expr)?;
         PlanBuilder::from(&new_input).project(&new_exprs)?.build()
     }
 
     fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
-        let new_exprs = self.rewrite_exprs(&schema_change, &plan.exprs)?;
+        let new_exprs = self.rewrite_exprs(&new_input.schema(), &plan.exprs)?;
         PlanBuilder::from(&new_input)
             .expression(&new_exprs, &plan.desc)?
             .build()
@@ -222,22 +223,19 @@ pub trait PlanRewriter {
 
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
-        let new_predicate = self.rewrite_expr(&schema_change, &plan.predicate)?;
+        let new_predicate = self.rewrite_expr(&new_input.schema(), &plan.predicate)?;
         PlanBuilder::from(&new_input).filter(new_predicate)?.build()
     }
 
     fn rewrite_having(&mut self, plan: &HavingPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
-        let new_predicate = self.rewrite_expr(&schema_change, &plan.predicate)?;
+        let new_predicate = self.rewrite_expr(&new_input.schema(), &plan.predicate)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let schema_change = SchemaChanges::new(&plan.input.schema(), &new_input.schema());
-        let new_order_by = self.rewrite_exprs(&schema_change, &plan.order_by)?;
+        let new_order_by = self.rewrite_exprs(&new_input.schema(), &plan.order_by)?;
         PlanBuilder::from(&new_input).sort(&new_order_by)?.build()
     }
 
@@ -321,20 +319,6 @@ pub trait PlanRewriter {
 
     fn rewrite_show_create_table(&mut self, plan: &ShowCreateTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowCreateTable(plan.clone()))
-    }
-}
-
-pub struct SchemaChanges {
-    pub before_input_schema: DataSchemaRef,
-    pub after_input_schema: DataSchemaRef,
-}
-
-impl SchemaChanges {
-    pub fn new(before: &DataSchemaRef, after: &DataSchemaRef) -> SchemaChanges {
-        SchemaChanges {
-            before_input_schema: before.clone(),
-            after_input_schema: after.clone(),
-        }
     }
 }
 
@@ -499,7 +483,7 @@ impl RewriteHelper {
                 })
             }
             Expression::Wildcard
-            | Expression::Literal(_)
+            | Expression::Literal { .. }
             | Expression::Subquery { .. }
             | Expression::ScalarSubquery { .. }
             | Expression::Sort { .. } => Ok(expr.clone()),
@@ -552,7 +536,7 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => vec![expr.as_ref().clone()],
             Expression::Column(_) => vec![],
-            Expression::Literal(_) => vec![],
+            Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => {
@@ -574,7 +558,7 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             Expression::Column(_) => vec![expr.clone()],
-            Expression::Literal(_) => vec![],
+            Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
@@ -647,7 +631,7 @@ impl RewriteHelper {
                 Expression::Alias(alias.clone(), Box::from(expressions[0].clone()))
             }
             Expression::Column(_) => expr.clone(),
-            Expression::Literal(_) => expr.clone(),
+            Expression::Literal { .. } => expr.clone(),
             Expression::BinaryExpression { op, .. } => Expression::BinaryExpression {
                 left: Box::new(expressions[0].clone()),
                 op: op.clone(),

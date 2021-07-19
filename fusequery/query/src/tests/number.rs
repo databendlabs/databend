@@ -45,7 +45,7 @@ impl NumberTestData {
             &ScanPlan {
                 schema_name: self.db.to_string(),
                 table_schema: Arc::new(DataSchema::empty()),
-                table_args: Some(Expression::Literal(DataValue::Int64(Some(numbers)))),
+                table_args: Some(Expression::create_literal(DataValue::Int64(Some(numbers)))),
                 projected_schema: Arc::new(DataSchema::empty()),
                 push_downs: Extras::default(),
             },

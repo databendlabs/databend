@@ -56,10 +56,10 @@ impl ExpressionChain {
                 };
                 self.actions.push(ExpressionAction::Input(input));
             }
-            Expression::Literal(l) => {
+            Expression::Literal { value, .. } => {
                 let value = ActionConstant {
                     name: expr.column_name(),
-                    value: l.clone(),
+                    value: value.clone(),
                 };
 
                 self.actions.push(ExpressionAction::Constant(value));

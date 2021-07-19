@@ -5,6 +5,7 @@
 #[cfg(test)]
 mod tests {
     use common_exception::Result;
+
     use crate::optimizers::*;
 
     #[test]
@@ -21,7 +22,7 @@ mod tests {
                 name: "Projection const recursion",
                 query: "SELECT 1 + 2 + 3",
                 expect: "\
-                Projection: 6:UInt32\
+                Projection: ((1 + 2) + 3):UInt32\
                 \n  Expression: 6:UInt32 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -37,7 +38,7 @@ mod tests {
                 name: "Projection right non const recursion",
                 query: "SELECT 1 + 2 + 3 + dummy",
                 expect: "\
-                Projection: (6 + dummy):UInt64\
+                Projection: (((1 + 2) + 3) + dummy):UInt64\
                 \n  Expression: (6 + dummy):UInt64 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -45,7 +46,7 @@ mod tests {
                 name: "Projection arithmetic const recursion",
                 query: "SELECT 1 + 2 + 3 / 3",
                 expect: "\
-                Projection: 4:Float64\
+                Projection: ((1 + 2) + (3 / 3)):Float64\
                 \n  Expression: 4:Float64 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -53,7 +54,7 @@ mod tests {
                 name: "Projection comparisons const recursion",
                 query: "SELECT 1 + 2 + 3 > 3",
                 expect: "\
-                Projection: true:Boolean\
+                Projection: (((1 + 2) + 3) > 3):Boolean\
                 \n  Expression: true:Boolean (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -61,7 +62,7 @@ mod tests {
                 name: "Projection cast const recursion",
                 query: "SELECT CAST(1 AS bigint)",
                 expect: "\
-                Projection: 1:Int64\
+                Projection: cast(1 as Int64):Int64\
                 \n  Expression: 1:Int64 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -69,7 +70,7 @@ mod tests {
                 name: "Projection hash const recursion",
                 query: "SELECT sipHash('test_string')",
                 expect: "\
-                Projection: 17123704338732264132:UInt64\
+                Projection: sipHash(test_string):UInt64\
                 \n  Expression: 17123704338732264132:UInt64 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -77,7 +78,7 @@ mod tests {
                 name: "Projection logics const recursion",
                 query: "SELECT 1 = 1 AND 2 > 1",
                 expect: "\
-                Projection: true:Boolean\
+                Projection: ((1 = 1) AND (2 > 1)):Boolean\
                 \n  Expression: true:Boolean (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -85,7 +86,7 @@ mod tests {
                 name: "Projection strings const recursion",
                 query: "SELECT SUBSTRING('1234567890' FROM 3 FOR 3)",
                 expect: "\
-                Projection: 345:Utf8\
+                Projection: substring(1234567890, 3, 3):Utf8\
                 \n  Expression: 345:Utf8 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -93,7 +94,7 @@ mod tests {
                 name: "Projection to type name const recursion",
                 query: "SELECT toTypeName('1234567890')",
                 expect: "\
-                Projection: Utf8:Utf8\
+                Projection: toTypeName(1234567890):Utf8\
                 \n  Expression: Utf8:Utf8 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
