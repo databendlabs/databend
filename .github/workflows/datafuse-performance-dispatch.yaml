@@ -84,12 +84,12 @@ jobs:
           echo "sync status to S3"
           echo '{"uuid": "${{ env.UUID }}", "status": "SUCCESS"}' > status.json
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
-     - name: Delete all resources
-       if: always()
-       uses: docker://zhihanz/test-infra:master
-       with:
-         args: >-
-           make clean
+#     - name: Delete all resources
+#       if: always()
+#       uses: docker://zhihanz/test-infra:master
+#       with:
+#         args: >-
+#           make clean
 #      with:
 #        args: >-
 #          echo ${{ env.UUID }};
