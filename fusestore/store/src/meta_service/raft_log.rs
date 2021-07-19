@@ -19,7 +19,7 @@ const K_RAFT_LOG: &str = "raft_log";
 /// RaftLog stores the logs of a raft node.
 /// It is part of MetaStore.
 pub struct RaftLog {
-    tree: sled::Tree,
+    pub(crate) tree: sled::Tree,
 }
 
 impl SledSerde for Entry<LogEntry> {}
