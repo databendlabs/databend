@@ -63,21 +63,21 @@ jobs:
       id: make_deploy
       uses: docker://zhihanz/test-infra:master
       with:
-        args: |
-          echo ${{ env.UUID }}
-          echo "Start to create cluster"
-          make cluster_create
-          echo "Successfully created cluster, start to pull test images"
-          make resource_apply -j 2
-          echo "Successfully deployed test pods, start to do performance test"
-          make run_perf
-          echo "Finished performance tests, upload reports"
-          make run_compare
+        args: >-
+          echo ${{ env.UUID }};
+          echo "Start to create cluster";
+          make cluster_create;
+          echo "Successfully created cluster, start to pull test images";
+          make resource_apply -j 2;
+          echo "Successfully deployed test pods, start to do performance test";
+          make run_perf -j 2;
+          echo "Finished performance tests, upload reports";
+          make run_compare;
      - name: Delete all resources
        if: always()
        uses: docker://zhihanz/test-infra:master
        with:
-         args: |
+         args: >-
            make clean
 
     - name: Update status to failure
