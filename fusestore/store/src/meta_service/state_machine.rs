@@ -79,7 +79,7 @@ pub struct StateMachine {
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
 
-    ///
+    /// table parts， db -> (table -> data parts)
     pub tbl_parts: HashMap<String, HashMap<String, Vec<DataPartInfo>>>,
 
     /// A kv store of all other general purpose information.

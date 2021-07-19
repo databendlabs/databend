@@ -135,10 +135,6 @@ impl ActionHandler {
         parts: Streaming<FlightData>,
     ) -> common_exception::Result<AppendResult> {
         {
-            // TODO(ariesdevil): use meta_node instead
-            // let mut meta = self.meta.lock();
-            // let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
-
             // TODO:  Validates the schema of input stream:
             // The schema of `parts` should be a subset of
             // table's current schema (or following the evolution rules of table schema)

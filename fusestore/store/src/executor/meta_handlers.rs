@@ -58,24 +58,31 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
             },
         };
 
-        let rst = self.meta_node.write(cr).await.map_err(|e| {
-            ErrorCode::MetaNodeInternalError(format!("not a Database result: {}", e.to_string()))
-        })?;
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            AppliedState::DataBase { result, .. } if result.is_some() => {
-                Ok(CreateDatabaseActionResult {
-                    database_id: result.unwrap().database_id,
-                })
+            AppliedState::DataBase { prev, result } => {
+                if let Some(r) = result {
+                    Ok(CreateDatabaseActionResult {
+                        database_id: r.database_id,
+                    })
+                } else if let Some(p) = prev {
+                    Ok(CreateDatabaseActionResult {
+                        database_id: p.database_id,
+                    })
+                } else {
+                    // Both prev and result are None
+                    Err(ErrorCode::DatabaseAlreadyExists(format!(
+                        "{} database exists",
+                        db_name
+                    )))
+                }
             }
-            AppliedState::DataBase { prev, .. } if prev.is_some() => {
-                Ok(CreateDatabaseActionResult {
-                    database_id: prev.unwrap().database_id,
-                })
-            }
-            AppliedState::DataBase { prev, result } if (prev.is_none() && result.is_none()) => Err(
-                ErrorCode::DatabaseAlreadyExists(format!("{} database exists", db_name)),
-            ),
+
             _ => Err(ErrorCode::MetaNodeInternalError("not a Database result")),
         }
     }
@@ -152,7 +159,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         let table = Table {
             table_id: 0,
             schema: flight_data.data_header,
-            parts: Default::default(), // TODO(ariesdevil): what's this?
+            parts: Default::default(),
         };
 
         let cr = LogEntry {
@@ -165,20 +172,30 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             },
         };
 
-        let rst = self.meta_node.write(cr).await.map_err(|e| {
-            ErrorCode::MetaNodeInternalError(format!("not a Table result: {}", e.to_string()))
-        })?;
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            AppliedState::Table { result, .. } if result.is_some() => Ok(CreateTableActionResult {
-                table_id: result.unwrap().table_id,
-            }),
-            AppliedState::Table { prev, .. } if prev.is_some() => Ok(CreateTableActionResult {
-                table_id: prev.unwrap().table_id,
-            }),
-            AppliedState::Table { prev, result } if (prev.is_none() && result.is_none()) => Err(
-                ErrorCode::TableAlreadyExists(format!("table exists: {}", table_name)),
-            ),
+            AppliedState::Table { prev, result } => {
+                if let Some(r) = result {
+                    Ok(CreateTableActionResult {
+                        table_id: r.table_id,
+                    })
+                } else if let Some(p) = prev {
+                    Ok(CreateTableActionResult {
+                        table_id: p.table_id,
+                    })
+                } else {
+                    // Both prev and result are None
+                    Err(ErrorCode::TableAlreadyExists(format!(
+                        "table exists: {}",
+                        table_name
+                    )))
+                }
+            }
             _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
         }
     }

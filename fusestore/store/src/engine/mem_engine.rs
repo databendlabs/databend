@@ -105,7 +105,9 @@ impl MemEngine {
         let table_id = self
             .dbs
             .get(&cmd.db_name)
-            .ok_or_else(|| ErrorCode::UnknownDatabase("database not found yet"))?
+            .ok_or_else(|| {
+                ErrorCode::UnknownDatabase(format!("database not found: {}", &cmd.db_name))
+            })?
             .table_name_to_id
             .get(&cmd.table_name);
 
@@ -170,7 +172,7 @@ impl MemEngine {
         table_name: String,
     ) -> common_exception::Result<Table> {
         let db = self.dbs.get(&db_name).ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("database not found yet: {:}", db_name))
+            ErrorCode::UnknownDatabase(format!("database not found: {:}", db_name))
         })?;
 
         let table_id = db
