@@ -52,9 +52,6 @@ use crate::meta_service::SledSerde;
 use crate::meta_service::Snapshot;
 use crate::meta_service::StateMachine;
 
-const ERR_INCONSISTENT_LOG: &str =
-    "a query was received which was expecting data to be in place which does not exist in the log";
-
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///
 /// Trees:
@@ -295,22 +292,22 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
     async fn apply_entry_to_state_machine(
         &self,
-        index: &u64,
+        index: &LogId,
         data: &LogEntry,
     ) -> anyhow::Result<AppliedState> {
         let mut sm = self.state_machine.write().await;
-        let resp = sm.apply(*index, data)?;
+        let resp = sm.apply(index, data)?;
         Ok(resp)
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
     async fn replicate_to_state_machine(
         &self,
-        entries: &[(&u64, &LogEntry)],
+        entries: &[(&LogId, &LogEntry)],
     ) -> anyhow::Result<()> {
         let mut sm = self.state_machine.write().await;
         for (index, data) in entries {
-            sm.apply(**index, data)?;
+            sm.apply(*index, data)?;
         }
         Ok(())
     }
@@ -330,7 +327,9 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
         let snapshot_size = data.len();
 
-        let membership_config = self.get_membership_from_log(Some(last_applied_log)).await?;
+        let membership_config = self
+            .get_membership_from_log(Some(last_applied_log.index))
+            .await?;
 
         let snapshot_idx = {
             let mut l = self.snapshot_index.lock().await;
@@ -338,26 +337,18 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             *l
         };
 
-        let term;
-        let snapshot_id;
         let meta;
         {
             let mut current_snapshot = self.current_snapshot.write().await;
-            term = self
-                .log
-                .get(&last_applied_log)?
-                .map(|entry| entry.log_id.term)
-                .ok_or_else(|| anyhow::anyhow!(ERR_INCONSISTENT_LOG))?;
+            self.log.range_delete(0..last_applied_log.index).await?;
 
-            self.log.range_delete(0..last_applied_log).await?;
-
-            snapshot_id = format!("{}-{}-{}", term, last_applied_log, snapshot_idx);
+            let snapshot_id = format!(
+                "{}-{}-{}",
+                last_applied_log.term, last_applied_log.index, snapshot_idx
+            );
 
             meta = SnapshotMeta {
-                last_log_id: LogId {
-                    term,
-                    index: last_applied_log,
-                },
+                last_log_id: last_applied_log,
                 snapshot_id,
                 membership: membership_config.clone(),
             };
