@@ -12,4 +12,4 @@ common-exception = {path = "../exception"}
 common-runtime = {path = "../runtime"}
 
 # Crates.io dependencies
-pprof = { version = "0.4", features = ["flamegraph", "protobuf"] }
+pprof = { version = "0.5", features = ["flamegraph", "protobuf"] }
