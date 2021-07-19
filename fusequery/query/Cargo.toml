@@ -61,7 +61,7 @@ log = "0.4"
 metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
-nom = "6.1.2"
+nom = "7.0.0-alpha1"
 num_cpus = "1.0"
 paste = "^1.0"
 pnet = "0.28.0"
@@ -84,7 +84,7 @@ bumpalo = "3.7.0"
 [dev-dependencies]
 pretty_assertions = "0.7"
 criterion = "0.3"
-mysql = "20.1.0"
+mysql = "21.0.0"
 
 [build-dependencies]
 common-building = {path = "../../common/building"}
