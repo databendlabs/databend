@@ -59,6 +59,7 @@ jobs:
       id: make_deploy
       uses: docker://zhihanz/test-infra:master
       with:
+        entrypoint: "/bin/sh -c"
         args: >-
             echo ${{ env.UUID }};
             echo "Start to create cluster";
@@ -95,6 +96,7 @@ jobs:
       if: always()
       uses: docker://zhihanz/test-infra:master
       with:
+        entrypoint: "/bin/sh -c"
         args: make clean
 #     - name: Delete all resources
 #       if: always()
