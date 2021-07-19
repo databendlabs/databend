@@ -18,18 +18,21 @@ jobs:
       UUID: ${{ github.event.client_payload.UUID }}
       REGION: ${{ github.event.client_payload.REGION }}
       BUCKET: ${{ github.event.client_payload.BUCKET }}
+      ENDPOINT: ${{ github.event.client_payload.ENDPOINT }}
     steps:
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
     - name: Install dependencies
       run: |
-        sudo apt install python2.7
-        mkdir -p /tmp/python2.7
-        wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
-        sudo python2.7 get-pip.py
-        git clone https://github.com/tencentyun/coscmd.git
-        cd coscmd
-        sudo python2.7 setup.py install
-        coscmd --version
-        coscmd config -a {{ secret.SECRET_ID }} -s {{ secrert.SECRET_KEY }} -r $REGION -b $BUCKET
+        python -m pip install --upgrade pip
+        pip install awscli
+    - name: Configure S3 credential
+      run: |
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: $REGION
     - name: Update status to pending
       run: |
         echo "update github pr status"
@@ -40,7 +43,7 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "PENDING"}' > status.json
-        coscmd upload status.json status/$UUID/status.json
+        aws s3 --endpoint-url $ENDPOINT cp ./test.json  s3://$BUCKET/s3/test/test.json
 
     - uses: actions/checkout@v2
       with:
@@ -86,7 +89,7 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "FAIL"}' > status.json
-        coscmd upload status.json status/$UUID/status.json
+        aws s3 --endpoint-url $ENDPOINT cp ./test.json  s3://$BUCKET/s3/test/test.json
     - name: Update status to success
       if: success()
       run: |
@@ -97,4 +100,4 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "SUCCESS"}' > status.json
-        coscmd upload status.json status/$UUID/status.json
+        aws s3 --endpoint-url $ENDPOINT cp ./test.json  s3://$BUCKET/s3/test/test.json
