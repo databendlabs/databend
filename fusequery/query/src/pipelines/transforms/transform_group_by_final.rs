@@ -28,6 +28,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct GroupByFinalTransform {
+    max_block_size: usize,
     aggr_exprs: Vec<Expression>,
     group_exprs: Vec<Expression>,
     schema: DataSchemaRef,
@@ -38,11 +39,13 @@ pub struct GroupByFinalTransform {
 impl GroupByFinalTransform {
     pub fn create(
         schema: DataSchemaRef,
+        max_block_size: usize,
         schema_before_group_by: DataSchemaRef,
         aggr_exprs: Vec<Expression>,
         group_exprs: Vec<Expression>,
     ) -> Self {
         Self {
+            max_block_size,
             aggr_exprs,
             group_exprs,
             schema,
@@ -197,10 +200,9 @@ impl Processor for GroupByFinalTransform {
                 }
 
                 let mut blocks = vec![];
-                // TODO: split the blocks by max_block_size
                 if !columns.is_empty() {
                     let block = DataBlock::create_by_array(self.schema.clone(), columns);
-                    blocks.push(block);
+                    blocks = DataBlock::split_block_by_size(&block, self.max_block_size)?;
                 }
 
                 Ok(Box::pin(DataBlockStream::create(

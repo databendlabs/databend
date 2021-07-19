@@ -48,9 +48,12 @@ async fn test_transform_final_group_by() -> Result<()> {
         )))
     })?;
     pipeline.merge_processor()?;
+
+    let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
     pipeline.add_simple_transform(|| {
         Ok(Box::new(GroupByFinalTransform::create(
             aggr_final.schema(),
+            max_block_size,
             source_schema.clone(),
             aggr_exprs.to_vec(),
             group_exprs.to_vec(),

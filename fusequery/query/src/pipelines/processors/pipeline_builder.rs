@@ -168,6 +168,7 @@ impl PipelineBuilder {
     fn visit_aggregator_final(&mut self, node: &AggregatorFinalPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.merge_processor()?;
+
         if node.group_expr.is_empty() {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorFinalTransform::try_create(
@@ -177,14 +178,17 @@ impl PipelineBuilder {
                 )?))
             })?;
         } else {
+            let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(GroupByFinalTransform::create(
                     node.schema(),
+                    max_block_size,
                     node.schema_before_group_by.clone(),
                     node.aggr_expr.clone(),
                     node.group_expr.clone(),
                 )))
             })?;
+            pipeline.mixed_processor(self.ctx.get_settings().get_max_threads()? as usize)?;
         }
         Ok(pipeline)
     }
@@ -203,8 +207,6 @@ impl PipelineBuilder {
 
     fn visit_having(&mut self, node: &HavingPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*node.input)?;
-        pipeline.mixed_processor(self.ctx.get_settings().get_max_threads()? as usize)?;
-
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 node.schema(),
