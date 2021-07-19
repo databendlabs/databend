@@ -16,18 +16,22 @@ use crate::DFUInt16Array;
 use crate::DFUtf8Array;
 use crate::UInt16Type;
 
-#[test]
-fn test_array_apply() -> Result<()> {
-    let mut builder = PrimitiveArrayBuilder::<UInt16Type>::new(5);
+fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Type> {
+    let mut builder = PrimitiveArrayBuilder::<UInt16Type>::new(cap);
 
-    (0..5).for_each(|index| {
+    (begin..end).for_each(|index| {
         if index % 2 == 0 {
             builder.append_null();
         } else {
             builder.append_value(index as u16);
         }
     });
-    let array = builder.finish();
+    builder.finish()
+}
+
+#[test]
+fn test_array_apply() -> Result<()> {
+    let array = new_test_uint16_array(5, 0, 5);
 
     let arrays = vec![
         array.apply(|arr| arr + 10),
@@ -68,5 +72,32 @@ fn test_array_apply() -> Result<()> {
             assert_eq!((40 + index) as u16, values[4].value(index));
         }
     }
+    Ok(())
+}
+
+#[test]
+fn test_array_apply_kernel() -> Result<()> {
+    let array1 = new_test_uint16_array(5, 0, 5);
+    let array2 = new_test_uint16_array(5, 5, 10);
+
+    let arrays = vec![
+        array1.apply_kernel(|arr| Arc::new(compute::add(arr, array2.as_ref()).unwrap())),
+        array1.apply_kernel_cast(|arr| Arc::new(compute::add(arr, array2.as_ref()).unwrap())),
+    ];
+
+    let values = vec![arrays[0].downcast_ref(), arrays[1].downcast_ref()];
+
+    assert_eq!(5 as u16, values[0].value(0));
+    assert_eq!(1 as u16, values[0].value(1));
+    assert_eq!(7 as u16, values[0].value(2));
+    assert_eq!(3 as u16, values[0].value(3));
+    assert_eq!(9 as u16, values[0].value(4));
+
+    assert_eq!(5 as u16, values[1].value(0));
+    assert_eq!(1 as u16, values[1].value(1));
+    assert_eq!(7 as u16, values[1].value(2));
+    assert_eq!(3 as u16, values[1].value(3));
+    assert_eq!(9 as u16, values[1].value(4));
+
     Ok(())
 }
