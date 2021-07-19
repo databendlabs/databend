@@ -207,11 +207,32 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         &self,
         act: DropTableAction,
     ) -> common_exception::Result<DropTableActionResult> {
+        let db_name = &act.plan.db;
+        let table_name = &act.plan.table;
+        let if_exists = act.plan.if_exists;
+
+        let db = self.meta_node.get_database(db_name).await.ok_or_else(|| {
+            ErrorCode::UnknownDatabase(format!("drop table: database not found {:}", db_name))
+        })?;
+
+        let table_id = db.tables.get(table_name);
+        if table_id.is_none() {
+            return if if_exists {
+                Ok(DropTableActionResult {})
+            } else {
+                Err(ErrorCode::UnknownTable(format!(
+                    "table not found: {:}",
+                    table_name
+                )))
+            };
+        }
+
         let cr = LogEntry {
             txid: None,
             cmd: DropTable {
-                db_name: act.plan.db,
-                table_name: act.plan.table,
+                db_name: db_name.clone(),
+                table_name: table_name.clone(),
+                if_exists: act.plan.if_exists,
             },
         };
 
@@ -231,17 +252,17 @@ impl RequestHandler<DropTableAction> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<GetTableAction> for ActionHandler {
     async fn handle(&self, act: GetTableAction) -> common_exception::Result<GetTableActionResult> {
-        let db_name = act.db;
-        let table_name = act.table;
+        let db_name = &act.db;
+        let table_name = &act.table;
 
-        let db = self.meta_node.get_database(&db_name).await.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("get table: database not found {:}", &db_name))
+        let db = self.meta_node.get_database(db_name).await.ok_or_else(|| {
+            ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db_name))
         })?;
 
         let table_id = db
             .tables
-            .get(&table_name)
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", &table_name)))?;
+            .get(table_name)
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table_name)))?;
 
         let result = self.meta_node.get_table(table_id).await;
 
@@ -256,8 +277,8 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                 })?;
                 let rst = GetTableActionResult {
                     table_id: table.table_id,
-                    db: db_name,
-                    name: table_name,
+                    db: db_name.clone(),
+                    name: table_name.clone(),
                     schema: Arc::new(arrow_schema.into()),
                 };
                 Ok(rst)

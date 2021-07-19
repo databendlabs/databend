@@ -64,6 +64,7 @@ pub enum Cmd {
     DropTable {
         db_name: String,
         table_name: String,
+        if_exists: bool,
     },
 
     /// Update or insert a general purpose kv store
@@ -126,8 +127,13 @@ impl fmt::Display for Cmd {
             Cmd::DropTable {
                 db_name,
                 table_name,
+                if_exists,
             } => {
-                write!(f, "delete_table:{}-{}", db_name, table_name)
+                write!(
+                    f,
+                    "delete_table:{}-{}, if_exists:{}",
+                    db_name, table_name, if_exists
+                )
             }
             Cmd::UpsertKV { key, seq, value } => {
                 write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)

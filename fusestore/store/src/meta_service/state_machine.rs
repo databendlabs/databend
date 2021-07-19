@@ -289,13 +289,14 @@ impl StateMachine {
             Cmd::DropTable {
                 ref db_name,
                 ref table_name,
+                if_exists: _,
             } => {
-                let db = self.databases.get(db_name);
-                let db = db.unwrap(); // unsafe?
+                let db = self.databases.get_mut(db_name).unwrap();
+                let tbl_id = db.tables[table_name];
 
-                let table_id = db.tables.get(table_name);
-                let table_id = table_id.unwrap();
-                let prev = self.tables.get(table_id).cloned();
+                db.tables.remove(table_name);
+                let prev = self.tables.remove(&tbl_id);
+
                 Ok((prev, None).into())
             }
 
