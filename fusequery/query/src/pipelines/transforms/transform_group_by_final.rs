@@ -197,6 +197,7 @@ impl Processor for GroupByFinalTransform {
                 }
 
                 let mut blocks = vec![];
+                // TODO: split the blocks by max_block_size
                 if !columns.is_empty() {
                     let block = DataBlock::create_by_array(self.schema.clone(), columns);
                     blocks.push(block);

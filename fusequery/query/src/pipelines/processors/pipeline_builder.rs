@@ -203,6 +203,8 @@ impl PipelineBuilder {
 
     fn visit_having(&mut self, node: &HavingPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*node.input)?;
+        pipeline.mixed_processor(self.ctx.get_settings().get_max_threads()? as usize)?;
+
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 node.schema(),
