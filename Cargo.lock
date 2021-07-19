@@ -1574,6 +1574,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
  "async-trait",
+ "backtrace",
  "bumpalo",
  "clickhouse-rs",
  "clickhouse-srv",

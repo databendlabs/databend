@@ -24,6 +24,7 @@ impl Router {
         let v1 = super::v1::hello::hello_handler(self.cfg.clone())
             .or(super::v1::config::config_handler(self.cfg.clone()))
             .or(super::v1::cluster::cluster_handler(self.cluster.clone()))
+            .or(super::debug::backtrace::backtrace_handler(self.cfg.clone()))
             .or(super::debug::home::debug_handler(self.cfg.clone()));
         let routes = v1.with(warp::log("v1"));
         Ok(routes)

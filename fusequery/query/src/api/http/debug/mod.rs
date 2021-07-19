@@ -4,5 +4,6 @@
 
 pub mod home;
 pub mod pprof;
+pub mod backtrace;
 
 pub use home::PProfRequest;
