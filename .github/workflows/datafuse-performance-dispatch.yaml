@@ -54,25 +54,25 @@ jobs:
         echo "sync status to S3"
         echo '{"uuid": "${{ env.UUID }}", "status": "PENDING"}' > status.json
         aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
-    - uses: azure/setup-kubectl@v1
-      with:
-        version: v1.21.1
-      id: install
 
     - name: Bootstrap cluster
       id: make_deploy
       uses: docker://zhihanz/test-infra:master
       with:
         args: >-
-          echo ${{ env.UUID }};
-          echo "Start to create cluster";
-          make cluster_create;
-          echo "Successfully created cluster, start to pull test images";
-          make resource_apply -j 2;
-          echo "Successfully deployed test pods, start to do performance test";
-          make run_perf -j 2;
-          echo "Finished performance tests, upload reports";
-          make run_compare;
+          until make all_nodes_deleted; do echo "waiting for nodepools to be deleted"; sleep 10; done;
+          make deploy;
+#      with:
+#        args: >-
+#          echo ${{ env.UUID }};
+#          echo "Start to create cluster";
+#          make cluster_create;
+#          echo "Successfully created cluster, start to pull test images";
+#          make resource_apply -j 2;
+#          echo "Successfully deployed test pods, start to do performance test";
+#          make run_perf -j 2;
+#          echo "Finished performance tests, upload reports";
+#          make run_compare;
    - name: Delete all resources
      if: always()
      uses: docker://zhihanz/test-infra:master
