@@ -62,6 +62,22 @@ jobs:
         args: >-
           until make all_nodes_deleted; do echo "waiting for nodepools to be deleted"; sleep 10; done;
           make deploy;
+    - name: Update status to failure
+      if: failure()
+      run: >-
+        curl -i -X POST
+        -H "Authorization: Bearer $GITHUB_TOKEN"
+        -H "Content-Type: application/json"
+        --data '{"state":"failure",  "context": "run-perf-status-update-start", "target_url": "'$GITHUB_STATUS_TARGET_URL'"}'
+        "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+    - name: Update status to success
+      if: success()
+      run: >-
+        curl -i -X POST
+        -H "Authorization: Bearer $GITHUB_TOKEN"
+        -H "Content-Type: application/json"
+        --data '{"state":"success",  "context": "run-perf-status-update-start", "target_url": "'$GITHUB_STATUS_TARGET_URL'"}'
+        "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
 #      with:
 #        args: >-
 #          echo ${{ env.UUID }};
@@ -80,25 +96,25 @@ jobs:
 #       args: >-
 #         make clean
 
-  - name: Update status to failure
-    if: failure()
-    run: |
-      curl -i -X POST \
-      -H "Authorization: Bearer $GITHUB_TOKEN" \
-      -H "Content-Type: application/json" \
-      --data '{"state":"failure","context":"run-perf-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
-      "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
-      echo "sync status to S3"
-      echo '{"uuid": "${{ env.UUID }}", "status": "FAIL"}' > status.json
-      aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
-  - name: Update status to success
-    if: success()
-    run: |
-      curl -i -X POST \
-      -H "Authorization: Bearer $GITHUB_TOKEN" \
-      -H "Content-Type: application/json" \
-      --data '{"state":"success","context":"run-perf-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
-      "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
-      echo "sync status to S3"
-      echo '{"uuid": "${{ env.UUID }}", "status": "SUCCESS"}' > status.json
-      aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
+#  - name: Update status to failure
+#    if: failure()
+#    run: |
+#      curl -i -X POST \
+#      -H "Authorization: Bearer $GITHUB_TOKEN" \
+#      -H "Content-Type: application/json" \
+#      --data '{"state":"failure","context":"run-perf-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
+#      "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+#      echo "sync status to S3"
+#      echo '{"uuid": "${{ env.UUID }}", "status": "FAIL"}' > status.json
+#      aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
+#  - name: Update status to success
+#    if: success()
+#    run: |
+#      curl -i -X POST \
+#      -H "Authorization: Bearer $GITHUB_TOKEN" \
+#      -H "Content-Type: application/json" \
+#      --data '{"state":"success","context":"run-perf-status,"target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
+#      "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+#      echo "sync status to S3"
+#      echo '{"uuid": "${{ env.UUID }}", "status": "SUCCESS"}' > status.json
+#      aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
