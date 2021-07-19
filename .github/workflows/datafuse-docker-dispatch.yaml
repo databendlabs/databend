@@ -43,7 +43,7 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "PENDING"}' > status.json
-        aws s3 --endpoint-url $ENDPOINT cp ./test.json  s3://$BUCKET/s3/test/test.json
+        aws s3 --endpoint-url $ENDPOINT cp ./status.json  s3://$BUCKET/s3/test/status.json
 
     - uses: actions/checkout@v2
       with:
@@ -89,7 +89,7 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "FAIL"}' > status.json
-        aws s3 --endpoint-url $ENDPOINT cp ./test.json  s3://$BUCKET/s3/test/test.json
+        aws s3 --endpoint-url $ENDPOINT cp ./status.json  s3://$BUCKET/s3/test/status.json
     - name: Update status to success
       if: success()
       run: |
@@ -100,4 +100,4 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
         echo '{"uuid": "$UUID", "status": "SUCCESS"}' > status.json
-        aws s3 --endpoint-url $ENDPOINT cp ./test.json  s3://$BUCKET/s3/test/test.json
+        aws s3 --endpoint-url $ENDPOINT cp ./status.json  s3://$BUCKET/s3/test/status.json
