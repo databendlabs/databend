@@ -73,7 +73,7 @@ impl<'a> QueryWriter<'a> {
     async fn write_block(&mut self, block: DataBlock) -> Result<()> {
         let block = convert_block(block)?;
 
-        match self.conn.write_block(block).await {
+        match self.conn.write_block(&block).await {
             Ok(_) => Ok(()),
             Err(error) => Err(ErrorCode::UnknownException(format!(
                 "Cannot send block {:?}",
@@ -102,6 +102,12 @@ impl<'a> QueryWriter<'a> {
                     self.write_block(block).await?;
                     return self.write_tail_data(receiver).await;
                 }
+                Some(BlockItem::InsertSample(block)) => {
+                    let schema = block.schema();
+                    let header = DataBlock::empty_with_schema(schema.clone());
+
+                    self.write_block(header).await?;
+                }
             }
         }
     }
@@ -112,6 +118,7 @@ impl<'a> QueryWriter<'a> {
                 BlockItem::ProgressTicker => self.write_progress().await?,
                 BlockItem::Block(Ok(block)) => self.write_block(block).await?,
                 BlockItem::Block(Err(error)) => self.write_error(error).await?,
+                BlockItem::InsertSample(block) => self.write_block(block).await?,
             };
         }
 

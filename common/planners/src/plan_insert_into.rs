@@ -34,10 +34,11 @@ impl InsertIntoPlan {
     pub fn empty_stream() -> Arc<Mutex<Option<BlockStream>>> {
         Default::default()
     }
-}
-
-impl InsertIntoPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
+    }
+    pub fn set_input_stream(&self, input_stream: BlockStream) {
+        let mut writer = self.input_stream.lock().unwrap();
+        *writer = Some(input_stream);
     }
 }

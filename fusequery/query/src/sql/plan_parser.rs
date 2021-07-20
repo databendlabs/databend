@@ -326,79 +326,94 @@ impl PlanParser {
         &self,
         table_name: &ObjectName,
         columns: &[Ident],
-        source: &Query,
+        source: &Option<Box<Query>>,
     ) -> Result<PlanNode> {
-        if let sqlparser::ast::SetExpr::Values(ref vs) = source.body {
-            //            let col_num = columns.len();
-            let db_name = self.ctx.get_current_database();
-            let tbl_name = table_name
-                .0
-                .get(0)
-                .ok_or_else(|| ErrorCode::SyntaxException("empty table name now allowed"))?
-                .value
-                .clone();
+        let db_name = self.ctx.get_current_database();
+        let tbl_name = table_name
+            .0
+            .get(0)
+            .ok_or_else(|| ErrorCode::SyntaxException("empty table name now allowed"))?
+            .value
+            .clone();
 
-            let values = &vs.0;
-            if values.is_empty() {
-                return Err(ErrorCode::EmptyData(
-                    "empty values for insertion is not allowed",
-                ));
-            }
+        let table = self.ctx.get_datasource().get_table(&db_name, &tbl_name)?;
 
-            let all_value = values
-                .iter()
-                .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
-            if !all_value {
-                return Err(ErrorCode::UnImplement(
-                    "not support value expressions other than literal value yet",
-                ));
-            }
-            // Buffers some chunks if possible
-            let chunks = values.chunks(100);
+        let mut schema = table.schema()?;
+
+        if !columns.is_empty() {
             let fields = columns
                 .iter()
-                .map(|ident| DataField::new(&ident.value, DataType::Utf8, true))
-                .collect::<Vec<_>>();
-            let schema = DataSchemaRefExt::create(fields);
+                .map(|ident| schema.field_with_name(&ident.value).map(|v| v.clone()))
+                .collect::<Result<Vec<_>>>()?;
 
-            let blocks: Vec<DataBlock> = chunks
-                .map(|chunk| {
-                    let transposed: Vec<Vec<String>> = (0..chunk[0].len())
-                        .map(|i| {
-                            chunk
-                                .iter()
-                                .map(|inner| match &inner[i] {
-                                    Expr::Value(v) => v.to_string(),
-                                    _ => "N/A".to_string(),
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .collect();
-
-                    let cols = transposed
-                        .iter()
-                        .map(|col| {
-                            Series::new(col.iter().map(|s| s as &str).collect::<Vec<&str>>())
-                        })
-                        .collect::<Vec<_>>();
-
-                    DataBlock::create_by_array(schema.clone(), cols)
-                })
-                .collect();
-            let input_stream = futures::stream::iter(blocks);
-            let plan_node = InsertIntoPlan {
-                db_name,
-                tbl_name,
-                schema,
-                // this is crazy, please do not keep it, I am just test driving apis
-                input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
-            };
-            Ok(PlanNode::InsertInto(plan_node))
-        } else {
-            Err(ErrorCode::UnImplement(
-                "only supports simple value tuples as source of insertion",
-            ))
+            schema = DataSchemaRefExt::create(fields);
         }
+
+        let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
+        match source {
+            Some(source) => {
+                match &source.body {
+                    sqlparser::ast::SetExpr::Values(vs) => {
+                        let values = &vs.0;
+                        if values.is_empty() {
+                            return Err(ErrorCode::EmptyData(
+                                "empty values for insertion is not allowed",
+                            ));
+                        }
+
+                        let all_value = values
+                            .iter()
+                            .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
+                        if !all_value {
+                            return Err(ErrorCode::UnImplement(
+                                "not support value expressions other than literal value yet",
+                            ));
+                        }
+                        // Buffers some chunks if possible
+                        let chunks = values.chunks(100);
+
+                        let blocks: Vec<DataBlock> = chunks
+                            .map(|chunk| {
+                                let transposed: Vec<Vec<String>> = (0..chunk[0].len())
+                                    .map(|i| {
+                                        chunk
+                                            .iter()
+                                            .map(|inner| match &inner[i] {
+                                                Expr::Value(v) => v.to_string(),
+                                                _ => "N/A".to_string(),
+                                            })
+                                            .collect::<Vec<_>>()
+                                    })
+                                    .collect();
+
+                                let cols = transposed
+                                    .iter()
+                                    .map(|col| {
+                                        Series::new(
+                                            col.iter().map(|s| s as &str).collect::<Vec<&str>>(),
+                                        )
+                                    })
+                                    .collect::<Vec<_>>();
+
+                                DataBlock::create_by_array(schema.clone(), cols)
+                            })
+                            .collect();
+                        input_stream = futures::stream::iter(blocks);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
+        let plan_node = InsertIntoPlan {
+            db_name,
+            tbl_name,
+            schema,
+            // this is crazy, please do not keep it, I am just test driving apis
+            input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
+        };
+        Ok(PlanNode::InsertInto(plan_node))
     }
 
     /// Generate a logic plan from an SQL query
