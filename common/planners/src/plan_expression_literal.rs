@@ -12,13 +12,13 @@ pub trait Literal {
 
 impl Literal for &str {
     fn to_literal(&self) -> Expression {
-        Expression::Literal(DataValue::Utf8(Some(self.to_string())))
+        Expression::create_literal(DataValue::Utf8(Some(self.to_string())))
     }
 }
 
 impl Literal for String {
     fn to_literal(&self) -> Expression {
-        Expression::Literal(DataValue::Utf8(Some(self.clone())))
+        Expression::create_literal(DataValue::Utf8(Some(self.clone())))
     }
 }
 
@@ -27,7 +27,7 @@ macro_rules! make_literal {
         #[allow(missing_docs)]
         impl Literal for $TYPE {
             fn to_literal(&self) -> Expression {
-                Expression::Literal(DataValue::$SCALAR(Some(self.clone())))
+                Expression::create_literal(DataValue::$SCALAR(Some(self.clone())))
             }
         }
     };

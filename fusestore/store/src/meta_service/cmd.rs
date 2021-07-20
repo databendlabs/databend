@@ -13,7 +13,7 @@ use crate::meta_service::Node;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Cmd {
     /// AKA put-if-absent. add a key-value record only when key is absent.
     AddFile {

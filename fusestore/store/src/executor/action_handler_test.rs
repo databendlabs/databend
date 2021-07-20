@@ -28,7 +28,8 @@ use crate::executor::ActionHandler;
 use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
 use crate::meta_service::MetaNode;
-use crate::tests::rand_local_addr;
+use crate::tests::service::new_test_context;
+use crate::tests::service::StoreTestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
@@ -40,7 +41,7 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
     let dir = tempdir()?;
     let root = dir.path();
 
-    let hdlr = bring_up_dfs_action_handler(root, hashmap! {
+    let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {
         "foo" => "bar",
     })
     .await?;
@@ -110,7 +111,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     {
         let dir = tempdir()?;
         let root = dir.path();
-        let hdlr = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
 
         for (i, c) in cases.iter().enumerate() {
             let mes = format!("{}-th: plan: {:?}, want: {:?}", i, c.plan, c.want);
@@ -166,7 +167,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
     {
         let dir = tempdir()?;
         let root = dir.path();
-        let hdlr = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
 
         {
             // create db
@@ -176,7 +177,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
                 engine: DatabaseEngineType::Local,
                 options: Default::default(),
             };
-            let cba = CreateDatabaseAction { plan: plan };
+            let cba = CreateDatabaseAction { plan };
             hdlr.handle(cba).await?;
         }
 
@@ -212,11 +213,13 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
 async fn bring_up_dfs_action_handler(
     root: &Path,
     files: HashMap<&str, &str>,
-) -> anyhow::Result<ActionHandler> {
+) -> anyhow::Result<(StoreTestContext, ActionHandler)> {
     let fs = LocalFS::try_create(root.to_str().unwrap().to_string())?;
 
-    let meta_addr = rand_local_addr();
-    let mn = MetaNode::boot(0, meta_addr.clone()).await?;
+    let mut tc = new_test_context();
+
+    let mn = MetaNode::boot(0, &tc.config).await?;
+    tc.meta_nodes.push(mn.clone());
 
     let dfs = Dfs::create(fs, mn.clone());
 
@@ -227,5 +230,5 @@ async fn bring_up_dfs_action_handler(
 
     let ah = ActionHandler::create(Arc::new(dfs), mn);
 
-    Ok(ah)
+    Ok((tc, ah))
 }

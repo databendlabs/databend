@@ -2,41 +2,33 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::hash_map::Entry::Occupied;
+use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
-use std::ops::Sub;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::Partitions;
 use common_runtime::tokio;
+use common_runtime::tokio::sync::mpsc::Receiver;
+use futures::future::Either;
 use metrics::counter;
 
 use crate::configs::Config;
 use crate::datasources::DataSource;
-use crate::servers::AbortableService;
-use crate::servers::Elapsed;
-use crate::sessions::session::ISession;
-use crate::sessions::session::SessionCreator;
-use crate::sessions::FuseQueryContext;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::session::Session;
+use crate::sessions::session_ref::SessionRef;
 
-pub struct SessionMgr {
-    conf: Config,
-    datasource: Arc<DataSource>,
+pub struct SessionManager {
+    pub(in crate::sessions) conf: Config,
+    pub(in crate::sessions) cluster: ClusterRef,
+    pub(in crate::sessions) datasource: Arc<DataSource>,
 
-    max_mysql_sessions: usize,
-    sessions: RwLock<HashMap<String, Arc<Box<dyn ISession>>>>,
-    // TODO: remove queries_context.
-    queries_context: RwLock<HashMap<String, FuseQueryContextRef>>,
-
-    notified: Arc<AtomicBool>,
-    aborted_notify: Arc<tokio::sync::Notify>,
+    pub(in crate::sessions) max_sessions: usize,
+    pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
 }
 
 pub type SessionMgrRef = Arc<SessionMgr>;
@@ -47,27 +39,21 @@ impl SessionMgr {
             conf: Config::default(),
             datasource: Arc::new(DataSource::try_create()?),
 
-            max_mysql_sessions: max_mysql_sessions as usize,
-            sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
-            queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions as usize)),
-
-            notified: Arc::new(AtomicBool::new(false)),
-            aborted_notify: Arc::new(tokio::sync::Notify::new()),
+            max_sessions: max_mysql_sessions as usize,
+            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
+                max_mysql_sessions as usize,
+            ))),
         }))
     }
 
-    pub fn from_conf(conf: Config) -> Result<SessionMgrRef> {
-        let max_mysql_sessions = conf.mysql_handler_thread_num as usize;
-        Ok(Arc::new(SessionMgr {
+    pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
+        let max_active_sessions = conf.max_active_sessions as usize;
+        Ok(Arc::new(SessionManager {
             conf,
+            cluster,
             datasource: Arc::new(DataSource::try_create()?),
-
-            max_mysql_sessions,
-            sessions: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
-            queries_context: RwLock::new(HashMap::with_capacity(max_mysql_sessions)),
-
-            notified: Arc::new(AtomicBool::new(false)),
-            aborted_notify: Arc::new(tokio::sync::Notify::new()),
+            max_sessions: max_active_sessions,
+            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
     }
 
@@ -75,141 +61,97 @@ impl SessionMgr {
         self.datasource.clone()
     }
 
-    pub fn create_session<S: SessionCreator>(self: &Arc<Self>) -> Result<Arc<Box<dyn ISession>>> {
+    pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
-        let mut sessions = self.sessions.write();
-        match sessions.len() == self.max_mysql_sessions {
+        let mut sessions = self.active_sessions.write();
+        match sessions.len() == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(
                 "The current accept connection has exceeded mysql_handler_thread_num config",
             )),
             false => {
-                let id = uuid::Uuid::new_v4().to_string();
-                let session = S::create(self.conf.clone(), id.clone(), self.clone())?;
-                sessions.insert(id, session.clone());
-                Ok(session)
+                let session = Session::try_create(
+                    self.conf.clone(),
+                    uuid::Uuid::new_v4().to_string(),
+                    self.clone(),
+                )?;
+
+                sessions.insert(session.get_id(), session.clone());
+                Ok(SessionRef::create(typ.into(), session))
             }
         }
     }
 
-    pub fn get_session(self: &Arc<Self>, id: &str) -> Result<Arc<Box<dyn ISession>>> {
-        let sessions = self.sessions.read();
-        match sessions.get(id) {
-            Some(sessions) => Ok(sessions.clone()),
-            None => Err(ErrorCode::NotFoundSession(format!(
-                "Not found session: {}",
-                id
-            ))),
-        }
-    }
-
-    pub fn destroy_session(self: &Arc<Self>, session_id: String) {
-        counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
-
-        self.sessions.write().remove(&session_id);
-    }
-
-    pub fn try_create_context(&self) -> Result<FuseQueryContextRef> {
+    pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
         counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
 
-        let ctx = FuseQueryContext::try_create(self.conf.clone())?;
-        self.queries_context
-            .write()
-            .insert(ctx.get_id(), ctx.clone());
-        Ok(ctx)
+        let mut sessions = self.active_sessions.write();
+
+        let session = match sessions.entry(id) {
+            Occupied(entry) => entry.get().clone(),
+            Vacant(_) if aborted => return Err(ErrorCode::AbortedSession("Aborting server.")),
+            Vacant(entry) => {
+                let session =
+                    Session::try_create(self.conf.clone(), entry.key().clone(), self.clone())?;
+
+                entry.insert(session).clone()
+            }
+        };
+
+        Ok(SessionRef::create(String::from("RpcSession"), session))
     }
 
-    pub fn try_remove_context(&self, ctx: FuseQueryContextRef) -> Result<()> {
+    #[allow(clippy::ptr_arg)]
+    pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
         counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
 
-        self.queries_context.write().remove(&*ctx.get_id());
-        Ok(())
+        self.active_sessions.write().remove(session_id);
     }
 
-    /// Fetch nums partitions from session manager by context id.
-    pub fn try_fetch_partitions(&self, ctx_id: String, nums: usize) -> Result<Partitions> {
-        let session_map = self.queries_context.read();
-        let ctx = session_map.get(&*ctx_id).ok_or_else(|| {
-            ErrorCode::UnknownContextID(format!("Unsupported context id: {}", ctx_id))
-        })?;
-        ctx.try_get_partitions(nums)
-    }
-}
+    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output = ()> {
+        let active_sessions = self.active_sessions.clone();
+        async move {
+            log::info!("Waiting for current connections to close.");
+            if let Some(mut signal) = signal {
+                let mut signal = Box::pin(signal.recv());
 
-#[async_trait::async_trait]
-impl AbortableService<(), ()> for SessionMgr {
-    fn abort(&self, force: bool) -> Result<()> {
-        self.sessions
-            .write()
-            .iter()
-            .map(|(_, session)| session.abort(force))
-            .collect::<Result<Vec<_>>>()?;
-
-        if !self.notified.load(Ordering::Relaxed) {
-            self.aborted_notify.notify_waiters();
-            self.notified.store(true, Ordering::Relaxed);
-        }
-
-        Ok(())
-    }
-
-    async fn start(&self, _: ()) -> Result<()> {
-        Err(ErrorCode::LogicalError(
-            "Logical error: start session manager.",
-        ))
-    }
-
-    async fn wait_terminal(&self, duration: Option<Duration>) -> Result<Elapsed> {
-        let instant = Instant::now();
-
-        let active_sessions_snapshot = || {
-            let locked_active_sessions = self.sessions.write();
-            (&*locked_active_sessions)
-                .iter()
-                .map(|(_, session)| session.clone())
-                .collect::<Vec<_>>()
-        };
-
-        match duration {
-            None => {
-                if !self.notified.load(Ordering::Relaxed) {
-                    self.aborted_notify.notified().await;
-                }
-
-                for active_session in active_sessions_snapshot() {
-                    active_session.wait_terminal(None).await?;
-                }
-            }
-            Some(duration) => {
-                let mut duration = duration;
-
-                if !self.notified.load(Ordering::Relaxed) {
-                    tokio::time::timeout(duration, self.aborted_notify.notified())
-                        .await
-                        .map_err(|_| {
-                            ErrorCode::Timeout(format!(
-                                "SessionManager did not shutdown in {:?}",
-                                duration
-                            ))
-                        })?;
-
-                    duration = duration.sub(std::cmp::min(instant.elapsed(), duration));
-                }
-
-                for active_session in active_sessions_snapshot() {
-                    if duration.is_zero() {
-                        return Err(ErrorCode::Timeout(format!(
-                            "SessionManager did not shutdown in {:?}",
-                            duration
-                        )));
+                for _index in 0..5 {
+                    if SessionManager::destroy_idle_sessions(&active_sessions) {
+                        return;
                     }
 
-                    let elapsed = active_session.wait_terminal(Some(duration)).await?;
-                    duration = duration.sub(std::cmp::min(elapsed, duration));
+                    let interval = Duration::from_secs(1);
+                    let sleep = Box::pin(tokio::time::sleep(interval));
+                    match futures::future::select(sleep, signal).await {
+                        Either::Right((_, _)) => break,
+                        Either::Left((_, reserve_signal)) => signal = reserve_signal,
+                    };
                 }
             }
-        };
 
-        Ok(instant.elapsed())
+            log::info!("Will shutdown forcefully.");
+            active_sessions
+                .read()
+                .values()
+                .for_each(Session::force_kill);
+        }
+    }
+
+    fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
+        // Read lock does not support reentrant
+        // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
+        let active_sessions_read_guard = sessions.read();
+
+        // First try to kill the idle session
+        active_sessions_read_guard.values().for_each(Session::kill);
+        let active_sessions = active_sessions_read_guard.len();
+
+        match active_sessions {
+            0 => true,
+            _ => {
+                log::info!("Waiting for {} connections to close.", active_sessions);
+                false
+            }
+        }
     }
 }

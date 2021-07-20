@@ -14,6 +14,8 @@ mod pipeline_walker_test;
 mod processor_empty_test;
 #[cfg(test)]
 mod processor_merge_test;
+#[cfg(test)]
+mod processor_mixed_test;
 
 mod pipe;
 mod pipeline;
@@ -23,6 +25,7 @@ mod pipeline_walker;
 mod processor;
 mod processor_empty;
 mod processor_merge;
+mod processor_mixed;
 
 pub use pipe::Pipe;
 pub use pipeline::Pipeline;
@@ -31,3 +34,4 @@ pub use processor::FormatterSettings;
 pub use processor::Processor;
 pub use processor_empty::EmptyProcessor;
 pub use processor_merge::MergeProcessor;
+pub use processor_mixed::MixedProcessor;

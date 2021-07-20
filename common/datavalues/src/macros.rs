@@ -84,16 +84,16 @@ macro_rules! format_data_value_with_option {
 macro_rules! typed_cast_from_data_value_to_std {
     ($SCALAR:ident, $NATIVE:ident) => {
         impl TryFrom<DataValue> for $NATIVE {
-            type Error = anyhow::Error;
+            type Error = ErrorCode;
 
-            fn try_from(value: DataValue) -> anyhow::Result<Self> {
+            fn try_from(value: DataValue) -> Result<Self> {
                 match value {
                     DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),
-                    _ => anyhow::bail!(format!(
+                    _ => Err(ErrorCode::BadDataValueType(format!(
                         "DataValue Error:  Cannot convert {:?} to {}",
                         value,
                         std::any::type_name::<Self>()
-                    )),
+                    ))),
                 }
             }
         }

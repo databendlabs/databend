@@ -8,7 +8,7 @@ use crate::test::Test;
 use crate::*;
 
 #[test]
-fn test_plan_builds() -> anyhow::Result<()> {
+fn test_plan_builds() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     struct TestCase {

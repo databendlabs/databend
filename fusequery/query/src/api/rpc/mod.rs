@@ -6,28 +6,29 @@
 mod flight_dispatcher_test;
 
 #[cfg(test)]
-mod flight_service_new_test;
+mod flight_service_test;
 
-mod actions;
-mod flight_client_new;
-mod flight_data_stream;
+#[cfg(test)]
+mod flight_actions_test;
+
+#[cfg(test)]
+mod flight_tickets_test;
+
+pub use flight_actions::BroadcastAction;
+pub use flight_actions::FlightAction;
+pub use flight_actions::ShuffleAction;
+pub use flight_client::FlightClient;
+pub use flight_dispatcher::FuseQueryFlightDispatcher;
+pub use flight_service::FuseQueryFlightService;
+pub use flight_tickets::FlightTicket;
+
+mod flight_actions;
+mod flight_client;
+mod flight_client_stream;
 mod flight_dispatcher;
 mod flight_scatter;
-mod flight_service_new;
-
-pub use actions::ExecutePlanWithShuffleAction;
-use common_exception::ErrorCode;
-pub use flight_client_new::FlightClient;
-pub use flight_dispatcher::FlightDispatcher;
-pub use flight_dispatcher::StreamInfo;
-pub use flight_service_new::FlightStream;
-pub use flight_service_new::FuseQueryService;
-use tonic::Status;
-
-pub fn to_status(error: ErrorCode) -> Status {
-    error.into()
-}
-
-pub fn from_status(status: Status) -> ErrorCode {
-    status.into()
-}
+mod flight_scatter_broadcast;
+mod flight_scatter_hash;
+mod flight_service;
+mod flight_service_stream;
+mod flight_tickets;

@@ -47,12 +47,12 @@ mod tests {
         let aggr_expr = Expression::AggregateFunction {
             op: "count".to_string(),
             distinct: false,
-            args: vec![Expression::Literal(DataValue::UInt64(Some(0)))],
+            args: vec![Expression::create_literal(DataValue::UInt64(Some(0)))],
         };
 
         let plan = PlanBuilder::from(&source_plan)
             .expression(
-                &[Expression::Literal(DataValue::UInt64(Some(0)))],
+                &[Expression::create_literal(DataValue::UInt64(Some(0)))],
                 "Before GroupBy",
             )?
             .aggregate_partial(&[aggr_expr.clone()], &[])?

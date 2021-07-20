@@ -36,7 +36,7 @@ async fn test_parquet_table() -> Result<()> {
     let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
-        ctx.get_max_threads()? as usize,
+        ctx.get_settings().get_max_threads()? as usize,
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;

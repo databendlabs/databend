@@ -8,6 +8,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
+use common_streams::CorrectWithSchemaStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
@@ -59,13 +60,19 @@ impl Processor for SourceTransform {
         );
 
         let table = if remote {
-            self.ctx
-                .get_remote_table(db.as_str(), table.as_str())
-                .await?
+            let remote_table = self.ctx.get_remote_table(db.as_str(), table.as_str());
+            remote_table.await?
         } else {
             self.ctx.get_table(db.as_str(), table.as_str())?
         };
 
-        table.read(self.ctx.clone(), &self.source_plan).await
+        let table_stream = table.read(self.ctx.clone(), &self.source_plan);
+
+        // We need to keep the block struct with the schema
+        // Because the table may not support require columns
+        Ok(Box::pin(CorrectWithSchemaStream::new(
+            table_stream.await?,
+            self.source_plan.schema.clone(),
+        )))
     }
 }

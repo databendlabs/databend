@@ -17,5 +17,4 @@ pub mod optimizers;
 pub mod pipelines;
 pub mod servers;
 pub mod sessions;
-pub mod shuffle;
 pub mod sql;

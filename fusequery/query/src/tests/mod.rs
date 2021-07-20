@@ -4,11 +4,12 @@
 
 mod context;
 mod number;
-mod service;
+mod parse_query;
+mod sessions;
 
+pub use context::try_create_cluster_context;
 pub use context::try_create_context;
+pub use context::ClusterNode;
 pub use number::NumberTestData;
-pub use service::register_one_executor_to_namespace;
-pub use service::start_cluster_registry;
-pub use service::try_start_service;
-pub use service::try_start_service_with_session_mgr;
+pub use parse_query::parse_query;
+pub use sessions::try_create_sessions;

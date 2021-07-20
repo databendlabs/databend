@@ -28,9 +28,6 @@ members = [
     # FuseStore
     "fusestore/store",
 
-    # Benchamrks
-    "fusequery/benchmarks/nyctaxi",
-
     # Fuzz
     "fusequery/fuzz"
 ]

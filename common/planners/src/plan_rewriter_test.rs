@@ -3,12 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+
+use common_exception::Result;
 
 use crate::test::Test;
 use crate::*;
 
 #[test]
-fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
+fn test_rewrite_projection_alias_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     #[allow(dead_code)]
@@ -135,7 +138,7 @@ fn test_rewrite_projection_alias_plan() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
+fn test_rewrite_expressions_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
@@ -165,8 +168,37 @@ fn test_rewrite_expressions_plan() -> anyhow::Result<()> {
     Ok(())
 }
 
+struct DefaultRewriter;
+
+impl PlanRewriter for DefaultRewriter {
+    fn rewrite_aggregate_partial(
+        &mut self,
+        plan: &AggregatorPartialPlan,
+    ) -> common_exception::Result<PlanNode> {
+        Ok(PlanNode::AggregatorPartial(AggregatorPartialPlan {
+            schema: plan.schema.clone(),
+            aggr_expr: plan.aggr_expr.clone(),
+            group_expr: plan.group_expr.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
+    }
+
+    fn rewrite_aggregate_final(
+        &mut self,
+        plan: &AggregatorFinalPlan,
+    ) -> common_exception::Result<PlanNode> {
+        Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
+            schema: plan.schema.clone(),
+            schema_before_group_by: plan.schema_before_group_by.clone(),
+            aggr_expr: plan.aggr_expr.clone(),
+            group_expr: plan.group_expr.clone(),
+            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+        }))
+    }
+}
+
 #[test]
-fn test_plan_rewriter_1() -> anyhow::Result<()> {
+fn test_plan_rewriter_1() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     use crate::*;
@@ -178,8 +210,6 @@ fn test_plan_rewriter_1() -> anyhow::Result<()> {
         .aggregate_final(source.schema(), &[col("number")], &[col("number")])?
         .project(&[col("number").alias("x"), col("number").alias("y")])?
         .build()?;
-    struct DefaultRewriter;
-    impl<'plan> PlanRewriter<'plan> for DefaultRewriter {}
 
     // DefaultRewriter::rewrite_plan_node() should return a totally same plan as input
     let mut rewriter = DefaultRewriter {};

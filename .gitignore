@@ -20,6 +20,7 @@ perf.*
 *.out
 *.swp
 _logs/*
+_meta/*
 
 # for tests in mac
 *.stderr-e

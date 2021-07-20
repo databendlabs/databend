@@ -97,7 +97,7 @@ impl Table for RemoteTable {
                         let _ = tx.send(Err(e));
                     }
                 }
-            });
+            })?;
         }
 
         rx.recv()

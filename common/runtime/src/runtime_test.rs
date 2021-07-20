@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_runtime() -> anyhow::Result<()> {
+async fn test_runtime() -> Result<()> {
     use crate::*;
 
     let runtime = Runtime::with_default_worker_threads()?;

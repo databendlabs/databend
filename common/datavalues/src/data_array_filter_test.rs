@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[test]
-fn filter_batch_array() -> anyhow::Result<()> {
+fn filter_batch_array() -> Result<()> {
     use std::sync::Arc;
 
     use pretty_assertions::assert_eq;

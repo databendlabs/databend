@@ -72,6 +72,24 @@ pub struct Config {
     )]
     pub meta_dir: String,
 
+    // raft config
+    #[structopt(
+        long,
+        env = "FUSE_STORE_SNAPSHOT_LOGS_SINCE_LAST",
+        default_value = "1024",
+        help = "The number of logs since the last snapshot to trigger next snapshot."
+    )]
+    pub snapshot_logs_since_last: u64,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_HEARTBEAT_INTERVAL",
+        default_value = "500",
+        help = concat!("The interval in milli seconds at which a leader send heartbeat message to followers.",
+                      " Different value of this setting on leader and followers may cause unexpected behavior.")
+    )]
+    pub heartbeat_interval: u64,
+
     #[structopt(
         long,
         env = "FUSE_STORE_BOOT",
@@ -88,5 +106,9 @@ impl Config {
     /// Thus we need another method to generate an empty default instance.
     pub fn empty() -> Self {
         Self::from_iter(&Vec::<&'static str>::new())
+    }
+
+    pub fn meta_api_addr(&self) -> String {
+        format!("{}:{}", self.meta_api_host, self.meta_api_port)
     }
 }

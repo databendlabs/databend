@@ -122,6 +122,10 @@ macro_rules! impl_dyn_arrays {
                 self.0.get_array_ref()
             }
 
+            fn to_values(&self) -> Result<Vec<DataValue>> {
+                self.0.to_values()
+            }
+
             fn slice(&self, offset: usize, length: usize) -> Series {
                 self.0.slice(offset, length).into_series()
             }

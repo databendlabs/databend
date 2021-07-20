@@ -4,15 +4,19 @@
 
 use std::env;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
+use common_runtime::tokio::runtime::Runtime;
 
+use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
+use crate::sessions::SessionManager;
 
 pub fn try_create_context() -> Result<FuseQueryContextRef> {
-    let mut conf = Config::default();
-    conf.cluster_registry_uri = "local://".to_string();
+    let mut config = Config::default();
+    let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
     conf.log_dir = env::current_dir()?
@@ -20,9 +24,50 @@ pub fn try_create_context() -> Result<FuseQueryContextRef> {
         .display()
         .to_string();
 
-    let ctx = FuseQueryContext::try_create(conf)?;
-    ctx.with_id("2021")?;
-    ctx.set_max_threads(8)?;
+    let sessions = SessionManager::from_conf(config, cluster)?;
+    let test_session = sessions.create_session("TestSession")?;
+    let test_context = test_session.create_context();
+    test_context.get_settings().set_max_threads(8)?;
+    Ok(test_context)
+}
 
-    Ok(ctx)
+#[derive(Clone)]
+pub struct ClusterNode {
+    name: String,
+    priority: u8,
+    address: String,
+}
+
+impl ClusterNode {
+    pub fn create(name: impl ToString, priority: u8, address: impl ToString) -> ClusterNode {
+        ClusterNode {
+            name: name.to_string(),
+            priority,
+            address: address.to_string(),
+        }
+    }
+}
+
+pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<FuseQueryContextRef> {
+    let config = Config::default();
+    let cluster = Cluster::empty();
+
+    for node in nodes {
+        let node = node.clone();
+        let cluster = cluster.clone();
+        std::thread::spawn(move || -> Result<()> {
+            let runtime = Runtime::new()
+                .map_err_to_code(ErrorCode::TokioError, || "Cannot create tokio runtime.")?;
+
+            runtime.block_on(cluster.add_node(&node.name, node.priority, &node.address))
+        })
+        .join()
+        .unwrap()?;
+    }
+
+    let sessions = SessionManager::from_conf(config, cluster)?;
+    let test_session = sessions.create_session("TestSession")?;
+    let test_context = test_session.create_context();
+    test_context.get_settings().set_max_threads(8)?;
+    Ok(test_context)
 }

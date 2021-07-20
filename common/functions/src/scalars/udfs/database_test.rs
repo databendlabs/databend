@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_datavalues::prelude::*;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::scalars::*;
 
 #[test]
-fn test_database_function() -> anyhow::Result<()> {
+fn test_database_function() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,

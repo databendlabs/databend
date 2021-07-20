@@ -19,7 +19,7 @@ async fn test_number_table() -> Result<()> {
     let scan = &ScanPlan {
         schema_name: "scan_test".to_string(),
         table_schema: DataSchemaRefExt::create(vec![]),
-        table_args: Some(Expression::Literal(DataValue::UInt64(Some(8)))),
+        table_args: Some(Expression::create_literal(DataValue::UInt64(Some(8)))),
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "number",
             DataType::UInt64,
@@ -27,7 +27,8 @@ async fn test_number_table() -> Result<()> {
         )]),
         push_downs: Extras::default(),
     };
-    let source_plan = table.read_plan(ctx.clone(), scan, ctx.get_max_threads()? as usize)?;
+    let partitions = ctx.get_settings().get_max_threads()? as usize;
+    let source_plan = table.read_plan(ctx.clone(), scan, partitions)?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;

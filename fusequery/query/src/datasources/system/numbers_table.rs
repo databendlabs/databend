@@ -78,8 +78,8 @@ impl Table for NumbersTable {
     ) -> Result<ReadDataSourcePlan> {
         let mut total = None;
         let ScanPlan { table_args, .. } = scan.clone();
-        if let Some(Expression::Literal(v)) = table_args {
-            total = Some(v.as_u64()?);
+        if let Some(Expression::Literal { value, .. }) = table_args {
+            total = Some(value.as_u64()?);
         }
 
         let total = total.ok_or_else(|| {
@@ -98,7 +98,7 @@ impl Table for NumbersTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            parts: Common::generate_parts(0, ctx.get_max_threads()?, total),
+            parts: Common::generate_parts(0, ctx.get_settings().get_max_threads()?, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

@@ -2,9 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#[cfg(test)]
+mod clickhouse_handler_test;
+
+mod writers;
+
 mod clickhouse_handler;
 mod clickhouse_metrics;
-mod clickhouse_stream;
+mod clickhouse_session;
+mod interactive_worker;
+mod interactive_worker_base;
+mod reject_connection;
 
-pub use self::clickhouse_handler::ClickHouseHandler;
-pub use self::clickhouse_stream::ClickHouseStream;
+pub use clickhouse_handler::ClickHouseHandler;

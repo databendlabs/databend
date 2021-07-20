@@ -48,9 +48,11 @@ pub enum Expression {
     /// Column name.
     Column(String),
     /// Constant value.
-    Literal(DataValue),
-    /// select * from t where xxx and exists (subquery)
-    Exists(Arc<PlanNode>),
+    /// Note: When literal represents a column, its column_name will not be None
+    Literal {
+        value: DataValue,
+        column_name: Option<String>,
+    },
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
 
@@ -91,18 +93,64 @@ pub enum Expression {
         /// The `DataType` the expression will yield
         data_type: DataType,
     },
+    /// Scalar sub query. such as `SELECT (SELECT 1)`
+    ScalarSubquery {
+        name: String,
+        query_plan: Arc<PlanNode>,
+    },
+    Subquery {
+        name: String,
+        query_plan: Arc<PlanNode>,
+    },
 }
 
 impl Expression {
+    pub fn create_literal(value: DataValue) -> Expression {
+        Expression::Literal {
+            value,
+            column_name: None,
+        }
+    }
+
     pub fn column_name(&self) -> String {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
-            Expression::ScalarFunction { op, .. } => {
+            Expression::Column(name) => name.clone(),
+            Expression::Literal {
+                column_name: Some(name),
+                ..
+            } => name.clone(),
+            Expression::UnaryExpression { op, expr } => {
+                format!("({} {})", op, expr.column_name())
+            }
+            Expression::BinaryExpression { op, left, right } => {
+                format!("({} {} {})", left.column_name(), op, right.column_name())
+            }
+            Expression::ScalarFunction { op, args } => {
                 match OP_SET.get(&op.to_lowercase().as_ref()) {
                     Some(_) => format!("{}()", op),
-                    None => format!("{:?}", self),
+                    None => {
+                        let args_column_name =
+                            args.iter().map(Expression::column_name).collect::<Vec<_>>();
+
+                        format!("{}({})", op, args_column_name.join(", "))
+                    }
                 }
             }
+            Expression::AggregateFunction { op, distinct, args } => {
+                let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+
+                match distinct {
+                    true => format!("{}(distinct {})", op, args_column_name.join(", ")),
+                    false => format!("{}({})", op, args_column_name.join(", ")),
+                }
+            }
+            Expression::Sort { expr, .. } => expr.column_name(),
+            Expression::Cast { expr, data_type } => {
+                format!("cast({} as {:?})", expr.column_name(), data_type)
+            }
+            Expression::Subquery { name, .. } => name.clone(),
+            Expression::ScalarSubquery { name, .. } => name.clone(),
             _ => format!("{:?}", self),
         }
     }
@@ -120,12 +168,46 @@ impl Expression {
         Ok(false)
     }
 
+    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataType {
+        let subquery_schema = subquery_plan.schema();
+        let mut columns_field = Vec::with_capacity(subquery_schema.fields().len());
+
+        for column_field in subquery_schema.fields() {
+            columns_field.push(DataField::new(
+                column_field.name(),
+                DataType::List(Box::new(DataField::new(
+                    "item",
+                    column_field.data_type().clone(),
+                    true,
+                ))),
+                false,
+            ));
+        }
+
+        match columns_field.len() {
+            1 => columns_field[0].data_type().clone(),
+            _ => DataType::Struct(columns_field),
+        }
+    }
+
+    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataType {
+        let subquery_schema = subquery_plan.schema();
+
+        match subquery_schema.fields().len() {
+            1 => subquery_schema.field(0).data_type().clone(),
+            _ => DataType::Struct(subquery_schema.fields().clone()),
+        }
+    }
+
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
         match self {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
-            Expression::Literal(v) => Ok(v.data_type()),
-            Expression::Exists(_p) => Ok(DataType::Boolean),
+            Expression::Literal { value, .. } => Ok(value.data_type()),
+            Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
+            Expression::ScalarSubquery { query_plan, .. } => {
+                Ok(Self::to_scalar_subquery_type(query_plan))
+            }
             Expression::BinaryExpression { op, left, right } => {
                 let arg_types = vec![
                     left.to_data_type(input_schema)?,
@@ -203,8 +285,9 @@ impl fmt::Debug for Expression {
         match self {
             Expression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             Expression::Column(ref v) => write!(f, "{:#}", v),
-            Expression::Literal(ref v) => write!(f, "{:#}", v),
-            Expression::Exists(ref v) => write!(f, "Exists({:?})", v),
+            Expression::Literal { ref value, .. } => write!(f, "{:#}", value),
+            Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
+            Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
                 write!(f, "({:?} {} {:?})", left, op, right,)
             }
@@ -247,3 +330,5 @@ impl fmt::Debug for Expression {
         }
     }
 }
+
+pub type Expressions = Vec<Expression>;

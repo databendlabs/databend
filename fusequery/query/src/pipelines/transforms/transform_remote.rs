@@ -11,12 +11,15 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::api::FlightTicket;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct RemoteTransform {
-    fetch_name: String,
+    query_id: String,
+    stage_id: String,
+    stream_id: String,
     fetch_node_name: String,
     schema: DataSchemaRef,
     pub ctx: FuseQueryContextRef,
@@ -24,13 +27,17 @@ pub struct RemoteTransform {
 
 impl RemoteTransform {
     pub fn try_create(
-        ctx: FuseQueryContextRef,
-        fetch_name: String,
+        query_id: String,
+        stage_id: String,
+        stream_id: String,
         fetch_node_name: String,
         schema: DataSchemaRef,
+        ctx: FuseQueryContextRef,
     ) -> Result<Self> {
         Ok(Self {
-            fetch_name,
+            query_id,
+            stage_id,
+            stream_id,
             fetch_node_name,
             schema,
             ctx,
@@ -60,19 +67,24 @@ impl Processor for RemoteTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!(
-            "execute, fetch name:{:#}, node name:{:#}...",
-            self.fetch_name,
+            "execute, query id:{:#}, stage id:{:#}, stream:{:#}, node name:{:#}...",
+            self.query_id,
+            self.stage_id,
+            self.stream_id,
             self.fetch_node_name
         );
 
-        let ctx = self.ctx.clone();
-        let remote_executor = ctx
-            .try_get_executor_by_name(self.fetch_node_name.clone())
-            .await?;
-        let timeout = ctx.get_settings().get_flight_client_timeout()?;
-        let mut flight_client = ctx.get_flight_client(remote_executor.address).await?;
+        let context = self.ctx.clone();
+        let cluster = context.try_get_cluster()?;
+        let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
+
+        let data_schema = self.schema.clone();
+        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
+        let mut flight_client = fetch_node.get_flight_client().await?;
+
+        let ticket = FlightTicket::stream(&self.query_id, &self.stage_id, &self.stream_id);
         flight_client
-            .fetch_stream(self.fetch_name.clone(), self.schema.clone(), timeout)
+            .fetch_stream(ticket, data_schema, timeout)
             .await
     }
 }

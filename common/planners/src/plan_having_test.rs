@@ -2,11 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 use crate::test::Test;
 use crate::*;
 
 #[test]
-fn test_having_plan() -> anyhow::Result<()> {
+fn test_having_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let source = Test::create().generate_source_plan_for_test(10000)?;

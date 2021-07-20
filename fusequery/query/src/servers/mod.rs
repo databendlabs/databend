@@ -4,14 +4,13 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
-pub use abortable::AbortableServer;
-pub use abortable::AbortableService;
-pub use abortable::Elapsed;
 pub use clickhouse::ClickHouseHandler;
+pub use server::Server;
+pub use server::ShutdownHandle;
 
+pub use self::mysql::MySQLConnection;
 pub use self::mysql::MySQLHandler;
-pub use self::mysql::Session;
 
-mod abortable;
 mod clickhouse;
 mod mysql;
+mod server;

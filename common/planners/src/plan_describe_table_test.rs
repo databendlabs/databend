@@ -5,12 +5,13 @@
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::*;
 
 #[test]
-fn test_describe_table_plan() -> anyhow::Result<()> {
+fn test_describe_table_plan() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("Field", DataType::Utf8, false),
         DataField::new("Type", DataType::Utf8, false),

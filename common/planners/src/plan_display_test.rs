@@ -7,11 +7,12 @@ use std::collections::HashMap;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::Result;
 
 use crate::*;
 
 #[test]
-fn test_plan_display_indent() -> anyhow::Result<()> {
+fn test_plan_display_indent() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     // TODO test other plan type
@@ -31,7 +32,7 @@ fn test_plan_display_indent() -> anyhow::Result<()> {
 
     assert_eq!(
         "Create table foo.bar DataField { name: \"a\", data_type: Int64, nullable: false }, engine: JSON, if_not_exists:true, option: {\"opt_foo\": \"opt_bar\"}",
-        format!("{}", plan_create.display_indent())
+        format!("{:?}", plan_create)
     );
 
     Ok(())

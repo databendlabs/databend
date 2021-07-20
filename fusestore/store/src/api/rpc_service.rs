@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_tracing::tracing;
 use tonic::transport::Server;
 
 use crate::api::rpc::StoreFlightImpl;
@@ -29,11 +30,11 @@ impl StoreServer {
             .flight_api_address
             .parse::<std::net::SocketAddr>()?;
 
+        tracing::info!("flight addr: {}", addr);
+
         // TODO(xp): add local fs dir to config and use it.
         let p = tempfile::tempdir()?;
         let fs = LocalFS::try_create(p.path().to_str().unwrap().into())?;
-
-        let meta_addr = format!("{}:{}", self.conf.meta_api_host, self.conf.meta_api_port);
 
         // TODO(xp): support non-boot mode.
         //           for now it can only be run in single-node cluster mode.
@@ -41,7 +42,9 @@ impl StoreServer {
         //     todo!("non-boot mode is not impl yet")
         // }
 
-        let mn = MetaNode::boot(0, meta_addr.clone()).await?;
+        let mn = MetaNode::boot(0, &self.conf).await?;
+
+        tracing::info!("boot done");
 
         let dfs = Dfs::create(fs, mn.clone());
 

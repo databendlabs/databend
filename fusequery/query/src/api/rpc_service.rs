@@ -2,45 +2,69 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
-use tonic::transport::Server;
+use std::future::Future;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
-use crate::api::rpc::FlightDispatcher;
-use crate::api::rpc::FuseQueryService;
-use crate::configs::Config;
-use crate::sessions::SessionMgrRef;
+use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_exception::Result;
+use common_runtime::tokio::net::TcpListener;
+use common_runtime::tokio::sync::Notify;
+use tokio_stream::wrappers::TcpListenerStream;
+use tonic::transport::Server;
+use crate::api::rpc::FuseQueryFlightDispatcher;
+use crate::api::rpc::FuseQueryFlightService;
+use crate::servers::Server as FuseQueryServer;
+use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
-    conf: Config,
-    session_mgr: SessionMgrRef,
+    sessions: SessionManagerRef,
+    abort_notify: Arc<Notify>,
+    dispatcher: Arc<FuseQueryFlightDispatcher>,
 }
 
 impl RpcService {
-    pub fn create(conf: Config, session_mgr: SessionMgrRef) -> Self {
-        Self { conf, session_mgr }
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn FuseQueryServer> {
+        Box::new(Self {
+            sessions,
+            abort_notify: Arc::new(Notify::new()),
+            dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
+        })
     }
 
-    pub async fn make_server(&self) -> Result<()> {
-        let addr = self
-            .conf
-            .flight_api_address
-            .parse::<std::net::SocketAddr>()?;
+    async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
+        let listener = TcpListener::bind(listening).await?;
+        let listener_addr = listener.local_addr()?;
+        Ok((TcpListenerStream::new(listener), listener_addr))
+    }
 
-        let flight_dispatcher = FlightDispatcher::new(self.conf.clone(), self.session_mgr.clone());
+    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
+        let notified = self.abort_notify.clone();
+        async move {
+            notified.notified().await;
+        }
+    }
+}
 
-        // Flight service:
-        let dispatcher_request_sender = flight_dispatcher.run();
-        let service = FuseQueryService::create(dispatcher_request_sender);
+#[async_trait::async_trait]
+impl FuseQueryServer for RpcService {
+    async fn shutdown(&mut self) {
+        self.dispatcher.abort();
+        // We can't turn off listening on the connection
+        // self.abort_notify.notify_waiters();
+    }
 
-        Server::builder()
-            .add_service(FlightServiceServer::new(service))
-            .serve(addr)
-            .await
-            .map_err_to_code(ErrorCode::CannotListenerPort, || {
-                format!("Cannot listener port {}", addr)
-            })
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        let sessions = self.sessions.clone();
+        let flight_dispatcher = self.dispatcher.clone();
+        let flight_api_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
+
+        let (listener_stream, listening) = Self::listener_tcp(listening).await?;
+        let server = Server::builder()
+            .add_service(FlightServiceServer::new(flight_api_service))
+            .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
+
+        common_runtime::tokio::spawn(server);
+        Ok(listening)
     }
 }

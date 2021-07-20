@@ -13,8 +13,13 @@ mod scatter;
 mod take;
 mod take_random;
 mod take_single;
+mod to_values;
 mod vec_hash;
 
+#[cfg(test)]
+mod agg_test;
+#[cfg(test)]
+mod apply_test;
 #[cfg(test)]
 mod cast_test;
 
@@ -29,4 +34,5 @@ pub use scatter::*;
 pub use take::*;
 pub use take_random::*;
 pub use take_single::*;
+pub use to_values::*;
 pub use vec_hash::*;

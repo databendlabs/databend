@@ -113,8 +113,8 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         let mut meta = self.meta.lock();
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
-        let flight_data =
-            arrow_flight::utils::flight_data_from_arrow_schema(&plan.schema.to_arrow(), &options);
+        let flight_data: FlightData =
+            arrow_flight::SchemaAsIpc::new(&plan.schema.to_arrow(), &options).into();
 
         let table = Table {
             // the storage engine fills the id.

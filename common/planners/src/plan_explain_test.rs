@@ -6,13 +6,14 @@ use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataType;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::test::Test;
 use crate::*;
 
 #[test]
-fn test_explain_plan() -> anyhow::Result<()> {
+fn test_explain_plan() -> Result<()> {
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
         .project(&[col("number").alias("c1"), col("number").alias("c2")])?
