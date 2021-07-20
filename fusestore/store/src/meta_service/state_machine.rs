@@ -8,6 +8,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
 use common_metatypes::Database;
 use common_metatypes::MatchSeqExt;
@@ -50,7 +51,7 @@ impl Default for Replication {
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct StateMachine {
     /// raft state: last applied log.
-    pub last_applied_log: u64,
+    pub last_applied_log: LogId,
 
     /// raft state: A mapping of client IDs to their state info:
     /// (serial, RaftResponse)
@@ -107,7 +108,7 @@ impl StateMachineBuilder {
         let replication = self.replication.unwrap_or(Replication::Mirror(1));
 
         let mut m = StateMachine {
-            last_applied_log: 0,
+            last_applied_log: LogId { term: 0, index: 0 },
             client_last_resp: Default::default(),
             keys: BTreeMap::new(),
             sequences: BTreeMap::new(),
@@ -153,8 +154,8 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn apply(&mut self, index: u64, data: &LogEntry) -> anyhow::Result<AppliedState> {
-        self.last_applied_log = index;
+    pub fn apply(&mut self, log_id: &LogId, data: &LogEntry) -> anyhow::Result<AppliedState> {
+        self.last_applied_log = *log_id;
         if let Some(ref txid) = data.txid {
             if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
                 if serial == &txid.serial {
