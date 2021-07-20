@@ -27,6 +27,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
     fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn>;
 
+    // If function returns the same result when same arguments, it is deterministic function.
     fn is_deterministic(&self) -> bool {
         true
     }

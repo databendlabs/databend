@@ -48,6 +48,7 @@ pub enum Expression {
     /// Column name.
     Column(String),
     /// Constant value.
+    /// Note: When literal represents a column, its column_name will not be None
     Literal {
         value: DataValue,
         column_name: Option<String>,
