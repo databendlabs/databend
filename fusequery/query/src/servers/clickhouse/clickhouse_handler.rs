@@ -79,6 +79,7 @@ impl ClickHouseHandler {
         match sessions.create_session("ClickHouseSession") {
             Err(error) => Self::reject_connection(socket, executor, error),
             Ok(session) => {
+                log::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
                 if let Err(error) = ClickHouseConnection::run_on_stream(session, socket) {
                     log::error!("Unexpected error occurred during query: {:?}", error);
                 }

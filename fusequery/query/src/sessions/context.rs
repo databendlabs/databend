@@ -40,37 +40,14 @@ pub struct FuseQueryContext {
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create(_conf: Config) -> Result<FuseQueryContextRef> {
-        // let settings = Settings::try_create()?;
-        // let ctx = FuseQueryContext {
-        //     conf,
-        //     uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
-        //     settings: settings.clone(),
-        //     cluster: Arc::new(RwLock::new(Cluster::empty())),
-        //     datasource: Arc::new(DataSource::try_create()?),
-        //     statistics: Arc::new(RwLock::new(Statistics::default())),
-        //     partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-        //     current_database: Arc::new(RwLock::new(String::from("default"))),
-        //     progress: Arc::new(Progress::create()),
-        //     runtime: Arc::new(RwLock::new(Runtime::with_worker_threads(
-        //         settings.get_max_threads()? as usize,
-        //     )?)),
-        //     version: format!(
-        //         "FuseQuery v-{}",
-        //         *crate::configs::config::FUSE_COMMIT_VERSION
-        //     ),
-        // };
-
-        // Ok(Arc::new(ctx))
-        unimplemented!();
-    }
-
     pub fn new(other: FuseQueryContextRef) -> FuseQueryContextRef {
         FuseQueryContext::from_shared(other.shared.clone())
     }
 
     pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> FuseQueryContextRef {
         shared.increment_ref_count();
+
+        log::info!("Create FuseQueryContext");
 
         Arc::new(FuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),

@@ -68,6 +68,7 @@ impl MySQLHandler {
         match sessions.create_session("MySQL") {
             Err(error) => Self::reject_session(socket, executor, error),
             Ok(session) => {
+                log::info!("MySQL connection coming: {:?}", socket.peer_addr());
                 if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
                     log::error!("Unexpected error occurred during query: {:?}", error);
                 };
