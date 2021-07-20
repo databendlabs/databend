@@ -77,68 +77,6 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-struct TestDataBase {
-    plan: CreateDatabasePlan,
-    want: common_exception::Result<CreateDatabaseActionResult>,
-}
-
-/// helper to build a D
-fn case_db(
-    db_name: &str,
-    if_not_exists: bool,
-    want: common_exception::Result<u64>,
-) -> TestDataBase {
-    let plan = CreateDatabasePlan {
-        db: db_name.to_string(),
-        if_not_exists,
-        engine: DatabaseEngineType::Local,
-        options: Default::default(),
-    };
-    let want = match want {
-        Ok(want_db_id) => Ok(CreateDatabaseActionResult {
-            database_id: want_db_id,
-        }),
-        Err(err) => Err(err), // Result<i64,_> to Result<StoreDoActionResult, _>
-    };
-
-    TestDataBase { plan, want }
-}
-
-struct TestTable {
-    plan: CreateTablePlan,
-    want: common_exception::Result<CreateTableActionResult>,
-}
-
-/// helper to build a T
-fn case_table(
-    db_name: &str,
-    table_name: &str,
-    if_not_exists: bool,
-    want: common_exception::Result<u64>,
-) -> TestTable {
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "number",
-        DataType::UInt64,
-        false,
-    )]));
-    let plan = CreateTablePlan {
-        if_not_exists,
-        db: db_name.to_string(),
-        table: table_name.to_string(),
-        schema: schema.clone(),
-        engine: TableEngineType::JsonEachRaw,
-        options: Default::default(),
-    };
-    let want = match want {
-        Ok(want_table_id) => Ok(CreateTableActionResult {
-            table_id: want_table_id,
-        }),
-        Err(err) => Err(err),
-    };
-
-    TestTable { plan, want }
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_action_handler_add_database() -> anyhow::Result<()> {
     // - Bring up an ActionHandler backed with a Dfs
@@ -146,8 +84,30 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     // - Assert retrieving database.
 
     common_tracing::init_default_tracing();
+    struct D {
+        plan: CreateDatabasePlan,
+        want: common_exception::Result<CreateDatabaseActionResult>,
+    }
 
-    let cases: Vec<TestDataBase> = vec![
+    /// helper to build a D
+    fn case_db(db_name: &str, if_not_exists: bool, want: common_exception::Result<u64>) -> D {
+        let plan = CreateDatabasePlan {
+            db: db_name.to_string(),
+            if_not_exists,
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+        let want = match want {
+            Ok(want_db_id) => Ok(CreateDatabaseActionResult {
+                database_id: want_db_id,
+            }),
+            Err(err) => Err(err), // Result<i64,_> to Result<StoreDoActionResult, _>
+        };
+
+        D { plan, want }
+    }
+
+    let cases: Vec<D> = vec![
         case_db("foo", false, Ok(1)),
         case_db("foo", true, Ok(1)),
         case_db(
@@ -264,9 +224,66 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
     // - Assert retrieving database.
 
     common_tracing::init_default_tracing();
+    struct D {
+        plan: CreateDatabasePlan,
+        want: common_exception::Result<CreateDatabaseActionResult>,
+    }
 
-    let db_cases: Vec<TestDataBase> = vec![case_db("foo", false, Ok(1))];
-    let table_cases: Vec<TestTable> = vec![
+    /// helper to build a D
+    fn case_db(db_name: &str, if_not_exists: bool, want: common_exception::Result<u64>) -> D {
+        let plan = CreateDatabasePlan {
+            db: db_name.to_string(),
+            if_not_exists,
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+        let want = match want {
+            Ok(want_db_id) => Ok(CreateDatabaseActionResult {
+                database_id: want_db_id,
+            }),
+            Err(err) => Err(err), // Result<i64,_> to Result<StoreDoActionResult, _>
+        };
+
+        D { plan, want }
+    }
+
+    struct T {
+        plan: CreateTablePlan,
+        want: common_exception::Result<CreateTableActionResult>,
+    }
+
+    /// helper to build a T
+    fn case_table(
+        db_name: &str,
+        table_name: &str,
+        if_not_exists: bool,
+        want: common_exception::Result<u64>,
+    ) -> T {
+        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "number",
+            DataType::UInt64,
+            false,
+        )]));
+        let plan = CreateTablePlan {
+            if_not_exists,
+            db: db_name.to_string(),
+            table: table_name.to_string(),
+            schema: schema.clone(),
+            engine: TableEngineType::JsonEachRaw,
+            options: Default::default(),
+        };
+        let want = match want {
+            Ok(want_table_id) => Ok(CreateTableActionResult {
+                table_id: want_table_id,
+            }),
+            Err(err) => Err(err),
+        };
+
+        T { plan, want }
+    }
+
+    let db_cases: Vec<D> = vec![case_db("foo", false, Ok(1))];
+    let table_cases: Vec<T> = vec![
         case_table("foo", "foo_t1", false, Ok(1)),
         case_table("foo", "foo_t1", true, Ok(1)),
         case_table(
