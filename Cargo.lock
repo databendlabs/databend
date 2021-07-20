@@ -2843,9 +2843,9 @@ dependencies = [
 
 [[package]]
 name = "mysql"
-version = "21.0.0"
+version = "21.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "041ab021578b86d8a1d108f175e8554fcbeee088070fc4c7d08dc4e396b06a29"
+checksum = "f992a6dffc9f1607ad5425b0d1909d5dc07ff636ec077f68d8b437c7ae5e054d"
 dependencies = [
  "bufstream",
  "bytes 1.0.1",
