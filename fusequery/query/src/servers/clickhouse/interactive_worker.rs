@@ -34,6 +34,7 @@ impl ClickHouseSession for InteractiveWorker {
         let start = Instant::now();
 
         let context = self.session.create_context();
+        context.attach_query_info(&ctx.state.query);
         let mut query_writer = QueryWriter::create(ctx.client_revision, conn, context.clone());
 
         let get_query_result = InteractiveWorkerBase::do_query(&ctx.state.query, context);
