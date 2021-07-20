@@ -13,6 +13,7 @@ use common_tracing::tracing;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
 
+use crate::configs;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -386,8 +387,17 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     tracing::info!("restart all");
 
     // restart
-    let mn0 = MetaNode::builder().node_id(0).sto(sto0).build().await?;
-    let mn1 = MetaNode::builder().node_id(1).sto(sto1).build().await?;
+    let config = configs::Config::empty();
+    let mn0 = MetaNode::builder(&config)
+        .node_id(0)
+        .sto(sto0)
+        .build()
+        .await?;
+    let mn1 = MetaNode::builder(&config)
+        .node_id(1)
+        .sto(sto1)
+        .build()
+        .await?;
 
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 

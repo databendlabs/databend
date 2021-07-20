@@ -22,6 +22,7 @@ use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftStorage;
 use async_raft::SnapshotMeta;
+use async_raft::SnapshotPolicy;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
 use common_metatypes::Database;
@@ -561,24 +562,33 @@ impl MetaNodeBuilder {
 }
 
 impl MetaNode {
-    pub fn builder() -> MetaNodeBuilder {
-        // Set heartbeat interval to a reasonable value.
-        // The election_timeout should tolerate several heartbeat loss.
-        let heartbeat = 500; // ms
+    pub fn builder(config: &configs::Config) -> MetaNodeBuilder {
+        let raft_config = MetaNode::new_raft_config(config);
+
         MetaNodeBuilder {
             node_id: None,
-            config: Some(
-                Config::build("foo_cluster".into())
-                    .heartbeat_interval(heartbeat)
-                    .election_timeout_min(heartbeat * 4)
-                    .election_timeout_max(heartbeat * 8)
-                    .validate()
-                    .expect("fail to build raft config"),
-            ),
+            config: Some(raft_config),
             sto: None,
             monitor_metrics: true,
             start_grpc_service: true,
         }
+    }
+
+    pub fn new_raft_config(config: &configs::Config) -> Config {
+        // TODO(xp): configure cluster name.
+
+        let hb = config.heartbeat_interval;
+
+        Config::build("foo_cluster".into())
+            .heartbeat_interval(hb)
+            // Choose a rational value for election timeout.
+            .election_timeout_min(hb * 4)
+            .election_timeout_max(hb * 8)
+            .snapshot_policy(SnapshotPolicy::LogsSinceLast(
+                config.snapshot_logs_since_last,
+            ))
+            .validate()
+            .expect("building raft Config from fuse-store config")
     }
 
     /// Start the grpc service for raft communication and meta operation API.
@@ -620,7 +630,7 @@ impl MetaNode {
     pub async fn open(config: &configs::Config) -> common_exception::Result<Arc<MetaNode>> {
         let sto = MetaStore::open(config).await?;
         let sto = Arc::new(sto);
-        let b = MetaNode::builder().node_id(sto.id).sto(sto);
+        let b = MetaNode::builder(config).node_id(sto.id).sto(sto);
 
         b.build().await
     }
@@ -755,7 +765,7 @@ impl MetaNode {
         // Thus we need to start grpc manually.
         let sto = MetaStore::new(node_id, config).await?;
 
-        let b = MetaNode::builder()
+        let b = MetaNode::builder(config)
             .node_id(node_id)
             .start_grpc_service(false)
             .sto(Arc::new(sto));
