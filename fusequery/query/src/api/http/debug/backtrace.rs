@@ -19,7 +19,7 @@ mod handlers {
     use backtrace::Backtrace;
 
     pub async fn backtrace(
-    _header: Option<String>,
+        _header: Option<String>,
     ) -> Result<impl warp::Reply, std::convert::Infallible> {
         let bt = Backtrace::new();
 
