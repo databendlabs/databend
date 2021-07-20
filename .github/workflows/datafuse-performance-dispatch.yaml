@@ -54,12 +54,18 @@ jobs:
         echo "sync status to S3"
         echo '{"uuid": "${{ env.UUID }}", "status": "PENDING"}' > status.json
         aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
-
-    - name: Bootstrap cluster
-      id: make_deploy
-      uses: docker://zhihanz/test-infra:master
+    - name: Checkout tools repo
+      uses: actions/checkout@v2
       with:
-        args: >-
+        repository: datafuselabs/test-infra
+        path: master
+    - uses: actions/setup-go@v2
+      with:
+        stable: 'true'
+        go-version: '1.15.12'
+    - run: make build
+    - name: Bootstrap cluster
+      run: >-
             echo ${{ env.UUID }};
             echo "Start to create cluster";
             make cluster_create;
@@ -93,9 +99,7 @@ jobs:
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
     - name: Delete all resources
       if: always()
-      uses: docker://zhihanz/test-infra:master
-      with:
-        args: make clean
+      run: make clean
 #     - name: Delete all resources
 #       if: always()
 #       uses: docker://zhihanz/test-infra:master
