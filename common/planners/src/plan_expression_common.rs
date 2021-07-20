@@ -295,7 +295,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             }),
 
             Expression::Column(_)
-            | Expression::Literal(_)
+            | Expression::Literal { .. }
             | Expression::Subquery { .. }
             | Expression::ScalarSubquery { .. } => Ok(expr.clone()),
         },

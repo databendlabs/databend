@@ -141,7 +141,10 @@ pub trait PlanRewriter {
             }),
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
-            Expression::Literal(value) => Ok(Expression::Literal(value.clone())),
+            Expression::Literal { value, column_name } => Ok(Expression::Literal {
+                value: value.clone(),
+                column_name: column_name.clone(),
+            }),
             Expression::Subquery { name, query_plan } => {
                 let new_subquery = self.rewrite_subquery_plan(query_plan)?;
                 Ok(Expression::Subquery {
@@ -480,7 +483,7 @@ impl RewriteHelper {
                 })
             }
             Expression::Wildcard
-            | Expression::Literal(_)
+            | Expression::Literal { .. }
             | Expression::Subquery { .. }
             | Expression::ScalarSubquery { .. }
             | Expression::Sort { .. } => Ok(expr.clone()),
@@ -533,7 +536,7 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => vec![expr.as_ref().clone()],
             Expression::Column(_) => vec![],
-            Expression::Literal(_) => vec![],
+            Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => {
@@ -555,7 +558,7 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             Expression::Column(_) => vec![expr.clone()],
-            Expression::Literal(_) => vec![],
+            Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],
             Expression::UnaryExpression { expr, .. } => Self::expression_plan_columns(expr)?,
@@ -628,7 +631,7 @@ impl RewriteHelper {
                 Expression::Alias(alias.clone(), Box::from(expressions[0].clone()))
             }
             Expression::Column(_) => expr.clone(),
-            Expression::Literal(_) => expr.clone(),
+            Expression::Literal { .. } => expr.clone(),
             Expression::BinaryExpression { op, .. } => Expression::BinaryExpression {
                 left: Box::new(expressions[0].clone()),
                 op: op.clone(),

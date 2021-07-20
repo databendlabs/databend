@@ -159,7 +159,7 @@ fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Action>> 
         stage_id: String::from(stage_id),
         plan: parse_query("SELECT number FROM numbers(5)")?,
         sinks: vec![String::from("stream_id")],
-        scatters_expression: Expression::Literal(DataValue::UInt64(Some(1))),
+        scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
     });
 
     Ok(Request::new(flight_action.try_into()?))

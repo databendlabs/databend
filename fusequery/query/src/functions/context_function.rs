@@ -26,10 +26,10 @@ impl ContextFunction {
         }
 
         Ok(match name.to_lowercase().as_str() {
-            "database" => vec![Expression::Literal(DataValue::Utf8(Some(
+            "database" => vec![Expression::create_literal(DataValue::Utf8(Some(
                 ctx.get_current_database(),
             )))],
-            "version" => vec![Expression::Literal(DataValue::Utf8(Some(
+            "version" => vec![Expression::create_literal(DataValue::Utf8(Some(
                 ctx.get_fuse_version(),
             )))],
             _ => vec![],
