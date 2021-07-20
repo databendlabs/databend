@@ -58,12 +58,13 @@ jobs:
       uses: actions/checkout@v2
       with:
         repository: datafuselabs/test-infra
-        path: master
+        path: main
     - uses: actions/setup-go@v2
       with:
         stable: 'true'
         go-version: '1.15.12'
-    - run: make build
+    - name: build latest binary
+      run: make build
     - name: Bootstrap cluster
       run: >-
             echo ${{ env.UUID }};
