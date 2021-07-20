@@ -90,6 +90,7 @@ fn test_env_config() -> Result<()> {
 
 // From Args.
 #[test]
+#[ignore]
 fn test_args_config() -> Result<()> {
     let actual = Config::load_from_args();
     assert_eq!("INFO", actual.log_level);
@@ -98,6 +99,7 @@ fn test_args_config() -> Result<()> {
 
 // From file NotFound.
 #[test]
+#[ignore]
 fn test_config_file_not_found() -> Result<()> {
     if let Err(e) = Config::load_from_toml("xx.toml") {
         let expect = "Code: 23, displayText = File: xx.toml, err: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }.";
@@ -108,6 +110,7 @@ fn test_config_file_not_found() -> Result<()> {
 
 // From file.
 #[test]
+#[ignore]
 fn test_file_config() -> Result<()> {
     std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
     let path = std::env::current_dir()
@@ -126,6 +129,7 @@ fn test_file_config() -> Result<()> {
 
 // From env, load config file and ignore the rest settings.
 #[test]
+#[ignore]
 fn test_env_file_config() -> Result<()> {
     std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
     let config_path = std::env::current_dir()
