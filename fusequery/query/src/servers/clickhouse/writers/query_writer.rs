@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::borrow::Cow;
+
 use clickhouse_srv::connection::Connection;
 use clickhouse_srv::errors::Error as CHError;
 use clickhouse_srv::errors::Result as CHResult;
@@ -78,7 +80,7 @@ impl<'a> QueryWriter<'a> {
 
         match self.conn.write_block(&block).await {
             Ok(_) => Ok(()),
-            Err(error) => Err(ErrorCode::UnknownException(format!(error))),
+            Err(error) => Err(ErrorCode::UnknownException(format!("{}", error))),
         }
     }
 
@@ -147,37 +149,98 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
 
     for column_index in 0..block.num_columns() {
         let column = block.column(column_index).to_array()?;
-        let name = block.schema().field(column_index).name();
+        let field = block.schema().field(column_index);
+        let name = field.name();
+        let is_nullable = field.is_nullable();
 
-        result = match column.data_type() {
-            DataType::Int8 => result.column(name, column.i8()?.collect_values()),
-            DataType::Int16 => result.column(name, column.i16()?.collect_values()),
-            DataType::Int32 => result.column(name, column.i32()?.collect_values()),
-            DataType::Int64 => result.column(name, column.i64()?.collect_values()),
-            DataType::UInt8 => result.column(name, column.u8()?.collect_values()),
-            DataType::UInt16 => result.column(name, column.u16()?.collect_values()),
-            DataType::UInt32 => result.column(name, column.u32()?.collect_values()),
-            DataType::UInt64 => result.column(name, column.u64()?.collect_values()),
-            DataType::Float32 => result.column(name, column.f32()?.collect_values()),
-            DataType::Float64 => result.column(name, column.f64()?.collect_values()),
-            DataType::Date32 => result.column(name, column.date32()?.collect_values()),
-            DataType::Date64 => result.column(name, column.date64()?.collect_values()),
-            DataType::Utf8 => result.column(name, column.utf8()?.collect_values()),
-            DataType::Boolean => {
-                let v: Vec<Option<u8>> = column
-                    .bool()?
-                    .downcast_iter()
-                    .map(|f| f.map(|v| v as u8))
-                    .collect();
+        result = match is_nullable {
+            true => match column.data_type() {
+                DataType::Int8 => result.column(name, column.i8()?.collect_values()),
+                DataType::Int16 => result.column(name, column.i16()?.collect_values()),
+                DataType::Int32 => result.column(name, column.i32()?.collect_values()),
+                DataType::Int64 => result.column(name, column.i64()?.collect_values()),
+                DataType::UInt8 => result.column(name, column.u8()?.collect_values()),
+                DataType::UInt16 => result.column(name, column.u16()?.collect_values()),
+                DataType::UInt32 => result.column(name, column.u32()?.collect_values()),
+                DataType::UInt64 => result.column(name, column.u64()?.collect_values()),
+                DataType::Float32 => result.column(name, column.f32()?.collect_values()),
+                DataType::Float64 => result.column(name, column.f64()?.collect_values()),
+                DataType::Date32 => result.column(name, column.date32()?.collect_values()),
+                DataType::Date64 => result.column(name, column.date64()?.collect_values()),
+                DataType::Utf8 => result.column(name, column.utf8()?.collect_values()),
+                DataType::Boolean => {
+                    let v: Vec<Option<u8>> = column
+                        .bool()?
+                        .downcast_iter()
+                        .map(|f| f.map(|v| v as u8))
+                        .collect();
 
-                result.column(name, v)
-            }
-            _ => {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Unsupported column type:{:?}",
-                    column.data_type()
-                )));
-            }
+                    result.column(name, v)
+                }
+                _ => {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "Unsupported column type:{:?}",
+                        column.data_type()
+                    )));
+                }
+            },
+            false => match column.data_type() {
+                DataType::Int8 => {
+                    result.column(name, column.i8()?.downcast_ref().values().to_owned())
+                }
+                DataType::Int16 => {
+                    result.column(name, column.i16()?.downcast_ref().values().to_owned())
+                }
+                DataType::Int32 => {
+                    result.column(name, column.i32()?.downcast_ref().values().to_owned())
+                }
+                DataType::Int64 => {
+                    result.column(name, column.i64()?.downcast_ref().values().to_owned())
+                }
+                DataType::UInt8 => {
+                    result.column(name, column.u8()?.downcast_ref().values().to_owned())
+                }
+                DataType::UInt16 => {
+                    result.column(name, column.u16()?.downcast_ref().values().to_owned())
+                }
+                DataType::UInt32 => {
+                    result.column(name, column.u32()?.downcast_ref().values().to_owned())
+                }
+                DataType::UInt64 => {
+                    result.column(name, column.u64()?.downcast_ref().values().to_owned())
+                }
+                DataType::Float32 => {
+                    result.column(name, column.f32()?.downcast_ref().values().to_owned())
+                }
+                DataType::Float64 => {
+                    result.column(name, column.f64()?.downcast_ref().values().to_owned())
+                }
+                DataType::Date32 => {
+                    result.column(name, column.date32()?.downcast_ref().values().to_owned())
+                }
+                DataType::Date64 => {
+                    result.column(name, column.date64()?.downcast_ref().values().to_owned())
+                }
+                DataType::Utf8 => {
+                    let vs: Vec<&str> =
+                        column.utf8()?.downcast_iter().map(|c| c.unwrap()).collect();
+                    result.column(name, vs)
+                }
+                DataType::Boolean => {
+                    let vs: Vec<u8> = column
+                        .bool()?
+                        .downcast_iter()
+                        .map(|c| c.unwrap() as u8)
+                        .collect();
+                    result.column(name, vs)
+                }
+                _ => {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "Unsupported column type:{:?}",
+                        column.data_type()
+                    )));
+                }
+            },
         }
     }
     Ok(result)
@@ -225,7 +288,10 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
                 col.iter::<&[u8]>()?.map(|c| String::from_utf8_lossy(c)),
             )
             .into_series()),
-            other => Err(CHError::Other(format!("Unsupported type: {:?}", other))),
+            other => Err(CHError::Other(Cow::from(format!(
+                "Unsupported type: {:?}",
+                other
+            )))),
         }
     };
 

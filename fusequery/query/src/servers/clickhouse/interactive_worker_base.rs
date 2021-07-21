@@ -10,7 +10,9 @@ use std::time::Duration;
 use clickhouse_srv::types::Block as ClickHouseBlock;
 use clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
@@ -89,7 +91,16 @@ impl InteractiveWorkerBase {
         ch_ctx: &mut CHContext,
         ctx: FuseQueryContextRef,
     ) -> Result<Receiver<BlockItem>> {
-        let sample_block = DataBlock::empty_with_schema(insert.schema());
+        // Fixme: nullable currently is not accepted by inserts
+        let fields: Vec<_> = insert
+            .schema()
+            .fields()
+            .iter()
+            .map(|v| DataField::new(v.name(), v.data_type().clone(), false))
+            .collect();
+
+        let schema = DataSchemaRefExt::create(fields);
+        let sample_block = DataBlock::empty_with_schema(schema);
         let (sender, rec) = channel(4);
         ch_ctx.state.out = Some(sender);
 
@@ -105,18 +116,12 @@ impl InteractiveWorkerBase {
         let (mut tx, rx) = mpsc::channel(20);
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
-        println!("send sample ok");
         // the data is comming in async mode
-        let ctx_clone = ctx.clone();
         tokio::spawn(async move {
             let async_data_stream = interpreter.execute();
             let mut data_stream = async_data_stream.await.unwrap();
-            println!("start read ");
-            while let Some(block) = data_stream.next().await {}
-            println!("end read ");
+            while let Some(_block) = data_stream.next().await {}
         });
-
-        println!("return read ");
         Ok(rx)
     }
 }
