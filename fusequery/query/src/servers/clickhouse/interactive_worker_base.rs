@@ -91,7 +91,7 @@ impl InteractiveWorkerBase {
         ch_ctx: &mut CHContext,
         ctx: FuseQueryContextRef,
     ) -> Result<Receiver<BlockItem>> {
-        // Fixme: nullable currently is not accepted by inserts
+        // TODO: nullable currently is not accepted by inserts
         let fields: Vec<_> = insert
             .schema()
             .fields()

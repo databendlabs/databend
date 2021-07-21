@@ -7,7 +7,6 @@ use std::task::Poll;
 use std::usize;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_streams::ProgressStream;
 use futures::stream::Stream;
@@ -65,7 +64,7 @@ impl MemoryTableStream {
         if self.block_index == self.block_ranges.len() {
             return Ok(None);
         }
-        let current = self.block_ranges[self.block_index].clone();
+        let current = self.block_ranges[self.block_index];
         self.block_index += 1;
         Ok(Some(self.blocks[current].clone()))
     }

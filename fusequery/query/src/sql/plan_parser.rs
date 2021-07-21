@@ -349,60 +349,52 @@ impl PlanParser {
         }
 
         let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
-        match source {
-            Some(source) => {
-                match &source.body {
-                    sqlparser::ast::SetExpr::Values(vs) => {
-                        let values = &vs.0;
-                        if values.is_empty() {
-                            return Err(ErrorCode::EmptyData(
-                                "empty values for insertion is not allowed",
-                            ));
-                        }
+        if let Some(source) = source {
+            if let sqlparser::ast::SetExpr::Values(vs) = &source.body {
+                let values = &vs.0;
+                if values.is_empty() {
+                    return Err(ErrorCode::EmptyData(
+                        "empty values for insertion is not allowed",
+                    ));
+                }
 
-                        let all_value = values
-                            .iter()
-                            .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
-                        if !all_value {
-                            return Err(ErrorCode::UnImplement(
-                                "not support value expressions other than literal value yet",
-                            ));
-                        }
-                        // Buffers some chunks if possible
-                        let chunks = values.chunks(100);
+                let all_value = values
+                    .iter()
+                    .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
+                if !all_value {
+                    return Err(ErrorCode::UnImplement(
+                        "not support value expressions other than literal value yet",
+                    ));
+                }
+                // Buffers some chunks if possible
+                let chunks = values.chunks(100);
 
-                        let blocks: Vec<DataBlock> = chunks
-                            .map(|chunk| {
-                                let transposed: Vec<Vec<String>> = (0..chunk[0].len())
-                                    .map(|i| {
-                                        chunk
-                                            .iter()
-                                            .map(|inner| match &inner[i] {
-                                                Expr::Value(v) => v.to_string(),
-                                                _ => "N/A".to_string(),
-                                            })
-                                            .collect::<Vec<_>>()
-                                    })
-                                    .collect();
-
-                                let cols = transposed
+                let blocks: Vec<DataBlock> = chunks
+                    .map(|chunk| {
+                        let transposed: Vec<Vec<String>> = (0..chunk[0].len())
+                            .map(|i| {
+                                chunk
                                     .iter()
-                                    .map(|col| {
-                                        Series::new(
-                                            col.iter().map(|s| s as &str).collect::<Vec<&str>>(),
-                                        )
+                                    .map(|inner| match &inner[i] {
+                                        Expr::Value(v) => v.to_string(),
+                                        _ => "N/A".to_string(),
                                     })
-                                    .collect::<Vec<_>>();
-
-                                DataBlock::create_by_array(schema.clone(), cols)
+                                    .collect::<Vec<_>>()
                             })
                             .collect();
-                        input_stream = futures::stream::iter(blocks);
-                    }
-                    _ => {}
-                }
+
+                        let cols = transposed
+                            .iter()
+                            .map(|col| {
+                                Series::new(col.iter().map(|s| s as &str).collect::<Vec<&str>>())
+                            })
+                            .collect::<Vec<_>>();
+
+                        DataBlock::create_by_array(schema.clone(), cols)
+                    })
+                    .collect();
+                input_stream = futures::stream::iter(blocks);
             }
-            _ => {}
         }
 
         let plan_node = InsertIntoPlan {

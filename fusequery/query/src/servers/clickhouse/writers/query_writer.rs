@@ -251,34 +251,34 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
         let col = &block.columns()[index];
         match col.sql_type() {
             SqlType::UInt8 => {
-                Ok(DFUInt8Array::new_from_iter(col.iter::<u8>()?.map(|c| *c)).into_series())
+                Ok(DFUInt8Array::new_from_iter(col.iter::<u8>()?.copied()).into_series())
             }
             SqlType::UInt16 => {
-                Ok(DFUInt16Array::new_from_iter(col.iter::<u16>()?.map(|c| *c)).into_series())
+                Ok(DFUInt16Array::new_from_iter(col.iter::<u16>()?.copied()).into_series())
             }
             SqlType::UInt32 => {
-                Ok(DFUInt32Array::new_from_iter(col.iter::<u32>()?.map(|c| *c)).into_series())
+                Ok(DFUInt32Array::new_from_iter(col.iter::<u32>()?.copied()).into_series())
             }
             SqlType::UInt64 => {
-                Ok(DFUInt64Array::new_from_iter(col.iter::<u64>()?.map(|c| *c)).into_series())
+                Ok(DFUInt64Array::new_from_iter(col.iter::<u64>()?.copied()).into_series())
             }
             SqlType::Int8 => {
-                Ok(DFInt8Array::new_from_iter(col.iter::<i8>()?.map(|c| *c)).into_series())
+                Ok(DFInt8Array::new_from_iter(col.iter::<i8>()?.copied()).into_series())
             }
             SqlType::Int16 => {
-                Ok(DFInt16Array::new_from_iter(col.iter::<i16>()?.map(|c| *c)).into_series())
+                Ok(DFInt16Array::new_from_iter(col.iter::<i16>()?.copied()).into_series())
             }
             SqlType::Int32 => {
-                Ok(DFInt32Array::new_from_iter(col.iter::<i32>()?.map(|c| *c)).into_series())
+                Ok(DFInt32Array::new_from_iter(col.iter::<i32>()?.copied()).into_series())
             }
             SqlType::Int64 => {
-                Ok(DFInt64Array::new_from_iter(col.iter::<i64>()?.map(|c| *c)).into_series())
+                Ok(DFInt64Array::new_from_iter(col.iter::<i64>()?.copied()).into_series())
             }
             SqlType::Float32 => {
-                Ok(DFFloat32Array::new_from_iter(col.iter::<f32>()?.map(|c| *c)).into_series())
+                Ok(DFFloat32Array::new_from_iter(col.iter::<f32>()?.copied()).into_series())
             }
             SqlType::Float64 => {
-                Ok(DFFloat64Array::new_from_iter(col.iter::<f64>()?.map(|c| *c)).into_series())
+                Ok(DFFloat64Array::new_from_iter(col.iter::<f64>()?.copied()).into_series())
             }
             SqlType::String => Ok(DFUtf8Array::new_from_iter(
                 col.iter::<&[u8]>()?.map(|c| String::from_utf8_lossy(c)),

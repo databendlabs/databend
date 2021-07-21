@@ -75,14 +75,8 @@ impl Table for MemoryTable {
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
         let blocks = self.blocks.read();
-        let rows = blocks
-            .iter()
-            .map(|block| block.num_rows())
-            .fold(0usize, |acc, b| acc + b);
-        let bytes = blocks
-            .iter()
-            .map(|block| block.memory_size())
-            .fold(0usize, |acc, b| acc + b);
+        let rows = blocks.iter().map(|block| block.num_rows()).sum();
+        let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
