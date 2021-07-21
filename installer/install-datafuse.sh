@@ -38,11 +38,10 @@ detect_rosetta() {
     if ! [ -x "$(command -v sysctl)" ]; then
       return 1
     fi
-    if [ "$(sysctl -in sysctl.proc_translated)" = "1" ]; then
-        echo "Running on Rosetta 2"
+    if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+        log_info "Running on Rosetta 2"
         return 0
     else
-        echo "Running on native Intel"
         return 1
     fi
   fi
@@ -106,12 +105,12 @@ get_architecture() {
     # rosetta hack, return ARM64 binary directly
     detect_rosetta "$_cputype"
     _is_rosseta=$?
-#    if [ $_is_rosseta -eq 0 ]; then
-#        log_err "⚠️ Macbook M1 is not officially supported!"
-#        _arch="aarch64-apple-darwin"
-#        RETVAL="$_arch"
-#        return
-#    fi
+    if [ $_is_rosseta -eq 0 ]; then
+        log_err "⚠️ Macbook M1 is not officially supported!"
+        _arch="aarch64-apple-darwin"
+        RETVAL="$_arch"
+        return
+    fi
     if [ "$_ostype" = Linux ]; then
         if [ "$(uname -o)" = Android ]; then
             _ostype=Android
