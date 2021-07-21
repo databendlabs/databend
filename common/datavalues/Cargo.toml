@@ -14,14 +14,13 @@ common-exception = {path = "../exception"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.42"
 paste = "^1.0"
 num = "^0.4"
 unsafe_unwrap = "^0.1.0"
 ordered-float = "2.7"
 serde = { version = "1.0", features = ["derive"] }
 ahash = "0.7.4"
-prettytable-rs = { version = "0.8.0"}
+comfy-table = "4.0.1"
 
 
 [dev-dependencies]

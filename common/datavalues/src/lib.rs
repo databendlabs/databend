@@ -28,6 +28,9 @@ mod data_value_ops;
 mod utils;
 mod vec;
 
+#[cfg(test)]
+mod vec_test;
+
 pub mod arrays;
 pub mod columns;
 pub mod prelude;

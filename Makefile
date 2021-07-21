@@ -1,6 +1,6 @@
-HUB ?= datafusedev
+HUB ?= datafuselabs
 TAG ?= latest
-PLATFORM ?= linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6,linux/ppc64le
+PLATFORM ?= linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
 
 # Setup dev toolchain
 setup:
@@ -60,4 +60,6 @@ profile:
 clean:
 	cargo clean
 
+docker_release:
+	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/datafuse:${TAG} --push
 .PHONY: setup test run build fmt lint docker clean

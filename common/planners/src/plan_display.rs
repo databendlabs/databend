@@ -7,172 +7,12 @@ use std::fmt::Display;
 
 use common_datavalues::DataSchema;
 
+use crate::plan_display_indent::PlanNodeIndentFormatDisplay;
 use crate::PlanNode;
 
 impl PlanNode {
-    pub fn display_indent(&self) -> impl fmt::Display + '_ {
-        struct Wrapper<'a>(&'a PlanNode);
-        impl<'a> fmt::Display for Wrapper<'a> {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                let mut indent = 0;
-                let mut write_indent = |f: &mut fmt::Formatter| -> fmt::Result {
-                    if indent > 0 {
-                        writeln!(f)?;
-                    }
-                    for _ in 0..indent {
-                        write!(f, "  ")?;
-                    }
-                    indent += 1;
-                    Ok(())
-                };
-
-                self.0.walk_preorder(|node| {
-                    write_indent(f)?;
-                    match node {
-                        PlanNode::Stage(plan) => {
-                            write!(
-                                f,
-                                "RedistributeStage[expr: {:?}]",
-                                plan.scatters_expr,
-                            )?;
-                            Ok(true)
-                        }
-                        PlanNode::Projection(plan) => {
-                            write!(f, "Projection: ")?;
-                            for i in 0..plan.expr.len() {
-                                if i > 0 {
-                                    write!(f, ", ")?;
-                                }
-                                write!(
-                                    f,
-                                    "{:?}:{:?}",
-                                    plan.expr[i],
-                                    plan.expr[i].to_data_type(&plan.input.schema()).unwrap()
-                                )?;
-                            }
-                            Ok(true)
-                        }
-                        PlanNode::Expression(plan) => {
-                            write!(f, "Expression: ")?;
-                            for i in 0..plan.exprs.len() {
-                                if i > 0 {
-                                    write!(f, ", ")?;
-                                }
-                                write!(
-                                    f,
-                                    "{:?}:{:?}",
-                                    plan.exprs[i],
-                                    plan.exprs[i].to_data_type(&plan.input.schema()).unwrap()
-                                )?;
-                            }
-                            write!(f, " ({})", plan.desc)?;
-                            Ok(true)
-                        }
-                        PlanNode::AggregatorPartial(plan) => {
-                            write!(
-                                f,
-                                "AggregatorPartial: groupBy=[{:?}], aggr=[{:?}]",
-                                plan.group_expr, plan.aggr_expr
-                            )?;
-                            Ok(true)
-                        }
-                        PlanNode::AggregatorFinal(plan) => {
-                            write!(
-                                f,
-                                "AggregatorFinal: groupBy=[{:?}], aggr=[{:?}]",
-                                plan.group_expr, plan.aggr_expr
-                            )?;
-                            Ok(true)
-                        }
-                        PlanNode::Filter(plan) => {
-                            write!(f, "Filter: {:?}", plan.predicate)?;
-                            Ok(true)
-                        }
-                        PlanNode::Having(plan) => {
-                            write!(f, "Having: {:?}", plan.predicate)?;
-                            Ok(true)
-                        }
-                        PlanNode::Sort(plan) => {
-                            write!(f, "Sort: ")?;
-                            for i in 0..plan.order_by.len() {
-                                if i > 0 {
-                                    write!(f, ", ")?;
-                                }
-                                let expr = plan.order_by[i].clone();
-                                write!(
-                                    f,
-                                    "{:?}:{:?}",
-                                    expr,
-                                    expr.to_data_type(&plan.schema()).unwrap()
-                                )?;
-                            }
-                            Ok(true)
-                        }
-                        PlanNode::Limit(plan) => {
-                            match (plan.n, plan.offset) {
-                                (Some(n), 0) => {
-                                    write!(f, "Limit: {}", n)?;
-                                },
-                                (Some(n), offset) => {
-                                    write!(f, "Limit: {}, {}", n, offset)?;
-                                },
-                                (None, offset) => {
-                                    write!(f, "Limit: all, {}", offset)?;
-                                }
-                            }
-                            Ok(true)
-                        }
-                        PlanNode::ReadSource(plan) => {
-                            write!(
-                                f,
-                                "ReadDataSource: scan partitions: [{}], scan schema: {}, statistics: [read_rows: {:?}, read_bytes: {:?}]",
-                                plan.parts.len(),
-                                PlanNode::display_schema(plan.schema.as_ref()),
-                                plan.statistics.read_rows,
-                                plan.statistics.read_bytes,
-                            )?;
-                            Ok(false)
-                        }
-                        PlanNode::Explain(plan) => {
-                            write!(f, "{:?}", plan.input)?;
-                            Ok(false)
-                        }
-                        PlanNode::Select(plan) => {
-                            write!(f, "{:?}", plan.input)?;
-                            Ok(false)
-                        }
-                        PlanNode::CreateDatabase(plan) => {
-                            write!(f, "Create database {:},", plan.db)?;
-                            write!(f, " engine: {},", plan.engine.to_string())?;
-                            write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
-                            write!(f, " option: {:?}", plan.options)?;
-                            Ok(false)
-                        }
-                        PlanNode::DropDatabase(plan) => {
-                            write!(f, "Drop database {:},", plan.db)?;
-                            write!(f, " if_exists:{:}", plan.if_exists)?;
-                            Ok(false)
-                        }
-                        PlanNode::CreateTable(plan) => {
-                            write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
-                            write!(f, " {:},", plan.schema)?;
-                            // need engine to impl Display
-                            write!(f, " engine: {},", plan.engine.to_string())?;
-                            write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
-                            write!(f, " option: {:?}", plan.options)?;
-                            Ok(false)
-                        }
-                        PlanNode::DropTable(plan) => {
-                            write!(f, "Drop table {:}.{:},", plan.db, plan.table)?;
-                            write!(f, " if_exists:{:}", plan.if_exists)?;
-                            Ok(false)
-                        }
-                        _ => Ok(false),
-                    }
-                })
-            }
-        }
-        Wrapper(self)
+    pub fn display_indent_format(&self) -> impl fmt::Display + '_ {
+        PlanNodeIndentFormatDisplay::create(0, self, false)
     }
 
     pub fn display_graphviz(&self) -> impl fmt::Display + '_ {
@@ -221,6 +61,6 @@ impl PlanNode {
 
 impl fmt::Debug for PlanNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.display_indent().fmt(f)
+        self.display_indent_format().fmt(f)
     }
 }

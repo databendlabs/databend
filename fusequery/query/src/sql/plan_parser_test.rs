@@ -111,13 +111,13 @@ fn test_plan_parser() -> Result<()> {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1 year', INTERVAL '1 month', INTERVAL '1 day', INTERVAL '1 hour', INTERVAL '1 minute', INTERVAL '1 second'",
             expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
-            error: ""
+            error: "",
         },
         Test {
             name: "interval-unsupported",
             sql: "SELECT INTERVAL '1 year 1 day'",
             expect: "",
-            error: "Code: 5, displayText = DF does not support intervals that have both a Year/Month part as well as Days/Hours/Mins/Seconds: \"1 year 1 day\". Hint: try breaking the interval into two parts, one with Year/Month and the other with Days/Hours/Mins/Seconds - e.g. (NOW() + INTERVAL \'1 year\') + INTERVAL \'1 day\'."
+            error: "Code: 5, displayText = DF does not support intervals that have both a Year/Month part as well as Days/Hours/Mins/Seconds: \"1 year 1 day\". Hint: try breaking the interval into two parts, one with Year/Month and the other with Days/Hours/Mins/Seconds - e.g. (NOW() + INTERVAL \'1 year\') + INTERVAL \'1 day\'.",
         },
         Test {
             name: "interval-out-of-range",
@@ -125,28 +125,24 @@ fn test_plan_parser() -> Result<()> {
             expect: "",
             error: "Code: 5, displayText = Interval field value out of range: \"100000000000000000 day\".",
         },
-
         Test {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
             error: "",
         },
-
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 2, displayText = not support value expressions other than literal value yet."
+            error: "Code: 2, displayText = not support value expressions other than literal value yet.",
         },
-
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 2, displayText = only supports simple value tuples as source of insertion."
+            error: "Code: 2, displayText = only supports simple value tuples as source of insertion.",
         },
-
         Test {
             name: "select-full",
             sql: "select sum(number+1)+2, number%3 as id from numbers(10) where number>1 group by id having id>1 order by id desc limit 3",
@@ -161,14 +157,14 @@ fn test_plan_parser() -> Result<()> {
             \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
             \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
-            error: ""
+            error: "",
         },
 
         Test {
             name: "unimplemented-cte",
             sql: "with t as ( select sum(number) n from system.numbers_mt(1000) )select * from t",
             expect: "",
-            error: "Code: 2, displayText = CTE is not yet implement."
+            error: "Code: 2, displayText = CTE is not yet implement.",
         },
     ];
 

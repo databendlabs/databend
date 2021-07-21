@@ -11,12 +11,52 @@ from datetime import datetime
 from time import time, sleep
 
 from argparse import ArgumentParser
+from qcloud_cos import CosConfig
+from qcloud_cos import CosS3Client
+import sys
+import logging
 
 faster = 0
 slower = 0
 stable = 0
 
 stats = {}
+
+def build_COSclient(secretID, secretKey, Region):
+
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    secret_id = secretID
+    secret_key = secretKey
+    region = Region
+    token = None         # TODO(zhihanz) support token for client
+    scheme = 'https'
+    config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key, Token=token, Scheme=scheme)
+    client = CosS3Client(config)
+    return client
+
+def get_perf(client, bucket, key, output):
+    response = client.get_object(
+        Bucket=bucket,
+        Key=key,
+    )
+    response['Body'].get_stream_to_file(output)
+    return client.get_object_url(bucket, key)
+
+
+# store all S3 report files to output directory
+def retrieve_all_files(client, bucket, path, output_dir):
+    response = client.list_objects(
+        Bucket=bucket,
+        Prefix=path,
+        Delimiter='/',
+        MaxKeys=100,
+    )
+    file_dict = {}
+    for elem in response['Contents']:
+        file_name = elem['Key'].split('/')[-1]
+        u = get_perf(client, bucket, elem['Key'], '{}/{}'.format(output_dir, file_name))
+        file_dict[file_name] = u
+    return file_dict
 
 def load_config():
     with open('perfs.yaml','r') as f:
@@ -77,19 +117,26 @@ tr:nth-child(odd) td {{filter: brightness(90%);}}
 </body>
 </html> """
 
-def create_tr(name, before_score, after_score, state, query):
+def create_tr(name, before_score, after_score, state, query, type, before_result_url, after_result_url):
     tmp = """ </tr>
         <tr id="changes-in-performance.{}">
-        <td>{:.3f}</td>
-        <td>{:.3f}</td>
+        <td>{}</td>
+        <td>{}</td>
         <td>{}{:.3f}x</td>
         <td>{:.3f}</td>
         <td>{}</td>
         <td>{}</td>
         <td>{}</td>
     </tr> """
-
-    return tmp.format(name, before_score, after_score,  '+' if after_score > before_score else '-',  after_score/before_score, (after_score - before_score) / before_score, name, state, query)
+    before = ''
+    after = ''
+    if type == 'local':
+        before = '{:.3f}'.format(before_score)
+        after  = '{:.3f}'.format(after_score)
+    elif type == 'COS':
+        before = '<a href="{}">{:.3f}</a>'.format(before_result_url, before_score)
+        after  = '<a href="{}">{:.3f}</a>'.format(after_result_url, after_score)
+    return tmp.format(name, before, after,  '+' if after_score > before_score else '-',  after_score/before_score, (after_score - before_score) / before_score, name, state, query)
 
 def get_suit_by_name(name):
     for suit in conf['perfs']:
@@ -99,16 +146,35 @@ def get_suit_by_name(name):
     return None
 
 
-def compare(releaser, pull):
+def compare(releaser, pull, type, region, bucket, rpath, ppath, secret_id, secret_key, output_path):
+    global cli
+    dict_r = {}
+    dict_p = dict()
+    if type == "COS":
+        cli = build_COSclient(secretID=secret_id, secretKey=secret_key, Region=region)
+        dict_r = retrieve_all_files(cli, bucket, rpath, releaser)
+        dict_p = retrieve_all_files(cli, bucket, ppath, pull)
+
+
     fs = [f for f in os.listdir(releaser) if f.endswith(".json")]
     fs_after_score = [f for f in os.listdir(pull) if f.endswith(".json")]
 
     files = list(set(fs).intersection(set(fs_after_score)))
     for f in files:
         suit_name = f.replace("-result.json", "")
-        compare_suit(releaser, pull, f, suit_name)
+        compare_suit(releaser, pull, f, suit_name, type, dict_r.get(f, ''), dict_p.get(f, ''))
 
     report(releaser, pull, files)
+    if type == "COS":
+        with open('/tmp/performance.html', 'rb') as fp:
+            response = cli.put_object(
+                Bucket=bucket,
+                Body=fp,
+                Key='{}/{}'.format(output_path, 'performance.html'),
+                StorageClass='STANDARD',
+                EnableMD5=False
+            )
+            print(response['ETag'])
 
     print("Faster: {}, Slower: {}, Stable: {}".format(faster, slower, stable))
 
@@ -116,7 +182,7 @@ def compare(releaser, pull):
         return -1
     return 0
 
-def compare_suit(releaser, pull, suit_file, suit_name):
+def compare_suit(releaser, pull, suit_file, suit_name, type, releaser_suit_url, pull_suit_url):
     global faster
     global slower
     global stable
@@ -139,7 +205,14 @@ def compare_suit(releaser, pull, suit_file, suit_name):
         "after_score": pull_result["statistics"]["MiBPS"],
         "diff" : diff,
         "state" : "stable",
+        "type" : type,
+        "before_url": "",
+        "after_url": "",
     }
+
+    if type == 'COS':
+        stats[suit_name]["before_url"] = releaser_suit_url
+        stats[suit_name]["after_url"] = pull_suit_url
 
     if abs(diff) / stats[suit_name]["before_score"] >= 0.05:
         if diff > 0:
@@ -160,7 +233,8 @@ def report(releaser, pull, files):
         state = stats[name]
         suit = get_suit_by_name(name)
 
-        trs += create_tr(name, state['before_score'], state['after_score'], state['state'], suit['query'])
+        trs += create_tr(name, state['before_score'], state['after_score'], state['state'], suit['query'],
+                         state['type'], state['before_url'], state['after_url'])
 
     html = template.format(trs)
 
@@ -175,8 +249,16 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='fuse perf results compare tools')
     parser.add_argument('-r', '--releaser', help='Perf results directory from release version')
     parser.add_argument('-p', '--pull',  help='Perf results directory from current build')
+    parser.add_argument('-t', '--type', default="local",  help='Set storage endpoint for performance testing, support local and COS')
+    parser.add_argument('--region', default="",  help='Set storage region')
+    parser.add_argument('--bucket', default="",  help='Set storage bucket')
+    parser.add_argument('--rpath', default="",  help='absolute path releaser objects')
+    parser.add_argument('--ppath', default="",  help='absolute path pull objects')
+    parser.add_argument('--secretID', default="",  help='Set storage secret ID')
+    parser.add_argument('--secretKey', default="",  help='Set storage secret Key')
+    parser.add_argument('-o', '--outputPath', default="",  help='store output in remote object storage')
 
     args = parser.parse_args()
-    code = compare(args.releaser, args.pull)
+    code = compare(args.releaser, args.pull, args.type, args.region, args.bucket, args.rpath, args.ppath, args.secretID, args.secretKey, args.outputPath)
 
     sys.exit(code)

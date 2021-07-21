@@ -39,8 +39,8 @@ impl DataColumn {
     #[allow(unused)]
     pub fn logic(&self, op: DataValueLogicOperator, rhs: &[DataColumn]) -> Result<DataColumn> {
         match op {
-            DataValueLogicOperator::And => apply_logic! {self, rhs, and},
-            DataValueLogicOperator::Or => apply_logic! {self, rhs, or},
+            DataValueLogicOperator::And => apply_logic! {self, rhs, and_kleene},
+            DataValueLogicOperator::Or => apply_logic! {self, rhs, or_kleene},
             DataValueLogicOperator::Not => apply_logic! {self, not},
         }
     }

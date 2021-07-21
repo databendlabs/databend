@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
 #[test]
-fn test_progress() -> anyhow::Result<()> {
+fn test_progress() -> Result<()> {
     use crate::*;
 
     let progress = Progress::create();

@@ -24,6 +24,10 @@ docker run --privileged --rm tonistiigi/binfmt --install all
 ```bash
 docker buildx create --name host --use --buildkitd-flags '--allow-insecure-entitlement network.host'
 ```
+### update qemu static link
+```bash
+ docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+```
 
 ### build with given buildx builder
 return to datafuse root directory

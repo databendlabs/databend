@@ -105,7 +105,9 @@ impl MemEngine {
         let table_id = self
             .dbs
             .get(&cmd.db_name)
-            .ok_or_else(|| ErrorCode::UnknownDatabase("database not found"))?
+            .ok_or_else(|| {
+                ErrorCode::UnknownDatabase(format!("database not found: {}", &cmd.db_name))
+            })?
             .table_name_to_id
             .get(&cmd.table_name);
 
@@ -165,7 +167,7 @@ impl MemEngine {
     }
 
     pub fn get_table(
-        &mut self,
+        &self,
         db_name: String,
         table_name: String,
     ) -> common_exception::Result<Table> {

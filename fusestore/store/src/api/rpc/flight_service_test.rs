@@ -22,7 +22,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
     // 1. Service starts.
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -42,7 +42,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         let res = client.create_database(plan.clone()).await;
         tracing::info!("create database res: {:?}", res);
         let res = res.unwrap();
-        assert_eq!(0, res.database_id, "first database id is 0");
+        assert_eq!(1, res.database_id, "first database id is 1");
     }
     {
         // create second db
@@ -56,7 +56,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         let res = client.create_database(plan.clone()).await;
         tracing::info!("create database res: {:?}", res);
         let res = res.unwrap();
-        assert_eq!(1, res.database_id, "second database id is 1");
+        assert_eq!(2, res.database_id, "second database id is 2");
     }
 
     // 3. Get database.
@@ -66,7 +66,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         let res = client.get_database("db1").await;
         tracing::debug!("get present database res: {:?}", res);
         let res = res?;
-        assert_eq!(0, res.database_id, "db1 id is 0");
+        assert_eq!(1, res.database_id, "db1 id is 1");
         assert_eq!("db1".to_string(), res.db, "db1.db is db1");
     }
 
@@ -99,15 +99,18 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     tracing::info!("init logging");
 
     // 1. Service starts.
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    let db_name = "db1";
+    let tbl_name = "tb2";
 
     {
         // prepare db
         let plan = CreateDatabasePlan {
             if_not_exists: false,
-            db: "db1".to_string(),
+            db: db_name.to_string(),
             engine: DatabaseEngineType::Local,
             options: Default::default(),
         };
@@ -117,7 +120,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
         tracing::info!("create database res: {:?}", res);
 
         let res = res.unwrap();
-        assert_eq!(0, res.database_id, "first database id is 0");
+        assert_eq!(1, res.database_id, "first database id is 1");
     }
     {
         // create table and fetch it
@@ -132,8 +135,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
         // Create table plan.
         let mut plan = CreateTablePlan {
             if_not_exists: false,
-            db: "db1".to_string(),
-            table: "tb2".to_string(),
+            db: db_name.to_string(),
+            table: tbl_name.to_string(),
             schema: schema.clone(),
             // TODO check get_table
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
@@ -146,11 +149,14 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             let res = client.create_table(plan.clone()).await.unwrap();
             assert_eq!(1, res.table_id, "table id is 1");
 
-            let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
+            let got = client
+                .get_table(db_name.into(), tbl_name.into())
+                .await
+                .unwrap();
             let want = GetTableActionResult {
                 table_id: 1,
-                db: "db1".into(),
-                name: "tb2".into(),
+                db: db_name.into(),
+                name: tbl_name.into(),
                 schema: schema.clone(),
             };
             assert_eq!(want, got, "get created table");
@@ -162,11 +168,14 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             let res = client.create_table(plan.clone()).await.unwrap();
             assert_eq!(1, res.table_id, "new table id");
 
-            let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
+            let got = client
+                .get_table(db_name.into(), tbl_name.into())
+                .await
+                .unwrap();
             let want = GetTableActionResult {
                 table_id: 1,
-                db: "db1".into(),
-                name: "tb2".into(),
+                db: db_name.into(),
+                name: tbl_name.into(),
                 schema: schema.clone(),
             };
             assert_eq!(want, got, "get created table");
@@ -181,7 +190,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
             let status = res.err().unwrap();
             assert_eq!(
-                "Code: 4003, displayText = table exists.",
+                format!("Code: 4003, displayText = table exists: {}.", tbl_name),
                 status.to_string()
             );
 
@@ -190,8 +199,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
             let want = GetTableActionResult {
                 table_id: 1,
-                db: "db1".into(),
-                name: "tb2".into(),
+                db: db_name.into(),
+                name: tbl_name.into(),
                 schema: schema.clone(),
             };
             assert_eq!(want, got, "get old table");
@@ -213,7 +222,7 @@ async fn test_do_append() -> anyhow::Result<()> {
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
@@ -241,7 +250,9 @@ async fn test_do_append() -> anyhow::Result<()> {
             engine: DatabaseEngineType::Local,
             options: Default::default(),
         };
-        client.create_database(plan.clone()).await?;
+        let res = client.create_database(plan.clone()).await;
+        let res = res.unwrap();
+        assert_eq!(res.database_id, 1, "db created");
         let plan = CreateTablePlan {
             if_not_exists: false,
             db: db_name.to_string(),
@@ -250,7 +261,7 @@ async fn test_do_append() -> anyhow::Result<()> {
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             engine: TableEngineType::Parquet,
         };
-        client.create_table(plan.clone()).await?;
+        client.create_table(plan.clone()).await.unwrap();
     }
     let res = client
         .append_data(
@@ -259,11 +270,12 @@ async fn test_do_append() -> anyhow::Result<()> {
             schema,
             Box::pin(stream),
         )
-        .await?;
+        .await
+        .unwrap();
     tracing::info!("append res is {:?}", res);
     let summary = res.summary;
-    assert_eq!(summary.rows, expected_rows);
-    assert_eq!(res.parts.len(), num_batch);
+    assert_eq!(summary.rows, expected_rows, "rows eq");
+    assert_eq!(res.parts.len(), num_batch, "batch eq");
     res.parts.iter().for_each(|p| {
         assert_eq!(p.rows, expected_rows / num_batch);
         assert_eq!(p.cols, expected_cols);
@@ -283,7 +295,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
@@ -359,7 +371,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
 async fn test_flight_generic_kv() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let addr = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 

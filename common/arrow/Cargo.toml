@@ -14,9 +14,9 @@ simd = ["arrow/simd"]
 
 # Github dependencies
 
-arrow = { git="https://github.com/datafuse-extras/arrow-rs", rev = "f7d182df" }
-arrow-flight = {git="https://github.com/datafuse-extras/arrow-rs", rev = "f7d182df" }
-parquet = { git="https://github.com/datafuse-extras/arrow-rs", rev = "f7d182df", features = ["arrow"] }
+arrow = { git="https://github.com/datafuse-extras/arrow-rs", rev = "86d127b" }
+arrow-flight = {git="https://github.com/datafuse-extras/arrow-rs", rev = "86d127b" }
+parquet = { git="https://github.com/datafuse-extras/arrow-rs", rev = "86d127b", features = ["arrow"] }
 
 # Crates.io dependencies
 

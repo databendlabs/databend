@@ -8,11 +8,11 @@ edition = "2018"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-exception = { path = "../exception" }
 
 # Github dependencies
 
 # Crates.io dependencies
 
 [dev-dependencies]
-anyhow = "1.0.42"
 pretty_assertions = "0.7"

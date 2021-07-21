@@ -33,13 +33,6 @@ pub fn find_aggregate_exprs(exprs: &[Expression]) -> Vec<Expression> {
     })
 }
 
-/// Find all `Expression::Exists` in a predicate
-pub fn find_exists_exprs(exprs: &[Expression]) -> Vec<Expression> {
-    find_exprs_in_exprs(exprs, &|nest_exprs| {
-        matches!(nest_exprs, Expression::Exists(..))
-    })
-}
-
 /// Collect all arguments from aggregation function and append to this exprs
 /// [ColumnExpr(b), Aggr(sum(a, b))] ---> [ColumnExpr(b), ColumnExpr(a)]
 
@@ -302,9 +295,11 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             }),
 
             Expression::Column(_)
-            | Expression::Literal(_)
             | Expression::Exists(_)
             | Expression::InList { .. } => Ok(expr.clone()),
+            | Expression::Literal { .. }
+            | Expression::Subquery { .. }
+            | Expression::ScalarSubquery { .. } => Ok(expr.clone()),
         },
     }
 }

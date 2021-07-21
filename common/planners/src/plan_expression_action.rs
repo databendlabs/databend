@@ -22,7 +22,6 @@ pub enum ExpressionAction {
     InList(ActionInList),
     Alias(ActionAlias),
     Function(ActionFunction),
-    Exists(ActionExists),
 }
 
 #[derive(Debug, Clone)]
@@ -68,11 +67,6 @@ pub struct ActionFunction {
     pub arg_fields: Vec<DataField>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ActionExists {
-    pub name: String,
-}
-
 impl ExpressionAction {
     pub fn column_name(&self) -> &str {
         match self {
@@ -81,7 +75,6 @@ impl ExpressionAction {
             ExpressionAction::InList(l) => &l.name,
             ExpressionAction::Alias(a) => &a.name,
             ExpressionAction::Function(f) => &f.name,
-            ExpressionAction::Exists(f) => &f.name,
         }
     }
 }
@@ -95,7 +88,7 @@ impl ActionFunction {
         }
 
         match self.func_name.as_str() {
-            "cast" => Ok(CastFunction::create(self.return_type.clone())),
+            "cast" => CastFunction::create(self.func_name.clone(), self.return_type.clone()),
             _ => FunctionFactory::get(&self.func_name),
         }
     }

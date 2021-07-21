@@ -8,6 +8,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::plan_broadcast::BroadcastPlan;
+use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
@@ -38,6 +40,7 @@ use crate::UseDatabasePlan;
 pub enum PlanNode {
     Empty(EmptyPlan),
     Stage(StagePlan),
+    Broadcast(BroadcastPlan),
     Remote(RemotePlan),
     Projection(ProjectionPlan),
     Expression(ExpressionPlan),
@@ -61,6 +64,7 @@ pub enum PlanNode {
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
+    SubQueryExpression(SubQueriesSetPlan),
 }
 
 impl PlanNode {
@@ -69,6 +73,7 @@ impl PlanNode {
         match self {
             PlanNode::Empty(v) => v.schema(),
             PlanNode::Stage(v) => v.schema(),
+            PlanNode::Broadcast(v) => v.schema(),
             PlanNode::Remote(v) => v.schema(),
             PlanNode::Scan(v) => v.schema(),
             PlanNode::Projection(v) => v.schema(),
@@ -92,6 +97,7 @@ impl PlanNode {
             PlanNode::UseDatabase(v) => v.schema(),
             PlanNode::InsertInto(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
+            PlanNode::SubQueryExpression(v) => v.schema(),
         }
     }
 
@@ -99,6 +105,7 @@ impl PlanNode {
         match self {
             PlanNode::Empty(_) => "EmptyPlan",
             PlanNode::Stage(_) => "StagePlan",
+            PlanNode::Broadcast(_) => "BroadcastPlan",
             PlanNode::Scan(_) => "ScanPlan",
             PlanNode::Remote(_) => "RemotePlan",
             PlanNode::Projection(_) => "ProjectionPlan",
@@ -122,12 +129,14 @@ impl PlanNode {
             PlanNode::UseDatabase(_) => "UseDatabasePlan",
             PlanNode::InsertInto(_) => "InsertIntoPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
+            PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
         }
     }
 
     pub fn inputs(&self) -> Vec<Arc<PlanNode>> {
         match self {
             PlanNode::Stage(v) => vec![v.input.clone()],
+            PlanNode::Broadcast(v) => vec![v.input.clone()],
             PlanNode::Projection(v) => vec![v.input.clone()],
             PlanNode::Expression(v) => vec![v.input.clone()],
             PlanNode::AggregatorPartial(v) => vec![v.input.clone()],
@@ -138,6 +147,7 @@ impl PlanNode {
             PlanNode::Explain(v) => vec![v.input.clone()],
             PlanNode::Select(v) => vec![v.input.clone()],
             PlanNode::Sort(v) => vec![v.input.clone()],
+            PlanNode::SubQueryExpression(v) => v.get_inputs(),
 
             _ => vec![],
         }
@@ -154,6 +164,7 @@ impl PlanNode {
 
         match self {
             PlanNode::Stage(v) => v.set_input(inputs[0]),
+            PlanNode::Broadcast(v) => v.set_input(inputs[0]),
             PlanNode::Projection(v) => v.set_input(inputs[0]),
             PlanNode::Expression(v) => v.set_input(inputs[0]),
             PlanNode::AggregatorPartial(v) => v.set_input(inputs[0]),
@@ -164,6 +175,7 @@ impl PlanNode {
             PlanNode::Explain(v) => v.set_input(inputs[0]),
             PlanNode::Select(v) => v.set_input(inputs[0]),
             PlanNode::Sort(v) => v.set_input(inputs[0]),
+            PlanNode::SubQueryExpression(v) => v.set_inputs(inputs),
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
                     "UnImplement set_inputs for {:?}",

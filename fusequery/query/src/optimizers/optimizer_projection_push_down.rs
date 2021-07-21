@@ -3,18 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
 use common_planners::FilterPlan;
+use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use common_planners::ProjectionPlan;
@@ -30,48 +31,74 @@ pub struct ProjectionPushDownOptimizer {}
 struct ProjectionPushDownImpl {
     pub required_columns: HashSet<String>,
     pub has_projection: bool,
+    pub before_group_by_schema: Option<DataSchemaRef>,
 }
 
-impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
+impl PlanRewriter for ProjectionPushDownImpl {
+    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(&plan.group_expr)?;
+        self.collect_column_names_from_expr_vec(&plan.aggr_expr)?;
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+
+        match self.before_group_by_schema {
+            Some(_) => Err(ErrorCode::LogicalError(
+                "Logical error: before group by schema must be None",
+            )),
+            None => {
+                self.before_group_by_schema = Some(new_input.schema());
+                PlanBuilder::from(&new_input)
+                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+                    .build()
+            }
+        }
+    }
+
+    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(&plan.group_expr)?;
+        self.collect_column_names_from_expr_vec(&plan.aggr_expr)?;
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+
+        match self.before_group_by_schema.take() {
+            None => Err(ErrorCode::LogicalError(
+                "Logical error: before group by schema must be Some",
+            )),
+            Some(schema_before_group_by) => PlanBuilder::from(&new_input)
+                .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
+                .build(),
+        }
+    }
+
+    fn rewrite_empty(&mut self, plan: &EmptyPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Empty(plan.clone()))
+    }
+
     fn rewrite_projection(&mut self, plan: &ProjectionPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr_vec(plan.expr.as_slice())?;
         self.has_projection = true;
-        let mut new_plan = plan.clone();
-        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
-        Ok(PlanNode::Projection(new_plan))
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+        PlanBuilder::from(&new_input)
+            .project(&self.rewrite_exprs(&new_input.schema(), &plan.expr)?)?
+            .build()
     }
 
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr(&plan.predicate)?;
-        let mut new_plan = plan.clone();
-        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
-        Ok(PlanNode::Filter(new_plan))
-    }
-
-    fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
-        self.collect_column_names_from_expr_vec(&plan.group_expr)
-            .and_then(|_| self.collect_column_names_from_expr_vec(&plan.aggr_expr))?;
-        let mut new_plan = plan.clone();
-        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
-        Ok(PlanNode::AggregatorPartial(new_plan))
-    }
-
-    fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
-        self.collect_column_names_from_expr_vec(&plan.group_expr)
-            .and_then(|_| self.collect_column_names_from_expr_vec(&plan.aggr_expr))?;
-        let mut new_plan = plan.clone();
-        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
-        Ok(PlanNode::AggregatorFinal(new_plan))
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+        PlanBuilder::from(&new_input)
+            .filter(self.rewrite_expr(&new_input.schema(), &plan.predicate)?)?
+            .build()
     }
 
     fn rewrite_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr_vec(plan.order_by.as_slice())?;
-        let mut new_plan = plan.clone();
-        new_plan.input = Arc::new(self.rewrite_plan_node(&plan.input)?);
-        Ok(PlanNode::Sort(new_plan))
+        let new_input = self.rewrite_plan_node(&plan.input)?;
+        PlanBuilder::from(&new_input)
+            .sort(&self.rewrite_exprs(&new_input.schema(), &plan.order_by)?)?
+            .build()
     }
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
+        // TODO: rewrite scan
         self.get_projected_schema(plan.schema.as_ref())
             .map(|projected_schema| {
                 PlanNode::ReadSource(ReadDataSourcePlan {
@@ -86,10 +113,6 @@ impl<'plan> PlanRewriter<'plan> for ProjectionPushDownImpl {
                 })
             })
     }
-
-    fn rewrite_empty(&mut self, plan: &EmptyPlan) -> Result<PlanNode> {
-        Ok(PlanNode::Empty(plan.clone()))
-    }
 }
 
 impl ProjectionPushDownImpl {
@@ -97,6 +120,7 @@ impl ProjectionPushDownImpl {
         ProjectionPushDownImpl {
             required_columns: HashSet::new(),
             has_projection: false,
+            before_group_by_schema: None,
         }
     }
 

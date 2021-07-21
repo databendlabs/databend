@@ -8,6 +8,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
+use super::MixedProcessor;
 use crate::pipelines::processors::MergeProcessor;
 use crate::pipelines::processors::Pipe;
 use crate::pipelines::processors::Processor;
@@ -104,6 +105,41 @@ impl Pipeline {
             new_pipe.add(Arc::from(merge));
             self.pipes.push(new_pipe);
         }
+        Ok(())
+    }
+
+    /// Mixed M processors into N processes.
+    ///
+    /// processor1 --          processor1
+    ///               \      /
+    /// processor2      -->
+    ///               /      \
+    /// processor3 --          processor2
+    ///
+    pub fn mixed_processor(&mut self, n: usize) -> Result<()> {
+        if n == 1 {
+            return self.merge_processor();
+        }
+        let last_pipe = self.last_pipe()?;
+
+        // do nothing when m == n
+        if last_pipe.nums() == n {
+            return Ok(());
+        }
+
+        let mut processor = MixedProcessor::create(self.ctx.clone(), n);
+        for x in last_pipe.processors() {
+            processor.connect_to(x)?;
+        }
+
+        let mut new_pipe = Pipe::create();
+        for _i in 0..n - 1 {
+            let processor = processor.share()?;
+            new_pipe.add(Arc::from(processor));
+        }
+        new_pipe.add(Arc::from(processor));
+        self.pipes.push(new_pipe);
+
         Ok(())
     }
 

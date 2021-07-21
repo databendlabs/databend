@@ -91,6 +91,10 @@ impl Function for SleepFunction {
             }
         }
     }
+
+    fn is_deterministic(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for SleepFunction {

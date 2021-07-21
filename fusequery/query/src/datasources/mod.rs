@@ -20,4 +20,5 @@ pub use common::Common;
 pub use database::Database;
 pub use datasource::DataSource;
 pub use table::Table;
+pub use table::TablePtr;
 pub use table_function::TableFunction;

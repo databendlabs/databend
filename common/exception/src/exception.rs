@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::net::AddrParseError;
+use std::string::FromUtf8Error;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
@@ -149,6 +150,9 @@ build_exceptions! {
     AbortedQuery(ABORT_QUERY),
     NotFoundSession(44),
     CannotListenerPort(45),
+    BadBytes(46),
+    InitPrometheusFailure(47),
+    ScalarSubqueryBadRows(48),
 
 
     // uncategorized
@@ -180,6 +184,11 @@ build_exceptions! {
     // config errors
 
     InvalidConfig(2301),
+
+    // meta store errors
+
+    MetaStoreDamaged(2401),
+    MetaStoreAlreadyExists(2402),
 
 
     // TODO
@@ -319,6 +328,15 @@ impl From<std::net::AddrParseError> for ErrorCode {
     }
 }
 
+impl From<FromUtf8Error> for ErrorCode {
+    fn from(error: FromUtf8Error) -> Self {
+        ErrorCode::BadBytes(format!(
+            "Bad bytes, cannot parse bytes with UTF8, cause: {}",
+            error
+        ))
+    }
+}
+
 impl ErrorCode {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCode {
@@ -449,5 +467,11 @@ impl From<ErrorCode> for Status {
             }
             Err(error) => Status::unknown(error.to_string()),
         }
+    }
+}
+
+impl Clone for ErrorCode {
+    fn clone(&self) -> Self {
+        ErrorCode::create(self.code(), self.message(), self.backtrace())
     }
 }

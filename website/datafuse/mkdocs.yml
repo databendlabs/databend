@@ -138,9 +138,10 @@ nav:
       - Describe Commands:
           - DESCRIBE TABLE: sqlstatement/describe-commands/describe-table.md
       - Show Commands:
-          - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
-          - SHOW TABLES: sqlstatement/show-commands/show-tables.md
           - SHOW CREATE TABLE: sqlstatement/show-commands/show-create-table.md
+          - SHOW DATABASES: sqlstatement/show-commands/show-databases.md
+          - SHOW PROCESSLIST: sqlstatement/show-commands/show-processlist.md
+          - SHOW TABLES: sqlstatement/show-commands/show-tables.md
       - Aggregate Functions:
           - AVG: sqlstatement/aggregate-functions/aggregate-avg.md
           - COUNT: sqlstatement/aggregate-functions/aggregate-count.md
@@ -155,6 +156,9 @@ nav:
           - minIf: sqlstatement/aggregate-functions/aggregate-min-if.md
           - maxIf: sqlstatement/aggregate-functions/aggregate-max-if.md
           - sumIf: sqlstatement/aggregate-functions/aggregate-sum-if.md
+      - Conversion Functions:
+          - CAST: sqlstatement/conversion-functions/cast.md
+          - Type Conversion: sqlstatement/conversion-functions/type-conversion.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:
@@ -168,6 +172,8 @@ nav:
       - Other Functions:
           - ToTypeName: sqlstatement/other-functions/totypename.md
       - System Tables: system/system-tables.md
+    - API:
+        - Config: api/config.md
   - Development:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md

@@ -70,7 +70,7 @@ fn test_util_generate_parts() -> Result<()> {
 }
 
 #[test]
-fn test_lines_count() -> anyhow::Result<()> {
+fn test_lines_count() -> Result<()> {
     use std::env;
 
     use pretty_assertions::assert_eq;

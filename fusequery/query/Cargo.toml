@@ -22,50 +22,49 @@ allocator = ["common-allocators/snmalloc-alloc"]
 
 [dependencies]
 # Workspace dependencies
-common-arrow = {path = "../../common/arrow"}
-common-allocators = {path = "../../common/allocators"}
-common-datablocks = {path = "../../common/datablocks"}
-common-datavalues = {path = "../../common/datavalues"}
-common-exception = {path = "../../common/exception"}
-common-flights = {path = "../../common/flights"}
-common-functions = {path = "../../common/functions"}
-common-infallible = {path = "../../common/infallible"}
-common-planners = {path = "../../common/planners"}
-common-progress = {path = "../../common/progress"}
-common-runtime = {path = "../../common/runtime"}
-common-streams = {path = "../../common/streams"}
-common-tracing = {path = "../../common/tracing"}
-common-profling = {path = "../../common/profiling"}
-common-store-api = {path = "../../common/store-api"}
-common-management = {path = "../../common/management"}
+common-arrow = { path = "../../common/arrow" }
+common-allocators = { path = "../../common/allocators" }
+common-datablocks = { path = "../../common/datablocks" }
+common-datavalues = { path = "../../common/datavalues" }
+common-exception = { path = "../../common/exception" }
+common-flights = { path = "../../common/flights" }
+common-functions = { path = "../../common/functions" }
+common-infallible = { path = "../../common/infallible" }
+common-planners = { path = "../../common/planners" }
+common-progress = { path = "../../common/progress" }
+common-runtime = { path = "../../common/runtime" }
+common-streams = { path = "../../common/streams" }
+common-tracing = { path = "../../common/tracing" }
+common-profling = { path = "../../common/profiling" }
+common-store-api = { path = "../../common/store-api" }
+common-management = { path = "../../common/management" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
-clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9"}
-sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0db7cfa"}
+clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0db7cfa" }
+clickhouse-srv = { git = "https://github.com/zhang2014/clickhouse-srv", branch = "support_abort" }
 
 
 # Crates.io dependencies
 ahash = "0.7.4"
-anyhow = "1.0.42"
 async-trait = "0.1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
 ctrlc = { version = "3.1.9", features = ["termination"] }
-clickhouse-srv = "0.2.1"
 crossbeam-queue = "0.3.2"
-env_logger = "0.8"
+env_logger = "0.9"
 futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
-metrics = "0.16.0"
-metrics-exporter-prometheus = "0.5.0"
+metrics = "0.17.0"
+metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
-nom = "6.1.2"
+nom = "7.0.0-alpha1"
 num_cpus = "1.0"
 paste = "^1.0"
-pnet = "0.27.2"
+pnet = "0.28.0"
 prost = "0.7"
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
@@ -85,7 +84,7 @@ bumpalo = "3.7.0"
 [dev-dependencies]
 pretty_assertions = "0.7"
 criterion = "0.3"
-mysql = "20.1.0"
+mysql = "21.0.1"
 
 [build-dependencies]
 common-building = {path = "../../common/building"}

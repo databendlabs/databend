@@ -124,6 +124,9 @@ impl PlanParser {
                 .as_str(),
             ),
             DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
+            DfStatement::ShowProcessList(_) => {
+                self.build_from_sql("SELECT * FROM system.processes")
+            }
         }
     }
 
@@ -632,7 +635,7 @@ impl PlanParser {
                         .read_plan(
                             self.ctx.clone(),
                             dummy_scan_plan,
-                            self.ctx.get_max_threads()? as usize,
+                            self.ctx.get_settings().get_max_threads()? as usize,
                         )
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
@@ -697,9 +700,10 @@ impl PlanParser {
                 };
 
                 // TODO: Move ReadSourcePlan to SelectInterpreter
+                let partitions = self.ctx.get_settings().get_max_threads()? as usize;
                 scan.and_then(|scan| match scan {
                     PlanNode::Scan(ref scan) => table
-                        .read_plan(self.ctx.clone(), scan, self.ctx.get_max_threads()? as usize)
+                        .read_plan(self.ctx.clone(), scan, partitions)
                         .map(PlanNode::ReadSource),
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
@@ -800,11 +804,11 @@ impl PlanParser {
         fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
             match value {
                 sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::try_from_literal(n).map(Expression::Literal)
+                    DataValue::try_from_literal(n).map(Expression::create_literal)
                 }
-                sqlparser::ast::Value::SingleQuotedString(ref value) => {
-                    Ok(Expression::Literal(DataValue::Utf8(Some(value.clone()))))
-                }
+                sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(
+                    Expression::create_literal(DataValue::Utf8(Some(value.clone()))),
+                ),
                 sqlparser::ast::Value::Interval {
                     value,
                     leading_field,
@@ -819,7 +823,7 @@ impl PlanParser {
                     fractional_seconds_precision,
                 ),
                 sqlparser::ast::Value::Boolean(b) => {
-                    Ok(Expression::Literal(DataValue::Boolean(Some(*b))))
+                    Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
                 }
                 other => Result::Err(ErrorCode::SyntaxException(format!(
                     "Unsupported value expression: {}, type: {:?}",
@@ -842,9 +846,6 @@ impl PlanParser {
                 op: format!("{}", op),
                 expr: Box::new(self.sql_to_rex(expr, schema, select)?),
             }),
-            sqlparser::ast::Expr::Exists(q) => {
-                Ok(Expression::Exists(Arc::new(self.query_to_plan(q)?)))
-            }
             sqlparser::ast::Expr::InList {
                 expr,
                 list,
@@ -860,6 +861,11 @@ impl PlanParser {
                     *negated,
                 )))
             }
+            sqlparser::ast::Expr::Exists(q) => Ok(Expression::ScalarFunction {
+                op: "EXISTS".to_lowercase(),
+                args: vec![self.subquery_to_rex(q)?],
+            }),
+            sqlparser::ast::Expr::Subquery(q) => Ok(self.scalar_subquery_to_rex(q)?),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
                 self.process_compound_ident(ids.as_slice(), select)
@@ -913,7 +919,9 @@ impl PlanParser {
             sqlparser::ast::Expr::Wildcard => Ok(Expression::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
                 SQLCommon::make_data_type(data_type).map(|data_type| Expression::Cast {
-                    expr: Box::new(Expression::Literal(DataValue::Utf8(Some(value.clone())))),
+                    expr: Box::new(Expression::create_literal(DataValue::Utf8(Some(
+                        value.clone(),
+                    )))),
                     data_type,
                 })
             }
@@ -934,7 +942,7 @@ impl PlanParser {
                 if let Some(from) = substring_from {
                     args.push(self.sql_to_rex(from, schema, select)?);
                 } else {
-                    args.push(Expression::Literal(DataValue::Int64(Some(1))));
+                    args.push(Expression::create_literal(DataValue::Int64(Some(1))));
                 }
 
                 if let Some(len) = substring_for {
@@ -969,6 +977,24 @@ impl PlanParser {
                 expr, other
             ))),
         }
+    }
+
+    pub fn subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
+        let subquery = self.query_to_plan(subquery)?;
+        let subquery_name = self.ctx.get_subquery_name(&subquery);
+        Ok(Expression::Subquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
+        })
+    }
+
+    pub fn scalar_subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
+        let subquery = self.query_to_plan(subquery)?;
+        let subquery_name = self.ctx.get_subquery_name(&subquery);
+        Ok(Expression::ScalarSubquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
+        })
     }
 
     pub fn set_variable_to_plan(
@@ -1089,7 +1115,7 @@ impl PlanParser {
                     .map(|limit_expr| {
                         self.sql_to_rex(limit_expr, &input.schema(), select)
                             .and_then(|limit_expr| match limit_expr {
-                                Expression::Literal(v) => Ok(v.as_u64()? as usize),
+                                Expression::Literal { value, .. } => Ok(value.as_u64()? as usize),
                                 _ => Err(ErrorCode::SyntaxException(format!(
                                     "Unexpected expression for LIMIT clause: {:?}",
                                     limit_expr
@@ -1104,7 +1130,7 @@ impl PlanParser {
                         let offset_expr = &offset.value;
                         self.sql_to_rex(offset_expr, &input.schema(), select)
                             .and_then(|offset_expr| match offset_expr {
-                                Expression::Literal(v) => Ok(v.as_u64()? as usize),
+                                Expression::Literal { value, .. } => Ok(value.as_u64()? as usize),
                                 _ => Err(ErrorCode::SyntaxException(format!(
                                     "Unexpected expression for OFFSET clause: {:?}",
                                     offset_expr,

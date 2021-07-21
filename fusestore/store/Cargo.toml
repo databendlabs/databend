@@ -34,15 +34,16 @@ common-tracing = {path = "../../common/tracing"}
 
 # Crates.io dependencies
 anyhow = "1.0.42"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.4" }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.6" }
 async-trait = "0.1"
-env_logger = "0.8"
+byteorder = "1.1.0"
+env_logger = "0.9"
 futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
-metrics = "0.16.0"
-metrics-exporter-prometheus = "0.5.0"
+metrics = "0.17.0"
+metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
 num_cpus = "1.0"
 paste = "^1.0"
@@ -50,6 +51,7 @@ prost = "0.7"
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sled = { version = "0.34.6", features = ["event_log", "pretty_backtrace"]}
 structopt = "0.3"
 structopt-toml = "0.4.5"
 tempfile = "3.2.0"

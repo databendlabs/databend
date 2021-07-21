@@ -11,12 +11,12 @@ use common_planners::DropTablePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseActionResult {
-    pub database_id: i64,
+    pub database_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetDatabaseActionResult {
-    pub database_id: i64,
+    pub database_id: u64,
     pub db: String,
 }
 
@@ -25,7 +25,7 @@ pub struct DropDatabaseActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableActionResult {
-    pub table_id: i64,
+    pub table_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -33,7 +33,7 @@ pub struct DropTableActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableActionResult {
-    pub table_id: i64,
+    pub table_id: u64,
     pub db: String,
     pub name: String,
     pub schema: DataSchemaRef,

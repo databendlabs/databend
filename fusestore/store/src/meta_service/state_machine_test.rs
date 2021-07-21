@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use async_raft::LogId;
 use common_metatypes::Database;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
@@ -141,7 +142,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
-        let resp = sm.apply(5, &LogEntry {
+        let resp = sm.apply(&LogId { term: 0, index: 5 }, &LogEntry {
             txid: txid.clone(),
             cmd: Cmd::IncrSeq { key: k.to_string() },
         });
@@ -181,19 +182,21 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
     let cases: Vec<T> = vec![
         case("foo", None, Some(1)),
-        case("foo", Some(1), None),
+        case("foo", Some(1), Some(1)),
         case("bar", None, Some(2)),
-        case("bar", Some(2), None),
+        case("bar", Some(2), Some(2)),
         case("wow", None, Some(3)),
     ];
 
-    for c in cases.iter() {
+    for (i, c) in cases.iter().enumerate() {
         // add
 
         let resp = m.apply_non_dup(&LogEntry {
             txid: None,
-            cmd: Cmd::AddDatabase {
+            cmd: Cmd::CreateDatabase {
                 name: c.name.to_string(),
+                if_not_exists: true,
+                db: Default::default(),
             },
         })?;
         assert_eq!(
@@ -201,7 +204,9 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
                 prev: c.prev.clone(),
                 result: c.result.clone(),
             },
-            resp
+            resp,
+            "{}-th",
+            i
         );
 
         // get
@@ -387,7 +392,7 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &LogEntry {
+        let resp = sm.apply(&LogId { term: 0, index: 5 }, &LogEntry {
             txid: txid.clone(),
             cmd: Cmd::AddFile {
                 key: k.to_string(),
@@ -417,7 +422,7 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
     let cases = crate::meta_service::raftmeta_test::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(5, &LogEntry {
+        let resp = sm.apply(&LogId { term: 0, index: 5 }, &LogEntry {
             txid: txid.clone(),
             cmd: Cmd::SetFile {
                 key: k.to_string(),

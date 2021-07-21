@@ -34,7 +34,9 @@ fn test_projection_push_down_optimizer_1() -> Result<()> {
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a"), col("b"), col("c")],
         schema: output_schema,
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
+        input: Arc::from(
+            PlanBuilder::from(&PlanNode::Empty(EmptyPlan::create_with_schema(schema))).build()?,
+        ),
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
