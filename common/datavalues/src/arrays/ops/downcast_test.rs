@@ -6,6 +6,7 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
+use crate::arrays::builders::*;
 
 use crate::prelude::*;
 use crate::DFBooleanArray;
@@ -52,10 +53,10 @@ fn test_array_as_ref() -> Result<()> {
 
     // Test DFBinaryArray
     let mut binary_builder = BinaryArrayBuilder::new(8);
-    binary_builder.append_value(&[1u8, 2u8, 3u8]);
-    let mut df_binary_array = binary_builder.finish();
+    binary_builder.append_value(&"123");
+    let df_binary_array = binary_builder.finish();
     let arrow_binary_array = df_binary_array.as_ref();
-    assert_eq!(&[5], &arrow_binary_array.values().as_slice());
+    assert_eq!(&[0x31, 0x32, 0x33], &arrow_binary_array.value_data().as_slice());
 
     // TODO: Test DFStructArray
 
