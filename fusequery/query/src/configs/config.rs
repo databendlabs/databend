@@ -62,6 +62,9 @@ const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
 const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
 const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 
+const TLS_SERVER_CERT: &str = "TLS_SERVER_CERT";
+const TLS_SERVER_KEY: &str = "TLS_SERVER_KEY";
+
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
@@ -139,6 +142,12 @@ pub struct Config {
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
+
+    #[structopt(long, env = TLS_SERVER_CERT, default_value = "")]
+    pub tls_server_cert: String,
+
+    #[structopt(long, env = TLS_SERVER_KEY, default_value = "")]
+    pub tls_server_key: String,
 }
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
@@ -230,6 +239,8 @@ impl Config {
                 store_api_password: "root".to_string(),
             },
             config_file: "".to_string(),
+            tls_server_cert: "".to_string(),
+            tls_server_key: "".to_string(),
         }
     }
 

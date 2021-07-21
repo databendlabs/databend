@@ -5,9 +5,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::Notify;
 use common_runtime::tokio::task::JoinHandle;
@@ -62,13 +60,25 @@ impl Server for HttpService {
         let router = Router::create(self.cfg.clone(), self.cluster.clone());
         let server = warp::serve(router.router()?);
 
-        let (listening, server) = server
-            .try_bind_with_graceful_shutdown(listening, self.shutdown_notify())
-            .map_err_to_code(ErrorCode::CannotListenerPort, || {
-                format!("Cannot start HTTPService with {}", listening)
-            })?;
+        let conf = self.cfg.clone();
+        let tls_cert = conf.tls_server_cert;
+        let tls_key = conf.tls_server_key;
 
-        self.join_handle = Some(tokio::spawn(server));
-        Ok(listening)
+        if !tls_cert.is_empty() && !tls_key.is_empty() {
+            log::info!("Http API TLS enabled");
+            let (listening, server) = server
+                .tls()
+                .cert_path(tls_cert)
+                .key_path(tls_key)
+                .bind_with_graceful_shutdown(listening, self.shutdown_notify());
+            self.join_handle = Some(tokio::spawn(server));
+            Ok(listening)
+        } else {
+            log::warn!("Http API TLS not set");
+            let (listening, server) =
+                server.bind_with_graceful_shutdown(listening, self.shutdown_notify());
+            self.join_handle = Some(tokio::spawn(server));
+            Ok(listening)
+        }
     }
 }

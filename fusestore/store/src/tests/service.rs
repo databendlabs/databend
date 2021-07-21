@@ -6,8 +6,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_runtime::tokio;
-use common_tracing::tracing;
-use rand::Rng;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
