@@ -1,7 +1,7 @@
 FROM debian as installer
-COPY ./installer/install-datafuse.sh /install.sh
+COPY ./scripts/installer/install-datafuse.sh /install.sh
 RUN apt update \
-    && apt install curl tar jq -y
+    && apt install curl tar -y
 # hack ssl issue in curl
 RUN update-ca-certificates -f
 RUN chmod +x /install.sh

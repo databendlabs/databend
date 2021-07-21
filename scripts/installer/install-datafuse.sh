@@ -38,11 +38,10 @@ detect_rosetta() {
     if ! [ -x "$(command -v sysctl)" ]; then
       return 1
     fi
-    if [ "$(sysctl -in sysctl.proc_translated)" = "1" ]; then
-        echo "Running on Rosetta 2"
+    if [ "$(sysctl -in sysctl.proc_translated 2>/dev/null)" = "1" ]; then
+        log_info "Running on Rosetta 2"
         return 0
     else
-        echo "Running on native Intel"
         return 1
     fi
   fi
@@ -402,7 +401,7 @@ assert_supported_architecture() {
 }
 get_latest_tag() {
   # shellcheck disable=SC2046
-  curl --silent "https://api.github.com/repos/$1/tags"  |  jq '.[0].name'
+  curl --silent "https://api.github.com/repos/$1/tags"  |  grep -Eo '"name"[^,]*' | sed -r 's/^[^:]*:(.*)$/\1/' | head -n 1 | sed -e 's/^[[:space:]]*//' | sed -e 's/[[:space:]]*$//'
 }
 
 # Untar release binary files
@@ -449,7 +448,7 @@ download_datafuse() {
     local _url="$2"; shift
     tmpdir=$(mktemp -d)
     log_debug "downloading files into ${tmpdir}"
-    echo "${_url}"
+    log_info "😊 Start to download datafuse in ${_url}"
     http_download "${tmpdir}/${_name}" "${_url}"
     _status=$?
     if [ $_status -ne 0 ]; then
@@ -458,7 +457,7 @@ download_datafuse() {
         rm -rf tmpdir
         abort_prompt_issue
     fi
-  log_info "✅ Successfully download datafuse in ${_url}"
+  log_info "✅ Successfully downloaded datafuse in ${_url}"
     srcdir="${tmpdir}"
     (cd "${tmpdir}" && untar "${_name}")
     _status=$?
@@ -485,9 +484,9 @@ http_download_curl() {
   source_url=$2
   header=$3
   if [ -z "$header" ]; then
-    code=$(curl -w '%{http_code}' -sL -o "$local_file" "$source_url")
+    code=$(curl -w '%{http_code}' -L -o "$local_file" "$source_url")
   else
-    code=$(curl -w '%{http_code}' -sL -H "$header" -o "$local_file" "$source_url")
+    code=$(curl -w '%{http_code}' -L -H "$header" -o "$local_file" "$source_url")
   fi
   if [ "$code" != "200" ]; then
     log_debug "http_download_curl received HTTP status $code"
@@ -580,7 +579,6 @@ main(){
   need_cmd mkdir
   need_cmd mv
   need_cmd tar
-  need_cmd jq
   log_info "👏👏👏 Welcome to use datafuse!"
 #   Detect architecture and ensure it's supported
   get_architecture || return 1
