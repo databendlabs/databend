@@ -42,6 +42,8 @@ pub enum Cmd {
 
     /// Add a database if absent
     CreateDatabase {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
         name: String,
         if_not_exists: bool,
         db: Database,
@@ -49,11 +51,15 @@ pub enum Cmd {
 
     /// Drop a database if absent
     DropDatabase {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
         name: String,
     },
 
     /// Create a table if absent
     CreateTable {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
         db_name: String,
         table_name: String,
         if_not_exists: bool,
@@ -62,6 +68,8 @@ pub enum Cmd {
 
     /// Drop a table if absent
     DropTable {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
         db_name: String,
         table_name: String,
         if_exists: bool,

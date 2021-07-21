@@ -45,12 +45,13 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
     ) -> common_exception::Result<CreateDatabaseActionResult> {
         let plan = act.plan;
         let db_name = &plan.db;
+        let if_not_exists = plan.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
             cmd: CreateDatabase {
                 name: db_name.clone(),
-                if_not_exists: plan.if_not_exists,
+                if_not_exists,
                 db: Database {
                     database_id: 0,
                     tables: HashMap::new(),
@@ -66,20 +67,21 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
 
         match rst {
             AppliedState::DataBase { prev, result } => {
-                if let Some(r) = result {
-                    Ok(CreateDatabaseActionResult {
-                        database_id: r.database_id,
-                    })
-                } else if let Some(p) = prev {
-                    Ok(CreateDatabaseActionResult {
-                        database_id: p.database_id,
-                    })
+                if let Some(prev) = prev {
+                    if if_not_exists {
+                        Ok(CreateDatabaseActionResult {
+                            database_id: prev.database_id,
+                        })
+                    } else {
+                        Err(ErrorCode::DatabaseAlreadyExists(format!(
+                            "{} database exists",
+                            db_name
+                        )))
+                    }
                 } else {
-                    // Both prev and result are None
-                    Err(ErrorCode::DatabaseAlreadyExists(format!(
-                        "{} database exists",
-                        db_name
-                    )))
+                    Ok(CreateDatabaseActionResult {
+                        database_id: result.unwrap().database_id,
+                    })
                 }
             }
 
@@ -144,13 +146,9 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         let plan = act.plan;
         let db_name = &plan.db;
         let table_name = &plan.table;
+        let if_not_exists = plan.if_not_exists;
 
         info!("create table: {:}: {:?}", &db_name, &table_name);
-
-        // if database not exists, return early.
-        self.meta_node.get_database(db_name).await.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("create table: database not found {:}", db_name))
-        })?;
 
         let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
         let flight_data: FlightData =
@@ -167,7 +165,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             cmd: CreateTable {
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
-                if_not_exists: plan.if_not_exists,
+                if_not_exists,
                 table,
             },
         };
@@ -180,20 +178,21 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         match rst {
             AppliedState::Table { prev, result } => {
-                if let Some(r) = result {
-                    Ok(CreateTableActionResult {
-                        table_id: r.table_id,
-                    })
-                } else if let Some(p) = prev {
-                    Ok(CreateTableActionResult {
-                        table_id: p.table_id,
-                    })
+                if let Some(prev) = prev {
+                    if if_not_exists {
+                        Ok(CreateTableActionResult {
+                            table_id: prev.table_id,
+                        })
+                    } else {
+                        Err(ErrorCode::TableAlreadyExists(format!(
+                            "table exists: {}",
+                            table_name
+                        )))
+                    }
                 } else {
-                    // Both prev and result are None
-                    Err(ErrorCode::TableAlreadyExists(format!(
-                        "table exists: {}",
-                        table_name
-                    )))
+                    Ok(CreateTableActionResult {
+                        table_id: result.unwrap().table_id,
+                    })
                 }
             }
             _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
@@ -211,28 +210,12 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         let table_name = &act.plan.table;
         let if_exists = act.plan.if_exists;
 
-        let db = self.meta_node.get_database(db_name).await.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("drop table: database not found {:}", db_name))
-        })?;
-
-        let table_id = db.tables.get(table_name);
-        if table_id.is_none() {
-            return if if_exists {
-                Ok(DropTableActionResult {})
-            } else {
-                Err(ErrorCode::UnknownTable(format!(
-                    "table not found: {:}",
-                    table_name
-                )))
-            };
-        }
-
         let cr = LogEntry {
             txid: None,
             cmd: DropTable {
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
-                if_exists: act.plan.if_exists,
+                if_exists,
             },
         };
 
@@ -243,7 +226,16 @@ impl RequestHandler<DropTableAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            AppliedState::Table { .. } => Ok(DropTableActionResult {}),
+            AppliedState::Table { prev, .. } => {
+                if prev.is_some() || if_exists {
+                    Ok(DropTableActionResult {})
+                } else {
+                    Err(ErrorCode::UnknownTable(format!(
+                        "table not found: {:}",
+                        table_name
+                    )))
+                }
+            }
             _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
         }
     }

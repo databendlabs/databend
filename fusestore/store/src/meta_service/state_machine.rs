@@ -220,30 +220,22 @@ impl StateMachine {
                 }
             }
 
-            Cmd::CreateDatabase {
-                ref name,
-                ref if_not_exists,
-                ..
-            } => {
+            Cmd::CreateDatabase { ref name, .. } => {
                 // - If the db present, return it.
                 // - Otherwise, create a new one with next seq number as database id, and add it in to store.
                 if self.databases.contains_key(name) {
                     let prev = self.databases.get(name);
-                    if *if_not_exists {
-                        Ok((prev.cloned(), None).into())
-                    } else {
-                        Ok((None::<Database>, None::<Database>).into())
-                    }
+                    Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let db = Database {
                         database_id: self.incr_seq(SEQ_DATABASE_ID),
                         tables: Default::default(),
                     };
 
-                    let prev = self.databases.insert(name.clone(), db.clone());
+                    self.databases.insert(name.clone(), db.clone());
                     tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
 
-                    Ok((prev, Some(db)).into())
+                    Ok((None, Some(db)).into())
                 }
             }
 
@@ -257,7 +249,7 @@ impl StateMachine {
             Cmd::CreateTable {
                 ref db_name,
                 ref table_name,
-                ref if_not_exists,
+                if_not_exists: _,
                 ref table,
             } => {
                 let db = self.databases.get(db_name);
@@ -266,11 +258,7 @@ impl StateMachine {
                 if db.tables.contains_key(table_name) {
                     let table_id = db.tables.get(table_name).unwrap();
                     let prev = self.tables.get(table_id);
-                    if *if_not_exists {
-                        Ok((prev.cloned(), None).into())
-                    } else {
-                        Ok((None::<Table>, None::<Table>).into())
-                    }
+                    Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let table = Table {
                         table_id: self.incr_seq(SEQ_TABLE_ID),
@@ -279,10 +267,10 @@ impl StateMachine {
                     };
                     db.tables.insert(table_name.clone(), table.table_id);
                     self.databases.insert(db_name.clone(), db);
-                    let prev = self.tables.insert(table.table_id, table.clone());
+                    self.tables.insert(table.table_id, table.clone());
                     tracing::debug!("applied CreateTable: {}={:?}", table_name, table);
 
-                    Ok((prev, Some(table)).into())
+                    Ok((None, Some(table)).into())
                 }
             }
 
@@ -292,12 +280,16 @@ impl StateMachine {
                 if_exists: _,
             } => {
                 let db = self.databases.get_mut(db_name).unwrap();
-                let tbl_id = db.tables[table_name];
+                let tbl_id = db.tables.get(table_name);
+                if let Some(tbl_id) = tbl_id {
+                    let tbl_id = tbl_id.to_owned();
+                    db.tables.remove(table_name);
+                    let prev = self.tables.remove(&tbl_id);
 
-                db.tables.remove(table_name);
-                let prev = self.tables.remove(&tbl_id);
-
-                Ok((prev, None).into())
+                    Ok((prev, None).into())
+                } else {
+                    Ok((None::<Table>, None::<Table>).into())
+                }
             }
 
             Cmd::UpsertKV {
