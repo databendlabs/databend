@@ -57,6 +57,7 @@ check_proc() {
     fi
 }
 
+# problematic in arm/v7 and arm/v6 environment
 get_bitness() {
     need_cmd head
     # Architecture detection without dependencies beyond coreutils.
@@ -76,6 +77,7 @@ get_bitness() {
     fi
 }
 
+# problematic in arm/v7 and arm/v6 environment
 get_endianness() {
     local cputype=$1
     local suffix_eb=$2
@@ -382,6 +384,10 @@ assert_supported_architecture() {
             echo "arm-unknown-linux-gnueabi"
             return 0
             ;;
+        arm-unknown-linux-gnueabihf)
+            echo "arm-unknown-linux-gnueabi" # armv7 hf not work
+            return 0
+            ;;
         armv7-unknown-linux-gnueabihf)
             echo "armv7-unknown-linux-gnueabihf"
             return 0
@@ -452,7 +458,7 @@ download_datafuse() {
         rm -rf tmpdir
         abort_prompt_issue
     fi
-
+  log_info "✅ Successfully download datafuse in ${_url}"
     srcdir="${tmpdir}"
     (cd "${tmpdir}" && untar "${_name}")
     _status=$?
@@ -575,6 +581,7 @@ main(){
   need_cmd mv
   need_cmd tar
   need_cmd jq
+  log_info "👏👏👏 Welcome to use datafuse!"
 #   Detect architecture and ensure it's supported
   get_architecture || return 1
   local _arch="$RETVAL"
@@ -586,8 +593,8 @@ main(){
       log_err "❌ Architecture ${_arch} is not supported."
       abort_prompt_issue
   fi
+  log_info "😊 Your Architecture ${_arch} is supported"
   set_tag || return 1
-
   _version="$TAG"
   _name=$(set_name "$_target" "$_version" || return 1)
   _url=$(set_name_url "$_target" "$_version" || return 1)
