@@ -17,6 +17,7 @@ pub enum TableEngineType {
     Csv,
     /// Null ENGINE
     Null,
+    Memory,
 }
 
 impl ToString for TableEngineType {
@@ -26,6 +27,7 @@ impl ToString for TableEngineType {
             TableEngineType::Parquet => "Parquet".into(),
             TableEngineType::Csv => "CSV".into(),
             TableEngineType::Null => "Null".into(),
+            TableEngineType::Memory => "Memory".into(),
         }
     }
 }
