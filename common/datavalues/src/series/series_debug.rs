@@ -2,11 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use comfy_table::Cell;
+use comfy_table::Table;
 use common_exception::Result;
-use prettytable::format;
-use prettytable::Cell;
-use prettytable::Row;
-use prettytable::Table;
 
 use super::Series;
 
@@ -68,20 +66,21 @@ pub fn assert_series_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, ser
 ///! Convert a series of record batches into a table
 fn create_table(results: &[Series]) -> Result<Table> {
     let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+    table.load_preset("||--+-++|    ++++++");
 
     if results.is_empty() {
         return Ok(table);
     }
 
     let header = vec![Cell::new("series")];
-    table.set_titles(Row::new(header));
+    table.set_header(header);
+
     for series in results {
         for row in 0..series.len() {
             let mut cells = Vec::new();
             let str = format!("{}", series.try_get(row)?);
             cells.push(Cell::new(&str));
-            table.add_row(Row::new(cells));
+            table.add_row(cells);
         }
     }
 
