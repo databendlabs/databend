@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use async_raft::AppDataResponse;
+use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
 use common_metatypes::SeqValue;
+use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -22,16 +24,29 @@ pub enum AppliedState {
         // The value after applying a RaftRequest.
         result: Option<String>,
     },
+
     Seq {
         seq: u64,
     },
+
     Node {
         prev: Option<Node>,
         result: Option<Node>,
     },
+
     DataBase {
         prev: Option<Database>,
         result: Option<Database>,
+    },
+
+    Table {
+        prev: Option<Table>,
+        result: Option<Table>,
+    },
+
+    DataParts {
+        prev: Option<Vec<DataPartInfo>>,
+        result: Option<Vec<DataPartInfo>>,
     },
 
     KV {
@@ -71,6 +86,24 @@ impl From<(Option<Node>, Option<Node>)> for AppliedState {
 impl From<(Option<Database>, Option<Database>)> for AppliedState {
     fn from(v: (Option<Database>, Option<Database>)) -> Self {
         AppliedState::DataBase {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
+impl From<(Option<Table>, Option<Table>)> for AppliedState {
+    fn from(v: (Option<Table>, Option<Table>)) -> Self {
+        AppliedState::Table {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
+impl From<(Option<Vec<DataPartInfo>>, Option<Vec<DataPartInfo>>)> for AppliedState {
+    fn from(v: (Option<Vec<DataPartInfo>>, Option<Vec<DataPartInfo>>)) -> Self {
+        AppliedState::DataParts {
             prev: v.0,
             result: v.1,
         }

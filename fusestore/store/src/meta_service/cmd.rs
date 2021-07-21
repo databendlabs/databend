@@ -5,7 +5,9 @@
 use std::fmt;
 
 use async_raft::NodeId;
+use common_metatypes::Database;
 use common_metatypes::MatchSeq;
+use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -39,8 +41,38 @@ pub enum Cmd {
     },
 
     /// Add a database if absent
-    AddDatabase {
+    CreateDatabase {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
         name: String,
+        if_not_exists: bool,
+        db: Database,
+    },
+
+    /// Drop a database if absent
+    DropDatabase {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
+        name: String,
+    },
+
+    /// Create a table if absent
+    CreateTable {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
+        db_name: String,
+        table_name: String,
+        if_not_exists: bool,
+        table: Table,
+    },
+
+    /// Drop a table if absent
+    DropTable {
+        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
+        // the two commands (failed `add` and successful `delete`)
+        db_name: String,
+        table_name: String,
+        if_exists: bool,
     },
 
     /// Update or insert a general purpose kv store
@@ -74,8 +106,42 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::AddDatabase { name } => {
-                write!(f, "add_db:{}", name)
+            Cmd::CreateDatabase {
+                name,
+                if_not_exists,
+                db,
+            } => {
+                write!(
+                    f,
+                    "create_db:{}={}, if_not_exists:{}",
+                    name, db, if_not_exists
+                )
+            }
+            Cmd::DropDatabase { name } => {
+                write!(f, "drop_db:{}", name)
+            }
+            Cmd::CreateTable {
+                db_name,
+                table_name,
+                if_not_exists,
+                table,
+            } => {
+                write!(
+                    f,
+                    "create_table:{}-{}={}, if_not_exists:{}",
+                    db_name, table_name, table, if_not_exists
+                )
+            }
+            Cmd::DropTable {
+                db_name,
+                table_name,
+                if_exists,
+            } => {
+                write!(
+                    f,
+                    "delete_table:{}-{}, if_exists:{}",
+                    db_name, table_name, if_exists
+                )
             }
             Cmd::UpsertKV { key, seq, value } => {
                 write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)

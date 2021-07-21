@@ -25,8 +25,11 @@ use async_raft::SnapshotMeta;
 use async_raft::SnapshotPolicy;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
+use common_flights::storage_api_impl::AppendResult;
+use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
 use common_metatypes::SeqValue;
+use common_metatypes::Table;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
@@ -852,6 +855,47 @@ impl MetaNode {
 
         let sm = self.sto.state_machine.read().await;
         sm.get_database(name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_table(&self, tid: &u64) -> Option<Table> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.state_machine.read().await;
+        sm.get_table(tid)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_data_parts(
+        &self,
+        db_name: &str,
+        table_name: &str,
+    ) -> Option<Vec<DataPartInfo>> {
+        let sm = self.sto.state_machine.read().await;
+        sm.get_data_parts(db_name, table_name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn append_data_parts(
+        &self,
+        db_name: &str,
+        table_name: &str,
+        append_res: &AppendResult,
+    ) {
+        let mut sm = self.sto.state_machine.write().await;
+        sm.append_data_parts(db_name, table_name, append_res)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_table_data_parts(&self, db_name: &str, table_name: &str) {
+        let mut sm = self.sto.state_machine.write().await;
+        sm.remove_table_data_parts(db_name, table_name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_db_data_parts(&self, db_name: &str) {
+        let mut sm = self.sto.state_machine.write().await;
+        sm.remove_db_data_parts(db_name)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

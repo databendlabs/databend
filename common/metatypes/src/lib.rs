@@ -12,6 +12,8 @@ mod match_seq_test;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
+use std::fmt::Formatter;
 
 pub use errors::SeqError;
 pub use match_seq::MatchSeq;
@@ -30,6 +32,12 @@ pub struct Database {
     pub tables: HashMap<String, u64>,
 }
 
+impl fmt::Display for Database {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "database id: {}", self.database_id)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Table {
     pub table_id: u64,
@@ -39,4 +47,10 @@ pub struct Table {
 
     /// name of parts that belong to this table.
     pub parts: HashSet<String>,
+}
+
+impl fmt::Display for Table {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "table id: {}", self.table_id)
+    }
 }

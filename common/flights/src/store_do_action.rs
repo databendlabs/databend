@@ -52,9 +52,10 @@ pub enum StoreDoAction {
     // meta-table
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
+    GetTable(GetTableAction),
     // storage
     ReadPlan(ReadPlanAction),
-    GetTable(GetTableAction),
+
     // general purpose kv
     UpsertKV(UpsertKVAction),
     GetKV(GetKVAction),
