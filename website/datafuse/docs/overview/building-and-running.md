@@ -18,11 +18,8 @@ This document describes how to build and run [FuseQuery](https://github.com/data
 === "Release binary"
 
     ```markdown
-    Install latest datafuse release on local path ~/.datafuse/bin/
     $ curl -fsS https://raw.githubusercontent.com/datafuselabs/datafuse/master/scripts/installer/install-datafuse.sh | bash
-    Install given version of datafuse
-    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/datafuse/master/scripts/installer/install-datafuse.sh | bash 
-    ```
+   ```
 
 === "From source"
 
