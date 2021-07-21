@@ -2,22 +2,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::BooleanArray;
+use common_arrow::arrow::array::Int32Array;
 use common_arrow::arrow::array::ListArray;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringArray;
-use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::array::StructArray;
+use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::Field;
+use common_arrow::arrow::datatypes::Schema;
+use common_arrow::arrow::record_batch::RecordBatch;
 use common_exception::Result;
 
 use crate::arrays::builders::*;
 use crate::prelude::*;
+use crate::DFBinaryArray;
 use crate::DFBooleanArray;
 use crate::DFListArray;
+use crate::DFStructArray;
 use crate::DFUInt16Array;
 use crate::DFUtf8Array;
 use crate::Int32Type;
 use crate::UInt16Type;
-use crate::UInt8Type;
 
 #[test]
 fn test_array_as_ref() -> Result<()> {
@@ -118,6 +125,27 @@ fn test_array_downcast() -> Result<()> {
             &expected[i].to_values()?
         );
     }
+
+    // Test BinaryArray
+    let arrow_binary_array = BinaryArray::from_opt_vec(vec![Some(b"1a"), None, Some(b"2b")]);
+    let df_binary_array = DFBinaryArray::from_arrow_array(arrow_binary_array);
+    let downcast_array = df_binary_array.downcast_ref();
+    assert_eq!(
+        &[0x31, 0x61, 0x32, 0x62],
+        downcast_array.value_data().as_slice()
+    );
+
+    // Test StructArray
+    let id_array = Int32Array::from(vec![1, 2, 3, 4, 5]);
+    let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+
+    let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(id_array)])?;
+
+    let arrow_struct_array = StructArray::from(batch);
+    let df_struct_array = DFStructArray::from_arrow_array(arrow_struct_array);
+    let downcast_struct_array = df_struct_array.downcast_ref();
+    let expected = "StructArray\n[\n-- child 0: \"id\" (Int32)\nPrimitiveArray<Int32>\n[\n  1,\n  2,\n  3,\n  4,\n  5,\n]\n]";
+    assert_eq!(expected, format!("{:?}", downcast_struct_array));
 
     Ok(())
 }
