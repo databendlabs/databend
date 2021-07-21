@@ -116,12 +116,14 @@ impl InteractiveWorkerBase {
         let (mut tx, rx) = mpsc::channel(20);
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
+        let ctx_cloned = ctx.clone();
         // the data is comming in async mode
-        tokio::spawn(async move {
+        ctx.execute_task(async move {
             let async_data_stream = interpreter.execute();
-            let mut data_stream = async_data_stream.await.unwrap();
-            while let Some(_block) = data_stream.next().await {}
-        });
+            let data_stream = async_data_stream.await.unwrap();
+            let mut abort_stream = ctx_cloned.try_create_abortable(data_stream).unwrap();
+            while let Some(_block) = abort_stream.next().await {}
+        })?;
         Ok(rx)
     }
 }
