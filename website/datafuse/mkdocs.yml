@@ -171,7 +171,6 @@ nav:
       - System Tables: system/system-tables.md
     - API:
         - Config: api/config.md
-        - Debug: api/profiling.md
   - Development:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md
