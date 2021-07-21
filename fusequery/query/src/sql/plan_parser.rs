@@ -328,14 +328,13 @@ impl PlanParser {
         columns: &[Ident],
         source: &Option<Box<Query>>,
     ) -> Result<PlanNode> {
-        let db_name = self.ctx.get_current_database();
-        let tbl_name = table_name
-            .0
-            .get(0)
-            .ok_or_else(|| ErrorCode::SyntaxException("empty table name now allowed"))?
-            .value
-            .clone();
+        let mut db_name = self.ctx.get_current_database();
+        let mut tbl_name = table_name.0[0].value.clone();
 
+        if table_name.0.len() > 1 {
+            db_name = tbl_name;
+            tbl_name = table_name.0[1].value.clone();
+        }
         let table = self.ctx.get_datasource().get_table(&db_name, &tbl_name)?;
 
         let mut schema = table.schema()?;

@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use clickhouse_srv::connection::Connection;
+use clickhouse_srv::errors::Error as CHError;
 use clickhouse_srv::errors::Result as CHResult;
 use clickhouse_srv::errors::ServerError;
 use clickhouse_srv::types::Block;
+use clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_datavalues::DFUInt8Array;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::channel::mpsc::Receiver;
@@ -71,14 +74,11 @@ impl<'a> QueryWriter<'a> {
     }
 
     async fn write_block(&mut self, block: DataBlock) -> Result<()> {
-        let block = convert_block(block)?;
+        let block = to_clickhouse_block(block)?;
 
         match self.conn.write_block(&block).await {
             Ok(_) => Ok(()),
-            Err(error) => Err(ErrorCode::UnknownException(format!(
-                "Cannot send block {:?}",
-                error
-            ))),
+            Err(error) => Err(ErrorCode::UnknownException(format!(error))),
         }
     }
 
@@ -135,7 +135,11 @@ pub fn to_clickhouse_err(res: ErrorCode) -> clickhouse_srv::errors::Error {
     })
 }
 
-pub fn convert_block(block: DataBlock) -> Result<Block> {
+pub fn from_clickhouse_err(res: clickhouse_srv::errors::Error) -> ErrorCode {
+    ErrorCode::LogicalError(format!("clickhouse-srv expception: {:?}", res))
+}
+
+pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
     let mut result = Block::new();
     if block.num_columns() == 0 {
         return Ok(result);
@@ -177,4 +181,59 @@ pub fn convert_block(block: DataBlock) -> Result<Block> {
         }
     }
     Ok(result)
+}
+
+pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<DataBlock> {
+    let get_series = |block: &Block, index: usize| -> CHResult<Series> {
+        let col = &block.columns()[index];
+        match col.sql_type() {
+            SqlType::UInt8 => {
+                Ok(DFUInt8Array::new_from_iter(col.iter::<u8>()?.map(|c| *c)).into_series())
+            }
+            SqlType::UInt16 => {
+                Ok(DFUInt16Array::new_from_iter(col.iter::<u16>()?.map(|c| *c)).into_series())
+            }
+            SqlType::UInt32 => {
+                Ok(DFUInt32Array::new_from_iter(col.iter::<u32>()?.map(|c| *c)).into_series())
+            }
+            SqlType::UInt64 => {
+                Ok(DFUInt64Array::new_from_iter(col.iter::<u64>()?.map(|c| *c)).into_series())
+            }
+            SqlType::Int8 => {
+                Ok(DFInt8Array::new_from_iter(col.iter::<i8>()?.map(|c| *c)).into_series())
+            }
+            SqlType::Int16 => {
+                Ok(DFInt16Array::new_from_iter(col.iter::<i16>()?.map(|c| *c)).into_series())
+            }
+            SqlType::Int32 => {
+                Ok(DFInt32Array::new_from_iter(col.iter::<i32>()?.map(|c| *c)).into_series())
+            }
+            SqlType::Int64 => {
+                Ok(DFInt64Array::new_from_iter(col.iter::<i64>()?.map(|c| *c)).into_series())
+            }
+            SqlType::Float32 => {
+                Ok(DFFloat32Array::new_from_iter(col.iter::<f32>()?.map(|c| *c)).into_series())
+            }
+            SqlType::Float64 => {
+                Ok(DFFloat64Array::new_from_iter(col.iter::<f64>()?.map(|c| *c)).into_series())
+            }
+            SqlType::String => Ok(DFUtf8Array::new_from_iter(
+                col.iter::<&[u8]>()?.map(|c| String::from_utf8_lossy(c)),
+            )
+            .into_series()),
+            SqlType::FixedString(_) => Ok(DFUtf8Array::new_from_iter(
+                col.iter::<&[u8]>()?.map(|c| String::from_utf8_lossy(c)),
+            )
+            .into_series()),
+            other => Err(CHError::Other(format!("Unsupported type: {:?}", other))),
+        }
+    };
+
+    let mut arrays = vec![];
+    for index in 0..block.column_count() {
+        let array = get_series(&block, index);
+        let a2 = array.map_err(from_clickhouse_err);
+        arrays.push(a2?);
+    }
+    Ok(DataBlock::create_by_array(schema, arrays))
 }

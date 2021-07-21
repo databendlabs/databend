@@ -35,6 +35,7 @@ pub use crate::arrays::Utf8ArrayBuilder;
 pub use crate::columns::DataColumn;
 pub use crate::columns::DataColumnCommon;
 pub use crate::data_array_filter::*;
+pub use crate::data_df_type::*;
 pub use crate::data_type_coercion::*;
 // series
 pub use crate::series::IntoSeries;
