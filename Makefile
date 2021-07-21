@@ -1,7 +1,7 @@
-HUB ?= datafusedev
+HUB ?= datafuselabs
 TAG ?= latest
 PLATFORM ?= linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
-VERSION ?= ""
+
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
