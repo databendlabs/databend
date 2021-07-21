@@ -169,6 +169,8 @@ nav:
       - Other Functions:
           - ToTypeName: sqlstatement/other-functions/totypename.md
       - System Tables: system/system-tables.md
+    - API:
+        - Config: api/config.md
   - Development:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md

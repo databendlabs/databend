@@ -141,7 +141,8 @@ fn query<T: FromRow>(connection: &mut Conn, query: &str) -> Result<Vec<T>> {
 
 fn create_connection(port: u16) -> Result<mysql::Conn> {
     let uri = &format!("mysql://127.0.0.1:{}", port);
-    mysql::Conn::new(uri).map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
+    let opts = mysql::Opts::from_url(uri).unwrap();
+    mysql::Conn::new(opts).map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
 }
 
 struct EmptyRow;

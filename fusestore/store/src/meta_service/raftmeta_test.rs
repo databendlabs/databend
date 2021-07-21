@@ -13,6 +13,7 @@ use common_tracing::tracing;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
 
+use crate::configs;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -300,10 +301,15 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
     // - db name to create
     // - expected db id
-    let cases: Vec<(&str, u64)> = vec![("foo", 1), ("bar", 2), ("foo", 1), ("bar", 2)];
+    let cases: Vec<(&str, bool, u64)> = vec![
+        ("foo", true, 1),
+        ("bar", true, 2),
+        ("foo", true, 1),
+        ("bar", true, 2),
+    ];
 
     // Sending AddDatabase request to any node is ok.
-    for (i, (name, want_id)) in cases.iter().enumerate() {
+    for (i, (name, not_exists, want_id)) in cases.iter().enumerate() {
         let mn = &all[i as usize];
 
         let last_applied = mn.raft.metrics().borrow().last_applied;
@@ -311,8 +317,10 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
         let rst = mn
             .write(LogEntry {
                 txid: None,
-                cmd: Cmd::AddDatabase {
+                cmd: Cmd::CreateDatabase {
                     name: name.to_string(),
+                    if_not_exists: *not_exists,
+                    db: Default::default(),
                 },
             })
             .await;
@@ -386,8 +394,17 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     tracing::info!("restart all");
 
     // restart
-    let mn0 = MetaNode::builder().node_id(0).sto(sto0).build().await?;
-    let mn1 = MetaNode::builder().node_id(1).sto(sto1).build().await?;
+    let config = configs::Config::empty();
+    let mn0 = MetaNode::builder(&config)
+        .node_id(0)
+        .sto(sto0)
+        .build()
+        .await?;
+    let mn1 = MetaNode::builder(&config)
+        .node_id(1)
+        .sto(sto1)
+        .build()
+        .await?;
 
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 

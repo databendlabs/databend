@@ -8,11 +8,11 @@ pub mod errors;
 pub mod log_entry;
 pub mod meta_service_impl;
 pub mod network;
-pub mod node_id;
 pub mod placement;
 pub mod raft_log;
 pub mod raft_state;
 pub mod raft_txid;
+pub mod raft_types;
 pub mod raftmeta;
 pub mod sled_serde;
 pub mod snapshot;
@@ -25,9 +25,11 @@ pub use errors::ShutdownError;
 pub use log_entry::LogEntry;
 pub use meta_service_impl::MetaServiceImpl;
 pub use network::Network;
-pub use node_id::NodeId;
 pub use placement::Placement;
 pub use raft_txid::RaftTxId;
+pub use raft_types::LogIndex;
+pub use raft_types::NodeId;
+pub use raft_types::Term;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
 pub use sled_serde::SledSerde;
@@ -48,13 +50,13 @@ mod meta_service_impl_test;
 #[cfg(test)]
 mod meta_store_test;
 #[cfg(test)]
-mod node_id_test;
-#[cfg(test)]
 mod placement_test;
 #[cfg(test)]
 mod raft_log_test;
 #[cfg(test)]
 mod raft_state_test;
+#[cfg(test)]
+mod raft_types_test;
 #[cfg(test)]
 mod raftmeta_test;
 #[cfg(test)]

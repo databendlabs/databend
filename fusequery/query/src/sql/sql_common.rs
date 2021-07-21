@@ -223,14 +223,14 @@ impl SQLCommon {
         }
 
         if result_month != 0 {
-            return Ok(Expression::Literal(DataValue::IntervalYearMonth(Some(
-                result_month as i32,
-            ))));
+            return Ok(Expression::create_literal(DataValue::IntervalYearMonth(
+                Some(result_month as i32),
+            )));
         }
 
         let result: i64 = (result_days << 32) | result_millis;
-        Ok(Expression::Literal(DataValue::IntervalDayTime(Some(
-            result,
-        ))))
+        Ok(Expression::create_literal(DataValue::IntervalDayTime(
+            Some(result),
+        )))
     }
 }

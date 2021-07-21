@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -16,7 +15,6 @@ use async_raft::raft::MembershipConfig;
 use async_raft::storage::CurrentSnapshotData;
 use async_raft::storage::HardState;
 use async_raft::storage::InitialState;
-use async_raft::AppData;
 use async_raft::ClientWriteError;
 use async_raft::LogId;
 use async_raft::NodeId;
@@ -24,10 +22,14 @@ use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftStorage;
 use async_raft::SnapshotMeta;
+use async_raft::SnapshotPolicy;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
+use common_flights::storage_api_impl::AppendResult;
+use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
 use common_metatypes::SeqValue;
+use common_metatypes::Table;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
@@ -37,7 +39,9 @@ use common_runtime::tokio::task::JoinHandle;
 use common_tracing::tracing;
 
 use crate::configs;
+use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
+use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -48,11 +52,9 @@ use crate::meta_service::Network;
 use crate::meta_service::Node;
 use crate::meta_service::RetryableError;
 use crate::meta_service::ShutdownError;
+use crate::meta_service::SledSerde;
 use crate::meta_service::Snapshot;
 use crate::meta_service::StateMachine;
-
-const ERR_INCONSISTENT_LOG: &str =
-    "a query was received which was expecting data to be in place which does not exist in the log";
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///
@@ -63,6 +65,7 @@ const ERR_INCONSISTENT_LOG: &str =
 ///   log
 ///   state_machine
 /// TODO(xp): MetaNode recovers persisted state when restarted.
+/// TODO(xp): move MetaStore to a standalone file.
 pub struct MetaStore {
     /// The ID of the Raft node for which this storage instances is configured.
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
@@ -80,8 +83,8 @@ pub struct MetaStore {
     // voted_for
     pub raft_state: RaftState,
 
-    /// The Raft log.
-    pub log: RwLock<BTreeMap<u64, Entry<LogEntry>>>,
+    pub log: RaftLog,
+
     /// The Raft state machine.
     pub state_machine: RwLock<StateMachine>,
 
@@ -121,9 +124,11 @@ impl MetaStore {
                 format!("opening sled db: {}", config.meta_dir)
             })?;
 
-        let raft_state = RaftState::create(&db, &id).await?;
+        // TODO(xp): merge the duplicated snippets in new() and open(), when I got time :DDD
 
-        let log = RwLock::new(BTreeMap::new());
+        let raft_state = RaftState::create(&db, &id).await?;
+        let log = RaftLog::open(&db).await?;
+
         let sm = RwLock::new(StateMachine::default());
         let current_snapshot = RwLock::new(None);
 
@@ -146,8 +151,8 @@ impl MetaStore {
             })?;
 
         let raft_state = RaftState::open(&db)?;
+        let log = RaftLog::open(&db).await?;
 
-        let log = RwLock::new(BTreeMap::new());
         let sm = RwLock::new(StateMachine::default());
         let current_snapshot = RwLock::new(None);
 
@@ -162,11 +167,6 @@ impl MetaStore {
         })
     }
 
-    /// Get a handle to the log for testing purposes.
-    pub async fn get_log(&self) -> RwLockWriteGuard<'_, BTreeMap<u64, Entry<LogEntry>>> {
-        self.log.write().await
-    }
-
     /// Get a handle to the state machine for testing purposes.
     pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, StateMachine> {
         self.state_machine.write().await
@@ -178,38 +178,29 @@ impl MetaStore {
 }
 
 impl MetaStore {
-    fn find_first_membership_log<'a, T, D>(mut it: T) -> Option<MembershipConfig>
-    where
-        T: 'a + Iterator<Item = &'a Entry<D>>,
-        D: AppData,
-    {
-        it.find_map(|entry| match &entry.payload {
-            EntryPayload::ConfigChange(cfg) => Some(cfg.membership.clone()),
-            EntryPayload::SnapshotPointer(snap) => Some(snap.membership.clone()),
-            _ => None,
-        })
-    }
-
     /// Go backwards through the log to find the most recent membership config <= `upto_index`.
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn get_membership_from_log(
         &self,
         upto_index: Option<u64>,
     ) -> anyhow::Result<MembershipConfig> {
-        let log = self.log.read().await;
-
-        let reversed_logs = log.values().rev();
-        let membership = match upto_index {
-            Some(upto) => {
-                let skipped = reversed_logs.skip_while(|entry| entry.log_id.index > upto);
-                Self::find_first_membership_log(skipped)
-            }
-            None => Self::find_first_membership_log(reversed_logs),
+        //TODO(xp): test it
+        let it = match upto_index {
+            Some(upto) => self.log.tree.range(0.ser()?..=upto.ser()?).rev(),
+            None => self.log.tree.range(0.ser()?..).rev(),
         };
-        Ok(match membership {
-            Some(cfg) => cfg,
-            None => MembershipConfig::new_initial(self.id),
-        })
+
+        for ivec in it {
+            let (_k_ivec, v_ivec) = ivec?;
+            let ent = Entry::<LogEntry>::de(v_ivec)?;
+            match &ent.payload {
+                EntryPayload::ConfigChange(cfg) => return Ok(cfg.membership.clone()),
+                EntryPayload::SnapshotPointer(snap) => return Ok(snap.membership.clone()),
+                _ => {}
+            };
+        }
+
+        Ok(MembershipConfig::new_initial(self.id))
     }
 }
 
@@ -228,13 +219,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         let hard_state = self.raft_state.read_hard_state().await?;
 
         let membership = self.get_membership_config().await?;
-        let log = self.log.read().await;
         let sm = self.state_machine.read().await;
 
         match hard_state {
             Some(inner) => {
-                let last_log_id = match log.values().rev().next() {
-                    Some(log) => log.log_id,
+                let last = self.log.last()?;
+                let last_log_id = match last {
+                    Some((_index, ent)) => ent.log_id,
                     None => (0, 0).into(),
                 };
                 let last_applied_log = sm.last_applied_log;
@@ -269,8 +260,8 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             tracing::error!("invalid request, start > stop");
             return Ok(vec![]);
         }
-        let log = self.log.read().await;
-        Ok(log.range(start..stop).map(|(_, val)| val.clone()).collect())
+
+        Ok(self.log.range_get(start..stop)?)
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
@@ -279,61 +270,57 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             tracing::error!("invalid request, start > stop");
             return Ok(());
         }
-        let mut log = self.log.write().await;
 
         // If a stop point was specified, delete from start until the given stop point.
         if let Some(stop) = stop.as_ref() {
-            for key in start..*stop {
-                log.remove(&key);
-            }
-            return Ok(());
+            self.log.range_delete(start..*stop).await?;
+        } else {
+            self.log.range_delete(start..).await?;
         }
-        // Else, just split off the remainder.
-        log.split_off(&start);
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self, entry), fields(myid=self.id))]
     async fn append_entry_to_log(&self, entry: &Entry<LogEntry>) -> anyhow::Result<()> {
-        let mut log = self.log.write().await;
-        log.insert(entry.log_id.index, entry.clone());
+        self.log.insert(entry).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
     async fn replicate_to_log(&self, entries: &[Entry<LogEntry>]) -> anyhow::Result<()> {
-        let mut log = self.log.write().await;
-        for entry in entries {
-            log.insert(entry.log_id.index, entry.clone());
-        }
+        // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
+        self.log.append(entries).await?;
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
     async fn apply_entry_to_state_machine(
         &self,
-        index: &u64,
+        index: &LogId,
         data: &LogEntry,
     ) -> anyhow::Result<AppliedState> {
         let mut sm = self.state_machine.write().await;
-        let resp = sm.apply(*index, data)?;
+        let resp = sm.apply(index, data)?;
         Ok(resp)
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
     async fn replicate_to_state_machine(
         &self,
-        entries: &[(&u64, &LogEntry)],
+        entries: &[(&LogId, &LogEntry)],
     ) -> anyhow::Result<()> {
         let mut sm = self.state_machine.write().await;
         for (index, data) in entries {
-            sm.apply(**index, data)?;
+            sm.apply(*index, data)?;
         }
         Ok(())
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
     async fn do_log_compaction(&self) -> anyhow::Result<CurrentSnapshotData<Self::Snapshot>> {
+        // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
+
+        // TODO(xp): add test of small chunk snapshot transfer and installation
         let (data, last_applied_log);
         {
             // Serialize the data of the state machine.
@@ -344,7 +331,9 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
         let snapshot_size = data.len();
 
-        let membership_config = self.get_membership_from_log(Some(last_applied_log)).await?;
+        let membership_config = self
+            .get_membership_from_log(Some(last_applied_log.index))
+            .await?;
 
         let snapshot_idx = {
             let mut l = self.snapshot_index.lock().await;
@@ -352,25 +341,18 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             *l
         };
 
-        let term;
-        let snapshot_id;
         let meta;
         {
-            let mut log = self.log.write().await;
             let mut current_snapshot = self.current_snapshot.write().await;
-            term = log
-                .get(&last_applied_log)
-                .map(|entry| entry.log_id.term)
-                .ok_or_else(|| anyhow::anyhow!(ERR_INCONSISTENT_LOG))?;
-            *log = log.split_off(&last_applied_log);
+            self.log.range_delete(0..last_applied_log.index).await?;
 
-            snapshot_id = format!("{}-{}-{}", term, last_applied_log, snapshot_idx);
+            let snapshot_id = format!(
+                "{}-{}-{}",
+                last_applied_log.term, last_applied_log.index, snapshot_idx
+            );
 
             meta = SnapshotMeta {
-                last_log_id: LogId {
-                    term,
-                    index: last_applied_log,
-                },
+                last_log_id: last_applied_log,
                 snapshot_id,
                 membership: membership_config.clone(),
             };
@@ -379,10 +361,9 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                 meta: meta.clone(),
                 data: data.clone(),
             };
-            log.insert(
-                snapshot.meta.last_log_id.index,
-                Entry::new_snapshot_pointer(&snapshot.meta),
-            );
+            self.log
+                .insert(&Entry::new_snapshot_pointer(&snapshot.meta))
+                .await?;
 
             *current_snapshot = Some(snapshot);
         } // Release log & snapshot write locks.
@@ -424,12 +405,12 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
         // Update log.
         {
-            let mut log = self.log.write().await;
-
             // Remove logs that are included in the snapshot.
-            *log = log.split_off(&(meta.last_log_id.index + 1));
+            self.log.range_delete(0..=meta.last_log_id.index).await?;
 
-            log.insert(meta.last_log_id.index, Entry::new_snapshot_pointer(meta));
+            self.log
+                .append(&[Entry::new_snapshot_pointer(meta)])
+                .await?;
         }
 
         // Update the state machine.
@@ -584,24 +565,33 @@ impl MetaNodeBuilder {
 }
 
 impl MetaNode {
-    pub fn builder() -> MetaNodeBuilder {
-        // Set heartbeat interval to a reasonable value.
-        // The election_timeout should tolerate several heartbeat loss.
-        let heartbeat = 500; // ms
+    pub fn builder(config: &configs::Config) -> MetaNodeBuilder {
+        let raft_config = MetaNode::new_raft_config(config);
+
         MetaNodeBuilder {
             node_id: None,
-            config: Some(
-                Config::build("foo_cluster".into())
-                    .heartbeat_interval(heartbeat)
-                    .election_timeout_min(heartbeat * 4)
-                    .election_timeout_max(heartbeat * 8)
-                    .validate()
-                    .expect("fail to build raft config"),
-            ),
+            config: Some(raft_config),
             sto: None,
             monitor_metrics: true,
             start_grpc_service: true,
         }
+    }
+
+    pub fn new_raft_config(config: &configs::Config) -> Config {
+        // TODO(xp): configure cluster name.
+
+        let hb = config.heartbeat_interval;
+
+        Config::build("foo_cluster".into())
+            .heartbeat_interval(hb)
+            // Choose a rational value for election timeout.
+            .election_timeout_min(hb * 4)
+            .election_timeout_max(hb * 8)
+            .snapshot_policy(SnapshotPolicy::LogsSinceLast(
+                config.snapshot_logs_since_last,
+            ))
+            .validate()
+            .expect("building raft Config from fuse-store config")
     }
 
     /// Start the grpc service for raft communication and meta operation API.
@@ -643,7 +633,7 @@ impl MetaNode {
     pub async fn open(config: &configs::Config) -> common_exception::Result<Arc<MetaNode>> {
         let sto = MetaStore::open(config).await?;
         let sto = Arc::new(sto);
-        let b = MetaNode::builder().node_id(sto.id).sto(sto);
+        let b = MetaNode::builder(config).node_id(sto.id).sto(sto);
 
         b.build().await
     }
@@ -778,7 +768,7 @@ impl MetaNode {
         // Thus we need to start grpc manually.
         let sto = MetaStore::new(node_id, config).await?;
 
-        let b = MetaNode::builder()
+        let b = MetaNode::builder(config)
             .node_id(node_id)
             .start_grpc_service(false)
             .sto(Arc::new(sto));
@@ -865,6 +855,47 @@ impl MetaNode {
 
         let sm = self.sto.state_machine.read().await;
         sm.get_database(name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_table(&self, tid: &u64) -> Option<Table> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.state_machine.read().await;
+        sm.get_table(tid)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_data_parts(
+        &self,
+        db_name: &str,
+        table_name: &str,
+    ) -> Option<Vec<DataPartInfo>> {
+        let sm = self.sto.state_machine.read().await;
+        sm.get_data_parts(db_name, table_name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn append_data_parts(
+        &self,
+        db_name: &str,
+        table_name: &str,
+        append_res: &AppendResult,
+    ) {
+        let mut sm = self.sto.state_machine.write().await;
+        sm.append_data_parts(db_name, table_name, append_res)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_table_data_parts(&self, db_name: &str, table_name: &str) {
+        let mut sm = self.sto.state_machine.write().await;
+        sm.remove_table_data_parts(db_name, table_name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_db_data_parts(&self, db_name: &str) {
+        let mut sm = self.sto.state_machine.write().await;
+        sm.remove_db_data_parts(db_name)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

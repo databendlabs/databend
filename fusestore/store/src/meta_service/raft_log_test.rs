@@ -96,6 +96,78 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_raft_log_insert() -> anyhow::Result<()> {
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let rl = RaftLog::open(db).await?;
+
+    assert_eq!(None, rl.get(&5)?);
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 3, index: 4 },
+            payload: EntryPayload::Normal(EntryNormal {
+                data: LogEntry {
+                    txid: None,
+                    cmd: Cmd::IncrSeq {
+                        key: "foo".to_string(),
+                    },
+                },
+            }),
+        },
+    ];
+
+    for log in logs.iter() {
+        rl.insert(log).await?;
+    }
+
+    assert_eq!(logs, rl.range_get(..)?);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_raft_log_get() -> anyhow::Result<()> {
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let rl = RaftLog::open(db).await?;
+
+    assert_eq!(None, rl.get(&5)?);
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 3, index: 4 },
+            payload: EntryPayload::Normal(EntryNormal {
+                data: LogEntry {
+                    txid: None,
+                    cmd: Cmd::IncrSeq {
+                        key: "foo".to_string(),
+                    },
+                },
+            }),
+        },
+    ];
+
+    rl.append(&logs).await?;
+
+    assert_eq!(None, rl.get(&1)?);
+    assert_eq!(Some(logs[0].clone()), rl.get(&2)?);
+    assert_eq!(None, rl.get(&3)?);
+    assert_eq!(Some(logs[1].clone()), rl.get(&4)?);
+    assert_eq!(None, rl.get(&5)?);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_last() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;

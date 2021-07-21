@@ -41,6 +41,10 @@ impl Function for DatabaseFunction {
     fn num_arguments(&self) -> usize {
         1
     }
+
+    fn is_deterministic(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for DatabaseFunction {

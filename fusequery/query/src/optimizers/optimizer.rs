@@ -7,6 +7,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
+use crate::optimizers::ConstantFoldingOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::sessions::FuseQueryContextRef;
@@ -32,6 +33,7 @@ impl Optimizers {
     pub fn without_scatters(ctx: FuseQueryContextRef) -> Self {
         Optimizers {
             inner: vec![
+                Box::new(ConstantFoldingOptimizer::create(ctx.clone())),
                 Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
                 Box::new(StatisticsExactOptimizer::create(ctx)),
             ],

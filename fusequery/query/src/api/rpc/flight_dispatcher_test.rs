@@ -51,7 +51,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
                 stage_id: stage_id.clone(),
                 plan: parse_query("SELECT number FROM numbers(5)")?,
                 sinks: vec![stream_id.clone()],
-                scatters_expression: Expression::Literal(DataValue::UInt64(Some(1))),
+                scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
             }),
         )?;
 

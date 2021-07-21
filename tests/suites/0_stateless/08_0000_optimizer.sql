@@ -1,6 +1,8 @@
 SET max_threads=16;
-SELECT 'filter push down: push (number+1) to filter';
-EXPLAIN SELECT (number+1) as a from numbers_mt(10000) where a > 2;
+
+-- https://github.com/datafuselabs/datafuse/issues/574
+-- SELECT 'filter push down: push (number+1) to filter';
+-- EXPLAIN SELECT (number+1) as a from numbers_mt(10000) where a > 2;
 
 SELECT 'limit push down: push (limit 10) to projection';
 

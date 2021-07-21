@@ -44,6 +44,10 @@ impl Function for CrashMeFunction {
     fn eval(&self, _columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
         panic!("crash me function");
     }
+
+    fn is_deterministic(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for CrashMeFunction {

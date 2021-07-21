@@ -22,7 +22,7 @@ use crate::tests::Seq;
 pub async fn start_store_server() -> Result<(StoreTestContext, String)> {
     let mut tc = new_test_context();
 
-    let addr = rand_local_addr();
+    let addr = next_local_addr();
 
     // TODO(xp): when testing, new_test_context() should build a random addr for flight
     //           and fs storage dir
@@ -41,9 +41,12 @@ pub async fn start_store_server() -> Result<(StoreTestContext, String)> {
 }
 
 pub fn next_port() -> u32 {
-    let addr = 19000u32 + (*Seq::default() as u32);
-    tracing::info!("next port: {}", addr);
-    addr
+    19000u32 + (*Seq::default() as u32)
+}
+
+pub fn next_local_addr() -> String {
+    let port: u32 = next_port();
+    format!("127.0.0.1:{}", port)
 }
 
 pub struct StoreTestContext {
@@ -86,13 +89,6 @@ pub fn new_sled_test_context() -> SledTestContext {
         temp_dir: t,
         db: sled::open(tmpdir).expect("open sled db"),
     }
-}
-
-pub fn rand_local_addr() -> String {
-    let mut rng = rand::thread_rng();
-    let port: u32 = rng.gen_range(10000..11000);
-    let addr = format!("127.0.0.1:{}", port);
-    return addr;
 }
 
 pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {

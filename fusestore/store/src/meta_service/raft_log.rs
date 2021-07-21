@@ -11,6 +11,7 @@ use common_exception::ToErrorCode;
 use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::sled_serde::SledRangeSerde;
 use crate::meta_service::LogEntry;
+use crate::meta_service::LogIndex;
 use crate::meta_service::SledSerde;
 
 const K_RAFT_LOG: &str = "raft_log";
@@ -18,7 +19,7 @@ const K_RAFT_LOG: &str = "raft_log";
 /// RaftLog stores the logs of a raft node.
 /// It is part of MetaStore.
 pub struct RaftLog {
-    tree: sled::Tree,
+    pub(crate) tree: sled::Tree,
 }
 
 impl SledSerde for Entry<LogEntry> {}
@@ -34,22 +35,43 @@ impl RaftLog {
         Ok(rl)
     }
 
+    /// Retrieve the log at index.
+    pub fn get(&self, index: &LogIndex) -> common_exception::Result<Option<Entry<LogEntry>>> {
+        // TODO(xp): add more context info to the error returned.
+        // TODO(xp): replace primitive type names: u64->Term, LogIndex etc.
+        let got = self
+            .tree
+            .get(index.ser()?)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("get log: {}", index)
+            })?;
+
+        let ent = match got {
+            None => None,
+            Some(v) => Some(Entry::<LogEntry>::de(&v)?),
+        };
+
+        Ok(ent)
+    }
+
     /// Retrieve the last log index and the log entry.
-    pub fn last(&self) -> common_exception::Result<Option<(u64, Entry<LogEntry>)>> {
+    pub fn last(&self) -> common_exception::Result<Option<(LogIndex, Entry<LogEntry>)>> {
         //  TODO(xp): rename LogEntry: Entry<LogEntry> is weird.
         let last = self
             .tree
             .last()
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "read last log")?;
 
-        match last {
+        let index_ent = match last {
             Some((k, v)) => {
-                let log_index = u64::de(&k)?;
+                let log_index = LogIndex::de(&k)?;
                 let ent = Entry::<LogEntry>::de(&v)?;
-                Ok(Some((log_index, ent)))
+                Some((log_index, ent))
             }
-            None => Ok(None),
-        }
+            None => None,
+        };
+
+        Ok(index_ent)
     }
 
     /// Delete logs that are in `range`.
@@ -68,10 +90,10 @@ impl RaftLog {
     ///    If the system allows logs hole, non-atomic delete is quite enough(depends on the upper layer).
     ///
     pub async fn range_delete<R>(&self, range: R) -> common_exception::Result<()>
-    where R: RangeBounds<u64> {
+    where R: RangeBounds<LogIndex> {
         let mut batch = sled::Batch::default();
 
-        // Convert u64 range into sled::IVec range
+        // Convert LogIndex range into sled::IVec range
         let range = range.ser()?;
 
         for item in self.tree.range(range) {
@@ -93,11 +115,11 @@ impl RaftLog {
 
     /// Get logs of index in `range`
     pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<Entry<LogEntry>>>
-    where R: RangeBounds<u64> {
+    where R: RangeBounds<LogIndex> {
         // TODO(xp): pre alloc vec space
         let mut res = vec![];
 
-        // Convert u64 range into sled::IVec range
+        // Convert LogIndex range into sled::IVec range
         let range = range.ser()?;
         for item in self.tree.range(range) {
             let (_, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || "range_get")?;
@@ -122,7 +144,6 @@ impl RaftLog {
 
             let k = index.ser()?;
             let v = log.ser()?;
-            // let v = SledSerde::ser(log)?;
 
             batch.insert(k, v);
         }
@@ -130,6 +151,25 @@ impl RaftLog {
         self.tree
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch log insert")?;
+
+        self.tree
+            .flush_async()
+            .await
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush log insert")?;
+
+        Ok(())
+    }
+
+    /// Insert a single log.
+    pub async fn insert(&self, log: &Entry<LogEntry>) -> common_exception::Result<()> {
+        let index = log.log_id.index;
+
+        let k = index.ser()?;
+        let v = log.ser()?;
+
+        self.tree
+            .insert(k, v)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "log insert")?;
 
         self.tree
             .flush_async()
