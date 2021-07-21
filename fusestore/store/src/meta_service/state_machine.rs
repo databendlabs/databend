@@ -242,9 +242,13 @@ impl StateMachine {
 
             Cmd::DropDatabase { ref name } => {
                 let prev = self.databases.get(name).cloned();
-                self.databases.remove(name);
-                tracing::debug!("applied DropDatabase: {}", name);
-                Ok((prev, None).into())
+                if prev.is_some() {
+                    self.databases.remove(name);
+                    tracing::debug!("applied DropDatabase: {}", name);
+                    Ok((prev, None).into())
+                } else {
+                    Ok((None::<Database>, None::<Database>).into())
+                }
             }
 
             Cmd::CreateTable {

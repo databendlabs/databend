@@ -118,9 +118,13 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
         &self,
         act: DropDatabaseAction,
     ) -> common_exception::Result<DropDatabaseActionResult> {
+        let db_name = &act.plan.db;
+        let if_exists = act.plan.if_exists;
         let cr = LogEntry {
             txid: None,
-            cmd: DropDatabase { name: act.plan.db },
+            cmd: DropDatabase {
+                name: db_name.clone(),
+            },
         };
 
         let rst = self
@@ -130,7 +134,16 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            AppliedState::DataBase { .. } => Ok(DropDatabaseActionResult {}),
+            AppliedState::DataBase { prev, .. } => {
+                if prev.is_some() || if_exists {
+                    Ok(DropDatabaseActionResult {})
+                } else {
+                    Err(ErrorCode::UnknownDatabase(format!(
+                        "database not found: {:}",
+                        db_name
+                    )))
+                }
+            }
             _ => Err(ErrorCode::MetaNodeInternalError("not a Database result")),
         }
     }

@@ -15,6 +15,8 @@ use common_flights::meta_api_impl::CreateDatabaseAction;
 use common_flights::meta_api_impl::CreateDatabaseActionResult;
 use common_flights::meta_api_impl::CreateTableAction;
 use common_flights::meta_api_impl::CreateTableActionResult;
+use common_flights::meta_api_impl::DropDatabaseAction;
+use common_flights::meta_api_impl::DropDatabaseActionResult;
 use common_flights::meta_api_impl::DropTableAction;
 use common_flights::meta_api_impl::DropTableActionResult;
 use common_flights::meta_api_impl::GetDatabaseAction;
@@ -24,6 +26,7 @@ use common_flights::meta_api_impl::GetTableActionResult;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DatabaseEngineType;
+use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 use common_runtime::tokio;
@@ -197,6 +200,87 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
             let rst = hdlr
                 .handle(GetDatabaseAction {
                     db: c.db_name.to_string(),
+                })
+                .await;
+
+            match c.want {
+                Ok(ref act_rst) => {
+                    assert_eq!(act_rst, &rst.unwrap(), "{}", mes);
+                }
+                Err(ref err) => {
+                    let got = rst.unwrap_err();
+                    let got: ErrorCode = got.into();
+                    assert_eq!(err.code(), got.code(), "{}", mes);
+                    assert_eq!(err.message(), got.message(), "{}", mes);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_action_handler_drop_database() -> anyhow::Result<()> {
+    // - Bring up an ActionHandler backed with a Dfs
+    // - Add a database.
+    // - Assert getting present and absent databases.
+
+    common_tracing::init_default_tracing();
+
+    struct T {
+        db_name: &'static str,
+        if_exists: bool,
+        want: Result<DropDatabaseActionResult, ErrorCode>,
+    }
+
+    /// helper to build a T
+    fn case(db_name: &'static str, if_exists: bool, want: Result<(), &str>) -> T {
+        let want = match want {
+            Ok(..) => Ok(DropDatabaseActionResult {}),
+            Err(err_str) => Err(ErrorCode::UnknownDatabase(err_str)),
+        };
+
+        T {
+            db_name,
+            if_exists,
+            want,
+        }
+    }
+
+    let db_cases: Vec<T> = vec![
+        case("foo", false, Ok(())),
+        case("foo", true, Ok(())),
+        case("foo", false, Err("database not found: foo")),
+        case("foo", true, Ok(())),
+    ];
+
+    {
+        let dir = tempdir()?;
+        let root = dir.path();
+        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+
+        {
+            // create db
+            let plan = CreateDatabasePlan {
+                db: "foo".to_string(),
+                if_not_exists: false,
+                engine: DatabaseEngineType::Local,
+                options: Default::default(),
+            };
+            let cba = CreateDatabaseAction { plan };
+            hdlr.handle(cba).await?;
+        }
+
+        for (i, c) in db_cases.iter().enumerate() {
+            let mes = format!("{}-th: db: {:?}, want: {:?}", i, c.db_name, c.want);
+
+            let rst = hdlr
+                .handle(DropDatabaseAction {
+                    plan: DropDatabasePlan {
+                        if_exists: c.if_exists,
+                        db: c.db_name.to_string(),
+                    },
                 })
                 .await;
 
