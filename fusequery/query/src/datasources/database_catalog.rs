@@ -2,23 +2,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
+
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
-use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
+
+
 use common_store_api::MetaApi;
-use common_streams::SendableDataBlockStream;
+
 
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
@@ -26,12 +26,12 @@ use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::meta_synchronizer::Synchronizer;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteFactory;
-use crate::datasources::system::FunctionsTable;
+
 use crate::datasources::system::SystemFactory;
 use crate::datasources::Database;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
-use crate::sessions::FuseQueryContextRef;
+
 
 pub type MetaId = u64;
 pub type MetaVersion = u64;

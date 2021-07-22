@@ -72,7 +72,7 @@ impl MetaApi for StoreClient {
         self.do_action(GetTableAction { db, table }).await
     }
 
-    async fn get_databases(&mut self, ver_lower_bound: Option<u64>) -> common_exception::Result<DatabaseMeta> {
+    async fn get_databases(&mut self, _ver_lower_bound: Option<u64>) -> common_exception::Result<DatabaseMeta> {
         todo!()
     }
 }

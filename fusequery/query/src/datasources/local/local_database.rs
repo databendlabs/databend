@@ -14,7 +14,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
-use crate::datasources::database_catalog::DatasourceWrapper;
+
 use crate::datasources::database_catalog::TableFunctionMeta;
 use crate::datasources::database_catalog::TableMeta;
 use crate::datasources::local::CsvTable;
