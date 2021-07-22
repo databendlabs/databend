@@ -5,3 +5,4 @@ SELECT toTypeName(toint8('8')) FROM numbers_mt(1);
 SELECT toTypeName(toint16('16')) FROM numbers_mt(1);
 SELECT toTypeName(toint32('32')) FROM numbers_mt(1);
 SELECT toTypeName(toint64('64')) FROM numbers_mt(1);
+SELECT toTypeName(toUInt32('64')) FROM numbers_mt(1);

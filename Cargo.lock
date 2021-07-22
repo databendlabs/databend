@@ -807,6 +807,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "unicase",
 ]
 
 [[package]]
