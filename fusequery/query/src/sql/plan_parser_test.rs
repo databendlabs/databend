@@ -129,19 +129,19 @@ fn test_plan_parser() -> Result<()> {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
-            error: "",
+            error: "Code: 25, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 2, displayText = not support value expressions other than literal value yet.",
+            error: "Code: 25, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 2, displayText = only supports simple value tuples as source of insertion.",
+            error: "Code: 25, displayText = Unknown table: 't'.",
         },
         Test {
             name: "select-full",

@@ -152,7 +152,6 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
         let field = block.schema().field(column_index);
         let name = field.name();
         let is_nullable = field.is_nullable();
-
         result = match is_nullable {
             true => match column.data_type() {
                 DataType::Int8 => result.column(name, column.i8()?.collect_values()),

@@ -17,5 +17,5 @@ thiserror = "1.0.26"
 tonic = "0.4.3"
 
 # Github dependencies
-sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "fc5459c"}
+sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", branch = "insert-format"}
 
