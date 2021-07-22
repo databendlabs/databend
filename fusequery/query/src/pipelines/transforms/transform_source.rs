@@ -59,13 +59,8 @@ impl Processor for SourceTransform {
             remote
         );
 
-        let table = if remote {
-            let remote_table = self.ctx.get_remote_table(db.as_str(), table.as_str());
-            remote_table.await?
-        } else {
-            self.ctx.get_table(db.as_str(), table.as_str())?
-        };
-
+        let table_meta = self.ctx.get_table(db.as_str(), table.as_str())?;
+        let table = table_meta.get_inner();
         let table_stream = table.read(self.ctx.clone(), &self.source_plan);
 
         // We need to keep the block struct with the schema

@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::DatabaseCatalog;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 
@@ -92,7 +92,7 @@ impl FuseQueryContextShared {
         self.session.get_settings()
     }
 
-    pub fn get_datasource(&self) -> Arc<DataSource> {
+    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
         self.session.get_datasource()
     }
 

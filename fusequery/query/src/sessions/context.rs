@@ -23,9 +23,11 @@ use common_streams::SendableDataBlockStream;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::DatabaseCatalog;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
+use crate::datasources::TableFunctionMeta;
+use crate::datasources::TableMeta;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::ProcessInfo;
 use crate::sessions::Settings;
@@ -133,26 +135,15 @@ impl FuseQueryContext {
         self.shared.try_get_cluster()
     }
 
-    pub fn get_datasource(&self) -> Arc<DataSource> {
+    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
         self.shared.get_datasource()
     }
 
-    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
         self.get_datasource().get_table(database, table)
     }
 
-    // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
-    //
-    // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
-    // Implementation of fetching remote table involves async operations which is not
-    // straight forward (but not infeasible) to do in a non-async method.
-    pub async fn get_remote_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
-        self.get_datasource()
-            .get_remote_table(database, table)
-            .await
-    }
-
-    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn TableFunction>> {
+    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {
         self.get_datasource().get_table_function(function_name)
     }
 

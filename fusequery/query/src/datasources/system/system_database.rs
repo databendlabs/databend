@@ -10,18 +10,27 @@ use common_exception::Result;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::datasources::database_catalog::TableFunctionMeta;
+use crate::datasources::database_catalog::TableMeta;
 use crate::datasources::system;
 use crate::datasources::Database;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 
+const SYSDB_TBL_ID_START: u64 = 1;
+
 pub struct SystemDatabase {
-    tables: HashMap<String, Arc<dyn Table>>,
-    table_functions: HashMap<String, Arc<dyn TableFunction>>,
+    tables: HashMap<String, Arc<TableMeta>>,
+    table_functions: HashMap<String, Arc<TableFunctionMeta>>,
 }
 
 impl SystemDatabase {
     pub fn create() -> Self {
+        let mut id = SYSDB_TBL_ID_START;
+        let mut next_id = || -> u64 {
+            id += 1;
+            id
+        };
         // Table list.
         let table_list: Vec<Arc<dyn Table>> = vec![
             Arc::new(system::OneTable::create()),
@@ -37,9 +46,14 @@ impl SystemDatabase {
             Arc::new(system::TracingTable::create()),
             Arc::new(system::ProcessesTable::create()),
         ];
-        let mut tables: HashMap<String, Arc<dyn Table>> = HashMap::default();
-        for tbl in table_list.iter() {
-            tables.insert(tbl.name().to_string(), tbl.clone());
+
+        let meta_table_list = table_list
+            .iter()
+            .map(|t| TableMeta::with_id(t.clone(), next_id()))
+            .collect::<Vec<_>>();
+        let mut tables = HashMap::default();
+        for tbl in meta_table_list.iter() {
+            tables.insert(tbl.get_inner().name().to_string(), tbl.clone());
         }
 
         // Table function list.
@@ -48,9 +62,16 @@ impl SystemDatabase {
             Arc::new(system::NumbersTable::create("numbers_mt")),
             Arc::new(system::NumbersTable::create("numbers_local")),
         ];
-        let mut table_functions: HashMap<String, Arc<dyn TableFunction>> = HashMap::default();
-        for tbl_func in table_function_list.iter() {
-            table_functions.insert(tbl_func.name().to_string(), tbl_func.clone());
+        let meta_func_list = table_function_list
+            .iter()
+            .map(|t| TableFunctionMeta::with_id(t.clone(), next_id()))
+            .collect::<Vec<_>>();
+        let mut table_functions = HashMap::default();
+        for tbl_func in meta_func_list.iter() {
+            table_functions.insert(
+                tbl_func.get_inner().function_name().to_string(),
+                tbl_func.clone(),
+            );
         }
 
         SystemDatabase {
@@ -74,7 +95,7 @@ impl Database for SystemDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
         let table = self
             .tables
             .get(table_name)
@@ -82,11 +103,11 @@ impl Database for SystemDatabase {
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
         Ok(self.tables.values().cloned().collect())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
+    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(self.table_functions.values().cloned().collect())
     }
 

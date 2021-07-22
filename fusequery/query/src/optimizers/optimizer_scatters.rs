@@ -273,7 +273,7 @@ impl PlanRewriter for ScattersOptimizerImpl {
         let context = self.ctx.clone();
         let select_table = context.get_table(&plan.db, &plan.table)?;
 
-        match select_table.is_local() {
+        match select_table.get_inner().is_local() {
             false => self.running_mode = RunningMode::Cluster,
             true => self.running_mode = RunningMode::Standalone,
         }
