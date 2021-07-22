@@ -125,12 +125,6 @@ impl DatabaseCatalog {
         self.insert_databases(databases)
     }
 
-    // Register remote database with Remote engine.
-    //fn register_remote_database(&mut self) -> Result<()> {
-    //    let databases = self.remote_factory.load_databases()?;
-    //    self.insert_databases(databases)
-    //}
-
     // Register default database with Local engine.
     fn register_default_database(&mut self) -> Result<()> {
         let default_db = LocalDatabase::create();
