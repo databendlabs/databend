@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -105,7 +106,7 @@ impl Table for NullTable {
             let mut inner = insert_plan.input_stream.lock().unwrap();
             (*inner).take()
         }
-        .unwrap();
+        .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
         while let Some(block) = s.next().await {
             info!("Ignore one block rows: {}", block.num_rows())

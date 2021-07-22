@@ -129,8 +129,17 @@ impl futures::stream::Stream for FromClickHouseBlockStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(cx).map(|x| match x {
             Some(v) => {
-                let block = from_clickhouse_block(self.schema.clone(), v).unwrap();
-                Some(block)
+                let block = from_clickhouse_block(self.schema.clone(), v);
+                match block {
+                    Ok(block) => Some(block),
+                    Err(e) => {
+                        log::error!(
+                            "failed to convert ClickHouseBlock to block , breaking out, {:?}",
+                            e
+                        );
+                        None
+                    }
+                }
             }
             _ => None,
         })

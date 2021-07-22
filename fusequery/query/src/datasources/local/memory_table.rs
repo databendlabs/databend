@@ -115,7 +115,7 @@ impl Table for MemoryTable {
             let mut inner = insert_plan.input_stream.lock().unwrap();
             (*inner).take()
         }
-        .unwrap();
+        .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
         if insert_plan.schema().as_ref() != self.schema.as_ref() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
