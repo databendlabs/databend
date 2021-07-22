@@ -24,6 +24,8 @@ mod apply_test;
 mod cast_test;
 #[cfg(test)]
 mod downcast_test;
+#[cfg(test)]
+mod fill_test;
 
 pub use agg::*;
 pub use apply::*;
