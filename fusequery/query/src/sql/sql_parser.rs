@@ -451,6 +451,7 @@ impl<'a> DfParser<'a> {
                 "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
                 "CSV" => Ok(TableEngineType::Csv),
                 "Null" => Ok(TableEngineType::Null),
+                "Memory" => Ok(TableEngineType::Memory),
                 _ => self.expected(
                     "Engine must one of Parquet, JSONEachRaw, Null or CSV",
                     Token::Word(w),

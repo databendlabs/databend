@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_infallible::Mutex;
 
 /// please do not keep this, this code is just for test purpose
 type BlockStream =
@@ -32,12 +32,13 @@ impl PartialEq for InsertIntoPlan {
 
 impl InsertIntoPlan {
     pub fn empty_stream() -> Arc<Mutex<Option<BlockStream>>> {
-        Default::default()
+        Arc::new(Mutex::new(None))
     }
-}
-
-impl InsertIntoPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
+    }
+    pub fn set_input_stream(&self, input_stream: BlockStream) {
+        let mut writer = self.input_stream.lock();
+        *writer = Some(input_stream);
     }
 }

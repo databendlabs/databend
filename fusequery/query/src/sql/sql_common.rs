@@ -25,6 +25,7 @@ impl SQLCommon {
             SQLDataType::SmallInt => Ok(DataType::Int16),
             SQLDataType::Char(_) => Ok(DataType::Utf8),
             SQLDataType::Varchar(_) => Ok(DataType::Utf8),
+            SQLDataType::String => Ok(DataType::Utf8),
             SQLDataType::Text => Ok(DataType::Utf8),
             SQLDataType::Decimal(_, _) => Ok(DataType::Float64),
             SQLDataType::Float(_) => Ok(DataType::Float32),

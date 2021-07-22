@@ -28,8 +28,31 @@ async fn test_clickhouse_handler_query() -> Result<()> {
     let query_str = "SELECT COUNT() AS c FROM numbers(1000)";
     let block = query(&mut handler, query_str).await?;
     assert_eq!(block.row_count(), 1);
-    assert_eq!(get_u64_data(block)?, Some(1000));
+    assert_eq!(get_u64_data(block)?, 1000);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_clickhouse_insert_data() -> Result<()> {
+    let sessions = SessionManager::try_create(1)?;
+    let mut handler = ClickHouseHandler::create(sessions);
+
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = handler.start(listening).await?;
+    let mut handler = create_conn(listening.port()).await?;
+
+    let query_str = "CREATE TABLE test(a UInt64, b String) Engine = Memory";
+    execute(&mut handler, query_str).await?;
+
+    let block = Block::new();
+    let block = block.column("a", vec![3u64, 4, 5, 6]);
+    let block = block.column("b", vec!["33", "44", "55", "66"]);
+    insert(&mut handler, "test", block).await?;
+
+    let query_str = "SELECT * from test";
+    let block = query(&mut handler, query_str).await?;
+    assert_eq!(block.row_count(), 4);
     Ok(())
 }
 
@@ -87,7 +110,7 @@ async fn test_abort_clickhouse_server() -> Result<()> {
     Ok(())
 }
 
-fn get_u64_data(block: Block<Complex>) -> Result<Option<u64>> {
+fn get_u64_data(block: Block<Complex>) -> Result<u64> {
     match block.get(0, "c") {
         Ok(value) => Ok(value),
         Err(error) => Err(ErrorCode::UnknownException(format!(
@@ -103,6 +126,26 @@ async fn query(handler: &mut ClientHandle, query: &str) -> Result<Block<Complex>
         Ok(block) => Ok(block),
         Err(error) => Err(ErrorCode::UnknownException(format!(
             "Error query: {:?}",
+            error
+        ))),
+    }
+}
+
+async fn execute(handler: &mut ClientHandle, query: &str) -> Result<()> {
+    match handler.execute(query).await {
+        Ok(()) => Ok(()),
+        Err(error) => Err(ErrorCode::UnknownException(format!(
+            "Error execute query: {:?}",
+            error
+        ))),
+    }
+}
+
+async fn insert(handler: &mut ClientHandle, table: &str, block: Block) -> Result<()> {
+    match handler.insert(table, block).await {
+        Ok(()) => Ok(()),
+        Err(error) => Err(ErrorCode::UnknownException(format!(
+            "Error insert table: {:?}",
             error
         ))),
     }
