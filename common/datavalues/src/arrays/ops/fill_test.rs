@@ -14,9 +14,13 @@ use crate::Int32Type;
 use crate::UInt16Type;
 
 #[test]
-fn test_array_fill() -> Result<()> {
-    let df_uint16_array = DFUInt16Array::fill(5u16, 3);
-    let arrow_uint16_array: &PrimitiveArray<UInt16Type> = df_uint16_array.as_ref();
+fn test_primitive_array_fill() -> Result<()> {
+    let mut df_uint16_array = DFUInt16Array::fill(5u16, 3);
+    let mut arrow_uint16_array: &PrimitiveArray<UInt16Type> = df_uint16_array.as_ref();
+    assert_eq!(&[5u16, 5u16, 5u16], &arrow_uint16_array.values());
+
+    df_uint16_array = DFUInt16Array::fill_null(3);
+    arrow_uint16_array: &PrimitiveArray<UInt16Type> = df_uint16_array.as_ref();
     assert_eq!(&[5u16, 5u16, 5u16], &arrow_uint16_array.values());
 
     Ok(())
