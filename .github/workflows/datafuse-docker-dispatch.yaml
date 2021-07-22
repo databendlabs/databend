@@ -6,7 +6,7 @@ jobs:
   run_funcbench:
     name: Running build_docker
     if: github.event.action == 'build_docker'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       GITHUB_TOKEN: ${{ github.token }}
       GITHUB_ORG: zhihanz
