@@ -109,6 +109,7 @@ function install_toolchain {
   rustup set profile minimal
   rustup component add rustfmt --toolchain "$version"
   rustup component add clippy --toolchain "$version"
+  rustup component add miri --toolchain "$version"
   rustup default "$version"
 }
 
