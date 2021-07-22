@@ -65,7 +65,7 @@ impl FileSystem for LocalFS {
         tracing::info!("read: {}", p.as_path().display());
 
         let data = std::fs::read(p.as_path()).map_err_to_code(ErrorCode::FileDamaged, || {
-            format!("localfs: fail to read: {:?}", path)
+            format!("LocalFS: fail to read: {:?}", path)
         })?;
         Ok(data)
     }
