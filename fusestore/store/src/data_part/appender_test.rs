@@ -56,6 +56,7 @@ mod test {
             bail!("empty record set?")
         }
     }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_append() -> anyhow::Result<()> {
         let col0: ArrayRef = Arc::new(Int64Array::from(vec![0, 1, 2]));
