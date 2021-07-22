@@ -105,13 +105,11 @@ impl InteractiveWorkerBase {
         let (mut tx, rx) = mpsc::channel(20);
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
-        let ctx_cloned = ctx.clone();
         // the data is comming in async mode
+        let sent_all_data = ch_ctx.state.sent_all_data.clone();
         ctx.execute_task(async move {
-            let async_data_stream = interpreter.execute();
-            let data_stream = async_data_stream.await.unwrap();
-            let mut abort_stream = ctx_cloned.try_create_abortable(data_stream).unwrap();
-            while let Some(_block) = abort_stream.next().await {}
+            interpreter.execute().await.unwrap();
+            sent_all_data.notify_one();
         })?;
         Ok(rx)
     }

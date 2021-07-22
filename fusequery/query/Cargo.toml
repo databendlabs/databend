@@ -43,7 +43,7 @@ common-management = { path = "../../common/management" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", branch = "insert-format" }
-clickhouse-srv = "0.3.0"
+clickhouse-srv = "0.3.1"
 
 
 # Crates.io dependencies

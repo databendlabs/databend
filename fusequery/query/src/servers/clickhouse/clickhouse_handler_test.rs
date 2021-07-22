@@ -50,7 +50,6 @@ async fn test_clickhouse_insert_data() -> Result<()> {
     let block = block.column("b", vec!["33", "44", "55", "66"]);
     insert(&mut handler, "test", block).await?;
 
-    std::thread::sleep(Duration::from_secs(1));
     let query_str = "SELECT * from test";
     let block = query(&mut handler, query_str).await?;
     assert_eq!(block.row_count(), 4);

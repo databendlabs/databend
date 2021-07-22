@@ -609,9 +609,9 @@ dependencies = [
 
 [[package]]
 name = "clickhouse-srv"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6be7c9f05de63913e5d038c71e619bfc2ed183dfa7e105f76eea93d3f493df79"
+checksum = "8f9d602b512c468ab39d777639be84da96e55b126ece26d0055e2b05a33daef2"
 dependencies = [
  "async-trait",
  "byteorder",
