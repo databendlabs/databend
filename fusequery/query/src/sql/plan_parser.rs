@@ -77,7 +77,10 @@ impl PlanParser {
         DfParser::parse_sql(query).and_then(|(stmts, _)| {
             stmts
                 .first()
-                .map(|statement| self.statement_to_plan(statement))
+                .map(|statement| {
+                    let _ = &self;
+                    self.statement_to_plan(statement)
+                })
                 .unwrap_or_else(|| {
                     Result::Err(ErrorCode::SyntaxException("Only support single query"))
                 })
@@ -365,6 +368,7 @@ impl PlanParser {
                 .map(|chunk| {
                     let transposed: Vec<Vec<String>> = (0..chunk[0].len())
                         .map(|i| {
+                            let _ = &chunk;
                             chunk
                                 .iter()
                                 .map(|inner| match &inner[i] {
@@ -433,14 +437,20 @@ impl PlanParser {
         // In example: Filter=(number > 1)
         let plan = self
             .plan_tables_with_joins(&select.from)
-            .and_then(|input| self.filter(&input, &select.selection, Some(select)))?;
+            .and_then(|input| {
+                let _ = &self;
+                self.filter(&input, &select.selection, Some(select))
+            })?;
 
         // Projection expression
         // In example: Projection=[(sum((number + 1)) + 2), (number % 3) as id]
         let projection_exprs = select
             .projection
             .iter()
-            .map(|e| self.sql_select_to_rex(e, &plan.schema(), Some(select)))
+            .map(|e| {
+                let _ = &self;
+                self.sql_select_to_rex(e, &plan.schema(), Some(select))
+            })
             .collect::<Result<Vec<Expression>>>()?
             .iter()
             .flat_map(|expr| expand_wildcard(expr, &plan.schema()))
@@ -456,6 +466,7 @@ impl PlanParser {
             .group_by
             .iter()
             .map(|e| {
+                let _ = &self;
                 self.sql_to_rex(e, &plan.schema(), Some(select))
                     .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))
             })
@@ -467,6 +478,7 @@ impl PlanParser {
             .having
             .as_ref()
             .map::<Result<Expression>, _>(|having_expr| {
+                let _ = &self;
                 let having_expr = self.sql_to_rex(having_expr, &plan.schema(), Some(select))?;
                 let having_expr = resolve_aliases_to_exprs(&having_expr, &aliases)?;
 
@@ -479,6 +491,7 @@ impl PlanParser {
         let order_by_exprs = order_by
             .iter()
             .map(|e| -> Result<Expression> {
+                let _ = &self;
                 Ok(Expression::Sort {
                     expr: Box::new(
                         self.sql_to_rex(&e.expr, &plan.schema(), Some(select))
@@ -520,7 +533,10 @@ impl PlanParser {
             // inner expression=[(number + 1), (number % 3)]
             let plan = self
                 .expression(&plan, &before_aggr_exprs, "Before GroupBy")
-                .and_then(|input| self.aggregate(&input, &aggr_exprs, &group_by_exprs))?;
+                .and_then(|input| {
+                    let _ = &self;
+                    self.aggregate(&input, &aggr_exprs, &group_by_exprs)
+                })?;
 
             // After aggregation, these are all of the columns that will be
             // available to next phases of planning.
@@ -626,6 +642,7 @@ impl PlanParser {
             table
                 .schema()
                 .and_then(|ref schema| {
+                    let _ = (&db_name, &table_name);
                     PlanBuilder::scan(db_name, table_name, schema, None, None, None)
                 })
                 .and_then(|builder| builder.build())
@@ -1097,6 +1114,7 @@ impl PlanParser {
                 let n = limit
                     .as_ref()
                     .map(|limit_expr| {
+                        let _ = &self;
                         self.sql_to_rex(limit_expr, &input.schema(), select)
                             .and_then(|limit_expr| match limit_expr {
                                 Expression::Literal { value, .. } => Ok(value.as_u64()? as usize),
@@ -1111,6 +1129,7 @@ impl PlanParser {
                 let offset = offset
                     .as_ref()
                     .map(|offset| {
+                        let _ = &self;
                         let offset_expr = &offset.value;
                         self.sql_to_rex(offset_expr, &input.schema(), select)
                             .and_then(|offset_expr| match offset_expr {

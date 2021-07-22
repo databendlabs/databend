@@ -201,6 +201,7 @@ impl DataSource {
                     .try_get_client()
                     .await?;
                 client.create_database(plan.clone()).await.map(|_| {
+                    let _ = &self;
                     let database = RemoteDatabase::create(
                         self.remote_factory.store_client_provider(),
                         plan.db.clone(),
@@ -237,6 +238,7 @@ impl DataSource {
                 .try_get_client()
                 .await?;
             client.drop_database(plan.clone()).await.map(|_| {
+                let _ = &self;
                 self.databases.write().remove(plan.db.as_str());
             })?;
         };

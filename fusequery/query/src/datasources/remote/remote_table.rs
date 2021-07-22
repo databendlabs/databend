@@ -100,9 +100,10 @@ impl Table for RemoteTable {
             })?;
         }
 
-        rx.recv()
-            .map_err(ErrorCode::from_std_error)?
-            .map(|v| self.partitions_to_plan(v, scan.clone()))
+        rx.recv().map_err(ErrorCode::from_std_error)?.map(|v| {
+            let _ = &self;
+            self.partitions_to_plan(v, scan.clone())
+        })
     }
 
     async fn read(

@@ -163,7 +163,10 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
     {
         self.apply_kernel_cast(|array| {
             let av: AlignedVec<_> = (0..array.len())
-                .map(|idx| unsafe { f(array.value_unchecked(idx)) })
+                .map(|idx| {
+                    let _ = &array;
+                    unsafe { f(array.value_unchecked(idx)) }
+                })
                 .collect();
             let null_bit_buffer = array.data_ref().null_buffer().cloned();
             Arc::new(av.into_primitive_array::<S>(null_bit_buffer)) as ArrayRef
@@ -204,7 +207,10 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
     {
         let arr = self.downcast_ref();
         let av: AlignedVec<_> = (0..arr.len())
-            .map(|idx| unsafe { f(arr.value_unchecked(idx)) })
+            .map(|idx| {
+                let _ = &arr;
+                unsafe { f(arr.value_unchecked(idx)) }
+            })
             .collect();
 
         let null_bit_buffer = self.array.data_ref().null_buffer().cloned();

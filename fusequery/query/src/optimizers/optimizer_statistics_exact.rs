@@ -52,6 +52,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                             table
                                 .schema()
                                 .and_then(|ref schema| {
+                                    let _ = (&db_name, &table_name);
                                     PlanBuilder::scan(db_name, table_name, schema, None, None, None)
                                 })
                                 .and_then(|builder| builder.build())

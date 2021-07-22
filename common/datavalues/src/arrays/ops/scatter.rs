@@ -56,11 +56,13 @@ where T: DFNumericType
         match self.null_count() {
             0 => {
                 indices.zip(0..self.len()).for_each(|(index, row)| {
+                    let _ = &array;
                     builders[index as usize].append_value(array.value(row));
                 });
             }
             _ => {
                 indices.zip(0..self.len()).for_each(|(index, row)| {
+                    let _ = (&self, &array);
                     if self.is_null(row) {
                         builders[index as usize].append_null();
                     } else {
@@ -99,11 +101,13 @@ impl ArrayScatter for DFUtf8Array {
         match self.null_count() {
             0 => {
                 indices.zip(0..self.len()).for_each(|(index, row)| {
+                    let _ = &array;
                     builders[index as usize].append_value(array.value(row));
                 });
             }
             _ => {
                 indices.zip(0..self.len()).for_each(|(index, row)| {
+                    let _ = &array;
                     if self.is_null(row) {
                         builders[index as usize].append_null();
                     } else {
@@ -139,11 +143,13 @@ impl ArrayScatter for DFBooleanArray {
         match self.null_count() {
             0 => {
                 indices.zip(0..self.len()).for_each(|(index, row)| {
+                    let _ = &array;
                     builders[index as usize].append_value(array.value(row));
                 });
             }
             _ => {
                 indices.zip(0..self.len()).for_each(|(index, row)| {
+                    let _ = &array;
                     if self.is_null(row) {
                         builders[index as usize].append_null();
                     } else {

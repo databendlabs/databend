@@ -170,7 +170,10 @@ pub trait PlanRewriter {
     ) -> Result<Expressions> {
         exprs
             .iter()
-            .map(|expr| Self::rewrite_expr(self, schema, expr))
+            .map(|expr| {
+                let _ = &self;
+                Self::rewrite_expr(self, schema, expr)
+            })
             .collect::<Result<Vec<_>>>()
     }
 

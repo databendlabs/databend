@@ -62,6 +62,7 @@ impl AggregateFunctionFactory {
                     return map
                         .get(nested_name)
                         .map(|nested_creator| {
+                            let _ = &nested_name;
                             combinator_creator(nested_name, arguments, *nested_creator)
                         })
                         .unwrap_or_else(|| Err(not_found_error()));

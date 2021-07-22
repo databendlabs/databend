@@ -7,8 +7,6 @@ use common_planners::PlanNode;
 use common_runtime::tokio;
 use criterion::Criterion;
 use fuse_query::interpreters::SelectInterpreter;
-use fuse_query::servers::MySQLConnection;
-use fuse_query::sessions::session_ref::SessionRef;
 use fuse_query::sessions::SessionManager;
 use fuse_query::sql::PlanParser;
 use futures::StreamExt;
@@ -36,6 +34,7 @@ pub async fn select_executor(sql: &str) -> Result<()> {
 pub fn criterion_benchmark_suite(c: &mut Criterion, sql: &str) {
     c.bench_function(sql, |b| {
         b.iter(|| {
+            let _ = &sql;
             tokio::runtime::Runtime::new()
                 .unwrap()
                 .block_on(select_executor(sql))

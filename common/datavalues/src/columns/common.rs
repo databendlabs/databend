@@ -261,6 +261,7 @@ impl DataArrayMerge {
 
         // prepare a comparison function taking into account nulls and sort options
         let cmp = |left, right| {
+            let _ = (&lhs, &options, &rhs);
             for c in 0..lhs.len() {
                 let descending = options[c].descending;
                 let null_first = options[c].nulls_first;

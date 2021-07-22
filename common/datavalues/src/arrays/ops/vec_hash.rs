@@ -96,6 +96,7 @@ impl VecHash for DFBinaryArray {
         let mut builder = PrimitiveArrayBuilder::<UInt64Type>::new(self.len());
 
         (0..self.len()).for_each(|index| {
+            let _ = &binary_data;
             if self.is_null(index) {
                 builder.append_null();
             } else {

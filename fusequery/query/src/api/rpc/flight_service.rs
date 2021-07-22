@@ -60,6 +60,7 @@ impl FlightService for FuseQueryFlightService {
         &self,
         _: StreamRequest<HandshakeRequest>,
     ) -> Response<Self::HandshakeStream> {
+        let _ = &__arg1;
         Result::Err(Status::unimplemented(
             "FuseQuery does not implement handshake.",
         ))
@@ -68,18 +69,21 @@ impl FlightService for FuseQueryFlightService {
     type ListFlightsStream = FlightStream<FlightInfo>;
 
     async fn list_flights(&self, _: Request<Criteria>) -> Response<Self::ListFlightsStream> {
+        let _ = &__arg1;
         Result::Err(Status::unimplemented(
             "FuseQuery does not implement list_flights.",
         ))
     }
 
     async fn get_flight_info(&self, _: Request<FlightDescriptor>) -> Response<FlightInfo> {
+        let _ = &__arg1;
         Err(Status::unimplemented(
             "FuseQuery does not implement get_flight_info.",
         ))
     }
 
     async fn get_schema(&self, _: Request<FlightDescriptor>) -> Response<SchemaResult> {
+        let _ = &__arg1;
         Err(Status::unimplemented(
             "FuseQuery does not implement get_schema.",
         ))
@@ -108,6 +112,7 @@ impl FlightService for FuseQueryFlightService {
     type DoPutStream = FlightStream<PutResult>;
 
     async fn do_put(&self, _: StreamRequest<FlightData>) -> Response<Self::DoPutStream> {
+        let _ = &__arg1;
         Result::Err(Status::unimplemented(
             "FuseQuery does not implement do_put.",
         ))
@@ -116,6 +121,7 @@ impl FlightService for FuseQueryFlightService {
     type DoExchangeStream = FlightStream<FlightData>;
 
     async fn do_exchange(&self, _: StreamRequest<FlightData>) -> Response<Self::DoExchangeStream> {
+        let _ = &__arg1;
         Result::Err(Status::unimplemented(
             "FuseQuery does not implement do_exchange.",
         ))
@@ -157,6 +163,7 @@ impl FlightService for FuseQueryFlightService {
     type ListActionsStream = FlightStream<ActionType>;
 
     async fn list_actions(&self, _: Request<Empty>) -> Response<Self::ListActionsStream> {
+        let _ = &__arg1;
         Result::Ok(RawResponse::new(
             Box::pin(tokio_stream::iter(vec![
                 Ok(ActionType {

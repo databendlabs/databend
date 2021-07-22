@@ -105,7 +105,7 @@ impl Config {
     ///
     /// Thus we need another method to generate an empty default instance.
     pub fn empty() -> Self {
-        Self::from_iter(&Vec::<&'static str>::new())
+        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
     }
 
     pub fn meta_api_addr(&self) -> String {
