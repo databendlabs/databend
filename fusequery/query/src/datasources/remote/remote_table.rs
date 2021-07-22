@@ -115,7 +115,7 @@ impl Table for RemoteTable {
 
     async fn append_data(&self, _ctx: FuseQueryContextRef, plan: InsertIntoPlan) -> Result<()> {
         let opt_stream = {
-            let mut inner = plan.input_stream.lock().unwrap();
+            let mut inner = plan.input_stream.lock();
             (*inner).take()
         };
 

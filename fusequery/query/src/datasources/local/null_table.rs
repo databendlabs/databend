@@ -103,7 +103,7 @@ impl Table for NullTable {
         insert_plan: common_planners::InsertIntoPlan,
     ) -> Result<()> {
         let mut s = {
-            let mut inner = insert_plan.input_stream.lock().unwrap();
+            let mut inner = insert_plan.input_stream.lock();
             (*inner).take()
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
