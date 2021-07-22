@@ -33,7 +33,7 @@ jobs:
         --data '{"state":"pending","context":"build-docker-status","target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
         echo "sync status to S3"
-        echo '{"uuid": "${{ env.UUID }}", "status": "PENDING"}' > status.jsondatafuse-docker-dispatch.yaml
+        echo '{"uuid": "${{ env.UUID }}", "status": "PENDING"}' > status.json
         aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
     - uses: actions/checkout@v2
       with:
