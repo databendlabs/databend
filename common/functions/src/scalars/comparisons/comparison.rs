@@ -29,15 +29,18 @@ impl ComparisonFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
 
-        map.insert("=", ComparisonEqFunction::try_create_func);
-        map.insert("<", ComparisonLtFunction::try_create_func);
-        map.insert(">", ComparisonGtFunction::try_create_func);
-        map.insert("<=", ComparisonLtEqFunction::try_create_func);
-        map.insert(">=", ComparisonGtEqFunction::try_create_func);
-        map.insert("!=", ComparisonNotEqFunction::try_create_func);
-        map.insert("<>", ComparisonNotEqFunction::try_create_func);
-        map.insert("like", ComparisonLikeFunction::try_create_func);
-        map.insert("not like", ComparisonNotLikeFunction::try_create_func);
+        map.insert("=".into(), ComparisonEqFunction::try_create_func);
+        map.insert("<".into(), ComparisonLtFunction::try_create_func);
+        map.insert(">".into(), ComparisonGtFunction::try_create_func);
+        map.insert("<=".into(), ComparisonLtEqFunction::try_create_func);
+        map.insert(">=".into(), ComparisonGtEqFunction::try_create_func);
+        map.insert("!=".into(), ComparisonNotEqFunction::try_create_func);
+        map.insert("<>".into(), ComparisonNotEqFunction::try_create_func);
+        map.insert("like".into(), ComparisonLikeFunction::try_create_func);
+        map.insert(
+            "not like".into(),
+            ComparisonNotLikeFunction::try_create_func,
+        );
         Ok(())
     }
 

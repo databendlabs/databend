@@ -9,6 +9,7 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
+use unicase::UniCase;
 
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::ComparisonFunction;
@@ -22,7 +23,8 @@ use crate::scalars::UdfFunction;
 pub struct FunctionFactory;
 pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn Function>>;
 
-pub type FactoryFuncRef = Arc<RwLock<IndexMap<&'static str, FactoryFunc>>>;
+type Key = UniCase<String>;
+pub type FactoryFuncRef = Arc<RwLock<IndexMap<Key, FactoryFunc>>>;
 
 lazy_static! {
     static ref FACTORY: FactoryFuncRef = {
@@ -34,22 +36,27 @@ lazy_static! {
         UdfFunction::register(map.clone()).unwrap();
         HashesFunction::register(map.clone()).unwrap();
         ToCastFunction::register(map.clone()).unwrap();
+
         map
     };
 }
 
 impl FunctionFactory {
-    pub fn get(name: &str) -> Result<Box<dyn Function>> {
+    pub fn get(name: impl AsRef<str>) -> Result<Box<dyn Function>> {
+        let name = name.as_ref();
         let map = FACTORY.read();
+        let key: Key = name.into();
         let creator = map
-            .get(&*name.to_lowercase())
+            .get(&key)
             .ok_or_else(|| ErrorCode::UnknownFunction(format!("Unsupported Function: {}", name)))?;
         (creator)(name)
     }
 
-    pub fn check(name: &str) -> bool {
+    pub fn check(name: impl AsRef<str>) -> bool {
+        let name = name.as_ref();
+        let key: Key = name.into();
         let map = FACTORY.read();
-        map.contains_key(&*name.to_lowercase())
+        map.contains_key(&key)
     }
 
     pub fn registered_names() -> Vec<String> {

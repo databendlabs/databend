@@ -24,9 +24,9 @@ pub struct LogicFunction {
 impl LogicFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
-        map.insert("and", LogicAndFunction::try_create_func);
-        map.insert("or", LogicOrFunction::try_create_func);
-        map.insert("not", LogicNotFunction::try_create_func);
+        map.insert("and".into(), LogicAndFunction::try_create_func);
+        map.insert("or".into(), LogicOrFunction::try_create_func);
+        map.insert("not".into(), LogicNotFunction::try_create_func);
         Ok(())
     }
 
