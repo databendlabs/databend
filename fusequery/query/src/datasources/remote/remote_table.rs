@@ -123,9 +123,7 @@ impl Table for RemoteTable {
             let block_stream =
                 opt_stream.ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-            println!("{:?}", "aa");
             let mut client = self.store_client_provider.try_get_client().await?;
-            println!("{:?}", "bb");
 
             client
                 .append_data(

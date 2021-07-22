@@ -9,6 +9,9 @@
 #[macro_use]
 mod macros;
 
+#[cfg(test)]
+mod data_array_filter_test;
+
 #[allow(dead_code)]
 mod bit_util;
 mod data_array_filter;

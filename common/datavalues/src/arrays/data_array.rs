@@ -224,6 +224,7 @@ where T: DFDataType
         }
     }
 
+    // Apply BitAnd with the null masks and generate a new ArrayData
     pub fn apply_null_mask(&self, mask: impl AsRef<[u8]>) -> Result<Self> {
         let mask = mask.as_ref();
         if mask.len() != self.len() {

@@ -100,7 +100,6 @@ impl Table for MemoryTable {
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let blocks = self.blocks.read();
-
         Ok(Box::pin(MemoryTableStream::try_create(
             ctx,
             blocks.clone(),
