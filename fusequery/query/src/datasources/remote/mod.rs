@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 pub(crate) mod meta_synchronizer;
-mod remote_database;
-mod remote_factory;
+pub(crate) mod remote_database;
+pub(crate) mod remote_factory;
 mod remote_table;
 mod remote_table_do_read;
 mod store_client_provider;

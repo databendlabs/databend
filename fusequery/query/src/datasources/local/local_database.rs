@@ -14,8 +14,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
-use crate::datasources::database_catalog::TableFunctionMeta;
-use crate::datasources::database_catalog::TableMeta;
+use crate::catalog::datasource_meta::TableFunctionMeta;
+use crate::catalog::datasource_meta::TableMeta;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
@@ -107,7 +107,7 @@ impl Database for LocalDatabase {
 
         self.tables.write().insert(
             table_name.to_string(),
-            TableMeta::with_id(Arc::from(table), self.next_id()),
+            TableMeta::new(Arc::from(table), self.next_id()),
         );
         Ok(())
     }

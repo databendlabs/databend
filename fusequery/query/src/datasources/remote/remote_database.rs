@@ -12,8 +12,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_store_api::MetaApi;
 
-use crate::datasources::database_catalog::TableFunctionMeta;
-use crate::datasources::database_catalog::TableMeta;
+use crate::catalog::datasource_meta::TableFunctionMeta;
+use crate::catalog::datasource_meta::TableMeta;
 use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
 use crate::datasources::Database;
@@ -100,7 +100,7 @@ impl Database for RemoteDatabase {
             let tid = tid as u64;
             tables.insert(
                 table.name().to_string(),
-                TableMeta::with_id(Arc::from(table), tid),
+                TableMeta::new(Arc::from(table), tid),
             );
         })?;
         Ok(())

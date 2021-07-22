@@ -29,7 +29,7 @@ mod one_table;
 mod processes_table;
 mod settings_table;
 mod system_database;
-mod system_factory;
+pub(crate) mod system_factory;
 mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;

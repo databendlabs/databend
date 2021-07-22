@@ -8,8 +8,8 @@ use common_exception::Result;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::datasources::database_catalog::TableFunctionMeta;
-use crate::datasources::database_catalog::TableMeta;
+use crate::catalog::datasource_meta::TableFunctionMeta;
+use crate::catalog::datasource_meta::TableMeta;
 
 #[async_trait::async_trait]
 pub trait Database: Sync + Send {

@@ -1,6 +1,7 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
+//
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -15,59 +16,25 @@ use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 use common_store_api::MetaApi;
 
+use crate::catalog::datasource_meta::MetaId;
+use crate::catalog::datasource_meta::MetaVersion;
+use crate::catalog::datasource_meta::TableFunctionMeta;
+use crate::catalog::datasource_meta::TableMeta;
 use crate::configs::Config;
-use crate::datasources::local::LocalDatabase;
-use crate::datasources::local::LocalFactory;
-use crate::datasources::remote::meta_synchronizer::Synchronizer;
-use crate::datasources::remote::RemoteDatabase;
-use crate::datasources::remote::RemoteFactory;
-use crate::datasources::system::SystemFactory;
+use crate::datasources::local::local_database::LocalDatabase;
+use crate::datasources::local::local_factory::LocalFactory;
+use crate::datasources::remote::meta_synchronizer::CachedRemoteMetaStoreClient;
+use crate::datasources::remote::remote_database::RemoteDatabase;
+use crate::datasources::system::system_factory::SystemFactory;
 use crate::datasources::Database;
-use crate::datasources::Table;
-use crate::datasources::TableFunction;
-
-pub type MetaId = u64;
-pub type MetaVersion = u64;
-
-pub struct DatasourceWrapper<T> {
-    inner: T,
-    id: MetaId,
-    version: Option<MetaVersion>,
-}
-
-pub type TableMeta = DatasourceWrapper<Arc<dyn Table>>;
-pub type TableFunctionMeta = DatasourceWrapper<Arc<dyn TableFunction>>;
-
-impl<T> DatasourceWrapper<T> {
-    pub fn with_id(inner: T, id: MetaId) -> Arc<DatasourceWrapper<T>> {
-        Arc::new(DatasourceWrapper {
-            inner,
-            id,
-            version: None,
-        })
-    }
-}
-
-impl<T> DatasourceWrapper<T> {
-    pub fn get_id(&self) -> MetaId {
-        self.id
-    }
-
-    pub fn get_version(&self) -> Option<MetaVersion> {
-        self.version
-    }
-
-    pub fn get_inner(&self) -> &T {
-        &self.inner
-    }
-}
+use crate::datasources::RemoteFactory;
 
 // Maintain all the databases of user.
 pub struct DatabaseCatalog {
     databases: RwLock<HashMap<String, Arc<dyn Database>>>,
     table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
     remote_factory: RemoteFactory,
-    meta_store_syncer: Synchronizer,
+    meta_store_client: CachedRemoteMetaStoreClient,
 }
 
 impl DatabaseCatalog {
@@ -81,7 +48,7 @@ impl DatabaseCatalog {
             databases: Default::default(),
             table_functions: Default::default(),
             remote_factory: RemoteFactory::new(conf),
-            meta_store_syncer: Synchronizer::new(),
+            meta_store_client: CachedRemoteMetaStoreClient::new(),
         };
 
         datasource.register_default_database()?;
@@ -135,7 +102,7 @@ impl DatabaseCatalog {
             .get(db_name)
             .map(Clone::clone)
             .ok_or_else(|| ErrorCode::UnknownDatabase(format!("Unknown database: '{}'", db_name)))
-            .or_else(|_| self.meta_store_syncer.get_database(db_name))
+            .or_else(|_| self.meta_store_client.get_database(db_name))
     }
 
     pub fn get_databases(&self) -> Result<Vec<String>> {
@@ -144,7 +111,7 @@ impl DatabaseCatalog {
             results.push(k.clone());
         }
         let local_db_names = BTreeSet::from_iter(results);
-        let meta_store_dbs = self.meta_store_syncer.get_databases()?;
+        let meta_store_dbs = self.meta_store_client.get_databases()?;
         let meta_store_db_names = meta_store_dbs
             .iter()
             .map(|db| db.name().to_owned())
@@ -159,7 +126,7 @@ impl DatabaseCatalog {
         let database = self.get_database(db_name)?;
         database
             .get_table(table_name)
-            .or_else(|_e| self.meta_store_syncer.get_table(db_name, table_name))
+            .or_else(|_e| self.meta_store_client.get_table(db_name, table_name))
     }
 
     pub fn get_table_by_id(
@@ -179,7 +146,7 @@ impl DatabaseCatalog {
             }
         }
 
-        let meta_store_info = self.meta_store_syncer.get_databases()?;
+        let meta_store_info = self.meta_store_client.get_databases()?;
         for db in meta_store_info.iter() {
             let tables = db.get_tables()?;
             for table in tables {

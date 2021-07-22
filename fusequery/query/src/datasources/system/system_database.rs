@@ -10,8 +10,8 @@ use common_exception::Result;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::datasources::database_catalog::TableFunctionMeta;
-use crate::datasources::database_catalog::TableMeta;
+use crate::catalog::datasource_meta::TableFunctionMeta;
+use crate::catalog::datasource_meta::TableMeta;
 use crate::datasources::system;
 use crate::datasources::Database;
 use crate::datasources::Table;
@@ -54,7 +54,7 @@ impl SystemDatabase {
 
         let meta_table_list = table_list
             .iter()
-            .map(|t| TableMeta::with_id(t.clone(), next_id()))
+            .map(|t| TableMeta::new(t.clone(), next_id()))
             .collect::<Vec<_>>();
         let mut tables = HashMap::default();
         for tbl in meta_table_list.iter() {
@@ -69,7 +69,7 @@ impl SystemDatabase {
         ];
         let meta_func_list = table_function_list
             .iter()
-            .map(|t| TableFunctionMeta::with_id(t.clone(), next_id()))
+            .map(|t| TableFunctionMeta::new(t.clone(), next_id()))
             .collect::<Vec<_>>();
         let mut table_functions = HashMap::default();
         for tbl_func in meta_func_list.iter() {

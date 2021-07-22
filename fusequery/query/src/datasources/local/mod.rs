@@ -11,8 +11,8 @@ mod parquet_table_test;
 
 mod csv_table;
 mod csv_table_stream;
-mod local_database;
-mod local_factory;
+pub(crate) mod local_database;
+pub(crate) mod local_factory;
 mod null_table;
 mod parquet_table;
 

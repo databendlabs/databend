@@ -21,11 +21,11 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalog::datasource_meta::TableFunctionMeta;
+use crate::catalog::datasource_meta::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
-use crate::datasources::TableFunctionMeta;
-use crate::datasources::TableMeta;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::ProcessInfo;
 use crate::sessions::Settings;
