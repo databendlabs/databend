@@ -50,6 +50,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let dummy_read_plan =
                         self.ctx.get_table(db_name, table_name).and_then(|table| {
                             table
+                                .get_inner()
                                 .schema()
                                 .and_then(|ref schema| {
                                     PlanBuilder::scan(db_name, table_name, schema, None, None, None)
@@ -57,6 +58,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                                 .and_then(|builder| builder.build())
                                 .and_then(|dummy_scan_plan| match dummy_scan_plan {
                                     PlanNode::Scan(ref dummy_scan_plan) => table
+                                        .get_inner()
                                         .read_plan(
                                             self.ctx.clone(),
                                             dummy_scan_plan,

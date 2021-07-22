@@ -13,14 +13,15 @@ use common_runtime::tokio;
 use common_runtime::tokio::select;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use common_runtime::tokio::sync::mpsc::Sender;
+use common_store_api::DatabaseMeta;
 use common_store_api::MetaApi;
 
+use crate::datasources::database_catalog::MetaId;
 use crate::datasources::database_catalog::MetaVersion;
-use crate::datasources::database_catalog::TableId;
-use crate::datasources::database_catalog::VersionedTable;
+use crate::datasources::database_catalog::TableMeta;
 use crate::datasources::Database;
 use crate::datasources::RemoteFactory;
-use common_store_api::DatabaseMeta;
+use crate::datasources::Table;
 
 pub struct Synchronizer {
     databases: RwLock<Option<Arc<Vec<Arc<dyn Database>>>>>,
@@ -31,7 +32,6 @@ pub struct Synchronizer {
 }
 
 impl Synchronizer {
-
     pub fn new() -> Synchronizer {
         todo!()
     }
@@ -69,15 +69,14 @@ impl Synchronizer {
     }
 
     async fn fetch(&self) -> Result<Arc<Vec<Arc<dyn Database>>>> {
-            let mut client = self
-                .remote_factory
-                .store_client_provider()
-                .try_get_client()
-                .await?;
-            let db_meta = client.get_databases(None).await?;
-            let dbs = from_database_meta(db_meta); 
-            Ok(Arc::new(dbs))
-            
+        let mut client = self
+            .remote_factory
+            .store_client_provider()
+            .try_get_client()
+            .await?;
+        let db_meta = client.get_databases(None).await?;
+        let dbs = from_database_meta(db_meta);
+        Ok(Arc::new(dbs))
     }
 
     //    fn get_snapshot() -> Result<Arc<>>
@@ -90,19 +89,19 @@ impl Synchronizer {
         let dbs = self.databases.read();
         match &*dbs {
             Some(v) => Ok(v.clone()),
-            None => todo!()
+            None => todo!(),
         }
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn VersionedTable>> {
+    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
         todo!()
     }
 
     pub fn get_table_by_id(
         &self,
-        tbl_id: TableId,
-        tbl_version: MetaVersion,
-    ) -> Result<Arc<dyn VersionedTable>> {
+        _tbl_id: MetaId,
+        _tbl_version: MetaVersion,
+    ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 }

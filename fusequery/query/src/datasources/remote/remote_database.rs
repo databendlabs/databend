@@ -12,8 +12,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_store_api::MetaApi;
 
-use crate::datasources::database_catalog::TableWrapper;
-use crate::datasources::database_catalog::VersionedTable;
+use crate::datasources::database_catalog::TableFunctionMeta;
+use crate::datasources::database_catalog::TableMeta;
 use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
 use crate::datasources::Database;
@@ -23,7 +23,7 @@ use crate::datasources::TableFunction;
 pub struct RemoteDatabase {
     name: String,
     store_client_provider: StoreClientProvider,
-    tables: RwLock<HashMap<String, Arc<RemoteTable>>>,
+    tables: RwLock<HashMap<String, Arc<TableMeta>>>,
 }
 
 impl RemoteDatabase {
@@ -50,7 +50,7 @@ impl Database for RemoteDatabase {
         false
     }
 
-    fn get_table(&self, _table_name: &str) -> Result<Arc<dyn VersionedTable>> {
+    fn get_table(&self, _table_name: &str) -> Result<Arc<TableMeta>> {
         match self.tables.read().get(_table_name) {
             Some(tbl) => Ok(tbl.clone()),
             None =>
@@ -61,16 +61,16 @@ impl Database for RemoteDatabase {
         }
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn VersionedTable>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
         Ok(self
             .tables
             .read()
             .values()
-            .map(|item| item.clone() as Arc<dyn VersionedTable>)
-            .collect::<Vec<Arc<dyn VersionedTable>>>())
+            .map(|item| item.clone())
+            .collect())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
+    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(vec![])
     }
 
@@ -99,9 +99,15 @@ impl Database for RemoteDatabase {
             plan.options,
         )?;
         let mut client = provider.try_get_client().await?;
-        client.create_table(clone).await.map(|_| {
+        client.create_table(clone).await.map(|res| {
             let mut tables = self.tables.write();
-            tables.insert(table.name().to_string(), Arc::from(table));
+            let tid = res.table_id;
+            //TODO remove this, a PR has changed table_id to u64 already
+            let tid = tid as u64;
+            tables.insert(
+                table.name().to_string(),
+                TableMeta::with_id(Arc::from(table), tid),
+            );
         })?;
         Ok(())
     }

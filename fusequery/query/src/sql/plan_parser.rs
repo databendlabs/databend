@@ -47,7 +47,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use crate::datasources::database_catalog::VersionedTable;
+use crate::datasources::Table;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -624,6 +624,7 @@ impl PlanParser {
 
         self.ctx.get_table(db_name, table_name).and_then(|table| {
             table
+                .get_inner()
                 .schema()
                 .and_then(|ref schema| {
                     PlanBuilder::scan(db_name, table_name, schema, None, None, None)
@@ -631,6 +632,7 @@ impl PlanParser {
                 .and_then(|builder| builder.build())
                 .and_then(|dummy_scan_plan| match dummy_scan_plan {
                     PlanNode::Scan(ref dummy_scan_plan) => table
+                        .get_inner()
                         .read_plan(
                             self.ctx.clone(),
                             dummy_scan_plan,
@@ -656,7 +658,7 @@ impl PlanParser {
                     table_name = name.0[1].to_string();
                 }
                 let mut table_args = None;
-                let table: Arc<dyn VersionedTable>;
+                let table: Arc<dyn Table>;
 
                 // only table functions has table args
                 if !args.is_empty() {
@@ -676,12 +678,17 @@ impl PlanParser {
                         }
                     }
 
-                    let table_function = self.ctx.get_table_function(&table_name)?;
+                    let tbl_func_meta = self.ctx.get_table_function(&table_name)?;
+                    let table_function = tbl_func_meta.get_inner();
                     table_name = table_function.name().to_string();
                     db_name = table_function.db().to_string();
-                    table = table_function.as_table();
+                    table = table_function.clone().as_table();
                 } else {
-                    table = self.ctx.get_table(&db_name, table_name.as_str())?;
+                    table = self
+                        .ctx
+                        .get_table(&db_name, table_name.as_str())?
+                        .get_inner()
+                        .clone();
                 }
 
                 let scan = {

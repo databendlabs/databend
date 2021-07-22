@@ -26,90 +26,53 @@ use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::meta_synchronizer::Synchronizer;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteFactory;
+use crate::datasources::system::FunctionsTable;
 use crate::datasources::system::SystemFactory;
 use crate::datasources::Database;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::FuseQueryContextRef;
 
-pub type TableId = u64;
+pub type MetaId = u64;
 pub type MetaVersion = u64;
 
-pub trait VersionedTable: Table {
-    fn get_id(&self) -> TableId;
-    fn get_version(&self) -> Option<MetaVersion>;
-}
-
-pub struct TableWrapper {
-    table: Arc<dyn Table>,
-    id: TableId,
+pub struct DatasourceWrapper<T> {
+    inner: T,
+    id: MetaId,
     version: Option<MetaVersion>,
 }
 
-impl TableWrapper {
-    pub fn new(table: Arc<dyn Table>, id: TableId) -> Arc<Self> {
-        Arc::new(TableWrapper {
-            table,
+pub type TableMeta = DatasourceWrapper<Arc<dyn Table>>;
+pub type TableFunctionMeta = DatasourceWrapper<Arc<dyn TableFunction>>;
+
+impl<T> DatasourceWrapper<T> {
+    pub fn with_id(inner: T, id: MetaId) -> Arc<DatasourceWrapper<T>> {
+        Arc::new(DatasourceWrapper {
+            inner,
             id,
             version: None,
         })
     }
 }
 
-impl VersionedTable for TableWrapper {
-    fn get_id(&self) -> TableId {
+impl<T> DatasourceWrapper<T> {
+    pub fn get_id(&self) -> MetaId {
         self.id
     }
 
-    fn get_version(&self) -> Option<MetaVersion> {
+    pub fn get_version(&self) -> Option<MetaVersion> {
         self.version
     }
-}
 
-#[async_trait::async_trait]
-impl Table for TableWrapper {
-    fn name(&self) -> &str {
-        self.table.name()
-    }
-
-    fn engine(&self) -> &str {
-        self.table.engine()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn schema(&self) -> Result<DataSchemaRef> {
-        self.table.schema()
-    }
-
-    fn is_local(&self) -> bool {
-        self.table.is_local()
-    }
-
-    fn read_plan(
-        &self,
-        ctx: FuseQueryContextRef,
-        scan: &ScanPlan,
-        partitions: usize,
-    ) -> Result<ReadDataSourcePlan> {
-        self.table.read_plan(ctx, scan, partitions)
-    }
-
-    async fn read(
-        &self,
-        ctx: FuseQueryContextRef,
-        source_plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        self.table.read(ctx, source_plan).await
+    pub fn get_inner(&self) -> &T {
+        &self.inner
     }
 }
 
 // Maintain all the databases of user.
 pub struct DatabaseCatalog {
     databases: RwLock<HashMap<String, Arc<dyn Database>>>,
-    table_functions: RwLock<HashMap<String, Arc<dyn TableFunction>>>,
+    table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
     remote_factory: RemoteFactory,
     meta_store_syncer: Synchronizer,
 }
@@ -142,7 +105,7 @@ impl DatabaseCatalog {
             for tbl_func in database.get_table_functions()? {
                 self.table_functions
                     .write()
-                    .insert(tbl_func.name().to_string(), tbl_func.clone());
+                    .insert(tbl_func.get_inner().name().to_string(), tbl_func.clone());
             }
         }
         Ok(())
@@ -203,7 +166,7 @@ impl DatabaseCatalog {
         Ok(res)
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn VersionedTable>> {
+    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
         let database = self.get_database(db_name)?;
         database
             .get_table(table_name)
@@ -212,13 +175,13 @@ impl DatabaseCatalog {
 
     pub fn get_table_by_id(
         &self,
-        tbl_id: TableId,
-        tbl_ver: Option<MetaVersion>,
-    ) -> Result<Arc<dyn VersionedTable>> {
+        _tbl_id: MetaId,
+        _tbl_ver: Option<MetaVersion>,
+    ) -> Result<Arc<TableMeta>> {
         todo!()
     }
 
-    pub fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn VersionedTable>)>> {
+    pub fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
         let mut results = vec![];
         for (k, v) in self.databases.read().iter() {
             let tables = v.get_tables()?;
@@ -238,7 +201,7 @@ impl DatabaseCatalog {
         Ok(results)
     }
 
-    pub fn get_table_function(&self, name: &str) -> Result<Arc<dyn TableFunction>> {
+    pub fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>> {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock.get(name).ok_or_else(|| {
             ErrorCode::UnknownTableFunction(format!("Unknown table function: '{}'", name))

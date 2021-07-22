@@ -33,7 +33,8 @@ impl Interpreter for InsertIntoInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_datasource();
         let database = datasource.get_database(self.plan.db_name.as_str())?;
-        let table = database.get_table(self.plan.tbl_name.as_str())?;
+        let table_meta = database.get_table(self.plan.tbl_name.as_str())?;
+        let table = table_meta.get_inner();
         table
             .append_data(self.ctx.clone(), self.plan.clone())
             .await?;

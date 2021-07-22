@@ -19,9 +19,6 @@ use common_store_api::ReadPlanResult;
 use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 
-use crate::datasources::database_catalog::MetaVersion;
-use crate::datasources::database_catalog::TableId;
-use crate::datasources::database_catalog::VersionedTable;
 use crate::datasources::remote::StoreClientProvider;
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
@@ -141,16 +138,6 @@ impl Table for RemoteTable {
         }
 
         Ok(())
-    }
-}
-
-impl VersionedTable for RemoteTable {
-    fn get_id(&self) -> Option<TableId> {
-        todo!()
-    }
-
-    fn get_version(&self) -> Option<MetaVersion> {
-        todo!()
     }
 }
 

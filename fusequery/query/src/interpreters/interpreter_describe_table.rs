@@ -34,9 +34,10 @@ impl Interpreter for DescribeTableInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let table = self
+        let table_meta = self
             .ctx
             .get_table(self.plan.db.as_str(), self.plan.table.as_str())?;
+        let table = table_meta.get_inner();
         let schema = table.schema()?;
 
         let mut names: Vec<String> = vec![];

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -14,8 +14,9 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
-use crate::datasources::database_catalog::TableWrapper;
-use crate::datasources::database_catalog::VersionedTable;
+use crate::datasources::database_catalog::DatasourceWrapper;
+use crate::datasources::database_catalog::TableFunctionMeta;
+use crate::datasources::database_catalog::TableMeta;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
@@ -25,7 +26,7 @@ use crate::datasources::TableFunction;
 const LOCAL_TBL_ID_START: u64 = 1;
 
 pub struct LocalDatabase {
-    tables: RwLock<HashMap<String, Arc<dyn VersionedTable>>>,
+    tables: RwLock<HashMap<String, Arc<TableMeta>>>,
     seq_id: AtomicU64,
 }
 
@@ -55,7 +56,7 @@ impl Database for LocalDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn VersionedTable>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
         let table_lock = self.tables.read();
         let table = table_lock
             .get(table_name)
@@ -63,11 +64,11 @@ impl Database for LocalDatabase {
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn VersionedTable>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
         Ok(self.tables.read().values().cloned().collect())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
+    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(vec![])
     }
 
@@ -104,9 +105,10 @@ impl Database for LocalDatabase {
             }
         };
 
-        self.tables
-            .write()
-            .insert(table_name.to_string(), TableWrapper::new(Arc::from(table), self.next_id()));
+        self.tables.write().insert(
+            table_name.to_string(),
+            TableMeta::with_id(Arc::from(table), self.next_id()),
+        );
         Ok(())
     }
 

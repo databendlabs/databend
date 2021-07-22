@@ -85,8 +85,14 @@ impl Table for TablesTable {
         let database_tables = ctx.get_datasource().get_all_tables()?;
 
         let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
-        let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();
-        let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
+        let names: Vec<&str> = database_tables
+            .iter()
+            .map(|(_, v)| v.get_inner().name())
+            .collect();
+        let engines: Vec<&str> = database_tables
+            .iter()
+            .map(|(_, v)| v.get_inner().engine())
+            .collect();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Series::new(databases),
