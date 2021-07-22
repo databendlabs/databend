@@ -2384,9 +2384,9 @@ dependencies = [
 
 [[package]]
 name = "jwt-simple"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b5630483dc02fd2274f6d1ec91209811f1a3bc442da4d76a31872d6a02cf9e9"
+checksum = "d793a60f90bf0764880d5b76292459dce3632f68bcd22389638f700f129ba1a5"
 dependencies = [
  "anyhow",
  "coarsetime",
@@ -2406,9 +2406,9 @@ dependencies = [
 
 [[package]]
 name = "k256"
-version = "0.9.5"
+version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "008b0281ca8032567c9711cd48631781c15228301860a39b32deb28d63125e46"
+checksum = "903ae2481bcdfdb7b68e0a9baa4b7c9aff600b9ae2e8e5bb5833b8c91ab851ea"
 dependencies = [
  "cfg-if 1.0.0",
  "ecdsa",
@@ -4496,7 +4496,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.9.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=625316f#625316fd2385a7a807cf0b2ae46bf39fc22236e5"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=a92e193#a92e19348250eb73dc313ab4e5b9490b11519e3f"
 dependencies = [
  "log",
 ]
@@ -4920,9 +4920,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.8.2"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2602b8af3767c285202012822834005f596c811042315fa7e9f5b12b2a43207"
+checksum = "4b7b349f11a7047e6d1276853e612d152f5e8a352c61917887cc2169e2366b4c"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",

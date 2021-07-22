@@ -53,13 +53,3 @@ impl ToCastFunction {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use common_datavalues::DataType;
-
-    #[test]
-    fn it_works() {
-        println!("{}", DataType::Utf8);
-    }
-}
