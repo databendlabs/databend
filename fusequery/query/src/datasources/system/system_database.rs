@@ -17,7 +17,9 @@ use crate::datasources::Database;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 
-const SYSDB_TBL_ID_START: u64 = 1;
+const SYSDB_TBL_ID_BEGIN: u64 = 0;
+
+//const SYSDB_TBL_ID_END: u64 = 10000;
 
 pub struct SystemDatabase {
     tables: HashMap<String, Arc<TableMeta>>,
@@ -26,11 +28,14 @@ pub struct SystemDatabase {
 
 impl SystemDatabase {
     pub fn create() -> Self {
-        let mut id = SYSDB_TBL_ID_START;
+        let mut id = SYSDB_TBL_ID_BEGIN;
+
         let mut next_id = || -> u64 {
+            // TODO overflow check
             id += 1;
             id
         };
+
         // Table list.
         let table_list: Vec<Arc<dyn Table>> = vec![
             Arc::new(system::OneTable::create()),

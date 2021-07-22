@@ -21,7 +21,8 @@ use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
 use crate::datasources::Database;
 
-const LOCAL_TBL_ID_START: u64 = 1;
+const LOCAL_TBL_ID_BEGIN: u64 = 10000;
+//const LOCAL_TBL_ID_END: u64 = 20000;
 
 pub struct LocalDatabase {
     tables: RwLock<HashMap<String, Arc<TableMeta>>>,
@@ -32,10 +33,11 @@ impl LocalDatabase {
     pub fn create() -> Self {
         LocalDatabase {
             tables: RwLock::new(HashMap::default()),
-            seq_id: AtomicU64::new(LOCAL_TBL_ID_START),
+            seq_id: AtomicU64::new(LOCAL_TBL_ID_BEGIN),
         }
     }
     pub fn next_id(&self) -> u64 {
+        // TODO overflow check
         self.seq_id.fetch_add(1, Ordering::SeqCst)
     }
 }

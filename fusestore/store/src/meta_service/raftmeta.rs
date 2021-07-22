@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -863,6 +864,13 @@ impl MetaNode {
 
         let sm = self.sto.state_machine.read().await;
         sm.get_table(tid)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_databases(&self) -> BTreeMap<String, Database> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.state_machine.read().await;
+        sm.get_databases()
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

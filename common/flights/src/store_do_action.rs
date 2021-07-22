@@ -21,6 +21,7 @@ use crate::impls::meta_api_impl::DropTableAction;
 use crate::impls::meta_api_impl::GetDatabaseAction;
 use crate::impls::meta_api_impl::GetTableAction;
 use crate::impls::storage_api_impl::ReadPlanAction;
+use crate::meta_api_impl::GetDatabasesReq;
 use crate::protobuf::FlightStoreRequest;
 
 pub trait RequestFor {
@@ -45,14 +46,15 @@ macro_rules! action_declare {
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoAction {
-    // meta-database
+    // database meta
     CreateDatabase(CreateDatabaseAction),
     GetDatabase(GetDatabaseAction),
     DropDatabase(DropDatabaseAction),
-    // meta-table
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
     GetTable(GetTableAction),
+    GetDatabases(GetDatabasesReq),
+
     // storage
     ReadPlan(ReadPlanAction),
 

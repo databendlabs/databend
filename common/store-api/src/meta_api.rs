@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+use std::collections::BTreeMap;
+
 use common_datavalues::DataSchemaRef;
+use common_metatypes::Database;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -39,8 +42,10 @@ pub struct GetTableActionResult {
     pub schema: DataSchemaRef,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DatabaseMeta {}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DatabaseMeta {
+    pub databases: BTreeMap<String, Database>,
+}
 
 #[async_trait::async_trait]
 pub trait MetaApi {

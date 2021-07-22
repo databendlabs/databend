@@ -15,12 +15,14 @@ use common_flights::meta_api_impl::CreateDatabaseAction;
 use common_flights::meta_api_impl::CreateDatabaseActionResult;
 use common_flights::meta_api_impl::CreateTableAction;
 use common_flights::meta_api_impl::CreateTableActionResult;
+use common_flights::meta_api_impl::DatabaseMeta;
 use common_flights::meta_api_impl::DropDatabaseAction;
 use common_flights::meta_api_impl::DropDatabaseActionResult;
 use common_flights::meta_api_impl::DropTableAction;
 use common_flights::meta_api_impl::DropTableActionResult;
 use common_flights::meta_api_impl::GetDatabaseAction;
 use common_flights::meta_api_impl::GetDatabaseActionResult;
+use common_flights::meta_api_impl::GetDatabasesReq;
 use common_flights::meta_api_impl::GetTableAction;
 use common_flights::meta_api_impl::GetTableActionResult;
 use common_metatypes::Database;
@@ -290,5 +292,23 @@ impl RequestHandler<GetTableAction> for ActionHandler {
             }
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
+    }
+}
+#[async_trait::async_trait]
+impl RequestHandler<GetDatabasesReq> for ActionHandler {
+    async fn handle(&self, _act: GetDatabasesReq) -> common_exception::Result<DatabaseMeta> {
+        // TODO, something need deeper thought:
+        // - Sync the whole database is not practical
+        //      instead we should sync operation logs(like doris) or differences (like TiDB)
+        //
+        // - DatabaseMeta should be versioned (globally)
+        //    e.g. increase a global version number for each DDL (like TiDB)
+        //    or metadata tagged with txn-id (logical timestamp), if we store meta data in KV
+        //
+        // - Computation layer do not need all the database meta all the time, care about the
+        //   relations being processed only. Instead, UI frontend, like worksheets may need to
+        //   access all the database meta (or information_schema).
+        let databases = self.meta_node.get_databases().await;
+        Ok(DatabaseMeta { databases })
     }
 }

@@ -379,6 +379,10 @@ impl StateMachine {
         x.cloned()
     }
 
+    pub fn get_databases(&self) -> BTreeMap<String, Database> {
+        self.databases.clone()
+    }
+
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
         let x = self.tables.get(tid);
         x.cloned()

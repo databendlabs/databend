@@ -74,9 +74,10 @@ impl MetaApi for StoreClient {
 
     async fn get_databases(
         &mut self,
-        _ver_lower_bound: Option<u64>,
+        ver_lower_bound: Option<u64>,
     ) -> common_exception::Result<DatabaseMeta> {
-        todo!()
+        let req = GetDatabasesReq { ver_lower_bound };
+        self.do_action(req).await
     }
 }
 
@@ -147,3 +148,10 @@ action_declare!(
     GetTableActionResult,
     StoreDoAction::GetTable
 );
+
+// get databases
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetDatabasesReq {
+    pub ver_lower_bound: Option<u64>,
+}
+action_declare!(GetDatabasesReq, DatabaseMeta, StoreDoAction::GetDatabases);
