@@ -2,76 +2,49 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::ops::Deref;
 use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
-use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 
-use crate::meta_service::sled_serde::SledOrderedSerde;
-use crate::meta_service::sled_serde::SledRangeSerde;
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
 use crate::meta_service::SledSerde;
+use crate::meta_service::SledTree;
+use crate::meta_service::SledValueToKey;
 
-const K_RAFT_LOG: &str = "raft_log";
+const TREE_RAFT_LOG: &str = "raft_log";
 
 /// RaftLog stores the logs of a raft node.
 /// It is part of MetaStore.
 pub struct RaftLog {
-    pub(crate) tree: sled::Tree,
+    inner: SledTree<LogIndex, Entry<LogEntry>>,
+}
+
+/// Allows to access directly the internal SledTree.
+impl Deref for RaftLog {
+    type Target = SledTree<LogIndex, Entry<LogEntry>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 impl SledSerde for Entry<LogEntry> {}
 
+impl SledValueToKey<LogIndex> for Entry<LogEntry> {
+    fn to_key(&self) -> LogIndex {
+        self.log_id.index
+    }
+}
+
 impl RaftLog {
     /// Open RaftLog
     pub async fn open(db: &sled::Db) -> common_exception::Result<RaftLog> {
-        let t = db
-            .open_tree(K_RAFT_LOG)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "open tree raft_log")?;
-
-        let rl = RaftLog { tree: t };
+        let rl = RaftLog {
+            inner: SledTree::open(db, TREE_RAFT_LOG).await?,
+        };
         Ok(rl)
-    }
-
-    /// Retrieve the log at index.
-    pub fn get(&self, index: &LogIndex) -> common_exception::Result<Option<Entry<LogEntry>>> {
-        // TODO(xp): add more context info to the error returned.
-        // TODO(xp): replace primitive type names: u64->Term, LogIndex etc.
-        let got = self
-            .tree
-            .get(index.ser()?)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("get log: {}", index)
-            })?;
-
-        let ent = match got {
-            None => None,
-            Some(v) => Some(Entry::<LogEntry>::de(&v)?),
-        };
-
-        Ok(ent)
-    }
-
-    /// Retrieve the last log index and the log entry.
-    pub fn last(&self) -> common_exception::Result<Option<(LogIndex, Entry<LogEntry>)>> {
-        //  TODO(xp): rename LogEntry: Entry<LogEntry> is weird.
-        let last = self
-            .tree
-            .last()
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "read last log")?;
-
-        let index_ent = match last {
-            Some((k, v)) => {
-                let log_index = LogIndex::de(&k)?;
-                let ent = Entry::<LogEntry>::de(&v)?;
-                Some((log_index, ent))
-            }
-            None => None,
-        };
-
-        Ok(index_ent)
     }
 
     /// Delete logs that are in `range`.
@@ -91,44 +64,7 @@ impl RaftLog {
     ///
     pub async fn range_delete<R>(&self, range: R) -> common_exception::Result<()>
     where R: RangeBounds<LogIndex> {
-        let mut batch = sled::Batch::default();
-
-        // Convert LogIndex range into sled::IVec range
-        let range = range.ser()?;
-
-        for item in self.tree.range(range) {
-            let (k, _) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || "range_delete")?;
-            batch.remove(k);
-        }
-
-        self.tree
-            .apply_batch(batch)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch log delete")?;
-
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush log delete")?;
-
-        Ok(())
-    }
-
-    /// Get logs of index in `range`
-    pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<Entry<LogEntry>>>
-    where R: RangeBounds<LogIndex> {
-        // TODO(xp): pre alloc vec space
-        let mut res = vec![];
-
-        // Convert LogIndex range into sled::IVec range
-        let range = range.ser()?;
-        for item in self.tree.range(range) {
-            let (_, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || "range_get")?;
-
-            let ent = Entry::<LogEntry>::de(&v)?;
-            res.push(ent);
-        }
-
-        Ok(res)
+        self.inner.range_delete(range, true).await
     }
 
     /// Append logs into RaftLog.
@@ -137,45 +73,11 @@ impl RaftLog {
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
     pub async fn append(&self, logs: &[Entry<LogEntry>]) -> common_exception::Result<()> {
-        let mut batch = sled::Batch::default();
-
-        for log in logs.iter() {
-            let index = log.log_id.index;
-
-            let k = index.ser()?;
-            let v = log.ser()?;
-
-            batch.insert(k, v);
-        }
-
-        self.tree
-            .apply_batch(batch)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch log insert")?;
-
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush log insert")?;
-
-        Ok(())
+        self.inner.append_values(logs).await
     }
 
     /// Insert a single log.
     pub async fn insert(&self, log: &Entry<LogEntry>) -> common_exception::Result<()> {
-        let index = log.log_id.index;
-
-        let k = index.ser()?;
-        let v = log.ser()?;
-
-        self.tree
-            .insert(k, v)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "log insert")?;
-
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush log insert")?;
-
-        Ok(())
+        self.inner.insert_value(log).await
     }
 }
