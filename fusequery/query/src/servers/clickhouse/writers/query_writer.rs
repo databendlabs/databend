@@ -288,6 +288,58 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
                 col.iter::<&[u8]>()?.map(|c| String::from_utf8_lossy(c)),
             )
             .into_series()),
+
+            SqlType::Nullable(SqlType::UInt8) => Ok(DFUInt8Array::new_from_opt_iter(
+                col.iter::<Option<u8>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::UInt16) => Ok(DFUInt16Array::new_from_opt_iter(
+                col.iter::<Option<u16>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::UInt32) => Ok(DFUInt32Array::new_from_opt_iter(
+                col.iter::<Option<u32>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::UInt64) => Ok(DFUInt64Array::new_from_opt_iter(
+                col.iter::<Option<u64>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::Int8) => Ok(DFInt8Array::new_from_opt_iter(
+                col.iter::<Option<i8>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::Int16) => Ok(DFInt16Array::new_from_opt_iter(
+                col.iter::<Option<i16>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::Int32) => Ok(DFInt32Array::new_from_opt_iter(
+                col.iter::<Option<i32>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::Int64) => Ok(DFInt64Array::new_from_opt_iter(
+                col.iter::<Option<i64>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::Float32) => Ok(DFFloat32Array::new_from_opt_iter(
+                col.iter::<Option<f32>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::Float64) => Ok(DFFloat64Array::new_from_opt_iter(
+                col.iter::<Option<f64>>()?.map(|c| c.copied()),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::String) => Ok(DFUtf8Array::new_from_opt_iter(
+                col.iter::<Option<&[u8]>>()?
+                    .map(|c| c.map(|d| String::from_utf8_lossy(d))),
+            )
+            .into_series()),
+            SqlType::Nullable(SqlType::FixedString(_)) => Ok(DFUtf8Array::new_from_opt_iter(
+                col.iter::<Option<&[u8]>>()?
+                    .map(|c| c.map(|d| String::from_utf8_lossy(d))),
+            )
+            .into_series()),
+
             other => Err(CHError::Other(Cow::from(format!(
                 "Unsupported type: {:?}",
                 other

@@ -91,16 +91,7 @@ impl InteractiveWorkerBase {
         ch_ctx: &mut CHContext,
         ctx: FuseQueryContextRef,
     ) -> Result<Receiver<BlockItem>> {
-        // TODO: nullable currently is not accepted by inserts
-        let fields: Vec<_> = insert
-            .schema()
-            .fields()
-            .iter()
-            .map(|v| DataField::new(v.name(), v.data_type().clone(), false))
-            .collect();
-
-        let schema = DataSchemaRefExt::create(fields);
-        let sample_block = DataBlock::empty_with_schema(schema);
+        let sample_block = DataBlock::empty_with_schema(insert.schema());
         let (sender, rec) = channel(4);
         ch_ctx.state.out = Some(sender);
 
