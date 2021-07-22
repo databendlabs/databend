@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 use common_exception::Result;
 
 use crate::arrays::builders::Utf8ArrayBuilder;
@@ -9,16 +13,12 @@ use crate::DFListArray;
 use crate::DFPrimitiveType;
 use crate::DFUtf8Array;
 
-// Copyright 2020-2021 The Datafuse Authors.
-//
-// SPDX-License-Identifier: Apache-2.0.
-
 #[derive(Copy, Clone, Debug)]
 pub enum FillNoneStrategy {
     /// previous value in array
-    Backward,
-    /// next value in array
     Forward,
+    /// next value in array
+    Backward,
     /// mean value of array
     Mean,
     /// minimal value in array
