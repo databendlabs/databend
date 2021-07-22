@@ -11,7 +11,6 @@ use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
-use common_planners::TableOptions;
 use common_store_api::MetaApi;
 
 use crate::configs::Config;
@@ -19,7 +18,6 @@ use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteFactory;
-use crate::datasources::remote::RemoteTable;
 use crate::datasources::system::SystemFactory;
 use crate::datasources::Database;
 use crate::datasources::Table;
@@ -120,40 +118,6 @@ impl DataSource {
 
         let table = database.get_table(table_name)?;
         Ok(table.clone())
-    }
-
-    pub async fn get_remote_table(
-        &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        match self.get_table(db_name, table_name) {
-            Ok(t) if t.is_local() => Err(ErrorCode::LogicalError(format!(
-                "local table {}.{} exists, which is used as remote",
-                db_name, table_name
-            ))),
-            tbl @ Ok(_) => tbl,
-            _ => {
-                let cli_provider = self.remote_factory.store_client_provider();
-                let mut store_cli = cli_provider.try_get_client().await?;
-                let res = store_cli
-                    .get_table(db_name.to_string(), table_name.to_string())
-                    .await?;
-                let remote_table = RemoteTable::try_create(
-                    db_name.to_string(),
-                    table_name.to_string(),
-                    res.schema,
-                    self.remote_factory.store_client_provider().clone(),
-                    TableOptions::new(),
-                )?;
-
-                // Remote_table we've got here is NOT cached.
-                //
-                // Since we should solve the metadata synchronization problem in a more reasonable way,
-                // let's postpone it until we have taken all the things into account.
-                Ok(Arc::from(remote_table))
-            }
-        }
     }
 
     pub fn get_all_tables(&self) -> Result<Vec<(String, Arc<dyn Table>)>> {

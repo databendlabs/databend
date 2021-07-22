@@ -19,6 +19,9 @@ use common_store_api::ReadPlanResult;
 use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 
+use crate::datasources::database_catalog::MetaVersion;
+use crate::datasources::database_catalog::TableId;
+use crate::datasources::database_catalog::VersionedTable;
 use crate::datasources::remote::StoreClientProvider;
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
@@ -38,14 +41,18 @@ impl RemoteTable {
         schema: DataSchemaRef,
         store_client_provider: StoreClientProvider,
         _options: TableOptions,
-    ) -> Result<Box<dyn Table>> {
+    ) -> Result<RemoteTable> {
         let table = Self {
             db,
             name,
             schema,
             store_client_provider,
         };
-        Ok(Box::new(table))
+        Ok(table)
+    }
+
+    pub fn test_write(&mut self) {
+        todo!()
     }
 }
 
@@ -131,18 +138,19 @@ impl Table for RemoteTable {
                     block_stream,
                 )
                 .await?;
-
-            //            let mut um = UserMgr::new(client);
-            //            let a = "test";
-            //            um.get_users(&vec![a]).await;
-            //            um.add_user("user", "pass", "salt").await;
-            //            um.drop_user("user", None).await;
-            //            um.update_user("user", None, None, None).await;
-            //            um.get_users(&vec!["user"]).await;
-            //            um.get_all_users().await;
         }
 
         Ok(())
+    }
+}
+
+impl VersionedTable for RemoteTable {
+    fn get_id(&self) -> Option<TableId> {
+        todo!()
+    }
+
+    fn get_version(&self) -> Option<MetaVersion> {
+        todo!()
     }
 }
 

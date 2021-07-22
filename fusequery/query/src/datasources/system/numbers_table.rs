@@ -18,6 +18,8 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
+use crate::datasources::database_catalog::TableWrapper;
+use crate::datasources::database_catalog::VersionedTable;
 use crate::datasources::system::NumbersStream;
 use crate::datasources::Common;
 use crate::datasources::Table;
@@ -30,7 +32,7 @@ pub struct NumbersTable {
 }
 
 impl NumbersTable {
-    pub fn create(table: &'static str) -> Self {
+    pub fn create(table: &'static str, id: u64) -> Self {
         NumbersTable {
             table,
             schema: DataSchemaRefExt::create(vec![DataField::new(
@@ -130,8 +132,8 @@ impl TableFunction for NumbersTable {
         "system"
     }
 
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn VersionedTable + 'a>
     where Self: 'a {
-        self
+        TableWrapper::new(self.clone())
     }
 }

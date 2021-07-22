@@ -32,13 +32,13 @@ impl NumberTestData {
     }
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
-        let datasource = crate::datasources::DataSource::try_create()?;
+        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
         table.schema()
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
-        let datasource = crate::datasources::DataSource::try_create()?;
+        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
         table.read_plan(
             self.ctx.clone(),

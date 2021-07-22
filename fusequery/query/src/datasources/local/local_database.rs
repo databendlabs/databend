@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -12,22 +14,30 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
+use crate::datasources::database_catalog::TableWrapper;
+use crate::datasources::database_catalog::VersionedTable;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
 use crate::datasources::Database;
-use crate::datasources::Table;
 use crate::datasources::TableFunction;
 
+const LOCAL_TBL_ID_START: u64 = 1;
+
 pub struct LocalDatabase {
-    tables: RwLock<HashMap<String, Arc<dyn Table>>>,
+    tables: RwLock<HashMap<String, Arc<dyn VersionedTable>>>,
+    seq_id: AtomicU64,
 }
 
 impl LocalDatabase {
     pub fn create() -> Self {
         LocalDatabase {
             tables: RwLock::new(HashMap::default()),
+            seq_id: AtomicU64::new(LOCAL_TBL_ID_START),
         }
+    }
+    pub fn next_id(&self) -> u64 {
+        self.seq_id.fetch_add(1, Ordering::SeqCst)
     }
 }
 
@@ -45,7 +55,7 @@ impl Database for LocalDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn VersionedTable>> {
         let table_lock = self.tables.read();
         let table = table_lock
             .get(table_name)
@@ -53,7 +63,7 @@ impl Database for LocalDatabase {
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<dyn VersionedTable>>> {
         Ok(self.tables.read().values().cloned().collect())
     }
 
@@ -96,7 +106,7 @@ impl Database for LocalDatabase {
 
         self.tables
             .write()
-            .insert(table_name.to_string(), Arc::from(table));
+            .insert(table_name.to_string(), TableWrapper::new(Arc::from(table), self.next_id()));
         Ok(())
     }
 

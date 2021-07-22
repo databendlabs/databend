@@ -39,6 +39,10 @@ pub struct GetTableActionResult {
     pub schema: DataSchemaRef,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DatabaseMeta{
+}
+
 #[async_trait::async_trait]
 pub trait MetaApi {
     async fn create_database(
@@ -69,4 +73,7 @@ pub trait MetaApi {
         db: String,
         table: String,
     ) -> common_exception::Result<GetTableActionResult>;
+
+    async fn get_databases(&mut self, ver_lower_bound: Option<u64>) -> common_exception::Result<DatabaseMeta>;
+
 }

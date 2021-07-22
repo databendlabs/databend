@@ -47,7 +47,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use crate::datasources::Table;
+use crate::datasources::database_catalog::VersionedTable;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -656,7 +656,7 @@ impl PlanParser {
                     table_name = name.0[1].to_string();
                 }
                 let mut table_args = None;
-                let table: Arc<dyn Table>;
+                let table: Arc<dyn VersionedTable>;
 
                 // only table functions has table args
                 if !args.is_empty() {

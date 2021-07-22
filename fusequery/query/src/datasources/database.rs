@@ -8,7 +8,7 @@ use common_exception::Result;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::datasources::Table;
+use crate::datasources::database_catalog::VersionedTable;
 use crate::datasources::TableFunction;
 
 #[async_trait::async_trait]
@@ -19,10 +19,10 @@ pub trait Database: Sync + Send {
     fn is_local(&self) -> bool;
 
     /// Get one table by name.
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>>;
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn VersionedTable>>;
 
     /// Get all tables.
-    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>>;
+    fn get_tables(&self) -> Result<Vec<Arc<dyn VersionedTable>>>;
 
     /// Get database table functions.
     fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>>;

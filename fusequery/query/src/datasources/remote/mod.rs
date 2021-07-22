@@ -1,6 +1,8 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
+
+pub(crate) mod meta_synchronizer;
 mod remote_database;
 mod remote_factory;
 mod remote_table;
