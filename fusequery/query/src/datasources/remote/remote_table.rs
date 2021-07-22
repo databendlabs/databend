@@ -47,10 +47,6 @@ impl RemoteTable {
         };
         Ok(table)
     }
-
-    pub fn test_write(&mut self) {
-        todo!()
-    }
 }
 
 #[async_trait::async_trait]

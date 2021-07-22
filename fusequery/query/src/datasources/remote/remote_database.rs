@@ -18,7 +18,6 @@ use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
 use crate::datasources::Database;
 use crate::datasources::Table;
-use crate::datasources::TableFunction;
 
 pub struct RemoteDatabase {
     name: String,
@@ -62,12 +61,7 @@ impl Database for RemoteDatabase {
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        Ok(self
-            .tables
-            .read()
-            .values()
-            .map(|item| item.clone())
-            .collect())
+        Ok(self.tables.read().values().map(Clone::clone).collect())
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {

@@ -14,14 +14,12 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
-
 use crate::datasources::database_catalog::TableFunctionMeta;
 use crate::datasources::database_catalog::TableMeta;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
 use crate::datasources::Database;
-use crate::datasources::TableFunction;
 
 const LOCAL_TBL_ID_START: u64 = 1;
 

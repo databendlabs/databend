@@ -24,8 +24,6 @@ use common_streams::SendableDataBlockStream;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
-use crate::datasources::Table;
-
 use crate::datasources::TableFunctionMeta;
 use crate::datasources::TableMeta;
 use crate::sessions::context_shared::FuseQueryContextShared;

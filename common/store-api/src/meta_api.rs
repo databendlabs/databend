@@ -40,8 +40,7 @@ pub struct GetTableActionResult {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DatabaseMeta{
-}
+pub struct DatabaseMeta {}
 
 #[async_trait::async_trait]
 pub trait MetaApi {
@@ -74,6 +73,8 @@ pub trait MetaApi {
         table: String,
     ) -> common_exception::Result<GetTableActionResult>;
 
-    async fn get_databases(&mut self, ver_lower_bound: Option<u64>) -> common_exception::Result<DatabaseMeta>;
-
+    async fn get_databases(
+        &mut self,
+        ver_lower_bound: Option<u64>,
+    ) -> common_exception::Result<DatabaseMeta>;
 }

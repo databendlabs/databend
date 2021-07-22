@@ -132,6 +132,6 @@ impl TableFunction for NumbersTable {
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
     where Self: 'a {
-        self.clone()
+        self
     }
 }

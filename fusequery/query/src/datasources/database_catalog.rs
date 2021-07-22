@@ -2,12 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
-
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -15,10 +13,7 @@ use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
-
-
 use common_store_api::MetaApi;
-
 
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
@@ -26,12 +21,10 @@ use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::meta_synchronizer::Synchronizer;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteFactory;
-
 use crate::datasources::system::SystemFactory;
 use crate::datasources::Database;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
-
 
 pub type MetaId = u64;
 pub type MetaVersion = u64;
@@ -152,8 +145,10 @@ impl DatabaseCatalog {
         }
         let local_db_names = BTreeSet::from_iter(results);
         let meta_store_dbs = self.meta_store_syncer.get_databases()?;
-        let meta_store_db_names =
-            BTreeSet::from_iter(meta_store_dbs.iter().map(|db| db.name().to_owned()));
+        let meta_store_db_names = meta_store_dbs
+            .iter()
+            .map(|db| db.name().to_owned())
+            .collect::<BTreeSet<_>>();
         let db_names = meta_store_db_names.union(&local_db_names);
         let mut res = db_names.map(String::to_owned).collect::<Vec<_>>();
         res.sort();
