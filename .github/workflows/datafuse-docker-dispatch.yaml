@@ -24,13 +24,6 @@ jobs:
       AWS_DEFAULT_REGION: us-west-2
       AWS_DEFAULT_OUTPUT: json
     steps:
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install awscli
     - name: Update status to pending
       run: |
         echo "update github pr status"
@@ -42,7 +35,6 @@ jobs:
         echo "sync status to S3"
         echo '{"uuid": "${{ env.UUID }}", "status": "PENDING"}' > status.jsondatafuse-docker-dispatch.yaml
         aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
-
     - uses: actions/checkout@v2
       with:
         ref: ${{ env.SHA }}
