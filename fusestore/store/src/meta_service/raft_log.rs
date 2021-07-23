@@ -77,7 +77,10 @@ impl RaftLog {
     }
 
     /// Insert a single log.
-    pub async fn insert(&self, log: &Entry<LogEntry>) -> common_exception::Result<()> {
+    pub async fn insert(
+        &self,
+        log: &Entry<LogEntry>,
+    ) -> common_exception::Result<Option<Entry<LogEntry>>> {
         self.inner.insert_value(log).await
     }
 }
