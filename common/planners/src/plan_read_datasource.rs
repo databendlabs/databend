@@ -6,6 +6,8 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 
 use crate::Extras;
 use crate::Partitions;
@@ -17,6 +19,8 @@ use crate::Statistics;
 pub struct ReadDataSourcePlan {
     pub db: String,
     pub table: String,
+    pub table_id: MetaId,
+    pub table_version: Option<MetaVersion>,
     pub schema: DataSchemaRef,
     pub parts: Partitions,
     pub statistics: Statistics,
@@ -26,15 +30,17 @@ pub struct ReadDataSourcePlan {
 }
 
 impl ReadDataSourcePlan {
-    pub fn empty() -> ReadDataSourcePlan {
+    pub fn empty(table_id: u64, table_version: Option<u64>) -> ReadDataSourcePlan {
         ReadDataSourcePlan {
             db: "".to_string(),
             table: "".to_string(),
+            table_id,
+            table_version,
             schema: Arc::from(DataSchema::empty()),
             parts: vec![],
             statistics: Statistics::default(),
             description: "".to_string(),
-            scan_plan: Arc::new(ScanPlan::empty()),
+            scan_plan: Arc::new(ScanPlan::with_table_id(table_id, table_version)),
             remote: false,
         }
     }

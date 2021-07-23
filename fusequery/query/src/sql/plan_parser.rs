@@ -35,6 +35,7 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SettingPlan;
 use common_planners::ShowCreateTablePlan;
+use common_planners::TableScanInfo;
 use common_planners::TruncateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
@@ -48,7 +49,6 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use crate::datasources::Table;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -358,7 +358,7 @@ impl PlanParser {
         }
         let table = self.ctx.get_datasource().get_table(&db_name, &tbl_name)?;
 
-        let mut schema = table.schema()?;
+        let mut schema = table.datasource().schema()?;
 
         if !columns.is_empty() {
             let fields = columns
@@ -649,24 +649,36 @@ impl PlanParser {
         let db_name = "system";
         let table_name = "one";
 
-        self.ctx.get_table(db_name, table_name).and_then(|table| {
-            table
-                .schema()
-                .and_then(|ref schema| {
-                    PlanBuilder::scan(db_name, table_name, schema, None, None, None)
-                })
-                .and_then(|builder| builder.build())
-                .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                    PlanNode::Scan(ref dummy_scan_plan) => table
-                        .read_plan(
-                            self.ctx.clone(),
-                            dummy_scan_plan,
-                            self.ctx.get_settings().get_max_threads()? as usize,
-                        )
-                        .map(PlanNode::ReadSource),
-                    _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
-                })
-        })
+        self.ctx
+            .get_table(db_name, table_name)
+            .and_then(|table_meta| {
+                let table = table_meta.datasource();
+                let table_id = table_meta.meta_id();
+                let table_version = table_meta.meta_ver();
+                table
+                    .schema()
+                    .and_then(|ref schema| {
+                        let tbl_scan_info = TableScanInfo {
+                            table_name,
+                            table_id,
+                            table_version,
+                            table_schema: schema.as_ref(),
+                            table_args: None,
+                        };
+                        PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+                    })
+                    .and_then(|builder| builder.build())
+                    .and_then(|dummy_scan_plan| match dummy_scan_plan {
+                        PlanNode::Scan(ref dummy_scan_plan) => table
+                            .read_plan(
+                                self.ctx.clone(),
+                                dummy_scan_plan,
+                                self.ctx.get_settings().get_max_threads()? as usize,
+                            )
+                            .map(PlanNode::ReadSource),
+                        _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
+                    })
+            })
     }
 
     fn plan_table_with_joins(&self, t: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
@@ -683,7 +695,9 @@ impl PlanParser {
                     table_name = name.0[1].to_string();
                 }
                 let mut table_args = None;
-                let table: Arc<dyn Table>;
+                let meta_id;
+                let meta_version;
+                let table;
 
                 // only table functions has table args
                 if !args.is_empty() {
@@ -703,25 +717,30 @@ impl PlanParser {
                         }
                     }
 
-                    let table_function = self.ctx.get_table_function(&table_name)?;
+                    let func_meta = self.ctx.get_table_function(&table_name)?;
+                    meta_id = func_meta.meta_id();
+                    meta_version = func_meta.meta_ver();
+                    let table_function = func_meta.datasource().clone();
                     table_name = table_function.name().to_string();
-                    db_name = table_function.db().to_string();
                     table = table_function.as_table();
                 } else {
-                    table = self.ctx.get_table(&db_name, table_name.as_str())?;
+                    let table_meta = self.ctx.get_table(&db_name, &table_name)?;
+                    meta_id = table_meta.meta_id();
+                    meta_version = table_meta.meta_ver();
+                    table = table_meta.datasource().clone();
                 }
 
                 let scan = {
                     table.schema().and_then(|schema| {
-                        PlanBuilder::scan(
-                            &db_name,
-                            &table_name,
-                            schema.as_ref(),
-                            None,
+                        let tbl_scan_info = TableScanInfo {
+                            table_name: &table_name,
+                            table_id: meta_id,
+                            table_version: meta_version,
+                            table_schema: schema.as_ref(),
                             table_args,
-                            None,
-                        )
-                        .and_then(|builder| builder.build())
+                        };
+                        PlanBuilder::scan(&db_name, tbl_scan_info, None, None)
+                            .and_then(|builder| builder.build())
                     })
                 };
 

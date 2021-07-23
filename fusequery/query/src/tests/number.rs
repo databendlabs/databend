@@ -32,18 +32,23 @@ impl NumberTestData {
     }
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
-        let datasource = crate::datasources::DataSource::try_create()?;
-        let table = datasource.get_table(self.db, self.table)?;
-        table.schema()
+        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
+        datasource
+            .get_table(self.db, self.table)?
+            .datasource()
+            .schema()
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
-        let datasource = crate::datasources::DataSource::try_create()?;
-        let table = datasource.get_table(self.db, self.table)?;
+        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
+        let table_meta = datasource.get_table(self.db, self.table)?;
+        let table = table_meta.datasource();
         table.read_plan(
             self.ctx.clone(),
             &ScanPlan {
                 schema_name: self.db.to_string(),
+                table_id: table_meta.meta_id(),
+                table_version: table_meta.meta_ver(),
                 table_schema: Arc::new(DataSchema::empty()),
                 table_args: Some(Expression::create_literal(DataValue::Int64(Some(numbers)))),
                 projected_schema: Arc::new(DataSchema::empty()),
