@@ -453,12 +453,12 @@ impl<'a> DfParser<'a> {
                 "Null" => Ok(TableEngineType::Null),
                 "Memory" => Ok(TableEngineType::Memory),
                 _ => self.expected(
-                    "Engine must one of Parquet, JSONEachRow, Null or CSV",
+                    "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                     Token::Word(w),
                 ),
             },
             unexpected => self.expected(
-                "Engine must one of Parquet, JSONEachRow, Null or CSV",
+                "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                 unexpected,
             ),
         }
