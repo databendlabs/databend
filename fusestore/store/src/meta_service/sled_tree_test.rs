@@ -188,6 +188,43 @@ async fn test_sled_tree_insert() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sled_tree_contains_key() -> anyhow::Result<()> {
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+
+    assert_eq!(None, rl.get(&5)?);
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 3, index: 4 },
+            payload: EntryPayload::Normal(EntryNormal {
+                data: LogEntry {
+                    txid: None,
+                    cmd: Cmd::IncrSeq {
+                        key: "foo".to_string(),
+                    },
+                },
+            }),
+        },
+    ];
+
+    rl.append_values(&logs).await?;
+
+    assert!(!rl.contains_key(&1)?);
+    assert!(rl.contains_key(&2)?);
+    assert!(!rl.contains_key(&3)?);
+    assert!(rl.contains_key(&4)?);
+    assert!(!rl.contains_key(&5)?);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_tree_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;

@@ -50,6 +50,18 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
         Ok(rl)
     }
 
+    /// Return true if the tree contains the key.
+    pub fn contains_key(&self, key: &K) -> common_exception::Result<bool> {
+        let got = self
+            .tree
+            .contains_key(key.ser()?)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("contains_key: {}:{}", self.name, key)
+            })?;
+
+        Ok(got)
+    }
+
     /// Retrieve the value of key.
     pub fn get(&self, key: &K) -> common_exception::Result<Option<V>> {
         let got = self
