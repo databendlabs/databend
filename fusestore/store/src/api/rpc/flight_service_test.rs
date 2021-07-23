@@ -691,7 +691,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
         table: "tbl1".to_string(),
         schema: schema.clone(),
         options: Default::default(),
-        engine: TableEngineType::JsonEachRaw,
+        engine: TableEngineType::JSONEachRow,
     };
 
     client.create_table(plan.clone()).await?;
