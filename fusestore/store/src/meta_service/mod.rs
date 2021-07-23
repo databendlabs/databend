@@ -15,6 +15,7 @@ pub mod raft_txid;
 pub mod raft_types;
 pub mod raftmeta;
 pub mod sled_serde;
+pub mod sled_tree;
 pub mod snapshot;
 pub mod state_machine;
 
@@ -33,6 +34,8 @@ pub use raft_types::Term;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
 pub use sled_serde::SledSerde;
+pub use sled_tree::SledTree;
+pub use sled_tree::SledValueToKey;
 pub use snapshot::Snapshot;
 pub use state_machine::Node;
 pub use state_machine::Slot;
@@ -61,5 +64,7 @@ mod raft_types_test;
 mod raftmeta_test;
 #[cfg(test)]
 mod sled_serde_test;
+#[cfg(test)]
+mod sled_tree_test;
 #[cfg(test)]
 mod state_machine_test;
