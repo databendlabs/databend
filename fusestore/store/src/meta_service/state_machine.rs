@@ -35,6 +35,8 @@ const SEQ_GENERIC_KV: &str = "generic_kv";
 const SEQ_DATABASE_ID: &str = "database_id";
 /// seq number key to generate table id
 const SEQ_TABLE_ID: &str = "table_id";
+/// seq number key to database meta version
+const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 
 /// Replication defines the replication strategy.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -232,6 +234,7 @@ impl StateMachine {
                         database_id: self.incr_seq(SEQ_DATABASE_ID),
                         tables: Default::default(),
                     };
+                    self.incr_seq(SEQ_DATABASE_META_ID);
 
                     self.databases.insert(name.clone(), db.clone());
                     tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
@@ -244,6 +247,7 @@ impl StateMachine {
                 let prev = self.databases.get(name).cloned();
                 if prev.is_some() {
                     self.databases.remove(name);
+                    self.incr_seq(SEQ_DATABASE_META_ID);
                     tracing::debug!("applied DropDatabase: {}", name);
                     Ok((prev, None).into())
                 } else {
@@ -270,6 +274,7 @@ impl StateMachine {
                         schema: table.schema.clone(),
                         parts: table.parts.clone(),
                     };
+                    self.incr_seq(SEQ_DATABASE_META_ID);
                     db.tables.insert(table_name.clone(), table.table_id);
                     self.databases.insert(db_name.clone(), db);
                     self.tables.insert(table.table_id, table.clone());
@@ -290,6 +295,7 @@ impl StateMachine {
                     let tbl_id = tbl_id.to_owned();
                     db.tables.remove(table_name);
                     let prev = self.tables.remove(&tbl_id);
+                    self.incr_seq(SEQ_DATABASE_META_ID);
 
                     Ok((prev, None).into())
                 } else {
@@ -377,6 +383,14 @@ impl StateMachine {
     pub fn get_database(&self, name: &str) -> Option<Database> {
         let x = self.databases.get(name);
         x.cloned()
+    }
+
+    pub fn get_databases(&self) -> &BTreeMap<String, Database> {
+        &self.databases
+    }
+
+    pub fn get_database_meta_ver(&self) -> Option<u64> {
+        self.sequences.get(SEQ_DATABASE_META_ID).cloned()
     }
 
     pub fn get_table(&self, tid: &u64) -> Option<Table> {

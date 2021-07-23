@@ -4,6 +4,7 @@
 //
 
 use common_datavalues::DataSchemaRef;
+use common_metatypes::Database;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -39,6 +40,8 @@ pub struct GetTableActionResult {
     pub schema: DataSchemaRef,
 }
 
+pub type DatabaseMetaReply = Option<(u64, Vec<Database>)>;
+
 #[async_trait::async_trait]
 pub trait MetaApi {
     async fn create_database(
@@ -69,4 +72,9 @@ pub trait MetaApi {
         db: String,
         table: String,
     ) -> common_exception::Result<GetTableActionResult>;
+
+    async fn get_database_meta(
+        &mut self,
+        current_ver: Option<u64>,
+    ) -> common_exception::Result<Option<(u64, Vec<Database>)>>;
 }
