@@ -111,7 +111,7 @@ impl DatabaseCatalog {
             results.push(k.clone());
         }
         let local_db_names = BTreeSet::from_iter(results);
-        let meta_store_dbs = self.meta_store_client.get_databases()?;
+        let meta_store_dbs = self.meta_store_client.get_db_meta()?;
         let meta_store_db_names = meta_store_dbs
             .iter()
             .map(|db| db.name().to_owned())
@@ -146,7 +146,7 @@ impl DatabaseCatalog {
             }
         }
 
-        let meta_store_info = self.meta_store_client.get_databases()?;
+        let meta_store_info = self.meta_store_client.get_db_meta()?;
         for db in meta_store_info.iter() {
             let tables = db.get_tables()?;
             for table in tables {

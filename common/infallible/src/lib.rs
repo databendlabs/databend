@@ -13,6 +13,7 @@ mod rwlock;
 
 pub use exit_guard::ExitGuard;
 pub use mutex::Mutex;
+pub use parking_lot::Condvar;
 pub use rwlock::RwLock;
 
 #[macro_export]
