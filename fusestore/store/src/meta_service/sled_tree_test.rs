@@ -153,6 +153,56 @@ async fn test_sled_tree_append_values_and_range_get() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sled_tree_range_keys() -> anyhow::Result<()> {
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 9 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 10 },
+            payload: EntryPayload::Blank,
+        },
+    ];
+
+    rl.append_values(&logs).await?;
+
+    let got = rl.range_keys(0..)?;
+    assert_eq!(vec![2, 9, 10], got);
+
+    let got = rl.range_keys(0..=2)?;
+    assert_eq!(vec![2], got);
+
+    let got = rl.range_keys(0..3)?;
+    assert_eq!(vec![2], got);
+
+    let got = rl.range_keys(0..10)?;
+    assert_eq!(vec![2, 9], got);
+
+    let got = rl.range_keys(0..11)?;
+    assert_eq!(vec![2, 9, 10], got);
+
+    let got = rl.range_keys(9..11)?;
+    assert_eq!(vec![9, 10], got);
+
+    let got = rl.range_keys(10..256)?;
+    assert_eq!(vec![10], got);
+
+    let got = rl.range_keys(11..)?;
+    assert_eq!(Vec::<LogIndex>::new(), got);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_tree_insert() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;

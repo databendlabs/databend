@@ -135,6 +135,28 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
         Ok(())
     }
 
+    /// Get keys in `range`
+    pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<K>>
+    where R: RangeBounds<K> {
+        // TODO(xp): pre alloc vec space
+        let mut res = vec![];
+
+        let range_mes = self.range_message(&range);
+
+        // Convert K range into sled::IVec range
+        let range = range.ser()?;
+        for item in self.tree.range(range) {
+            let (k, _) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("range_get: {}", range_mes,)
+            })?;
+
+            let key = K::de(&k)?;
+            res.push(key);
+        }
+
+        Ok(res)
+    }
+
     /// Get values of key in `range`
     pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<V>>
     where R: RangeBounds<K> {
