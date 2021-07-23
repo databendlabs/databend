@@ -133,6 +133,8 @@ nav:
       - Data Definition Language:
           - CREATE DATABASE: sqlstatement/data-definition-language-ddl/ddl-create-database.md
           - DROP DATABASE: sqlstatement/data-definition-language-ddl/ddl-drop-database.md
+          - CREATE TABLE: sqlstatement/data-definition-language-ddl/ddl-create-table.md
+          - DROP TABLE: sqlstatement/data-definition-language-ddl/ddl-drop-table.md
       - Data Manipulation Language:
           - SELECT: sqlstatement/data-manipulation-language-dml/dml-select.md
       - Describe Commands:
