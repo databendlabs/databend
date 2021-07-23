@@ -24,18 +24,18 @@ use crate::sessions::session_ref::SessionRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
-    pub(in crate::sessions) cluster: ClusterRef,
     pub(in crate::sessions) datasource: Arc<DataSource>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
 }
 
-pub type SessionMgrRef = Arc<SessionMgr>;
+pub type SessionManagerRef = Arc<SessionManager>;
 
-impl SessionMgr {
-    pub fn try_create(max_mysql_sessions: u64) -> Result<SessionMgrRef> {
-        Ok(Arc::new(SessionMgr {
+impl SessionManager {
+    #[cfg(test)]
+    pub fn try_create(max_mysql_sessions: u64) -> Result<SessionManagerRef> {
+        Ok(Arc::new(SessionManager {
             conf: Config::default(),
             datasource: Arc::new(DataSource::try_create()?),
 
@@ -46,11 +46,10 @@ impl SessionMgr {
         }))
     }
 
-    pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
+    pub fn from_conf(conf: Config) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             conf,
-            cluster,
             datasource: Arc::new(DataSource::try_create()?),
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),

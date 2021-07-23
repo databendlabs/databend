@@ -27,8 +27,6 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
-use common_management::cluster::ClusterClientRef;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::datasources::Table;
@@ -36,6 +34,8 @@ use crate::datasources::TableFunction;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::ProcessInfo;
 use crate::sessions::Settings;
+use crate::api::FlightClient;
+use std::time::Duration;
 
 pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,
@@ -136,8 +136,19 @@ impl FuseQueryContext {
         Ok(())
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        self.shared.try_get_cluster()
+    pub fn try_get_executors(&self) -> Result<Vec<Arc<ClusterExecutor>>> {
+        self.shared.try_get_executors()
+    }
+
+    pub fn try_get_executor_by_name(&self, name: &str) -> Result<Arc<ClusterExecutor>> {
+        self.shared.try_get_executor_by_name(name)
+    }
+
+    /// Get the flight client from address.
+    pub async fn get_flight_client(&self, address: Address) -> Result<FlightClient> {
+        let address = address.to_string().clone();
+        let channel = ConnectionFactory::create_flight_channel(address, None).await;
+        channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 
     pub fn get_datasource(&self) -> Arc<DataSource> {

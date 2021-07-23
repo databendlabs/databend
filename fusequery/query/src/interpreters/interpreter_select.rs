@@ -57,18 +57,20 @@ impl Interpreter for SelectInterpreter {
             Result::Err(error)
         };
 
-        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
+        let context = self.ctx.clone();
+        let timeout = context.get_settings().get_flight_client_timeout()?;
         for (index, (node, action)) in remote_actions.iter().enumerate() {
-            let mut flight_client = node.get_flight_client().await?;
+            let address = node.address.clone();
+            let mut flight_client = context.get_flight_client(address).await?;
             let prepare_query_stage = flight_client.execute_action(action.clone(), timeout);
             if let Err(error) = prepare_query_stage.await {
                 return prepare_error_handler(error, index);
             }
         }
 
-        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
-        let mut in_local_pipeline = pipeline_builder.build(&scheduled_tasks.get_local_task())?;
-        in_local_pipeline.execute().await
+        let builder = PipelineBuilder::create(self.ctx.clone());
+        let mut local_pipeline = builder.build(&scheduled_tasks.get_local_task())?;
+        local_pipeline.execute().await
     }
 
     fn schema(&self) -> DataSchemaRef {

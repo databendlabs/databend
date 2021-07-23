@@ -218,13 +218,12 @@ impl ConstantFoldingImpl {
     }
 }
 
-#[async_trait::async_trait]
 impl Optimizer for ConstantFoldingOptimizer {
     fn name(&self) -> &str {
         "ConstantFolding"
     }
 
-    async fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+    fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut visitor = ConstantFoldingImpl::new();
         visitor.rewrite_plan_node(plan)
     }

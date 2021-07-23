@@ -83,7 +83,7 @@ impl Table for ClustersTable {
         ctx: FuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let executors = ctx.try_get_executors().await?;
+        let executors = ctx.try_get_executors()?;
         let names: Vec<&str> = executors.iter().map(|x| x.name.as_str()).collect();
         let hosts = executors
             .iter()

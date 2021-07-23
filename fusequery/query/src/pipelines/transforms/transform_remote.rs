@@ -75,16 +75,15 @@ impl Processor for RemoteTransform {
         );
 
         let context = self.ctx.clone();
-        let cluster = context.try_get_cluster()?;
-        let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
+        let executor = context.try_get_executor_by_name(&self.fetch_node_name)?;
 
+        let address = executor.address.clone();
         let data_schema = self.schema.clone();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-        let mut flight_client = fetch_node.get_flight_client().await?;
+        let mut flight_client = context.get_flight_client(address).await?;
 
         let ticket = FlightTicket::stream(&self.query_id, &self.stage_id, &self.stream_id);
-        flight_client
-            .fetch_stream(ticket, data_schema, timeout)
-            .await
+        let fetch_stream = flight_client.fetch_stream(ticket, data_schema, timeout);
+        fetch_stream.await
     }
 }

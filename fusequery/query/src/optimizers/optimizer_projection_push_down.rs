@@ -182,13 +182,12 @@ impl ProjectionPushDownImpl {
     }
 }
 
-#[async_trait::async_trait]
 impl Optimizer for ProjectionPushDownOptimizer {
     fn name(&self) -> &str {
         "ProjectionPushDown"
     }
 
-    async fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
+    fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         let mut visitor = ProjectionPushDownImpl::new();
         visitor.rewrite_plan_node(plan)
     }

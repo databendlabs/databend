@@ -99,7 +99,6 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
     }
 }
 
-#[async_trait::async_trait]
 impl Optimizer for StatisticsExactOptimizer {
     fn name(&self) -> &str {
         "StatisticsExact"

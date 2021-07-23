@@ -11,7 +11,6 @@ use common_infallible::Mutex;
 use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::context_shared::FuseQueryContextShared;
@@ -20,6 +19,7 @@ use crate::sessions::FuseQueryContextRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
+use common_management::cluster::ClusterExecutor;
 
 pub(in crate::sessions) struct MutableStatus {
     pub(in crate::sessions) abort: bool,
@@ -142,7 +142,7 @@ impl Session {
         self.mutable_state.lock().session_settings.clone()
     }
 
-    pub fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
+    pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
         Ok(self.sessions.get_cluster())
     }
 

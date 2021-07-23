@@ -65,19 +65,18 @@ pub struct PlanScheduler {
 
 impl PlanScheduler {
     pub fn try_create(context: FuseQueryContextRef) -> Result<PlanScheduler> {
-        let cluster = context.try_get_cluster()?;
-        let cluster_nodes = cluster.get_nodes()?;
+        let executors = context.try_get_executors()?;
 
         let mut local_pos = 0;
         let mut nodes_plan = Vec::new();
-        let mut cluster_nodes_name = Vec::with_capacity(cluster_nodes.len());
-        for index in 0..cluster_nodes.len() {
-            if cluster_nodes[index].is_local() {
+        let mut cluster_nodes_name = Vec::with_capacity(executors.len());
+        for index in 0..executors.len() {
+            if executors[index].is_local() {
                 local_pos = index;
             }
 
             nodes_plan.push(PlanNode::Empty(EmptyPlan::create()));
-            cluster_nodes_name.push(cluster_nodes[index].name.clone());
+            cluster_nodes_name.push(executors[index].name.clone());
         }
 
         Ok(PlanScheduler {
@@ -95,12 +94,11 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
-        let cluster = context.try_get_cluster()?;
         let mut tasks = Tasks::create(context);
 
-        match cluster.is_empty()? {
-            true => tasks.finalize(plan),
-            false => {
+        match context.try_get_executors()?.len() {
+            size if size < 2 => tasks.finalize(plan),
+            _ => {
                 self.visit_plan_node(plan, &mut tasks)?;
                 tasks.finalize(&self.nodes_plan[self.local_pos])
             }
@@ -126,14 +124,12 @@ impl Tasks {
         Ok(self)
     }
 
-    pub fn get_tasks(&self) -> Result<Vec<(Arc<Node>, FlightAction)>> {
-        let cluster = self.context.try_get_cluster()?;
-
+    pub fn get_tasks(&self) -> Result<Vec<(Arc<ClusterExecutor>, FlightAction)>> {
         let mut tasks = Vec::new();
-        for cluster_node in &cluster.get_nodes()? {
-            if let Some(actions) = self.actions.get(&cluster_node.name) {
+        for executor in &self.context.try_get_executors()? {
+            if let Some(actions) = self.actions.get(&executor.name) {
                 for action in actions {
-                    tasks.push((cluster_node.clone(), action.clone()));
+                    tasks.push((executor.clone(), action.clone()));
                 }
             }
         }

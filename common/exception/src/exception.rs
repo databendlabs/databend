@@ -153,6 +153,7 @@ build_exceptions! {
     BadBytes(46),
     InitPrometheusFailure(47),
     ScalarSubqueryBadRows(48),
+    UnknownQueryClusterNode(49),
 
 
     // uncategorized

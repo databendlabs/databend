@@ -49,17 +49,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         malloc
     );
 
-    let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
+    // let cluster = Cluster::create_global(conf.clone())?;
+    let session_manager = SessionManager::from_conf(conf.clone())?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.
     {
-        let listening = format!(
-            "{}:{}",
-            conf.mysql_handler_host.clone(),
-            conf.mysql_handler_port
-        );
+        let hostname = conf.mysql_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.mysql_handler_port);
         let listening = listening.parse::<SocketAddr>()?;
 
         let mut handler = MySQLHandler::create(session_manager.clone());
