@@ -234,6 +234,29 @@ async fn test_sled_tree_insert() -> anyhow::Result<()> {
 
     assert_eq!(logs, rl.range_get(..)?);
 
+    // insert and override
+
+    let override_2 = Entry {
+        log_id: LogId { term: 10, index: 2 },
+        payload: EntryPayload::Blank,
+    };
+
+    let prev = rl.insert_value(&override_2).await?;
+    assert_eq!(Some(logs[0].clone()), prev);
+
+    // insert and override nothing
+
+    let override_nothing = Entry {
+        log_id: LogId {
+            term: 10,
+            index: 100,
+        },
+        payload: EntryPayload::Blank,
+    };
+
+    let prev = rl.insert_value(&override_nothing).await?;
+    assert_eq!(None, prev);
+
     Ok(())
 }
 

@@ -229,15 +229,22 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
     }
 
     /// Insert a single kv.
-    pub async fn insert(&self, key: &K, value: &V) -> common_exception::Result<()> {
+    /// Returns the last value if it is set.
+    pub async fn insert(&self, key: &K, value: &V) -> common_exception::Result<Option<V>> {
         let k = key.ser()?;
         let v = value.ser()?;
 
-        self.tree
+        let prev = self
+            .tree
             .insert(k, v)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
                 format!("insert_value {}", key)
             })?;
+
+        let prev = match prev {
+            None => None,
+            Some(x) => Some(V::de(x)?),
+        };
 
         self.tree
             .flush_async()
@@ -246,11 +253,11 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
                 format!("flush insert_value {}", key)
             })?;
 
-        Ok(())
+        Ok(prev)
     }
 
     /// Insert a single kv, Retrieve the key from value.
-    pub async fn insert_value(&self, value: &V) -> common_exception::Result<()>
+    pub async fn insert_value(&self, value: &V) -> common_exception::Result<Option<V>>
     where V: SledValueToKey<K> {
         let key = value.to_key();
         self.insert(&key, value).await
