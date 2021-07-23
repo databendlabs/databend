@@ -448,17 +448,17 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match &*w.value {
                 "Parquet" => Ok(TableEngineType::Parquet),
-                "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
+                "JSONEachRow" => Ok(TableEngineType::JSONEachRow),
                 "CSV" => Ok(TableEngineType::Csv),
                 "Null" => Ok(TableEngineType::Null),
                 "Memory" => Ok(TableEngineType::Memory),
                 _ => self.expected(
-                    "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                    "Engine must one of Parquet, JSONEachRow, Null or CSV",
                     Token::Word(w),
                 ),
             },
             unexpected => self.expected(
-                "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                "Engine must one of Parquet, JSONEachRow, Null or CSV",
                 unexpected,
             ),
         }

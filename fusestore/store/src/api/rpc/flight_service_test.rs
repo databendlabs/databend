@@ -141,7 +141,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             // TODO check get_table
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             // TODO
-            engine: TableEngineType::JsonEachRaw,
+            engine: TableEngineType::JSONEachRow,
         };
 
         {

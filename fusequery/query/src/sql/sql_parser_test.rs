@@ -162,7 +162,7 @@ mod tests {
         let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
         expect_parse_error(
             sql,
-            "Expected Engine must one of Parquet, JSONEachRaw, Null or CSV, found: XX",
+            "Expected Engine must one of Parquet, JSONEachRow, Null or CSV, found: XX",
         )?;
 
         Ok(())
