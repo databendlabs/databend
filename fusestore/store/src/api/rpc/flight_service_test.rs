@@ -716,7 +716,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
 
     // failed ddl do not effect meta version
     //  recall: plan.if_not_exist == true
-    let r = client.create_table(plan).await?;
+    let _r = client.create_table(plan).await?;
     let res = client.get_database_meta(Some(2)).await?;
     assert!(res.is_none());
 
@@ -727,7 +727,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
         table: "tbl1".to_string(),
     };
 
-    client.drop_table(plan).await;
+    client.drop_table(plan).await?;
     let res = client.get_database_meta(Some(2)).await?;
     assert!(res.is_some());
     let (v, dbs) = res.unwrap();
