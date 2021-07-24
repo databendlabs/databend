@@ -130,6 +130,10 @@ nav:
       - Architecture: overview/architecture.md
       - Installation: overview/building-and-running.md
     - SQL Reference:
+      - Data Types:
+            - Integer Numbers: sqlstatement/data-types/data-type-integer-number.md
+            - Real Numbers: sqlstatement/data-types/data-type-real-number.md
+            - String Types: sqlstatement/data-types/data-type-string-types.md
       - Data Definition Language:
           - CREATE DATABASE: sqlstatement/data-definition-language-ddl/ddl-create-database.md
           - DROP DATABASE: sqlstatement/data-definition-language-ddl/ddl-drop-database.md
