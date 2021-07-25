@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt::Display;
+use std::marker::PhantomData;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
@@ -39,6 +40,14 @@ impl SledVarTypeTree {
             tree: t,
         };
         Ok(rl)
+    }
+
+    /// Borrows the SledVarTypeTree and creates a wrapper with access limited to a specified namespace `KV`.
+    pub fn as_type<KV: SledKV>(&self) -> AsType<KV> {
+        AsType::<KV> {
+            inner: self,
+            phantom: PhantomData,
+        }
     }
 
     /// Return true if the tree contains the key.
@@ -298,5 +307,62 @@ impl SledVarTypeTree {
             range.start_bound(),
             range.end_bound()
         )
+    }
+}
+
+/// AsType borrows the internal SledVarTypeTree with access limited to a specified namespace `KV`.
+pub struct AsType<'a, KV: SledKV> {
+    inner: &'a SledVarTypeTree,
+    phantom: PhantomData<KV>,
+}
+
+impl<'a, KV: SledKV> AsType<'a, KV> {
+    pub fn contains_key(&self, key: &KV::K) -> common_exception::Result<bool> {
+        self.inner.contains_key::<KV>(key)
+    }
+
+    pub fn get(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
+        self.inner.get::<KV>(key)
+    }
+
+    pub fn last(&self) -> common_exception::Result<Option<(KV::K, KV::V)>> {
+        self.inner.last::<KV>()
+    }
+
+    pub async fn range_delete<R>(&self, range: R, flush: bool) -> common_exception::Result<()>
+    where R: RangeBounds<KV::K> {
+        self.inner.range_delete::<KV, R>(range, flush).await
+    }
+
+    pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<KV::K>>
+    where R: RangeBounds<KV::K> {
+        self.inner.range_keys::<KV, R>(range)
+    }
+
+    pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
+    where R: RangeBounds<KV::K> {
+        self.inner.range_get::<KV, R>(range)
+    }
+
+    pub async fn append(&self, kvs: &[(KV::K, KV::V)]) -> common_exception::Result<()> {
+        self.inner.append::<KV>(kvs).await
+    }
+
+    pub async fn append_values(&self, values: &[KV::V]) -> common_exception::Result<()>
+    where KV::V: SledValueToKey<KV::K> {
+        self.inner.append_values::<KV>(values).await
+    }
+
+    pub async fn insert(
+        &self,
+        key: &KV::K,
+        value: &KV::V,
+    ) -> common_exception::Result<Option<KV::V>> {
+        self.inner.insert::<KV>(key, value).await
+    }
+
+    pub async fn insert_value(&self, value: &KV::V) -> common_exception::Result<Option<KV::V>>
+    where KV::V: SledValueToKey<KV::K> {
+        self.inner.insert_value::<KV>(value).await
     }
 }
