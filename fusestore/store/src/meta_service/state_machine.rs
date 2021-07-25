@@ -28,6 +28,7 @@ use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
+use crate::meta_service::SledSerde;
 
 /// seq number key to generate seq for the value of a `generic_kv` record.
 const SEQ_GENERIC_KV: &str = "generic_kv";
@@ -489,6 +490,9 @@ impl Display for Node {
         write!(f, "{}={}", self.name, self.address)
     }
 }
+
+/// For Node to be able to be stored in sled::Tree as a value.
+impl SledSerde for Node {}
 
 impl Placement for StateMachine {
     fn get_slots(&self) -> &[Slot] {
