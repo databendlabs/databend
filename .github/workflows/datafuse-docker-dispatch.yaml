@@ -57,10 +57,10 @@ jobs:
     - name: docker push
       run: |
       docker push ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }}
-     - name: Delete all resources
-       if: always()
-       run: |
-         rm -rf /tmp/*
+    - name: Delete all resources
+      if: always()
+      run: |
+       rm -rf /tmp/*
 
     - name: Update status to failure
       if: failure()
