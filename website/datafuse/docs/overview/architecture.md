@@ -9,7 +9,7 @@ title: Architecture
 
 ## FuseQuery
   
-  [FuseQuery](https://github.com/datafuselabs/datafuse/tree/master/fusequery) is a Distributed Query Engine at scale
+  [FuseQuery](https://github.com/datafuselabs/datafuse/tree/master/fusequery) is a Distributed Query Engine at scale.
 
 ## FuseStore
 

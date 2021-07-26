@@ -29,3 +29,5 @@ tests/perfs/*-result.json
 
 # python
 venv/
+
+tls/certs/*

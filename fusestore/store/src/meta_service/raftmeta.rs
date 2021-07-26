@@ -863,6 +863,23 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_database_meta(
+        &self,
+        lower_bound: Option<u64>,
+    ) -> Option<(u64, Vec<Database>)> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.state_machine.read().await;
+        let ver = sm.get_database_meta_ver();
+        if ver <= lower_bound {
+            None
+        } else {
+            let dbs = sm.get_databases();
+            Some((ver.unwrap_or(0), dbs.values().cloned().collect()))
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_table(&self, tid: &u64) -> Option<Table> {
         // inconsistent get: from local state machine
 

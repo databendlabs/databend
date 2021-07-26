@@ -84,35 +84,6 @@ Note:
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5)
 * FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
-## Status
-
-#### General
-
-- [x] SQL Parser
-- [x] Query Planner
-- [x] Query Optimizer
-- [x] Predicate Push Down
-- [x] Limit Push Down
-- [x] Projection Push Down
-- [x] Type coercion
-- [x] Parallel Query Execution
-- [x] Distributed Query Execution
-- [x] Shuffle Hash GroupBy
-- [x] Merge-Sort OrderBy
-- [ ] Joins (WIP)
-
-#### SQL Support
-
-- [x] Projection
-- [x] Filter (WHERE)
-- [x] Limit
-- [x] Aggregate Functions
-- [x] Scalar Functions
-- [x] UDF Functions
-- [x] SubQueries
-- [x] Sorting
-- [ ] Joins (WIP)
-- [ ] Window (TODO)
 
 ## Getting Started
 

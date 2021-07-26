@@ -11,8 +11,12 @@ use common_flights::StorageApi;
 use common_flights::StoreClient;
 use common_metatypes::MatchSeq;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DatabaseEngineType;
+use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
+use common_planners::TableEngineType;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
@@ -141,7 +145,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             // TODO check get_table
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             // TODO
-            engine: TableEngineType::JsonEachRaw,
+            engine: TableEngineType::JSONEachRow,
         };
 
         {
@@ -580,6 +584,156 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
         assert!(kv.result.is_some());
         assert_eq!(kv.result.unwrap().1, "brand new value".as_bytes());
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+    let (_tc, addr) = crate::tests::start_store_server().await?;
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    // Empty Database
+    let res = client.get_database_meta(None).await?;
+    assert_eq!(None, res);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+    let (_tc, addr) = crate::tests::start_store_server().await?;
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    // create-db operation will increases meta_version
+    let plan = CreateDatabasePlan {
+        if_not_exists: false,
+        db: "db1".to_string(),
+        engine: DatabaseEngineType::Local,
+        options: Default::default(),
+    };
+    client.create_database(plan).await?;
+
+    let res = client.get_database_meta(None).await?;
+    assert!(res.is_some());
+    let (v, dbs) = res.unwrap();
+    assert_eq!(1, v);
+    assert_eq!(1, dbs.len());
+
+    // if lower_bound < current meta version, returns database meta
+    let res = client.get_database_meta(Some(0)).await?;
+    assert!(res.is_some());
+    let (v, dbs) = res.unwrap();
+    assert_eq!(1, v);
+    assert_eq!(1, dbs.len());
+
+    // if lower_bound equals current meta version, returns None
+    let res = client.get_database_meta(Some(1)).await?;
+    assert!(res.is_none());
+
+    // failed ddl do not effect meta version
+    let plan = CreateDatabasePlan {
+        if_not_exists: true, // <<--
+        db: "db1".to_string(),
+        engine: DatabaseEngineType::Local, // accepts a Local engine?
+        options: Default::default(),
+    };
+
+    client.create_database(plan).await?;
+    let res = client.get_database_meta(Some(1)).await?;
+    assert!(res.is_none());
+
+    // drop-db will increase meta version
+    let plan = DropDatabasePlan {
+        if_exists: true,
+        db: "db1".to_string(),
+    };
+
+    client.drop_database(plan).await?;
+    let res = client.get_database_meta(Some(1)).await?;
+    assert!(res.is_some());
+    let (v, dbs) = res.unwrap();
+    assert_eq!(2, v);
+    assert_eq!(0, dbs.len());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+    let (_, addr) = crate::tests::start_store_server().await?;
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    let test_db = "db1";
+    let plan = CreateDatabasePlan {
+        if_not_exists: false,
+        db: test_db.to_string(),
+        engine: DatabaseEngineType::Local,
+        options: Default::default(),
+    };
+    client.create_database(plan).await?;
+
+    // After `create db`, meta_ver will be increased to 1
+
+    let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        "number",
+        DataType::UInt64,
+        false,
+    )]));
+
+    // create-tbl operation will increases meta_version
+    let plan = CreateTablePlan {
+        if_not_exists: true,
+        db: test_db.to_string(),
+        table: "tbl1".to_string(),
+        schema: schema.clone(),
+        options: Default::default(),
+        engine: TableEngineType::JSONEachRow,
+    };
+
+    client.create_table(plan.clone()).await?;
+
+    let res = client.get_database_meta(None).await?;
+    assert!(res.is_some());
+    let (v, dbs) = res.unwrap();
+    assert_eq!(2, v);
+    assert_eq!(1, dbs.len());
+    assert_eq!(1, dbs[0].tables.len());
+
+    // if lower_bound < current meta version, returns database meta
+    let res = client.get_database_meta(Some(0)).await?;
+    assert!(res.is_some());
+    let (v, dbs) = res.unwrap();
+    assert_eq!(2, v);
+    assert_eq!(1, dbs.len());
+
+    // if lower_bound equals current meta version, returns None
+    let res = client.get_database_meta(Some(2)).await?;
+    assert!(res.is_none());
+
+    // failed ddl do not effect meta version
+    //  recall: plan.if_not_exist == true
+    let _r = client.create_table(plan).await?;
+    let res = client.get_database_meta(Some(2)).await?;
+    assert!(res.is_none());
+
+    // drop-table will increase meta version
+    let plan = DropTablePlan {
+        if_exists: true,
+        db: test_db.to_string(),
+        table: "tbl1".to_string(),
+    };
+
+    client.drop_table(plan).await?;
+    let res = client.get_database_meta(Some(2)).await?;
+    assert!(res.is_some());
+    let (v, dbs) = res.unwrap();
+    assert_eq!(3, v);
+    assert_eq!(1, dbs.len());
+    assert_eq!(0, dbs[0].tables.len());
 
     Ok(())
 }

@@ -61,7 +61,8 @@ fn test_array_as_ref() -> Result<()> {
     let mut list_builder = ListPrimitiveArrayBuilder::<UInt16Type>::new(list_value_builder, 3);
     let df_list = list_builder.finish();
     let arrow_list = df_list.as_ref();
-    println!("value-{:?}", arrow_list.values());
+    let expected = "PrimitiveArray<UInt16>\n[\n  1,\n  2,\n  3,\n]";
+    assert_eq!(expected, format!("{:?}", arrow_list.values()));
 
     // Test DFBinaryArray
     let mut binary_builder = BinaryArrayBuilder::new(8);

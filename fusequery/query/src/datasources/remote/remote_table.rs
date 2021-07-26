@@ -116,14 +116,16 @@ impl Table for RemoteTable {
 
     async fn append_data(&self, _ctx: FuseQueryContextRef, plan: InsertIntoPlan) -> Result<()> {
         let opt_stream = {
-            let mut inner = plan.input_stream.lock().unwrap();
+            let mut inner = plan.input_stream.lock();
             (*inner).take()
         };
 
         {
             let block_stream =
                 opt_stream.ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
+
             let mut client = self.store_client_provider.try_get_client().await?;
+
             client
                 .append_data(
                     plan.db_name.clone(),

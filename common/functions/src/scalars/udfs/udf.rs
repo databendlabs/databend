@@ -19,13 +19,13 @@ pub struct UdfFunction;
 impl UdfFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
-        map.insert("example", UdfExampleFunction::try_create);
-        map.insert("totypename", ToTypeNameFunction::try_create);
-        map.insert("database", DatabaseFunction::try_create);
-        map.insert("version", VersionFunction::try_create);
-        map.insert("sleep", SleepFunction::try_create);
-        map.insert("crashme", CrashMeFunction::try_create);
-        map.insert("exists", ExistsFunction::try_create);
+        map.insert("example".into(), UdfExampleFunction::try_create);
+        map.insert("totypename".into(), ToTypeNameFunction::try_create);
+        map.insert("database".into(), DatabaseFunction::try_create);
+        map.insert("version".into(), VersionFunction::try_create);
+        map.insert("sleep".into(), SleepFunction::try_create);
+        map.insert("crashme".into(), CrashMeFunction::try_create);
+        map.insert("exists".into(), ExistsFunction::try_create);
         Ok(())
     }
 }

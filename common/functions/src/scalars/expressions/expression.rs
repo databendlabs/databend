@@ -13,18 +13,43 @@ pub struct ToCastFunction;
 impl ToCastFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
-        map.insert("toint8", |display_name| {
-            CastFunction::create(display_name.to_string(), DataType::Int8)
-        });
-        map.insert("toint16", |display_name| {
-            CastFunction::create(display_name.to_string(), DataType::Int16)
-        });
-        map.insert("toint32", |display_name| {
-            CastFunction::create(display_name.to_string(), DataType::Int32)
-        });
-        map.insert("toint64", |display_name| {
-            CastFunction::create(display_name.to_string(), DataType::Int64)
-        });
+
+        macro_rules! register_cast_funcs {
+            ( $($name:ident), *) => {{
+               $(
+                let name = format!("to{}", DataType::$name);
+                map.insert(name.into(), |display_name| {
+                    CastFunction::create(display_name.to_string(), DataType::$name)
+                });
+               )*
+            }};
+        }
+
+        {
+            register_cast_funcs! {
+                Null,
+                Boolean,
+                UInt8,
+                UInt16,
+                UInt32,
+                UInt64,
+                Int8,
+                Int16,
+                Int32,
+                Int64,
+                Float32,
+                Float64,
+                Utf8,
+                Date32,
+                Date64,
+                Binary
+            }
+            // aliases
+            map.insert("tostring".into(), |display_name| {
+                CastFunction::create(display_name.to_string(), DataType::Utf8)
+            });
+        }
+
         Ok(())
     }
 }

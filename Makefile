@@ -41,6 +41,10 @@ lint:
 	cargo fmt
 	cargo clippy -- -D warnings
 
+miri:
+	cargo miri setup
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
+
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/fuse-query:${TAG} .
 

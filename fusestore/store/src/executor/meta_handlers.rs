@@ -15,12 +15,14 @@ use common_flights::meta_api_impl::CreateDatabaseAction;
 use common_flights::meta_api_impl::CreateDatabaseActionResult;
 use common_flights::meta_api_impl::CreateTableAction;
 use common_flights::meta_api_impl::CreateTableActionResult;
+use common_flights::meta_api_impl::DatabaseMetaReply;
 use common_flights::meta_api_impl::DropDatabaseAction;
 use common_flights::meta_api_impl::DropDatabaseActionResult;
 use common_flights::meta_api_impl::DropTableAction;
 use common_flights::meta_api_impl::DropTableActionResult;
 use common_flights::meta_api_impl::GetDatabaseAction;
 use common_flights::meta_api_impl::GetDatabaseActionResult;
+use common_flights::meta_api_impl::GetDatabaseMetaAction;
 use common_flights::meta_api_impl::GetTableAction;
 use common_flights::meta_api_impl::GetTableActionResult;
 use common_metatypes::Database;
@@ -290,5 +292,15 @@ impl RequestHandler<GetTableAction> for ActionHandler {
             }
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<GetDatabaseMetaAction> for ActionHandler {
+    async fn handle(
+        &self,
+        req: GetDatabaseMetaAction,
+    ) -> common_exception::Result<DatabaseMetaReply> {
+        Ok(self.meta_node.get_database_meta(req.ver_lower_bound).await)
     }
 }

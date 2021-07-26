@@ -96,7 +96,6 @@ impl StorageApi for StoreClient {
         let arrow_schema: ArrowSchemaRef = Arc::new(scheme_ref.to_arrow());
         let flight_schema = SchemaAsIpc::new(arrow_schema.as_ref(), &ipc_write_opt).into();
         let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
-
         tx.send(flight_schema)
             .await
             .map_err(|send_err| ErrorCode::BrokenChannel(send_err.to_string()))?;
