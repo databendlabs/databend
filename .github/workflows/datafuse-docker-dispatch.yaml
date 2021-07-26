@@ -47,9 +47,10 @@ jobs:
         export SCCACHE_DIR=$HOME/.cache/sccache
         export RUSTC_WRAPPER=sccache
         make build-debug
-        mv target/debug/fuse-query /tmp/fuse-query
-        mv target/debug/fuse-store /tmp/fuse-store
-        mv docker/bootstrap.sh /tmp/bootstrap.sh
+        mkdir -p distro
+        mv target/debug/fuse-query ./distro/fuse-query
+        mv target/debug/fuse-store ./distro/fuse-store
+        mv docker/bootstrap.sh ./distro/bootstrap.sh
 
     - name: build docker image
       run: |
