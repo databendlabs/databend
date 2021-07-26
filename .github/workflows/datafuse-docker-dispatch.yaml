@@ -38,33 +38,23 @@ jobs:
     - uses: actions/checkout@v2
       with:
         ref: ${{ env.SHA }}
-    - name: setup docker context for buildx
-      id: buildx-context
+    - name: build all binary
+      id: make debug
       run: |
-        docker context create builders
-    - name: setup docker buildx
-      uses: docker/setup-buildx-action@v1
-      with:
-        endpoint: builders
+        # enable sccache
+        sccache --start-server
+        echo $HOME
+        export SCCACHE_DIR=$HOME/.cache/sccache
+        export RUSTC_WRAPPER=sccache
+        make debug
+        mv target/debug/fuse-query /tmp/fuse-query
+        mv target/debug/fuse-store /tmp/fuse-store
+        mv docker/bootstrap.sh /tmp/bootstrap.sh
 
-    - name: Login to DockerHub
-      uses: docker/login-action@v1 
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    - name: Build and push
-      id: docker_build
-      uses: docker/build-push-action@v2
-      with:
-        push: true
-        tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }}
-        context: .
-        file: ./docker/cache/Dockerfile
-
-    - name: Image digest
-      run: echo ${{ steps.docker_build.outputs.digest }}
-
+    - name: build docker image
+      run: |
+        docker build --network host -f docker/cache/Dockerfile -t ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{env.SHA}} .
+        docker push ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{env.SHA}}
     # - name: Delete all resources
     #   if: always()
     #   run: |
