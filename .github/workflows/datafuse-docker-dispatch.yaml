@@ -46,7 +46,7 @@ jobs:
         echo $HOME
         export SCCACHE_DIR=$HOME/.cache/sccache
         export RUSTC_WRAPPER=sccache
-        make debug
+        make build-debug
         mv target/debug/fuse-query /tmp/fuse-query
         mv target/debug/fuse-store /tmp/fuse-store
         mv docker/bootstrap.sh /tmp/bootstrap.sh
