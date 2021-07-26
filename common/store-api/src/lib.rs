@@ -27,3 +27,4 @@ pub use storage_api::ReadAction;
 pub use storage_api::ReadPlanResult;
 pub use storage_api::StorageApi;
 pub use storage_api::Summary;
+pub use storage_api::TruncateTableResult;

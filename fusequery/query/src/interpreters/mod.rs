@@ -37,6 +37,7 @@ mod interpreter_setting;
 mod interpreter_show_create_table;
 mod interpreter_table_create;
 mod interpreter_table_drop;
+mod interpreter_truncate_table;
 mod interpreter_use_database;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
@@ -54,4 +55,5 @@ pub use interpreter_setting::SettingInterpreter;
 pub use interpreter_show_create_table::ShowCreateTableInterpreter;
 pub use interpreter_table_create::CreateTableInterpreter;
 pub use interpreter_table_drop::DropTableInterpreter;
+pub use interpreter_truncate_table::TruncateTableInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;

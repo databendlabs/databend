@@ -14,6 +14,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing::info;
@@ -111,6 +112,14 @@ impl Table for NullTable {
         while let Some(block) = s.next().await {
             info!("Ignore one block rows: {}", block.num_rows())
         }
+        Ok(())
+    }
+
+    async fn truncate(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _truncate_plan: TruncateTablePlan,
+    ) -> Result<()> {
         Ok(())
     }
 }
