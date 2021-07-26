@@ -29,7 +29,6 @@ mod fill_test;
 #[cfg(test)]
 mod group_hash_test;
 
-
 pub use agg::*;
 pub use apply::*;
 pub use boolean::*;
