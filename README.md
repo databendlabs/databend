@@ -22,10 +22,6 @@ Built to make the Data Cloud easy!
 <img src="https://codecov.io/gh/datafuselabs/datafuse/branch/master/graph/badge.svg" alt="codecov" />
 </a>
 
-<a href="https://deps.rs/repo/github/datafuselabs/datafuse">
-<img src="https://deps.rs/repo/github/datafuselabs/datafuse/status.svg" alt="dependency status" />
-</a>
-
 <img src="https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat" alt="patform" />
 
 <a href="https://opensource.org/licenses/Apache-2.0">
