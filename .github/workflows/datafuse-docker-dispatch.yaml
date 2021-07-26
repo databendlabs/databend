@@ -44,10 +44,11 @@ jobs:
         # enable sccache
         sccache --start-server
         echo $HOME
-        export SCCACHE_DIR=$HOME/.cache/sccache
+        export SCCACHE_DIR=/home/runner/.cache/sccache
         export RUSTC_WRAPPER=sccache
         make build-debug
         mkdir -p distro
+        sccache --show-stats
         mv target/debug/fuse-query ./distro/fuse-query
         mv target/debug/fuse-store ./distro/fuse-store
         mv docker/bootstrap.sh ./distro/bootstrap.sh
