@@ -23,6 +23,7 @@ site_name: Datafuse
 site_url: https://datafuse.rs
 site_author: DatafuseLabs
 site_description: >-
+  Built to make the Data Cloud easy.
 
 # Repository
 repo_name: datafuselabs/datafuse
@@ -30,7 +31,7 @@ repo_url: https://github.com/datafuselabs/datafuse
 edit_uri: "https://github.com/datafuselabs/datafuse/tree/master/website/datafuse/docs"
 
 # Copyright
-copyright: Copyright &copy; 2020 - 2021 DatafuseLabs
+copyright: Copyright &copy; 2020 - 2021 Datafuse Labs
 
 # Configuration
 theme:
