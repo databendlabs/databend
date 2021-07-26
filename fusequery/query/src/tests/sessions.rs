@@ -21,5 +21,5 @@ pub fn try_create_sessions() -> Result<SessionManagerRef> {
         .display()
         .to_string();
 
-    SessionManager::from_conf(config, cluster)
+    SessionManager::from_conf(config, cluster, ClusterClient::create("local"))
 }

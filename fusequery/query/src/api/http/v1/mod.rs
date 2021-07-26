@@ -7,7 +7,9 @@ mod cluster_test;
 #[cfg(test)]
 mod kv_test;
 
-pub mod cluster;
 pub mod config;
 pub mod hello;
 pub mod kv;
+mod cluster;
+
+pub use cluster::ClusterRouter;

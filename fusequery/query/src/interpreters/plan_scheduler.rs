@@ -94,7 +94,7 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
-        let mut tasks = Tasks::create(context);
+        let mut tasks = Tasks::create(context.clone());
 
         match context.try_get_executors()?.len() {
             size if size < 2 => tasks.finalize(plan),

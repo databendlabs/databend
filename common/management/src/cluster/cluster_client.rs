@@ -18,8 +18,8 @@ pub struct ClusterClient {
 }
 
 impl ClusterClient {
-    pub fn create(uri: String) -> ClusterClientRef {
-        let backend_client = BackendClient::create(uri);
+    pub fn create(uri: impl Into<String>) -> ClusterClientRef {
+        let backend_client = BackendClient::create(uri.into());
         Arc::new(ClusterClient { backend_client })
     }
 

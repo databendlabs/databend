@@ -21,10 +21,12 @@ use crate::configs::Config;
 use crate::datasources::DataSource;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use common_management::cluster::{ClusterExecutor, ClusterClientRef, ClusterClient};
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) datasource: Arc<DataSource>,
+    pub(in crate::sessions) cluster_manager: ClusterClientRef,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -38,7 +40,7 @@ impl SessionManager {
         Ok(Arc::new(SessionManager {
             conf: Config::default(),
             datasource: Arc::new(DataSource::try_create()?),
-
+            cluster_manager: ClusterClient::create("local"),
             max_sessions: max_mysql_sessions as usize,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
                 max_mysql_sessions as usize,
@@ -46,10 +48,11 @@ impl SessionManager {
         }))
     }
 
-    pub fn from_conf(conf: Config) -> Result<SessionManagerRef> {
+    pub fn from_conf(conf: Config, manager: ClusterClientRef) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             conf,
+            cluster_manager: manager,
             datasource: Arc::new(DataSource::try_create()?),
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
@@ -152,5 +155,13 @@ impl SessionManager {
                 false
             }
         }
+    }
+
+    pub fn get_conf(self: &Arc<Self>) -> Config {
+        self.conf.clone()
+    }
+
+    pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
+        Err(ErrorCode::UnImplement(""))
     }
 }

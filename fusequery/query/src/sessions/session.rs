@@ -143,7 +143,7 @@ impl Session {
     }
 
     pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
-        Ok(self.sessions.get_cluster())
+        self.sessions.try_get_executors()
     }
 
     pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {

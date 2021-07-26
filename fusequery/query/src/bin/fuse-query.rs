@@ -15,6 +15,7 @@ use fuse_query::servers::MySQLHandler;
 use fuse_query::servers::ShutdownHandle;
 use fuse_query::sessions::SessionManager;
 use log::info;
+use common_management::cluster::ClusterClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,8 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         malloc
     );
 
-    // let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone())?;
+    let cluster_manager = ClusterClient::create("local");
+    let session_manager = SessionManager::from_conf(conf.clone(), cluster_manager)?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.
@@ -101,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // HTTP API service.
     {
         let listening = conf.http_api_address.parse::<std::net::SocketAddr>()?;
-        let mut srv = HttpService::create(conf.clone(), cluster.clone());
+        let mut srv = HttpService::create(session_manager.clone());
         let listening = srv.start(listening).await?;
         shutdown_handle.add_service(srv);
         info!("HTTP API server listening on {}", listening);
