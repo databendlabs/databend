@@ -1,5 +1,5 @@
 FROM debian:buster
-COPY /tmp/fuse-query /fuse-query
-COPY /tmp/fuse-store /fuse-store
-COPY /tmp/bootstrap.sh /bootstrap.sh
+COPY ./distro/fuse-query /fuse-query
+COPY ./distro/fuse-store /fuse-store
+COPY ./distro/bootstrap.sh /bootstrap.sh
 ENTRYPOINT ["/bootstrap.sh"]

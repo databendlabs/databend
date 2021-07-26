@@ -44,7 +44,7 @@ jobs:
         # enable sccache
         sccache --start-server
         echo $HOME
-        export SCCACHE_DIR=/home/runner/.cache/sccache
+        export SCCACHE_DIR=/mnt/.cache/sccache
         export RUSTC_WRAPPER=sccache
         make build-debug
         mkdir -p distro
