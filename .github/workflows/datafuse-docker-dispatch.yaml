@@ -74,7 +74,6 @@ jobs:
     - name: Delete all resources
       if: always()
       run: |
-       rm -rf .
        sccache --stop-server
 
     - name: Update status to failure
