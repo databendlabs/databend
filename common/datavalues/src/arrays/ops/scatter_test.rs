@@ -8,13 +8,14 @@ use crate::arrays::builders::*;
 use crate::arrays::ops::scatter::ArrayScatter;
 use crate::DFUInt16Array;
 use crate::DFUtf8Array;
+use crate::DFBooleanArray;
 
 #[test]
 fn test_scatter() -> Result<()> {
     // Test DFUint16Array
     let df_uint16_array = DFUInt16Array::new_from_iter(1u16..11u16);
     // Create the indice array 
-    let mut indices = vec![1, 2, 3, 1, 3, 2, 0, 3, 1, 0];
+    let indices = vec![1, 2, 3, 1, 3, 2, 0, 3, 1, 0];
     // The number of rows should be equal to the length of indices
     assert_eq!(df_uint16_array.len(), indices.len());
 
@@ -33,6 +34,14 @@ fn test_scatter() -> Result<()> {
     assert_eq!(&"b".as_bytes(), &array_vec[0].as_ref().value_data().as_slice());
     assert_eq!(&"acd".as_bytes(), &array_vec[1].as_ref().value_data().as_slice());
 
+    // Test BooleanArray
+    let df_bool_array = DFBooleanArray::new_from_slice(&[true, false, true, false]);
+    let indices = vec![1, 0, 0, 1];
+    assert_eq!(df_bool_array.len(), indices.len());
+
+    let array_vec = unsafe { df_bool_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
+    assert_eq!(&[2], &array_vec[0].as_ref().values().as_slice());
+    assert_eq!(&[1], &array_vec[1].as_ref().values().as_slice());
 
 
 
