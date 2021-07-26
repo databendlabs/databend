@@ -1767,6 +1767,7 @@ dependencies = [
  "common-infallible",
  "common-metatypes",
  "common-planners",
+ "common-profling",
  "common-runtime",
  "common-tracing",
  "env_logger 0.9.0",
@@ -1797,6 +1798,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "uuid",
+ "warp",
 ]
 
 [[package]]
