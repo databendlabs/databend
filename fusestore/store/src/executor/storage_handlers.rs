@@ -37,7 +37,7 @@ impl RequestHandler<TruncateTableAction> for ActionHandler {
         let tbl_name = &act.table;
 
         let db = self.meta_node.get_database(db_name).await.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("truncate table: database not found {:}", db_name))
+            ErrorCode::UnknownDatabase(format!("database not found {:}", db_name))
         })?;
 
         db.tables
@@ -47,6 +47,7 @@ impl RequestHandler<TruncateTableAction> for ActionHandler {
         self.meta_node
             .remove_table_data_parts(db_name, tbl_name)
             .await;
+
         Ok(TruncateTableResult {})
     }
 }
