@@ -44,7 +44,7 @@ jobs:
         # enable sccache
         sccache --start-server
         echo $HOME
-        export SCCACHE_DIR=/mnt/.cache/sccache
+        export SCCACHE_DIR=/home/runner/.cache/sccache
         export RUSTC_WRAPPER=sccache
         make build-debug
         mkdir -p distro
@@ -52,7 +52,11 @@ jobs:
         mv target/debug/fuse-query ./distro/fuse-query
         mv target/debug/fuse-store ./distro/fuse-store
         mv docker/bootstrap.sh ./distro/bootstrap.sh
-
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: build docker image
       run: |
         docker build --network host -f docker/cache/Dockerfile -t ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }} ./
