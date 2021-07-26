@@ -39,7 +39,7 @@ jobs:
       with:
         ref: ${{ env.SHA }}
     - name: build all binary
-      id: make debug
+      id: make_debug
       run: |
         # enable sccache
         sccache --start-server
