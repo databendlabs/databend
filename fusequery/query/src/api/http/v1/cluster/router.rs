@@ -18,12 +18,7 @@ use std::result::Result as StdResult;
 use warp::reply::Response;
 use crate::api::http::v1::cluster::action_register::RegisterAction;
 use crate::api::http::v1::cluster::action_list::ListAction;
-
-#[derive(Clone)]
-pub struct ClusterExtra {
-    pub cfg: Config,
-    pub client: ClusterClientRef,
-}
+use crate::api::http::v1::cluster::action_unregister::{UnregisterAction, NodeIdentifier};
 
 pub struct ClusterRouter {
     sessions: SessionManagerRef,
@@ -33,29 +28,6 @@ impl ClusterRouter {
     pub fn create(sessions: SessionManagerRef) -> Self {
         ClusterRouter { sessions }
     }
-
-    // async fn add_node(sessions: &SessionManager, _: NodeInfo) -> StdResult<impl Reply, Rejection> {
-    //     // sessions.try_get_cluster()?;
-    //     Ok(warp::http::StatusCode::OK)
-    // }
-
-    // fn add_node<RouterFuture>(&self) -> RouterFuture
-    //     where RouterFuture: TryFuture, RouterFuture::Ok: Reply, RouterFuture::Error: IsReject
-    // {
-    //     let sessions = self.sessions.clone();
-    //
-    //     async move {
-    //         // TODO: 处理
-    //     }
-    //     // let conf = extra.cfg.clone();
-    //     // let executor = conf.executor_from_config().unwrap();
-    //     // extra
-    //     //     .client
-    //     //     .register(conf.cluster_namespace, &executor)
-    //     //     .await
-    //     //     .unwrap();
-    //     // Ok(warp::http::StatusCode::OK)
-    // }
 
     /// GET /v1/cluster/list
     fn cluster_list_node(&self) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
@@ -76,9 +48,12 @@ impl ClusterRouter {
     }
 
     fn cluster_unregister_node(&self) -> impl Filter<Extract=impl Reply, Error=Rejection> + Clone {
+        let sessions = self.sessions.clone();
+        // We use DELETE HTTP method, see: RFC 2616
         warp::path!("v1" / "cluster" / "unregister")
-            .and(warp::post())
-            .and_then(handlers::unregister_node)
+            .and(warp::delete())
+            .and(warp::query::<NodeIdentifier>())
+            .map(move |name| UnregisterAction::create(name, sessions.clone()))
     }
 
     pub fn build(&self) -> Result<impl Filter<Extract=impl Reply, Error=Rejection> + Clone> {
@@ -88,39 +63,3 @@ impl ClusterRouter {
         )
     }
 }
-
-mod handlers {
-    //
-    // pub async fn list_node(
-    //     extra: ClusterExtra,
-    // ) -> Result<impl warp::Reply, std::convert::Infallible> {
-    //     let results = extra
-    //         .client
-    //         .get_executors_by_namespace(extra.cfg.cluster_namespace)
-    //         .await
-    //         .unwrap();
-    //     Ok(warp::reply::json(&results))
-    // }
-
-    pub async fn unregister_node() -> Result<impl warp::Reply, std::convert::Infallible> {
-        // let conf = extra.cfg.clone();
-        // let executor = conf.executor_from_config().unwrap();
-        // extra
-        //     .client
-        //     .unregister(conf.cluster_namespace, &executor)
-        //     .await
-        //     .unwrap();
-        Ok(warp::http::StatusCode::OK)
-    }
-}
-
-
-struct NoBacktraceErrorCode(ErrorCode);
-
-impl Debug for NoBacktraceErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Reject for NoBacktraceErrorCode {}

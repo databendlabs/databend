@@ -10,6 +10,7 @@ mod kv_test;
 pub mod config;
 pub mod hello;
 pub mod kv;
+mod responses;
 mod cluster;
 
 pub use cluster::ClusterRouter;

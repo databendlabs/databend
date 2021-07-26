@@ -1,6 +1,11 @@
 use crate::sessions::SessionManagerRef;
 use warp::Reply;
 use warp::reply::Response;
+use common_exception::Result;
+use warp::hyper::Body;
+use crate::api::http::v1::responses::{ErrorCodeResponseHelper, JSONResponseHelper};
+use std::sync::Arc;
+use common_management::cluster::ClusterExecutor;
 
 pub struct ListAction {
     sessions: SessionManagerRef,
@@ -14,8 +19,10 @@ impl ListAction {
 
 impl Reply for ListAction {
     fn into_response(self) -> Response {
-        use warp::http::*;
-        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        match self.sessions.try_get_executors() {
+            Err(error) => error.into_response(),
+            Ok(executors) => executors.into_json_response()
+        }
     }
 }
 

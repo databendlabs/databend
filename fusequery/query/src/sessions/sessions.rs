@@ -164,4 +164,12 @@ impl SessionManager {
     pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
         Err(ErrorCode::UnImplement(""))
     }
+
+    pub fn register_executor(self: &Arc<Self>) -> Result<()> {
+        Err(ErrorCode::UnImplement(""))
+    }
+
+    pub fn unregister_executor(self: &Arc<Self>) -> Result<()> {
+        Err(ErrorCode::UnImplement(""))
+    }
 }
