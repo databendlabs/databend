@@ -60,7 +60,7 @@ jobs:
         push: true
         tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }}
         context: .
-        file: ./docker/Dockerfile
+        file: ./docker/cache/Dockerfile
 
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
