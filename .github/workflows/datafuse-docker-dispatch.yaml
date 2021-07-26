@@ -53,10 +53,8 @@ jobs:
 
     - name: build docker image
       run: |
-        docker build --network host -f docker/cache/Dockerfile -t ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }} .
-    - name: docker push
-      run: |
-      docker push ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }}
+        docker build --network host -f docker/cache/Dockerfile -t ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }} ./
+        docker push ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:perf-${{ env.SHA }}
     - name: Delete all resources
       if: always()
       run: |
