@@ -19,6 +19,7 @@ COPY . .
 # Copy over the cached dependencies
 COPY --from=cacher /tmp/target target
 COPY --from=cacher $CARGO_HOME $CARGO_HOME
+RUN rustup component add rustfmt --toolchain nightly-2021-06-01-x86_64-unknown-linux-gnu
 RUN make build
 RUN cp ./target/release/fuse-query /tmp/fuse-query \
 	&& mv ./target/release/fuse-store /tmp/fuse-store \
