@@ -238,6 +238,19 @@ mod tests {
     }
 
     #[test]
+    fn truncate_table() -> Result<()> {
+        {
+            let sql = "TRUNCATE TABLE t1";
+            let expected = DfStatement::TruncateTable(DfTruncateTable {
+                name: ObjectName(vec![Ident::new("t1")]),
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn hint_test() -> Result<()> {
         {
             let comment = " { ErrorCode  1002 }";

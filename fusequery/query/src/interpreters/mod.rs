@@ -21,6 +21,8 @@ mod interpreter_table_create_test;
 #[cfg(test)]
 mod interpreter_table_drop_test;
 #[cfg(test)]
+mod interpreter_truncate_table_test;
+#[cfg(test)]
 mod interpreter_use_database_test;
 #[cfg(test)]
 mod plan_scheduler_test;
