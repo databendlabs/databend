@@ -34,6 +34,7 @@ use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
+use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -60,6 +61,7 @@ pub enum PlanNode {
     CreateTable(CreateTablePlan),
     DescribeTable(DescribeTablePlan),
     DropTable(DropTablePlan),
+    TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
@@ -92,6 +94,7 @@ impl PlanNode {
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
+            PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
             PlanNode::UseDatabase(v) => v.schema(),
@@ -124,6 +127,7 @@ impl PlanNode {
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
+            PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
             PlanNode::UseDatabase(_) => "UseDatabasePlan",

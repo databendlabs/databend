@@ -15,6 +15,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_planners::TruncateTablePlan;
 use common_store_api::ReadPlanResult;
 use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
@@ -144,6 +145,12 @@ impl Table for RemoteTable {
             //            um.get_all_users().await;
         }
 
+        Ok(())
+    }
+
+    async fn truncate(&self, _ctx: FuseQueryContextRef, plan: TruncateTablePlan) -> Result<()> {
+        let mut client = self.store_client_provider.try_get_client().await?;
+        client.truncate(plan.db.clone(), plan.table.clone()).await?;
         Ok(())
     }
 }

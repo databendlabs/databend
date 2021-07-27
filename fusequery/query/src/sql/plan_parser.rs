@@ -35,6 +35,7 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SettingPlan;
 use common_planners::ShowCreateTablePlan;
+use common_planners::TruncateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use common_tracing::tracing;
@@ -61,6 +62,7 @@ use crate::sql::DfHint;
 use crate::sql::DfParser;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfStatement;
+use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
 
 pub struct PlanParser {
@@ -111,6 +113,7 @@ impl PlanParser {
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(v),
             DfStatement::DescribeTable(v) => self.sql_describe_table_to_plan(v),
             DfStatement::DropTable(v) => self.sql_drop_table_to_plan(v),
+            DfStatement::TruncateTable(v) => self.sql_truncate_table_to_plan(v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(v),
             DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
 
@@ -319,6 +322,24 @@ impl PlanParser {
             db,
             table,
         }))
+    }
+
+    // DfTruncateTable to plan.
+    #[tracing::instrument(level = "info", skip(self, truncate), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_truncate_table_to_plan(&self, truncate: &DfTruncateTable) -> Result<PlanNode> {
+        let mut db = self.ctx.get_current_database();
+        if truncate.name.0.is_empty() {
+            return Result::Err(ErrorCode::SyntaxException(
+                "TruncateTable table name is empty",
+            ));
+        }
+        let mut table = truncate.name.0[0].value.clone();
+        if truncate.name.0.len() > 1 {
+            db = table;
+            table = truncate.name.0[1].value.clone();
+        }
+
+        Ok(PlanNode::TruncateTable(TruncateTablePlan { db, table }))
     }
 
     #[tracing::instrument(level = "info", skip(self, table_name, columns, source), fields(ctx.id = self.ctx.get_id().as_str()))]

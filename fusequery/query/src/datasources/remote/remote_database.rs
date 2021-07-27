@@ -54,7 +54,10 @@ impl Database for RemoteDatabase {
             None =>
             // Depends on the degree of staleness we can tolerate ...
             {
-                Err(ErrorCode::UnknownTable(_table_name))
+                Err(ErrorCode::UnknownTable(format!(
+                    "Unknown table: '{}'",
+                    _table_name
+                )))
             }
         }
     }

@@ -14,6 +14,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
@@ -125,6 +126,16 @@ impl Table for MemoryTable {
             let mut blocks = self.blocks.write();
             blocks.push(block);
         }
+        Ok(())
+    }
+
+    async fn truncate(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _truncate_plan: TruncateTablePlan,
+    ) -> Result<()> {
+        let mut blocks = self.blocks.write();
+        blocks.clear();
         Ok(())
     }
 }

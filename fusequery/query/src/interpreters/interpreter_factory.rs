@@ -19,6 +19,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
+use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::FuseQueryContextRef;
 
@@ -34,6 +35,7 @@ impl InterpreterFactory {
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx, v),
+            PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             PlanNode::InsertInto(v) => InsertIntoInterpreter::try_create(ctx, v),

@@ -61,6 +61,11 @@ pub struct DfDropTable {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfTruncateTable {
+    pub name: ObjectName,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
@@ -98,6 +103,7 @@ pub enum DfStatement {
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
+    TruncateTable(DfTruncateTable),
 
     // Settings.
     ShowSettings(DfShowSettings),

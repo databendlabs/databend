@@ -140,6 +140,7 @@ nav:
           - DROP DATABASE: sqlstatement/data-definition-language-ddl/ddl-drop-database.md
           - CREATE TABLE: sqlstatement/data-definition-language-ddl/ddl-create-table.md
           - DROP TABLE: sqlstatement/data-definition-language-ddl/ddl-drop-table.md
+          - TRUNCATE TABLE: sqlstatement/data-definition-language-ddl/ddl-truncate-table.md
       - Data Manipulation Language:
           - SELECT: sqlstatement/data-manipulation-language-dml/dml-select.md
           - INSERT: sqlstatement/data-manipulation-language-dml/dml-insert.md
