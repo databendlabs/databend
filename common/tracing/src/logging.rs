@@ -20,18 +20,20 @@ pub fn init_default_tracing() {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        init_tracing_stdout("error");
+        init_tracing_stdout();
     });
 }
 
-fn init_tracing_stdout(level: &str) {
+fn init_tracing_stdout() {
     let fmt_layer = fmt::Layer::default()
         .with_thread_ids(true)
+        .with_thread_names(true)
+        .pretty()
         .with_ansi(true)
         .with_span_events(fmt::format::FmtSpan::FULL);
 
     let subscriber = Registry::default()
-        .with(EnvFilter::new(level))
+        .with(EnvFilter::from_default_env())
         .with(fmt_layer);
 
     tracing::subscriber::set_global_default(subscriber)
