@@ -27,7 +27,7 @@ pub trait ArrayScatter: Debug {
     /// in the input array belongs to.
     /// _scattered_size: the number of partitions
     ///
-    /// Example: if the input array has five rows [1, 2, 3, 4] and 
+    /// Example: if the input array has five rows [1, 2, 3, 4] and
     /// _indices = [0, 1, 0, 1] and _scatter_size = 2,
     /// then the output would be a vector of two arrays: [1, 4] and [2, 3].
     unsafe fn scatter_unchecked(
