@@ -3,7 +3,7 @@ id: ddl-truncate-table
 title: TRUNCATE TABLE
 ---
 
-Empties the table completely..
+Empties the table completely.
 
 ## Syntax
 
