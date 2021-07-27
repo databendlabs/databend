@@ -25,8 +25,8 @@ use common_flights::meta_api_impl::GetDatabaseActionResult;
 use common_flights::meta_api_impl::GetDatabaseMetaAction;
 use common_flights::meta_api_impl::GetTableAction;
 use common_flights::meta_api_impl::GetTableActionResult;
-use common_metatypes::Database;
-use common_metatypes::Table;
+use common_flights::storage_api_impl::Database;
+use common_flights::storage_api_impl::Table;
 use log::info;
 
 use crate::executor::action_handler::RequestHandler;

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use async_raft::LogId;
-use common_metatypes::Database;
+use common_flights::storage_api_impl::Database;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;

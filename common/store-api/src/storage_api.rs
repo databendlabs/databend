@@ -3,6 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fmt;
+use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_planners::Part;
@@ -11,12 +18,58 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DataPartInfo {
     pub part: Part,
     pub stats: Statistics,
 }
+
+impl PartialEq for DataPartInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.part.name.eq(&other.part.name)
+    }
+}
+
+impl Eq for DataPartInfo {}
+
+impl Hash for DataPartInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.part.name.hash(state);
+    }
+}
+
 pub type ReadPlanResult = Option<Vec<DataPartInfo>>;
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct Database {
+    pub database_id: u64,
+
+    /// tables belong to this database.
+    pub tables: HashMap<String, u64>,
+}
+
+impl fmt::Display for Database {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "database id: {}", self.database_id)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct Table {
+    pub table_id: u64,
+
+    /// serialized schema
+    pub schema: Vec<u8>,
+
+    /// name of parts that belong to this table.
+    pub parts: HashSet<DataPartInfo>,
+}
+
+impl fmt::Display for Table {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "table id: {}", self.table_id)
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadAction {

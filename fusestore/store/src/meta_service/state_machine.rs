@@ -4,18 +4,20 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::iter::FromIterator;
 
 use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::DataPartInfo;
-use common_metatypes::Database;
+use common_flights::storage_api_impl::Database;
+use common_flights::storage_api_impl::Table;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
-use common_metatypes::Table;
 use common_planners::Part;
 use common_planners::Statistics;
 use common_tracing::tracing;
@@ -291,15 +293,12 @@ impl StateMachine {
                 ref table_name,
                 if_exists: _,
             } => {
+                self.remove_table_data_parts(db_name, table_name);
+
                 let db = self.databases.get_mut(db_name).unwrap();
-                let tbl_id = db.tables.get(table_name);
-                if let Some(tbl_id) = tbl_id {
-                    let tbl_id = tbl_id.to_owned();
-                    db.tables.remove(table_name);
-                    let prev = self.tables.remove(&tbl_id);
-
-                    self.remove_table_data_parts(db_name, table_name);
-
+                let table_id = db.tables.remove(table_name);
+                if let Some(table_id) = table_id {
+                    let prev = self.tables.remove(&table_id);
                     self.incr_seq(SEQ_DATABASE_META_ID);
 
                     Ok((prev, None).into())
@@ -409,8 +408,11 @@ impl StateMachine {
     }
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
-        let parts = self.tbl_parts.get(db_name);
-        parts.and_then(|m| m.get(table_name)).map(Clone::clone)
+        let db = self.databases.get(db_name).unwrap();
+        let table_id = db.tables[table_name];
+        let table = self.tables[&table_id].clone();
+        let parts = Vec::from_iter(table.parts);
+        Some(parts)
     }
 
     pub fn append_data_parts(
@@ -435,29 +437,33 @@ impl StateMachine {
                 })
                 .collect::<Vec<_>>()
         };
-        self.tbl_parts
-            .entry(db_name.to_string())
-            .and_modify(move |e| {
-                e.entry(table_name.to_string())
-                    .and_modify(|v| v.append(&mut part_info()))
-                    .or_insert_with(part_info);
-            })
-            .or_insert_with(|| {
-                [(table_name.to_string(), part_info())]
-                    .iter()
-                    .cloned()
-                    .collect()
-            });
+        let db = self.databases.get(db_name);
+        let db = db.unwrap().to_owned();
+        let table_id = db.tables[table_name];
+        self.tables.entry(table_id).and_modify(move |t| {
+            for i in part_info() {
+                t.parts.insert(i);
+            }
+        });
     }
 
     pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
-        self.tbl_parts
-            .get_mut(db_name)
-            .and_then(|t| t.remove(table_name));
+        let db = self.databases.get(db_name).unwrap();
+        let table_id = db.tables.get(table_name);
+        if let Some(table_id) = table_id {
+            self.tables
+                .entry(*table_id)
+                .and_modify(|t| t.parts = HashSet::new());
+        }
     }
 
     pub fn remove_db_data_parts(&mut self, db_name: &str) {
-        self.tbl_parts.remove(db_name);
+        let db = self.databases.get(db_name).unwrap();
+        for tbl_id in db.tables.values() {
+            self.tables
+                .entry(*tbl_id)
+                .and_modify(|t| t.parts = HashSet::new());
+        }
     }
 
     pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {

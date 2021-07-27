@@ -4,9 +4,9 @@
 
 use async_raft::AppDataResponse;
 use common_flights::storage_api_impl::DataPartInfo;
-use common_metatypes::Database;
+use common_flights::storage_api_impl::Database;
+use common_flights::storage_api_impl::Table;
 use common_metatypes::SeqValue;
-use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
 

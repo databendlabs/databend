@@ -5,9 +5,9 @@
 use std::fmt;
 
 use async_raft::NodeId;
-use common_metatypes::Database;
+use common_flights::storage_api_impl::Database;
+use common_flights::storage_api_impl::Table;
 use common_metatypes::MatchSeq;
-use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
 

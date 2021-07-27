@@ -4,11 +4,12 @@
 //
 
 use common_datavalues::DataSchemaRef;
-use common_metatypes::Database;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+
+use crate::storage_api::Database;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseActionResult {
