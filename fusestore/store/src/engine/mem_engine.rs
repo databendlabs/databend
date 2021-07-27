@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_flights::storage_api_impl::AppendResult;
+use common_flights::storage_api_impl::DataPartInfo;
 use common_infallible::Mutex;
 use common_planners::Part;
 use common_planners::Statistics;
-use common_store_api::AppendResult;
-use common_store_api::DataPartInfo;
 
 use crate::protobuf::CmdCreateDatabase;
 use crate::protobuf::CmdCreateTable;
@@ -105,7 +105,9 @@ impl MemEngine {
         let table_id = self
             .dbs
             .get(&cmd.db_name)
-            .ok_or_else(|| ErrorCode::UnknownDatabase("database not found"))?
+            .ok_or_else(|| {
+                ErrorCode::UnknownDatabase(format!("database not found: {}", &cmd.db_name))
+            })?
             .table_name_to_id
             .get(&cmd.table_name);
 
@@ -144,7 +146,7 @@ impl MemEngine {
             let name2id_removed = db.table_name_to_id.remove_entry(tbl_name);
             let id_removed = name2id_removed
                 .as_ref()
-                .and_then(|(_, id)| db.tables.remove(&id));
+                .and_then(|(_, id)| db.tables.remove(id));
             (name2id_removed, id_removed)
         });
         match (r, if_exists) {
@@ -165,7 +167,7 @@ impl MemEngine {
     }
 
     pub fn get_table(
-        &mut self,
+        &self,
         db_name: String,
         table_name: String,
     ) -> common_exception::Result<Table> {
@@ -178,7 +180,7 @@ impl MemEngine {
             .get(&table_name)
             .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table_name)))?;
 
-        let table = db.tables.get(&table_id).unwrap();
+        let table = db.tables.get(table_id).unwrap();
         Ok(table.clone())
     }
 
@@ -204,10 +206,7 @@ impl MemEngine {
                             name: loc.clone(),
                             version: 0,
                         },
-                        stats: Statistics {
-                            read_bytes: p.disk_bytes,
-                            read_rows: p.rows,
-                        },
+                        stats: Statistics::new_exact(p.disk_bytes, p.rows),
                     }
                 })
                 .collect::<Vec<_>>()

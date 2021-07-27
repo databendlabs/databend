@@ -11,10 +11,11 @@ edition = "2018"
 common-arrow = {path = "../arrow"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
+common-infallible = {path = "../infallible"}
+
 
 # Github dependencies
 
 # Crates.io dependencies
 ahash = "0.7.4"
-anyhow = "1.0.41"
-prettytable-rs = { version = "0.8.0"}
+comfy-table = "4.0.1"

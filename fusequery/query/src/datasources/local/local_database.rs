@@ -13,6 +13,7 @@ use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
 use crate::datasources::local::CsvTable;
+use crate::datasources::local::MemoryTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
 use crate::datasources::Database;
@@ -85,6 +86,9 @@ impl Database for LocalDatabase {
             }
             TableEngineType::Null => {
                 NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
+            }
+            TableEngineType::Memory => {
+                MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
             }
             _ => {
                 return Result::Err(ErrorCode::UnImplement(format!(

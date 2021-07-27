@@ -162,7 +162,7 @@ mod tests {
         let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
         expect_parse_error(
             sql,
-            "Expected Engine must one of Parquet, JSONEachRaw, Null or CSV, found: XX",
+            "Expected Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV, found: XX",
         )?;
 
         Ok(())
@@ -182,6 +182,26 @@ mod tests {
             let sql = "DROP TABLE IF EXISTS t1";
             let expected = DfStatement::DropTable(DfDropTable {
                 if_exists: true,
+                name: ObjectName(vec![Ident::new("t1")]),
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn describe_table() -> Result<()> {
+        {
+            let sql = "DESCRIBE t1";
+            let expected = DfStatement::DescribeTable(DfDescribeTable {
+                name: ObjectName(vec![Ident::new("t1")]),
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+        {
+            let sql = "DESC t1";
+            let expected = DfStatement::DescribeTable(DfDescribeTable {
                 name: ObjectName(vec![Ident::new("t1")]),
             });
             expect_parse_ok(sql, expected)?;

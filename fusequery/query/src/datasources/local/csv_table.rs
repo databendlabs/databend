@@ -93,7 +93,7 @@ impl Table for CsvTable {
             schema: self.schema.clone(),
             parts: Common::generate_parts(
                 start_line as u64,
-                ctx.get_max_threads()?,
+                ctx.get_settings().get_max_threads()?,
                 lines_count as u64,
             ),
             statistics: Statistics::default(),

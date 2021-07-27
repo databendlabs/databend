@@ -60,6 +60,37 @@ impl Pipeline {
                                 prev_ways,
                             )?;
                         }
+                        "MixedProcessor" => {
+                            let mut pipes = self.0.pipes();
+                            pipes.reverse();
+
+                            let prev_pipe = pipes[index - 1].clone();
+                            let prev_name = prev_pipe.name().to_string();
+                            let prev_ways = prev_pipe.nums();
+
+                            let post_pipe = pipes[index + 1].clone();
+                            let post_name = post_pipe.name().to_string();
+                            let post_ways = post_pipe.nums();
+
+                            write!(
+                                f,
+                                "Mixed ({} × {} {}) to ({} × {} {})",
+                                post_name,
+                                post_ways,
+                                if post_ways == 1 {
+                                    "processor"
+                                } else {
+                                    "processors"
+                                },
+                                prev_name,
+                                prev_ways,
+                                if prev_ways == 1 {
+                                    "processor"
+                                } else {
+                                    "processors"
+                                },
+                            )?;
+                        }
                         "RemoteTransform" => {
                             let name = processor.name();
 

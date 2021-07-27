@@ -6,13 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::StringArray;
-use common_datavalues::UInt16Array;
-use common_datavalues::UInt8Array;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -99,10 +93,10 @@ impl Table for ClustersTable {
         let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
-            Arc::new(StringArray::from(names)),
-            Arc::new(StringArray::from(hostnames)),
-            Arc::new(UInt16Array::from(ports)),
-            Arc::new(UInt8Array::from(priorities)),
+            Series::new(names),
+            Series::new(hostnames),
+            Series::new(ports),
+            Series::new(priorities),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

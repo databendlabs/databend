@@ -7,7 +7,6 @@ use common_planners::PlanNode;
 use common_runtime::tokio;
 use criterion::Criterion;
 use fuse_query::interpreters::SelectInterpreter;
-use fuse_query::servers::Session;
 use fuse_query::sessions::SessionManager;
 use fuse_query::sql::PlanParser;
 use futures::StreamExt;
@@ -19,8 +18,8 @@ pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
     let session_manager = SessionManager::try_create(1)?;
-    let executor_session = session_manager.create_session::<Session>()?;
-    let ctx = executor_session.try_create_context()?;
+    let executor_session = session_manager.create_session("Benches")?;
+    let ctx = executor_session.create_context();
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone()).build_from_sql(sql)? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;

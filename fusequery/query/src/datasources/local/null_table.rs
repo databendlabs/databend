@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -15,6 +16,8 @@ use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing::info;
+use futures::stream::StreamExt;
 
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
@@ -73,7 +76,7 @@ impl Table for NullTable {
                 name: "".to_string(),
                 version: 0,
             }],
-            statistics: Statistics::default(),
+            statistics: Statistics::new_exact(0, 0),
             description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
             scan_plan: Arc::new(scan.clone()),
             remote: false,
@@ -92,5 +95,22 @@ impl Table for NullTable {
             None,
             vec![block],
         )))
+    }
+
+    async fn append_data(
+        &self,
+        _ctx: FuseQueryContextRef,
+        insert_plan: common_planners::InsertIntoPlan,
+    ) -> Result<()> {
+        let mut s = {
+            let mut inner = insert_plan.input_stream.lock();
+            (*inner).take()
+        }
+        .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
+
+        while let Some(block) = s.next().await {
+            info!("Ignore one block rows: {}", block.num_rows())
+        }
+        Ok(())
     }
 }

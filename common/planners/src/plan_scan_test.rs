@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
+use common_exception::Result;
 
 use crate::*;
 
 #[test]
-fn test_scan_plan() -> anyhow::Result<()> {
+fn test_scan_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let scan = PlanNode::Scan(ScanPlan {

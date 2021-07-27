@@ -13,13 +13,12 @@ use common_arrow::parquet::arrow::ParquetFileArrowReader;
 use common_arrow::parquet::file::reader::SerializedFileReader;
 use common_arrow::parquet::file::serialized_reader::SliceableCursor;
 use common_exception::ErrorCode;
+use common_flights::storage_api_impl::AppendResult;
+use common_flights::storage_api_impl::ReadAction;
 use common_flights::RequestFor;
 use common_flights::StoreDoAction;
-use common_infallible::Mutex;
 use common_planners::PlanNode;
 use common_runtime::tokio::sync::mpsc::Sender;
-use common_store_api::AppendResult;
-use common_store_api::ReadAction;
 use futures::Stream;
 use serde::Serialize;
 use tokio_stream::StreamExt;
@@ -27,10 +26,8 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::data_part::appender::Appender;
-use crate::engine::MemEngine;
 use crate::fs::FileSystem;
 use crate::meta_service::MetaNode;
-use crate::user::UserMgr;
 
 pub trait ReplySerializer {
     type Output;
@@ -39,15 +36,12 @@ pub trait ReplySerializer {
 }
 
 pub struct ActionHandler {
-    pub(crate) meta: Arc<Mutex<MemEngine>>,
     /// The raft-based meta data entry.
     /// In our design meta serves for both the distributed file system and the catalog storage such as db,tabel etc.
     /// Thus in case the `fs` is a Dfs impl, `meta_node` is just a reference to the `Dfs.meta_node`.
     /// TODO(xp): turn on dead_code warning when we finished action handler unit test.
     pub(crate) meta_node: Arc<MetaNode>,
     fs: Arc<dyn FileSystem>,
-    #[allow(dead_code)]
-    user_mgr: UserMgr,
 }
 
 // TODO did this already defined somewhere?
@@ -63,12 +57,7 @@ where T: RequestFor
 
 impl ActionHandler {
     pub fn create(fs: Arc<dyn FileSystem>, meta_node: Arc<MetaNode>) -> Self {
-        ActionHandler {
-            meta: MemEngine::create(),
-            meta_node,
-            fs,
-            user_mgr: UserMgr::new(),
-        }
+        ActionHandler { meta_node, fs }
     }
 
     /// Handle pull-file request, which is used internally for replicating data copies.
@@ -121,6 +110,7 @@ impl ActionHandler {
             StoreDoAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetDatabaseMeta(a) => s.serialize(self.handle(a).await?),
 
             // table
             StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?),
@@ -133,6 +123,9 @@ impl ActionHandler {
             // general-purpose kv
             StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::MGetKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::DeleteKV(a) => s.serialize(self.handle(a).await?),
         }
     }
 
@@ -143,9 +136,6 @@ impl ActionHandler {
         parts: Streaming<FlightData>,
     ) -> common_exception::Result<AppendResult> {
         {
-            let mut meta = self.meta.lock();
-            let _tbl_meta = meta.get_table(db_name.clone(), table_name.clone())?;
-
             // TODO:  Validates the schema of input stream:
             // The schema of `parts` should be a subset of
             // table's current schema (or following the evolution rules of table schema)
@@ -160,8 +150,12 @@ impl ActionHandler {
             .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
             .await?;
 
-        let mut meta = self.meta.lock();
-        meta.append_data_parts(&db_name, &table_name, &res);
+        // let mut meta = self.meta.lock(); //todo(ariesdevil): change to meta_node
+        // meta.append_data_parts(&db_name, &table_name, &res);
+        // Ok(res)
+        self.meta_node
+            .append_data_parts(&db_name, &table_name, &res)
+            .await;
         Ok(res)
     }
 

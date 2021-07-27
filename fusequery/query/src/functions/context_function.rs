@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_aggregate_functions::AggregateFunctionFactory;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::FunctionFactory;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
 use crate::sessions::FuseQueryContextRef;
@@ -26,10 +26,10 @@ impl ContextFunction {
         }
 
         Ok(match name.to_lowercase().as_str() {
-            "database" => vec![Expression::Literal(DataValue::Utf8(Some(
+            "database" => vec![Expression::create_literal(DataValue::Utf8(Some(
                 ctx.get_current_database(),
             )))],
-            "version" => vec![Expression::Literal(DataValue::Utf8(Some(
+            "version" => vec![Expression::create_literal(DataValue::Utf8(Some(
                 ctx.get_fuse_version(),
             )))],
             _ => vec![],

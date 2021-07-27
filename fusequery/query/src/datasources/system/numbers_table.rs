@@ -10,7 +10,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -77,28 +76,21 @@ impl Table for NumbersTable {
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
-        let mut total = ctx.get_settings().get_max_block_size()? as u64;
-
+        let mut total = None;
         let ScanPlan { table_args, .. } = scan.clone();
-        if let Some(args) = table_args {
-            if let Expression::Literal(DataValue::UInt64(Some(v))) = args {
-                total = v;
-            }
-
-            if let Expression::Literal(DataValue::Int64(Some(v))) = args {
-                total = v as u64;
-            }
-        } else {
-            return Result::Err(ErrorCode::BadArguments(format!(
-                "Must have one argument for table: system.{}",
-                self.name()
-            )));
+        if let Some(Expression::Literal { value, .. }) = table_args {
+            total = Some(value.as_u64()?);
         }
 
-        let statistics = Statistics {
-            read_rows: total as usize,
-            read_bytes: ((total) * size_of::<u64>() as u64) as usize,
-        };
+        let total = total.ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "Must have one number argument for table: system.{}",
+                self.name()
+            ))
+        })?;
+
+        let statistics =
+            Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
         ctx.try_set_statistics(&statistics)?;
         ctx.add_total_rows_approx(statistics.read_rows);
 
@@ -106,7 +98,7 @@ impl Table for NumbersTable {
             db: "system".to_string(),
             table: self.name().to_string(),
             schema: self.schema.clone(),
-            parts: Common::generate_parts(0, ctx.get_max_threads()?, total),
+            parts: Common::generate_parts(0, ctx.get_settings().get_max_threads()?, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

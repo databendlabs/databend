@@ -6,13 +6,12 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::AggregateFunction;
+use bumpalo::Bump;
 use common_datablocks::DataBlock;
-use common_datavalues::DataArrayRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
-use common_datavalues::StringArray;
+use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionRef;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -23,7 +22,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<Box<dyn AggregateFunction>>,
+    funcs: Vec<AggregateFunctionRef>,
     arg_names: Vec<Vec<String>>,
 
     schema: DataSchemaRef,
@@ -78,31 +77,40 @@ impl Processor for AggregatorPartialTransform {
         tracing::debug!("execute...");
         let start = Instant::now();
 
-        let mut funcs = self.funcs.clone();
+        let funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
         let arg_names = self.arg_names.clone();
+
+        let arena = Bump::new();
+        let places: Vec<usize> = funcs
+            .iter()
+            .map(|func| func.allocate_state(&arena))
+            .collect();
 
         while let Some(block) = stream.next().await {
             let block = block?;
             let rows = block.num_rows();
 
-            for (idx, func) in funcs.iter_mut().enumerate() {
+            for (idx, func) in funcs.iter().enumerate() {
                 let mut arg_columns = vec![];
                 for name in arg_names[idx].iter() {
                     arg_columns.push(block.try_column_by_name(name)?.clone());
                 }
-                func.accumulate(&arg_columns, rows)?;
+                func.accumulate(places[idx], &arg_columns, rows)?;
             }
         }
         let delta = start.elapsed();
         tracing::debug!("Aggregator partial cost: {:?}", delta);
 
-        let mut columns: Vec<DataArrayRef> = vec![];
-        for func in funcs.iter() {
-            // Column.
-            let states = DataValue::Struct(func.accumulate_result()?);
-            let ser = serde_json::to_string(&states)?;
-            let col = Arc::new(StringArray::from(vec![ser.as_str()]));
+        let mut columns: Vec<Series> = vec![];
+        for (idx, func) in funcs.iter().enumerate() {
+            let mut writer = vec![];
+            func.serialize(places[idx], &mut writer)?;
+            let mut array_builder = BinaryArrayBuilder::new(4);
+            array_builder.append_value(writer);
+
+            let array = array_builder.finish();
+            let col = array.into_series();
             columns.push(col);
         }
 

@@ -2,12 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::data_array_to_string;
+use comfy_table::Cell;
+use comfy_table::Table;
 use common_exception::Result;
-use prettytable::format;
-use prettytable::Cell;
-use prettytable::Row;
-use prettytable::Table;
 
 use crate::DataBlock;
 
@@ -24,7 +21,7 @@ pub fn assert_blocks_eq(expect: Vec<&str>, blocks: &[DataBlock]) {
 /// ['a', 'b'] not equals ['b', 'a']
 pub fn assert_blocks_eq_with_name(test_name: &str, expect: Vec<&str>, blocks: &[DataBlock]) {
     let expected_lines: Vec<String> = expect.iter().map(|&s| s.into()).collect();
-    let formatted = pretty_format_blocks(&blocks).unwrap();
+    let formatted = pretty_format_blocks(blocks).unwrap();
     let actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     assert_eq!(
@@ -50,7 +47,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
         expected_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
     }
 
-    let formatted = pretty_format_blocks(&blocks).unwrap();
+    let formatted = pretty_format_blocks(blocks).unwrap();
     let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
 
     // sort except for header + footer
@@ -69,7 +66,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
 ///! Convert a series of record batches into a table
 fn create_table(results: &[DataBlock]) -> Result<Table> {
     let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+    table.load_preset("||--+-++|    ++++++");
 
     if results.is_empty() {
         return Ok(table);
@@ -79,18 +76,19 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
 
     let mut header = Vec::new();
     for field in schema.fields() {
-        header.push(Cell::new(&field.name()));
+        header.push(Cell::new(field.name()));
     }
-    table.set_titles(Row::new(header));
+    table.set_header(header);
 
     for batch in results {
         for row in 0..batch.num_rows() {
             let mut cells = Vec::new();
             for col in 0..batch.num_columns() {
-                let array = batch.column(col).to_array()?;
-                cells.push(Cell::new(&data_array_to_string(&array, row)?));
+                let series = batch.column(col).to_array()?;
+                let str = format!("{}", series.try_get(row)?);
+                cells.push(Cell::new(&str));
             }
-            table.add_row(Row::new(cells));
+            table.add_row(cells);
         }
     }
 

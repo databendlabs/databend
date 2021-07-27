@@ -41,6 +41,15 @@ pub struct Config {
     )]
     pub metric_api_address: String,
 
+    #[structopt(long, env = "HTTP_API_ADDRESS", default_value = "127.0.0.1:8181")]
+    pub http_api_address: String,
+
+    #[structopt(long, env = "TLS_SERVER_CERT", default_value = "")]
+    pub tls_server_cert: String,
+
+    #[structopt(long, env = "TLS_SERVER_KEY", default_value = "")]
+    pub tls_server_key: String,
+
     #[structopt(
         long,
         env = "FUSE_STORE_FLIGHT_API_ADDRESS",
@@ -66,6 +75,32 @@ pub struct Config {
 
     #[structopt(
         long,
+        env = "FUSE_STORE_META_DIR",
+        default_value = "./_meta",
+        help = "The dir to store persisted meta state, including raft logs, state machine etc."
+    )]
+    pub meta_dir: String,
+
+    // raft config
+    #[structopt(
+        long,
+        env = "FUSE_STORE_SNAPSHOT_LOGS_SINCE_LAST",
+        default_value = "1024",
+        help = "The number of logs since the last snapshot to trigger next snapshot."
+    )]
+    pub snapshot_logs_since_last: u64,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_HEARTBEAT_INTERVAL",
+        default_value = "500",
+        help = concat!("The interval in milli seconds at which a leader send heartbeat message to followers.",
+                      " Different value of this setting on leader and followers may cause unexpected behavior.")
+    )]
+    pub heartbeat_interval: u64,
+
+    #[structopt(
+        long,
         env = "FUSE_STORE_BOOT",
         help = "Whether to boot up a new cluster. If already booted, it is ignored"
     )]
@@ -80,5 +115,9 @@ impl Config {
     /// Thus we need another method to generate an empty default instance.
     pub fn empty() -> Self {
         Self::from_iter(&Vec::<&'static str>::new())
+    }
+
+    pub fn meta_api_addr(&self) -> String {
+        format!("{}:{}", self.meta_api_host, self.meta_api_port)
     }
 }

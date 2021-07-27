@@ -2,29 +2,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
-use common_arrow::arrow::array::UInt64Builder;
-use common_datavalues::*;
+use common_datavalues::prelude::*;
+use common_exception::Result;
 
 use crate::*;
 
 #[test]
-fn test_data_block_scatter() -> anyhow::Result<()> {
+fn test_data_block_scatter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Float64, false),
     ]);
 
     let raw = DataBlock::create(schema.clone(), vec![
-        DataColumnarValue::Array(Arc::new(Int64Array::from(vec![1, 2, 3]))),
-        DataColumnarValue::Array(Arc::new(Float64Array::from(vec![1., 2., 3.]))),
+        Series::new(vec![1i64, 2, 3]).into(),
+        Series::new(vec![1.0f64, 2., 3.]).into(),
     ]);
 
-    let mut builder = UInt64Builder::new(3);
-    builder.append_slice(&[0, 1, 0])?;
-    let indices = DataColumnarValue::Array(Arc::new(builder.finish()));
-
+    let indices = DataColumn::Array(Series::new([0u64, 1, 0]));
     let scattered = DataBlock::scatter_block(&raw, &indices, 2)?;
     assert_eq!(scattered.len(), 2);
     assert_eq!(raw.schema(), scattered[0].schema());

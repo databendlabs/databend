@@ -4,6 +4,8 @@
 
 pub use transform_aggregator_final::AggregatorFinalTransform;
 pub use transform_aggregator_partial::AggregatorPartialTransform;
+pub use transform_create_sets::CreateSetsTransform;
+pub use transform_create_sets::SubQueriesPuller;
 pub use transform_expression::ExpressionTransform;
 pub use transform_expression_executor::ExpressionExecutor;
 pub use transform_filter::FilterTransform;
@@ -42,6 +44,7 @@ mod transform_source_test;
 
 mod transform_aggregator_final;
 mod transform_aggregator_partial;
+mod transform_create_sets;
 mod transform_expression;
 mod transform_expression_executor;
 mod transform_filter;

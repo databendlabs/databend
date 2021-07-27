@@ -1,5 +1,5 @@
 SELECT 1;
-SELECT x; -- {ErrorCode 1002}
+SELECT x; -- {ErrorCode 6}
 SELECT 'a';
 SELECT NOT(1=1);
 SELECT NOT(1);

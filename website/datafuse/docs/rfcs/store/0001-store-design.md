@@ -86,7 +86,7 @@ A FuseStore process includes two grpc API: the flight service and the meta
 service.
 
 - Meta related components are wrapped into `MetaNode`, in which a `Raft` instance
-    is maintained along with storage and netowrk engines.
+    is maintained along with storage and network engines.
 
     `MetaNode` is the only entry for other FuseStore components to access meta data.
 
@@ -241,7 +241,7 @@ A table in `IFileSystem` consists of several files and the structure is similar
 to a append-only log:
 
 - Table head: contains schema and a pointer to the latest manifest file.
-    The table head must be updated atomically.
+    The table head must be updated **atomically**.
 
 - Manifest: describes what data blocks belongs to a table.
     There is a list of data block files pointing to the latest updates,

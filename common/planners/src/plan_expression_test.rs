@@ -4,22 +4,24 @@
 
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::test::Test;
 use crate::*;
 
 #[test]
-fn test_expression_plan_format() -> anyhow::Result<()> {
+fn test_expression_plan_format() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
 
+    let empty_plan = EmptyPlan::create_with_schema(schema.clone());
     let expression = PlanNode::Expression(ExpressionPlan {
         exprs: vec![col("a")],
         schema: schema.clone(),
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
+        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
         desc: "".to_string(),
     });
     let _ = expression.schema();
@@ -30,7 +32,7 @@ fn test_expression_plan_format() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_expression_plan() -> anyhow::Result<()> {
+fn test_expression_plan() -> Result<()> {
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
         .filter(
@@ -55,7 +57,7 @@ fn test_expression_plan() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_expression_validate() -> anyhow::Result<()> {
+fn test_expression_validate() -> Result<()> {
     struct Test {
         desc: &'static str,
         expression: Expression,

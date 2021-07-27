@@ -7,7 +7,9 @@ use common_datavalues::DataSchemaRef;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct RemotePlan {
     pub schema: DataSchemaRef,
-    pub fetch_name: String,
+    pub query_id: String,
+    pub stage_id: String,
+    pub stream_id: String,
     pub fetch_nodes: Vec<String>,
 }
 

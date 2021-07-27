@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fmt;
+use std::str::FromStr;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use lazy_static::lazy_static;
@@ -46,11 +49,10 @@ const NUM_CPUS: &str = "FUSE_QUERY_NUM_CPUS";
 
 const MYSQL_HANDLER_HOST: &str = "FUSE_QUERY_MYSQL_HANDLER_HOST";
 const MYSQL_HANDLER_PORT: &str = "FUSE_QUERY_MYSQL_HANDLER_PORT";
-const MYSQL_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM";
+const MAX_ACTIVE_SESSIONS: &str = "FUSE_QUERY_MAX_ACTIVE_SESSIONS";
 
 const CLICKHOUSE_HANDLER_HOST: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_HOST";
 const CLICKHOUSE_HANDLER_PORT: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_PORT";
-const CLICKHOUSE_HANDLER_THREAD_NUM: &str = "FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM";
 
 const FLIGHT_API_ADDRESS: &str = "FUSE_QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "FUSE_QUERY_HTTP_API_ADDRESS";
@@ -59,6 +61,9 @@ const METRICS_API_ADDRESS: &str = "FUSE_QUERY_METRIC_API_ADDRESS";
 const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
 const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
 const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
+
+const TLS_SERVER_CERT: &str = "TLS_SERVER_CERT";
+const TLS_SERVER_KEY: &str = "TLS_SERVER_KEY";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
@@ -86,10 +91,10 @@ pub struct Config {
 
     #[structopt(
     long,
-    env = MYSQL_HANDLER_THREAD_NUM,
+    env = MAX_ACTIVE_SESSIONS,
     default_value = "256"
     )]
-    pub mysql_handler_thread_num: u64,
+    pub max_active_sessions: u64,
 
     #[structopt(
     long,
@@ -103,14 +108,7 @@ pub struct Config {
     env = CLICKHOUSE_HANDLER_PORT,
     default_value = "9000"
     )]
-    pub clickhouse_handler_port: u64,
-
-    #[structopt(
-    long,
-    env = CLICKHOUSE_HANDLER_THREAD_NUM,
-    default_value = "256"
-    )]
-    pub clickhouse_handler_thread_num: u64,
+    pub clickhouse_handler_port: u16,
 
     #[structopt(
     long,
@@ -137,13 +135,85 @@ pub struct Config {
     pub store_api_address: String,
 
     #[structopt(long, env = STORE_API_USERNAME, default_value = "root")]
-    pub store_api_username: String,
+    pub store_api_username: User,
 
     #[structopt(long, env = STORE_API_PASSWORD, default_value = "root")]
-    pub store_api_password: String,
+    pub store_api_password: Password,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
+
+    #[structopt(long, env = TLS_SERVER_CERT, default_value = "")]
+    pub tls_server_cert: String,
+
+    #[structopt(long, env = TLS_SERVER_KEY, default_value = "")]
+    pub tls_server_key: String,
+}
+
+#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[serde(default)]
+pub struct Password {
+    pub store_api_password: String,
+}
+
+impl AsRef<String> for Password {
+    fn as_ref(&self) -> &String {
+        &self.store_api_password
+    }
+}
+
+impl FromStr for Password {
+    type Err = ErrorCode;
+    fn from_str(s: &str) -> common_exception::Result<Self> {
+        Ok(Self {
+            store_api_password: s.to_string(),
+        })
+    }
+}
+
+impl ToString for Password {
+    fn to_string(&self) -> String {
+        self.store_api_password.clone()
+    }
+}
+
+impl fmt::Debug for Password {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "******")
+    }
+}
+
+#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[serde(default)]
+pub struct User {
+    pub store_api_username: String,
+}
+
+impl ToString for User {
+    fn to_string(&self) -> String {
+        self.store_api_username.clone()
+    }
+}
+
+impl fmt::Debug for User {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "******")
+    }
+}
+
+impl AsRef<String> for User {
+    fn as_ref(&self) -> &String {
+        &self.store_api_username
+    }
+}
+
+impl FromStr for User {
+    type Err = ErrorCode;
+    fn from_str(s: &str) -> common_exception::Result<Self> {
+        Ok(Self {
+            store_api_username: s.to_string(),
+        })
+    }
 }
 
 impl Config {
@@ -155,17 +225,22 @@ impl Config {
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
-            mysql_handler_thread_num: 256,
+            max_active_sessions: 256,
             clickhouse_handler_host: "127.0.0.1".to_string(),
             clickhouse_handler_port: 9000,
-            clickhouse_handler_thread_num: 256,
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             store_api_address: "127.0.0.1:9191".to_string(),
-            store_api_username: "root".to_string(),
-            store_api_password: "root".to_string(),
+            store_api_username: User {
+                store_api_username: "root".to_string(),
+            },
+            store_api_password: Password {
+                store_api_password: "root".to_string(),
+            },
             config_file: "".to_string(),
+            tls_server_cert: "".to_string(),
+            tls_server_key: "".to_string(),
         }
     }
 
@@ -203,12 +278,7 @@ impl Config {
         env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
         env_helper!(mut_config, mysql_handler_host, String, MYSQL_HANDLER_HOST);
         env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);
-        env_helper!(
-            mut_config,
-            mysql_handler_thread_num,
-            u64,
-            MYSQL_HANDLER_THREAD_NUM
-        );
+        env_helper!(mut_config, max_active_sessions, u64, MAX_ACTIVE_SESSIONS);
         env_helper!(
             mut_config,
             clickhouse_handler_host,
@@ -218,21 +288,15 @@ impl Config {
         env_helper!(
             mut_config,
             clickhouse_handler_port,
-            u64,
+            u16,
             CLICKHOUSE_HANDLER_PORT
-        );
-        env_helper!(
-            mut_config,
-            clickhouse_handler_thread_num,
-            u64,
-            CLICKHOUSE_HANDLER_THREAD_NUM
         );
         env_helper!(mut_config, flight_api_address, String, FLIGHT_API_ADDRESS);
         env_helper!(mut_config, http_api_address, String, HTTP_API_ADDRESS);
         env_helper!(mut_config, metric_api_address, String, METRICS_API_ADDRESS);
         env_helper!(mut_config, store_api_address, String, STORE_API_ADDRESS);
-        env_helper!(mut_config, store_api_username, String, STORE_API_USERNAME);
-        env_helper!(mut_config, store_api_password, String, STORE_API_PASSWORD);
+        env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
+        env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
 
         Ok(mut_config)
     }

@@ -4,6 +4,7 @@
 //
 
 use common_datavalues::DataSchemaRef;
+use common_metatypes::Database;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -11,12 +12,12 @@ use common_planners::DropTablePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseActionResult {
-    pub database_id: i64,
+    pub database_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetDatabaseActionResult {
-    pub database_id: i64,
+    pub database_id: u64,
     pub db: String,
 }
 
@@ -25,7 +26,7 @@ pub struct DropDatabaseActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableActionResult {
-    pub table_id: i64,
+    pub table_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -33,14 +34,16 @@ pub struct DropTableActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableActionResult {
-    pub table_id: i64,
+    pub table_id: u64,
     pub db: String,
     pub name: String,
     pub schema: DataSchemaRef,
 }
 
+pub type DatabaseMetaReply = Option<(u64, Vec<Database>)>;
+
 #[async_trait::async_trait]
-pub trait MetaApi: Sync + Send {
+pub trait MetaApi {
     async fn create_database(
         &mut self,
         plan: CreateDatabasePlan,
@@ -69,4 +72,9 @@ pub trait MetaApi: Sync + Send {
         db: String,
         table: String,
     ) -> common_exception::Result<GetTableActionResult>;
+
+    async fn get_database_meta(
+        &mut self,
+        current_ver: Option<u64>,
+    ) -> common_exception::Result<Option<(u64, Vec<Database>)>>;
 }

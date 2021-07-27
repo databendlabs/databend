@@ -9,7 +9,7 @@ use tonic::metadata::MetadataValue;
 pub const META_KEY_DB_NAME: &str = "fq-db-name-bin";
 pub const META_KEY_TBL_NAME: &str = "fq-tbl-name-bin";
 
-pub fn set_do_put_meta(meta: &mut MetadataMap, db_name: &str, tbl_name: &str) {
+pub fn put_meta(meta: &mut MetadataMap, db_name: &str, tbl_name: &str) {
     meta.insert_bin(
         META_KEY_DB_NAME,
         MetadataValue::from_bytes(db_name.as_bytes()),
@@ -20,7 +20,7 @@ pub fn set_do_put_meta(meta: &mut MetadataMap, db_name: &str, tbl_name: &str) {
     );
 }
 
-pub fn get_do_put_meta(meta: &MetadataMap) -> anyhow::Result<(String, String)> {
+pub fn get_meta(meta: &MetadataMap) -> anyhow::Result<(String, String)> {
     fn fetch_string(
         meta: &MetadataMap,
         key: &str,

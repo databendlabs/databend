@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+#![feature(hash_raw_entry)]
+
 #[cfg(test)]
 mod data_block_test;
 
@@ -11,4 +13,4 @@ mod kernels;
 
 pub use data_block::DataBlock;
 pub use data_block_debug::*;
-pub use kernels::SortColumnDescription;
+pub use kernels::*;

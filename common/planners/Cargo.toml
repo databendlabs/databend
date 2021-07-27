@@ -10,7 +10,6 @@ edition = "2018"
 # Workspace dependencies
 common-datavalues = {path = "../datavalues"}
 common-functions = {path = "../functions"}
-common-aggregate-functions = {path = "../aggregate_functions" }
 common-exception = {path = "../exception"}
 common-datablocks = {path = "../datablocks"}
 common-infallible = {path = "../infallible"}
@@ -18,7 +17,6 @@ common-infallible = {path = "../infallible"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.41"
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3"
 lazy_static = "1.4.0"

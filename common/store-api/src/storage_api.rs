@@ -81,7 +81,7 @@ pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
 #[async_trait::async_trait]
-pub trait StorageApi: Sync + Send {
+pub trait StorageApi {
     async fn read_plan(
         &mut self,
         db_name: String,

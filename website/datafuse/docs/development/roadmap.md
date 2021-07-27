@@ -8,7 +8,6 @@ Datafuse roadmap 2021.
 !!! note "Notes"
     Sync from the [#476](https://github.com/datafuselabs/datafuse/issues/746)
 
-
 # Main tasks
 
 ###  1. Query/Store task
@@ -47,13 +46,19 @@ Datafuse roadmap 2021.
 
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
-| [RBAC track #894](https://github.com/datafuselabs/datafuse/issues/894) | PLANNING  | v0.5  |  Access Control and Account Management |
+| [RBAC track #894](https://github.com/datafuselabs/datafuse/issues/894) | PROGRESS  | v0.5  |  Access Control and Account Management |
 
 ### 7. CBO task
 
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
 | [Cost based optimizer(CBO) track #915](https://github.com/datafuselabs/datafuse/issues/915) | PLANNING  |   |  Table statistics and CBO |
+
+### 8. Deployment task
+
+| Task                                         | Status    | Release Target | Comments        | 
+| ----------------------------------------------- | --------- | -------------- | --------------- | 
+| [ datafuse cli #938](https://github.com/datafuselabs/datafuse/issues/938) | PROGRESS  | v0.5   |  All-in-one tool for setting up, managing with Datafuse |
 
 # Experimental and interns tasks
 
@@ -69,4 +74,3 @@ Datafuse roadmap 2021.
 | Array functions | PLANNING  |   |  Reference: https://clickhouse.tech/docs/en/sql-reference/functions/array-functions/ |
 | Lambda functions | PLANNING  |   | Reference: https://clickhouse.tech/docs/en/sql-reference/functions/#higher-order-functions  |
 | Compile aggregate functions(JIT) | PLANNING  |   | Reference: https://github.com/ClickHouse/ClickHouse/pull/24789  |
-

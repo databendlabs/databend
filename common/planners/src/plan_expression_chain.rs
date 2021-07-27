@@ -4,11 +4,10 @@
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_functions::FunctionFactory;
+use common_functions::scalars::FunctionFactory;
 
 use crate::ActionAlias;
 use crate::ActionConstant;
-use crate::ActionExists;
 use crate::ActionFunction;
 use crate::ActionInput;
 use crate::Expression;
@@ -57,19 +56,27 @@ impl ExpressionChain {
                 };
                 self.actions.push(ExpressionAction::Input(input));
             }
-            Expression::Literal(l) => {
+            Expression::Literal { value, .. } => {
                 let value = ActionConstant {
                     name: expr.column_name(),
-                    value: l.clone(),
+                    value: value.clone(),
                 };
 
                 self.actions.push(ExpressionAction::Constant(value));
             }
-            Expression::Exists(_p) => {
-                let value = ActionExists {
-                    name: format!("{:?}", expr),
-                };
-                self.actions.push(ExpressionAction::Exists(value));
+            Expression::Subquery { name, query_plan } => {
+                // Subquery results are ready in the expression input
+                self.actions.push(ExpressionAction::Input(ActionInput {
+                    name: name.clone(),
+                    return_type: Expression::to_subquery_type(query_plan),
+                }));
+            }
+            Expression::ScalarSubquery { name, query_plan } => {
+                // Scalar subquery results are ready in the expression input
+                self.actions.push(ExpressionAction::Input(ActionInput {
+                    name: name.to_string(),
+                    return_type: Expression::to_subquery_type(query_plan),
+                }));
             }
             Expression::UnaryExpression {
                 op,

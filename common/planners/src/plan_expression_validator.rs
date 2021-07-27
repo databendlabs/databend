@@ -4,8 +4,8 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::Function;
-use common_functions::FunctionFactory;
+use common_functions::scalars::Function;
+use common_functions::scalars::FunctionFactory;
 
 use crate::Expression;
 use crate::ExpressionVisitor;

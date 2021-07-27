@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -48,3 +49,5 @@ pub trait Table: Sync + Send {
         )))
     }
 }
+
+pub type TablePtr = Arc<dyn Table>;

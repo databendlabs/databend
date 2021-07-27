@@ -5,7 +5,7 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use pretty_assertions::assert_eq;
@@ -34,7 +34,9 @@ fn test_projection_push_down_optimizer_1() -> Result<()> {
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a"), col("b"), col("c")],
         schema: output_schema,
-        input: Arc::from(PlanBuilder::from(&PlanNode::Empty(EmptyPlan { schema })).build()?),
+        input: Arc::from(
+            PlanBuilder::from(&PlanNode::Empty(EmptyPlan::create_with_schema(schema))).build()?,
+        ),
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
@@ -75,10 +77,8 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
-    let statistics = Statistics {
-        read_rows: total as usize,
-        read_bytes: ((total) * size_of::<u64>() as u64) as usize,
-    };
+    let statistics =
+        Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
         db: "system".to_string(),
@@ -128,10 +128,8 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
-    let statistics = Statistics {
-        read_rows: total as usize,
-        read_bytes: ((total) * size_of::<u64>() as u64) as usize,
-    };
+    let statistics =
+        Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
         db: "system".to_string(),

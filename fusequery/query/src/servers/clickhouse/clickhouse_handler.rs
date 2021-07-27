@@ -2,219 +2,119 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
-use clickhouse_srv::connection::Connection;
-use clickhouse_srv::errors::ServerError;
-use clickhouse_srv::types::Block as ClickHouseBlock;
-use clickhouse_srv::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio;
-use common_runtime::tokio::net::TcpListener;
-use common_runtime::tokio::sync::mpsc;
-use common_runtime::tokio::time;
-use log::error;
-use metrics::histogram;
-use tokio_stream::wrappers::IntervalStream;
-use tokio_stream::StreamExt;
+use common_runtime::tokio::net::TcpStream;
+use common_runtime::tokio::task::JoinHandle;
+use common_runtime::Runtime;
+use futures::future::AbortHandle;
+use futures::future::AbortRegistration;
+use futures::stream::Abortable;
+use futures::Future;
+use futures::StreamExt;
+use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::clusters::ClusterRef;
-use crate::configs::Config;
-use crate::interpreters::InterpreterFactory;
-use crate::servers::clickhouse::ClickHouseStream;
-use crate::sessions::FuseQueryContextRef;
+use crate::servers::clickhouse::clickhouse_session::ClickHouseConnection;
+use crate::servers::clickhouse::reject_connection::RejectCHConnection;
+use crate::servers::server::ListeningStream;
+use crate::servers::server::Server;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
-use crate::sql::PlanParser;
-
-struct Session {
-    ctx: FuseQueryContextRef,
-}
-
-impl Session {
-    pub fn create(ctx: FuseQueryContextRef) -> Self {
-        Session { ctx }
-    }
-}
-
-pub fn to_clickhouse_err(res: ErrorCode) -> clickhouse_srv::errors::Error {
-    clickhouse_srv::errors::Error::Server(ServerError {
-        code: res.code() as u32,
-        name: "DB:Exception".to_string(),
-        message: res.message(),
-        stack_trace: res.backtrace_str(),
-    })
-}
-
-enum BlockItem {
-    Block(Result<ClickHouseBlock>),
-    ProgressTicker,
-}
-
-#[async_trait::async_trait]
-impl ClickHouseSession for Session {
-    async fn execute_query(
-        &self,
-        ctx: &mut CHContext,
-        connection: &mut Connection,
-    ) -> clickhouse_srv::errors::Result<()> {
-        self.ctx.reset().map_err(to_clickhouse_err)?;
-        let start = Instant::now();
-
-        let interpreter = PlanParser::create(self.ctx.clone())
-            .build_from_sql(&ctx.state.query)
-            .and_then(|built_plan| InterpreterFactory::get(self.ctx.clone(), built_plan))
-            .map_err(to_clickhouse_err)?;
-
-        let schema = interpreter.schema();
-
-        let mut interval_stream = IntervalStream::new(time::interval(Duration::from_millis(30)));
-        let (tx, mut rx) = mpsc::channel(20);
-        let cancel = Arc::new(AtomicBool::new(false));
-
-        let tx2 = tx.clone();
-        let cancel_clone = cancel.clone();
-
-        tokio::spawn(async move {
-            while !cancel.load(Ordering::Relaxed) {
-                let _ = interval_stream.next().await;
-                tx.send(BlockItem::ProgressTicker).await.ok();
-            }
-        });
-
-        self.ctx.execute_task(async move {
-            let clickhouse_stream = interpreter
-                .execute()
-                .await
-                .map(|stream| ClickHouseStream::create(stream, schema));
-
-            match clickhouse_stream {
-                Ok(mut clickhouse_stream) => {
-                    while let Some(block) = clickhouse_stream.next().await {
-                        tx2.send(BlockItem::Block(block)).await.ok();
-                    }
-                }
-
-                Err(e) => {
-                    tx2.send(BlockItem::Block(Err(e))).await.ok();
-                }
-            }
-            cancel_clone.store(true, Ordering::Relaxed);
-        });
-
-        while let Some(item) = rx.recv().await {
-            match item {
-                BlockItem::Block(block) => {
-                    connection
-                        .write_block(block.map_err(to_clickhouse_err)?)
-                        .await?;
-                }
-
-                BlockItem::ProgressTicker => {
-                    let progress = self.get_progress();
-                    connection
-                        .write_progress(progress, ctx.client_revision)
-                        .await?;
-                }
-            }
-        }
-
-        histogram!(
-            super::clickhouse_metrics::METRIC_CLICKHOUSE_PROCESSOR_REQUEST_DURATION,
-            start.elapsed()
-        );
-        Ok(())
-    }
-
-    fn dbms_name(&self) -> &str {
-        "datafuse"
-    }
-
-    fn server_display_name(&self) -> &str {
-        "datafuse"
-    }
-
-    fn dbms_version_major(&self) -> u64 {
-        2021
-    }
-
-    fn dbms_version_minor(&self) -> u64 {
-        5
-    }
-
-    fn dbms_version_patch(&self) -> u64 {
-        0
-    }
-
-    fn timezone(&self) -> &str {
-        "UTC"
-    }
-
-    // the MIN_SERVER_REVISION for suggestions is 54406
-    fn dbms_tcp_protocol_version(&self) -> u64 {
-        54405
-    }
-
-    fn get_progress(&self) -> clickhouse_srv::types::Progress {
-        let values = self.ctx.get_and_reset_progress_value();
-        clickhouse_srv::types::Progress {
-            rows: values.read_rows as u64,
-            bytes: values.read_bytes as u64,
-            total_rows: 0,
-        }
-    }
-}
 
 pub struct ClickHouseHandler {
-    conf: Config,
-    cluster: ClusterRef,
-    session_manager: SessionManagerRef,
+    sessions: SessionManagerRef,
+
+    abort_handle: AbortHandle,
+    abort_registration: Option<AbortRegistration>,
+    join_handle: Option<JoinHandle<()>>,
 }
 
 impl ClickHouseHandler {
-    pub fn create(conf: Config, cluster: ClusterRef, session_manager: SessionManagerRef) -> Self {
-        Self {
-            conf,
-            cluster,
-            session_manager,
-        }
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn Server> {
+        let (abort_handle, registration) = AbortHandle::new_pair();
+        Box::new(ClickHouseHandler {
+            sessions,
+            abort_handle,
+            abort_registration: Some(registration),
+            join_handle: None,
+        })
     }
 
-    pub async fn start(&self) -> anyhow::Result<()> {
-        let listener = TcpListener::bind(format!(
-            "{}:{}",
-            self.conf.clickhouse_handler_host, self.conf.clickhouse_handler_port
-        ))
-        .await?;
+    async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
+        let listener = tokio::net::TcpListener::bind(socket).await?;
+        let listener_addr = listener.local_addr()?;
+        Ok((TcpListenerStream::new(listener), listener_addr))
+    }
 
-        loop {
-            let session_mgr = self.session_manager.clone();
-            // Asynchronously wait for an inbound TcpStream.
-            let (stream, _) = listener.accept().await?;
-            let ctx = self
-                .session_manager
-                .try_create_context()?
-                .with_cluster(self.cluster.clone())?;
-            ctx.set_max_threads(self.conf.num_cpus)?;
+    fn listen_loop(&self, stream: ListeningStream, r: Arc<Runtime>) -> impl Future<Output = ()> {
+        let sessions = self.sessions.clone();
+        stream.for_each(move |accept_socket| {
+            let executor = r.clone();
+            let sessions = sessions.clone();
+            async move {
+                match accept_socket {
+                    Err(error) => log::error!("Broken session connection: {}", error),
+                    Ok(socket) => ClickHouseHandler::accept_socket(sessions, executor, socket),
+                };
+            }
+        })
+    }
 
-            // Spawn our handler to be run asynchronously.
-            tokio::spawn(async move {
-                if let Err(e) =
-                    ClickHouseServer::run_on_stream(Arc::new(Session::create(ctx.clone())), stream)
-                        .await
-                {
-                    error!("Error: {:?}", e);
+    fn reject_connection(stream: TcpStream, executor: Arc<Runtime>, error: ErrorCode) {
+        executor.spawn(async move {
+            if let Err(error) = RejectCHConnection::reject(stream, error).await {
+                log::error!(
+                    "Unexpected error occurred during reject connection: {:?}",
+                    error
+                );
+            }
+        });
+    }
+
+    fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
+        match sessions.create_session("ClickHouseSession") {
+            Err(error) => Self::reject_connection(socket, executor, error),
+            Ok(session) => {
+                log::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
+                if let Err(error) = ClickHouseConnection::run_on_stream(session, socket) {
+                    log::error!("Unexpected error occurred during query: {:?}", error);
                 }
-                session_mgr.try_remove_context(ctx).unwrap();
-            });
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Server for ClickHouseHandler {
+    async fn shutdown(&mut self) {
+        self.abort_handle.abort();
+
+        if let Some(join_handle) = self.join_handle.take() {
+            if let Err(error) = join_handle.await {
+                log::error!(
+                    "Unexpected error during shutdown ClickHouseHandler. cause {}",
+                    error
+                );
+            }
         }
     }
 
-    pub fn stop(&self) -> Result<()> {
-        Ok(())
+    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        match self.abort_registration.take() {
+            None => Err(ErrorCode::LogicalError(
+                "ClickHouseHandler already running.",
+            )),
+            Some(registration) => {
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let (stream, listener) = Self::listener_tcp(listening).await?;
+                let stream = Abortable::new(stream, registration);
+                self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));
+                Ok(listener)
+            }
+        }
     }
 }

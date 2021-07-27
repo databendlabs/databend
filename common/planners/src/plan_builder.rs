@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -12,6 +13,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::col;
+use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::validate_expression;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -48,14 +50,14 @@ impl PlanBuilder {
     }
 
     pub fn create(schema: DataSchemaRef) -> Self {
-        Self::from(&PlanNode::Empty(EmptyPlan { schema }))
+        Self::from(&PlanNode::Empty(EmptyPlan::create_with_schema(schema)))
     }
 
     /// Create an empty relation.
     pub fn empty() -> Self {
-        Self::from(&PlanNode::Empty(EmptyPlan {
-            schema: DataSchemaRef::new(DataSchema::empty()),
-        }))
+        Self::from(&PlanNode::Empty(EmptyPlan::create_with_schema(
+            DataSchemaRef::new(DataSchema::empty()),
+        )))
     }
 
     /// Apply a expression and merge the fields with exprs.
@@ -87,9 +89,9 @@ impl PlanBuilder {
             }
         }
 
-        Ok(Self::from(&PlanNode::Expression(ExpressionPlan {
-            input: Arc::new(self.plan.clone()),
-            exprs: projection_exprs,
+        Ok(PlanBuilder::from(&PlanNode::Expression(ExpressionPlan {
+            input: self.wrap_subquery_plan(&projection_exprs)?,
+            exprs: projection_exprs.clone(),
             schema: DataSchemaRefExt::create(merged),
             desc: desc.to_string(),
         })))
@@ -101,7 +103,7 @@ impl PlanBuilder {
         let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {
-            input: Arc::new(self.plan.clone()),
+            input: self.wrap_subquery_plan(exprs)?,
             expr: exprs.to_owned(),
             schema: DataSchemaRefExt::create(fields),
         })))
@@ -119,16 +121,26 @@ impl PlanBuilder {
                 let fields = RewriteHelper::exprs_to_fields(aggr_expr, &schema_before_groupby)?;
                 let mut partial_fields = fields
                     .iter()
-                    .map(|f| DataField::new(f.name(), DataType::Utf8, false))
+                    .map(|f| DataField::new(f.name(), DataType::Binary, false))
                     .collect::<Vec<_>>();
 
                 if !group_expr.is_empty() {
-                    // Fields. [aggrs,  [keys],  key ]
+                    // Fields. [aggrs,  group_keys...,  key]
                     // aggrs: aggr_len aggregate states
-                    // keys:  Vec<Key>, DataTypeStruct
-                    // key:  group id, DataTypeBinary
-                    partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
-                    partial_fields.push(DataField::new("_group_by_key", DataType::Binary, false));
+                    // group_keys:  group_len, group by key columns
+                    // key: Varint by hash method
+
+                    let mut group_cols = vec![];
+                    for expr in group_expr.iter() {
+                        group_cols.push(expr.column_name());
+                        let field = expr.to_data_field(&schema_before_groupby)?;
+                        partial_fields.push(field);
+                    }
+
+                    let sample_block = DataBlock::empty_with_schema(schema_before_groupby);
+                    let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
+                    // partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
+                    partial_fields.push(DataField::new("_group_by_key", method.data_type(), false));
                 }
 
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {
@@ -221,8 +233,9 @@ impl PlanBuilder {
     pub fn filter(&self, expr: Expression) -> Result<Self> {
         validate_expression(&expr)?;
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
-            predicate: expr,
-            input: Arc::new(self.plan.clone()),
+            predicate: expr.clone(),
+            schema: self.plan.schema(),
+            input: self.wrap_subquery_plan(&[expr])?,
         })))
     }
 
@@ -230,15 +243,17 @@ impl PlanBuilder {
     pub fn having(&self, expr: Expression) -> Result<Self> {
         validate_expression(&expr)?;
         Ok(Self::from(&PlanNode::Having(HavingPlan {
-            predicate: expr,
-            input: Arc::new(self.plan.clone()),
+            predicate: expr.clone(),
+            schema: self.plan.schema(),
+            input: self.wrap_subquery_plan(&[expr])?,
         })))
     }
 
     pub fn sort(&self, exprs: &[Expression]) -> Result<Self> {
         Ok(Self::from(&PlanNode::Sort(SortPlan {
             order_by: exprs.to_vec(),
-            input: Arc::new(self.plan.clone()),
+            schema: self.plan.schema(),
+            input: self.wrap_subquery_plan(exprs)?,
         })))
     }
 
@@ -284,5 +299,17 @@ impl PlanBuilder {
     /// Build the plan
     pub fn build(&self) -> Result<PlanNode> {
         Ok(self.plan.clone())
+    }
+
+    fn wrap_subquery_plan(&self, exprs: &[Expression]) -> Result<Arc<PlanNode>> {
+        let input = &self.plan;
+        let sub_queries = RewriteHelper::collect_exprs_sub_queries(exprs)?;
+        match sub_queries.is_empty() {
+            true => Ok(Arc::new(input.clone())),
+            false => Ok(Arc::new(PlanNode::SubQueryExpression(SubQueriesSetPlan {
+                expressions: sub_queries,
+                input: Arc::new(input.clone()),
+            }))),
+        }
     }
 }

@@ -4,6 +4,7 @@
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
+use fuse_store::api::HttpService;
 use fuse_store::api::StoreServer;
 use fuse_store::configs::Config;
 use fuse_store::metrics::MetricService;
@@ -34,6 +35,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             srv.make_server().expect("Metrics service error");
         });
         info!("Metric API server listening on {}", conf.metric_api_address);
+    }
+
+    // HTTP API service.
+    {
+        let mut srv = HttpService::create(conf.clone());
+        info!("HTTP API server listening on {}", conf.http_api_address);
+        tokio::spawn(async move {
+            srv.start().await.expect("HTTP: admin api error");
+        });
     }
 
     // RPC API service.

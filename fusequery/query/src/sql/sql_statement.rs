@@ -26,9 +26,17 @@ pub struct DfShowDatabases;
 pub struct DfShowSettings;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfShowProcessList;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfExplain {
     pub typ: ExplainType,
     pub statement: Box<SQLStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfShowCreateTable {
+    pub name: ObjectName,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,6 +47,11 @@ pub struct DfCreateTable {
     pub columns: Vec<ColumnDef>,
     pub engine: TableEngineType,
     pub options: Vec<SqlOption>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfDescribeTable {
+    pub name: ObjectName,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,11 +94,16 @@ pub enum DfStatement {
 
     // Tables.
     ShowTables(DfShowTables),
+    ShowCreateTable(DfShowCreateTable),
     CreateTable(DfCreateTable),
+    DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
 
     // Settings.
     ShowSettings(DfShowSettings),
+
+    // ProcessList
+    ShowProcessList(DfShowProcessList),
 }
 
 /// Comment hints from SQL.

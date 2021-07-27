@@ -16,10 +16,15 @@ common-exception = {path = "../exception"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.41"
 dyn-clone = "1.0.4"
-indexmap = "1.6.1"
+indexmap = "1.7.0"
 lazy_static = "1.4.0"
+bumpalo = "3.7.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bytes = "1.0.1"
+unicase = "2.6.0"
+
 
 [dev-dependencies]
 common-datablocks = {path = "../datablocks"}

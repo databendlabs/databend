@@ -3,5 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
-mod user_info;
-mod user_mgr;
+pub(crate) mod user_api;
+pub(crate) mod user_mgr;
+///
+///
+///
+/// let mut um = UserMgr::new(client);
+/// let a = "test";
+/// um.get_users(&vec![a]);
+///
+pub(crate) mod utils;
+
+#[cfg(test)]
+mod user_mgr_test;

@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::Result;
 
 use crate::Part;
 use crate::Partitions;
@@ -30,6 +30,7 @@ impl Test {
         let statistics = Statistics {
             read_rows: total,
             read_bytes: total * 8,
+            is_exact: true,
         };
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {

@@ -91,7 +91,7 @@ impl Processor for MergeProcessor {
                                 }
                             }
                         }
-                    });
+                    })?;
                 }
                 Ok(Box::pin(ReceiverStream::new(receiver)))
             }

@@ -8,8 +8,10 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow;
+use common_arrow::arrow::array::BooleanArray;
 use common_datablocks::DataBlock;
-use common_datavalues::BooleanArray;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodSerializer;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
@@ -40,7 +42,9 @@ impl LimitByStream {
     pub fn limit_by(&mut self, block: &DataBlock) -> Result<Option<DataBlock>> {
         // TODO: use BitVec here.
         let mut filter_vec = vec![false; block.num_rows()];
-        let group_indices = DataBlock::group_by_get_indices(&block, &self.limit_by_columns_name)?;
+        let method = HashMethodSerializer::default();
+        let group_indices = method.group_by_get_indices(block, &self.limit_by_columns_name)?;
+
         for (limit_by_key, (rows, _)) in group_indices {
             for row in rows {
                 let count = self.keys_count.entry(limit_by_key.clone()).or_default();

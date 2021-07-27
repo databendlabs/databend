@@ -6,11 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::StringArray;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -86,9 +82,9 @@ impl Table for ContributorsTable {
             .split_terminator(',')
             .map(|x| x.trim())
             .collect();
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![Arc::new(
-            StringArray::from(contributors),
-        )]);
+        let block =
+            DataBlock::create_by_array(self.schema.clone(), vec![Series::new(contributors)]);
+
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

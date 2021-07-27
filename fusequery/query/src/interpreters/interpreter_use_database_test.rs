@@ -38,7 +38,7 @@ async fn test_use_database_interpreter_error() -> Result<()> {
         let executor = UseDatabaseInterpreter::try_create(ctx, plan)?;
 
         if let Err(e) = executor.execute().await {
-            let expect = "Code: 3, displayText = Database xx  doesn\'t exist..";
+            let expect = "Code: 3, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
             assert_eq!(expect, format!("{}", e));
         } else {
             assert!(false);

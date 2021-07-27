@@ -97,7 +97,7 @@ impl Table for RemoteTable {
                         let _ = tx.send(Err(e));
                     }
                 }
-            });
+            })?;
         }
 
         rx.recv()
@@ -115,14 +115,16 @@ impl Table for RemoteTable {
 
     async fn append_data(&self, _ctx: FuseQueryContextRef, plan: InsertIntoPlan) -> Result<()> {
         let opt_stream = {
-            let mut inner = plan.input_stream.lock().unwrap();
+            let mut inner = plan.input_stream.lock();
             (*inner).take()
         };
 
         {
             let block_stream =
                 opt_stream.ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
+
             let mut client = self.store_client_provider.try_get_client().await?;
+
             client
                 .append_data(
                     plan.db_name.clone(),
@@ -131,6 +133,15 @@ impl Table for RemoteTable {
                     block_stream,
                 )
                 .await?;
+
+            //            let mut um = UserMgr::new(client);
+            //            let a = "test";
+            //            um.get_users(&vec![a]).await;
+            //            um.add_user("user", "pass", "salt").await;
+            //            um.drop_user("user", None).await;
+            //            um.update_user("user", None, None, None).await;
+            //            um.get_users(&vec!["user"]).await;
+            //            um.get_all_users().await;
         }
 
         Ok(())
@@ -143,6 +154,7 @@ impl RemoteTable {
         let mut statistics = Statistics {
             read_rows: 0,
             read_bytes: 0,
+            is_exact: false,
         };
 
         if let Some(parts) = res {
@@ -153,6 +165,7 @@ impl RemoteTable {
                 });
                 statistics.read_rows += part.stats.read_rows;
                 statistics.read_bytes += part.stats.read_bytes;
+                statistics.is_exact &= part.stats.is_exact;
             }
         }
 

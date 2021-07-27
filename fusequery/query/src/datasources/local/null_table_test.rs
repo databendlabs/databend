@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
@@ -23,7 +23,7 @@ async fn test_null_table() -> Result<()> {
     let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
-        ctx.get_max_threads()? as usize,
+        ctx.get_settings().get_max_threads()? as usize,
     )?;
     assert_eq!(table.engine(), "Null");
 

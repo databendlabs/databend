@@ -2,14 +2,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+
+use crate::plan_broadcast::BroadcastPlan;
+use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
+use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
@@ -23,6 +29,7 @@ use crate::RemotePlan;
 use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::UseDatabasePlan;
@@ -68,8 +75,8 @@ use crate::UseDatabasePlan;
 ///     }
 /// }
 /// ```
-pub trait PlanVisitor<'plan> {
-    fn visit_plan_node(&mut self, node: &'plan PlanNode) {
+pub trait PlanVisitor {
+    fn visit_plan_node(&mut self, node: &PlanNode) -> Result<()> {
         match node {
             PlanNode::AggregatorPartial(plan) => self.visit_aggregate_partial(plan),
             PlanNode::AggregatorFinal(plan) => self.visit_aggregate_final(plan),
@@ -87,82 +94,161 @@ pub trait PlanVisitor<'plan> {
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
+            PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
+            PlanNode::Broadcast(plan) => self.visit_broadcast(plan),
             PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
+            PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
+            PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
         }
     }
 
-    fn visit_aggregate_partial(&mut self, plan: &'plan AggregatorPartialPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_subquery_plan(&mut self, subquery_plan: &PlanNode) -> Result<()> {
+        self.visit_plan_node(subquery_plan)
     }
 
-    fn visit_aggregate_final(&mut self, plan: &'plan AggregatorFinalPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    // TODO: Move it to ExpressionsVisitor trait
+    fn visit_expr(&mut self, expr: &Expression) -> Result<()> {
+        match expr {
+            Expression::Subquery { query_plan, .. } => {
+                self.visit_subquery_plan(query_plan.as_ref())
+            }
+            Expression::ScalarSubquery { query_plan, .. } => {
+                self.visit_subquery_plan(query_plan.as_ref())
+            }
+            _ => Ok(()),
+        }
     }
 
-    fn visit_empty(&mut self, _: &'plan EmptyPlan) {}
+    // TODO: Move it to ExpressionsVisitor trait
+    fn visit_exprs(&mut self, exprs: &[Expression]) -> Result<()> {
+        for expr in exprs {
+            self.visit_expr(expr)?;
+        }
 
-    fn visit_stage(&mut self, plan: &'plan StagePlan) {
-        self.visit_plan_node(plan.input.as_ref());
+        Ok(())
     }
 
-    fn visit_remote(&mut self, _: &'plan RemotePlan) {}
-
-    fn visit_projection(&mut self, plan: &'plan ProjectionPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_exprs(&plan.aggr_expr)?;
+        self.visit_exprs(&plan.group_expr)
     }
 
-    fn visit_expression(&mut self, plan: &'plan ExpressionPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_exprs(&plan.aggr_expr)?;
+        self.visit_exprs(&plan.group_expr)
     }
 
-    fn visit_filter(&mut self, plan: &'plan FilterPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_empty(&mut self, _: &EmptyPlan) -> Result<()> {
+        Ok(())
     }
 
-    fn visit_having(&mut self, plan: &'plan HavingPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_stage(&mut self, plan: &StagePlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())
     }
 
-    fn visit_sort(&mut self, plan: &'plan SortPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_broadcast(&mut self, plan: &BroadcastPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())
     }
 
-    fn visit_limit(&mut self, plan: &'plan LimitPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_remote(&mut self, _: &RemotePlan) -> Result<()> {
+        Ok(())
     }
 
-    fn visit_limit_by(&mut self, plan: &'plan LimitByPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_exprs(&plan.expr)
     }
 
-    fn visit_scan(&mut self, _: &'plan ScanPlan) {}
-
-    fn visit_read_data_source(&mut self, _: &'plan ReadDataSourcePlan) {}
-
-    fn visit_select(&mut self, plan: &'plan SelectPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_exprs(&plan.exprs)
     }
 
-    fn visit_explain(&mut self, plan: &'plan ExplainPlan) {
-        self.visit_plan_node(plan.input.as_ref());
+    fn visit_sub_queries_sets(&mut self, plan: &SubQueriesSetPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_exprs(&plan.expressions)
     }
 
-    fn visit_create_database(&mut self, _: &'plan CreateDatabasePlan) {}
+    fn visit_filter(&mut self, plan: &FilterPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_expr(&plan.predicate)
+    }
 
-    fn visit_drop_database(&mut self, _: &'plan DropDatabasePlan) {}
+    fn visit_having(&mut self, plan: &HavingPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_expr(&plan.predicate)
+    }
 
-    fn visit_create_table(&mut self, _: &'plan CreateTablePlan) {}
+    fn visit_sort(&mut self, plan: &SortPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())?;
+        self.visit_exprs(&plan.order_by)
+    }
 
-    fn visit_drop_table(&mut self, _: &'plan DropTablePlan) {}
+    fn visit_limit(&mut self, plan: &LimitPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())
+    }
 
-    fn visit_use_database(&mut self, _: &'plan UseDatabasePlan) {}
+    fn visit_limit_by(&mut self, plan: &LimitByPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())
+    }
 
-    fn visit_set_variable(&mut self, _: &'plan SettingPlan) {}
-    fn visit_insert_into(&mut self, _: &'plan InsertIntoPlan) {}
+    fn visit_scan(&mut self, _: &ScanPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_read_data_source(&mut self, _: &ReadDataSourcePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_select(&mut self, plan: &SelectPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())
+    }
+
+    fn visit_explain(&mut self, plan: &ExplainPlan) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref())
+    }
+
+    fn visit_create_database(&mut self, _: &CreateDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_database(&mut self, _: &DropDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_table(&mut self, _: &CreateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_describe_table(&mut self, _: &DescribeTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_table(&mut self, _: &DropTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_use_database(&mut self, _: &UseDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_set_variable(&mut self, _: &SettingPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_insert_into(&mut self, _: &InsertIntoPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_create_table(&mut self, _: &ShowCreateTablePlan) -> Result<()> {
+        Ok(())
+    }
 }

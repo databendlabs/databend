@@ -26,11 +26,14 @@ use sqlparser::tokenizer::Whitespace;
 
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
+use crate::sql::DfDescribeTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
+use crate::sql::DfShowCreateTable;
 use crate::sql::DfShowDatabases;
+use crate::sql::DfShowProcessList;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
@@ -128,6 +131,14 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_create()
                     }
+                    Keyword::DESC => {
+                        self.parser.next_token();
+                        self.parse_describe()
+                    }
+                    Keyword::DESCRIBE => {
+                        self.parser.next_token();
+                        self.parse_describe()
+                    }
                     Keyword::DROP => {
                         self.parser.next_token();
                         self.parse_drop()
@@ -146,6 +157,10 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowDatabases(DfShowDatabases))
                         } else if self.consume_token("SETTINGS") {
                             Ok(DfStatement::ShowSettings(DfShowSettings))
+                        } else if self.consume_token("CREATE") {
+                            self.parse_show_create()
+                        } else if self.consume_token("PROCESSLIST") {
+                            Ok(DfStatement::ShowProcessList(DfShowProcessList))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -318,6 +333,12 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateDatabase(create))
     }
 
+    fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
+        let table_name = self.parser.parse_object_name()?;
+        let desc = DfDescribeTable { name: table_name };
+        Ok(DfStatement::DescribeTable(desc))
+    }
+
     /// Drop database/table.
     fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
@@ -427,18 +448,34 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match &*w.value {
                 "Parquet" => Ok(TableEngineType::Parquet),
-                "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
+                "JSONEachRow" => Ok(TableEngineType::JSONEachRow),
                 "CSV" => Ok(TableEngineType::Csv),
                 "Null" => Ok(TableEngineType::Null),
+                "Memory" => Ok(TableEngineType::Memory),
                 _ => self.expected(
-                    "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                    "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                     Token::Word(w),
                 ),
             },
             unexpected => self.expected(
-                "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                 unexpected,
             ),
+        }
+    }
+
+    fn parse_show_create(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => {
+                    let table_name = self.parser.parse_object_name()?;
+
+                    let show_create_table = DfShowCreateTable { name: table_name };
+                    Ok(DfStatement::ShowCreateTable(show_create_table))
+                }
+                _ => self.expected("show create statement", Token::Word(w)),
+            },
+            unexpected => self.expected("show create statement", unexpected),
         }
     }
 

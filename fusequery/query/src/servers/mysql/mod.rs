@@ -3,12 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::Session;
+pub use self::mysql_session::MySQLConnection;
 
 #[cfg(test)]
 mod mysql_handler_test;
-#[cfg(test)]
-mod mysql_session_test;
 
 mod mysql_handler;
 mod mysql_interactive_worker;

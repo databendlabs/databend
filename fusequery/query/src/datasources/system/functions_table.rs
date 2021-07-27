@@ -5,16 +5,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_aggregate_functions::AggregateFunctionFactory;
 use common_datablocks::DataBlock;
-use common_datavalues::BooleanArray;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::StringArray;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::FunctionFactory;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
@@ -102,8 +97,8 @@ impl Table for FunctionsTable {
             .collect::<Vec<bool>>();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
-            Arc::new(StringArray::from(names)),
-            Arc::new(BooleanArray::from(is_aggregate)),
+            Series::new(names),
+            Series::new(is_aggregate),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

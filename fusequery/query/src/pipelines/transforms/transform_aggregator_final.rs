@@ -6,11 +6,11 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_aggregate_functions::AggregateFunction;
 use common_datablocks::DataBlock;
+use common_datavalues::DFBinaryArray;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionRef;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -21,7 +21,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<Box<dyn AggregateFunction>>,
+    funcs: Vec<AggregateFunctionRef>,
     schema: DataSchemaRef,
     input: Arc<dyn Processor>,
 }
@@ -66,29 +66,37 @@ impl Processor for AggregatorFinalTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 
-        let mut funcs = self.funcs.clone();
+        let funcs = self.funcs.clone();
         let mut stream = self.input.execute().await?;
 
         let start = Instant::now();
+
+        let arena = bumpalo::Bump::new();
+        let places = funcs
+            .iter()
+            .map(|func| func.allocate_state(&arena))
+            .collect::<Vec<_>>();
+
         while let Some(block) = stream.next().await {
             let block = block?;
-            for (i, func) in funcs.iter_mut().enumerate() {
-                if let DataValue::Utf8(Some(col)) = DataValue::try_from_column(block.column(i), 0)?
-                {
-                    let val: DataValue = serde_json::from_str(&col)?;
-                    if let DataValue::Struct(states) = val {
-                        func.merge(&states)?;
-                    }
-                }
+            for (i, func) in funcs.iter().enumerate() {
+                let binary_array = block.column(i).to_array()?;
+                let binary_array: &DFBinaryArray = binary_array.binary()?;
+                let array = binary_array.downcast_ref();
+
+                let place = func.allocate_state(&arena);
+                let data = array.value(0);
+                func.deserialize(place, data)?;
+                func.merge(places[i], place)?;
             }
         }
         let delta = start.elapsed();
         tracing::debug!("Aggregator final cost: {:?}", delta);
 
         let mut final_result = Vec::with_capacity(funcs.len());
-        for func in &funcs {
-            let merge_result = func.merge_result()?;
-            final_result.push(merge_result.to_array_with_size(1)?);
+        for (idx, func) in funcs.iter().enumerate() {
+            let merge_result = func.merge_result(places[idx])?;
+            final_result.push(merge_result.to_series_with_size(1)?);
         }
 
         let mut blocks = vec![];
