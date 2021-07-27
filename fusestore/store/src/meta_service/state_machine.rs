@@ -296,6 +296,9 @@ impl StateMachine {
                     let tbl_id = tbl_id.to_owned();
                     db.tables.remove(table_name);
                     let prev = self.tables.remove(&tbl_id);
+
+                    self.remove_table_data_parts(db_name, table_name);
+
                     self.incr_seq(SEQ_DATABASE_META_ID);
 
                     Ok((prev, None).into())
