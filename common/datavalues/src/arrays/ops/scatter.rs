@@ -20,6 +20,16 @@ use crate::*;
 pub trait ArrayScatter: Debug {
     /// # Safety
     /// Note this doesn't do any bound checking, for performance reason.
+
+    /// scatter_unchecked() partitions the input array into multiple arrays.
+    /// _indices: an iterateor of vector whose length is the same as the array.
+    /// The element of _indices indicates which group the corresponding row
+    /// in the input array belongs to.
+    /// _scattered_size: the number of partitions
+    ///
+    /// Example: if the input array has five rows [1, 2, 3, 4] and
+    /// _indices = [0, 1, 0, 1] and _scatter_size = 2,
+    /// then the output would be a vector of two arrays: [1, 4] and [2, 3].
     unsafe fn scatter_unchecked(
         &self,
         _indices: &mut dyn Iterator<Item = u64>,
