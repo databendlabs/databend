@@ -13,6 +13,8 @@ fn test_scan_plan() -> Result<()> {
 
     let scan = PlanNode::Scan(ScanPlan {
         schema_name: "scan_test".to_string(),
+        table_id: 0,
+        table_version: None,
         table_schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
         table_args: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(

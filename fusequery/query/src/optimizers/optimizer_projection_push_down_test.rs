@@ -83,6 +83,8 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
         db: "system".to_string(),
         table: "test".to_string(),
+        table_id: 0,
+        table_version: None,
         schema: DataSchemaRefExt::create(vec![
             DataField::new("a", DataType::Utf8, false),
             DataField::new("b", DataType::Utf8, false),
@@ -134,6 +136,8 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
         db: "system".to_string(),
         table: "test".to_string(),
+        table_id: 0,
+        table_version: None,
         schema: DataSchemaRefExt::create(vec![
             DataField::new("a", DataType::Utf8, false),
             DataField::new("b", DataType::Utf8, false),

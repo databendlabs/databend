@@ -36,6 +36,8 @@ impl Test {
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
             db: "system".to_string(),
             table: "numbers_mt".to_string(),
+            table_id: 0,
+            table_version: None,
             schema,
             parts: Self::generate_partitions(8, total as u64),
             statistics: statistics.clone(),

@@ -13,6 +13,7 @@ common-functions = {path = "../functions"}
 common-exception = {path = "../exception"}
 common-datablocks = {path = "../datablocks"}
 common-infallible = {path = "../infallible"}
+common-metatypes= {path = "../metatypes"}
 
 # Github dependencies
 

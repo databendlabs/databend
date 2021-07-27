@@ -66,7 +66,7 @@ impl Processor for SourceTransform {
             self.ctx.get_table(db.as_str(), table.as_str())?
         };
 
-        let table_stream = table.read(self.ctx.clone(), &self.source_plan);
+        let table_stream = table.datasource().read(self.ctx.clone(), &self.source_plan);
 
         // We need to keep the block struct with the schema
         // Because the table may not support require columns
