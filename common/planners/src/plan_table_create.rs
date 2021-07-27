@@ -10,22 +10,24 @@ use common_datavalues::DataSchemaRef;
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum TableEngineType {
     /// Newline-delimited JSON
-    JsonEachRaw,
+    JSONEachRow,
     /// Apache Parquet columnar store
     Parquet,
     /// Comma separated values
     Csv,
     /// Null ENGINE
     Null,
+    Memory,
 }
 
 impl ToString for TableEngineType {
     fn to_string(&self) -> String {
         match self {
-            TableEngineType::JsonEachRaw => "JSON".into(),
+            TableEngineType::JSONEachRow => "JSON".into(),
             TableEngineType::Parquet => "Parquet".into(),
             TableEngineType::Csv => "CSV".into(),
             TableEngineType::Null => "Null".into(),
+            TableEngineType::Memory => "Memory".into(),
         }
     }
 }

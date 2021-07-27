@@ -39,12 +39,13 @@ common-tracing = { path = "../../common/tracing" }
 common-profling = { path = "../../common/profiling" }
 common-store-api = { path = "../../common/store-api" }
 common-management = { path = "../../common/management" }
+common-metatypes = { path = "../../common/metatypes" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0db7cfa" }
-clickhouse-srv = { git = "https://github.com/zhang2014/clickhouse-srv", branch = "support_abort" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193" }
+clickhouse-srv = "0.3.1"
 
 
 # Crates.io dependencies
@@ -77,7 +78,7 @@ tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.4"
 walkdir = "2.3.2"
-warp = "0.3.1"
+warp = { version = "0.3.1", features = ["tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 bumpalo = "3.7.0"
 
@@ -85,7 +86,7 @@ bumpalo = "3.7.0"
 [dev-dependencies]
 pretty_assertions = "0.7"
 criterion = "0.3"
-mysql = "21.0.0"
+mysql = "21.0.1"
 
 [build-dependencies]
 common-building = {path = "../../common/building"}

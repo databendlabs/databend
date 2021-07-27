@@ -32,6 +32,8 @@ fn test_default_config() -> Result<()> {
             store_api_password: "root".to_string(),
         },
         config_file: "".to_string(),
+        tls_server_cert: "".to_string(),
+        tls_server_key: "".to_string(),
     };
     let actual = Config::default();
     assert_eq!(actual, expect);

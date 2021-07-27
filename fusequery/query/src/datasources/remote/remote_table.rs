@@ -15,6 +15,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
+use common_planners::TruncateTablePlan;
 use common_store_api::ReadPlanResult;
 use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
@@ -115,14 +116,16 @@ impl Table for RemoteTable {
 
     async fn append_data(&self, _ctx: FuseQueryContextRef, plan: InsertIntoPlan) -> Result<()> {
         let opt_stream = {
-            let mut inner = plan.input_stream.lock().unwrap();
+            let mut inner = plan.input_stream.lock();
             (*inner).take()
         };
 
         {
             let block_stream =
                 opt_stream.ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
+
             let mut client = self.store_client_provider.try_get_client().await?;
+
             client
                 .append_data(
                     plan.db_name.clone(),
@@ -131,17 +134,14 @@ impl Table for RemoteTable {
                     block_stream,
                 )
                 .await?;
-
-            //            let mut um = UserMgr::new(client);
-            //            let a = "test";
-            //            um.get_users(&vec![a]).await;
-            //            um.add_user("user", "pass", "salt").await;
-            //            um.drop_user("user", None).await;
-            //            um.update_user("user", None, None, None).await;
-            //            um.get_users(&vec!["user"]).await;
-            //            um.get_all_users().await;
         }
 
+        Ok(())
+    }
+
+    async fn truncate(&self, _ctx: FuseQueryContextRef, plan: TruncateTablePlan) -> Result<()> {
+        let mut client = self.store_client_provider.try_get_client().await?;
+        client.truncate(plan.db.clone(), plan.table.clone()).await?;
         Ok(())
     }
 }
@@ -170,6 +170,8 @@ impl RemoteTable {
         ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name.clone(),
+            table_id: scan_plan.table_id,
+            table_version: scan_plan.table_version,
             schema: self.schema.clone(),
             parts: partitions,
             statistics,

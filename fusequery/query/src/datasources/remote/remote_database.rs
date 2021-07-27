@@ -2,26 +2,28 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_store_api::MetaApi;
 
+use crate::catalog::utils::InMemoryMetas;
+use crate::catalog::utils::TableFunctionMeta;
+use crate::catalog::utils::TableMeta;
 use crate::datasources::remote::remote_table::RemoteTable;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
 use crate::datasources::Database;
-use crate::datasources::Table;
-use crate::datasources::TableFunction;
 
 pub struct RemoteDatabase {
     name: String,
     store_client_provider: StoreClientProvider,
-    tables: RwLock<HashMap<String, Arc<dyn Table>>>,
+    tables: RwLock<InMemoryMetas>,
 }
 
 impl RemoteDatabase {
@@ -29,7 +31,7 @@ impl RemoteDatabase {
         RemoteDatabase {
             name,
             store_client_provider,
-            tables: RwLock::new(HashMap::default()),
+            tables: RwLock::new(InMemoryMetas::new()),
         }
     }
 }
@@ -48,29 +50,39 @@ impl Database for RemoteDatabase {
         false
     }
 
-    fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
-        match self.tables.read().get(_table_name) {
+    fn get_table(&self, _table_name: &str) -> Result<Arc<TableMeta>> {
+        match self.tables.read().name2meta.get(_table_name) {
             Some(tbl) => Ok(tbl.clone()),
-            None =>
-            // Depends on the degree of staleness we can tolerate ...
-            {
-                Err(ErrorCode::UnknownTable(_table_name))
-            }
+            None => Err(ErrorCode::UnknownTable(_table_name)),
         }
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        Ok(self.tables.read().values().cloned().collect())
+    fn get_table_by_id(
+        &self,
+        table_id: MetaId,
+        _table_version: Option<MetaVersion>,
+    ) -> Result<Arc<TableMeta>> {
+        match self.tables.read().id2meta.get(&table_id) {
+            Some(tbl) => Ok(tbl.clone()),
+            None => Err(ErrorCode::UnknownTable(format!(
+                "unknown table id {}",
+                table_id
+            ))),
+        }
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
+        Ok(self.tables.read().name2meta.values().cloned().collect())
+    }
+
+    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(vec![])
     }
 
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
         let db_name = plan.db.as_str();
         let table_name = plan.table.as_str();
-        if self.tables.read().get(table_name).is_some() {
+        if self.tables.read().name2meta.get(table_name).is_some() {
             return if plan.if_not_exists {
                 Ok(())
             } else {
@@ -92,16 +104,16 @@ impl Database for RemoteDatabase {
             plan.options,
         )?;
         let mut client = provider.try_get_client().await?;
-        client.create_table(clone).await.map(|_| {
+        client.create_table(clone).await.map(|t| {
             let mut tables = self.tables.write();
-            tables.insert(table.name().to_string(), Arc::from(table));
+            tables.insert(TableMeta::new(table.into(), t.table_id));
         })?;
         Ok(())
     }
 
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
         let table_name = plan.table.as_str();
-        if self.tables.read().get(table_name).is_none() {
+        if self.tables.read().name2meta.get(table_name).is_none() {
             return if plan.if_exists {
                 Ok(())
             } else {

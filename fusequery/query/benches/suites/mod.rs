@@ -7,8 +7,6 @@ use common_planners::PlanNode;
 use common_runtime::tokio;
 use criterion::Criterion;
 use fuse_query::interpreters::SelectInterpreter;
-use fuse_query::servers::MySQLConnection;
-use fuse_query::sessions::SessionRef;
 use fuse_query::sessions::SessionManager;
 use fuse_query::sql::PlanParser;
 use futures::StreamExt;

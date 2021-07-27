@@ -2,6 +2,8 @@
 <h1>Datafuse</h1>
 <strong>
 Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
+  
+Built to make the Data Cloud easy!
 </strong>
 
 <br>
@@ -20,10 +22,6 @@ Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
 <img src="https://codecov.io/gh/datafuselabs/datafuse/branch/master/graph/badge.svg" alt="codecov" />
 </a>
 
-<a href="https://deps.rs/repo/github/datafuselabs/datafuse">
-<img src="https://deps.rs/repo/github/datafuselabs/datafuse/status.svg" alt="dependency status" />
-</a>
-
 <img src="https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat" alt="patform" />
 
 <a href="https://opensource.org/licenses/Apache-2.0">
@@ -32,9 +30,6 @@ Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
 
 </div>
 </div>
-
-Datafuse is a Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture written
-in Rust, inspired by [ClickHouse](https://github.com/ClickHouse/ClickHouse) and powered by [arrow-rs](https://github.com/apache/arrow-rs), built to make it easy to power the Data Cloud.
 
 [![Stargazers over time](https://starchart.cc/datafuselabs/datafuse.svg)](https://starchart.cc/datafuselabs/datafuse)
 
@@ -84,35 +79,6 @@ Note:
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5)
 * FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
-## Status
-
-#### General
-
-- [x] SQL Parser
-- [x] Query Planner
-- [x] Query Optimizer
-- [x] Predicate Push Down
-- [x] Limit Push Down
-- [x] Projection Push Down
-- [x] Type coercion
-- [x] Parallel Query Execution
-- [x] Distributed Query Execution
-- [x] Shuffle Hash GroupBy
-- [x] Merge-Sort OrderBy
-- [ ] Joins (WIP)
-
-#### SQL Support
-
-- [x] Projection
-- [x] Filter (WHERE)
-- [x] Limit
-- [x] Aggregate Functions
-- [x] Scalar Functions
-- [x] UDF Functions
-- [x] SubQueries
-- [x] Sorting
-- [ ] Joins (WIP)
-- [ ] Window (TODO)
 
 ## Getting Started
 

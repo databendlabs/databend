@@ -37,6 +37,7 @@ use crate::sql::DfShowProcessList;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
+use crate::sql::DfTruncateTable;
 use crate::sql::DfUseDatabase;
 
 // Use `Parser::expected` instead, if possible
@@ -147,7 +148,6 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_explain()
                     }
-
                     Keyword::SHOW => {
                         self.parser.next_token();
 
@@ -164,6 +164,10 @@ impl<'a> DfParser<'a> {
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
+                    }
+                    Keyword::TRUNCATE => {
+                        self.parser.next_token();
+                        self.parse_truncate()
                     }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
@@ -448,16 +452,17 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match &*w.value {
                 "Parquet" => Ok(TableEngineType::Parquet),
-                "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
+                "JSONEachRow" => Ok(TableEngineType::JSONEachRow),
                 "CSV" => Ok(TableEngineType::Csv),
                 "Null" => Ok(TableEngineType::Null),
+                "Memory" => Ok(TableEngineType::Memory),
                 _ => self.expected(
-                    "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                    "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                     Token::Word(w),
                 ),
             },
             unexpected => self.expected(
-                "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                 unexpected,
             ),
         }
@@ -475,6 +480,20 @@ impl<'a> DfParser<'a> {
                 _ => self.expected("show create statement", Token::Word(w)),
             },
             unexpected => self.expected("show create statement", unexpected),
+        }
+    }
+
+    fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => {
+                    let table_name = self.parser.parse_object_name()?;
+                    let trunc = DfTruncateTable { name: table_name };
+                    Ok(DfStatement::TruncateTable(trunc))
+                }
+                _ => self.expected("truncate statement", Token::Word(w)),
+            },
+            unexpected => self.expected("truncate statement", unexpected),
         }
     }
 

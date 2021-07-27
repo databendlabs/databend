@@ -9,6 +9,9 @@
 #[macro_use]
 mod macros;
 
+#[cfg(test)]
+mod data_array_filter_test;
+
 #[allow(dead_code)]
 mod bit_util;
 mod data_array_filter;
@@ -27,6 +30,9 @@ mod data_value_ops;
 #[allow(dead_code)]
 mod utils;
 mod vec;
+
+#[cfg(test)]
+mod vec_test;
 
 pub mod arrays;
 pub mod columns;

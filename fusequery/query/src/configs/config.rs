@@ -74,6 +74,9 @@ const CLUSTER_REGISTRY_URI: &str = "CLUSTER_REGISTRY_URI";
 const CLUSTER_EXECUTOR_NAME: &str = "CLUSTER_EXECUTOR_NAME";
 const CLUSTER_EXECUTOR_PRIORITY: &str = "CLUSTER_EXECUTOR_PRIORITY";
 
+const TLS_SERVER_CERT: &str = "TLS_SERVER_CERT";
+const TLS_SERVER_KEY: &str = "TLS_SERVER_KEY";
+
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
@@ -164,6 +167,12 @@ pub struct Config {
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
+
+    #[structopt(long, env = TLS_SERVER_CERT, default_value = "")]
+    pub tls_server_cert: String,
+
+    #[structopt(long, env = TLS_SERVER_KEY, default_value = "")]
+    pub tls_server_key: String,
 }
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
@@ -259,6 +268,8 @@ impl Config {
             cluster_executor_name: "".to_string(),
             cluster_executor_priority: 0,
             config_file: "".to_string(),
+            tls_server_cert: "".to_string(),
+            tls_server_key: "".to_string(),
         }
     }
 

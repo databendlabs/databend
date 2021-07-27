@@ -182,19 +182,21 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
     let cases: Vec<T> = vec![
         case("foo", None, Some(1)),
-        case("foo", Some(1), None),
+        case("foo", Some(1), Some(1)),
         case("bar", None, Some(2)),
-        case("bar", Some(2), None),
+        case("bar", Some(2), Some(2)),
         case("wow", None, Some(3)),
     ];
 
-    for c in cases.iter() {
+    for (i, c) in cases.iter().enumerate() {
         // add
 
         let resp = m.apply_non_dup(&LogEntry {
             txid: None,
-            cmd: Cmd::AddDatabase {
+            cmd: Cmd::CreateDatabase {
                 name: c.name.to_string(),
+                if_not_exists: true,
+                db: Default::default(),
             },
         })?;
         assert_eq!(
@@ -202,7 +204,9 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
                 prev: c.prev.clone(),
                 result: c.result.clone(),
             },
-            resp
+            resp,
+            "{}-th",
+            i
         );
 
         // get

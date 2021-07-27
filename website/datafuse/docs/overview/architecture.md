@@ -9,11 +9,11 @@ title: Architecture
 
 ## FuseQuery
   
-  [FuseQuery](https://github.com/datafuselabs/datafuse/tree/master/fusequery) is a Distributed Query Engine(Inspired by ClickHouse) at scale
+  [FuseQuery](https://github.com/datafuselabs/datafuse/tree/master/fusequery) is a Distributed Query Engine at scale.
 
 ## FuseStore
 
-[FuseStore](https://github.com/datafuselabs/datafuse/tree/master/fusestore) is a Distributed Table Storage Engine(Inspired by ClickHouse MergeTree) at scale.
+[FuseStore](https://github.com/datafuselabs/datafuse/tree/master/fusestore) is a Distributed Table Storage Engine at scale.
 
 
 

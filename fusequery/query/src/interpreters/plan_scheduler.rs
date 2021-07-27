@@ -767,12 +767,13 @@ impl PlanScheduler {
     }
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
-        let table = self.query_context.get_table(&plan.db, &plan.table)?;
+        let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
+        let table = table_meta.datasource();
 
         match table.is_local() {
             true => self.visit_local_data_source(plan),
             false => {
-                let cluster_source = self.cluster_source(&plan.scan_plan, table)?;
+                let cluster_source = self.cluster_source(&plan.scan_plan, table.clone())?;
                 self.visit_cluster_data_source(&cluster_source)
             }
         }

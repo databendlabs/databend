@@ -7,21 +7,40 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalog::constants::SYS_TBL_ID_BEGIN;
+use crate::catalog::constants::SYS_TBL_ID_END;
+use crate::catalog::utils::InMemoryMetas;
+use crate::catalog::utils::TableFunctionMeta;
+use crate::catalog::utils::TableMeta;
 use crate::datasources::system;
 use crate::datasources::Database;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 
 pub struct SystemDatabase {
-    tables: HashMap<String, Arc<dyn Table>>,
-    table_functions: HashMap<String, Arc<dyn TableFunction>>,
+    tables: InMemoryMetas,
+    table_functions: HashMap<String, Arc<TableFunctionMeta>>,
 }
 
 impl SystemDatabase {
     pub fn create() -> Self {
+        let mut id = SYS_TBL_ID_BEGIN;
+        let mut next_id = || -> u64 {
+            // 10000 table ids reserved for system tables
+            if id >= SYS_TBL_ID_END {
+                // Fatal error, gives up
+                panic!("system table id used up")
+            } else {
+                let r = id;
+                id += 1;
+                r
+            }
+        };
         // Table list.
         let table_list: Vec<Arc<dyn Table>> = vec![
             Arc::new(system::OneTable::create()),
@@ -37,9 +56,12 @@ impl SystemDatabase {
             Arc::new(system::TracingTable::create()),
             Arc::new(system::ProcessesTable::create()),
         ];
-        let mut tables: HashMap<String, Arc<dyn Table>> = HashMap::default();
-        for tbl in table_list.iter() {
-            tables.insert(tbl.name().to_string(), tbl.clone());
+        let tbl_meta_list = table_list
+            .iter()
+            .map(|t| TableMeta::new(t.clone(), next_id()));
+        let mut tables = InMemoryMetas::new();
+        for tbl in tbl_meta_list.into_iter() {
+            tables.insert(tbl);
         }
 
         // Table function list.
@@ -48,9 +70,12 @@ impl SystemDatabase {
             Arc::new(system::NumbersTable::create("numbers_mt")),
             Arc::new(system::NumbersTable::create("numbers_local")),
         ];
-        let mut table_functions: HashMap<String, Arc<dyn TableFunction>> = HashMap::default();
+        let mut table_functions = HashMap::default();
         for tbl_func in table_function_list.iter() {
-            table_functions.insert(tbl_func.name().to_string(), tbl_func.clone());
+            table_functions.insert(
+                tbl_func.name().to_string(),
+                Arc::new(TableFunctionMeta::new(tbl_func.clone(), next_id())),
+            );
         }
 
         SystemDatabase {
@@ -74,19 +99,31 @@ impl Database for SystemDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table = self
-            .tables
-            .get(table_name)
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
+    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
+        let table =
+            self.tables.name2meta.get(table_name).ok_or_else(|| {
+                ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
+            })?;
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        Ok(self.tables.values().cloned().collect())
+    fn get_table_by_id(
+        &self,
+        table_id: MetaId,
+        _table_version: Option<MetaVersion>,
+    ) -> Result<Arc<TableMeta>> {
+        let table =
+            self.tables.id2meta.get(&table_id).ok_or_else(|| {
+                ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
+            })?;
+        Ok(table.clone())
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>> {
+    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
+        Ok(self.tables.name2meta.values().cloned().collect())
+    }
+
+    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(self.table_functions.values().cloned().collect())
     }
 

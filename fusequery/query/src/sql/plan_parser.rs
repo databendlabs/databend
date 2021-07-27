@@ -4,13 +4,13 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_infallible::Mutex;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::expand_wildcard;
 use common_planners::expr_as_column_expr;
@@ -35,6 +35,8 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SettingPlan;
 use common_planners::ShowCreateTablePlan;
+use common_planners::TableScanInfo;
+use common_planners::TruncateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use common_tracing::tracing;
@@ -47,7 +49,6 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use crate::datasources::Table;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -61,6 +62,7 @@ use crate::sql::DfHint;
 use crate::sql::DfParser;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfStatement;
+use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
 
 pub struct PlanParser {
@@ -111,6 +113,7 @@ impl PlanParser {
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(v),
             DfStatement::DescribeTable(v) => self.sql_describe_table_to_plan(v),
             DfStatement::DropTable(v) => self.sql_drop_table_to_plan(v),
+            DfStatement::TruncateTable(v) => self.sql_truncate_table_to_plan(v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(v),
             DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
 
@@ -321,84 +324,108 @@ impl PlanParser {
         }))
     }
 
+    // DfTruncateTable to plan.
+    #[tracing::instrument(level = "info", skip(self, truncate), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_truncate_table_to_plan(&self, truncate: &DfTruncateTable) -> Result<PlanNode> {
+        let mut db = self.ctx.get_current_database();
+        if truncate.name.0.is_empty() {
+            return Result::Err(ErrorCode::SyntaxException(
+                "TruncateTable table name is empty",
+            ));
+        }
+        let mut table = truncate.name.0[0].value.clone();
+        if truncate.name.0.len() > 1 {
+            db = table;
+            table = truncate.name.0[1].value.clone();
+        }
+
+        Ok(PlanNode::TruncateTable(TruncateTablePlan { db, table }))
+    }
+
     #[tracing::instrument(level = "info", skip(self, table_name, columns, source), fields(ctx.id = self.ctx.get_id().as_str()))]
     fn insert_to_plan(
         &self,
         table_name: &ObjectName,
         columns: &[Ident],
-        source: &Query,
+        source: &Option<Box<Query>>,
     ) -> Result<PlanNode> {
-        if let sqlparser::ast::SetExpr::Values(ref vs) = source.body {
-            //            let col_num = columns.len();
-            let db_name = self.ctx.get_current_database();
-            let tbl_name = table_name
-                .0
-                .get(0)
-                .ok_or_else(|| ErrorCode::SyntaxException("empty table name now allowed"))?
-                .value
-                .clone();
+        let mut db_name = self.ctx.get_current_database();
+        let mut tbl_name = table_name.0[0].value.clone();
 
-            let values = &vs.0;
-            if values.is_empty() {
-                return Err(ErrorCode::EmptyData(
-                    "empty values for insertion is not allowed",
-                ));
-            }
+        if table_name.0.len() > 1 {
+            db_name = tbl_name;
+            tbl_name = table_name.0[1].value.clone();
+        }
+        let table = self.ctx.get_datasource().get_table(&db_name, &tbl_name)?;
 
-            let all_value = values
-                .iter()
-                .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
-            if !all_value {
-                return Err(ErrorCode::UnImplement(
-                    "not support value expressions other than literal value yet",
-                ));
-            }
-            // Buffers some chunks if possible
-            let chunks = values.chunks(100);
+        let mut schema = table.datasource().schema()?;
+
+        if !columns.is_empty() {
             let fields = columns
                 .iter()
-                .map(|ident| DataField::new(&ident.value, DataType::Utf8, true))
-                .collect::<Vec<_>>();
-            let schema = DataSchemaRefExt::create(fields);
+                .map(|ident| schema.field_with_name(&ident.value).map(|v| v.clone()))
+                .collect::<Result<Vec<_>>>()?;
 
-            let blocks: Vec<DataBlock> = chunks
-                .map(|chunk| {
-                    let transposed: Vec<Vec<String>> = (0..chunk[0].len())
-                        .map(|i| {
-                            chunk
-                                .iter()
-                                .map(|inner| match &inner[i] {
-                                    Expr::Value(v) => v.to_string(),
-                                    _ => "N/A".to_string(),
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .collect();
-
-                    let cols = transposed
-                        .iter()
-                        .map(|col| {
-                            Series::new(col.iter().map(|s| s as &str).collect::<Vec<&str>>())
-                        })
-                        .collect::<Vec<_>>();
-
-                    DataBlock::create_by_array(schema.clone(), cols)
-                })
-                .collect();
-            let input_stream = futures::stream::iter(blocks);
-            let plan_node = InsertIntoPlan {
-                db_name,
-                tbl_name,
-                schema,
-                // this is crazy, please do not keep it, I am just test driving apis
-                input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
-            };
-            Ok(PlanNode::InsertInto(plan_node))
-        } else {
-            Err(ErrorCode::UnImplement(
-                "only supports simple value tuples as source of insertion",
-            ))
+            schema = DataSchemaRefExt::create(fields);
         }
+
+        let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
+        if let Some(source) = source {
+            if let sqlparser::ast::SetExpr::Values(vs) = &source.body {
+                let values = &vs.0;
+                if values.is_empty() {
+                    return Err(ErrorCode::EmptyData(
+                        "empty values for insertion is not allowed",
+                    ));
+                }
+
+                let all_value = values
+                    .iter()
+                    .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
+                if !all_value {
+                    return Err(ErrorCode::UnImplement(
+                        "not support value expressions other than literal value yet",
+                    ));
+                }
+                // Buffers some chunks if possible
+                let chunks = values.chunks(100);
+
+                let blocks: Vec<DataBlock> = chunks
+                    .map(|chunk| {
+                        let transposed: Vec<Vec<String>> = (0..chunk[0].len())
+                            .map(|i| {
+                                chunk
+                                    .iter()
+                                    .map(|inner| match &inner[i] {
+                                        Expr::Value(v) => v.to_string(),
+                                        _ => "N/A".to_string(),
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect();
+
+                        let cols = transposed
+                            .iter()
+                            .map(|col| {
+                                Series::new(col.iter().map(|s| s as &str).collect::<Vec<&str>>())
+                            })
+                            .collect::<Vec<_>>();
+
+                        DataBlock::create_by_array(schema.clone(), cols)
+                    })
+                    .collect();
+                input_stream = futures::stream::iter(blocks);
+            }
+        }
+
+        let plan_node = InsertIntoPlan {
+            db_name,
+            tbl_name,
+            schema,
+            // this is crazy, please do not keep it, I am just test driving apis
+            input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
+        };
+        Ok(PlanNode::InsertInto(plan_node))
     }
 
     /// Generate a logic plan from an SQL query
@@ -622,24 +649,36 @@ impl PlanParser {
         let db_name = "system";
         let table_name = "one";
 
-        self.ctx.get_table(db_name, table_name).and_then(|table| {
-            table
-                .schema()
-                .and_then(|ref schema| {
-                    PlanBuilder::scan(db_name, table_name, schema, None, None, None)
-                })
-                .and_then(|builder| builder.build())
-                .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                    PlanNode::Scan(ref dummy_scan_plan) => table
-                        .read_plan(
-                            self.ctx.clone(),
-                            dummy_scan_plan,
-                            self.ctx.get_settings().get_max_threads()? as usize,
-                        )
-                        .map(PlanNode::ReadSource),
-                    _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
-                })
-        })
+        self.ctx
+            .get_table(db_name, table_name)
+            .and_then(|table_meta| {
+                let table = table_meta.datasource();
+                let table_id = table_meta.meta_id();
+                let table_version = table_meta.meta_ver();
+                table
+                    .schema()
+                    .and_then(|ref schema| {
+                        let tbl_scan_info = TableScanInfo {
+                            table_name,
+                            table_id,
+                            table_version,
+                            table_schema: schema.as_ref(),
+                            table_args: None,
+                        };
+                        PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+                    })
+                    .and_then(|builder| builder.build())
+                    .and_then(|dummy_scan_plan| match dummy_scan_plan {
+                        PlanNode::Scan(ref dummy_scan_plan) => table
+                            .read_plan(
+                                self.ctx.clone(),
+                                dummy_scan_plan,
+                                self.ctx.get_settings().get_max_threads()? as usize,
+                            )
+                            .map(PlanNode::ReadSource),
+                        _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
+                    })
+            })
     }
 
     fn plan_table_with_joins(&self, t: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
@@ -656,7 +695,9 @@ impl PlanParser {
                     table_name = name.0[1].to_string();
                 }
                 let mut table_args = None;
-                let table: Arc<dyn Table>;
+                let meta_id;
+                let meta_version;
+                let table;
 
                 // only table functions has table args
                 if !args.is_empty() {
@@ -676,25 +717,30 @@ impl PlanParser {
                         }
                     }
 
-                    let table_function = self.ctx.get_table_function(&table_name)?;
+                    let func_meta = self.ctx.get_table_function(&table_name)?;
+                    meta_id = func_meta.meta_id();
+                    meta_version = func_meta.meta_ver();
+                    let table_function = func_meta.datasource().clone();
                     table_name = table_function.name().to_string();
-                    db_name = table_function.db().to_string();
                     table = table_function.as_table();
                 } else {
-                    table = self.ctx.get_table(&db_name, table_name.as_str())?;
+                    let table_meta = self.ctx.get_table(&db_name, &table_name)?;
+                    meta_id = table_meta.meta_id();
+                    meta_version = table_meta.meta_ver();
+                    table = table_meta.datasource().clone();
                 }
 
                 let scan = {
                     table.schema().and_then(|schema| {
-                        PlanBuilder::scan(
-                            &db_name,
-                            &table_name,
-                            schema.as_ref(),
-                            None,
+                        let tbl_scan_info = TableScanInfo {
+                            table_name: &table_name,
+                            table_id: meta_id,
+                            table_version: meta_version,
+                            table_schema: schema.as_ref(),
                             table_args,
-                            None,
-                        )
-                        .and_then(|builder| builder.build())
+                        };
+                        PlanBuilder::scan(&db_name, tbl_scan_info, None, None)
+                            .and_then(|builder| builder.build())
                     })
                 };
 

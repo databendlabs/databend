@@ -301,10 +301,15 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
     // - db name to create
     // - expected db id
-    let cases: Vec<(&str, u64)> = vec![("foo", 1), ("bar", 2), ("foo", 1), ("bar", 2)];
+    let cases: Vec<(&str, bool, u64)> = vec![
+        ("foo", true, 1),
+        ("bar", true, 2),
+        ("foo", true, 1),
+        ("bar", true, 2),
+    ];
 
     // Sending AddDatabase request to any node is ok.
-    for (i, (name, want_id)) in cases.iter().enumerate() {
+    for (i, (name, not_exists, want_id)) in cases.iter().enumerate() {
         let mn = &all[i as usize];
 
         let last_applied = mn.raft.metrics().borrow().last_applied;
@@ -312,8 +317,10 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
         let rst = mn
             .write(LogEntry {
                 txid: None,
-                cmd: Cmd::AddDatabase {
+                cmd: Cmd::CreateDatabase {
                     name: name.to_string(),
+                    if_not_exists: *not_exists,
+                    db: Default::default(),
                 },
             })
             .await;

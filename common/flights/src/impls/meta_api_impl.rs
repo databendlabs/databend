@@ -9,6 +9,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 pub use common_store_api::CreateDatabaseActionResult;
 pub use common_store_api::CreateTableActionResult;
+pub use common_store_api::DatabaseMetaReply;
 pub use common_store_api::DropDatabaseActionResult;
 pub use common_store_api::DropTableActionResult;
 pub use common_store_api::GetDatabaseActionResult;
@@ -70,82 +71,93 @@ impl MetaApi for StoreClient {
     ) -> common_exception::Result<GetTableActionResult> {
         self.do_action(GetTableAction { db, table }).await
     }
+
+    async fn get_database_meta(
+        &mut self,
+        ver_lower_bound: Option<u64>,
+    ) -> common_exception::Result<DatabaseMetaReply> {
+        self.do_action(GetDatabaseMetaAction { ver_lower_bound })
+            .await
+    }
 }
 
+// == database actions ==
+// - create database
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CreateDatabaseAction {
     pub plan: CreateDatabasePlan,
 }
-
-// === database: get ===
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct GetDatabaseAction {
-    pub db: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropDatabaseAction {
-    pub plan: DropDatabasePlan,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateTableAction {
-    pub plan: CreateTablePlan,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropTableAction {
-    pub plan: DropTablePlan,
-}
-
-impl RequestFor for DropTableAction {
-    type Reply = DropTableActionResult;
-}
-
-impl From<DropTableAction> for StoreDoAction {
-    fn from(act: DropTableAction) -> Self {
-        StoreDoAction::DropTable(act)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableAction {
-    pub db: String,
-    pub table: String,
-}
-
-action_declare!(
-    CreateTableAction,
-    CreateTableActionResult,
-    StoreDoAction::CreateTable
-);
-
-action_declare!(
-    GetTableAction,
-    GetTableActionResult,
-    StoreDoAction::GetTable
-);
-
 action_declare!(
     CreateDatabaseAction,
     CreateDatabaseActionResult,
     StoreDoAction::CreateDatabase
 );
 
-action_declare!(
-    DropDatabaseAction,
-    DropDatabaseActionResult,
-    StoreDoAction::DropDatabase
-);
-
+// - get database
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct GetDatabaseAction {
+    pub db: String,
+}
 action_declare!(
     GetDatabaseAction,
     GetDatabaseActionResult,
     StoreDoAction::GetDatabase
 );
 
-// === database: create ===
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DropDatabaseAction {
+    pub plan: DropDatabasePlan,
+}
+action_declare!(
+    DropDatabaseAction,
+    DropDatabaseActionResult,
+    StoreDoAction::DropDatabase
+);
 
-// === table: drop ===
+// == table actions ==
+// - create table
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CreateTableAction {
+    pub plan: CreateTablePlan,
+}
+action_declare!(
+    CreateTableAction,
+    CreateTableActionResult,
+    StoreDoAction::CreateTable
+);
 
-// === table: get ===
+// - drop table
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DropTableAction {
+    pub plan: DropTablePlan,
+}
+action_declare!(
+    DropTableAction,
+    DropTableActionResult,
+    StoreDoAction::DropTable
+);
+
+// - get table
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetTableAction {
+    pub db: String,
+    pub table: String,
+}
+action_declare!(
+    GetTableAction,
+    GetTableActionResult,
+    StoreDoAction::GetTable
+);
+
+// - get database meta
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetDatabaseMetaAction {
+    pub ver_lower_bound: Option<u64>,
+}
+
+action_declare!(
+    GetDatabaseMetaAction,
+    DatabaseMetaReply,
+    StoreDoAction::GetDatabaseMeta
+);

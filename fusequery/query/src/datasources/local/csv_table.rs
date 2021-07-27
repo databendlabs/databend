@@ -90,6 +90,8 @@ impl Table for CsvTable {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
+            table_id: scan.table_id,
+            table_version: scan.table_version,
             schema: self.schema.clone(),
             parts: Common::generate_parts(
                 start_line as u64,

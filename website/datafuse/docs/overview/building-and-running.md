@@ -11,13 +11,15 @@ This document describes how to build and run [FuseQuery](https://github.com/data
 === "Run with Docker(Recommended)"
 
     ```markdown
-    $ docker pull datafusedev/fuse-query
-    $ docker run --init --rm -p 3307:3307 datafusedev/fuse-query
+    $ docker pull datafuselabs/datafuse
+    $ docker run --init --rm -p 3307:3307 datafuselabs/datafuse
     ```
 
 === "Release binary"
 
-    Download: [datafuse/releases](https://github.com/datafuselabs/datafuse/releases)
+    ```markdown
+    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/datafuse/master/scripts/installer/install-datafuse.sh | bash
+    ```
 
 === "From source"
 

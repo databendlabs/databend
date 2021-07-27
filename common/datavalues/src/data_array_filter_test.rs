@@ -2,61 +2,49 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
+use pretty_assertions::assert_eq;
+
+use crate::prelude::*;
+
 #[test]
 fn filter_batch_array() -> Result<()> {
-    use std::sync::Arc;
-
-    use pretty_assertions::assert_eq;
-
-    use super::*;
-
     #[allow(dead_code)]
     struct FilterArrayTest {
         name: &'static str,
-        filter: BooleanArray,
-        expect: Vec<DataArrayRef>,
+        filter: DFBooleanArray,
+        expect: Vec<Series>,
     }
 
-    let batch_array: Vec<DataArrayRef> = vec![
-        Arc::new(Int64Array::from(vec![1, 2, 3, 4, 5])),
-        Arc::new(Int64Array::from(vec![6, 7, 8, 9, 10])),
+    let batch_array = vec![
+        Series::new(vec![1, 2, 3, 4, 5]),
+        Series::new(vec![6, 7, 8, 9, 10]),
     ];
 
     let tests = vec![
         FilterArrayTest {
             name: "normal filter",
-            filter: BooleanArray::from(vec![true, false, true, false, true]),
-            expect: vec![
-                Arc::new(Int64Array::from(vec![1, 3, 5])),
-                Arc::new(Int64Array::from(vec![6, 8, 10])),
-            ],
+            filter: DFBooleanArray::new_from_slice(&vec![true, false, true, false, true]),
+            expect: vec![Series::new(vec![1, 3, 5]), Series::new(vec![6, 8, 10])],
         },
         FilterArrayTest {
             name: "filter contain null",
-            filter: {
-                let mut filter = BooleanArray::builder(5);
-                filter.append_slice(&[true, false, true])?;
-                filter.append_null()?;
-                filter.append_null()?;
-                filter.finish()
-            },
-            expect: vec![
-                Arc::new(Int64Array::from(vec![1, 3])),
-                Arc::new(Int64Array::from(vec![6, 8])),
-            ],
+            filter: DFBooleanArray::new_from_opt_slice(&vec![
+                Some(true),
+                Some(false),
+                Some(true),
+                None,
+                None,
+            ]),
+            expect: vec![Series::new(vec![1, 3]), Series::new(vec![6, 8])],
         },
     ];
 
     for t in tests {
-        let result = DataArrayFilter::filter_batch_array(batch_array.to_vec(), &t.filter)?;
+        let result = DataArrayFilter::filter_batch_array(batch_array.clone(), &t.filter)?;
         assert_eq!(t.expect.len(), result.len());
         for i in 0..t.expect.len() {
-            assert_eq!(
-                result.get(i).as_ref(),
-                t.expect.get(i).as_ref(),
-                "{}",
-                t.name
-            )
+            assert!(result[i].series_equal(&(t.expect[i])), "{}", t.name)
         }
     }
 

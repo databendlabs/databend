@@ -4,6 +4,9 @@
 mod arrow_array;
 mod data_array;
 
+#[cfg(test)]
+mod data_array_test;
+
 #[macro_use]
 mod arithmetic;
 mod builders;

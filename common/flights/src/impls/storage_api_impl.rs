@@ -23,11 +23,13 @@ pub use common_store_api::DataPartInfo;
 pub use common_store_api::ReadAction;
 pub use common_store_api::ReadPlanResult;
 pub use common_store_api::StorageApi;
+pub use common_store_api::TruncateTableResult;
 use common_streams::SendableDataBlockStream;
 use futures::SinkExt;
 use futures::StreamExt;
 use tonic::Request;
 
+use crate::action_declare;
 use crate::impls::storage_api_impl_utils;
 pub use crate::impls::storage_api_impl_utils::get_meta;
 use crate::RequestFor;
@@ -39,16 +41,18 @@ use crate::StoreDoGet;
 pub struct ReadPlanAction {
     pub scan_plan: ScanPlan,
 }
+action_declare!(ReadPlanAction, ReadPlanResult, StoreDoAction::ReadPlan);
 
-impl RequestFor for ReadPlanAction {
-    type Reply = ReadPlanResult;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct TruncateTableAction {
+    pub db: String,
+    pub table: String,
 }
-
-impl From<ReadPlanAction> for StoreDoAction {
-    fn from(act: ReadPlanAction) -> Self {
-        StoreDoAction::ReadPlan(act)
-    }
-}
+action_declare!(
+    TruncateTableAction,
+    TruncateTableResult,
+    StoreDoAction::TruncateTable
+);
 
 #[async_trait::async_trait]
 impl StorageApi for StoreClient {
@@ -96,7 +100,6 @@ impl StorageApi for StoreClient {
         let arrow_schema: ArrowSchemaRef = Arc::new(scheme_ref.to_arrow());
         let flight_schema = SchemaAsIpc::new(arrow_schema.as_ref(), &ipc_write_opt).into();
         let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
-
         tx.send(flight_schema)
             .await
             .map_err(|send_err| ErrorCode::BrokenChannel(send_err.to_string()))?;
@@ -135,5 +138,13 @@ impl StorageApi for StoreClient {
         let put_result = res.into_inner().next().await.context("empty response")??;
         let vec = serde_json::from_slice(&put_result.app_metadata)?;
         Ok(vec)
+    }
+
+    async fn truncate(
+        &mut self,
+        db: String,
+        table: String,
+    ) -> common_exception::Result<TruncateTableResult> {
+        self.do_action(TruncateTableAction { db, table }).await
     }
 }

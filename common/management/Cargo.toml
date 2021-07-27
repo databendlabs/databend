@@ -23,5 +23,6 @@ sha2 = "0.9.5"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
+tokio = { version = "1.8.2", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 mockall = "0.10.2"
-common-metatypes = {path = "../metatypes"}
+common-metatypes = { path = "../metatypes" }

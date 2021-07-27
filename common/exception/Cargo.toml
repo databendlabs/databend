@@ -18,5 +18,5 @@ tonic = "0.4.3"
 ureq =  "2.1.1"
 
 # Github dependencies
-sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0db7cfa"}
+sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193"}
 

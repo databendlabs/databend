@@ -65,6 +65,8 @@ impl Table for TablesTable {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
+            table_id: scan.table_id,
+            table_version: scan.table_version,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),
@@ -85,8 +87,14 @@ impl Table for TablesTable {
         let database_tables = ctx.get_datasource().get_all_tables()?;
 
         let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
-        let names: Vec<&str> = database_tables.iter().map(|(_, v)| v.name()).collect();
-        let engines: Vec<&str> = database_tables.iter().map(|(_, v)| v.engine()).collect();
+        let names: Vec<&str> = database_tables
+            .iter()
+            .map(|(_, v)| v.datasource().name())
+            .collect();
+        let engines: Vec<&str> = database_tables
+            .iter()
+            .map(|(_, v)| v.datasource().engine())
+            .collect();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Series::new(databases),

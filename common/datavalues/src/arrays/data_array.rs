@@ -5,10 +5,12 @@
 use std::convert::TryFrom;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
+use std::ops::BitAnd;
 use std::sync::Arc;
 
 use common_arrow::arrow::array as arrow_array;
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
@@ -220,6 +222,42 @@ where T: DFDataType
                 other
             ))),
         }
+    }
+
+    // Apply BitAnd with the null masks and generate a new ArrayData
+    pub fn apply_null_mask(&self, mask: impl AsRef<[u8]>) -> Result<Self> {
+        let mask = mask.as_ref();
+        if mask.len() != self.len() {
+            return Err(ErrorCode::BadDataArrayLength(format!(
+                "cannot apply null mask, size not matched, got: {}, expect: {}",
+                mask.len(),
+                self.len(),
+            )));
+        }
+        let mut builder = BooleanBufferBuilder::new(mask.len());
+        for b in mask.iter() {
+            builder.append(*b > 0);
+        }
+        let buffer = builder.finish();
+        let data = self.array.data();
+        let bitmap = Bitmap::from(buffer);
+
+        let bitmap_and = if let Some(b) = data.null_bitmap() {
+            b.bitand(&bitmap)?
+        } else {
+            bitmap
+        };
+
+        let array_data = ArrayData::new(
+            T::data_type().to_arrow(),
+            data.len(),
+            None,
+            Some(bitmap_and.into_buffer()),
+            data.offset(),
+            data.buffers().to_owned(),
+            data.child_data().to_owned(),
+        );
+        Ok(make_array(array_data).into())
     }
 }
 

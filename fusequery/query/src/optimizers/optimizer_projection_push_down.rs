@@ -104,6 +104,8 @@ impl PlanRewriter for ProjectionPushDownImpl {
                 PlanNode::ReadSource(ReadDataSourcePlan {
                     db: plan.db.to_string(),
                     table: plan.table.to_string(),
+                    table_id: plan.table_id,
+                    table_version: plan.table_version,
                     schema: projected_schema,
                     parts: plan.parts.clone(),
                     statistics: plan.statistics.clone(),
