@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use datafuse_cli::cmds::RootCommand;
+use datafuse_cli::cmds::Processor;
 use datafuse_cli::error::Result;
-use structopt::StructOpt;
 
 fn main() -> Result<()> {
-    let root: RootCommand = RootCommand::from_args();
-    futures::executor::block_on(root.execute())
+    let mut processor = Processor::create();
+    processor.process_run()
 }
