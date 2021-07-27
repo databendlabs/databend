@@ -273,8 +273,7 @@ impl Config {
 
     /// Load configs from toml file.
     pub fn load_from_toml(file: &str) -> Result<Self> {
-        let context = std::fs::read_to_string(file)
-            .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+        let context = std::fs::read_to_string(file)?;
         let mut cfg = Config::from_args_with_toml(context.as_str())
             .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
         if cfg.num_cpus == 0 {

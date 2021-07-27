@@ -143,7 +143,8 @@ impl Session {
     }
 
     pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
-        self.sessions.try_get_executors()
+        let cluster_manager = self.sessions.get_cluster_manager();
+        cluster_manager.get_executors_by_namespace("".to_string())
     }
 
     pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {

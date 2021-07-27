@@ -40,7 +40,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
         let flight_dispatcher = FuseQueryFlightDispatcher::create();
 
-        let sessions = try_create_sessions()?;
+        let sessions = with_max_connections_sessions()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
         flight_dispatcher.shuffle_action(
@@ -81,7 +81,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
         let flight_dispatcher = FuseQueryFlightDispatcher::create();
 
-        let sessions = try_create_sessions()?;
+        let sessions = with_max_connections_sessions()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
         flight_dispatcher.shuffle_action(

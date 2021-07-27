@@ -10,14 +10,14 @@ pub struct NodeIdentifier {
     name: String,
 }
 
-pub struct UnregisterAction {
-    name: NodeIdentifier,
+pub struct RemoveAction {
+    name: String,
     sessions: SessionManagerRef,
 }
 
-impl UnregisterAction {
-    pub fn create(name: NodeIdentifier, sessions: SessionManagerRef) -> UnregisterAction {
-        UnregisterAction { name, sessions }
+impl RemoveAction {
+    pub fn create(name: String, sessions: SessionManagerRef) -> RemoveAction {
+        RemoveAction { name, sessions }
     }
 
     fn unregister_cluster_executor(&self) -> Result<String> {
@@ -26,11 +26,11 @@ impl UnregisterAction {
     }
 }
 
-impl Reply for UnregisterAction {
+impl Reply for RemoveAction {
     fn into_response(self) -> Response {
         match self.unregister_cluster_executor() {
             Err(error) => error.into_response(),
-            Ok(message) => StatusCode::OK.into_with_body_response(message),
+            Ok(message) => StatusCode::ACCEPTED.into_with_body_response(message),
         }
     }
 }

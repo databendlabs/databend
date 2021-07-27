@@ -12,6 +12,7 @@ use fuse_query::sessions::SessionRef;
 use fuse_query::sessions::SessionManager;
 use fuse_query::sql::PlanParser;
 use futures::StreamExt;
+use fuse_query::tests::with_max_connections_sessions;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;
@@ -19,7 +20,7 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-    let session_manager = SessionManager::try_create(1)?;
+    let session_manager = with_max_connections_sessions(1)?;
     let executor_session = session_manager.create_session("Benches")?;
     let ctx = executor_session.create_context();
 

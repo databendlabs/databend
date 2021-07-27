@@ -7,22 +7,18 @@ use crate::api::http::v1::responses::{ErrorCodeResponseHelper, JSONResponseHelpe
 use std::sync::Arc;
 use common_management::cluster::ClusterExecutor;
 
-pub struct ListAction {
+pub struct GetAction {
+    name: String,
     sessions: SessionManagerRef,
 }
 
-impl ListAction {
-    pub fn create(sessions: SessionManagerRef) -> ListAction {
-        ListAction { sessions }
-    }
-
-    pub fn try_get_nodes(&self) -> Result<Vec<Arc<ClusterExecutor>>> {
-        let cluster = self.sessions.get_cluster_manager();
-        cluster.get_executors_by_namespace()
+impl GetAction {
+    pub fn create(name: String, sessions: SessionManagerRef) -> GetAction {
+        GetAction { name, sessions }
     }
 }
 
-impl Reply for ListAction {
+impl Reply for GetAction {
     fn into_response(self) -> Response {
         match self.sessions.try_get_executors() {
             Err(error) => error.into_response(),

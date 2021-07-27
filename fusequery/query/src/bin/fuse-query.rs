@@ -15,7 +15,7 @@ use fuse_query::servers::MySQLHandler;
 use fuse_query::servers::ShutdownHandle;
 use fuse_query::sessions::SessionManager;
 use log::info;
-use common_management::cluster::ClusterClient;
+use common_management::cluster::ClusterManager;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,8 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         malloc
     );
 
-    let cluster_manager = ClusterClient::create("local");
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster_manager)?;
+    let session_manager = SessionManager::from_conf(conf.clone())?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.

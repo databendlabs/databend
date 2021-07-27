@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
-use common_management::cluster::ClusterClient;
-use common_management::cluster::ClusterClientRef;
+use common_management::cluster::ClusterManager;
+use common_management::cluster::ClusterManagerRef;
 use warp::{Filter, Reply, Rejection};
 
 use crate::api::http::v1::kv::KvStore;

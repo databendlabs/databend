@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-#[cfg(test)]
-mod cluster_test;
+pub use cluster::ClusterRouter;
+
 #[cfg(test)]
 mod kv_test;
 
@@ -13,4 +13,3 @@ pub mod kv;
 mod responses;
 mod cluster;
 
-pub use cluster::ClusterRouter;

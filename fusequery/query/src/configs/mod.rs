@@ -6,5 +6,7 @@
 mod config_test;
 
 pub mod config;
+mod extractor_config;
 
 pub use config::Config;
+pub use extractor_config::ConfigExtractor;

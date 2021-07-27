@@ -13,3 +13,4 @@ pub use context::ClusterNode;
 pub use number::NumberTestData;
 pub use parse_query::parse_query;
 pub use sessions::try_create_sessions;
+pub use sessions::with_max_connections_sessions;

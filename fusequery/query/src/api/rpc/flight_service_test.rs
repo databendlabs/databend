@@ -27,7 +27,7 @@ use crate::tests::try_create_sessions;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_shared_session() -> Result<()> {
-    let sessions = try_create_sessions()?;
+    let sessions = with_max_connections_sessions()?;
     let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
     let service = FuseQueryFlightService::create(dispatcher, sessions);
 
@@ -50,7 +50,7 @@ async fn test_do_flight_action_with_shared_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_different_session() -> Result<()> {
-    let sessions = try_create_sessions()?;
+    let sessions = with_max_connections_sessions()?;
     let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
     let service = FuseQueryFlightService::create(dispatcher, sessions);
 
@@ -73,7 +73,7 @@ async fn test_do_flight_action_with_different_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_session() -> Result<()> {
-    let sessions = try_create_sessions()?;
+    let sessions = with_max_connections_sessions()?;
     let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
     let service = FuseQueryFlightService::create(dispatcher.clone(), sessions);
 
@@ -105,7 +105,7 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
-    let sessions = try_create_sessions()?;
+    let sessions = with_max_connections_sessions()?;
     let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
     let service = FuseQueryFlightService::create(dispatcher.clone(), sessions);
 

@@ -15,10 +15,11 @@ use common_runtime::tokio;
 
 use crate::servers::ClickHouseHandler;
 use crate::sessions::SessionManager;
+use crate::tests::with_max_connections_sessions;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
-    let sessions = SessionManager::try_create(1)?;
+    let sessions = with_max_connections_sessions(1)?;
     let mut handler = ClickHouseHandler::create(sessions);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
@@ -35,7 +36,7 @@ async fn test_clickhouse_handler_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reject_clickhouse_connection() -> Result<()> {
-    let sessions = SessionManager::try_create(1)?;
+    let sessions = with_max_connections_sessions(1)?;
     let mut handler = ClickHouseHandler::create(sessions);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
@@ -64,7 +65,7 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_abort_clickhouse_server() -> Result<()> {
-    let sessions = SessionManager::try_create(3)?;
+    let sessions = with_max_connections_sessions(3)?;
     let mut handler = ClickHouseHandler::create(sessions);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;

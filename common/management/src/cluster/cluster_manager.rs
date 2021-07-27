@@ -9,18 +9,23 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_kvs::BackendClient;
 
-use crate::cluster::ClusterExecutor;
+use crate::cluster::{ClusterExecutor, ClusterConfig};
 
-pub type ClusterClientRef = Arc<ClusterClient>;
+pub type ClusterManagerRef = Arc<ClusterManager>;
 
-pub struct ClusterClient {
+pub struct ClusterManager {
     backend_client: BackendClient,
 }
 
-impl ClusterClient {
-    pub fn create(uri: impl Into<String>) -> ClusterClientRef {
-        let backend_client = BackendClient::create(uri.into());
-        Arc::new(ClusterClient { backend_client })
+impl ClusterManager {
+    // #[cfg(test)]
+    // pub fn create(uri: impl Into<String>) -> ClusterManagerRef {
+    //     let backend_client = BackendClient::create(uri.into());
+    //     Arc::new(ClusterManager { backend_client })
+    // }
+
+    pub fn from_conf(conf: ClusterConfig) -> ClusterManagerRef {
+
     }
 
     /// Register an executor to the namespace.
@@ -36,10 +41,7 @@ impl ClusterClient {
     }
 
     /// Get all the executors by namespace.
-    pub async fn get_executors_by_namespace(
-        &self,
-        namespace: String,
-    ) -> Result<Vec<ClusterExecutor>> {
+    pub async fn get_executors_by_namespace(&self, namespace: String) -> Result<Vec<ClusterExecutor>> {
         let executors: Vec<(String, ClusterExecutor)> =
             self.backend_client.get_from_prefix(namespace).await?;
         executors

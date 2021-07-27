@@ -8,14 +8,14 @@ use warp::http::StatusCode;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct NodeInfo {}
 
-pub struct RegisterAction {
+pub struct CreateAction {
     info: NodeInfo,
     sessions: SessionManagerRef,
 }
 
-impl RegisterAction {
-    pub fn create(info: NodeInfo, sessions: SessionManagerRef) -> RegisterAction {
-        RegisterAction { info, sessions }
+impl CreateAction {
+    pub fn create(info: NodeInfo, sessions: SessionManagerRef) -> CreateAction {
+        CreateAction { info, sessions }
     }
 
     fn register_cluster_executor(&self) -> Result<String> {
@@ -24,12 +24,11 @@ impl RegisterAction {
     }
 }
 
-impl Reply for RegisterAction {
+impl Reply for CreateAction {
     fn into_response(self) -> Response {
-        // TODO: maybe should change OK to CREATED?
         match self.register_cluster_executor() {
             Err(error) => error.into_response(),
-            Ok(message) => StatusCode::OK.into_with_body_response(message),
+            Ok(message) => StatusCode::CREATED.into_with_body_response(message),
         }
     }
 }
