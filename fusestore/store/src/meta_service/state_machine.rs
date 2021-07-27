@@ -451,8 +451,8 @@ impl StateMachine {
 
     pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
         self.tbl_parts
-            .remove(db_name)
-            .and_then(|mut t| t.remove(table_name));
+            .get_mut(db_name)
+            .and_then(|t| t.remove(table_name));
     }
 
     pub fn remove_db_data_parts(&mut self, db_name: &str) {
