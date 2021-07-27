@@ -5,6 +5,7 @@
 use common_exception::Result;
 
 use crate::arrays::builders::*;
+use crate::arrays::get_list_builder;
 use crate::arrays::ops::scatter::ArrayScatter;
 use crate::prelude::*;
 use crate::DFBinaryArray;
@@ -71,19 +72,20 @@ fn test_scatter() -> Result<()> {
     );
 
     // Test ListArray
-    let mut list_value_builder = ArrowPrimitiveArrayBuilder::<UInt16Type>::new(5);
-    list_value_builder.append_slice(&[1u16, 2u16, 3u16]);
-    list_value_builder.append_slice(&[4u16, 5u16]);
-    list_value_builder.append_slice(&[6u16, 7u16]);
+    let mut builder = get_list_builder(&DataType::UInt16, 12, 3);
+    builder.append_series(&Series::new(vec![1_u16, 2, 3]));
+    builder.append_series(&Series::new(vec![7_u16, 8, 9]));
+    builder.append_series(&Series::new(vec![10_u16, 11, 12]));
+    builder.append_series(&Series::new(vec![4_u16, 5, 6]));
+    let df_list = builder.finish();
 
-    let mut list_builder = ListPrimitiveArrayBuilder::<UInt16Type>::new(list_value_builder, 5);
-    let df_list = list_builder.finish();
-    let indices = vec![1, 0, 0];
-
+    let indices = vec![1, 0, 0, 1];
     let array_vec = unsafe { df_list.scatter_unchecked(&mut indices.into_iter(), 2)? };
-    println!("vec[0]={:?}", array_vec[0].as_ref().values());
-    println!("vec[1]={:?}", array_vec[1].as_ref().values());
-    println!("list={:?}", df_list.as_ref().values());
+
+    let expected1 = "PrimitiveArray<UInt16>\n[\n  7,\n  8,\n  9,\n  10,\n  11,\n  12,\n]";
+    let expected2 = "PrimitiveArray<UInt16>\n[\n  1,\n  2,\n  3,\n  4,\n  5,\n  6,\n]";
+    assert_eq!(expected1, format!("{:?}", array_vec[0].as_ref().values()));
+    assert_eq!(expected2, format!("{:?}", array_vec[1].as_ref().values()));
 
     Ok(())
 }
