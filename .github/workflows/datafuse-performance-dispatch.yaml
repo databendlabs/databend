@@ -68,8 +68,8 @@ jobs:
           --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
     - name: testing environment set up
       run: |
-        kubectl label node k3d-k3s-fusebench-agent-0 test-branch=${{env.CURRENT}}
-        kubectl label node k3d-k3s-fusebench-agent-0 test-branch=${{env.REFERENCE}}
+        kubectl label node k3d-fusebench-agent-0 test-branch=${{env.CURRENT}}
+        kubectl label node k3d-fusebench-agent-0 test-branch=${{env.REFERENCE}}
     - name: Start performance testing
       run: >-
             echo ${{ env.UUID }};
