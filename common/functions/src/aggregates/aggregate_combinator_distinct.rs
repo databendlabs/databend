@@ -2,16 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
-use std::io::Cursor;
 
-use bytes::Buf;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::*;
 
 use super::GetState;
 use super::StateAddr;
@@ -29,30 +27,36 @@ pub struct AggregateDistinctState {
 }
 
 impl AggregateDistinctState {
-    pub fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        let mut vs = Vec::with_capacity(self.set.len());
-        for entry in self.set.iter() {
-            let array = entry.0.iter().map(DataValue::from).collect::<Vec<_>>();
-            vs.push(array);
-        }
+    pub fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+        writer.write_uvarint(self.set.len() as u64)?;
 
-        serde_json::to_writer(writer, &vs)?;
+        for entry in self.set.iter() {
+            writer.write_uvarint(entry.0.len() as u64)?;
+            for group_value in entry.0.iter() {
+                let datavalue = DataValue::from(group_value);
+                datavalue.serialize_to_buf(writer)?;
+            }
+        }
         Ok(())
     }
 
-    pub fn deserialize(&mut self, reader: &[u8]) -> Result<()> {
+    pub fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         self.set.clear();
-        let reader = Cursor::new(reader).reader();
-        let vs: Vec<Vec<DataValue>> = serde_json::from_reader(reader)?;
 
-        for array in vs.iter() {
-            let v = array
-                .iter()
-                .map(DataGroupValue::try_from)
-                .collect::<Result<Vec<_>>>()?;
+        let size = reader.read_uvarint()?;
+        self.set.reserve(size as usize);
 
-            self.set.insert(DataGroupValues(v));
+        for _i in 0..size {
+            let vsize = reader.read_uvarint()?;
+            let mut values = Vec::with_capacity(vsize as usize);
+            for _j in 0..vsize {
+                let value = DataValue::deserialize(reader)?;
+                let value = DataGroupValue::try_from(&value)?;
+                values.push(value);
+            }
+            self.set.insert(DataGroupValues(values));
         }
+
         Ok(())
     }
 }
@@ -116,10 +120,6 @@ impl AggregateFunction for AggregateDistinctCombinator {
         self.nested.nullable(input_schema)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
         let addr = self.nested.allocate_state(arena);
         let state = arena.alloc(AggregateDistinctState {
@@ -148,12 +148,12 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = AggregateDistinctState::get(place);
         state.serialize(writer)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = AggregateDistinctState::get(place);
         state.deserialize(reader)
     }
@@ -170,12 +170,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         let state = AggregateDistinctState::get(place);
 
         // faster path for count
-        if self
-            .nested
-            .as_any()
-            .downcast_ref::<AggregateCountFunction>()
-            .is_some()
-        {
+        if self.nested.name() == "AggregateFunctionCount" {
             Ok(DataValue::UInt64(Some(state.set.len() as u64)))
         } else {
             if state.set.is_empty() {

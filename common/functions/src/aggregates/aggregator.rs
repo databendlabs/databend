@@ -4,17 +4,17 @@
 
 use common_exception::Result;
 
+use super::aggregate_arg_min_max::try_create_aggregate_arg_max_function;
+use super::aggregate_arg_min_max::try_create_aggregate_arg_min_function;
+use super::aggregate_avg::try_create_aggregate_avg_function;
+use super::aggregate_min_max::try_create_aggregate_max_function;
+use super::aggregate_min_max::try_create_aggregate_min_function;
+use super::aggregate_sum::try_create_aggregate_sum_function;
 use crate::aggregates::aggregate_function_factory::FactoryCombinatorFuncRef;
 use crate::aggregates::aggregate_function_factory::FactoryFuncRef;
-use crate::aggregates::AggregateArgMaxFunction;
-use crate::aggregates::AggregateArgMinFunction;
-use crate::aggregates::AggregateAvgFunction;
 use crate::aggregates::AggregateCountFunction;
 use crate::aggregates::AggregateDistinctCombinator;
 use crate::aggregates::AggregateIfCombinator;
-use crate::aggregates::AggregateMaxFunction;
-use crate::aggregates::AggregateMinFunction;
-use crate::aggregates::AggregateSumFunction;
 
 pub struct Aggregators;
 
@@ -23,12 +23,12 @@ impl Aggregators {
         let mut map = map.write();
         // FuseQuery always uses lowercase function names to get functions.
         map.insert("count".into(), AggregateCountFunction::try_create);
-        map.insert("sum".into(), AggregateSumFunction::try_create);
-        map.insert("min".into(), AggregateMinFunction::try_create);
-        map.insert("max".into(), AggregateMaxFunction::try_create);
-        map.insert("avg".into(), AggregateAvgFunction::try_create);
-        map.insert("argmin".into(), AggregateArgMinFunction::try_create);
-        map.insert("argmax".into(), AggregateArgMaxFunction::try_create);
+        map.insert("sum".into(), try_create_aggregate_sum_function);
+        map.insert("min".into(), try_create_aggregate_min_function);
+        map.insert("max".into(), try_create_aggregate_max_function);
+        map.insert("avg".into(), try_create_aggregate_avg_function);
+        map.insert("argmin".into(), try_create_aggregate_arg_min_function);
+        map.insert("argmax".into(), try_create_aggregate_arg_max_function);
 
         map.insert("uniq".into(), AggregateDistinctCombinator::try_create_uniq);
 

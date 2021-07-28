@@ -127,9 +127,9 @@ impl Processor for GroupByFinalTransform {
                             None => {
                                 let mut places = Vec::with_capacity(aggr_funcs_len);
                                 for (i, func) in aggr_funcs.iter().enumerate() {
-                                    let data = states_binary_arrays[i].value(row);
+                                    let mut data = states_binary_arrays[i].value(row);
                                     let place = func.allocate_state(&arena);
-                                    func.deserialize(place, data)?;
+                                    func.deserialize(place, &mut data)?;
                                     places.push(place);
                                 }
                                 let mut values = Vec::with_capacity(group_expr_len);
@@ -141,9 +141,9 @@ impl Processor for GroupByFinalTransform {
                             }
                             Some((places, _)) => {
                                 for (i, func) in aggr_funcs.iter().enumerate() {
-                                    let data = states_binary_arrays[i].value(row);
+                                    let mut data = states_binary_arrays[i].value(row);
                                     let place = func.allocate_state(&arena);
-                                    func.deserialize(place, data)?;
+                                    func.deserialize(place, &mut data)?;
                                     func.merge(places[i], place)?;
                                 }
                             }

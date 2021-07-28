@@ -2,44 +2,85 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
 use std::fmt;
+use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
+use common_datavalues::TryFromDataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::*;
+use num::NumCast;
 
-use super::AggregateSingeValueState;
+use super::aggregate_count::count_batch;
+use super::aggregate_sum::sum_batch;
 use super::GetState;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::aggregates::AggregateSumFunction;
+use crate::apply_numeric_creator_with_largest_type;
 
-#[derive(Clone)]
-pub struct AggregateAvgFunction {
-    display_name: String,
-    arguments: Vec<DataField>,
-    sum_type: DataType,
+// count = 0 means it's all nullable
+// so we do not need option like sum
+struct AggregateAvgState<T: BinarySer + BinaryDe> {
+    pub value: T,
+    pub count: u64,
 }
 
-impl AggregateAvgFunction {
-    pub fn try_create(
-        display_name: &str,
-        arguments: Vec<DataField>,
-    ) -> Result<AggregateFunctionRef> {
-        assert_unary_arguments(display_name, arguments.len())?;
+impl<'a, T> GetState<'a, AggregateAvgState<T>> for AggregateAvgState<T> where T: BinarySer + BinaryDe
+{}
 
-        let sum_type = AggregateSumFunction::sum_return_type(arguments[0].data_type())?;
-        Ok(Arc::new(AggregateAvgFunction {
-            display_name: display_name.to_string(),
-            arguments,
-            sum_type,
-        }))
+impl<T> AggregateAvgState<T>
+where T: std::ops::Add<Output = T> + Clone + Copy + BinarySer + BinaryDe
+{
+    #[inline(always)]
+    fn add(&mut self, value: &Option<T>, count: u64) {
+        if let Some(v) = value {
+            self.value = self.value.add(*v);
+            self.count += count;
+        }
+    }
+
+    #[inline(always)]
+    fn merge(&mut self, other: &Self) {
+        self.value = self.value.add(other.value);
+        self.count += other.count;
     }
 }
 
-impl AggregateFunction for AggregateAvgFunction {
+#[derive(Clone)]
+pub struct AggregateAvgFunction<T, SumT> {
+    display_name: String,
+    arguments: Vec<DataField>,
+    t: PhantomData<T>,
+    sum_t: PhantomData<SumT>,
+}
+
+impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
+where
+    T: NumCast
+        + TryFromDataValue<DataValue>
+        + Clone
+        + Copy
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
+    SumT: NumCast
+        + TryFromDataValue<DataValue>
+        + Into<DataValue>
+        + Clone
+        + Copy
+        + Default
+        + std::ops::Add<Output = SumT>
+        + BinarySer
+        + BinaryDe
+        + Send
+        + Sync
+        + 'static,
+    Option<SumT>: Into<DataValue>,
+{
     fn name(&self) -> &str {
         "AggregateAvgFunction"
     }
@@ -52,103 +93,123 @@ impl AggregateFunction for AggregateAvgFunction {
         Ok(false)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(AggregateSingeValueState {
-            value: DataValue::Struct(vec![
-                DataValue::from(&self.sum_type),
-                DataValue::UInt64(Some(0)),
-            ]),
+        let state = arena.alloc(AggregateAvgState::<SumT> {
+            value: SumT::default(),
+            count: 0,
         });
-
-        (state as *mut AggregateSingeValueState) as StateAddr
+        (state as *mut AggregateAvgState<SumT>) as StateAddr
     }
 
     fn accumulate(
         &self,
         place: StateAddr,
         columns: &[DataColumn],
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<()> {
-        let state = AggregateSingeValueState::get(place);
+        let state = AggregateAvgState::<SumT>::get(place);
+        let value = sum_batch(&columns[0])?;
+        let count = count_batch(&columns[0]);
+        let opt_sum: Option<SumT> = TryFromDataValue::try_from(value).ok();
 
-        if let DataValue::Struct(values) = state.value.clone() {
-            let sum = match &columns[0] {
-                DataColumn::Constant(value, size) => {
-                    DataValue::arithmetic(Mul, value.clone(), DataValue::UInt64(Some(*size as u64)))
-                }
-                DataColumn::Array(array) => array.sum(),
-            }?;
-
-            let sum = (&sum + &values[0])?;
-
-            let count = DataValue::UInt64(Some(input_rows as u64));
-            let count = (&count + &values[1])?;
-
-            state.value = DataValue::Struct(vec![sum, count]);
-        }
+        state.add(&opt_sum, count as u64);
         Ok(())
     }
 
     fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
-        let state = AggregateSingeValueState::get(place);
+        let state = AggregateAvgState::<SumT>::get(place);
         let value = columns[0].try_get(row)?;
 
-        if let DataValue::Struct(values) = state.value.clone() {
-            let sum = (&value + &values[0])?;
-            let count = DataValue::UInt64(Some(1_u64));
-            let count = (&count + &values[1])?;
+        let opt_sum: Option<T> = TryFromDataValue::try_from(value).ok();
+        let opt_sum: Option<SumT> = match opt_sum {
+            Some(v) => NumCast::from(v),
+            None => None,
+        };
 
-            state.value = DataValue::Struct(vec![sum, count]);
-        }
+        state.add(&opt_sum, 1);
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = AggregateSingeValueState::get(place);
-        state.serialize(writer)
+    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+        let state = AggregateAvgState::<SumT>::get(place);
+        state.value.serialize_to_buf(writer)?;
+        state.count.serialize_to_buf(writer)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
-        let state = AggregateSingeValueState::get(place);
-        state.deserialize(reader)
+    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        let state = AggregateAvgState::<SumT>::get(place);
+        state.value = SumT::deserialize(reader)?;
+        state.count = u64::deserialize(reader)?;
+        Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = AggregateSingeValueState::get(place);
-        let rhs = AggregateSingeValueState::get(rhs);
-
-        if let (DataValue::Struct(current), DataValue::Struct(other)) =
-            (state.value.clone(), rhs.value.clone())
-        {
-            let sum = (&current[0] + &other[0])?;
-            let count = (&current[1] + &other[1])?;
-
-            state.value = DataValue::Struct(vec![sum, count]);
-        }
+        let state = AggregateAvgState::<SumT>::get(place);
+        let rhs = AggregateAvgState::<SumT>::get(rhs);
+        state.merge(rhs);
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = AggregateSingeValueState::get(place);
+        let state = AggregateAvgState::<SumT>::get(place);
 
-        Ok(if let DataValue::Struct(states) = state.value.clone() {
-            if states[1].eq(&DataValue::UInt64(Some(0))) {
-                DataValue::Float64(None)
-            } else {
-                (&states[0] / &states[1])?
-            }
-        } else {
-            state.value.clone()
-        })
+        if state.count == 0 {
+            return Ok(DataValue::Float64(None));
+        }
+        let v: f64 = NumCast::from(state.value).unwrap_or_default();
+        Ok(DataValue::Float64(Some(v / state.count as f64)))
     }
 }
 
-impl fmt::Display for AggregateAvgFunction {
+impl<T, SumT> fmt::Display for AggregateAvgFunction<T, SumT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
+}
+
+impl<T, SumT> AggregateAvgFunction<T, SumT>
+where
+    T: NumCast
+        + TryFromDataValue<DataValue>
+        + Clone
+        + Copy
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
+    SumT: NumCast
+        + TryFromDataValue<DataValue>
+        + Into<DataValue>
+        + Clone
+        + Copy
+        + Default
+        + std::ops::Add<Output = SumT>
+        + BinarySer
+        + BinaryDe
+        + Send
+        + Sync
+        + 'static,
+    Option<SumT>: Into<DataValue>,
+{
+    pub fn try_create(
+        display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<AggregateFunctionRef> {
+        Ok(Arc::new(Self {
+            display_name: display_name.to_string(),
+            arguments,
+            t: PhantomData,
+            sum_t: PhantomData,
+        }))
+    }
+}
+
+pub fn try_create_aggregate_avg_function(
+    display_name: &str,
+    arguments: Vec<DataField>,
+) -> Result<Arc<dyn AggregateFunction>> {
+    assert_unary_arguments(display_name, arguments.len())?;
+
+    let data_type = arguments[0].data_type();
+    apply_numeric_creator_with_largest_type! {data_type, AggregateAvgFunction, try_create, display_name, arguments}
 }

@@ -737,11 +737,13 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-exception",
+ "common-io",
  "num",
  "ordered-float 2.7.0",
  "paste",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "unsafe_unwrap",
 ]
 
@@ -801,9 +803,12 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-infallible",
+ "common-io",
  "dyn-clone",
  "indexmap",
  "lazy_static",
+ "num",
+ "ordered-float 2.7.0",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -815,6 +820,15 @@ name = "common-infallible"
 version = "0.1.0"
 dependencies = [
  "parking_lot",
+]
+
+[[package]]
+name = "common-io"
+version = "0.1.0"
+dependencies = [
+ "bytes 1.0.1",
+ "common-exception",
+ "rand 0.8.4",
 ]
 
 [[package]]
@@ -1705,6 +1719,7 @@ dependencies = [
  "common-flights",
  "common-functions",
  "common-infallible",
+ "common-io",
  "common-management",
  "common-planners",
  "common-profling",

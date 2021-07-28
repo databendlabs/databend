@@ -20,6 +20,7 @@ members = [
     "common/profiling",
     "common/store-api",
     "common/management",
+    "common/io",
 
     # FuseQuery
     "fusequery/query",

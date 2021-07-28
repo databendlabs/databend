@@ -199,6 +199,7 @@ impl DFNumericType for UInt8Type {}
 impl DFNumericType for UInt16Type {}
 impl DFNumericType for UInt32Type {}
 impl DFNumericType for UInt64Type {}
+
 impl DFNumericType for Int8Type {}
 impl DFNumericType for Int16Type {}
 impl DFNumericType for Int32Type {}

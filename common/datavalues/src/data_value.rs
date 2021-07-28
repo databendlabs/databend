@@ -5,7 +5,6 @@
 // Borrow from apache/arrow/rust/datafusion/src/functions.rs
 // See notice.md
 
-use std::convert::TryFrom;
 use std::fmt;
 use std::iter::repeat;
 use std::ops::Deref;
@@ -17,6 +16,7 @@ use common_arrow::arrow::datatypes::IntervalUnit;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -340,6 +340,12 @@ fn new_null_array_by_type(data_type: &DataType, length: usize) -> ArrayRef {
     new_null_array(&data_type.to_arrow(), length)
 }
 
+// Did not use std::convert:TryFrom
+// Because we do not need custom type error.
+pub trait TryFromDataValue<T>: Sized {
+    fn try_from(value: T) -> Result<Self>;
+}
+
 typed_cast_from_data_value_to_std!(Int8, i8);
 typed_cast_from_data_value_to_std!(Int16, i16);
 typed_cast_from_data_value_to_std!(Int32, i32);
@@ -351,6 +357,7 @@ typed_cast_from_data_value_to_std!(UInt64, u64);
 typed_cast_from_data_value_to_std!(Float32, f32);
 typed_cast_from_data_value_to_std!(Float64, f64);
 typed_cast_from_data_value_to_std!(Boolean, bool);
+typed_cast_from_data_value_to_std!(Utf8, String);
 
 std_to_data_value!(Int8, i8);
 std_to_data_value!(Int16, i16);
@@ -373,6 +380,12 @@ impl From<&str> for DataValue {
 impl From<String> for DataValue {
     fn from(x: String) -> Self {
         DataValue::Utf8(Some(x))
+    }
+}
+
+impl From<Option<String>> for DataValue {
+    fn from(x: Option<String>) -> Self {
+        DataValue::Utf8(x)
     }
 }
 
@@ -502,5 +515,25 @@ impl fmt::Debug for DataValue {
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
+    }
+}
+
+impl BinarySer for DataValue {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
+        let bs = serde_json::to_string(self)?;
+        writer.write_string(bs)
+    }
+
+    fn serialize_to_buf<W: BufMut>(&self, writer: &mut W) -> Result<()> {
+        let bs = serde_json::to_string(self)?;
+        writer.write_string(bs)
+    }
+}
+
+impl BinaryDe for DataValue {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> Result<Self> {
+        let str = reader.read_string()?;
+        let value: DataValue = serde_json::from_str(&str)?;
+        Ok(value)
     }
 }
