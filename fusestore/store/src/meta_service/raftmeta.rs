@@ -886,7 +886,7 @@ impl MetaNode {
     pub async fn get_database_meta(
         &self,
         lower_bound: Option<u64>,
-    ) -> Option<(u64, Vec<Database>)> {
+    ) -> Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -894,8 +894,17 @@ impl MetaNode {
         if ver <= lower_bound {
             None
         } else {
-            let dbs = sm.get_databases();
-            Some((ver.unwrap_or(0), dbs.values().cloned().collect()))
+            let dbs = sm
+                .get_databases()
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<Vec<_>>();
+            let tbls = sm
+                .tables
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect::<Vec<_>>();
+            Some((ver.unwrap_or(0), dbs, tbls))
         }
     }
 

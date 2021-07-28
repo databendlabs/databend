@@ -12,11 +12,11 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalog::constants::SYS_TBL_ID_BEGIN;
-use crate::catalog::constants::SYS_TBL_ID_END;
-use crate::catalog::utils::InMemoryMetas;
-use crate::catalog::utils::TableFunctionMeta;
-use crate::catalog::utils::TableMeta;
+use crate::catalogs::impls::database_catalog::SYS_TBL_ID_BEGIN;
+use crate::catalogs::impls::database_catalog::SYS_TBL_ID_END;
+use crate::catalogs::utils::InMemoryMetas;
+use crate::catalogs::utils::TableFunctionMeta;
+use crate::catalogs::utils::TableMeta;
 use crate::datasources::system;
 use crate::datasources::Database;
 use crate::datasources::Table;
@@ -72,9 +72,17 @@ impl SystemDatabase {
         ];
         let mut table_functions = HashMap::default();
         for tbl_func in table_function_list.iter() {
+            let name = tbl_func.name();
             table_functions.insert(
-                tbl_func.name().to_string(),
-                Arc::new(TableFunctionMeta::new(tbl_func.clone(), next_id())),
+                name.to_string(),
+                Arc::new(TableFunctionMeta::new(
+                    tbl_func.clone(),
+                    tables
+                        .name2meta
+                        .get(name)
+                        .expect("prelude function miss-assemblied")
+                        .meta_id(),
+                )),
             );
         }
 

@@ -15,10 +15,10 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
-use crate::catalog::constants::LOCAL_TBL_ID_BEGIN;
-use crate::catalog::utils::InMemoryMetas;
-use crate::catalog::utils::TableFunctionMeta;
-use crate::catalog::utils::TableMeta;
+use crate::catalogs::impls::database_catalog::LOCAL_TBL_ID_BEGIN;
+use crate::catalogs::utils::InMemoryMetas;
+use crate::catalogs::utils::TableFunctionMeta;
+use crate::catalogs::utils::TableMeta;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::MemoryTable;
 use crate::datasources::local::NullTable;

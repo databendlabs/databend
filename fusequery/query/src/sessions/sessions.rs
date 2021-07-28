@@ -52,10 +52,9 @@ impl SessionManager {
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
+            datasource: Arc::new(DatabaseCatalog::try_create_with_config(&conf)?),
             conf,
             cluster,
-            datasource: Arc::new(DatabaseCatalog::try_create()?),
-
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))

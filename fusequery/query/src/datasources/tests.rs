@@ -7,6 +7,7 @@ use common_planners::*;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
+use crate::catalogs::catalog::Catalog;
 use crate::datasources::DatabaseCatalog;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

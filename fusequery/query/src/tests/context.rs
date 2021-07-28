@@ -15,7 +15,10 @@ use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionManager;
 
 pub fn try_create_context() -> Result<FuseQueryContextRef> {
-    let mut config = Config::default();
+    let config = Config::default();
+    try_create_context_with_conf(config)
+}
+pub fn try_create_context_with_conf(mut config: Config) -> Result<FuseQueryContextRef> {
     let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
