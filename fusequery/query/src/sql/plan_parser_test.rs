@@ -174,7 +174,7 @@ fn test_plan_parser() -> Result<()> {
         },
         Test {
             name: "kleene-logic",
-            sql: "select * from numbers(10) where null and true;",
+            sql: "select * from numbers(10) where null and true",
             expect: "\
             Projection: number:UInt64\
             \n  Filter: (NULL AND true)\
