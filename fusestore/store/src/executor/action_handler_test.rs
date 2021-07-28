@@ -353,7 +353,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
             db: db_name.to_string(),
             table: table_name.to_string(),
             schema: schema.clone(),
-            engine: TableEngineType::JsonEachRaw,
+            engine: TableEngineType::JSONEachRow,
             options: Default::default(),
         };
         let want = match want {
@@ -498,7 +498,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
                 db: "foo".to_string(),
                 table: "foo_t1".to_string(),
                 schema: schema.clone(),
-                engine: TableEngineType::JsonEachRaw,
+                engine: TableEngineType::JSONEachRow,
                 options: Default::default(),
             };
             let cta = CreateTableAction { plan };
@@ -608,7 +608,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
                 db: "foo".to_string(),
                 table: "foo_t1".to_string(),
                 schema: schema.clone(),
-                engine: TableEngineType::JsonEachRaw,
+                engine: TableEngineType::JSONEachRow,
                 options: Default::default(),
             };
             let cta = CreateTableAction { plan };

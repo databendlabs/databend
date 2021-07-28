@@ -162,7 +162,7 @@ mod tests {
         let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
         expect_parse_error(
             sql,
-            "Expected Engine must one of Parquet, JSONEachRaw, Null or CSV, found: XX",
+            "Expected Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV, found: XX",
         )?;
 
         Ok(())
@@ -233,6 +233,19 @@ mod tests {
                 name: ObjectName(vec![Ident::new("db1")]),
             }),
         )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn truncate_table() -> Result<()> {
+        {
+            let sql = "TRUNCATE TABLE t1";
+            let expected = DfStatement::TruncateTable(DfTruncateTable {
+                name: ObjectName(vec![Ident::new("t1")]),
+            });
+            expect_parse_ok(sql, expected)?;
+        }
 
         Ok(())
     }

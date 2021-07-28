@@ -28,6 +28,7 @@ use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
+use crate::meta_service::SledSerde;
 
 /// seq number key to generate seq for the value of a `generic_kv` record.
 const SEQ_GENERIC_KV: &str = "generic_kv";
@@ -35,6 +36,8 @@ const SEQ_GENERIC_KV: &str = "generic_kv";
 const SEQ_DATABASE_ID: &str = "database_id";
 /// seq number key to generate table id
 const SEQ_TABLE_ID: &str = "table_id";
+/// seq number key to database meta version
+const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 
 /// Replication defines the replication strategy.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -232,6 +235,7 @@ impl StateMachine {
                         database_id: self.incr_seq(SEQ_DATABASE_ID),
                         tables: Default::default(),
                     };
+                    self.incr_seq(SEQ_DATABASE_META_ID);
 
                     self.databases.insert(name.clone(), db.clone());
                     tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
@@ -243,7 +247,9 @@ impl StateMachine {
             Cmd::DropDatabase { ref name } => {
                 let prev = self.databases.get(name).cloned();
                 if prev.is_some() {
+                    self.remove_db_data_parts(name);
                     self.databases.remove(name);
+                    self.incr_seq(SEQ_DATABASE_META_ID);
                     tracing::debug!("applied DropDatabase: {}", name);
                     Ok((prev, None).into())
                 } else {
@@ -270,6 +276,7 @@ impl StateMachine {
                         schema: table.schema.clone(),
                         parts: table.parts.clone(),
                     };
+                    self.incr_seq(SEQ_DATABASE_META_ID);
                     db.tables.insert(table_name.clone(), table.table_id);
                     self.databases.insert(db_name.clone(), db);
                     self.tables.insert(table.table_id, table.clone());
@@ -290,6 +297,10 @@ impl StateMachine {
                     let tbl_id = tbl_id.to_owned();
                     db.tables.remove(table_name);
                     let prev = self.tables.remove(&tbl_id);
+
+                    self.remove_table_data_parts(db_name, table_name);
+
+                    self.incr_seq(SEQ_DATABASE_META_ID);
 
                     Ok((prev, None).into())
                 } else {
@@ -379,6 +390,14 @@ impl StateMachine {
         x.cloned()
     }
 
+    pub fn get_databases(&self) -> &BTreeMap<String, Database> {
+        &self.databases
+    }
+
+    pub fn get_database_meta_ver(&self) -> Option<u64> {
+        self.sequences.get(SEQ_DATABASE_META_ID).cloned()
+    }
+
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
         let x = self.tables.get(tid);
         x.cloned()
@@ -433,8 +452,8 @@ impl StateMachine {
 
     pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
         self.tbl_parts
-            .remove(db_name)
-            .and_then(|mut t| t.remove(table_name));
+            .get_mut(db_name)
+            .and_then(|t| t.remove(table_name));
     }
 
     pub fn remove_db_data_parts(&mut self, db_name: &str) {
@@ -475,6 +494,9 @@ impl Display for Node {
         write!(f, "{}={}", self.name, self.address)
     }
 }
+
+/// For Node to be able to be stored in sled::Tree as a value.
+impl SledSerde for Node {}
 
 impl Placement for StateMachine {
     fn get_slots(&self) -> &[Slot] {

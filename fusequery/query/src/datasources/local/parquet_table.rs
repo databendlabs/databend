@@ -132,6 +132,8 @@ impl Table for ParquetTable {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
+            table_id: scan.table_id,
+            table_version: scan.table_version,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),

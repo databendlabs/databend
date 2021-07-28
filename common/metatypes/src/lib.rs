@@ -4,12 +4,6 @@
 
 //! This crate defines data types used in meta data storage service.
 
-mod errors;
-mod match_seq;
-
-#[cfg(test)]
-mod match_seq_test;
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -20,6 +14,12 @@ pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
 use serde::Deserialize;
 use serde::Serialize;
+
+mod errors;
+mod match_seq;
+
+#[cfg(test)]
+mod match_seq_test;
 
 /// Value with a corresponding sequence number
 pub type SeqValue<T = Vec<u8>> = (u64, T);
@@ -54,3 +54,6 @@ impl fmt::Display for Table {
         write!(f, "table id: {}", self.table_id)
     }
 }
+
+pub type MetaVersion = u64;
+pub type MetaId = u64;

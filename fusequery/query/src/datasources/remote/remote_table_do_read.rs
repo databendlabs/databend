@@ -20,27 +20,22 @@ impl RemoteTable {
     pub(super) async fn do_read(
         &self,
         ctx: FuseQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let client = self.store_client_provider.try_get_client().await?;
-        let schema = self.schema.clone();
-        let db = self.db.to_string();
-        let tbl = self.name.to_string();
         let progress_callback = ctx.progress_callback();
 
+        let plan = source_plan.clone();
         let iter = std::iter::from_fn(move || match ctx.try_get_partitions(1) {
             Err(_) => None,
             Ok(parts) if parts.is_empty() => None,
-            Ok(parts) => Some(ReadAction {
-                part: parts[0].clone(),
-                push_down: PlanNode::ReadSource(ReadDataSourcePlan {
-                    db: db.clone(),
-                    table: tbl.clone(),
-                    schema: schema.clone(),
-                    remote: true,
-                    ..ReadDataSourcePlan::empty()
-                }),
-            }),
+            Ok(parts) => {
+                let plan = plan.clone();
+                Some(ReadAction {
+                    part: parts[0].clone(),
+                    push_down: PlanNode::ReadSource(plan),
+                })
+            }
         });
 
         let schema = self.schema.clone();

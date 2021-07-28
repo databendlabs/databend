@@ -41,6 +41,15 @@ pub struct Config {
     )]
     pub metric_api_address: String,
 
+    #[structopt(long, env = "HTTP_API_ADDRESS", default_value = "127.0.0.1:8181")]
+    pub http_api_address: String,
+
+    #[structopt(long, env = "TLS_SERVER_CERT", default_value = "")]
+    pub tls_server_cert: String,
+
+    #[structopt(long, env = "TLS_SERVER_KEY", default_value = "")]
+    pub tls_server_key: String,
+
     #[structopt(
         long,
         env = "FUSE_STORE_FLIGHT_API_ADDRESS",
