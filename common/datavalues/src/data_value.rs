@@ -342,7 +342,7 @@ fn new_null_array_by_type(data_type: &DataType, length: usize) -> ArrayRef {
 
 // Did not use std::convert:TryFrom
 // Because we do not need custom type error.
-pub trait TryFromDataValue<T>: Sized {
+pub trait DFTryFrom<T>: Sized {
     fn try_from(value: T) -> Result<Self>;
 }
 

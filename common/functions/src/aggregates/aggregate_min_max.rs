@@ -7,7 +7,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
-use common_datavalues::TryFromDataValue;
+use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -67,7 +67,7 @@ pub struct AggregateMinMaxFunction<T> {
 
 impl<T> AggregateFunction for AggregateMinMaxFunction<T>
 where
-    T: std::cmp::PartialOrd + TryFromDataValue<DataValue> + Send + Sync + Clone + 'static,
+    T: std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static,
     Option<T>: BinarySer + BinaryDe + Into<DataValue>,
 {
     fn name(&self) -> &str {
@@ -99,7 +99,7 @@ where
             max_batch(&columns[0])
         }?;
 
-        let value: Result<T> = TryFromDataValue::try_from(value);
+        let value: Result<T> = DFTryFrom::try_from(value);
         if let Ok(v) = value {
             let state = AggregateMinMaxState::<T>::get(place);
             state.add(v, self.is_min);
@@ -109,7 +109,7 @@ where
 
     fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
         let value = columns[0].try_get(row)?;
-        let value: Result<T> = TryFromDataValue::try_from(value);
+        let value: Result<T> = DFTryFrom::try_from(value);
         if let Ok(v) = value {
             let state = AggregateMinMaxState::<T>::get(place);
             state.add(v, self.is_min);
@@ -172,7 +172,7 @@ impl<T> fmt::Display for AggregateMinMaxFunction<T> {
 
 impl<T> AggregateMinMaxFunction<T>
 where
-    T: std::cmp::PartialOrd + TryFromDataValue<DataValue> + Send + Sync + Clone + 'static,
+    T: std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static,
     Option<T>: BinarySer + BinaryDe + Into<DataValue>,
 {
     pub fn try_create_min(

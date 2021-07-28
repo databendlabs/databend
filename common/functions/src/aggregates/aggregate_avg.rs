@@ -6,7 +6,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
-use common_datavalues::TryFromDataValue;
+use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -59,16 +59,9 @@ pub struct AggregateAvgFunction<T, SumT> {
 
 impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
 where
-    T: NumCast
-        + TryFromDataValue<DataValue>
-        + Clone
-        + Copy
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
+    T: NumCast + DFTryFrom<DataValue> + Clone + Copy + Into<DataValue> + Send + Sync + 'static,
     SumT: NumCast
-        + TryFromDataValue<DataValue>
+        + DFTryFrom<DataValue>
         + Into<DataValue>
         + Clone
         + Copy
@@ -110,7 +103,7 @@ where
         let state = AggregateAvgState::<SumT>::get(place);
         let value = sum_batch(&columns[0])?;
         let count = count_batch(&columns[0]);
-        let opt_sum: Option<SumT> = TryFromDataValue::try_from(value).ok();
+        let opt_sum: Option<SumT> = DFTryFrom::try_from(value).ok();
 
         state.add(&opt_sum, count as u64);
         Ok(())
@@ -120,7 +113,7 @@ where
         let state = AggregateAvgState::<SumT>::get(place);
         let value = columns[0].try_get(row)?;
 
-        let opt_sum: Option<T> = TryFromDataValue::try_from(value).ok();
+        let opt_sum: Option<T> = DFTryFrom::try_from(value).ok();
         let opt_sum: Option<SumT> = match opt_sum {
             Some(v) => NumCast::from(v),
             None => None,
@@ -169,16 +162,9 @@ impl<T, SumT> fmt::Display for AggregateAvgFunction<T, SumT> {
 
 impl<T, SumT> AggregateAvgFunction<T, SumT>
 where
-    T: NumCast
-        + TryFromDataValue<DataValue>
-        + Clone
-        + Copy
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
+    T: NumCast + DFTryFrom<DataValue> + Clone + Copy + Into<DataValue> + Send + Sync + 'static,
     SumT: NumCast
-        + TryFromDataValue<DataValue>
+        + DFTryFrom<DataValue>
         + Into<DataValue>
         + Clone
         + Copy

@@ -7,7 +7,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
-use common_datavalues::TryFromDataValue;
+use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -74,7 +74,7 @@ pub struct AggregateArgMinMaxFunction<T> {
 
 impl<T> AggregateFunction for AggregateArgMinMaxFunction<T>
 where
-    T: std::cmp::PartialOrd + Send + Sync + Clone + 'static + TryFromDataValue<DataValue>,
+    T: std::cmp::PartialOrd + Send + Sync + Clone + 'static + DFTryFrom<DataValue>,
     Option<T>: Into<DataValue> + BinarySer + BinaryDe,
 {
     fn name(&self) -> &str {
@@ -125,7 +125,8 @@ where
             if index_value[0].is_null() {
                 return Ok(());
             }
-            let value: Result<T> = TryFromDataValue::try_from(index_value[1].clone());
+            let value: Result<T> = DFTryFrom::try_from(index_value[1].clone());
+
             if let Ok(v) = value {
                 let data = columns[0].try_get(index_value[0].as_u64()? as usize)?;
                 let state = AggregateArgMinMaxState::<T>::get(place);
@@ -138,7 +139,7 @@ where
 
     fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
         let value = columns[1].try_get(row)?;
-        let value: Result<T> = TryFromDataValue::try_from(value);
+        let value: Result<T> = DFTryFrom::try_from(value);
         if let Ok(v) = value {
             let data = columns[0].try_get(row)?;
             let state = AggregateArgMinMaxState::<T>::get(place);
@@ -180,7 +181,7 @@ impl<T> fmt::Display for AggregateArgMinMaxFunction<T> {
 
 impl<T> AggregateArgMinMaxFunction<T>
 where
-    T: std::cmp::PartialOrd + Send + Sync + Clone + 'static + TryFromDataValue<DataValue>,
+    T: std::cmp::PartialOrd + Send + Sync + Clone + 'static + DFTryFrom<DataValue>,
     Option<T>: Into<DataValue> + BinarySer + BinaryDe,
 {
     pub fn try_create_arg_min(
@@ -214,10 +215,8 @@ pub fn try_create_aggregate_arg_min_function(
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_binary_arguments(display_name, arguments.len())?;
 
-    let data_type = arguments[0].data_type();
-    let ty = data_type.clone();
-    let args = arguments.clone();
-    let c = apply_numeric_creator! { ty, AggregateArgMinMaxFunction, try_create_arg_min, display_name, args};
+    let data_type = arguments[1].data_type();
+    let c = apply_numeric_creator! { data_type.clone(), AggregateArgMinMaxFunction, try_create_arg_min, display_name, arguments.clone()};
 
     if c.is_ok() {
         return c;
@@ -231,10 +230,8 @@ pub fn try_create_aggregate_arg_max_function(
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_binary_arguments(display_name, arguments.len())?;
 
-    let data_type = arguments[0].data_type();
-    let ty = data_type.clone();
-    let args = arguments.clone();
-    let c = apply_numeric_creator! { ty, AggregateArgMinMaxFunction, try_create_arg_max, display_name, args};
+    let data_type = arguments[1].data_type();
+    let c = apply_numeric_creator! { data_type.clone(), AggregateArgMinMaxFunction, try_create_arg_max, display_name, arguments.clone()};
 
     if c.is_ok() {
         return c;

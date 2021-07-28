@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
-use common_datavalues::TryFromDataValue;
+use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -59,9 +59,9 @@ pub struct AggregateSumFunction<T, SumT> {
 
 impl<T, SumT> AggregateFunction for AggregateSumFunction<T, SumT>
 where
-    T: NumCast + TryFromDataValue<DataValue> + Clone + Into<DataValue> + Send + Sync + 'static,
+    T: NumCast + DFTryFrom<DataValue> + Clone + Into<DataValue> + Send + Sync + 'static,
     SumT: NumCast
-        + TryFromDataValue<DataValue>
+        + DFTryFrom<DataValue>
         + Into<DataValue>
         + Clone
         + Copy
@@ -98,7 +98,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let value = sum_batch(&columns[0])?;
-        let opt_sum: Result<SumT> = TryFromDataValue::try_from(value);
+        let opt_sum: Result<SumT> = DFTryFrom::try_from(value);
 
         if let Ok(s) = opt_sum {
             let state = AggregateSumState::<SumT>::get(place);
@@ -110,7 +110,7 @@ where
     fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
         let value = columns[0].try_get(row)?;
 
-        let opt_sum: Result<T> = TryFromDataValue::try_from(value);
+        let opt_sum: Result<T> = DFTryFrom::try_from(value);
         if let Ok(s) = opt_sum {
             let s: Option<SumT> = NumCast::from(s);
             if let Some(s) = s {
@@ -154,9 +154,9 @@ impl<T, SumT> fmt::Display for AggregateSumFunction<T, SumT> {
 
 impl<T, SumT> AggregateSumFunction<T, SumT>
 where
-    T: NumCast + TryFromDataValue<DataValue> + Into<DataValue> + Clone + Send + Sync + 'static,
+    T: NumCast + DFTryFrom<DataValue> + Into<DataValue> + Clone + Send + Sync + 'static,
     SumT: NumCast
-        + TryFromDataValue<DataValue>
+        + DFTryFrom<DataValue>
         + Into<DataValue>
         + Clone
         + Copy

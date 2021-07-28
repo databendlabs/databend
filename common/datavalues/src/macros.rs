@@ -83,7 +83,7 @@ macro_rules! format_data_value_with_option {
 
 macro_rules! typed_cast_from_data_value_to_std {
     ($SCALAR:ident, $NATIVE:ident) => {
-        impl TryFromDataValue<DataValue> for $NATIVE {
+        impl DFTryFrom<DataValue> for $NATIVE {
             fn try_from(value: DataValue) -> Result<Self> {
                 match value {
                     DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),

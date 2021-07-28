@@ -4,7 +4,7 @@
 
 #[macro_export]
 macro_rules! apply_integer_creator {
-    ($data_type: ident, $creator: ident, $creator_fn: ident, $display_name: ident, $arguments: ident) => {{
+    ($data_type: expr, $creator: ident, $creator_fn: ident, $display_name: expr, $arguments: expr) => {{
         match $data_type {
             DataType::UInt8 => $creator::<u8>::$creator_fn($display_name, $arguments),
             DataType::UInt16 => $creator::<u16>::$creator_fn($display_name, $arguments),
@@ -26,7 +26,7 @@ macro_rules! apply_integer_creator {
 
 #[macro_export]
 macro_rules! apply_numeric_creator {
-    ($data_type: ident, $creator: ident, $creator_fn: ident, $display_name: ident, $arguments: ident) => {{
+    ($data_type: expr, $creator: ident, $creator_fn: ident, $display_name: expr, $arguments: expr) => {{
         match $data_type {
             DataType::UInt8 => $creator::<u8>::$creator_fn($display_name, $arguments),
             DataType::UInt16 => $creator::<u16>::$creator_fn($display_name, $arguments),
@@ -50,7 +50,7 @@ macro_rules! apply_numeric_creator {
 
 #[macro_export]
 macro_rules! apply_string_creator {
-    ($data_type: ident, $creator: ident, $creator_fn: ident, $display_name: ident, $arguments: ident) => {{
+    ($data_type: expr, $creator: ident, $creator_fn: ident, $display_name: expr, $arguments: expr) => {{
         match $data_type {
             DataType::Utf8 => $creator::<String>::$creator_fn($display_name, $arguments),
             other => Err(ErrorCode::BadDataValueType(format!(
@@ -64,7 +64,7 @@ macro_rules! apply_string_creator {
 
 #[macro_export]
 macro_rules! apply_numeric_creator_with_largest_type {
-    ($data_type: ident, $creator: ident, $creator_fn: ident,  $display_name: ident, $arguments: ident) => {{
+    ($data_type: expr, $creator: ident, $creator_fn: ident,  $display_name: expr, $arguments: expr) => {{
         match $data_type {
             DataType::UInt8 => $creator::<u8, u64>::$creator_fn($display_name, $arguments),
             DataType::UInt16 => $creator::<u16, u64>::$creator_fn($display_name, $arguments),

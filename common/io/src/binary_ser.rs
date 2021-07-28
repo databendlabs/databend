@@ -55,7 +55,7 @@ where T: BinarySer
                 writer.write_scalar(&1u8)?;
                 v.serialize(writer)
             }
-            None => writer.write_scalar(&1u8),
+            None => writer.write_scalar(&0u8),
         }
     }
 
@@ -65,7 +65,7 @@ where T: BinarySer
                 writer.write_scalar(&1u8)?;
                 v.serialize_to_buf(writer)
             }
-            None => writer.write_scalar(&1u8),
+            None => writer.write_scalar(&0u8),
         }
     }
 }
