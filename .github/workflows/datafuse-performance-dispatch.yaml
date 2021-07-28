@@ -73,9 +73,6 @@ jobs:
     - name: Start performance testing
       run: >-
             echo ${{ env.UUID }};
-#            echo "Start to create cluster";
-#            make cluster_create;
-            echo "Successfully created cluster, start to pull test images";
             make resource_apply -j 2;
             echo "Successfully deployed test pods, start to do performance test";
             make run_perf -j 2;
