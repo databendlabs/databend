@@ -50,10 +50,13 @@ impl Database for RemoteDatabase {
         false
     }
 
-    fn get_table(&self, _table_name: &str) -> Result<Arc<TableMeta>> {
-        match self.tables.read().name2meta.get(_table_name) {
+    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
+        match self.tables.read().name2meta.get(table_name) {
             Some(tbl) => Ok(tbl.clone()),
-            None => Err(ErrorCode::UnknownTable(_table_name)),
+            None => Err(ErrorCode::UnknownTable(format!(
+                "Unknown table: '{}'",
+                table_name
+            ))),
         }
     }
 

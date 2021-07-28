@@ -247,6 +247,7 @@ impl StateMachine {
             Cmd::DropDatabase { ref name } => {
                 let prev = self.databases.get(name).cloned();
                 if prev.is_some() {
+                    self.remove_db_data_parts(name);
                     self.databases.remove(name);
                     self.incr_seq(SEQ_DATABASE_META_ID);
                     tracing::debug!("applied DropDatabase: {}", name);
