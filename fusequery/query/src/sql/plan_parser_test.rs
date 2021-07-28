@@ -172,6 +172,15 @@ fn test_plan_parser() -> Result<()> {
             expect: "",
             error: "Code: 2, displayText = CTE is not yet implement.",
         },
+        Test {
+            name: "kleene-logic",
+            sql: "select * from numbers(10) where null and true;",
+            expect: "\
+            Projection: number:UInt64\
+            \n  Filter: (NULL AND true)\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            error: "",
+        }
     ];
 
     let ctx = crate::tests::try_create_context()?;
