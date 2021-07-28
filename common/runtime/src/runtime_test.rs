@@ -2,12 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
