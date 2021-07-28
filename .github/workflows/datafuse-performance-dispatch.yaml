@@ -41,30 +41,10 @@ jobs:
         -H "Content-Type: application/json" \
         --data '{"state":"pending","context":"run-perf-status","target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install awscli
 
-    - name: Sync S3 status
-      run: |
         echo "sync status to S3"
         echo '{"uuid": "${{ env.UUID }}", "status": "PENDING"}' > status.json
         aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
-    - name: Checkout tools repo
-      uses: actions/checkout@v2
-      with:
-        repository: datafuselabs/test-infra
-        ref: main
-    - uses: actions/setup-go@v2
-      with:
-        stable: 'true'
-        go-version: '1.15.12'
-    - name: build latest binary
-      run: make build
     - name: Bootstrap cluster
       run: >-
             echo ${{ env.UUID }};
