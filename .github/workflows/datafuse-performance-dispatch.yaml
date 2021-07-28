@@ -54,11 +54,27 @@ jobs:
       run: |
         export PATH=$PATH:/usr/local/go/bin
         make build
-    - name: Bootstrap cluster
+    - uses: AbsaOSS/k3d-action@v1.5.0
+      name: "Create Single Cluster"
+      with:
+        cluster-name: "fusebench"
+        args: >-
+          -p "8083:80@agent[0]"
+          -p "8443:443@agent[0]"
+          -p "5053:53/udp@agent[0]"
+          --agents 3
+          --no-lb
+          --image docker.io/rancher/k3s:v1.20.4-k3s1
+          --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
+    - name: testing environment set up
+      run: |
+        kubectl label node k3d-k3s-fusebench-agent-0 test-branch=${{env.CURRENT}}
+        kubectl label node k3d-k3s-fusebench-agent-0 test-branch=${{env.REFERENCE}}
+    - name: Start performance testing
       run: >-
             echo ${{ env.UUID }};
-            echo "Start to create cluster";
-            make cluster_create;
+#            echo "Start to create cluster";
+#            make cluster_create;
             echo "Successfully created cluster, start to pull test images";
             make resource_apply -j 2;
             echo "Successfully deployed test pods, start to do performance test";
@@ -89,7 +105,7 @@ jobs:
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
     - name: Delete all resources
       if: always()
-      run: make clean &> /dev/null
+      run: make clean
 #     - name: Delete all resources
 #       if: always()
 #       uses: docker://zhihanz/test-infra:master
