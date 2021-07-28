@@ -66,12 +66,15 @@ jobs:
           --no-lb
           --image docker.io/rancher/k3s:v1.20.4-k3s1
           --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
+          --timeout 180s
     - name: testing environment set up
       run: |
         kubectl label node k3d-fusebench-agent-0 test-branch=${{env.CURRENT}}
         kubectl label node k3d-fusebench-agent-1 test-branch=${{env.REFERENCE}}
+        kubectl wait -n kube-system --timeout=30s --for condition=Ready --all pods
         kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/namespace.yaml
         kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/metallb.yaml
+        kubectl wait -n metallb-system --timeout=30s --for condition=Ready --all pods
         kubectl apply -f ./manifests/lb_configs.yaml
         kubectl apply -f ./manifests/config.yaml
     - name: Start performance testing
