@@ -51,7 +51,9 @@ jobs:
         repository: datafuselabs/test-infra
         ref: main
     - name: build latest binary
-      run: make build
+      run: |
+        export PATH=$PATH:/usr/local/go/bin
+        make build
     - name: Bootstrap cluster
       run: >-
             echo ${{ env.UUID }};
