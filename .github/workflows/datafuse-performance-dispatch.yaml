@@ -69,7 +69,11 @@ jobs:
     - name: testing environment set up
       run: |
         kubectl label node k3d-fusebench-agent-0 test-branch=${{env.CURRENT}}
-        kubectl label node k3d-fusebench-agent-0 test-branch=${{env.REFERENCE}}
+        kubectl label node k3d-fusebench-agent-1 test-branch=${{env.REFERENCE}}
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/namespace.yaml
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/metallb.yaml
+        kubectl apply -f ./manifests/lb_configs.yaml
+        kubectl apply -f ./manifests/config.yaml
     - name: Start performance testing
       run: >-
             echo ${{ env.UUID }};
