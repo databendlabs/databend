@@ -45,6 +45,13 @@ jobs:
         echo "sync status to S3"
         echo '{"uuid": "${{ env.UUID }}", "status": "PENDING"}' > status.json
         aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
+    - name: Checkout tools repo
+      uses: actions/checkout@v2
+      with:
+        repository: datafuselabs/test-infra
+        ref: main
+    - name: build latest binary
+      run: make build
     - name: Bootstrap cluster
       run: >-
             echo ${{ env.UUID }};
