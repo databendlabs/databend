@@ -41,7 +41,7 @@ common-management = { path = "../../common/management" }
 common-metatypes = { path = "../../common/metatypes" }
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "ed40333" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193" }
 clickhouse-srv = "0.3.1"
@@ -71,7 +71,7 @@ rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
-structopt-toml = "0.4.5"
+structopt-toml = "0.5.0"
 threadpool = "1.8.1"
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
