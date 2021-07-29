@@ -32,6 +32,7 @@ use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
+use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
@@ -95,6 +96,7 @@ pub trait PlanVisitor {
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
+            PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
@@ -249,6 +251,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_show_create_table(&mut self, _: &ShowCreateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_truncate_table(&mut self, _: &TruncateTablePlan) -> Result<()> {
         Ok(())
     }
 }

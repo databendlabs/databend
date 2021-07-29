@@ -12,6 +12,7 @@ use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -103,12 +104,13 @@ impl Processor for AggregatorPartialTransform {
         tracing::debug!("Aggregator partial cost: {:?}", delta);
 
         let mut columns: Vec<Series> = vec![];
-        for (idx, func) in funcs.iter().enumerate() {
-            let mut writer = vec![];
-            func.serialize(places[idx], &mut writer)?;
-            let mut array_builder = BinaryArrayBuilder::new(4);
-            array_builder.append_value(writer);
 
+        let mut bytes = BytesMut::new();
+        for (idx, func) in funcs.iter().enumerate() {
+            func.serialize(places[idx], &mut bytes)?;
+            let mut array_builder = BinaryArrayBuilder::new(4);
+            array_builder.append_value(&bytes[..]);
+            bytes.clear();
             let array = array_builder.finish();
             let col = array.into_series();
             columns.push(col);

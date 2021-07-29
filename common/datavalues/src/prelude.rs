@@ -37,6 +37,7 @@ pub use crate::columns::DataColumnCommon;
 pub use crate::data_array_filter::*;
 pub use crate::data_df_type::*;
 pub use crate::data_type_coercion::*;
+pub use crate::data_value::DFTryFrom;
 // series
 pub use crate::series::IntoSeries;
 pub use crate::series::Series;

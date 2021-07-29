@@ -97,6 +97,8 @@ impl Table for NumbersTable {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
+            table_id: scan.table_id,
+            table_version: scan.table_version,
             schema: self.schema.clone(),
             parts: Common::generate_parts(0, ctx.get_settings().get_max_threads()?, total),
             statistics: statistics.clone(),

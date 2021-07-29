@@ -11,6 +11,7 @@ use common_exception::Result;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
+use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::sessions::FuseQueryContextRef;
@@ -45,6 +46,17 @@ pub trait Table: Sync + Send {
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",
+            self.name()
+        )))
+    }
+
+    async fn truncate(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _truncate_plan: TruncateTablePlan,
+    ) -> Result<()> {
+        Err(ErrorCode::UnImplement(format!(
+            "truncate for local table {} is not implemented",
             self.name()
         )))
     }

@@ -22,7 +22,6 @@ use crate::ExplainPlan;
 use crate::ExplainType;
 use crate::Expression;
 use crate::ExpressionPlan;
-use crate::Extras;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitByPlan;
@@ -30,7 +29,6 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::RewriteHelper;
-use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SortPlan;
 
@@ -194,39 +192,6 @@ impl PlanBuilder {
             aggr_expr,
             group_expr,
         )
-    }
-
-    /// Scan a data source
-    pub fn scan(
-        schema_name: &str,
-        _table_name: &str,
-        table_schema: &DataSchema,
-        projection: Option<Vec<usize>>,
-        table_args: Option<Expression>,
-        limit: Option<usize>,
-    ) -> Result<Self> {
-        let table_schema = DataSchemaRef::new(table_schema.clone());
-        let projected_schema = projection.clone().map(|p| {
-            DataSchemaRefExt::create(p.iter().map(|i| table_schema.field(*i).clone()).collect())
-                .as_ref()
-                .clone()
-        });
-        let projected_schema = match projected_schema {
-            None => table_schema.clone(),
-            Some(v) => Arc::new(v),
-        };
-
-        Ok(Self::from(&PlanNode::Scan(ScanPlan {
-            schema_name: schema_name.to_owned(),
-            table_schema,
-            projected_schema,
-            table_args,
-            push_downs: Extras {
-                projection,
-                filters: vec![],
-                limit,
-            },
-        })))
     }
 
     /// Apply a filter

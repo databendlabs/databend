@@ -13,7 +13,7 @@ use futures::channel::*;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
@@ -150,7 +150,7 @@ impl Session {
         self.sessions.processes_info()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
+    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.sessions.get_datasource()
     }
 }

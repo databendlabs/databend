@@ -13,6 +13,7 @@ use common_planners::ExpressionPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
+use common_planners::TableScanInfo;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::FuseQueryContextRef;
@@ -46,28 +47,40 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                 {
                     let db_name = "system";
                     let table_name = "one";
+                    let table_id = 1;
+                    let table_version = None;
 
                     let dummy_read_plan =
-                        self.ctx.get_table(db_name, table_name).and_then(|table| {
-                            table
-                                .schema()
-                                .and_then(|ref schema| {
-                                    PlanBuilder::scan(db_name, table_name, schema, None, None, None)
-                                })
-                                .and_then(|builder| builder.build())
-                                .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                                    PlanNode::Scan(ref dummy_scan_plan) => table
-                                        .read_plan(
-                                            self.ctx.clone(),
-                                            dummy_scan_plan,
-                                            self.ctx.get_settings().get_max_threads()? as usize,
-                                        )
-                                        .map(PlanNode::ReadSource),
-                                    _unreachable_plan => {
-                                        panic!("Logical error: cannot downcast to scan plan")
-                                    }
-                                })
-                        })?;
+                        self.ctx
+                            .get_table(db_name, table_name)
+                            .and_then(|table_meta| {
+                                let table = table_meta.datasource();
+                                table
+                                    .schema()
+                                    .and_then(|ref schema| {
+                                        let tbl_scan_info = TableScanInfo {
+                                            table_name,
+                                            table_id,
+                                            table_version,
+                                            table_schema: schema.as_ref(),
+                                            table_args: None,
+                                        };
+                                        PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+                                    })
+                                    .and_then(|builder| builder.build())
+                                    .and_then(|dummy_scan_plan| match dummy_scan_plan {
+                                        PlanNode::Scan(ref dummy_scan_plan) => table
+                                            .read_plan(
+                                                self.ctx.clone(),
+                                                dummy_scan_plan,
+                                                self.ctx.get_settings().get_max_threads()? as usize,
+                                            )
+                                            .map(PlanNode::ReadSource),
+                                        _unreachable_plan => {
+                                            panic!("Logical error: cannot downcast to scan plan")
+                                        }
+                                    })
+                            })?;
                     let rows = read_source_plan.statistics.read_rows as u64;
                     let states = DataValue::Struct(vec![DataValue::UInt64(Some(rows))]);
                     let ser = serde_json::to_string(&states)?;

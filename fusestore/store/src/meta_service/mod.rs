@@ -39,6 +39,7 @@ pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledSerde;
 pub use sled_tree::SledTree;
 pub use sled_tree::SledValueToKey;
+pub use sled_vartype_tree::AsType;
 pub use sled_vartype_tree::SledVarTypeTree;
 pub use snapshot::Snapshot;
 pub use state_machine::Node;

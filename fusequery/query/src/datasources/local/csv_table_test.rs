@@ -36,6 +36,8 @@ async fn test_csv_table() -> Result<()> {
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
         table_schema: DataSchemaRefExt::create(vec![]),
+        table_id: 0,
+        table_version: None,
         table_args: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column1",
@@ -107,6 +109,8 @@ async fn test_csv_table_parse_error() -> Result<()> {
     )?;
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
+        table_id: 0,
+        table_version: None,
         table_schema: DataSchemaRefExt::create(vec![]),
         table_args: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(

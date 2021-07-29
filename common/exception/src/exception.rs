@@ -153,6 +153,7 @@ build_exceptions! {
     BadBytes(46),
     InitPrometheusFailure(47),
     ScalarSubqueryBadRows(48),
+    Overflow(49),
 
 
     // uncategorized
