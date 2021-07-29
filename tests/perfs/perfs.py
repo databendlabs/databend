@@ -2,7 +2,7 @@
 import json
 
 from errno import ESRCH
-
+import configargparse
 import yaml
 import re
 import subprocess
@@ -170,7 +170,7 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(description='fuse perf tests')
+    parser = configargparse.ArgParser()
     parser.add_argument('-o', '--output', default=".", help='Perf results directory')
     parser.add_argument('-b', '--bin', default="fuse-benchmark", help='Fuse benchmark binary')
     parser.add_argument('--host', default="127.0.0.1", help='Clickhouse handler Server host')
@@ -180,12 +180,12 @@ if __name__ == '__main__':
                         help='Set default iteration number for each performance tests to run')
     parser.add_argument('-t', '--type', default="local",
                         help='Set storage endpoint for performance testing, support local and COS')
-    parser.add_argument('--region', default="", help='Set storage region')
-    parser.add_argument('--bucket', default="", help='Set storage bucket')
+    parser.add_argument('--region', default="", help='Set storage region', env_var='REGION')
+    parser.add_argument('--bucket', default="", help='Set storage bucket', env_var='BUCKET')
     parser.add_argument('--path', default="", help='Set absolute path to store objects')
-    parser.add_argument('--secretID', default="", help='Set storage secret ID')
-    parser.add_argument('--secretKey', default="", help='Set storage secret Key')
-    parser.add_argument('--endpoint', default="", help='Set storage endpoint')
+    parser.add_argument('--secretID', default="", help='Set storage secret ID', env_var='SECRET_ID')
+    parser.add_argument('--secretKey', default="", help='Set storage secret Key', env_var='SECRET_KEY')
+    parser.add_argument('--endpoint', default="", help='Set storage endpoint', env_var='ENDPOINT')
     parser.add_argument('--rerun', default="False",
                         help='if rerun set as true, it will rerun all perfs.yaml completely')
     args = parser.parse_args()
