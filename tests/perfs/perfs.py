@@ -50,6 +50,48 @@ def build_COSclient(secretID, secretKey, Region, Endpoint):
     return client
 
 
+def save_json(client, bucket, path, output, file):
+    with open(os.path.join(output, "index.json"), 'w') as outfile:
+        json.dump(file, outfile)
+    with open(os.path.join(output, "index.json"), 'rb') as fp:
+        response = client.put_object(
+            Bucket=bucket,
+            Body=fp,
+            Key=os.path.join(path, "index.json"),
+            StorageClass='STANDARD',
+            EnableMD5=False
+        )
+        logging.warning(response['ETag'])
+
+
+def update_index(client, bucket, path, key, file_name, output):
+    try:
+        response = client.get_object(
+            Bucket=bucket,
+            Key=os.path.join(path, "index.json"),
+        )
+    except CosServiceError as e:
+        if e.get_error_code() == 'NoSuchKey':
+            new_index = {'Contents': []}
+            new_index['Contents'].append({
+                'path': key,
+                'file_name': file_name,
+            })
+            save_json(client, bucket, path, output, new_index)
+        else:
+            logging.info("other issue occured, {}".format(e.get_error_code()))
+    except ConnectionError as ce:
+        logging.info("timeout during index update")
+    else:
+        # Update index
+        new_index = json.load(response['Body'].get_raw_stream())
+        new_index['Contents'].append({
+            'path': key,
+            'file_name': file_name,
+        })
+        save_json(client, bucket, path, output, new_index)
+
+
 def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, type, region, bucket, S3path, secretID,
             secretKey, endpoint, rerun):
     base_cfg = conf['config']
@@ -67,11 +109,12 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
     if type == "COS":
         if rerun == "False":
             COScli = build_COSclient(secretID, secretKey, region, endpoint)
-            try :
-                response = COScli.head_object(
-                        Bucket=bucket,
-                        Key=S3key
-                    )
+            try:
+                response = COScli.get_object(
+                    Bucket=bucket,
+                    Key=os.path.join(S3path, "index.json"),
+                )
+
             except CosServiceError as e:
                 if e.get_error_code() == 'NoSuchResource':
                     logging.info("continue on test")
@@ -79,10 +122,14 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
                     logging.info("other issue occured, {}".format(e.get_error_code()))
             except ConnectionError as ce:
                 logging.info("timeout for {}".format(S3key))
-            else :
+            else:
                 # S3 key exists in given bucket just return
-                logging.info("S3 key {} found in bucket and not continue on it".format(S3key))
-                return
+                index = json.load(response['Body'].get_raw_stream())
+                file_dict = {}
+                for elem in index['Contents']:
+                    if elem['path'] == S3key:
+                        logging.info("S3 key {} found in bucket and not continue on it".format(S3key))
+                        return
     command = '{} -c {} -i {} -h {} -p {} --query "{}" --json "{}" '.format(bin_path, concurrency, iterations, host,
                                                                             port, suit['query'], json_path)
     logging.warning("perf {}, query: {} \n".format(suit_name, suit['query']))
@@ -102,11 +149,8 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
                 StorageClass='STANDARD',
                 EnableMD5=False
             )
-            index['Contents'].append({
-                'path':  S3key,
-                'file_name': file_name,
-            })
             logging.warning(response['ETag'])
+            update_index(COScli, bucket, S3path, S3key, file_name, output_dir)
 
     global failures
     global passed
@@ -142,22 +186,11 @@ if __name__ == '__main__':
     parser.add_argument('--secretID', default="", help='Set storage secret ID')
     parser.add_argument('--secretKey', default="", help='Set storage secret Key')
     parser.add_argument('--endpoint', default="", help='Set storage endpoint')
-    parser.add_argument('--rerun', default="False", help='if rerun set as true, it will rerun all perfs.yaml completely')
+    parser.add_argument('--rerun', default="False",
+                        help='if rerun set as true, it will rerun all perfs.yaml completely')
     args = parser.parse_args()
 
     for suit in conf['perfs']:
         execute(suit, args.bin, args.host, args.port, args.concurrency, args.iteration, args.output,
                 args.type, args.region, args.bucket, args.path, args.secretID, args.secretKey, args.endpoint,
                 args.rerun)
-    with open(os.path.join(args.output, "index.json"), 'w') as outfile:
-        json.dump(index, outfile)
-    s3 = build_COSclient(args.secretID, args.secretKey, args.region, args.endpoint)
-    with open(os.path.join(args.output, "index.json"), 'rb') as fp:
-        response = s3.put_object(
-            Bucket=args.bucket,
-            Body=fp,
-            Key=os.path.join(args.path, "index.json"),
-            StorageClass='STANDARD',
-            EnableMD5=False
-        )
-        logging.warning(response['ETag'])
