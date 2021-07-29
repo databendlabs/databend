@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+mod command;
 mod processor;
-mod root;
 mod versions;
+mod writer;
 
 pub use processor::Processor;
-pub use root::RootCommand;
 pub use versions::version::VersionCommand;
+pub use writer::Writer;

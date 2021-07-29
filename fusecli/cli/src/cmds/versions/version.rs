@@ -2,38 +2,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::io::Write;
+
 use sha2::Digest;
 use sha2::Sha256;
 use structopt::StructOpt;
 use sysinfo::SystemExt;
 
+use crate::cmds::command::Command;
+use crate::cmds::Writer;
 use crate::error::Result;
 
 #[derive(StructOpt, Debug)]
 pub struct VersionCommand {}
 
 impl VersionCommand {
-    pub async fn execute(&self) -> Result<()> {
-        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
-        let (ver, git, ts) = match (build_semver, git_sha, timestamp) {
-            (Some(ver), Some(git), Some(ts)) => (ver, git, ts),
-            _ => ("", "", ""),
-        };
-
-        self.print("Datafuse CLI", ver);
-        if let Some(sha) = self.cli_sha_info() {
-            self.print("Datafuse CLI SHA256", &sha);
-        }
-        self.print("Git commit", git);
-        self.print("Build date", ts);
-
-        if let Some(os) = self.os_info() {
-            self.print("OS version", &os);
-        }
-
-        Ok(())
+    pub fn create() -> Self {
+        VersionCommand {}
     }
 
     fn cli_sha_info(&self) -> Option<String> {
@@ -58,8 +43,33 @@ impl VersionCommand {
         Some(info)
     }
 
-    fn print(&self, name: &str, version: &str) {
+    fn print(&self, writer: &mut Writer, name: &str, version: &str) {
         let width = 20;
-        println!("{:width$} : {}", name, version, width = width);
+        writeln!(writer, "{:width$} : {}", name, version, width = width).unwrap();
+    }
+}
+
+impl Command for VersionCommand {
+    fn exec(&self, writer: &mut Writer) -> Result<()> {
+        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
+        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
+        let (ver, git, ts) = match (build_semver, git_sha, timestamp) {
+            (Some(ver), Some(git), Some(ts)) => (ver, git, ts),
+            _ => ("", "", ""),
+        };
+
+        self.print(writer, "Datafuse CLI", ver);
+        if let Some(sha) = self.cli_sha_info() {
+            self.print(writer, "Datafuse CLI SHA256", &sha);
+        }
+        self.print(writer, "Git commit", git);
+        self.print(writer, "Build date", ts);
+
+        if let Some(os) = self.os_info() {
+            self.print(writer, "OS version", &os);
+        }
+
+        Ok(())
     }
 }
