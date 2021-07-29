@@ -8,6 +8,7 @@ use std::ops::RangeBounds;
 use async_raft::raft::Entry;
 use common_tracing::tracing;
 
+use crate::configs;
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
 use crate::meta_service::SledSerde;
@@ -41,9 +42,12 @@ impl SledValueToKey<LogIndex> for Entry<LogEntry> {
 
 impl RaftLog {
     /// Open RaftLog
-    pub async fn open(db: &sled::Db) -> common_exception::Result<RaftLog> {
+    pub async fn open(
+        db: &sled::Db,
+        config: &configs::Config,
+    ) -> common_exception::Result<RaftLog> {
         let rl = RaftLog {
-            inner: SledTree::open(db, TREE_RAFT_LOG).await?,
+            inner: SledTree::open(db, TREE_RAFT_LOG, config.meta_sync()).await?,
         };
         Ok(rl)
     }

@@ -51,6 +51,9 @@ pub struct StoreTestContext {
 pub fn new_test_context() -> StoreTestContext {
     let mut config = configs::Config::empty();
 
+    // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+    config.meta_no_sync = true;
+
     config.meta_api_port = next_port();
 
     let host = "127.0.0.1";
@@ -86,6 +89,7 @@ pub fn new_test_context() -> StoreTestContext {
 pub struct SledTestContext {
     #[allow(dead_code)]
     temp_dir: TempDir,
+    pub config: configs::Config,
     pub db: sled::Db,
 }
 
@@ -94,9 +98,14 @@ pub fn new_sled_test_context() -> SledTestContext {
     let t = tempdir().expect("create temp dir to store meta");
     let tmpdir = t.path().to_str().unwrap().to_string();
 
+    // config for unit test of sled db, meta_sync() is true by default.
+    let config = configs::Config::empty();
+
     SledTestContext {
         // hold the TempDir until being dropped.
         temp_dir: t,
+        config,
+        // TODO(xp): one db per process.
         db: sled::open(tmpdir).expect("open sled db"),
     }
 }

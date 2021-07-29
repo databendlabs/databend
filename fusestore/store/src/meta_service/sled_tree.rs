@@ -25,7 +25,16 @@ pub trait SledValueToKey<K> {
 /// The value type `V` can be any serialize impl, i.e. for most cases, to impl trait `SledSerde`.
 pub struct SledTree<K: SledOrderedSerde + Display + Debug, V: SledSerde> {
     pub name: String,
+
+    /// Whether to fsync after an write operation.
+    /// With sync==false, it WONT fsync even when user tell it to sync.
+    /// This is only used for testing when fsync is quite slow.
+    /// E.g. File::sync_all takes 10 ~ 30 ms on a Mac.
+    /// See: https://github.com/drmingdrmer/sledtest/blob/500929ab0b89afe547143a38fde6fe85d88f1f80/src/ben_sync.rs
+    sync: bool,
+
     pub(crate) tree: sled::Tree,
+
     phantom_k: PhantomData<K>,
     phantom_v: PhantomData<V>,
 }
@@ -35,6 +44,7 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
     pub async fn open<N: AsRef<[u8]> + Display>(
         db: &sled::Db,
         tree_name: N,
+        sync: bool,
     ) -> common_exception::Result<Self> {
         let t = db
             .open_tree(&tree_name)
@@ -44,6 +54,7 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
 
         let rl = SledTree {
             name: format!("{}", tree_name),
+            sync,
             tree: t,
             phantom_k: PhantomData,
             phantom_v: PhantomData,
@@ -125,7 +136,10 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
                 format!("batch delete: {}", range_mes,)
             })?;
 
-        if flush {
+        if flush && self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-range-delete");
+            let _ent = span.enter();
+
             self.tree
                 .flush_async()
                 .await
@@ -196,10 +210,15 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append")?;
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-append");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
+        }
 
         Ok(())
     }
@@ -223,8 +242,8 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append_values")?;
 
-        {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-append");
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-append-values");
             let _ent = span.enter();
 
             self.tree
@@ -255,7 +274,7 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
             Some(x) => Some(V::de(x)?),
         };
 
-        {
+        if self.sync {
             let span = tracing::span!(tracing::Level::DEBUG, "flush-insert");
             let _ent = span.enter();
 
