@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::io::Write;
-
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -34,7 +32,7 @@ impl Command for HelpCommand {
 
     fn exec(&self, writer: &mut Writer) -> Result<()> {
         for cmd in self.commands.iter() {
-            writeln!(writer, "{:width$}{}", cmd.name(), cmd.about(), width = 20)?;
+            writer.writeln(cmd.name(), cmd.about());
         }
         Ok(())
     }

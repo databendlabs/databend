@@ -19,6 +19,11 @@ impl Writer {
             output: WriterOutput::Stdout(std::io::stdout()),
         }
     }
+
+    pub fn writeln(&mut self, name: &str, value: &str) {
+        let width = 20;
+        writeln!(self, "{:width$} {}", name, value, width = width).unwrap();
+    }
 }
 
 impl Write for Writer {

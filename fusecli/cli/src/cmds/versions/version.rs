@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::io::Write;
-
 use sha2::Digest;
 use sha2::Sha256;
 use sysinfo::SystemExt;
@@ -41,11 +39,6 @@ impl VersionCommand {
 
         Some(info)
     }
-
-    fn print(&self, writer: &mut Writer, name: &str, version: &str) {
-        let width = 20;
-        writeln!(writer, "{:width$} : {}", name, version, width = width).unwrap();
-    }
 }
 
 impl Command for VersionCommand {
@@ -70,15 +63,15 @@ impl Command for VersionCommand {
             _ => ("", "", ""),
         };
 
-        self.print(writer, "Datafuse CLI", ver);
+        writer.writeln("Datafuse CLI", ver);
         if let Some(sha) = self.cli_sha_info() {
-            self.print(writer, "Datafuse CLI SHA256", &sha);
+            writer.writeln("Datafuse CLI SHA256", &sha);
         }
-        self.print(writer, "Git commit", git);
-        self.print(writer, "Build date", ts);
+        writer.writeln("Git commit", git);
+        writer.writeln("Build date", ts);
 
         if let Some(os) = self.os_info() {
-            self.print(writer, "OS version", &os);
+            writer.writeln("OS version", &os);
         }
 
         Ok(())
