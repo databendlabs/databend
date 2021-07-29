@@ -48,7 +48,7 @@ fn init_tracing_stdout() {
 
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_service_name("fuse-store")
-            .install_simple()
+            .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
         let ot_layer = tracing_opentelemetry::layer().with_tracer(tracer);
