@@ -84,6 +84,12 @@ fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name: "truncate-table-passed",
+            sql: "TRUNCATE TABLE db1.t1",
+            expect: "",
+            error: "",
+        },
+        Test {
             name: "cast-passed",
             sql: "select cast('1' as int)",
             expect: "Projection: cast(1 as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",

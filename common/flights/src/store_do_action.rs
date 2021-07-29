@@ -22,6 +22,7 @@ use crate::impls::meta_api_impl::GetDatabaseAction;
 use crate::impls::meta_api_impl::GetDatabaseMetaAction;
 use crate::impls::meta_api_impl::GetTableAction;
 use crate::impls::storage_api_impl::ReadPlanAction;
+use crate::impls::storage_api_impl::TruncateTableAction;
 use crate::protobuf::FlightStoreRequest;
 
 pub trait RequestFor {
@@ -55,6 +56,7 @@ pub enum StoreDoAction {
     GetTable(GetTableAction),
     GetDatabaseMeta(GetDatabaseMetaAction),
     ReadPlan(ReadPlanAction),
+    TruncateTable(TruncateTableAction),
 
     // general purpose kv
     UpsertKV(UpsertKVAction),

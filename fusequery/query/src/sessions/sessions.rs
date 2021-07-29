@@ -20,14 +20,14 @@ use metrics::counter;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::DatabaseCatalog;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) cluster: ClusterRef,
-    pub(in crate::sessions) datasource: Arc<DataSource>,
+    pub(in crate::sessions) datasource: Arc<DatabaseCatalog>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -40,7 +40,7 @@ impl SessionManager {
         Ok(Arc::new(SessionManager {
             conf: Config::default(),
             cluster: Cluster::empty(),
-            datasource: Arc::new(DataSource::try_create()?),
+            datasource: Arc::new(DatabaseCatalog::try_create()?),
 
             max_sessions: max_mysql_sessions as usize,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
@@ -54,7 +54,7 @@ impl SessionManager {
         Ok(Arc::new(SessionManager {
             conf,
             cluster,
-            datasource: Arc::new(DataSource::try_create()?),
+            datasource: Arc::new(DatabaseCatalog::try_create()?),
 
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
@@ -65,7 +65,7 @@ impl SessionManager {
         self.cluster.clone()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
+    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.datasource.clone()
     }
 
