@@ -361,7 +361,6 @@ where
             builder.append_slice(values);
         } else {
             values.iter().enumerate().for_each(|(idx, v)| {
-                let _ = &builder;
                 if array.is_valid(idx) {
                     builder.append_value(*v);
                 } else {

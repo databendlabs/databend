@@ -20,7 +20,6 @@ impl DataBlock {
         let columns = fields
             .iter()
             .map(|f| {
-                let _ = (&constant_columns, &indices);
                 let column = raw.try_column_by_name(f.name())?;
                 if constant_columns.contains(f.name()) {
                     let v = column.try_get(indices[0] as usize)?;

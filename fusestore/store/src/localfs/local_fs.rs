@@ -40,10 +40,8 @@ impl FileSystem for LocalFS {
         let _tail = an.next();
         let base = an.next();
         if let Some(b) = base {
-            std::fs::create_dir_all(b).with_context(|| {
-                let _ = &b;
-                format!("LocalFS: fail create dir {}", b.display())
-            })?
+            std::fs::create_dir_all(b)
+                .with_context(|| format!("LocalFS: fail create dir {}", b.display()))?
         };
 
         let mut f = OpenOptions::new()

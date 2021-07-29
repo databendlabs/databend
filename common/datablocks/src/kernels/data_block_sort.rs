@@ -87,10 +87,7 @@ impl DataBlock {
             .columns()
             .iter()
             .zip(rhs.columns().iter())
-            .map(|(a, b)| {
-                let _ = &indices;
-                DataColumnCommon::merge_columns(a, b, indices)
-            })
+            .map(|(a, b)| DataColumnCommon::merge_columns(a, b, indices))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::create(lhs.schema().clone(), arrays))

@@ -597,7 +597,6 @@ impl MetaNode {
     /// Start the grpc service for raft communication and meta operation API.
     #[tracing::instrument(level = "info", skip(mn))]
     pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> common_exception::Result<()> {
-        let _ = &addr;
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = MetaServiceImpl::create(mn.clone());
@@ -641,7 +640,6 @@ impl MetaNode {
 
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn stop(&self) -> common_exception::Result<i32> {
-        let _ = &self;
         // TODO need to be reentrant.
 
         let mut rx = self.raft.metrics();
@@ -811,7 +809,6 @@ impl MetaNode {
     // get a file from local meta state, most business logic without strong consistency requirement should use this to access meta.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_file(&self, key: &str) -> Option<String> {
-        let _ = &key;
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -834,7 +831,6 @@ impl MetaNode {
         node_id: NodeId,
         addr: String,
     ) -> common_exception::Result<AppliedState> {
-        let _ = &self;
         // TODO: use txid?
         let _resp = self
             .write(LogEntry {
@@ -855,7 +851,6 @@ impl MetaNode {
     /// The returned value may not be the latest written.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_database(&self, name: &str) -> Option<Database> {
-        let _ = &name;
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -893,7 +888,6 @@ impl MetaNode {
         db_name: &str,
         table_name: &str,
     ) -> Option<Vec<DataPartInfo>> {
-        let _ = (&db_name, &table_name);
         let sm = self.sto.state_machine.read().await;
         sm.get_data_parts(db_name, table_name)
     }
@@ -905,28 +899,24 @@ impl MetaNode {
         table_name: &str,
         append_res: &AppendResult,
     ) {
-        let _ = (&db_name, &table_name);
         let mut sm = self.sto.state_machine.write().await;
         sm.append_data_parts(db_name, table_name, append_res)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn remove_table_data_parts(&self, db_name: &str, table_name: &str) {
-        let _ = (&db_name, &table_name);
         let mut sm = self.sto.state_machine.write().await;
         sm.remove_table_data_parts(db_name, table_name)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn remove_db_data_parts(&self, db_name: &str) {
-        let _ = &db_name;
         let mut sm = self.sto.state_machine.write().await;
         sm.remove_db_data_parts(db_name)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_kv(&self, key: &str) -> Option<SeqValue> {
-        let _ = &key;
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -938,7 +928,6 @@ impl MetaNode {
         &self,
         keys: &[impl AsRef<str> + std::fmt::Debug],
     ) -> Vec<Option<SeqValue>> {
-        let _ = &keys;
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.mget_kv(keys)
@@ -946,7 +935,6 @@ impl MetaNode {
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
-        let _ = &prefix;
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.prefix_list_kv(prefix)
@@ -955,7 +943,6 @@ impl MetaNode {
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {
-        let _ = &self;
         let mut curr_leader = self.get_leader().await;
         loop {
             let rst = if curr_leader == self.sto.id {

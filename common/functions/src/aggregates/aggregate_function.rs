@@ -32,10 +32,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         columns: &[DataColumn],
         input_rows: usize,
     ) -> Result<()> {
-        (0..input_rows).try_for_each(|row| {
-            let _ = (&self, &columns);
-            self.accumulate_row(place, row, columns)
-        })
+        (0..input_rows).try_for_each(|row| self.accumulate_row(place, row, columns))
     }
 
     // used when we need to caclulate row by row

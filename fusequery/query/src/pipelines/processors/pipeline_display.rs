@@ -27,7 +27,6 @@ impl Pipeline {
                 let mut index = 0;
 
                 self.0.walk_preorder(|pipe| {
-                    let _ = &self;
                     write_indent(f)?;
 
                     let ways = pipe.nums();

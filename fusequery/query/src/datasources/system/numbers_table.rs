@@ -83,7 +83,6 @@ impl Table for NumbersTable {
         }
 
         let total = total.ok_or_else(|| {
-            let _ = &self;
             ErrorCode::BadArguments(format!(
                 "Must have one number argument for table: system.{}",
                 self.name()

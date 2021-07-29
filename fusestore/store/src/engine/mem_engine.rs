@@ -143,7 +143,6 @@ impl MemEngine {
     ) -> common_exception::Result<()> {
         self.remove_table_data_parts(db_name, tbl_name);
         let r = self.dbs.get_mut(db_name).map(|db| {
-            let _ = &tbl_name;
             let name2id_removed = db.table_name_to_id.remove_entry(tbl_name);
             let id_removed = name2id_removed
                 .as_ref()
@@ -187,12 +186,7 @@ impl MemEngine {
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
         let parts = self.tbl_parts.get(db_name);
-        parts
-            .and_then(|m| {
-                let _ = &table_name;
-                m.get(table_name)
-            })
-            .map(Clone::clone)
+        parts.and_then(|m| m.get(table_name)).map(Clone::clone)
     }
 
     pub fn append_data_parts(
@@ -220,13 +214,11 @@ impl MemEngine {
         self.tbl_parts
             .entry(db_name.to_string())
             .and_modify(move |e| {
-                let _ = &table_name;
                 e.entry(table_name.to_string())
                     .and_modify(|v| v.append(&mut part_info()))
                     .or_insert_with(part_info);
             })
             .or_insert_with(|| {
-                let _ = &table_name;
                 [(table_name.to_string(), part_info())]
                     .iter()
                     .cloned()
@@ -235,10 +227,9 @@ impl MemEngine {
     }
 
     pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
-        self.tbl_parts.remove(db_name).and_then(|mut t| {
-            let _ = &table_name;
-            t.remove(table_name)
-        });
+        self.tbl_parts
+            .remove(db_name)
+            .and_then(|mut t| t.remove(table_name));
     }
 
     pub fn remove_db_data_parts(&mut self, db_name: &str) {

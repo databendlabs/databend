@@ -36,7 +36,6 @@ pub unsafe fn take_no_null_primitive<T: DFNumericType>(
     av.iter_mut()
         .zip(index_values.iter())
         .for_each(|(num, idx)| {
-            let _ = &array_values;
             *num = *array_values.get_unchecked(*idx as usize);
         });
 
@@ -63,7 +62,6 @@ pub unsafe fn take_no_null_primitive_iter_unchecked<
     let mut av = AlignedVec::<T::Native>::with_capacity_len_aligned(data_len);
 
     av.iter_mut().zip(indices_iter).for_each(|(num, idx)| {
-        let _ = &array_values;
         *num = *array_values.get_unchecked(idx);
     });
     let arr = av.into_primitive_array::<T>(None);
@@ -81,10 +79,7 @@ pub fn take_no_null_primitive_iter<T: DFNumericType, I: IntoIterator<Item = usiz
 
     let av = indices
         .into_iter()
-        .map(|idx| {
-            let _ = &array_values;
-            array_values[idx]
-        })
+        .map(|idx| array_values[idx])
         .collect::<AlignedVec<_>>();
     let arr = av.into_primitive_array(None);
 
@@ -101,7 +96,6 @@ pub unsafe fn take_primitive_iter_unchecked<T: DFNumericType, I: IntoIterator<It
     let array_values = arr.values();
 
     let iter = indices.into_iter().map(|idx| {
-        let _ = (&arr, &array_values);
         if arr.is_valid(idx) {
             Some(*array_values.get_unchecked(idx))
         } else {
@@ -123,7 +117,6 @@ pub fn take_primitive_iter<T: DFNumericType, I: IntoIterator<Item = usize>>(
     let arr = indices
         .into_iter()
         .map(|idx| {
-            let _ = (&arr, &array_values);
             if arr.is_valid(idx) {
                 Some(array_values[idx])
             } else {
@@ -148,12 +141,9 @@ pub unsafe fn take_no_null_primitive_opt_iter_unchecked<
 ) -> Arc<PrimitiveArray<T>> {
     let array_values = arr.values();
 
-    let iter = indices.into_iter().map(|opt_idx| {
-        opt_idx.map(|idx| {
-            let _ = &array_values;
-            *array_values.get_unchecked(idx)
-        })
-    });
+    let iter = indices
+        .into_iter()
+        .map(|opt_idx| opt_idx.map(|idx| *array_values.get_unchecked(idx)));
     let arr = PrimitiveArray::from_trusted_len_iter(iter);
 
     Arc::new(arr)
@@ -174,7 +164,6 @@ pub unsafe fn take_primitive_opt_iter_unchecked<
 
     let iter = indices.into_iter().map(|opt_idx| {
         opt_idx.and_then(|idx| {
-            let _ = (&arr, &array_values);
             if arr.is_valid(idx) {
                 Some(*array_values.get_unchecked(idx))
             } else {
@@ -216,10 +205,7 @@ pub fn take_no_null_bool_iter<I: IntoIterator<Item = usize>>(
 ) -> Arc<BooleanArray> {
     debug_assert_eq!(arr.null_count(), 0);
 
-    let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
-        Some(arr.value(idx))
-    });
+    let iter = indices.into_iter().map(|idx| Some(arr.value(idx)));
 
     Arc::new(iter.collect())
 }
@@ -232,10 +218,9 @@ pub unsafe fn take_no_null_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
     indices: I,
 ) -> Arc<BooleanArray> {
     debug_assert_eq!(arr.null_count(), 0);
-    let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
-        Some(arr.value_unchecked(idx))
-    });
+    let iter = indices
+        .into_iter()
+        .map(|idx| Some(arr.value_unchecked(idx)));
 
     Arc::new(iter.collect())
 }
@@ -246,7 +231,6 @@ pub fn take_bool_iter<I: IntoIterator<Item = usize>>(
     indices: I,
 ) -> Arc<BooleanArray> {
     let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
         if arr.is_null(idx) {
             None
         } else {
@@ -265,7 +249,6 @@ pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
     indices: I,
 ) -> Arc<BooleanArray> {
     let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
         if arr.is_null(idx) {
             None
         } else {
@@ -285,7 +268,6 @@ pub unsafe fn take_bool_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>
 ) -> Arc<BooleanArray> {
     let iter = indices.into_iter().map(|opt_idx| {
         opt_idx.and_then(|idx| {
-            let _ = &arr;
             if arr.is_null(idx) {
                 None
             } else {
@@ -304,12 +286,9 @@ pub unsafe fn take_no_null_bool_opt_iter_unchecked<I: IntoIterator<Item = Option
     arr: &BooleanArray,
     indices: I,
 ) -> Arc<BooleanArray> {
-    let iter = indices.into_iter().map(|opt_idx| {
-        opt_idx.map(|idx| {
-            let _ = &arr;
-            arr.value_unchecked(idx)
-        })
-    });
+    let iter = indices
+        .into_iter()
+        .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
 
     Arc::new(iter.collect())
 }
@@ -320,10 +299,9 @@ pub unsafe fn take_no_null_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
     arr: &StringArray,
     indices: I,
 ) -> Arc<StringArray> {
-    let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
-        Some(arr.value_unchecked(idx))
-    });
+    let iter = indices
+        .into_iter()
+        .map(|idx| Some(arr.value_unchecked(idx)));
 
     Arc::new(iter.collect())
 }
@@ -335,7 +313,6 @@ pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
     indices: I,
 ) -> Arc<StringArray> {
     let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
         if arr.is_null(idx) {
             None
         } else {
@@ -352,12 +329,9 @@ pub unsafe fn take_no_null_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option
     arr: &StringArray,
     indices: I,
 ) -> Arc<StringArray> {
-    let iter = indices.into_iter().map(|opt_idx| {
-        opt_idx.map(|idx| {
-            let _ = &arr;
-            arr.value_unchecked(idx)
-        })
-    });
+    let iter = indices
+        .into_iter()
+        .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
 
     Arc::new(iter.collect())
 }
@@ -370,7 +344,6 @@ pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>
 ) -> Arc<StringArray> {
     let iter = indices.into_iter().map(|opt_idx| {
         opt_idx.and_then(|idx| {
-            let _ = &arr;
             if arr.is_null(idx) {
                 None
             } else {
@@ -386,10 +359,7 @@ pub fn take_no_null_utf8_iter<I: IntoIterator<Item = usize>>(
     arr: &StringArray,
     indices: I,
 ) -> Arc<StringArray> {
-    let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
-        Some(arr.value(idx))
-    });
+    let iter = indices.into_iter().map(|idx| Some(arr.value(idx)));
 
     Arc::new(iter.collect())
 }
@@ -399,7 +369,6 @@ pub fn take_utf8_iter<I: IntoIterator<Item = usize>>(
     indices: I,
 ) -> Arc<StringArray> {
     let iter = indices.into_iter().map(|idx| {
-        let _ = &arr;
         if arr.is_null(idx) {
             None
         } else {
@@ -444,7 +413,6 @@ pub unsafe fn take_utf8(arr: &StringArray, indices: &UInt32Array) -> Arc<StringA
             .skip(1)
             .enumerate()
             .for_each(|(idx, offset)| {
-                let _ = (&indices, &arr);
                 let index = indices.value_unchecked(idx) as usize;
                 let s = arr.value_unchecked(index);
                 length_so_far += s.len() as i64;
@@ -464,7 +432,6 @@ pub unsafe fn take_utf8(arr: &StringArray, indices: &UInt32Array) -> Arc<StringA
             .skip(1)
             .enumerate()
             .for_each(|(idx, offset)| {
-                let _ = (&indices, &arr);
                 if indices.is_valid(idx) {
                     let index = indices.value_unchecked(idx) as usize;
                     let s = arr.value_unchecked(index);
@@ -485,7 +452,6 @@ pub unsafe fn take_utf8(arr: &StringArray, indices: &UInt32Array) -> Arc<StringA
 
         if indices.null_count() == 0 {
             (0..data_len).for_each(|idx| {
-                let _ = (&indices, &arr);
                 let index = indices.value_unchecked(idx) as usize;
                 if arr.is_valid(index) {
                     let s = arr.value_unchecked(index);
@@ -496,7 +462,6 @@ pub unsafe fn take_utf8(arr: &StringArray, indices: &UInt32Array) -> Arc<StringA
             });
         } else {
             (0..data_len).for_each(|idx| {
-                let _ = (&indices, &arr);
                 if indices.is_valid(idx) {
                     let index = indices.value_unchecked(idx) as usize;
 

@@ -31,10 +31,7 @@ pub trait Placement {
 
         slot.node_ids
             .iter()
-            .map(|nid| {
-                let _ = &self;
-                (*self.get_node(nid).unwrap()).clone()
-            })
+            .map(|nid| (*self.get_node(nid).unwrap()).clone())
             .collect()
     }
 

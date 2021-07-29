@@ -93,7 +93,6 @@ impl Database for RemoteDatabase {
         )?;
         let mut client = provider.try_get_client().await?;
         client.create_table(clone).await.map(|_| {
-            let _ = &__self;
             let mut tables = self.tables.write();
             tables.insert(table.name().to_string(), Arc::from(table));
         })?;
@@ -116,7 +115,6 @@ impl Database for RemoteDatabase {
         // Call remote create.
         let mut client = self.store_client_provider.try_get_client().await?;
         client.drop_table(plan.clone()).await.map(|_| {
-            let _ = (&__self, &table_name);
             let mut tables = self.tables.write();
             tables.remove(table_name);
         })?;

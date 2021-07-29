@@ -425,19 +425,11 @@ impl Add<&str> for &DFUtf8Array {
         Ok(match self.null_count() {
             0 => self
                 .into_no_null_iter()
-                .map(|l| {
-                    let _ = &rhs;
-                    concat_strings(l, rhs)
-                })
+                .map(|l| concat_strings(l, rhs))
                 .collect(),
             _ => self
                 .into_iter()
-                .map(|opt_l| {
-                    opt_l.map(|l| {
-                        let _ = &rhs;
-                        concat_strings(l, rhs)
-                    })
-                })
+                .map(|opt_l| opt_l.map(|l| concat_strings(l, rhs)))
                 .collect(),
         })
     }

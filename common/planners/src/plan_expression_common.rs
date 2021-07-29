@@ -72,10 +72,7 @@ fn find_exprs_in_exprs<F>(exprs: &[Expression], test_fn: &F) -> Vec<Expression>
 where F: Fn(&Expression) -> bool {
     exprs
         .iter()
-        .flat_map(|expr| {
-            let _ = &test_fn;
-            find_exprs_in_expr(expr, test_fn)
-        })
+        .flat_map(|expr| find_exprs_in_expr(expr, test_fn))
         .fold(vec![], |mut acc, expr| {
             if !acc.contains(&expr) {
                 acc.push(expr)
@@ -157,7 +154,6 @@ pub fn expr_as_column_expr(expr: &Expression) -> Result<Expression> {
 /// `a + b` found in the GROUP BY.
 pub fn rebase_expr(expr: &Expression, base_exprs: &[Expression]) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| {
-        let _ = &base_exprs;
         if base_exprs.contains(nest_exprs) {
             Ok(Some(expr_as_column_expr(nest_exprs)?))
         } else {
@@ -265,10 +261,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 op: op.clone(),
                 args: args
                     .iter()
-                    .map(|e| {
-                        let _ = &replacement_fn;
-                        clone_with_replacement(e, replacement_fn)
-                    })
+                    .map(|e| clone_with_replacement(e, replacement_fn))
                     .collect::<Result<Vec<Expression>>>()?,
             }),
 
@@ -278,10 +271,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                     distinct: *distinct,
                     args: args
                         .iter()
-                        .map(|e| {
-                            let _ = &replacement_fn;
-                            clone_with_replacement(e, replacement_fn)
-                        })
+                        .map(|e| clone_with_replacement(e, replacement_fn))
                         .collect::<Result<Vec<Expression>>>()?,
                 })
             }

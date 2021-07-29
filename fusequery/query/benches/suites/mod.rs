@@ -34,7 +34,6 @@ pub async fn select_executor(sql: &str) -> Result<()> {
 pub fn criterion_benchmark_suite(c: &mut Criterion, sql: &str) {
     c.bench_function(sql, |b| {
         b.iter(|| {
-            let _ = &sql;
             tokio::runtime::Runtime::new()
                 .unwrap()
                 .block_on(select_executor(sql))
