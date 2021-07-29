@@ -6,14 +6,13 @@ use std::io::Write;
 
 use sha2::Digest;
 use sha2::Sha256;
-use structopt::StructOpt;
 use sysinfo::SystemExt;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
 use crate::error::Result;
 
-#[derive(StructOpt, Debug)]
+#[derive(Clone)]
 pub struct VersionCommand {}
 
 impl VersionCommand {
@@ -51,6 +50,10 @@ impl VersionCommand {
 
 impl Command for VersionCommand {
     fn name(&self) -> &str {
+        "version"
+    }
+
+    fn about(&self) -> &str {
         "version"
     }
 

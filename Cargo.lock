@@ -1235,6 +1235,7 @@ dependencies = [
  "ansi_term 0.12.1",
  "clap",
  "common-building",
+ "dyn-clone",
  "pretty_assertions",
  "rustyline",
  "sha2",
