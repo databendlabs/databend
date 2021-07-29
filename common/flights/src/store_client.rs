@@ -10,6 +10,7 @@ use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
+use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
 use log::info;
@@ -34,6 +35,7 @@ pub struct StoreClient {
 static AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
+    #[tracing::instrument(level = "debug", skip(password))]
     pub async fn try_create(addr: &str, username: &str, password: &str) -> anyhow::Result<Self> {
         // TODO configuration
         let timeout = Duration::from_secs(60);
@@ -65,6 +67,7 @@ impl StoreClient {
     }
 
     /// Handshake.
+    #[tracing::instrument(level = "debug", skip(client, password))]
     async fn handshake(
         client: &mut FlightServiceClient<Channel>,
         timeout: Duration,
@@ -94,6 +97,7 @@ impl StoreClient {
         Ok(token)
     }
 
+    #[tracing::instrument(level = "debug", skip(self, v))]
     pub(crate) async fn do_action<T, R>(&mut self, v: T) -> common_exception::Result<R>
     where
         T: RequestFor<Reply = R>,
@@ -101,7 +105,9 @@ impl StoreClient {
         R: DeserializeOwned,
     {
         let act: StoreDoAction = v.into();
-        let mut req: Request<Action> = (&act).try_into()?;
+        let req: Request<Action> = (&act).try_into()?;
+        let mut req = common_tracing::inject_span_to_tonic_request(req);
+
         req.set_timeout(self.timeout);
 
         let mut stream = self.client.do_action(req).await?.into_inner();

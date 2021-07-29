@@ -28,6 +28,7 @@ use common_flights::StoreDoGet;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use common_runtime::tokio::sync::mpsc::Sender;
+use common_tracing::tracing;
 use futures::Stream;
 use futures::StreamExt;
 use log::info;
@@ -214,12 +215,16 @@ impl FlightService for StoreFlightImpl {
     }
 
     type DoActionStream = FlightStream<arrow_flight::Result>;
+
+    #[tracing::instrument(level = "debug", skip(self, request))]
     async fn do_action(
         &self,
         request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
         // Check token.
         let _claim = self.check_token(request.metadata())?;
+
+        common_tracing::extract_remote_span_as_parent(&request);
 
         let action: StoreDoAction = request.try_into()?;
         info!("Receive do_action: {:?}", action);

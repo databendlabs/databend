@@ -18,6 +18,7 @@ use crate::meta_service::MetaServiceClient;
 use crate::tests::Seq;
 
 // Start one random service and get the session manager.
+#[tracing::instrument(level = "info")]
 pub async fn start_store_server() -> Result<(StoreTestContext, String)> {
     let tc = new_test_context();
 

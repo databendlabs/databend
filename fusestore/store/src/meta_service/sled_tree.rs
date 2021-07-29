@@ -9,6 +9,7 @@ use std::ops::RangeBounds;
 
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
+use common_tracing::tracing;
 
 use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::sled_serde::SledRangeSerde;
@@ -101,6 +102,7 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
     }
 
     /// Delete kvs that are in `range`.
+    #[tracing::instrument(level = "debug", skip(self, range))]
     pub async fn range_delete<R>(&self, range: R, flush: bool) -> common_exception::Result<()>
     where R: RangeBounds<K> {
         let mut batch = sled::Batch::default();
@@ -203,6 +205,7 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
     }
     /// Append many values into SledTree.
     /// This could be used in cases the key is included in value and a value should impl trait `IntoKey` to retrieve the key from a value.
+    #[tracing::instrument(level = "debug", skip(self, values))]
     pub async fn append_values(&self, values: &[V]) -> common_exception::Result<()>
     where V: SledValueToKey<K> {
         let mut batch = sled::Batch::default();
@@ -220,16 +223,22 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append_values")?;
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
+        {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-append");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
+        }
 
         Ok(())
     }
 
     /// Insert a single kv.
     /// Returns the last value if it is set.
+    #[tracing::instrument(level = "debug", skip(self, value))]
     pub async fn insert(&self, key: &K, value: &V) -> common_exception::Result<Option<V>> {
         let k = key.ser()?;
         let v = value.ser()?;
@@ -246,17 +255,23 @@ impl<K: SledOrderedSerde + Display + Debug, V: SledSerde> SledTree<K, V> {
             Some(x) => Some(V::de(x)?),
         };
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("flush insert_value {}", key)
-            })?;
+        {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-insert");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                    format!("flush insert_value {}", key)
+                })?;
+        }
 
         Ok(prev)
     }
 
     /// Insert a single kv, Retrieve the key from value.
+    #[tracing::instrument(level = "debug", skip(self, value))]
     pub async fn insert_value(&self, value: &V) -> common_exception::Result<Option<V>>
     where V: SledValueToKey<K> {
         let key = value.to_key();
