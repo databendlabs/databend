@@ -50,6 +50,7 @@ pub use data_schema::DataSchemaRefExt;
 pub use data_type::DataType;
 pub use data_type::*;
 pub use data_type_coercion::*;
+pub use data_value::DFTryFrom;
 pub use data_value::DataValue;
 pub use data_value::DataValueRef;
 pub use data_value_arithmetic::*;

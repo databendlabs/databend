@@ -6,7 +6,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use crate::aggregates::*;
+use crate::aggregates::aggregate_min_max::max_batch;
+use crate::aggregates::aggregate_min_max::min_batch;
+use crate::aggregates::aggregate_sum::sum_batch;
 
 #[test]
 fn test_aggregate_batch() {
@@ -34,7 +36,7 @@ fn test_aggregate_batch() {
                 Series::new(vec![4.0_f32, 3.0, 2.0, 1.0]).into(),
                 Series::new(vec![4.0_f64, 3.0, 2.0, 1.0]).into(),
             ],
-            func: Box::new(AggregateMinFunction::min_batch),
+            func: Box::new(min_batch),
             expect: vec![
                 DataValue::Utf8(Some("x1".to_string())),
                 DataValue::Int8(Some(1)),
@@ -65,7 +67,7 @@ fn test_aggregate_batch() {
                 Series::new(vec![4.0_f32, 3.0, 2.0, 1.0]),
                 Series::new(vec![4.0_f64, 3.0, 2.0, 1.0]),
             ],
-            func: Box::new(AggregateMaxFunction::max_batch),
+            func: Box::new(max_batch),
             expect: vec![
                 DataValue::Utf8(Some("x2".to_string())),
                 DataValue::Int8(Some(4)),
@@ -96,7 +98,7 @@ fn test_aggregate_batch() {
                 Series::new(vec![4.0_f32, 3.0, 2.0, 1.0]),
                 Series::new(vec![4.0_f64, 3.0, 2.0, 1.0]),
             ],
-            func: Box::new(AggregateSumFunction::sum_batch),
+            func: Box::new(sum_batch),
             expect: vec![
                 DataValue::Utf8(Some("xx".to_string())),
                 DataValue::Int64(Some(10)),

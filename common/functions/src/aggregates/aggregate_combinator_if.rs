@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
 use std::fmt;
 
+use bytes::BytesMut;
 use common_arrow::arrow;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -74,10 +74,6 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.nullable(input_schema)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
         self.nested.allocate_state(arena)
     }
@@ -142,11 +138,11 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.accumulate_row(place, row, columns)
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         self.nested.serialize(place, writer)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         self.nested.deserialize(place, reader)
     }
 
