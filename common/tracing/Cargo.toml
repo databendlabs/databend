@@ -7,8 +7,14 @@ publish = false
 edition = "2018"
 
 [dependencies] # In alphabetical order
+common-runtime = {path = "../runtime"}
+
+opentelemetry = { version = "0.15", default-features = false, features = ["trace"] }
+opentelemetry-jaeger = "0.14"
+tonic = "0.4.3"
 tracing = "0.1.26"
 tracing-appender = "0.1.2"
 tracing-bunyan-formatter = "0.2"
 tracing-futures = { version = "0.2.5", default-features = false }
+tracing-opentelemetry = "0.14.0"
 tracing-subscriber = "0.2.19"

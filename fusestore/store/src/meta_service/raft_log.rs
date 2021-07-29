@@ -6,6 +6,7 @@ use std::ops::Deref;
 use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
+use common_tracing::tracing;
 
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
@@ -77,6 +78,7 @@ impl RaftLog {
     }
 
     /// Insert a single log.
+    #[tracing::instrument(level = "debug", skip(self, log), fields(log_id=format!("{}",log.log_id).as_str()))]
     pub async fn insert(
         &self,
         log: &Entry<LogEntry>,
