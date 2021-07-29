@@ -34,7 +34,7 @@ impl Command for HelpCommand {
 
     fn exec(&self, writer: &mut Writer) -> Result<()> {
         for cmd in self.commands.iter() {
-            writeln!(writer, "{} -- {}", cmd.name(), cmd.about())?;
+            writeln!(writer, "{:width$}{}", cmd.name(), cmd.about(), width = 20)?;
         }
         Ok(())
     }

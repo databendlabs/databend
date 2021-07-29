@@ -54,7 +54,7 @@ impl Command for VersionCommand {
     }
 
     fn about(&self) -> &str {
-        "version"
+        "Datafuse CLI version"
     }
 
     fn is(&self, s: &str) -> bool {
