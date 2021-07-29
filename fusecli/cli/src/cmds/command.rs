@@ -6,5 +6,7 @@ use crate::cmds::Writer;
 use crate::error::Result;
 
 pub trait Command {
+    fn name(&self) -> &str;
+    fn is(&self, s: &str) -> bool;
     fn exec(&self, writer: &mut Writer) -> Result<()>;
 }

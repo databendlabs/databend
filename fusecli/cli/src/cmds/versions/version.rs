@@ -50,6 +50,14 @@ impl VersionCommand {
 }
 
 impl Command for VersionCommand {
+    fn name(&self) -> &str {
+        "version"
+    }
+
+    fn is(&self, s: &str) -> bool {
+        self.name() == s
+    }
+
     fn exec(&self, writer: &mut Writer) -> Result<()> {
         let build_semver = option_env!("VERGEN_BUILD_SEMVER");
         let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");

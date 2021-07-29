@@ -14,12 +14,14 @@ use crate::error::Result;
 
 pub struct Processor {
     readline: Editor<()>,
+    commands: Vec<Box<dyn Command>>,
 }
 
 impl Processor {
     pub fn create() -> Self {
         Processor {
             readline: Editor::<()>::new(),
+            commands: vec![Box::new(VersionCommand::create())],
         }
     }
 
@@ -29,7 +31,6 @@ impl Processor {
             let readline = self.readline.readline(">> ");
             match readline {
                 Ok(line) => {
-                    println!("Line: {}", line);
                     self.processor_line(writer, line)?;
                 }
                 Err(ReadlineError::Interrupted) => {
@@ -49,9 +50,12 @@ impl Processor {
         Ok(())
     }
 
-    pub fn processor_line(&self, mut writer: Writer, _line: String) -> Result<()> {
-        let version = VersionCommand::create();
-        version.exec(&mut writer)?;
+    pub fn processor_line(&self, mut writer: Writer, line: String) -> Result<()> {
+        if let Some(cmd) = self.commands.iter().find(|c| c.is(&*line)) {
+            cmd.exec(&mut writer)?;
+        } else {
+            writeln!(writer, "Unknown command").unwrap();
+        }
         writer.flush()?;
         Ok(())
     }
