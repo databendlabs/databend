@@ -8,18 +8,22 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
+use crate::cmds::Config;
+use crate::cmds::Env;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
 
 pub struct Processor {
+    env: Env,
     readline: Editor<()>,
     commands: Vec<Box<dyn Command>>,
 }
 
 impl Processor {
-    pub fn create() -> Self {
+    pub fn create(conf: Config) -> Self {
         Processor {
+            env: Env::create(conf),
             readline: Editor::<()>::new(),
             commands: vec![Box::new(VersionCommand::create())],
         }
@@ -28,7 +32,7 @@ impl Processor {
     pub fn process_run(&mut self) -> Result<()> {
         loop {
             let writer = Writer::create();
-            let readline = self.readline.readline(">> ");
+            let readline = self.readline.readline(self.env.prompt.as_str());
             match readline {
                 Ok(line) => {
                     self.processor_line(writer, line)?;
