@@ -37,6 +37,9 @@ where
         };
     }
 
+    if T::data_type() == DataType::Null {
+        todo!()
+    }
     let ca = cast(&ca.array, &N::data_type().to_arrow())?;
     Ok(ca.into())
 }
@@ -119,11 +122,11 @@ impl ArrayCast for DFListArray {
 impl ArrayCast for DFNullArray {
     fn cast<N>(&self) -> Result<DataArray<N>>
     where N: DFDataType {
-        todo!()
+        cast_ca(self)
     }
 
-    fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
-        todo!()
+    fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
+        cast_with_type!(self, data_type)
     }
 }
 

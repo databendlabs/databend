@@ -40,6 +40,10 @@ fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
         return Ok((lhs.clone(), rhs.clone()));
     }
 
+    if lhs.data_type() == DataType::Null {
+        todo!()
+    }
+
     let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;
 
     let mut left = lhs.clone();
