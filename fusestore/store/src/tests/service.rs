@@ -52,7 +52,10 @@ pub fn new_test_context() -> StoreTestContext {
     let mut config = configs::Config::empty();
 
     // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
-    config.meta_no_sync = true;
+    if cfg!(target_os = "macos") {
+        tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+        config.meta_no_sync = true;
+    }
 
     config.meta_api_port = next_port();
 
