@@ -18,7 +18,7 @@ use crate::tests::service::new_sled_test_context;
 async fn test_sled_tree_open() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    SledTree::<LogIndex, Entry<LogEntry>>::open(db, "foo").await?;
+    SledTree::<LogIndex, Entry<LogEntry>>::open(db, "foo", true).await?;
 
     Ok(())
 }
@@ -27,7 +27,7 @@ async fn test_sled_tree_open() -> anyhow::Result<()> {
 async fn test_sled_tree_append() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
         (8, Entry {
@@ -83,7 +83,7 @@ async fn test_sled_tree_append() -> anyhow::Result<()> {
 async fn test_sled_tree_append_values_and_range_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -156,7 +156,7 @@ async fn test_sled_tree_append_values_and_range_get() -> anyhow::Result<()> {
 async fn test_sled_tree_range_keys() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -206,7 +206,7 @@ async fn test_sled_tree_range_keys() -> anyhow::Result<()> {
 async fn test_sled_tree_insert() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     assert_eq!(None, rl.get(&5)?);
 
@@ -264,7 +264,7 @@ async fn test_sled_tree_insert() -> anyhow::Result<()> {
 async fn test_sled_tree_contains_key() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     assert_eq!(None, rl.get(&5)?);
 
@@ -301,7 +301,7 @@ async fn test_sled_tree_contains_key() -> anyhow::Result<()> {
 async fn test_sled_tree_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     assert_eq!(None, rl.get(&5)?);
 
@@ -338,7 +338,7 @@ async fn test_sled_tree_get() -> anyhow::Result<()> {
 async fn test_sled_tree_last() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     assert_eq!(None, rl.last()?);
 
@@ -370,7 +370,7 @@ async fn test_sled_tree_last() -> anyhow::Result<()> {
 async fn test_sled_tree_range_delete() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log").await?;
+    let rl = SledTree::<LogIndex, Entry<LogEntry>>::open(db, "log", true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {

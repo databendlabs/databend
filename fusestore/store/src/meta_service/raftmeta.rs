@@ -127,7 +127,7 @@ impl MetaStore {
         // TODO(xp): merge the duplicated snippets in new() and open(), when I got time :DDD
 
         let raft_state = RaftState::create(&db, &id).await?;
-        let log = RaftLog::open(&db).await?;
+        let log = RaftLog::open(&db, config).await?;
 
         let sm = RwLock::new(StateMachine::default());
         let current_snapshot = RwLock::new(None);
@@ -151,7 +151,7 @@ impl MetaStore {
             })?;
 
         let raft_state = RaftState::open(&db)?;
-        let log = RaftLog::open(&db).await?;
+        let log = RaftLog::open(&db, config).await?;
 
         let sm = RwLock::new(StateMachine::default());
         let current_snapshot = RwLock::new(None);

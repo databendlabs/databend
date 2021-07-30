@@ -9,6 +9,7 @@ use std::ops::RangeBounds;
 
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
+use common_tracing::tracing;
 
 use crate::meta_service::sledkv::SledKV;
 use crate::meta_service::SledValueToKey;
@@ -20,6 +21,14 @@ use crate::meta_service::SledValueToKey;
 /// The value type `V` can be any serialize impl, i.e. for most cases, to impl trait `SledSerde`.
 pub struct SledVarTypeTree {
     pub name: String,
+
+    /// Whether to fsync after an write operation.
+    /// With sync==false, it WONT fsync even when user tell it to sync.
+    /// This is only used for testing when fsync is quite slow.
+    /// E.g. File::sync_all takes 10 ~ 30 ms on a Mac.
+    /// See: https://github.com/drmingdrmer/sledtest/blob/500929ab0b89afe547143a38fde6fe85d88f1f80/src/ben_sync.rs
+    sync: bool,
+
     pub(crate) tree: sled::Tree,
 }
 
@@ -28,6 +37,7 @@ impl SledVarTypeTree {
     pub async fn open<N: AsRef<[u8]> + Display>(
         db: &sled::Db,
         tree_name: N,
+        sync: bool,
     ) -> common_exception::Result<Self> {
         let t = db
             .open_tree(&tree_name)
@@ -37,6 +47,7 @@ impl SledVarTypeTree {
 
         let rl = SledVarTypeTree {
             name: format!("{}", tree_name),
+            sync,
             tree: t,
         };
         Ok(rl)
@@ -134,7 +145,10 @@ impl SledVarTypeTree {
                 format!("batch delete: {}", range_mes,)
             })?;
 
-        if flush {
+        if flush && self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-range-delete");
+            let _ent = span.enter();
+
             self.tree
                 .flush_async()
                 .await
@@ -211,10 +225,15 @@ impl SledVarTypeTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append")?;
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-append");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
+        }
 
         Ok(())
     }
@@ -241,10 +260,15 @@ impl SledVarTypeTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append_values")?;
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-append-values");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
+        }
 
         Ok(())
     }
@@ -274,12 +298,17 @@ impl SledVarTypeTree {
             Some(x) => Some(KV::deserialize_value(x)?),
         };
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("flush insert_value {}", key)
-            })?;
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-insert");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                    format!("flush insert_value {}", key)
+                })?;
+        }
 
         Ok(prev)
     }
