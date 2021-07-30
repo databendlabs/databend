@@ -186,8 +186,8 @@ impl MetaStore {
     ) -> anyhow::Result<MembershipConfig> {
         //TODO(xp): test it
         let it = match upto_index {
-            Some(upto) => self.log.tree.range(0.ser()?..=upto.ser()?).rev(),
-            None => self.log.tree.range(0.ser()?..).rev(),
+            Some(upto) => self.log.inner.tree.range(0.ser()?..=upto.ser()?).rev(),
+            None => self.log.inner.tree.range(0.ser()?..).rev(),
         };
 
         for ivec in it {
