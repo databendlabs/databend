@@ -447,9 +447,33 @@ impl StateMachine {
                 for part in part_infos {
                     let table = self.tables.get_mut(table_id).unwrap();
                     table.parts.insert(part.part.name.clone());
-                    self.table_parts
-                        .entry(*table_id)
-                        .and_modify(|v| v.push(part));
+                    // These comments are intentionally left here.
+                    // As rustc not smart enough, it says:
+                    // for part in part_infos {
+                    //     ---- move occurs because `part` has type `DataPartInfo`, which does not implement the `Copy` trait
+                    //     .and_modify(|v| v.push(part))
+                    //                 ---        ---- variable moved due to use in closure
+                    //                 |
+                    //                 value moved into closure here
+                    //     .or_insert_with(|| vec![part]);
+                    //                     ^^      ---- use occurs due to use in closure
+                    //                     |
+                    //                     value used here after move
+                    // But obviously the two methods can't happen at the same time.
+                    // ============== previous =============
+                    // self.table_parts
+                    //     .entry(*table_id)
+                    //     .and_modify(|v| v.push(part))
+                    //     .or_insert_with(|| vec![part]);
+                    // ============ previous end ===========
+                    match self.table_parts.get_mut(table_id) {
+                        Some(p) => {
+                            p.push(part);
+                        }
+                        None => {
+                            self.table_parts.insert(*table_id, vec![part]);
+                        }
+                    }
                 }
             }
         }
