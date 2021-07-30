@@ -4,4 +4,3 @@
 
 pub use arrow;
 pub use arrow_flight;
-pub use parquet;

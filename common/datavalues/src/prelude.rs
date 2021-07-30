@@ -63,3 +63,5 @@ pub use crate::DataValueComparisonOperator;
 pub use crate::DataValueComparisonOperator::*;
 pub use crate::DataValueLogicOperator;
 pub use crate::DataValueLogicOperator::*;
+
+pub type AlignedVec<T> = common_arrow::arrow::buffer::MutableBuffer<T>;

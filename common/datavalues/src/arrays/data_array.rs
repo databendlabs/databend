@@ -18,10 +18,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::data_df_type::*;
+use crate::prelude::AlignedVec;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::series::SeriesTrait;
-use crate::vec::AlignedVec;
 use crate::DataType;
 use crate::DataValue;
 
@@ -161,29 +161,6 @@ where T: DFDataType
             DataType::Int64 => downcast_and_pack!(Int64Array, Int64),
             DataType::Float32 => downcast_and_pack!(Float32Array, Float32),
             DataType::Float64 => downcast_and_pack!(Float64Array, Float64),
-            DataType::Date32 => downcast_and_pack!(Date32Array, Date32),
-            DataType::Date64 => downcast_and_pack!(Date64Array, Date64),
-
-            DataType::Timestamp(TimeUnit::Second, _) => {
-                downcast_and_pack!(TimestampSecondArray, TimestampSecond)
-            }
-            DataType::Timestamp(TimeUnit::Millisecond, _) => {
-                downcast_and_pack!(TimestampMillisecondArray, TimestampMillisecond)
-            }
-            DataType::Timestamp(TimeUnit::Microsecond, _) => {
-                downcast_and_pack!(TimestampMicrosecondArray, TimestampMicrosecond)
-            }
-            DataType::Timestamp(TimeUnit::Nanosecond, _) => {
-                downcast_and_pack!(TimestampNanosecondArray, TimestampNanosecond)
-            }
-
-            DataType::Interval(IntervalUnit::YearMonth) => {
-                downcast_and_pack!(IntervalYearMonthArray, IntervalYearMonth)
-            }
-
-            DataType::Interval(IntervalUnit::DayTime) => {
-                downcast_and_pack!(IntervalDayTimeArray, IntervalDayTime)
-            }
 
             DataType::Binary => {
                 downcast_and_pack!(BinaryArray, Binary)

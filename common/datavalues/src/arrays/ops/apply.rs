@@ -11,8 +11,8 @@ use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::StringArray;
 
 use crate::arrays::DataArray;
+use crate::prelude::AlignedVec;
 use crate::utils::NoNull;
-use crate::vec::AlignedVec;
 use crate::*;
 
 macro_rules! apply {

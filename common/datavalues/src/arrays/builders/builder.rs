@@ -4,20 +4,10 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::BinaryBuilder;
-use common_arrow::arrow::array::BooleanBuilder;
-use common_arrow::arrow::array::ListBuilder;
-use common_arrow::arrow::array::PrimitiveBuilder;
-use common_arrow::arrow::array::StringBuilder;
-use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::array::*;
 use num::Num;
 
-use super::ArrowBooleanArrayBuilder;
-use super::ArrowPrimitiveArrayBuilder;
 use crate::arrays::DataArray;
-use crate::arrays::GetValues;
 use crate::data_df_type::*;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
@@ -43,14 +33,14 @@ pub trait ArrayBuilder<N, T> {
 }
 
 pub struct BooleanArrayBuilder {
-    builder: BooleanBuilder,
+    builder: MutableBooleanArray,
 }
 
 impl ArrayBuilder<bool, BooleanType> for BooleanArrayBuilder {
     /// Appends a value of type `T` into the builder
     #[inline]
     fn append_value(&mut self, v: bool) {
-        self.builder.append_value(v).unwrap();
+        self.builder.push(Some(v))
     }
 
     /// Appends a null slot into the builder
@@ -66,9 +56,9 @@ impl ArrayBuilder<bool, BooleanType> for BooleanArrayBuilder {
 }
 
 impl BooleanArrayBuilder {
-    pub fn new(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         BooleanArrayBuilder {
-            builder: BooleanBuilder::new(capacity),
+            builder: MutableBooleanArray::with_capacity(capacity),
         }
     }
 }
@@ -78,7 +68,7 @@ where
     T: DFNumericType,
     T::Native: Default,
 {
-    builder: PrimitiveBuilder<T>,
+    builder: MutablePrimitiveArray<T::Native>,
 }
 
 impl<T> ArrayBuilder<T::Native, T> for PrimitiveArrayBuilder<T>
@@ -89,7 +79,7 @@ where
     /// Appends a value of type `T` into the builder
     #[inline]
     fn append_value(&mut self, v: T::Native) {
-        self.builder.append_value(v).unwrap();
+        self.builder.push(Some(v))
     }
 
     /// Appends a null slot into the builder
@@ -108,9 +98,9 @@ where
 impl<T> PrimitiveArrayBuilder<T>
 where T: DFNumericType
 {
-    pub fn new(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         PrimitiveArrayBuilder {
-            builder: PrimitiveBuilder::<T>::new(capacity),
+            builder: MutablePrimitiveArray::<T::Native>::with_capacity(capacity),
         }
     }
 }
@@ -125,7 +115,7 @@ pub type DFUInt64ArrayBuilder = PrimitiveArrayBuilder<UInt64Type>;
 pub type DFInt64ArrayBuilder = PrimitiveArrayBuilder<Int64Type>;
 
 pub struct Utf8ArrayBuilder {
-    pub builder: StringBuilder,
+    pub builder: MutableUtf8Array<i64>,
     pub capacity: usize,
 }
 
@@ -136,9 +126,9 @@ impl Utf8ArrayBuilder {
     ///
     /// * `capacity` - Number of string elements in the final array.
     /// * `bytes_capacity` - Number of bytes needed to store the string values.
-    pub fn new(capacity: usize, bytes_capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Utf8ArrayBuilder {
-            builder: StringBuilder::with_capacity(bytes_capacity, capacity),
+            builder: MutableUtf8Array::with_capacity(capacity),
             capacity,
         }
     }
@@ -146,13 +136,14 @@ impl Utf8ArrayBuilder {
     /// Appends a value of type `T` into the builder
     #[inline]
     pub fn append_value<S: AsRef<str>>(&mut self, v: S) {
-        self.builder.append_value(v.as_ref()).unwrap();
+        self.builder.push(Some(v))
     }
 
     /// Appends a null slot into the builder
     #[inline]
-    pub fn append_null(&mut self) {
-        self.builder.append_null().unwrap();
+    #[inline]
+    fn append_null(&mut self) {
+        self.builder.push_null();
     }
 
     #[inline]
@@ -167,18 +158,6 @@ impl Utf8ArrayBuilder {
         let array = Arc::new(self.builder.finish()) as ArrayRef;
         array.into()
     }
-}
-
-/// Get the null count and the null bitmap of the arrow array
-pub fn get_bitmap<T: Array + ?Sized>(arr: &T) -> (usize, Option<Buffer>) {
-    let data = arr.data();
-    (
-        data.null_count(),
-        data.null_bitmap().as_ref().map(|bitmap| {
-            let buff = bitmap.buffer_ref();
-            buff.clone()
-        }),
-    )
 }
 
 pub trait NewDataArray<T, N> {
@@ -242,14 +221,12 @@ where S: AsRef<str>
 {
     fn new_from_slice(v: &[S]) -> Self {
         let values_size = v.iter().fold(0, |acc, s| acc + s.as_ref().len());
-
-        let mut builder = StringBuilder::with_capacity(values_size, v.len());
+        let mut builder = Utf8ArrayBuilder::with_capacity(values_size);
         v.iter().for_each(|val| {
-            builder.append_value(val.as_ref()).unwrap();
+            builder.append_value(val.as_ref());
         });
 
-        let array = Arc::new(builder.finish()) as ArrayRef;
-        array.into()
+        builder.finish()
     }
 
     fn new_from_opt_slice(opt_v: &[Option<S>]) -> Self {
@@ -257,8 +234,7 @@ where S: AsRef<str>
             Some(s) => acc + s.as_ref().len(),
             None => acc,
         });
-        let mut builder = Utf8ArrayBuilder::new(values_size, opt_v.len());
-
+        let mut builder = Utf8ArrayBuilder::new(values_size);
         opt_v.iter().for_each(|opt| match opt {
             Some(v) => builder.append_value(v.as_ref()),
             None => builder.append_null(),
@@ -289,10 +265,14 @@ pub trait ListBuilderTrait {
     fn finish(&mut self) -> DFListArray;
 }
 
+type LargePrimitiveBuilder<T> = MutableListArray<i64, MutablePrimitiveArray<T>>;
+type LargeListUtf8Builder = MutableListArray<i64, MutableUtf8Array<i64>>;
+type LargeListBooleanBuilder = MutableListArray<i64, MutableBooleanArray>;
+
 pub struct ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub builder: ListBuilder<ArrowPrimitiveArrayBuilder<T>>,
+    pub builder: LargePrimitiveBuilder<T::Native>,
 }
 
 macro_rules! finish_list_builder {
@@ -305,25 +285,26 @@ macro_rules! finish_list_builder {
 impl<T> ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub fn new(values_builder: ArrowPrimitiveArrayBuilder<T>, capacity: usize) -> Self {
-        let builder = ListBuilder::with_capacity(values_builder, capacity);
+    pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
+        let values = MutablePrimitiveArray::<T::Native>::with_capacity(values_capacity);
+        let builder = LargePrimitiveBuilder::<T::Native>::new_with_capacity(values, capacity);
+
         ListPrimitiveArrayBuilder { builder }
     }
 
     pub fn append_slice(&mut self, opt_v: Option<&[T::Native]>) {
         match opt_v {
-            Some(v) => {
-                self.builder.values().append_slice(v);
-                self.builder.append(true).expect("should not fail");
+            Some(items) => {
+                let values = self.builder.mut_values();
+                // Safety:
+                // A slice is a trusted length iterator
+                unsafe { values.extend_trusted_len_unchecked(items.iter().map(Some)) }
+                self.builder.try_push_valid().unwrap();
             }
             None => {
-                self.builder.append(false).expect("should not fail");
+                self.builder.push_null();
             }
         }
-    }
-
-    pub fn append_null(&mut self) {
-        self.builder.append(false).expect("should not fail");
     }
 }
 
@@ -337,38 +318,27 @@ where
         match opt_s {
             Some(s) => self.append_series(s),
             None => {
-                self.builder.append(false).unwrap();
+                self.builder.push_null();
             }
         }
     }
 
     #[inline]
     fn append_null(&mut self) {
-        let builder = self.builder.values();
-        builder.append_null();
-        self.builder.append(true).unwrap();
+        self.builder.push_null();
     }
 
     #[inline]
     fn append_series(&mut self, s: &Series) {
-        let builder = self.builder.values();
         let array = s.get_array_ref();
-        let values = array.get_values::<T>();
-        // we would like to check if array has no null values.
-        // however at the time of writing there is a bug in append_slice, because it does not update
-        // the null bitmap
-        if s.null_count() == 0 {
-            builder.append_slice(values);
-        } else {
-            values.iter().enumerate().for_each(|(idx, v)| {
-                if array.is_valid(idx) {
-                    builder.append_value(*v);
-                } else {
-                    builder.append_null();
-                }
-            });
-        }
-        self.builder.append(true).unwrap();
+        let arr = array
+            .as_any()
+            .downcast_ref::<PrimitiveArray<T::Native>>()
+            .unwrap();
+
+        let values = self.builder.mut_values();
+        unsafe { values.extend_trusted_len_unchecked(arr.into_iter()) }
+        self.builder.try_push_valid().unwrap();
     }
 
     fn finish(&mut self) -> DFListArray {
@@ -377,12 +347,15 @@ where
 }
 
 pub struct ListUtf8ArrayBuilder {
-    builder: ListBuilder<StringBuilder>,
+    builder: LargeListUtf8Builder,
 }
 
+type LargeMutableUtf8Array = MutableUtf8Array<i64>;
 impl ListUtf8ArrayBuilder {
-    pub fn new(values_builder: StringBuilder, capacity: usize) -> Self {
-        let builder = ListBuilder::with_capacity(values_builder, capacity);
+    pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
+        let values = LargeMutableUtf8Array::with_capacity(values_capacity);
+        let builder = LargeListUtf8Builder::new_with_capacity(values, capacity);
+
         ListUtf8ArrayBuilder { builder }
     }
 }
@@ -392,29 +365,22 @@ impl ListBuilderTrait for ListUtf8ArrayBuilder {
         match opt_s {
             Some(s) => self.append_series(s),
             None => {
-                self.builder.append(false).unwrap();
+                self.builder.push_null();
             }
         }
     }
 
     #[inline]
     fn append_null(&mut self) {
-        let builder = self.builder.values();
-        builder.append_null().unwrap();
-        self.builder.append(true).unwrap();
+        self.builder.push_null();
     }
 
     #[inline]
     fn append_series(&mut self, s: &Series) {
         let ca = s.utf8().unwrap();
-        let value_builder = self.builder.values();
-        for s in ca {
-            match s {
-                Some(s) => value_builder.append_value(s).unwrap(),
-                None => value_builder.append_null().unwrap(),
-            };
-        }
-        self.builder.append(true).unwrap();
+        let value_builder = self.builder.mut_values();
+        value_builder.try_extend(ca).unwrap();
+        self.builder.try_push_valid().unwrap();
     }
 
     fn finish(&mut self) -> DFListArray {
@@ -423,13 +389,13 @@ impl ListBuilderTrait for ListUtf8ArrayBuilder {
 }
 
 pub struct ListBooleanArrayBuilder {
-    builder: ListBuilder<ArrowBooleanArrayBuilder>,
+    builder: LargeListBooleanBuilder,
 }
 
 impl ListBooleanArrayBuilder {
-    pub fn new(values_builder: ArrowBooleanArrayBuilder, capacity: usize) -> Self {
-        let builder = ListBuilder::with_capacity(values_builder, capacity);
-
+    pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
+        let values = MutableBooleanArray::with_capacity(values_capacity);
+        let builder = LargeListBooleanBuilder::new_with_capacity(values, capacity);
         Self { builder }
     }
 }
@@ -439,29 +405,22 @@ impl ListBuilderTrait for ListBooleanArrayBuilder {
         match opt_s {
             Some(s) => self.append_series(s),
             None => {
-                self.builder.append(false).unwrap();
+                self.builder.push_null();
             }
         }
     }
 
     #[inline]
     fn append_null(&mut self) {
-        let builder = self.builder.values();
-        builder.append_null();
-        self.builder.append(true).unwrap();
+        self.builder.push_null();
     }
 
     #[inline]
     fn append_series(&mut self, s: &Series) {
         let ca = s.bool().unwrap();
-        let value_builder = self.builder.values();
-        for s in ca {
-            match s {
-                Some(s) => value_builder.append_value(s),
-                None => value_builder.append_null(),
-            };
-        }
-        self.builder.append(true).unwrap();
+        let value_builder = self.builder.mut_values();
+        value_builder.try_extend(ca).unwrap();
+        self.builder.try_push_valid().unwrap();
     }
 
     fn finish(&mut self) -> DFListArray {
@@ -476,22 +435,19 @@ pub fn get_list_builder(
 ) -> Box<dyn ListBuilderTrait> {
     macro_rules! get_primitive_builder {
         ($type:ty) => {{
-            let values_builder = ArrowPrimitiveArrayBuilder::<$type>::new(value_capacity);
-            let builder = ListPrimitiveArrayBuilder::new(values_builder, list_capacity);
+            let builder = ListPrimitiveArrayBuilder::with_capacity(value_capacity, list_capacity);
             Box::new(builder)
         }};
     }
     macro_rules! get_bool_builder {
         () => {{
-            let values_builder = ArrowBooleanArrayBuilder::new(value_capacity);
-            let builder = ListBooleanArrayBuilder::new(values_builder, list_capacity);
+            let builder = ListBooleanArrayBuilder::with_capacity(value_capacity, list_capacity);
             Box::new(builder)
         }};
     }
     macro_rules! get_utf8_builder {
         () => {{
-            let values_builder = StringBuilder::with_capacity(value_capacity * 5, value_capacity);
-            let builder = ListUtf8ArrayBuilder::new(values_builder, list_capacity);
+            let builder = ListUtf8ArrayBuilder::with_capacity(value_capacity, list_capacity);
             Box::new(builder)
         }};
     }
@@ -504,22 +460,23 @@ pub fn get_list_builder(
 }
 
 pub struct BinaryArrayBuilder {
-    builder: BinaryBuilder,
+    builder: MutableBinaryArray<i64>,
 }
 
 impl BinaryArrayBuilder {
-    pub fn new(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            builder: BinaryBuilder::new(capacity),
+            builder: MutableBinaryArray::<i64>::with_capacity(capacity),
         }
     }
 
     pub fn append_value(&mut self, value: impl AsRef<[u8]>) {
-        self.builder.append_value(value).unwrap();
+        self.builder.push(Some(value))
     }
 
-    pub fn append_null(&mut self) {
-        self.builder.append_null().unwrap();
+    #[inline]
+    fn append_null(&mut self) {
+        self.builder.push_null();
     }
 
     pub fn finish(&mut self) -> DataArray<BinaryType> {

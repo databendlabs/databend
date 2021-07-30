@@ -14,10 +14,10 @@ use common_arrow::arrow::array::StringArray;
 
 use super::get_list_builder;
 use crate::arrays::DataArray;
+use crate::prelude::AlignedVec;
 use crate::series::Series;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
-use crate::vec::AlignedVec;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;
