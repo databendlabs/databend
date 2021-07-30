@@ -27,6 +27,19 @@ pub fn init_default_tracing() {
     });
 }
 
+/// Init logging and tracing.
+///
+/// To enable reporting tracing data to jaeger, set env var `FUSE_JAEGER` to non-empty value.
+/// A local tracing collection(maybe for testing) can be done with a local jaeger server.
+/// To report tracing data and view it:
+///   docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
+///   FUSE_JAEGER=on RUST_LOG=trace cargo test
+///   open http://localhost:16686/
+///
+/// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
+///   FUSE_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
+///
+// TODO(xp): use FUSE_JAEGER to assign jaeger server address.
 fn init_tracing_stdout() {
     let fmt_layer = fmt::Layer::default()
         .with_thread_ids(true)
@@ -35,13 +48,6 @@ fn init_tracing_stdout() {
         .with_ansi(true)
         .with_span_events(fmt::format::FmtSpan::FULL);
 
-    // Enable reporting tracing data to jaeger if FUSE_JAEGER is non-empty.
-    // Start a local jaeger server and report tracing data and view it:
-    //   docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
-    //   FUSE_JAEGER=on RUST_LOG=trace cargo test
-    //   open http://localhost:16686/
-
-    // TODO(xp): use FUSE_JAEGER to assign jaeger server address.
     let fuse_jaeger = env::var("FUSE_JAEGER").unwrap_or_else(|_| "".to_string());
     let ot_layer = if !fuse_jaeger.is_empty() {
         global::set_text_map_propagator(TraceContextPropagator::new());
