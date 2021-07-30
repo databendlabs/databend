@@ -62,9 +62,8 @@ jobs:
           -p "8083:80@agent[0]"
           -p "8443:443@agent[0]"
           -p "5053:53/udp@agent[0]"
-          --agents 3
+          --agents 2
           --no-lb
-          --image docker.io/rancher/k3s:v1.20.4-k3s1
           --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
           --timeout 180s
     - name: testing environment set up
