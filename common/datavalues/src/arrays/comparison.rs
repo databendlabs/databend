@@ -8,8 +8,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StringArray;
-use common_arrow::arrow::compute::kernels::comparison;
 use common_arrow::arrow::compute::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -19,6 +17,7 @@ use num::ToPrimitive;
 
 use super::DataArray;
 use crate::arrays::*;
+use crate::prelude::LargeUtf8Array;
 use crate::series::Series;
 use crate::utils::NoNull;
 use crate::*;
@@ -104,8 +103,8 @@ where T: DFNumericType
         &self,
         rhs: &DataArray<T>,
         operator: impl Fn(
-            &PrimitiveArray<T>,
-            &PrimitiveArray<T>,
+            &PrimitiveArray<T::Native>,
+            &PrimitiveArray<T::Native>,
         ) -> common_arrow::arrow::error::Result<BooleanArray>,
     ) -> Result<DFBooleanArray> {
         let array = Arc::new(operator(self.downcast_ref(), rhs.downcast_ref())?) as ArrayRef;
@@ -260,8 +259,8 @@ impl DFUtf8Array {
         &self,
         rhs: &DFUtf8Array,
         operator: impl Fn(
-            &StringArray,
-            &StringArray,
+            &LargeUtf8Array,
+            &LargeUtf8Array,
         ) -> common_arrow::arrow::error::Result<BooleanArray>,
     ) -> Result<DFBooleanArray> {
         let arr = operator(self.downcast_ref(), rhs.downcast_ref())?;

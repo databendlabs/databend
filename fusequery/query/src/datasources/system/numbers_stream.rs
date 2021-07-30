@@ -8,7 +8,6 @@ use std::usize;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::AlignedVec;
 use common_datavalues::DFUInt64Array;
 use common_exception::Result;
 use common_streams::ProgressStream;
@@ -87,12 +86,15 @@ impl NumbersStream {
         Ok(if current.begin == current.end {
             None
         } else {
-            let mut av =
-                AlignedVec::with_capacity_len_aligned((current.end - current.begin) as usize);
+            let mut av = AlignedVec::with_capacity((current.end - current.begin) as usize);
+            unsafe { av.set_len(av.capacity()) };
 
-            av.iter_mut().enumerate().for_each(|(idx, num)| {
-                *num = current.begin + idx as u64;
-            });
+            av.as_mut_slice()
+                .iter_mut()
+                .enumerate()
+                .for_each(|(idx, num)| {
+                    *num = current.begin + idx as u64;
+                });
             let series = DFUInt64Array::new_from_aligned_vec(av).into_series();
             let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
             Some(block)

@@ -15,7 +15,6 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute;
-use common_arrow::arrow::compute::divide_scalar;
 use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -88,9 +87,9 @@ where
         + Div<Output = T::Native>
         + num::Zero,
     Kernel: Fn(
-        &PrimitiveArray<T>,
-        &PrimitiveArray<T>,
-    ) -> std::result::Result<PrimitiveArray<T>, ArrowError>,
+        &PrimitiveArray<T::Native>,
+        &PrimitiveArray<T::Native>,
+    ) -> std::result::Result<PrimitiveArray<T::Native>, ArrowError>,
     F: Fn(T::Native, T::Native) -> T::Native,
 {
     let ca = match (lhs.len(), rhs.len()) {
@@ -184,13 +183,6 @@ where
     type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
-        if rhs.len() == 1 {
-            let result = Arc::new(compute::divide_scalar(
-                self.as_ref(),
-                rhs.as_ref().value(0),
-            )?) as ArrayRef;
-            return Ok(result.into());
-        }
         arithmetic_helper(self, rhs, compute::divide, |lhs, rhs| lhs / rhs)
     }
 }

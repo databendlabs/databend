@@ -151,9 +151,13 @@ where T: DFNumericType
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = match self.null_count() {
-                    0 => take_no_null_primitive_iter(primitive_array, iter) as ArrayRef,
-                    _ => take_primitive_iter(primitive_array, iter) as ArrayRef,
+                let array = unsafe {
+                    match self.null_count() {
+                        0 => {
+                            take_no_null_primitive_iter_unchecked(primitive_array, iter) as ArrayRef
+                        }
+                        _ => take_primitive_iter_unchecked(primitive_array, iter) as ArrayRef,
+                    }
                 };
                 Ok(Self::from(array))
             }

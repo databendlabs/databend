@@ -7,14 +7,12 @@ use std::borrow::Cow;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StringArray;
+use common_arrow::arrow::array::*;
 
 use super::get_list_builder;
 use crate::arrays::DataArray;
 use crate::prelude::AlignedVec;
+use crate::prelude::LargeUtf8Array;
 use crate::series::Series;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
@@ -32,7 +30,7 @@ where T: DFPrimitiveType
     fn from_iter<I: IntoIterator<Item = Option<T::Native>>>(iter: I) -> Self {
         let iter = iter.into_iter();
 
-        let arr: PrimitiveArray<T> = match iter.size_hint() {
+        let arr: PrimitiveArray<T::Native> = match iter.size_hint() {
             (a, Some(b)) if a == b => {
                 // 2021-02-07: ~40% faster than builder.
                 // It is unsafe because we cannot be certain that the iterators length can be trusted.
@@ -65,7 +63,7 @@ where T: DFPrimitiveType
     fn from_iter<I: IntoIterator<Item = T::Native>>(iter: I) -> Self {
         // 2021-02-07: aligned vec was ~2x faster than arrow collect.
         let iter = iter.into_iter();
-        let mut av = AlignedVec::with_capacity_aligned(0);
+        let mut av = AlignedVec::with_capacity(0);
         av.extend(iter);
         NoNull::new(DataArray::new_from_aligned_vec(av))
     }
@@ -102,7 +100,7 @@ where Ptr: AsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
         // 2021-02-07: this was ~30% faster than with the builder.
-        let arr = StringArray::from_iter(iter);
+        let arr = LargeUtf8Array::from_iter(iter);
         let array = Arc::new(arr) as ArrayRef;
         array.into()
     }
@@ -121,7 +119,7 @@ impl<Ptr> FromIterator<Ptr> for DFUtf8Array
 where Ptr: DFAsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
-        let arr = StringArray::from_iter_values(iter);
+        let arr = LargeUtf8Array::from_iter_values(iter);
 
         let array = Arc::new(arr) as ArrayRef;
         array.into()

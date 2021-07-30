@@ -131,7 +131,7 @@ macro_rules! build_list {
                 ))
             }
             Some(values) => {
-                let mut builder = ListBuilder::new($VALUE_BUILDER_TY::new(values.len()));
+                let mut builder = ListBuilder::with_capacity($VALUE_BUILDER_TY::new(values.len()));
 
                 for _ in 0..$SIZE {
                     for scalar_value in values {
@@ -172,7 +172,7 @@ macro_rules! try_build_array {
 
     // Boolean
     ($VALUES:expr) => {{
-        let mut builder = BooleanArrayBuilder::new($VALUES.len());
+        let mut builder = BooleanArrayBuilder::with_capacity($VALUES.len());
         for value in $VALUES.iter() {
             match value {
                 DataValue::Boolean(Some(v)) => builder.append_value(*v),
@@ -185,7 +185,7 @@ macro_rules! try_build_array {
 
     // utf8
     ($utf8:ident, $VALUES:expr) => {{
-        let mut builder = Utf8ArrayBuilder::new($VALUES.len(), $VALUES.len() * 4);
+        let mut builder = Utf8ArrayBuilder::with_capacity($VALUES.len(), $VALUES.len() * 4);
         for value in $VALUES.iter() {
             match value {
                 DataValue::Utf8(Some(v)) => builder.append_value(v),

@@ -12,13 +12,15 @@ use common_arrow::arrow::array as arrow_array;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::IntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::ArrayBuilder;
+use super::BooleanArrayBuilder;
 use crate::data_df_type::*;
 use crate::prelude::AlignedVec;
+use crate::prelude::LargeListArray;
+use crate::prelude::LargeUtf8Array;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::series::SeriesTrait;
@@ -68,16 +70,8 @@ impl<T> DataArray<T> {
     }
 
     /// Get the null count and the buffer of bits representing null values
-    pub fn null_bits(&self) -> (usize, Option<Buffer>) {
-        let data = self.array.data();
-
-        (
-            data.null_count(),
-            data.null_bitmap().as_ref().map(|bitmap| {
-                let buff = bitmap.buffer_ref();
-                buff.clone()
-            }),
-        )
+    pub fn null_bits(&self) -> (usize, &Option<Bitmap>) {
+        (self.array.null_count(), data.validity())
     }
 
     pub fn limit(&self, num_elements: usize) -> Self {
@@ -149,7 +143,7 @@ where T: DFDataType
 
         // TODO: insert types
         match T::data_type() {
-            DataType::Utf8 => downcast_and_pack!(StringArray, Utf8),
+            DataType::Utf8 => downcast_and_pack!(LargeUtf8Array, Utf8),
             DataType::Boolean => downcast_and_pack!(BooleanArray, Boolean),
             DataType::UInt8 => downcast_and_pack!(UInt8Array, UInt8),
             DataType::UInt16 => downcast_and_pack!(UInt16Array, UInt16),
@@ -167,7 +161,7 @@ where T: DFDataType
             }
 
             DataType::List(fs) => {
-                let list_array = &*(arr as *const dyn Array as *const ListArray);
+                let list_array = &*(arr as *const dyn Array as *const LargeListArray);
                 let value = match list_array.is_null(index) {
                     true => None,
                     false => {
@@ -200,42 +194,6 @@ where T: DFDataType
             ))),
         }
     }
-
-    // Apply BitAnd with the null masks and generate a new ArrayData
-    pub fn apply_null_mask(&self, mask: impl AsRef<[u8]>) -> Result<Self> {
-        let mask = mask.as_ref();
-        if mask.len() != self.len() {
-            return Err(ErrorCode::BadDataArrayLength(format!(
-                "cannot apply null mask, size not matched, got: {}, expect: {}",
-                mask.len(),
-                self.len(),
-            )));
-        }
-        let mut builder = BooleanBufferBuilder::new(mask.len());
-        for b in mask.iter() {
-            builder.append(*b > 0);
-        }
-        let buffer = builder.finish();
-        let data = self.array.data();
-        let bitmap = Bitmap::from(buffer);
-
-        let bitmap_and = if let Some(b) = data.null_bitmap() {
-            b.bitand(&bitmap)?
-        } else {
-            bitmap
-        };
-
-        let array_data = ArrayData::new(
-            T::data_type().to_arrow(),
-            data.len(),
-            None,
-            Some(bitmap_and.into_buffer()),
-            data.offset(),
-            data.buffers().to_owned(),
-            data.child_data().to_owned(),
-        );
-        Ok(make_array(array_data).into())
-    }
 }
 
 impl<T> DataArray<T>
@@ -243,16 +201,16 @@ where T: DFPrimitiveType
 {
     /// Create a new DataArray by taking ownership of the AlignedVec. This operation is zero copy.
     pub fn new_from_aligned_vec(v: AlignedVec<T::Native>) -> Self {
-        let array = v.into_primitive_array::<T>(None);
+        let array = to_primitive(values, None);
         Self::new(Arc::new(array))
     }
 
     /// Nullify values in slice with an existing null bitmap
     pub fn new_from_owned_with_null_bitmap(
         values: AlignedVec<T::Native>,
-        buffer: Option<Buffer>,
+        validity: Option<Bitmap>,
     ) -> Self {
-        let array = values.into_primitive_array::<T>(buffer);
+        let array = to_primitive(values, validity);
         Self::new(Arc::new(array))
     }
 
@@ -264,7 +222,7 @@ where T: DFPrimitiveType
         &self,
     ) -> impl Iterator<Item = &T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
     {
-        self.downcast_ref().values().iter()
+        self.downcast_ref().values().as_slice().iter()
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -311,4 +269,12 @@ where T: DFDataType
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DataArray<{:?}>", self.data_type())
     }
+}
+
+#[inline]
+pub fn to_primitive<T: DFPrimitiveType>(
+    values: AlignedVec<T::Native>,
+    validity: Option<Bitmap>,
+) -> PrimitiveArray<T::Native> {
+    PrimitiveArray::from_data(T::data_type().to_arrow(), values.into(), validity)
 }

@@ -7,13 +7,14 @@ use common_arrow::arrow::array::ArrayRef;
 use super::take_random::TakeRandom;
 use super::take_random::TakeRandomUtf8;
 use crate::arrays::DataArray;
+use crate::prelude::LargeUtf8Array;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;
 use crate::DFUtf8Array;
 
 macro_rules! impl_take_random_get {
-    ($self:ident, $index:ident, $array_type:ty) => {{
+    ($self:ident, $index:ident) => {{
         // Safety:
         // index should be in bounds
         let arr = $self.downcast_ref();
@@ -26,7 +27,7 @@ macro_rules! impl_take_random_get {
 }
 
 macro_rules! impl_take_random_get_unchecked {
-    ($self:ident, $index:ident, $array_type:ty) => {{
+    ($self:ident, $index:ident) => {{
         let arr = $self.downcast_ref();
         arr.value_unchecked($index)
     }};
@@ -39,12 +40,12 @@ where T: DFNumericType
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
-        unsafe { impl_take_random_get!(self, index, PrimitiveArray<T>) }
+        unsafe { impl_take_random_get!(self, index) }
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index, PrimitiveArray<T>)
+        impl_take_random_get_unchecked!(self, index)
     }
 }
 
@@ -71,12 +72,12 @@ impl TakeRandom for DFBooleanArray {
     fn get(&self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checked and downcast is of correct type
-        unsafe { impl_take_random_get!(self, index, BooleanArray) }
+        unsafe { impl_take_random_get!(self, index) }
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index, BooleanArray)
+        impl_take_random_get_unchecked!(self, index)
     }
 }
 
@@ -87,12 +88,12 @@ impl<'a> TakeRandom for &'a DFUtf8Array {
     fn get(&self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checked and downcast is of correct type
-        unsafe { impl_take_random_get!(self, index, StringArray) }
+        unsafe { impl_take_random_get!(self, index) }
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index, StringArray)
+        impl_take_random_get_unchecked!(self, index)
     }
 }
 
@@ -105,12 +106,12 @@ impl<'a> TakeRandomUtf8 for &'a DFUtf8Array {
     fn get(self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checkedn and downcast is of correct type
-        unsafe { impl_take_random_get!(self, index, StringArray) }
+        unsafe { impl_take_random_get!(self, Index) }
     }
 
     #[inline]
     unsafe fn get_unchecked(self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index, StringArray)
+        impl_take_random_get_unchecked!(self, index)
     }
 }
 
@@ -121,11 +122,11 @@ impl TakeRandom for DFListArray {
     fn get(&self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checked and downcast is of correct type
-        unsafe { impl_take_random_get!(self, index, LargeListArray) }
+        unsafe { impl_take_random_get!(self, index) }
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index, LargeListArray)
+        impl_take_random_get_unchecked!(self, index)
     }
 }

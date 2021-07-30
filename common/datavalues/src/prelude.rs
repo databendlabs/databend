@@ -5,6 +5,7 @@
 //! Everything you need to get started with this crate.
 pub use std::sync::Arc;
 
+pub use crate::arrays::to_primitive;
 // arrays
 pub use crate::arrays::ArrayApply;
 pub use crate::arrays::ArrayApplyKernel;
@@ -23,13 +24,10 @@ pub use crate::arrays::DFUInt32ArrayBuilder;
 pub use crate::arrays::DFUInt64ArrayBuilder;
 pub use crate::arrays::DFUInt8ArrayBuilder;
 pub use crate::arrays::DataArray;
-pub use crate::arrays::GetValues;
 pub use crate::arrays::IntoTakeRandom;
-pub use crate::arrays::IsNull;
 pub use crate::arrays::NewDataArray;
 pub use crate::arrays::PrimitiveArrayBuilder;
 pub use crate::arrays::TakeRandom;
-pub use crate::arrays::ToPrimitive;
 pub use crate::arrays::Utf8ArrayBuilder;
 // columns
 pub use crate::columns::DataColumn;
@@ -65,3 +63,6 @@ pub use crate::DataValueLogicOperator;
 pub use crate::DataValueLogicOperator::*;
 
 pub type AlignedVec<T> = common_arrow::arrow::buffer::MutableBuffer<T>;
+pub type LargeUtf8Array = common_arrow::arrow::array::Utf8Array<i64>;
+pub type LargeBinaryArray = common_arrow::arrow::array::BinaryArray<i64>;
+pub type LargeListArray = common_arrow::arrow::array::ListArray<i64>;

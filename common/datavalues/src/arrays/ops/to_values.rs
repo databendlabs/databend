@@ -43,7 +43,10 @@ pub trait ToValues: Debug {
     fn to_values(&self) -> Result<Vec<DataValue>>;
 }
 
-fn primitive_type_to_values_impl<T, F>(array: &PrimitiveArray<T>, f: F) -> Result<Vec<DataValue>>
+fn primitive_type_to_values_impl<T, F>(
+    array: &PrimitiveArray<T::Native>,
+    f: F,
+) -> Result<Vec<DataValue>>
 where
     T: DFPrimitiveType,
     F: Fn(Option<T::Native>) -> DataValue,

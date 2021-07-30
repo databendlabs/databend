@@ -5,10 +5,11 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::ListArray;
 use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::array::UInt32Array;
 
 use crate::arrays::DataArray;
+use crate::prelude::LargeListArray;
+use crate::prelude::LargeUtf8Array;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::series::SeriesWrap;
@@ -156,7 +157,7 @@ where T: DFNumericType
 }
 
 pub struct Utf8TakeRandom<'a> {
-    arr: &'a StringArray,
+    arr: &'a LargeUtf8Array,
 }
 
 impl<'a> TakeRandom for Utf8TakeRandom<'a> {
@@ -230,7 +231,7 @@ where T: Copy
 pub struct NumTakeRandomSingleArray<'a, T>
 where T: DFNumericType
 {
-    arr: &'a PrimitiveArray<T>,
+    arr: &'a PrimitiveArray<T::Native>,
 }
 
 impl<'a, T> TakeRandom for NumTakeRandomSingleArray<'a, T>
@@ -268,7 +269,7 @@ impl<'a> TakeRandom for BoolTakeRandom<'a> {
 }
 
 pub struct ListTakeRandom<'a> {
-    arr: &'a ListArray,
+    arr: &'a LargeListArray,
 }
 
 impl<'a> TakeRandom for ListTakeRandom<'a> {

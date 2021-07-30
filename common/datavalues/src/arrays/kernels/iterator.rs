@@ -2,12 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::ListArray;
-use common_arrow::arrow::array::StringArray;
+use common_arrow::arrow::array::*;
 
-use crate::prelude::DataArray;
+use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DFBooleanArray;
@@ -107,14 +104,14 @@ impl<'a> IntoIterator for &'a DFUtf8Array {
 }
 
 pub struct Utf8IterNoNull<'a> {
-    array: &'a StringArray,
+    array: &'a LargeUtf8Array,
     current: usize,
     current_end: usize,
 }
 
 impl<'a> Utf8IterNoNull<'a> {
     /// create a new iterator
-    pub fn new(array: &'a StringArray) -> Self {
+    pub fn new(array: &'a LargeUtf8Array) -> Self {
         Utf8IterNoNull {
             array,
             current: 0,
@@ -176,14 +173,14 @@ impl<'a> IntoIterator for &'a DFListArray {
 }
 
 pub struct ListIterNoNull<'a> {
-    array: &'a ListArray,
+    array: &'a LargeListArray,
     current: usize,
     current_end: usize,
 }
 
 impl<'a> ListIterNoNull<'a> {
     /// create a new iterator
-    pub fn new(array: &'a ListArray) -> Self {
+    pub fn new(array: &'a LargeListArray) -> Self {
         ListIterNoNull {
             array,
             current: 0,

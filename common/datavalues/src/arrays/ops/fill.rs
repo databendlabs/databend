@@ -98,7 +98,7 @@ impl ArrayFullNull for DFBooleanArray {
 
 impl<'a> ArrayFull<&'a str> for DFUtf8Array {
     fn full(value: &'a str, length: usize) -> Self {
-        let mut builder = Utf8ArrayBuilder::new(length, length * value.len());
+        let mut builder = Utf8ArrayBuilder::with_capacity(length, length * value.len());
 
         for _ in 0..length {
             builder.append_value(value);

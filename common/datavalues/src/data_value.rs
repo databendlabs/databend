@@ -20,6 +20,7 @@ use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::prelude::LargeUtf8Array;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DataField;
@@ -189,68 +190,12 @@ impl DataValue {
                 None => Ok(new_null_array_by_type(&DataType::Float64, size)),
             },
             DataValue::Utf8(e) => match e {
-                Some(v) => Ok(Arc::new(StringArray::from(vec![v.deref(); size]))),
+                Some(v) => Ok(Arc::new(LargeUtf8Array::from(vec![v.deref(); size]))),
                 None => Ok(new_null_array_by_type(&DataType::Utf8, size)),
             },
             DataValue::Binary(e) => match e {
                 Some(v) => Ok(Arc::new(BinaryArray::from(vec![v.deref(); size]))),
                 None => Ok(new_null_array_by_type(&DataType::Binary, size)),
-            },
-            DataValue::Date32(e) => match e {
-                Some(value) => Ok(Arc::new(Date32Array::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(&DataType::Date32, size)),
-            },
-            DataValue::Date64(e) => match e {
-                Some(value) => Ok(Arc::new(Date64Array::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(&DataType::Date64, size)),
-            },
-            DataValue::TimestampSecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampSecondArray::from_iter_values(
-                    repeat(*value).take(size),
-                ))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Second, None),
-                    size,
-                )),
-            },
-            DataValue::TimestampMillisecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampMillisecondArray::from_iter_values(
-                    repeat(*value).take(size),
-                ))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Millisecond, None),
-                    size,
-                )),
-            },
-            DataValue::TimestampMicrosecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampMicrosecondArray::from_value(
-                    *value, size,
-                ))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Microsecond, None),
-                    size,
-                )),
-            },
-            DataValue::TimestampNanosecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampNanosecondArray::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Nanosecond, None),
-                    size,
-                )),
-            },
-            DataValue::IntervalDayTime(e) => match e {
-                Some(value) => Ok(Arc::new(IntervalDayTimeArray::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Interval(IntervalUnit::DayTime),
-                    size,
-                )),
-            },
-            DataValue::IntervalYearMonth(e) => match e {
-                Some(value) => Ok(Arc::new(IntervalYearMonthArray::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Interval(IntervalUnit::YearMonth),
-                    size,
-                )),
             },
             DataValue::List(values, data_type) => match data_type {
                 DataType::Int8 => Ok(Arc::new(build_list!(Int8Builder, Int8, values, size))),
@@ -288,6 +233,10 @@ impl DataValue {
                 }
                 Ok(Arc::new(StructArray::from(array)))
             }
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{} for DataValue",
+                other
+            ))),
         }
     }
 

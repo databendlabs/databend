@@ -7,7 +7,6 @@ use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::Int32Array;
 use common_arrow::arrow::array::ListArray;
 use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StringArray;
 use common_arrow::arrow::array::StructArray;
 use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::datatypes::Field;
@@ -34,7 +33,7 @@ fn test_array_as_ref() -> Result<()> {
     assert_eq!(&[1u16, 2, 3], &arrow_uint16_array.values());
 
     // Test DFBooleanArray
-    let mut boolean_builder = BooleanArrayBuilder::new(3);
+    let mut boolean_builder = BooleanArrayBuilder::with_capacity(3);
     boolean_builder.append_value(true);
     boolean_builder.append_value(false);
     boolean_builder.append_value(true);
@@ -44,7 +43,7 @@ fn test_array_as_ref() -> Result<()> {
     assert_eq!(&[5], &arrow_boolean_array.values().as_slice());
 
     // Test DFUtf8Array
-    let mut utf8_builder = Utf8ArrayBuilder::new(3, 2);
+    let mut utf8_builder = Utf8ArrayBuilder::with_capacity(3, 2);
     utf8_builder.append_value("1a");
     utf8_builder.append_value("2b");
     utf8_builder.append_value("3c");
@@ -65,7 +64,7 @@ fn test_array_as_ref() -> Result<()> {
     assert_eq!(expected, format!("{:?}", arrow_list.values()));
 
     // Test DFBinaryArray
-    let mut binary_builder = BinaryArrayBuilder::new(8);
+    let mut binary_builder = BinaryArrayBuilder::with_capacity(8);
     binary_builder.append_value(&"123");
     let df_binary_array = binary_builder.finish();
     let arrow_binary_array = df_binary_array.as_ref();
@@ -92,25 +91,25 @@ fn test_array_downcast() -> Result<()> {
     // Test BooleanArray
     let vec_bool = vec![true, false, true];
     let arrow_bool_array = BooleanArray::from(vec_bool);
-    let df_bool_array = DFBooleanArray::from_arrow_array(arrow_bool_array);
-    let values = df_bool_array.collect_values();
+    let df_array = DFBooleanArray::from_arrow_array(arrow_bool_array);
+    let values = df_array.collect_values();
     assert_eq!(&[Some(true), Some(false), Some(true)], values.as_slice());
 
     // Test Utf8Array
     let vec_str = vec![Some("foo"), None, Some("bar")];
-    let arrow_str_array = StringArray::from(vec_str);
-    let df_bool_array = DFUtf8Array::from_arrow_array(arrow_str_array);
-    let values = df_bool_array.collect_values();
+    let arrow_str_array = LargeUtf8Array::from(vec_str);
+    let df_array = DFUtf8Array::from_arrow_array(arrow_str_array);
+    let values = df_array.collect_values();
     assert_eq!(&[Some("foo"), None, Some("bar")], values.as_slice());
 
-    // Test ListArray
+    // Test LargeListArray
     let data = vec![
         Some(vec![Some(0), Some(1), Some(2)]),
         Some(Vec::<Option<i32>>::new()),
         Some(vec![Some(3), None, Some(5)]),
         Some(vec![Some(6), Some(7)]),
     ];
-    let arrow_list_array = ListArray::from_iter_primitive::<Int32Type, _, _>(data);
+    let arrow_list_array = LargeListArray::from_iter_primitive::<Int32Type, _, _>(data);
     let df_list_array = DFListArray::from_arrow_array(arrow_list_array);
     let values: Vec<Option<Series>> = df_list_array.downcast_iter().collect();
 
@@ -127,8 +126,8 @@ fn test_array_downcast() -> Result<()> {
         );
     }
 
-    // Test BinaryArray
-    let arrow_binary_array = BinaryArray::from_opt_vec(vec![Some(b"1a"), None, Some(b"2b")]);
+    // Test LargeBinaryArray
+    let arrow_binary_array = LargeBinaryArray::from_opt_vec(vec![Some(b"1a"), None, Some(b"2b")]);
     let df_binary_array = DFBinaryArray::from_arrow_array(arrow_binary_array);
     let downcast_array = df_binary_array.downcast_ref();
     assert_eq!(

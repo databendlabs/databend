@@ -30,7 +30,7 @@ fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Ty
 }
 
 fn new_test_boolean_array(cap: usize, begin: i32, end: i32) -> DataArray<BooleanType> {
-    let mut builder = BooleanArrayBuilder::new(cap);
+    let mut builder = BooleanArrayBuilder::with_capacity(cap);
 
     (begin..end).for_each(|index| {
         if index % 3 == 0 {
@@ -43,7 +43,7 @@ fn new_test_boolean_array(cap: usize, begin: i32, end: i32) -> DataArray<Boolean
 }
 
 fn new_test_utf8_array(cap: usize, begin: i32, end: i32) -> DFUtf8Array {
-    let mut builder = Utf8ArrayBuilder::new(cap, 2);
+    let mut builder = Utf8ArrayBuilder::with_capacity(cap);
     let s = vec!["ax", "by", "cz", "dm", "13"];
 
     (begin..end).for_each(|index| {

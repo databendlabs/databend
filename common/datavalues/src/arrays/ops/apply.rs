@@ -4,14 +4,10 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StringArray;
+use common_arrow::arrow::array::*;
 
 use crate::arrays::DataArray;
-use crate::prelude::AlignedVec;
+use crate::prelude::*;
 use crate::utils::NoNull;
 use crate::*;
 
@@ -93,15 +89,19 @@ where T: DFNumericType
         F: Fn(T::Native) -> S::Native + Copy,
         S: DFNumericType,
     {
-        let mut av = AlignedVec::<S::Native>::with_capacity_len_aligned(self.len());
+        let mut av = AlignedVec::<S::Native>::with_capacity(self.len());
+        unsafe { av.set_len(av.capacity()) }
 
         let values = self.as_ref().values();
-        av.iter_mut().zip(values.iter()).for_each(|(num, n)| {
-            *num = f(*n);
-        });
+        av.as_mut_slice()
+            .iter_mut()
+            .zip(values.iter())
+            .for_each(|(num, n)| {
+                *num = f(*n);
+            });
 
-        let (_, buffer) = self.null_bits();
-        let array = Arc::new(av.into_primitive_array::<S>(buffer)) as ArrayRef;
+        let (_, validity) = self.null_bits();
+        let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
         array.into()
     }
 
@@ -110,29 +110,38 @@ where T: DFNumericType
         F: Fn(Option<T::Native>) -> S::Native + Copy,
         S: DFNumericType,
     {
-        let mut av = AlignedVec::<S::Native>::with_capacity_len_aligned(self.len());
+        let mut av = AlignedVec::<S::Native>::with_capacity(self.len());
+        unsafe { av.set_len(av.capacity()) }
+
         let array = self.downcast_ref();
-        let (_, buffer) = self.null_bits();
-        av.iter_mut()
+        let (_, validity) = self.null_bits();
+
+        av.as_mut_slice()
+            .iter_mut()
             .zip(array.values().iter())
             .for_each(|(num, n)| {
                 *num = f(Some(*n));
             });
 
-        let array = Arc::new(av.into_primitive_array::<S>(buffer)) as ArrayRef;
+        let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
         array.into()
     }
 
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(T::Native) -> T::Native + Copy {
-        let mut av = AlignedVec::<T::Native>::with_capacity_len_aligned(self.len());
-        let values = self.as_ref().values();
-        av.iter_mut().zip(values.iter()).for_each(|(num, n)| {
-            *num = f(*n);
-        });
+        let mut av = AlignedVec::<T::Native>::with_capacity(self.len());
+        unsafe { av.set_len(av.capacity()) }
 
-        let (_, buffer) = self.null_bits();
-        let array = Arc::new(av.into_primitive_array::<T>(buffer)) as ArrayRef;
+        let values = self.as_ref().values();
+        av.as_mut_slice()
+            .iter_mut()
+            .zip(values.iter())
+            .for_each(|(num, n)| {
+                *num = f(*n);
+            });
+
+        let (_, validity) = self.null_bits();
+        let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
         array.into()
     }
 
@@ -165,8 +174,10 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
             let av: AlignedVec<_> = (0..array.len())
                 .map(|idx| unsafe { f(array.value_unchecked(idx)) })
                 .collect();
-            let null_bit_buffer = array.data_ref().null_buffer().cloned();
-            Arc::new(av.into_primitive_array::<S>(null_bit_buffer)) as ArrayRef
+
+            let (_, validity) = self.null_bits();
+            let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
+            array.into()
         })
     }
 
@@ -177,7 +188,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
     {
         self.apply_kernel_cast(|array| {
             let av: AlignedVec<_> = array.into_iter().map(f).collect();
-            Arc::new(av.into_primitive_array::<S>(None)) as ArrayRef
+            Arc::new(to_primitive(av, None)) as ArrayRef
         })
     }
 
@@ -260,16 +271,16 @@ impl ArrayApplyKernel<BooleanArray> for DFBooleanArray {
     }
 }
 
-impl<T> ArrayApplyKernel<PrimitiveArray<T>> for DataArray<T>
+impl<T> ArrayApplyKernel<PrimitiveArray<T::Native>> for DataArray<T>
 where T: DFNumericType
 {
     fn apply_kernel<F>(&self, f: F) -> Self
-    where F: Fn(&PrimitiveArray<T>) -> ArrayRef {
+    where F: Fn(&PrimitiveArray<T::Native>) -> ArrayRef {
         self.apply_kernel_cast(f)
     }
     fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
     where
-        F: Fn(&PrimitiveArray<T>) -> ArrayRef,
+        F: Fn(&PrimitiveArray<T::Native>) -> ArrayRef,
         S: DFDataType,
     {
         let array = self.downcast_ref();
@@ -278,15 +289,15 @@ where T: DFNumericType
     }
 }
 
-impl ArrayApplyKernel<StringArray> for DFUtf8Array {
+impl ArrayApplyKernel<LargeUtf8Array> for DFUtf8Array {
     fn apply_kernel<F>(&self, f: F) -> Self
-    where F: Fn(&StringArray) -> ArrayRef {
+    where F: Fn(&LargeUtf8Array) -> ArrayRef {
         self.apply_kernel_cast(f)
     }
 
     fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
     where
-        F: Fn(&StringArray) -> ArrayRef,
+        F: Fn(&LargeUtf8Array) -> ArrayRef,
         S: DFDataType,
     {
         let array = self.downcast_ref();

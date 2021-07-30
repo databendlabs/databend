@@ -116,7 +116,6 @@ pub type DFInt64ArrayBuilder = PrimitiveArrayBuilder<Int64Type>;
 
 pub struct Utf8ArrayBuilder {
     pub builder: MutableUtf8Array<i64>,
-    pub capacity: usize,
 }
 
 impl Utf8ArrayBuilder {
@@ -125,11 +124,9 @@ impl Utf8ArrayBuilder {
     /// # Arguments
     ///
     /// * `capacity` - Number of string elements in the final array.
-    /// * `bytes_capacity` - Number of bytes needed to store the string values.
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(bytes_capacity: usize) -> Self {
         Utf8ArrayBuilder {
-            builder: MutableUtf8Array::with_capacity(capacity),
-            capacity,
+            builder: MutableUtf8Array::with_capacity(bytes_capacity),
         }
     }
 
@@ -141,8 +138,7 @@ impl Utf8ArrayBuilder {
 
     /// Appends a null slot into the builder
     #[inline]
-    #[inline]
-    fn append_null(&mut self) {
+    pub fn append_null(&mut self) {
         self.builder.push_null();
     }
 
@@ -183,7 +179,7 @@ where T: DFNumericType
     }
 
     fn new_from_opt_iter(it: impl Iterator<Item = Option<T::Native>>) -> DataArray<T> {
-        let mut builder = PrimitiveArrayBuilder::new(get_iter_capacity(&it));
+        let mut builder = PrimitiveArrayBuilder::with_capacity(get_iter_capacity(&it));
         it.for_each(|opt| builder.append_option(opt));
         builder.finish()
     }
@@ -205,7 +201,7 @@ impl NewDataArray<BooleanType, bool> for DFBooleanArray {
     }
 
     fn new_from_opt_iter(it: impl Iterator<Item = Option<bool>>) -> DFBooleanArray {
-        let mut builder = BooleanArrayBuilder::new(get_iter_capacity(&it));
+        let mut builder = BooleanArrayBuilder::with_capacity(get_iter_capacity(&it));
         it.for_each(|opt| builder.append_option(opt));
         builder.finish()
     }
@@ -234,7 +230,7 @@ where S: AsRef<str>
             Some(s) => acc + s.as_ref().len(),
             None => acc,
         });
-        let mut builder = Utf8ArrayBuilder::new(values_size);
+        let mut builder = Utf8ArrayBuilder::with_capacity(values_size);
         opt_v.iter().for_each(|opt| match opt {
             Some(v) => builder.append_value(v.as_ref()),
             None => builder.append_null(),
@@ -244,7 +240,7 @@ where S: AsRef<str>
 
     fn new_from_opt_iter(it: impl Iterator<Item = Option<S>>) -> Self {
         let cap = get_iter_capacity(&it);
-        let mut builder = Utf8ArrayBuilder::new(cap, cap * 5);
+        let mut builder = Utf8ArrayBuilder::with_capacity(cap * 5);
         it.for_each(|opt| builder.append_option(opt));
         builder.finish()
     }
@@ -252,7 +248,7 @@ where S: AsRef<str>
     /// Create a new DataArray from an iterator.
     fn new_from_iter(it: impl Iterator<Item = S>) -> Self {
         let cap = get_iter_capacity(&it);
-        let mut builder = Utf8ArrayBuilder::new(cap, cap * 5);
+        let mut builder = Utf8ArrayBuilder::with_capacity(cap * 5);
         it.for_each(|v| builder.append_value(v));
         builder.finish()
     }
@@ -265,7 +261,8 @@ pub trait ListBuilderTrait {
     fn finish(&mut self) -> DFListArray;
 }
 
-type LargePrimitiveBuilder<T> = MutableListArray<i64, MutablePrimitiveArray<T>>;
+type LargePrimitiveBuilder<T: DFPrimitiveType> =
+    MutableListArray<i64, MutablePrimitiveArray<T::Native>>;
 type LargeListUtf8Builder = MutableListArray<i64, MutableUtf8Array<i64>>;
 type LargeListBooleanBuilder = MutableListArray<i64, MutableBooleanArray>;
 
@@ -354,7 +351,7 @@ type LargeMutableUtf8Array = MutableUtf8Array<i64>;
 impl ListUtf8ArrayBuilder {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = LargeMutableUtf8Array::with_capacity(values_capacity);
-        let builder = LargeListUtf8Builder::new_with_capacity(values, capacity);
+        let builder = LargeListUtf8Builder::with_capacity_with_capacity(values, capacity);
 
         ListUtf8ArrayBuilder { builder }
     }
@@ -395,7 +392,7 @@ pub struct ListBooleanArrayBuilder {
 impl ListBooleanArrayBuilder {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = MutableBooleanArray::with_capacity(values_capacity);
-        let builder = LargeListBooleanBuilder::new_with_capacity(values, capacity);
+        let builder = LargeListBooleanBuilder::with_capacity_with_capacity(values, capacity);
         Self { builder }
     }
 }

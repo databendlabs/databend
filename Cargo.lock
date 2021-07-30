@@ -123,7 +123,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=95fe10a#95fe10a9e4574046ac271c1e7279af2d8eea471a"
+source = "git+https://github.com/datafuse-extras/arrow2?branch=main#95fe10a9e4574046ac271c1e7279af2d8eea471a"
 dependencies = [
  "arrow2",
  "bytes",
@@ -137,7 +137,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=95fe10a#95fe10a9e4574046ac271c1e7279af2d8eea471a"
+source = "git+https://github.com/datafuse-extras/arrow2?branch=main#95fe10a9e4574046ac271c1e7279af2d8eea471a"
 dependencies = [
  "ahash 0.7.4",
  "base64",
@@ -155,7 +155,7 @@ dependencies = [
  "multiversion",
  "num 0.3.1",
  "packed_simd_2",
- "parquet2",
+ "parquet2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "prettytable-rs",
  "rand 0.7.3",
  "regex",
@@ -686,6 +686,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
+ "parquet2 0.1.0 (git+https://github.com/datafuse-extras/parquet2?branch=main)",
 ]
 
 [[package]]
@@ -3299,6 +3300,23 @@ name = "parquet2"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cab3c2da3dc2e9e5e62fbf409d2c635ac5389ea9fdd5280e3660ae0f900e000"
+dependencies = [
+ "bitpacking",
+ "brotli",
+ "flate2",
+ "futures",
+ "lz4",
+ "parquet-format",
+ "snap",
+ "streaming-iterator",
+ "thrift",
+ "zstd",
+]
+
+[[package]]
+name = "parquet2"
+version = "0.1.0"
+source = "git+https://github.com/datafuse-extras/parquet2?branch=main#20a1fb9d705c827e045504a5d5cb01537ba07c27"
 dependencies = [
  "bitpacking",
  "brotli",

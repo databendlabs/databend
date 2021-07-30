@@ -100,7 +100,7 @@ impl ArrayScatter for DFUtf8Array {
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
-            builders.push(Utf8ArrayBuilder::new(
+            builders.push(Utf8ArrayBuilder::with_capacity(
                 self.len(),
                 self.get_array_memory_size(),
             ));
@@ -143,7 +143,7 @@ impl ArrayScatter for DFBooleanArray {
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
-            builders.push(BooleanArrayBuilder::new(self.len()));
+            builders.push(BooleanArrayBuilder::with_capacity(self.len()));
         }
 
         match self.null_count() {
@@ -226,7 +226,7 @@ impl ArrayScatter for DFBinaryArray {
         let mut builders = Vec::with_capacity(scattered_size);
         let guess_scattered_len = ((self.len() as f64) * 1.1 / (scattered_size as f64)) as usize;
         for _i in 0..scattered_size {
-            let builder = BinaryArrayBuilder::new(guess_scattered_len);
+            let builder = BinaryArrayBuilder::with_capacity(guess_scattered_len);
             builders.push(builder);
         }
 

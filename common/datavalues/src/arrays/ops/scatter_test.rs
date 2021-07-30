@@ -52,7 +52,7 @@ fn test_scatter() -> Result<()> {
     assert_eq!(&[1], &array_vec[1].as_ref().values().as_slice());
 
     // Test BinaryArray
-    let mut binary_builder = BinaryArrayBuilder::new(8);
+    let mut binary_builder = BinaryArrayBuilder::with_capacity(8);
     binary_builder.append_value(&"12");
     binary_builder.append_value(&"ab");
     binary_builder.append_value(&"c");
@@ -69,7 +69,7 @@ fn test_scatter() -> Result<()> {
         array_vec[1].as_ref().value_data().as_slice()
     );
 
-    // Test ListArray
+    // Test LargeListArray
     let mut builder = get_list_builder(&DataType::UInt16, 12, 3);
     builder.append_series(&Series::new(vec![1_u16, 2, 3]));
     builder.append_series(&Series::new(vec![7_u16, 8, 9]));
