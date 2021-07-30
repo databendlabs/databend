@@ -11,6 +11,7 @@ use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::Env;
 use crate::cmds::HelpCommand;
+use crate::cmds::UpdateCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -23,7 +24,10 @@ pub struct Processor {
 
 impl Processor {
     pub fn create(conf: Config) -> Self {
-        let sub_commands: Vec<Box<dyn Command>> = vec![Box::new(VersionCommand::create())];
+        let sub_commands: Vec<Box<dyn Command>> = vec![
+            Box::new(VersionCommand::create()),
+            Box::new(UpdateCommand::create()),
+        ];
 
         let mut commands: Vec<Box<dyn Command>> = sub_commands.clone();
         commands.push(Box::new(HelpCommand::create(sub_commands)));

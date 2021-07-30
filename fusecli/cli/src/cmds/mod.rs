@@ -7,6 +7,7 @@ mod config;
 mod env;
 mod helps;
 mod processor;
+mod updates;
 mod versions;
 mod writer;
 
@@ -15,5 +16,6 @@ pub use env::Env;
 // Commands.
 pub use helps::help::HelpCommand;
 pub use processor::Processor;
+pub use updates::update::UpdateCommand;
 pub use versions::version::VersionCommand;
 pub use writer::Writer;

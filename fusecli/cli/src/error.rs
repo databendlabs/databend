@@ -12,10 +12,18 @@ pub enum CliError {
     Unknown(String),
     #[error("IO error: {0}")]
     Io(io::Error),
+    #[error("Script error: {0}")]
+    Script(run_script::ScriptError),
 }
 
 impl From<io::Error> for CliError {
     fn from(err: io::Error) -> CliError {
         CliError::Io(err)
+    }
+}
+
+impl From<run_script::ScriptError> for CliError {
+    fn from(err: run_script::ScriptError) -> CliError {
+        CliError::Script(err)
     }
 }
