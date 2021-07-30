@@ -79,7 +79,6 @@ jobs:
           --wait
     - name: testing environment set up
       run: |
-        kubectl config use-context k3d-k3s-default
         kubectl label node k3d-fusebench-agent-0 test-branch=${{env.CURRENT}}
         kubectl label node k3d-fusebench-agent-1 test-branch=${{env.REFERENCE}}
         kubectl wait -n kube-system --timeout=180s --for condition=Ready --all pods
