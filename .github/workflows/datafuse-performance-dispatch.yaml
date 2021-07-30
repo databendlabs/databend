@@ -83,8 +83,8 @@ jobs:
             echo ${{ env.UUID }};
             make resource_apply -j 2;
             echo "Successfully deployed test pods, start to do performance test";
-            kubectl logs -f -l tag=perf-current &
-            kubectl logs -f -l tag=perf-ref &
+            kubectl logs -f -l tag=current &
+            kubectl logs -f -l tag=ref &
             make run_perf -j 2;
             echo "Finished performance tests, upload reports";
             kubectl logs -f -l tag=compare &
