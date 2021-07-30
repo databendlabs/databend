@@ -54,27 +54,33 @@ jobs:
       run: |
         export PATH=$PATH:/usr/local/go/bin
         make build
-    - uses: AbsaOSS/k3d-action@v1.5.0
-      name: "Create Single Cluster"
-      with:
-        cluster-name: "fusebench"
-        args: >-
-          -p "8083:80@agent[0]"
-          -p "8443:443@agent[0]"
-          -p "5053:53/udp@agent[0]"
-          -p "8084:80@agent[1]"
-          -p "8444:443@agent[1]"
-          -p "5054:53/udp@agent[1]"
-          --agents 2
-          --no-lb
-          --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
-          --timeout 360s
-          --wait
+    - name: create k3d cluster
+      run: |
+        curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash
+        k3d create cluster -p "8083:80@agent[0]" -p "8443:443@agent[0]" -p "5053:53/udp@agent[0]" \
+              -p "8084:80@agent[1]" -p "8444:443@agent[1]" -p "5054:53/udp@agent[1]" --agents 2 --no-lb \
+              --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server" --timeout 360s --wait
+#    - uses: AbsaOSS/k3d-action@v1.5.0
+#      name: "Create Single Cluster"
+#      with:
+#        cluster-name: "fusebench"
+#        args: >-
+#          -p "8083:80@agent[0]"
+#          -p "8443:443@agent[0]"
+#          -p "5053:53/udp@agent[0]"
+#          -p "8084:80@agent[1]"
+#          -p "8444:443@agent[1]"
+#          -p "5054:53/udp@agent[1]"
+#          --agents 2
+#          --no-lb
+#          --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
+#          --timeout 360s
+#          --wait
     - name: testing environment set up
       run: |
 
-        kubectl label node k3d-fusebench-agent-0 test-branch=${{env.CURRENT}}
-        kubectl label node k3d-fusebench-agent-1 test-branch=${{env.REFERENCE}}
+        kubectl label node k3d-default-agent-0 test-branch=${{env.CURRENT}}
+        kubectl label node k3d-default-agent-1 test-branch=${{env.REFERENCE}}
         kubectl wait -n kube-system --timeout=180s --for condition=Ready --all pods
         kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/namespace.yaml
         kubectl apply -f ./manifests/lb_configs.yaml
@@ -122,7 +128,8 @@ jobs:
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
     - name: Delete all resources
       if: always()
-      run: make clean
+      run: |
+        k3d cluster delete
 #     - name: Delete all resources
 #       if: always()
 #       uses: docker://zhihanz/test-infra:master
