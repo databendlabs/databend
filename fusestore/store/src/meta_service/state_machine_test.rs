@@ -22,7 +22,7 @@ fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     // - Create a meta with 3 node 1,3,5.
     // - Assert that expected number of nodes are assigned to a slot.
 
-    let mut meta = StateMachine {
+    let mut sm = StateMachine {
         slots: vec![Slot::default(), Slot::default(), Slot::default()],
         nodes: maplit::hashmap! {
             1=> Node{..Default::default()},
@@ -34,19 +34,19 @@ fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     };
 
     // assign all node to slot 2
-    meta.assign_rand_nodes_to_slot(2)?;
-    assert_eq!(meta.slots[2].node_ids, vec![1, 3, 5]);
+    sm.assign_rand_nodes_to_slot(2)?;
+    assert_eq!(sm.slots[2].node_ids, vec![1, 3, 5]);
 
     // assign all node again to slot 2
-    meta.assign_rand_nodes_to_slot(2)?;
-    assert_eq!(meta.slots[2].node_ids, vec![1, 3, 5]);
+    sm.assign_rand_nodes_to_slot(2)?;
+    assert_eq!(sm.slots[2].node_ids, vec![1, 3, 5]);
 
     // assign 1 node again to slot 1
-    meta.replication = Replication::Mirror(1);
-    meta.assign_rand_nodes_to_slot(1)?;
-    assert_eq!(1, meta.slots[1].node_ids.len());
+    sm.replication = Replication::Mirror(1);
+    sm.assign_rand_nodes_to_slot(1)?;
+    assert_eq!(1, sm.slots[1].node_ids.len());
 
-    let id = meta.slots[1].node_ids[0];
+    let id = sm.slots[1].node_ids[0];
     assert!(id == 1 || id == 3 || id == 5);
 
     Ok(())
@@ -54,11 +54,11 @@ fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
 
 #[test]
 fn test_state_machine_init_slots() -> anyhow::Result<()> {
-    // - Create a meta with 3 node 1,3,5.
+    // - Create a sm with 3 node 1,3,5.
     // - Initialize all slots.
     // - Assert slot states.
 
-    let mut meta = StateMachine {
+    let mut sm = StateMachine {
         slots: vec![Slot::default(), Slot::default(), Slot::default()],
         nodes: maplit::hashmap! {
             1=> Node{..Default::default()},
@@ -69,8 +69,8 @@ fn test_state_machine_init_slots() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    meta.init_slots()?;
-    for slot in meta.slots.iter() {
+    sm.init_slots()?;
+    for slot in sm.slots.iter() {
         assert_eq!(1, slot.node_ids.len());
 
         let id = slot.node_ids[0];
@@ -82,22 +82,22 @@ fn test_state_machine_init_slots() -> anyhow::Result<()> {
 
 #[test]
 fn test_state_machine_builder() -> anyhow::Result<()> {
-    // - Assert default meta builder
+    // - Assert default builder
     // - Assert customized meta builder
 
-    let m = StateMachine::builder().build()?;
-    assert_eq!(3, m.slots.len());
-    let n = match m.replication {
+    let sm = StateMachine::builder().build()?;
+    assert_eq!(3, sm.slots.len());
+    let n = match sm.replication {
         Replication::Mirror(x) => x,
     };
     assert_eq!(1, n);
 
-    let m = StateMachine::builder()
+    let sm = StateMachine::builder()
         .slots(5)
         .mirror_replication(8)
         .build()?;
-    assert_eq!(5, m.slots.len());
-    let n = match m.replication {
+    assert_eq!(5, sm.slots.len());
+    let n = match sm.replication {
         Replication::Mirror(x) => x,
     };
     assert_eq!(8, n);
@@ -106,12 +106,12 @@ fn test_state_machine_builder() -> anyhow::Result<()> {
 
 #[test]
 fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
-    let mut m = StateMachine::builder().build()?;
+    let mut sm = StateMachine::builder().build()?;
 
     for i in 0..3 {
         // incr "foo"
 
-        let resp = m.apply_non_dup(&LogEntry {
+        let resp = sm.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::IncrSeq {
                 key: "foo".to_string(),
@@ -121,7 +121,7 @@ fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
 
         // incr "bar"
 
-        let resp = m.apply_non_dup(&LogEntry {
+        let resp = sm.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::IncrSeq {
                 key: "bar".to_string(),
@@ -154,7 +154,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
 
 #[test]
 fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
-    let mut m = StateMachine::builder().build()?;
+    let mut sm = StateMachine::builder().build()?;
 
     struct T {
         name: &'static str,
@@ -191,7 +191,7 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     for (i, c) in cases.iter().enumerate() {
         // add
 
-        let resp = m.apply_non_dup(&LogEntry {
+        let resp = sm.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::CreateDatabase {
                 name: c.name.to_string(),
@@ -219,7 +219,7 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
             }
         };
 
-        let got = m
+        let got = sm
             .get_database(c.name)
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name));
         assert_eq!(want, got.unwrap().database_id);
@@ -230,7 +230,7 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
 #[test]
 fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
-    let mut m = StateMachine::builder().build()?;
+    let mut sm = StateMachine::builder().build()?;
 
     struct T {
         // input:
@@ -273,7 +273,7 @@ fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()
 
         // write
 
-        let resp = m.apply_non_dup(&LogEntry {
+        let resp = sm.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::UpsertKV {
                 key: c.key.clone(),
@@ -299,7 +299,7 @@ fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()
             _ => None,
         };
 
-        let got = m.get_kv(&c.key);
+        let got = sm.get_kv(&c.key);
         assert_eq!(want, got, "get: {}", mes,);
     }
 
@@ -344,10 +344,10 @@ fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
     for (i, c) in cases.iter().enumerate() {
         let mes = format!("{}-th: {}({})", i, c.key, c.seq);
 
-        let mut m = StateMachine::builder().build()?;
+        let mut sm = StateMachine::builder().build()?;
 
         // prepare an record
-        m.apply_non_dup(&LogEntry {
+        sm.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::UpsertKV {
                 key: "foo".to_string(),
@@ -357,7 +357,7 @@ fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
         })?;
 
         // delete
-        let resp = m.apply_non_dup(&LogEntry {
+        let resp = sm.apply_non_dup(&LogEntry {
             txid: None,
             cmd: Cmd::DeleteKVByKey {
                 key: c.key.clone(),
@@ -376,7 +376,7 @@ fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
 
         // read it to ensure the modified state.
         let want = &c.result;
-        let got = m.get_kv(&c.key);
+        let got = sm.get_kv(&c.key);
         assert_eq!(want, &got, "get: {}", mes,);
     }
 
