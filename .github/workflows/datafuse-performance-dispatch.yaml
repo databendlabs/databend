@@ -81,11 +81,13 @@ jobs:
     - name: Start performance testing
       run: >-
             echo ${{ env.UUID }};
+            export ENDPOINT=$(echo $ENDPOINT | grep -oP '(http|https)://\K\S+')
+            echo $ENDPOINT
             make resource_apply -j 2;
             echo "Successfully deployed test pods, start to do performance test";
             kubectl logs -f -l tag=current &
             kubectl logs -f -l tag=ref &
-            make run_perf -j 2 &
+            make run_perf -j 2
             sleep 10
             kubectl logs -f -l tag=perf-ref &
             kubectl logs -f -l tag=perf-current &
