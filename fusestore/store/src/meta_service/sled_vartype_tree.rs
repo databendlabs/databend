@@ -12,7 +12,11 @@ use common_exception::ToErrorCode;
 use common_tracing::tracing;
 
 use crate::meta_service::sledkv::SledKV;
-use crate::meta_service::SledValueToKey;
+
+/// Extract key from a value of sled tree that includes its key.
+pub trait SledValueToKey<K> {
+    fn to_key(&self) -> K;
+}
 
 /// SledVarTypeTree is a wrapper of sled::Tree that provides access of more than one key-value
 /// types.
@@ -120,6 +124,7 @@ impl SledVarTypeTree {
     }
 
     /// Delete kvs that are in `range`.
+    #[tracing::instrument(level = "debug", skip(self, range))]
     pub async fn range_delete<KV, R>(&self, range: R, flush: bool) -> common_exception::Result<()>
     where
         KV: SledKV,
@@ -240,6 +245,7 @@ impl SledVarTypeTree {
 
     /// Append many values into SledVarTypeTree.
     /// This could be used in cases the key is included in value and a value should impl trait `IntoKey` to retrieve the key from a value.
+    #[tracing::instrument(level = "debug", skip(self, values))]
     pub async fn append_values<KV>(&self, values: &[KV::V]) -> common_exception::Result<()>
     where
         KV: SledKV,
@@ -275,6 +281,7 @@ impl SledVarTypeTree {
 
     /// Insert a single kv.
     /// Returns the last value if it is set.
+    #[tracing::instrument(level = "debug", skip(self, value))]
     pub async fn insert<KV>(
         &self,
         key: &KV::K,
@@ -314,6 +321,7 @@ impl SledVarTypeTree {
     }
 
     /// Insert a single kv, Retrieve the key from value.
+    #[tracing::instrument(level = "debug", skip(self, value))]
     pub async fn insert_value<KV>(&self, value: &KV::V) -> common_exception::Result<Option<KV::V>>
     where
         KV: SledKV,
