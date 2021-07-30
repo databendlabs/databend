@@ -62,6 +62,9 @@ jobs:
           -p "8083:80@agent[0]"
           -p "8443:443@agent[0]"
           -p "5053:53/udp@agent[0]"
+          -p "8084:80@agent[1]"
+          -p "8444:443@agent[1]"
+          -p "5054:53/udp@agent[1]"
           --agents 2
           --no-lb
           --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
