@@ -54,28 +54,29 @@ jobs:
       run: |
         export PATH=$PATH:/usr/local/go/bin
         make build
-    - name: create k3d cluster
-      run: |
-        curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash
-        k3d cluster create -p "8083:80@agent[0]" -p "8443:443@agent[0]" -p "5053:53/udp@agent[0]" --api-port 127.0.0.1:6445\
-              -p "8084:80@agent[1]" -p "8444:443@agent[1]" -p "5054:53/udp@agent[1]" --agents 2 --no-lb \
-              --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server" --no-hostip --timeout 360s --wait
-#    - uses: AbsaOSS/k3d-action@v1.5.0
-#      name: "Create Single Cluster"
-#      with:
-#        cluster-name: "fusebench"
-#        args: >-
-#          -p "8083:80@agent[0]"
-#          -p "8443:443@agent[0]"
-#          -p "5053:53/udp@agent[0]"
-#          -p "8084:80@agent[1]"
-#          -p "8444:443@agent[1]"
-#          -p "5054:53/udp@agent[1]"
-#          --agents 2
-#          --no-lb
-#          --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
-#          --timeout 360s
-#          --wait
+#    - name: create k3d cluster
+#      run: |
+#        curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash
+#        k3d cluster create -p "8083:80@agent[0]" -p "8443:443@agent[0]" -p "5053:53/udp@agent[0]" --api-port 127.0.0.1:6445\
+#              -p "8084:80@agent[1]" -p "8444:443@agent[1]" -p "5054:53/udp@agent[1]" --agents 2 --no-lb \
+#              --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server" --no-hostip --timeout 360s --wait
+    - uses: AbsaOSS/k3d-action@v1.5.0
+      name: "Create Single Cluster"
+      with:
+        cluster-name: "fusebench"
+        args: >-
+          -p "8083:80@agent[0]"
+          -p "8443:443@agent[0]"
+          -p "5053:53/udp@agent[0]"
+          -p "8084:80@agent[1]"
+          -p "8444:443@agent[1]"
+          -p "5054:53/udp@agent[1]"
+          --api-port 127.0.0.1:6445
+          --agents 2
+          --no-lb
+          --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server"
+          --timeout 360s
+          --wait
     - name: testing environment set up
       run: |
         kubectl config use-context k3d-k3s-default
