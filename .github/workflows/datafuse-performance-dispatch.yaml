@@ -57,7 +57,7 @@ jobs:
     - name: create k3d cluster
       run: |
         curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash
-        k3d create cluster -p "8083:80@agent[0]" -p "8443:443@agent[0]" -p "5053:53/udp@agent[0]" \
+        k3d cluster create -p "8083:80@agent[0]" -p "8443:443@agent[0]" -p "5053:53/udp@agent[0]" \
               -p "8084:80@agent[1]" -p "8444:443@agent[1]" -p "5054:53/udp@agent[1]" --agents 2 --no-lb \
               --k3s-server-arg "--no-deploy=traefik,servicelb,metrics-server" --timeout 360s --wait
 #    - uses: AbsaOSS/k3d-action@v1.5.0
