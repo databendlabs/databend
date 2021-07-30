@@ -151,9 +151,6 @@ impl ActionHandler {
             .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
             .await?;
 
-        // let mut meta = self.meta.lock(); //todo(ariesdevil): change to meta_node
-        // meta.append_data_parts(&db_name, &table_name, &res);
-        // Ok(res)
         self.meta_node
             .append_data_parts(&db_name, &table_name, &res)
             .await;

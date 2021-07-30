@@ -83,8 +83,8 @@ pub struct StateMachine {
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
 
-    /// table parts， db -> (table -> data parts)
-    pub tbl_parts: HashMap<String, HashMap<String, Vec<DataPartInfo>>>,
+    /// table parts， table id -> data parts
+    pub table_parts: HashMap<u64, Vec<DataPartInfo>>,
 
     /// A kv store of all other general purpose information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
@@ -127,7 +127,7 @@ impl StateMachineBuilder {
             replication,
             databases: BTreeMap::new(),
             tables: BTreeMap::new(),
-            tbl_parts: HashMap::new(),
+            table_parts: HashMap::new(),
             kv: BTreeMap::new(),
         };
         for _i in 0..initial_slots {
@@ -409,8 +409,14 @@ impl StateMachine {
     }
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
-        let parts = self.tbl_parts.get(db_name);
-        parts.and_then(|m| m.get(table_name)).map(Clone::clone)
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            let table_id = db.tables.get(table_name);
+            if let Some(table_id) = table_id {
+                return self.table_parts.get(table_id).map(Clone::clone);
+            }
+        }
+        None
     }
 
     pub fn append_data_parts(
@@ -419,45 +425,55 @@ impl StateMachine {
         table_name: &str,
         append_res: &AppendResult,
     ) {
-        let part_info = || {
-            append_res
-                .parts
-                .iter()
-                .map(|p| {
-                    let loc = &p.location;
-                    DataPartInfo {
-                        part: Part {
-                            name: loc.clone(),
-                            version: 0,
-                        },
-                        stats: Statistics::new_exact(p.disk_bytes, p.rows),
-                    }
-                })
-                .collect::<Vec<_>>()
-        };
-        self.tbl_parts
-            .entry(db_name.to_string())
-            .and_modify(move |e| {
-                e.entry(table_name.to_string())
-                    .and_modify(|v| v.append(&mut part_info()))
-                    .or_insert_with(part_info);
+        let part_infos = append_res
+            .parts
+            .iter()
+            .map(|p| {
+                let loc = &p.location;
+                DataPartInfo {
+                    part: Part {
+                        name: loc.clone(),
+                        version: 0,
+                    },
+                    stats: Statistics::new_exact(p.disk_bytes, p.rows),
+                }
             })
-            .or_insert_with(|| {
-                [(table_name.to_string(), part_info())]
-                    .iter()
-                    .cloned()
-                    .collect()
-            });
+            .collect::<Vec<_>>();
+
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            let table_id = db.tables.get(table_name);
+            if let Some(table_id) = table_id {
+                for part in part_infos {
+                    let table = self.tables.get_mut(table_id).unwrap();
+                    table.parts.insert(part.part.name.clone());
+                    self.table_parts
+                        .entry(*table_id)
+                        .and_modify(|v| v.push(part));
+                }
+            }
+        }
     }
 
     pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
-        self.tbl_parts
-            .get_mut(db_name)
-            .and_then(|t| t.remove(table_name));
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            let table_id = db.tables.get(table_name);
+            if let Some(table_id) = table_id {
+                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
+                self.table_parts.remove(table_id);
+            }
+        }
     }
 
     pub fn remove_db_data_parts(&mut self, db_name: &str) {
-        self.tbl_parts.remove(db_name);
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            for table_id in db.tables.values() {
+                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
+                self.table_parts.remove(table_id);
+            }
+        }
     }
 
     pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {

@@ -4,6 +4,7 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_flights::meta_api_impl::DropTableActionResult;
 use common_flights::meta_api_impl::GetTableActionResult;
 use common_flights::KVApi;
 use common_flights::MetaApi;
@@ -208,6 +209,111 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 schema: schema.clone(),
             };
             assert_eq!(want, got, "get old table");
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_drop_table() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+    use std::sync::Arc;
+
+    use common_datavalues::DataField;
+    use common_datavalues::DataSchema;
+    use common_flights::StoreClient;
+    use common_planners::CreateDatabasePlan;
+    use common_planners::CreateTablePlan;
+    use common_planners::DatabaseEngineType;
+    use common_planners::TableEngineType;
+
+    tracing::info!("init logging");
+
+    // 1. Service starts.
+    let (_tc, addr) = crate::tests::start_store_server().await?;
+
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    let db_name = "db1";
+    let tbl_name = "tb2";
+
+    {
+        // prepare db
+        let plan = CreateDatabasePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+
+        let res = client.create_database(plan.clone()).await;
+
+        tracing::info!("create database res: {:?}", res);
+
+        let res = res.unwrap();
+        assert_eq!(1, res.database_id, "first database id is 1");
+    }
+    {
+        // create table and fetch it
+
+        // Table schema with metadata(due to serde issue).
+        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "number",
+            DataType::UInt64,
+            false,
+        )]));
+
+        // Create table plan.
+        let plan = CreateTablePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            table: tbl_name.to_string(),
+            schema: schema.clone(),
+            // TODO check get_table
+            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            // TODO
+            engine: TableEngineType::JSONEachRow,
+        };
+
+        {
+            // create table OK
+            let res = client.create_table(plan.clone()).await.unwrap();
+            assert_eq!(1, res.table_id, "table id is 1");
+
+            let got = client
+                .get_table(db_name.into(), tbl_name.into())
+                .await
+                .unwrap();
+            let want = GetTableActionResult {
+                table_id: 1,
+                db: db_name.into(),
+                name: tbl_name.into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get created table");
+        }
+
+        {
+            // drop table
+            let plan = DropTablePlan {
+                if_exists: true,
+                db: db_name.to_string(),
+                table: tbl_name.to_string(),
+            };
+            let res = client.drop_table(plan.clone()).await.unwrap();
+            assert_eq!(DropTableActionResult {}, res, "drop table {}", tbl_name)
+        }
+
+        {
+            let res = client.get_table(db_name.into(), tbl_name.into()).await;
+            let status = res.err().unwrap();
+            assert_eq!(
+                format!("Code: 25, displayText = table not found: {}.", tbl_name),
+                status.to_string(),
+                "get dropped table {}",
+                tbl_name
+            );
         }
     }
 
