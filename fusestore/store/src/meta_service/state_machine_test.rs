@@ -9,6 +9,7 @@ use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
+use crate::meta_service::sledkv;
 use crate::meta_service::state_machine::Replication;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
@@ -16,22 +17,28 @@ use crate::meta_service::LogEntry;
 use crate::meta_service::Node;
 use crate::meta_service::Slot;
 use crate::meta_service::StateMachine;
+use crate::tests::service::new_test_context;
 
-#[test]
-fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
-    // - Create a meta with 3 node 1,3,5.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
+    // - Create a state machine with 3 node 1,3,5.
     // - Assert that expected number of nodes are assigned to a slot.
 
-    let mut sm = StateMachine {
-        slots: vec![Slot::default(), Slot::default(), Slot::default()],
-        nodes: maplit::hashmap! {
-            1=> Node{..Default::default()},
-            3=> Node{..Default::default()},
-            5=> Node{..Default::default()},
-        },
-        replication: Replication::Mirror(3),
-        ..Default::default()
-    };
+    common_tracing::init_default_tracing();
+
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config).await?;
+    sm.sm_tree
+        .as_type::<sledkv::Nodes>()
+        .append(&[
+            (1, Node::default()),
+            (3, Node::default()),
+            (5, Node::default()),
+        ])
+        .await?;
+
+    sm.slots = vec![Slot::default(), Slot::default(), Slot::default()];
+    sm.replication = Replication::Mirror(3);
 
     // assign all node to slot 2
     sm.assign_rand_nodes_to_slot(2)?;
@@ -52,22 +59,27 @@ fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_state_machine_init_slots() -> anyhow::Result<()> {
-    // - Create a sm with 3 node 1,3,5.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_init_slots() -> anyhow::Result<()> {
+    // - Create a state machine with 3 node 1,3,5.
     // - Initialize all slots.
     // - Assert slot states.
 
-    let mut sm = StateMachine {
-        slots: vec![Slot::default(), Slot::default(), Slot::default()],
-        nodes: maplit::hashmap! {
-            1=> Node{..Default::default()},
-            3=> Node{..Default::default()},
-            5=> Node{..Default::default()},
-        },
-        replication: Replication::Mirror(1),
-        ..Default::default()
-    };
+    common_tracing::init_default_tracing();
+
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config).await?;
+    sm.sm_tree
+        .as_type::<sledkv::Nodes>()
+        .append(&[
+            (1, Node::default()),
+            (3, Node::default()),
+            (5, Node::default()),
+        ])
+        .await?;
+
+    sm.slots = vec![Slot::default(), Slot::default(), Slot::default()];
+    sm.replication = Replication::Mirror(1);
 
     sm.init_slots()?;
     for slot in sm.slots.iter() {
@@ -80,53 +92,71 @@ fn test_state_machine_init_slots() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_state_machine_builder() -> anyhow::Result<()> {
-    // - Assert default builder
-    // - Assert customized meta builder
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_builder() -> anyhow::Result<()> {
+    // - Assert default state machine builder
+    // - Assert customized state machine builder
 
-    let sm = StateMachine::builder().build()?;
-    assert_eq!(3, sm.slots.len());
-    let n = match sm.replication {
-        Replication::Mirror(x) => x,
-    };
-    assert_eq!(1, n);
+    common_tracing::init_default_tracing();
 
-    let sm = StateMachine::builder()
-        .slots(5)
-        .mirror_replication(8)
-        .build()?;
-    assert_eq!(5, sm.slots.len());
-    let n = match sm.replication {
-        Replication::Mirror(x) => x,
-    };
-    assert_eq!(8, n);
+    {
+        let tc = new_test_context();
+        let sm = StateMachine::open(&tc.config).await?;
+
+        assert_eq!(3, sm.slots.len());
+        let n = match sm.replication {
+            Replication::Mirror(x) => x,
+        };
+        assert_eq!(1, n);
+    }
+
+    {
+        let tc = new_test_context();
+        let sm = StateMachine::open(&tc.config).await?;
+
+        let sm = StateMachine::initializer()
+            .slots(5)
+            .mirror_replication(7)
+            .init(sm);
+
+        assert_eq!(5, sm.slots.len());
+        let n = match sm.replication {
+            Replication::Mirror(x) => x,
+        };
+        assert_eq!(7, n);
+    }
+
     Ok(())
 }
 
-#[test]
-fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
-    let mut sm = StateMachine::builder().build()?;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config).await?;
 
     for i in 0..3 {
         // incr "foo"
 
-        let resp = sm.apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::IncrSeq {
-                key: "foo".to_string(),
-            },
-        })?;
+        let resp = sm
+            .apply_non_dup(&LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "foo".to_string(),
+                },
+            })
+            .await?;
         assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
 
         // incr "bar"
 
-        let resp = sm.apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::IncrSeq {
-                key: "bar".to_string(),
-            },
-        })?;
+        let resp = sm
+            .apply_non_dup(&LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "bar".to_string(),
+                },
+            })
+            .await?;
         assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
     }
 
@@ -137,24 +167,28 @@ fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
 async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let mut sm = StateMachine::default();
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config).await?;
 
     let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
-        let resp = sm.apply(&LogId { term: 0, index: 5 }, &LogEntry {
-            txid: txid.clone(),
-            cmd: Cmd::IncrSeq { key: k.to_string() },
-        });
-        assert_eq!(AppliedState::Seq { seq: *want }, resp.unwrap(), "{}", name);
+        let resp = sm
+            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
+                txid: txid.clone(),
+                cmd: Cmd::IncrSeq { key: k.to_string() },
+            })
+            .await?;
+        assert_eq!(AppliedState::Seq { seq: *want }, resp, "{}", name);
     }
 
     Ok(())
 }
 
-#[test]
-fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
-    let mut sm = StateMachine::builder().build()?;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
+    let tc = new_test_context();
+    let mut m = StateMachine::open(&tc.config).await?;
 
     struct T {
         name: &'static str,
@@ -191,14 +225,16 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     for (i, c) in cases.iter().enumerate() {
         // add
 
-        let resp = sm.apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::CreateDatabase {
-                name: c.name.to_string(),
-                if_not_exists: true,
-                db: Default::default(),
-            },
-        })?;
+        let resp = m
+            .apply_non_dup(&LogEntry {
+                txid: None,
+                cmd: Cmd::CreateDatabase {
+                    name: c.name.to_string(),
+                    if_not_exists: true,
+                    db: Default::default(),
+                },
+            })
+            .await?;
         assert_eq!(
             AppliedState::DataBase {
                 prev: c.prev.clone(),
@@ -219,7 +255,7 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
             }
         };
 
-        let got = sm
+        let got = m
             .get_database(c.name)
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name));
         assert_eq!(want, got.unwrap().database_id);
@@ -228,9 +264,10 @@ fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
-    let mut sm = StateMachine::builder().build()?;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config).await?;
 
     struct T {
         // input:
@@ -273,14 +310,16 @@ fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()
 
         // write
 
-        let resp = sm.apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: c.key.clone(),
-                seq: c.seq.clone(),
-                value: c.value.clone(),
-            },
-        })?;
+        let resp = sm
+            .apply_non_dup(&LogEntry {
+                txid: None,
+                cmd: Cmd::UpsertKV {
+                    key: c.key.clone(),
+                    seq: c.seq.clone(),
+                    value: c.value.clone(),
+                },
+            })
+            .await?;
         assert_eq!(
             AppliedState::KV {
                 prev: c.prev.clone(),
@@ -306,8 +345,8 @@ fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()
     Ok(())
 }
 
-#[test]
-fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
     struct T {
         // input:
         key: String,
@@ -344,7 +383,8 @@ fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
     for (i, c) in cases.iter().enumerate() {
         let mes = format!("{}-th: {}({})", i, c.key, c.seq);
 
-        let mut sm = StateMachine::builder().build()?;
+        let tc = new_test_context();
+        let mut sm = StateMachine::open(&tc.config).await?;
 
         // prepare an record
         sm.apply_non_dup(&LogEntry {
@@ -354,16 +394,19 @@ fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
                 seq: MatchSeq::Any,
                 value: "x".as_bytes().to_vec(),
             },
-        })?;
+        })
+        .await?;
 
         // delete
-        let resp = sm.apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::DeleteKVByKey {
-                key: c.key.clone(),
-                seq: c.seq.clone(),
-            },
-        })?;
+        let resp = sm
+            .apply_non_dup(&LogEntry {
+                txid: None,
+                cmd: Cmd::DeleteKVByKey {
+                    key: c.key.clone(),
+                    seq: c.seq.clone(),
+                },
+            })
+            .await?;
         assert_eq!(
             AppliedState::KV {
                 prev: c.prev.clone(),
@@ -387,24 +430,27 @@ fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
 async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let mut sm = StateMachine::default();
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config).await?;
 
     let cases = crate::meta_service::raftmeta_test::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(&LogId { term: 0, index: 5 }, &LogEntry {
-            txid: txid.clone(),
-            cmd: Cmd::AddFile {
-                key: k.to_string(),
-                value: v.to_string(),
-            },
-        });
+        let resp = sm
+            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
+                txid: txid.clone(),
+                cmd: Cmd::AddFile {
+                    key: k.to_string(),
+                    value: v.to_string(),
+                },
+            })
+            .await?;
         assert_eq!(
             AppliedState::String {
                 prev: want_prev.clone(),
                 result: want_result.clone()
             },
-            resp.unwrap(),
+            resp,
             "{}",
             name
         );
@@ -417,24 +463,27 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
 async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let mut sm = StateMachine::default();
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config).await?;
 
     let cases = crate::meta_service::raftmeta_test::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
-        let resp = sm.apply(&LogId { term: 0, index: 5 }, &LogEntry {
-            txid: txid.clone(),
-            cmd: Cmd::SetFile {
-                key: k.to_string(),
-                value: v.to_string(),
-            },
-        });
+        let resp = sm
+            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
+                txid: txid.clone(),
+                cmd: Cmd::SetFile {
+                    key: k.to_string(),
+                    value: v.to_string(),
+                },
+            })
+            .await?;
         assert_eq!(
             AppliedState::String {
                 prev: want_prev.clone(),
                 result: want_result.clone()
             },
-            resp.unwrap(),
+            resp,
             "{}",
             name
         );
