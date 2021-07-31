@@ -26,7 +26,7 @@ impl Processor {
     pub fn create(conf: Config) -> Self {
         let sub_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
-            Box::new(UpdateCommand::create()),
+            Box::new(UpdateCommand::create(conf.clone())),
         ];
 
         let mut commands: Vec<Box<dyn Command>> = sub_commands.clone();
