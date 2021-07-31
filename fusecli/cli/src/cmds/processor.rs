@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fs;
 use std::io::Write;
 
 use rustyline::error::ReadlineError;
@@ -24,6 +25,8 @@ pub struct Processor {
 
 impl Processor {
     pub fn create(conf: Config) -> Self {
+        fs::create_dir_all(conf.datafuse_dir.clone()).unwrap();
+
         let sub_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
             Box::new(UpdateCommand::create(conf.clone())),

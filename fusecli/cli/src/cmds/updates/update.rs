@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::fs;
 use std::fs::File;
 use std::io;
 
@@ -66,19 +67,25 @@ impl Command for UpdateCommand {
     }
 
     fn exec(&self, writer: &mut Writer) -> Result<()> {
+        let bin_dir = format!("{}/bin", self.conf.datafuse_dir.clone());
+        fs::create_dir_all(bin_dir.clone()).unwrap();
+
         let arch = self.get_architecture()?;
         writer.writeln("Arch", arch.as_str());
 
         let latest_tag = self.get_latest_tag()?;
         writer.writeln("Latest Tag", latest_tag.as_str());
 
+        let bin_name = format!("datafuse--{}.tar.gz", arch);
         let binary_url = format!(
-            "{}/{}/{}--{}.tar.gz",
+            "{}/{}/{}",
             self.conf.download_url.clone(),
             latest_tag,
-            "datafuse",
-            arch
+            bin_name,
         );
+
+        let bin_file = format!("{}/{}", bin_dir, bin_name);
+        writer.writeln("Bin home", bin_file.as_str());
         writer.writeln("Download", binary_url.as_str());
 
         let res = ureq::get(binary_url.as_str()).call()?;
@@ -88,7 +95,7 @@ impl Command for UpdateCommand {
             .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
             .progress_chars("#>-"));
 
-        let mut out = File::create("/tmp/foo").unwrap();
+        let mut out = File::create(bin_file).unwrap();
         io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).unwrap();
 
         Ok(())
