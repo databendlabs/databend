@@ -113,9 +113,8 @@ impl Command for UpdateCommand {
         let tar_gz = File::open(bin_file)?;
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
-        writer.writeln("Prepare unpack...", "");
+        writer.writeln("Unpack to", bin_unpack_dir.as_str());
         archive.unpack(bin_unpack_dir).unwrap();
-        writer.writeln("Unpack done...", "");
 
         Ok(())
     }
