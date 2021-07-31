@@ -5,6 +5,7 @@
 use std::fs;
 use std::fs::File;
 use std::io;
+use std::path::Path;
 
 use flate2::read::GzDecoder;
 use indicatif::ProgressBar;
@@ -69,49 +70,51 @@ impl Command for UpdateCommand {
     }
 
     fn exec(&self, writer: &mut Writer) -> Result<()> {
-        let bin_dir = format!("{}/bin", self.conf.datafuse_dir.clone());
-        fs::create_dir_all(bin_dir.clone()).unwrap();
-
         let arch = self.get_architecture()?;
         writer.writeln("Arch", arch.as_str());
 
         let latest_tag = self.get_latest_tag()?;
         writer.writeln("Latest Tag", latest_tag.as_str());
 
+        // Create download dir.
+        let bin_download_dir = format!("{}/downloads", self.conf.datafuse_dir.clone());
+        fs::create_dir_all(bin_download_dir.clone()).unwrap();
+
+        // Create unpack dir.
+        let bin_unpack_dir = format!("{}/bin/{}", self.conf.datafuse_dir.clone(), latest_tag);
+        fs::create_dir_all(bin_unpack_dir.clone()).unwrap();
+
         let bin_name = format!("datafuse--{}.tar.gz", arch);
-
-        let binary_url = format!(
-            "{}/{}/{}",
-            self.conf.download_url.clone(),
-            latest_tag,
-            bin_name,
-        );
-
-        let bin_file = format!("{}/{}", bin_dir, bin_name);
+        let bin_file = format!("{}/{}", bin_download_dir, bin_name);
         writer.writeln("Binary", bin_file.as_str());
-        writer.writeln("Download", binary_url.as_str());
-        let res = ureq::get(binary_url.as_str()).call()?;
-        let total_size: u64 = res.header("content-length").unwrap().parse().unwrap();
-        let pb = ProgressBar::new(total_size);
-        pb.set_style(ProgressStyle::default_bar()
+        let exists = Path::new(bin_file.as_str()).exists();
+
+        // Download.
+        if !exists {
+            let binary_url = format!(
+                "{}/{}/{}",
+                self.conf.download_url.clone(),
+                latest_tag,
+                bin_name,
+            );
+            writer.writeln("Download", binary_url.as_str());
+            let res = ureq::get(binary_url.as_str()).call()?;
+            let total_size: u64 = res.header("content-length").unwrap().parse().unwrap();
+            let pb = ProgressBar::new(total_size);
+            pb.set_style(ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
                 .progress_chars("#>-"));
 
-        let mut out = File::create(bin_file.clone()).unwrap();
-        io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).unwrap();
+            let mut out = File::create(bin_file.clone()).unwrap();
+            io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).unwrap();
+        }
 
         // Unpack.
         let tar_gz = File::open(bin_file)?;
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
-        let mut files = vec![];
-        for file in archive.entries().unwrap() {
-            let f = file.unwrap();
-            let path = f.path().unwrap();
-            files.push(format!("{}", path.display()))
-        }
-        writer.writeln("Prepare unpack...", format!("{:?}", files).as_str());
-        archive.unpack(bin_dir).unwrap();
+        writer.writeln("Prepare unpack...", "");
+        archive.unpack(bin_unpack_dir).unwrap();
         writer.writeln("Unpack done...", "");
 
         Ok(())
