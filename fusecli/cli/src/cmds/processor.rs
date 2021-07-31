@@ -10,6 +10,7 @@ use rustyline::Editor;
 
 use crate::cmds::command::Command;
 use crate::cmds::ClusterCommand;
+use crate::cmds::CommentCommand;
 use crate::cmds::Config;
 use crate::cmds::Env;
 use crate::cmds::HelpCommand;
@@ -30,6 +31,7 @@ impl Processor {
 
         let sub_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
+            Box::new(CommentCommand::create()),
             Box::new(UpdateCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
         ];

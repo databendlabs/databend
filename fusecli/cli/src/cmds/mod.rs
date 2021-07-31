@@ -7,6 +7,7 @@ mod status_test;
 
 mod clusters;
 mod command;
+mod comments;
 mod config;
 mod env;
 mod helps;
@@ -17,6 +18,7 @@ mod versions;
 mod writer;
 
 pub use clusters::cluster::ClusterCommand;
+pub use comments::comment::CommentCommand;
 pub use config::Config;
 pub use env::Env;
 pub use helps::help::HelpCommand;
