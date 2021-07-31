@@ -69,12 +69,12 @@ impl Command for UpdateCommand {
         self.name() == s
     }
 
-    fn exec(&self, writer: &mut Writer) -> Result<()> {
+    fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
         let arch = self.get_architecture()?;
         writer.writeln("Arch", arch.as_str());
 
         let latest_tag = self.get_latest_tag()?;
-        writer.writeln("Latest Tag", latest_tag.as_str());
+        writer.writeln("Tag", latest_tag.as_str());
 
         // Create download dir.
         let bin_download_dir = format!("{}/downloads", self.conf.datafuse_dir.clone());

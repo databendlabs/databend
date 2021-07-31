@@ -54,7 +54,7 @@ impl Command for VersionCommand {
         self.name() == s
     }
 
-    fn exec(&self, writer: &mut Writer) -> Result<()> {
+    fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
         let build_semver = option_env!("VERGEN_BUILD_SEMVER");
         let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
         let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");

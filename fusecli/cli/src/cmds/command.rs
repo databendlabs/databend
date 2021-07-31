@@ -11,7 +11,7 @@ pub trait Command: DynClone {
     fn name(&self) -> &str;
     fn about(&self) -> &str;
     fn is(&self, s: &str) -> bool;
-    fn exec(&self, writer: &mut Writer) -> Result<()>;
+    fn exec(&self, writer: &mut Writer, args: String) -> Result<()>;
 }
 
 dyn_clone::clone_trait_object!(Command);

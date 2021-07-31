@@ -9,6 +9,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
+use crate::cmds::ClusterCommand;
 use crate::cmds::Config;
 use crate::cmds::Env;
 use crate::cmds::HelpCommand;
@@ -30,6 +31,7 @@ impl Processor {
         let sub_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
             Box::new(UpdateCommand::create(conf.clone())),
+            Box::new(ClusterCommand::create(conf.clone())),
         ];
 
         let mut commands: Vec<Box<dyn Command>> = sub_commands.clone();
@@ -69,7 +71,7 @@ impl Processor {
 
     pub fn processor_line(&self, mut writer: Writer, line: String) -> Result<()> {
         if let Some(cmd) = self.commands.iter().find(|c| c.is(&*line)) {
-            cmd.exec(&mut writer)?;
+            cmd.exec(&mut writer, line)?;
         } else {
             writeln!(writer, "Unknown command").unwrap();
         }
