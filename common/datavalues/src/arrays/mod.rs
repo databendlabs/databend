@@ -9,10 +9,10 @@ mod data_array_test;
 #[macro_use]
 mod arithmetic;
 mod builders;
-mod comparison;
 mod kernels;
 mod ops;
 mod upstream_traits;
+mod comparison;
 
 pub use arithmetic::*;
 pub use builders::*;

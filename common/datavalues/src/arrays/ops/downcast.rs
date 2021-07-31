@@ -8,7 +8,6 @@ use common_arrow::arrow::array::*;
 
 use crate::arrays::DataArray;
 use crate::prelude::*;
-use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DFBinaryArray;
 use crate::DFBooleanArray;
@@ -33,11 +32,23 @@ where T: DFPrimitiveType
         unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) }
     }
 
-    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<T::Native>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<&T::Native>> + DoubleEndedIterator {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) };
         arr.iter()
     }
+
+
+    // pub fn downcast_iter(
+    //     &self,
+    // ) -> impl Iterator<Item = &PrimitiveArray<T::Native>> + DoubleEndedIterator {
+    //     self.chunks.iter().map(|arr| {
+    //         // Safety:
+    //         // This should be the array type in PolarsNumericType
+    //         let arr = &**arr;
+    //         unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) }
+    //     })
+    // }
 
     pub fn collect_values(&self) -> Vec<Option<T::Native>> {
         self.downcast_iter().collect()
@@ -121,7 +132,9 @@ impl DFListArray {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const LargeListArray) };
 
-        arr.iter().map(|a| a.map(|a| a.into_series()))
+        arr.iter().map(|a| a.map(|a|  {
+            let c = Arc::from(a);
+        }))
     }
 
     pub fn from_arrow_array(array: LargeListArray) -> Self {

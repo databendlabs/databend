@@ -60,7 +60,7 @@ where T: DFNumericType
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
-            builders.push(PrimitiveArrayBuilder::<T>::new(self.len()));
+            builders.push(PrimitiveArrayBuilder::<T>::with_capacity(self.len()));
         }
 
         match self.null_count() {
@@ -102,7 +102,6 @@ impl ArrayScatter for DFUtf8Array {
         for _i in 0..scattered_size {
             builders.push(Utf8ArrayBuilder::with_capacity(
                 self.len(),
-                self.get_array_memory_size(),
             ));
         }
 

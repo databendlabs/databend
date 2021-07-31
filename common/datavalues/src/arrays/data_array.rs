@@ -5,7 +5,6 @@
 use std::convert::TryFrom;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
-use std::ops::BitAnd;
 use std::sync::Arc;
 
 use common_arrow::arrow::array as arrow_array;
@@ -18,12 +17,7 @@ use common_exception::Result;
 use super::ArrayBuilder;
 use super::BooleanArrayBuilder;
 use crate::data_df_type::*;
-use crate::prelude::AlignedVec;
-use crate::prelude::LargeListArray;
-use crate::prelude::LargeUtf8Array;
-use crate::series::IntoSeries;
-use crate::series::Series;
-use crate::series::SeriesTrait;
+use crate::prelude::*;
 use crate::DataType;
 use crate::DataValue;
 
@@ -71,7 +65,7 @@ impl<T> DataArray<T> {
 
     /// Get the null count and the buffer of bits representing null values
     pub fn null_bits(&self) -> (usize, &Option<Bitmap>) {
-        (self.array.null_count(), data.validity())
+        (self.array.null_count(), self.array.validity())
     }
 
     pub fn limit(&self, num_elements: usize) -> Self {
@@ -79,12 +73,14 @@ impl<T> DataArray<T> {
     }
 
     pub fn get_array_memory_size(&self) -> usize {
-        self.array.get_array_memory_size()
+        // self.array.gs
+        // TODO:
+        return self.len() * 4;
     }
 
     pub fn slice(&self, offset: usize, length: usize) -> Self {
-        let array = self.array.slice(offset, length);
-        array.into()
+        let array = Arc::from(self.array.slice(offset, length));
+        Self::from(array)
     }
 
     /// Unpack a array to the same physical type.
@@ -119,7 +115,7 @@ impl<T> DataArray<T> {
 }
 
 impl<T> DataArray<T>
-where T: DFDataType
+    where T: DFDataType
 {
     pub fn name(&self) -> String {
         format!("DataArray<{:?}>", T::data_type())
@@ -157,7 +153,7 @@ where T: DFDataType
             DataType::Float64 => downcast_and_pack!(Float64Array, Float64),
 
             DataType::Binary => {
-                downcast_and_pack!(BinaryArray, Binary)
+                downcast_and_pack!(LargeBinaryArray, Binary)
             }
 
             DataType::List(fs) => {
@@ -165,7 +161,7 @@ where T: DFDataType
                 let value = match list_array.is_null(index) {
                     true => None,
                     false => {
-                        let nested_array = list_array.value(index);
+                        let nested_array: Arc<dyn Array> = Arc::from(list_array.value(index));
                         let series = nested_array.into_series();
                         let scalar_vec = (0..series.len())
                             .map(|i| series.try_get(i))
@@ -179,7 +175,7 @@ where T: DFDataType
 
             DataType::Struct(_) => {
                 let struct_array = &*(arr as *const dyn Array as *const StructArray);
-                let nested_array = struct_array.column(index);
+                let nested_array = Arc::new(struct_array.values()[index].clone());
                 let series = nested_array.clone().into_series();
 
                 let scalar_vec = (0..nested_array.len())
@@ -197,11 +193,11 @@ where T: DFDataType
 }
 
 impl<T> DataArray<T>
-where T: DFPrimitiveType
+    where T: DFPrimitiveType
 {
     /// Create a new DataArray by taking ownership of the AlignedVec. This operation is zero copy.
-    pub fn new_from_aligned_vec(v: AlignedVec<T::Native>) -> Self {
-        let array = to_primitive(values, None);
+    pub fn new_from_aligned_vec(values: AlignedVec<T::Native>) -> Self {
+        let array = to_primitive::<T>(values, None);
         Self::new(Arc::new(array))
     }
 
@@ -210,7 +206,7 @@ where T: DFPrimitiveType
         values: AlignedVec<T::Native>,
         validity: Option<Bitmap>,
     ) -> Self {
-        let array = to_primitive(values, validity);
+        let array = to_primitive::<T>(values, validity);
         Self::new(Arc::new(array))
     }
 
@@ -220,7 +216,7 @@ where T: DFPrimitiveType
 
     pub fn data_views(
         &self,
-    ) -> impl Iterator<Item = &T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
+    ) -> impl Iterator<Item=&T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
     {
         self.downcast_ref().values().as_slice().iter()
     }
@@ -228,11 +224,11 @@ where T: DFPrimitiveType
     #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter(
         &self,
-    ) -> impl Iterator<Item = T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
+    ) -> impl Iterator<Item=T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
     {
         // .copied was significantly slower in benchmark, next call did not inline?
         #[allow(clippy::map_clone)]
-        self.data_views().map(|v| *v)
+            self.data_views().map(|v| *v)
     }
 }
 
@@ -251,6 +247,12 @@ impl<T> From<arrow_array::ArrayRef> for DataArray<T> {
     }
 }
 
+impl<T> From<Box<dyn Array>> for DataArray<T> {
+    fn from(array: Box<dyn Array>) -> Self {
+        Self::new(Arc::from(array))
+    }
+}
+
 impl<T> From<&arrow_array::ArrayRef> for DataArray<T> {
     fn from(array: &arrow_array::ArrayRef) -> Self {
         Self::new(array.clone())
@@ -264,7 +266,7 @@ impl<T> Clone for DataArray<T> {
 }
 
 impl<T> std::fmt::Debug for DataArray<T>
-where T: DFDataType
+    where T: DFDataType
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DataArray<{:?}>", self.data_type())

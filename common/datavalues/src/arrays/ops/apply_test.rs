@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::compute;
+use common_arrow::arrow::compute::arithmetics;
 use common_exception::Result;
 
 use crate::arrays::ops::apply::ArrayApply;

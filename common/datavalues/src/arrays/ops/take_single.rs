@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
-
+use std::sync::Arc;
 use super::take_random::TakeRandom;
 use super::take_random::TakeRandomUtf8;
 use crate::arrays::DataArray;
@@ -34,7 +34,7 @@ macro_rules! impl_take_random_get_unchecked {
 }
 
 impl<T> TakeRandom for DataArray<T>
-where T: DFNumericType
+    where T: DFNumericType
 {
     type Item = T::Native;
 
@@ -50,7 +50,7 @@ where T: DFNumericType
 }
 
 impl<'a, T> TakeRandom for &'a DataArray<T>
-where T: DFNumericType
+    where T: DFNumericType
 {
     type Item = T::Native;
 
@@ -106,13 +106,36 @@ impl<'a> TakeRandomUtf8 for &'a DFUtf8Array {
     fn get(self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checkedn and downcast is of correct type
-        unsafe { impl_take_random_get!(self, Index) }
+        unsafe { impl_take_random_get!(self, index) }
     }
 
     #[inline]
     unsafe fn get_unchecked(self, index: usize) -> Self::Item {
         impl_take_random_get_unchecked!(self, index)
     }
+}
+
+
+
+
+macro_rules! impl_take_random_get {
+    ($self:ident, $index:ident) => {{
+        // Safety:
+        // index should be in bounds
+        let arr = $self.downcast_ref();
+        if arr.is_valid($index) {
+            Some(arr.value_unchecked($index))
+        } else {
+            None
+        }
+    }};
+}
+
+macro_rules! impl_take_random_get_unchecked {
+    ($self:ident, $index:ident) => {{
+        let arr = $self.downcast_ref();
+        arr.value_unchecked($index)
+    }};
 }
 
 impl TakeRandom for DFListArray {
@@ -122,11 +145,16 @@ impl TakeRandom for DFListArray {
     fn get(&self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checked and downcast is of correct type
-        unsafe { impl_take_random_get!(self, index) }
+        let arr = self.downcast_ref();
+        if arr.is_valid(index) {
+            return Some(Arc::from(arr.value(index)));
+        }
+        return None;
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        impl_take_random_get_unchecked!(self, index)
+        let arr = self.downcast_ref();
+        return Arc::from(arr.value_unchecked(index));
     }
 }

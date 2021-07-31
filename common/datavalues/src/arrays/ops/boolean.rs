@@ -14,7 +14,7 @@ impl DFBooleanArray {
         match (self.len(), rhs.len()) {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {
-                let result = compute::and_kleene(self.downcast_ref(), rhs.downcast_ref())?;
+                let result = compute::boolean_kleene::and(self.downcast_ref(), rhs.downcast_ref())?;
                 Ok(DFBooleanArray::from_arrow_array(result))
             }
             (_, 1) => {
@@ -53,7 +53,7 @@ impl DFBooleanArray {
         match (self.len(), rhs.len()) {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {
-                let result = compute::or_kleene(self.downcast_ref(), rhs.downcast_ref())?;
+                let result = compute::boolean_kleene::or(self.downcast_ref(), rhs.downcast_ref())?;
                 Ok(DFBooleanArray::from_arrow_array(result))
             }
             (_, 1) => {
@@ -89,7 +89,7 @@ impl DFBooleanArray {
     }
 
     pub fn not(&self) -> Result<Self> {
-        let result = compute::not(self.downcast_ref())?;
+        let result =  compute::boolean::not(self.downcast_ref());
         Ok(DFBooleanArray::from_arrow_array(result))
     }
 

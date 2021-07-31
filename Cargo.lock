@@ -3298,8 +3298,7 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cab3c2da3dc2e9e5e62fbf409d2c635ac5389ea9fdd5280e3660ae0f900e000"
+source = "git+https://github.com/datafuse-extras/parquet2?branch=main#20a1fb9d705c827e045504a5d5cb01537ba07c27"
 dependencies = [
  "bitpacking",
  "brotli",
@@ -3316,7 +3315,8 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/parquet2?branch=main#20a1fb9d705c827e045504a5d5cb01537ba07c27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cab3c2da3dc2e9e5e62fbf409d2c635ac5389ea9fdd5280e3660ae0f900e000"
 dependencies = [
  "bitpacking",
  "brotli",

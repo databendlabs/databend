@@ -285,9 +285,9 @@ impl ToValues for DFStructArray {
         let mut values = Vec::with_capacity(self.len());
         let array = self.downcast_ref();
 
-        let mut columns_values = Vec::with_capacity(array.num_columns());
+        let mut columns_values = Vec::with_capacity(array.fields().len());
 
-        for column in array.columns_ref() {
+        for column in array.values() {
             let series = column.into_series();
             columns_values.push(series.to_values()?);
         }

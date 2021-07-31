@@ -6,7 +6,7 @@ use common_arrow::arrow::compute::cast;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::NumCast;
-
+use std::sync::Arc;
 use crate::arrays::DataArray;
 use crate::data_df_type::*;
 use crate::series::IntoSeries;
@@ -37,7 +37,7 @@ where
         };
     }
 
-    let ca = cast(&ca.array, &N::data_type().to_arrow())?;
+    let ca = Arc::from(cast::cast(ca.array.as_ref(), &N::data_type().to_arrow())?);
     Ok(ca.into())
 }
 

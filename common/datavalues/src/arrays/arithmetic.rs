@@ -14,7 +14,9 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::compute;
+use common_arrow::arrow::compute::arithmetics::basic;
+use common_arrow::arrow::compute::arithmetics::negate;
+
 use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -131,7 +133,7 @@ where
     type Output = Result<DataArray<T>>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, compute::add, |lhs, rhs| lhs + rhs)
+        arithmetic_helper(self, rhs, basic::add::add, |lhs, rhs| lhs + rhs)
     }
 }
 
@@ -148,7 +150,7 @@ where
     type Output = Result<DataArray<T>>;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, compute::subtract, |lhs, rhs| lhs - rhs)
+        arithmetic_helper(self, rhs, basic::sub::sub, |lhs, rhs| lhs - rhs)
     }
 }
 
@@ -165,7 +167,7 @@ where
     type Output = Result<DataArray<T>>;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, compute::multiply, |lhs, rhs| lhs * rhs)
+        arithmetic_helper(self, rhs, basic::mul::mul,|lhs, rhs| lhs * rhs)
     }
 }
 
@@ -183,7 +185,7 @@ where
     type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, compute::divide, |lhs, rhs| lhs / rhs)
+        arithmetic_helper(self, rhs, basic::div::div,  |lhs, rhs| lhs / rhs)
     }
 }
 
@@ -226,7 +228,7 @@ where
             }
 
             _ => {
-                let array = arithmetic_helper(self, rhs, compute::modulus, |lhs, rhs| lhs % rhs)?;
+                let array = arithmetic_helper(self, rhs, basic::rem::rem, |lhs, rhs| lhs % rhs)?;
                 Ok(array.into_series())
             }
         }
@@ -250,26 +252,26 @@ where
         let arr = &*self.array;
         let result = unsafe {
             match self.data_type() {
-                DataType::Int8 => Ok(Arc::new(compute::negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<Int8Type>),
-                )?) as ArrayRef),
+                DataType::Int8 => Ok(Arc::new(negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<i8>),
+                )) as ArrayRef),
 
-                DataType::Int16 => Ok(Arc::new(compute::negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<Int16Type>),
-                )?) as ArrayRef),
+                DataType::Int16 => Ok(Arc::new(negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<i16>),
+                )) as ArrayRef),
 
-                DataType::Int32 => Ok(Arc::new(compute::negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<Int32Type>),
-                )?) as ArrayRef),
-                DataType::Int64 => Ok(Arc::new(compute::negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<Int64Type>),
-                )?) as ArrayRef),
-                DataType::Float32 => Ok(Arc::new(compute::negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<Float32Type>),
-                )?) as ArrayRef),
-                DataType::Float64 => Ok(Arc::new(compute::negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<Float64Type>),
-                )?) as ArrayRef),
+                DataType::Int32 => Ok(Arc::new(negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<i32>),
+                )) as ArrayRef),
+                DataType::Int64 => Ok(Arc::new(negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<i64>),
+                )) as ArrayRef),
+                DataType::Float32 => Ok(Arc::new(negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<f32>),
+                )) as ArrayRef),
+                DataType::Float64 => Ok(Arc::new(negate(
+                    &*(arr as *const dyn Array as *const PrimitiveArray<f64>),
+                )) as ArrayRef),
 
                 _ => Err(ErrorCode::IllegalDataType(format!(
                     "DataType {:?} is Unsupported for neg op",
@@ -279,93 +281,6 @@ where
         };
         let result = result?;
         Ok(result.into())
-    }
-}
-
-// Operands on DataArray & Num
-
-impl<T, N> Add<N> for &DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Add<Output = T::Native>,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn add(self, rhs: N) -> Self::Output {
-        let adder: T::Native = NumCast::from(rhs).unwrap();
-        Ok(self.apply(|val| val + adder))
-    }
-}
-
-impl<T, N> Sub<N> for &DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Sub<Output = T::Native>,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn sub(self, rhs: N) -> Self::Output {
-        let subber: T::Native = NumCast::from(rhs).unwrap();
-        Ok(self.apply(|val| val - subber))
-    }
-}
-
-impl<T, N> Div<N> for &DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast
-        + Div<Output = T::Native>
-        + One
-        + Zero
-        + Rem<Output = T::Native>
-        + Sub<Output = T::Native>,
-    N: Num + ToPrimitive,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn div(self, rhs: N) -> Self::Output {
-        let rhs: T::Native = NumCast::from(rhs).expect("could not cast");
-        Ok(self.apply_kernel(|arr| Arc::new(divide_scalar(arr, rhs).unwrap())))
-    }
-}
-
-impl<T, N> Mul<N> for &DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Mul<Output = T::Native>,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn mul(self, rhs: N) -> Self::Output {
-        let multiplier: T::Native = NumCast::from(rhs).unwrap();
-        Ok(self.apply(|val| val * multiplier))
-    }
-}
-
-impl<T, N> Rem<N> for &DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    N: Num + ToPrimitive,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
-        + Zero
-        + One,
-{
-    type Output = Result<DataArray<T>>;
-
-    fn rem(self, rhs: N) -> Self::Output {
-        let rhs: T::Native = NumCast::from(rhs).expect("could not cast");
-        Ok(self.apply_kernel(|arr| Arc::new(compute::modulus_scalar(arr, rhs).unwrap())))
     }
 }
 
@@ -444,13 +359,13 @@ where
     fn pow_f32(&self, exp: f32) -> DFFloat32Array {
         self.cast::<Float32Type>()
             .expect("f32 array")
-            .apply_kernel(|arr| Arc::new(compute::powf_scalar(arr, exp).unwrap()))
+            .apply_kernel(|arr| Arc::new(basic::pow::powf_scalar(arr, exp)))
     }
 
     fn pow_f64(&self, exp: f64) -> DFFloat64Array {
         self.cast::<Float64Type>()
             .expect("f64 array")
-            .apply_kernel(|arr| Arc::new(compute::powf_scalar(arr, exp).unwrap()))
+            .apply_kernel(|arr| Arc::new(basic::pow::powf_scalar(arr, exp)))
     }
 }
 

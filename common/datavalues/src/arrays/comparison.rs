@@ -8,7 +8,11 @@ use std::sync::Arc;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::compute::*;
+use common_arrow::arrow::compute::comparison::Operator;
+use common_arrow::arrow::compute::comparison::compare;
+use common_arrow::arrow::compute::comparison::primitive_compare_scalar;
+use common_arrow::arrow::compute::comparison::boolean_compare_scalar;
+use common_arrow::arrow::compute::comparison::utf8_compare_scalar;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::Num;
@@ -22,15 +26,22 @@ use crate::series::Series;
 use crate::utils::NoNull;
 use crate::*;
 
-pub trait ArrayCompare<Rhs>: Debug {
-    /// Check for equality and regard missing values as equal.
-    fn eq_missing(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
-        Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported compare operation: eq_missing for {:?}",
-            self,
-        )))
-    }
 
+pub trait NumComp: Num + NumCast + PartialOrd {}
+
+impl NumComp for f32 {}
+impl NumComp for f64 {}
+impl NumComp for i8 {}
+impl NumComp for i16 {}
+impl NumComp for i32 {}
+impl NumComp for i64 {}
+impl NumComp for u8 {}
+impl NumComp for u16 {}
+impl NumComp for u32 {}
+impl NumComp for u64 {}
+
+
+pub trait ArrayCompare<Rhs>: Debug {
     /// Check for equality.
     fn eq(&self, _rhs: Rhs) -> Result<DFBooleanArray> {
         Err(ErrorCode::BadDataValueType(format!(
@@ -95,39 +106,32 @@ pub trait ArrayCompare<Rhs>: Debug {
 }
 
 impl<T> DataArray<T>
-where T: DFNumericType
+    where T: DFNumericType,
+          T::Native: NumComp
 {
     /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
     /// the comparison operator.
     fn comparison(
         &self,
         rhs: &DataArray<T>,
-        operator: impl Fn(
-            &PrimitiveArray<T::Native>,
-            &PrimitiveArray<T::Native>,
-        ) -> common_arrow::arrow::error::Result<BooleanArray>,
+        op: Operator,
     ) -> Result<DFBooleanArray> {
-        let array = Arc::new(operator(self.downcast_ref(), rhs.downcast_ref())?) as ArrayRef;
+        let (lhs, rhs) = (self.array.as_ref(), rhs.array.as_ref());
+        let array = Arc::new(compare(lhs, rhs, op)?) as ArrayRef;
+        Ok(array.into())
+    }
+
+
+    fn comparison_scalar(
+        &self,
+        rhs: T::Native,
+        op: Operator,
+    ) -> Result<DFBooleanArray> {
+        let array = Arc::new(primitive_compare_scalar(self.as_ref(), rhs, op)?) as ArrayRef;
         Ok(array.into())
     }
 }
 
-macro_rules! impl_eq_missing {
-    ($self:ident, $rhs:ident) => {{
-        match ($self.null_count(), $rhs.null_count()) {
-            (0, 0) => $self
-                .into_no_null_iter()
-                .zip($rhs.into_no_null_iter())
-                .map(|(opt_a, opt_b)| opt_a == opt_b)
-                .collect(),
-            (_, _) => $self
-                .downcast_iter()
-                .zip($rhs.downcast_iter())
-                .map(|(opt_a, opt_b)| opt_a == opt_b)
-                .collect(),
-        }
-    }};
-}
 
 macro_rules! apply {
     ($self:expr, $f:expr) => {{
@@ -139,118 +143,108 @@ macro_rules! apply {
     }};
 }
 
-macro_rules! impl_cmp_numeric_utf8 {
-    ($self:ident, $rhs:ident, $op:ident, $kop:ident, $operand:tt) => {{
-        // broadcast
-        if $rhs.len() == 1 {
+macro_rules! impl_cmp_common {
+    ($self:ident, $rhs:ident, $kop:ident, $neg_func:tt) => {{
+        if $self.len() == $rhs.len() {
+            $self.comparison($rhs, Operator::$kop)
+        } else if $rhs.len() == 1 {
             if let Some(value) = $rhs.get(0) {
-                $self.$op(value)
+                $self.comparison_scalar(value, Operator::$kop)
             } else {
                 Ok(DFBooleanArray::full(false, $self.len()))
             }
         } else if $self.len() == 1 {
             if let Some(value) = $self.get(0) {
-                let f = |c| value $operand c;
-                Ok(apply! {$rhs, f})
+               $rhs.$neg_func($self)
             } else {
                 Ok(DFBooleanArray::full(false, $rhs.len()))
             }
-        } else if $self.len() == $rhs.len() {
-            $self.comparison($rhs, comparison::$kop)
-        } else {
-            Ok(apply_operand_on_array_by_iter!($self, $rhs, $operand))
+        }  else {
+           unreachable!()
         }
     }};
 }
 
 impl<T> ArrayCompare<&DataArray<T>> for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumComp,
+    where
+        T: DFNumericType,
+        T::Native: NumComp
 {
-    fn eq_missing(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
-        Ok(impl_eq_missing!(self, rhs))
-    }
-
     fn eq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, eq, eq,  ==}
+        impl_cmp_common! {self, rhs, Eq, eq}
     }
 
     fn neq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, neq, neq,!=}
+        impl_cmp_common! {self, rhs, Neq, neq}
     }
 
     fn gt(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, gt,gt, >}
+        impl_cmp_common! {self, rhs, Gt, lt_eq}
     }
 
     fn gt_eq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, gt_eq, gt_eq, >=}
+        impl_cmp_common! {self, rhs, GtEq, lt}
     }
 
     fn lt(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, lt, lt,  <}
+        impl_cmp_common! {self, rhs, Lt, gt_eq}
     }
 
     fn lt_eq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, lt_eq, lt_eq, <=}
+        impl_cmp_common! {self, rhs, LtEq, gt}
     }
 }
 
-macro_rules! impl_cmp_bool {
-    ($self:ident, $rhs:ident, $operand:tt) => {{
-        // broadcast
-        if $rhs.len() == 1 {
-            if let Some(value) = $rhs.get(0) {
-                match value {
-                    true => Ok($self.clone()),
-                    false => $self.not(),
-                }
-            } else {
-                Ok(DFBooleanArray::full(false, $self.len()))
-            }
-        } else if $self.len() == 1 {
-            if let Some(value) = $self.get(0) {
-                match value {
-                    true => Ok($rhs.clone()),
-                    false => $rhs.not(),
-                }
-            } else {
-                Ok(DFBooleanArray::full(false, $rhs.len()))
-            }
-        } else {
-            Ok(apply_operand_on_array_by_iter!($self, $rhs, $operand))
-        }
-    }};
+
+impl DFBooleanArray
+{
+    /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
+    /// the comparison operator.
+    fn comparison(
+        &self,
+        rhs: &DFBooleanArray,
+        op: Operator,
+    ) -> Result<DFBooleanArray> {
+        let (lhs, rhs) = (self.array.as_ref(), rhs.array.as_ref());
+        let array = Arc::new(compare(lhs, rhs, op)?) as ArrayRef;
+        Ok(array.into())
+    }
+
+
+    fn comparison_scalar(
+        &self,
+        rhs: bool,
+        op: Operator,
+    ) -> Result<DFBooleanArray> {
+        let array = Arc::new(boolean_compare_scalar(self.as_ref(), rhs, op)?) as ArrayRef;
+        Ok(array.into())
+    }
 }
+
 
 impl ArrayCompare<&DFBooleanArray> for DFBooleanArray {
-    fn eq_missing(&self, rhs: &DFBooleanArray) -> Result<DFBooleanArray> {
-        Ok(impl_eq_missing!(self, rhs))
-    }
-
     fn eq(&self, rhs: &DFBooleanArray) -> Result<DFBooleanArray> {
-        impl_cmp_bool! {self, rhs, == }
+        impl_cmp_common! {self, rhs, Eq, eq}
     }
 
     fn neq(&self, rhs: &DFBooleanArray) -> Result<DFBooleanArray> {
-        impl_cmp_bool! {self, rhs, != }
+        impl_cmp_common! {self, rhs, Neq, neq}
     }
 
     fn gt(&self, rhs: &DFBooleanArray) -> Result<DFBooleanArray> {
-        impl_cmp_bool! {self, rhs, > }
+        impl_cmp_common! {self, rhs, Gt, lt_eq}
     }
 
     fn gt_eq(&self, rhs: &DFBooleanArray) -> Result<DFBooleanArray> {
-        impl_cmp_bool! {self, rhs, >= }
+        impl_cmp_common! {self, rhs, GtEq, lt}
     }
 
     fn lt(&self, rhs: &DFBooleanArray) -> Result<DFBooleanArray> {
-        impl_cmp_bool! {self, rhs, < }
+        impl_cmp_common! {self, rhs, Lt, gt_eq}
     }
 
     fn lt_eq(&self, rhs: &DFBooleanArray) -> Result<DFBooleanArray> {
-        impl_cmp_bool! {self, rhs, <= }
+        impl_cmp_common! {self, rhs, LtEq, gt}
     }
 }
 
@@ -258,13 +252,20 @@ impl DFUtf8Array {
     fn comparison(
         &self,
         rhs: &DFUtf8Array,
-        operator: impl Fn(
-            &LargeUtf8Array,
-            &LargeUtf8Array,
-        ) -> common_arrow::arrow::error::Result<BooleanArray>,
+        op: Operator,
     ) -> Result<DFBooleanArray> {
-        let arr = operator(self.downcast_ref(), rhs.downcast_ref())?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
+        let (lhs, rhs) = (self.array.as_ref(), rhs.array.as_ref());
+        let array = Arc::new(compare(lhs, rhs, op)?) as ArrayRef;
+        Ok(array.into())
+    }
+
+    fn comparison_scalar(
+        &self,
+        rhs: &str,
+        op: Operator,
+    ) -> Result<DFBooleanArray> {
+        let array = Arc::new(utf8_compare_scalar(self.as_ref(), rhs, op)) as ArrayRef;
+        Ok(array.into())
     }
 }
 
@@ -290,185 +291,36 @@ macro_rules! impl_like_utf8 {
 }
 
 impl ArrayCompare<&DFUtf8Array> for DFUtf8Array {
-    fn eq_missing(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        Ok(impl_eq_missing!(self, rhs))
-    }
-
     fn eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, eq, eq_utf8,  ==}
+        impl_cmp_common! {self, rhs, Eq, eq}
     }
 
     fn neq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, neq, neq_utf8,  !=}
+        impl_cmp_common! {self, rhs, Neq, neq}
     }
 
     fn gt(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, gt, gt_utf8,  >}
+        impl_cmp_common! {self, rhs, Gt, lt_eq}
     }
 
     fn gt_eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, gt_eq, gt_eq_utf8,  >=}
+        impl_cmp_common! {self, rhs, GtEq, lt}
     }
 
     fn lt(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, lt, lt_utf8,  <}
+        impl_cmp_common! {self, rhs, Lt, gt_eq}
     }
 
     fn lt_eq(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_cmp_numeric_utf8! {self, rhs, lt_eq, lt_eq_utf8,  <=}
-    }
-
-    fn like(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_like_utf8! {self, rhs, like, like_utf8}
-    }
-
-    fn nlike(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        impl_like_utf8! {self, rhs, nlike, nlike_utf8}
+        impl_cmp_common! {self, rhs, LtEq, gt}
     }
 }
 
 impl ArrayCompare<&DFNullArray> for DFNullArray {}
+
 impl ArrayCompare<&DFBinaryArray> for DFBinaryArray {}
+
 impl ArrayCompare<&DFStructArray> for DFStructArray {}
-
-pub trait NumComp: Num + NumCast + PartialOrd {}
-
-impl NumComp for f32 {}
-impl NumComp for f64 {}
-impl NumComp for i8 {}
-impl NumComp for i16 {}
-impl NumComp for i32 {}
-impl NumComp for i64 {}
-impl NumComp for u8 {}
-impl NumComp for u16 {}
-impl NumComp for u32 {}
-impl NumComp for u64 {}
-
-impl<T, Rhs> ArrayCompare<Rhs> for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
-    Rhs: NumComp + ToPrimitive,
-{
-    fn eq_missing(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        self.eq(rhs)
-    }
-
-    fn eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        let rhs = NumCast::from(rhs);
-        match rhs {
-            Some(v) => {
-                let arr = eq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::from_arrow_array(arr))
-            }
-            None => Ok(DFBooleanArray::full(false, self.len())),
-        }
-    }
-
-    fn neq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        let rhs = NumCast::from(rhs);
-        match rhs {
-            Some(v) => {
-                let arr = neq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::from_arrow_array(arr))
-            }
-            None => Ok(DFBooleanArray::full(false, self.len())),
-        }
-    }
-
-    fn gt(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        let rhs = NumCast::from(rhs);
-        match rhs {
-            Some(v) => {
-                let arr = gt_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::from_arrow_array(arr))
-            }
-            None => Ok(DFBooleanArray::full(false, self.len())),
-        }
-    }
-
-    fn gt_eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        let rhs = NumCast::from(rhs);
-
-        match rhs {
-            Some(v) => {
-                let arr = gt_eq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::from_arrow_array(arr))
-            }
-            None => Ok(DFBooleanArray::full(false, self.len())),
-        }
-    }
-
-    fn lt(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        let rhs = NumCast::from(rhs);
-
-        match rhs {
-            Some(v) => {
-                let arr = lt_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::from_arrow_array(arr))
-            }
-            None => Ok(DFBooleanArray::full(false, self.len())),
-        }
-    }
-
-    fn lt_eq(&self, rhs: Rhs) -> Result<DFBooleanArray> {
-        let rhs = NumCast::from(rhs);
-
-        match rhs {
-            Some(v) => {
-                let arr = lt_eq_scalar(self.downcast_ref(), v)?;
-                Ok(DFBooleanArray::from_arrow_array(arr))
-            }
-            None => Ok(DFBooleanArray::full(false, self.len())),
-        }
-    }
-}
-
-impl ArrayCompare<&str> for DFUtf8Array {
-    fn eq_missing(&self, rhs: &str) -> Result<DFBooleanArray> {
-        self.eq(rhs)
-    }
-
-    fn eq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = eq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-
-    fn neq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = neq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-
-    fn gt(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = gt_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-
-    fn gt_eq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = gt_eq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-
-    fn lt(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = lt_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-
-    fn lt_eq(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = lt_eq_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-
-    fn like(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = like_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-
-    fn nlike(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let arr = nlike_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(arr))
-    }
-}
 
 macro_rules! impl_cmp_numeric_utf8_list {
     ($self:ident, $rhs:ident, $cmp_method:ident) => {{
@@ -503,10 +355,6 @@ macro_rules! impl_cmp_numeric_utf8_list {
 }
 
 impl ArrayCompare<&DFListArray> for DFListArray {
-    fn eq_missing(&self, rhs: &DFListArray) -> Result<DFBooleanArray> {
-        Ok(impl_cmp_numeric_utf8_list!(self, rhs, series_equal_missing))
-    }
-
     fn eq(&self, rhs: &DFListArray) -> Result<DFBooleanArray> {
         Ok(impl_cmp_numeric_utf8_list!(self, rhs, series_equal))
     }
@@ -529,9 +377,9 @@ pub(crate) trait ArrayEqualElement {
 }
 
 impl<T> ArrayEqualElement for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: PartialEq,
+    where
+        T: DFNumericType,
+        T::Native: PartialEq,
 {
     unsafe fn equal_element(&self, idx_self: usize, idx_other: usize, other: &Series) -> bool {
         let ca_other = other.as_ref().as_ref();
@@ -561,6 +409,9 @@ impl ArrayEqualElement for DFUtf8Array {
 }
 
 impl ArrayEqualElement for DFListArray {}
+
 impl ArrayEqualElement for DFNullArray {}
+
 impl ArrayEqualElement for DFStructArray {}
+
 impl ArrayEqualElement for DFBinaryArray {}

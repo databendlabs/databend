@@ -1,11 +1,9 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::ListArray;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::UInt32Array;
+use std::sync::Arc;
+
+use common_arrow::arrow::array::*;
 
 use crate::arrays::DataArray;
 use crate::prelude::LargeListArray;
@@ -56,9 +54,9 @@ pub trait TakeRandomUtf8 {
 }
 
 pub enum TakeIdx<'a, I, INulls>
-where
-    I: Iterator<Item = usize>,
-    INulls: Iterator<Item = Option<usize>>,
+    where
+        I: Iterator<Item=usize>,
+        INulls: Iterator<Item=Option<usize>>,
 {
     Array(&'a UInt32Array),
     Iter(I),
@@ -71,7 +69,7 @@ pub type TakeIdxIter<'a, I> = TakeIdx<'a, I, Dummy<Option<usize>>>;
 pub type TakeIdxIterNull<'a, INull> = TakeIdx<'a, Dummy<usize>, INull>;
 
 impl<'a, I> From<I> for TakeIdx<'a, I, Dummy<Option<usize>>>
-where I: Iterator<Item = usize>
+    where I: Iterator<Item=usize>
 {
     fn from(iter: I) -> Self {
         TakeIdx::Iter(iter)
@@ -79,7 +77,7 @@ where I: Iterator<Item = usize>
 }
 
 impl<'a, INulls> From<SeriesWrap<INulls>> for TakeIdx<'a, Dummy<usize>, INulls>
-where INulls: Iterator<Item = Option<usize>>
+    where INulls: Iterator<Item=Option<usize>>
 {
     fn from(iter: SeriesWrap<INulls>) -> Self {
         TakeIdx::IterNulls(iter.0)
@@ -112,9 +110,9 @@ pub enum TakeRandBranch<N, S> {
 }
 
 impl<N, S, I> TakeRandom for TakeRandBranch<N, S>
-where
-    N: TakeRandom<Item = I>,
-    S: TakeRandom<Item = I>,
+    where
+        N: TakeRandom<Item=I>,
+        S: TakeRandom<Item=I>,
 {
     type Item = I;
 
@@ -134,11 +132,11 @@ where
 }
 
 impl<'a, T> IntoTakeRandom<'a> for &'a DataArray<T>
-where T: DFNumericType
+    where T: DFNumericType
 {
     type Item = T::Native;
     type TakeRandom =
-        TakeRandBranch<NumTakeRandomCont<'a, T::Native>, NumTakeRandomSingleArray<'a, T>>;
+    TakeRandBranch<NumTakeRandomCont<'a, T::Native>, NumTakeRandomSingleArray<'a, T>>;
 
     #[inline]
     fn take_rand(&self) -> Self::TakeRandom {
@@ -213,7 +211,7 @@ pub struct NumTakeRandomCont<'a, T> {
 }
 
 impl<'a, T> TakeRandom for NumTakeRandomCont<'a, T>
-where T: Copy
+    where T: Copy
 {
     type Item = T;
 
@@ -229,13 +227,13 @@ where T: Copy
 }
 
 pub struct NumTakeRandomSingleArray<'a, T>
-where T: DFNumericType
+    where T: DFNumericType
 {
     arr: &'a PrimitiveArray<T::Native>,
 }
 
 impl<'a, T> TakeRandom for NumTakeRandomSingleArray<'a, T>
-where T: DFNumericType
+    where T: DFNumericType
 {
     type Item = T::Native;
 
@@ -277,13 +275,17 @@ impl<'a> TakeRandom for ListTakeRandom<'a> {
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
-        let v = take_random_get!(self, index);
+        let v: Option<Box<dyn Array>> = take_random_get!(self, index);
+        let v = v.map(|c| {
+            let c: Arc<dyn Array> = Arc::from(c);
+            c
+        });
         v.map(|v| v.into_series())
     }
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        let v = self.arr.value_unchecked(index);
+        let v: Arc<dyn Array> = Arc::from(self.arr.value_unchecked(index));
         v.into_series()
     }
 }

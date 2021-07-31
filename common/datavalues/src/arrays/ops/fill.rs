@@ -5,10 +5,10 @@
 use common_exception::Result;
 
 use crate::arrays::builders::Utf8ArrayBuilder;
-use crate::arrays::DataArray;
+use crate::arrays::{DataArray, BinaryArrayBuilder};
 use crate::series::Series;
 use crate::utils::NoNull;
-use crate::DFBooleanArray;
+use crate::{DFBooleanArray, DFBinaryArray};
 use crate::DFListArray;
 use crate::DFPrimitiveType;
 use crate::DFUtf8Array;
@@ -98,7 +98,7 @@ impl ArrayFullNull for DFBooleanArray {
 
 impl<'a> ArrayFull<&'a str> for DFUtf8Array {
     fn full(value: &'a str, length: usize) -> Self {
-        let mut builder = Utf8ArrayBuilder::with_capacity(length, length * value.len());
+        let mut builder = Utf8ArrayBuilder::with_capacity( length * value.len());
 
         for _ in 0..length {
             builder.append_value(value);
@@ -124,5 +124,25 @@ impl ArrayFull<&Series> for DFListArray {
 impl ArrayFullNull for DFListArray {
     fn full_null(_length: usize) -> DFListArray {
         todo!()
+    }
+}
+
+impl ArrayFull<&[u8]> for DFBinaryArray {
+    fn full(value: &[u8], length: usize) -> DFBinaryArray {
+        let mut builder = BinaryArrayBuilder::with_capacity( length );
+        for _ in 0..length {
+            builder.append_value(value);
+        }
+        builder.finish()
+    }
+}
+
+impl ArrayFullNull for DFBinaryArray {
+    fn full_null(length: usize) -> DFBinaryArray {
+        let mut builder = BinaryArrayBuilder::with_capacity( length );
+        for _ in 0..length {
+            builder.append_null();
+        }
+        builder.finish()
     }
 }

@@ -10,8 +10,8 @@
 
 use std::fmt::Debug;
 
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::compute;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::compute::take;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -102,7 +102,7 @@ where T: DFNumericType
                         take_no_null_primitive(primitive_array, array) as ArrayRef
                     )),
                     _ => {
-                        let taked_array = compute::take(self.array.as_ref(), array, None)?;
+                        let taked_array = take::take(self.array.as_ref(), array)?;
                         Ok(Self::from(taked_array))
                     }
                 }
@@ -144,7 +144,7 @@ where T: DFNumericType
                 if self.is_empty() {
                     return Ok(Self::full_null(array.len()));
                 }
-                let array = compute::take(array, array, None)?;
+                let array = take::take(array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
@@ -181,7 +181,7 @@ impl ArrayTake for DFBooleanArray {
                 if self.is_empty() {
                     return Ok(Self::full_null(array.len()));
                 }
-                let array = compute::take(array, array, None)?;
+                let array = take::take(array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
@@ -219,7 +219,7 @@ impl ArrayTake for DFBooleanArray {
                 if self.is_empty() {
                     return Ok(Self::full_null(array.len()));
                 }
-                let array = compute::take(boolean_array, array, None)?;
+                let array = take::take(boolean_array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
@@ -249,7 +249,7 @@ impl ArrayTake for DFUtf8Array {
         let str_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
-                let array = compute::take(str_array, array, None)?;
+                let array = take::take(str_array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
@@ -284,7 +284,7 @@ impl ArrayTake for DFUtf8Array {
         let str_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
-                let array = compute::take(str_array, array, None)?;
+                let array = take::take(str_array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
@@ -323,7 +323,7 @@ impl ArrayTake for DFListArray {
         let list_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
-                let array = compute::take(list_array, array, None)?;
+                let array = take::take(list_array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {

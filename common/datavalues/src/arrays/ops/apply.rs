@@ -101,7 +101,7 @@ where T: DFNumericType
             });
 
         let (_, validity) = self.null_bits();
-        let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
+        let array = Arc::new(to_primitive::<T>(av, validity.clone())) as ArrayRef;
         array.into()
     }
 
@@ -123,7 +123,7 @@ where T: DFNumericType
                 *num = f(Some(*n));
             });
 
-        let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
+        let array = Arc::new(to_primitive::<T>(av, validity.clone())) as ArrayRef;
         array.into()
     }
 
@@ -141,7 +141,7 @@ where T: DFNumericType
             });
 
         let (_, validity) = self.null_bits();
-        let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
+        let array = Arc::new(to_primitive::<T>(av, validity.clone())) as ArrayRef;
         array.into()
     }
 
@@ -176,7 +176,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
                 .collect();
 
             let (_, validity) = self.null_bits();
-            let array = Arc::new(to_primitive(av, validity)) as ArrayRef;
+            let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
             array.into()
         })
     }
@@ -188,7 +188,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
     {
         self.apply_kernel_cast(|array| {
             let av: AlignedVec<_> = array.into_iter().map(f).collect();
-            Arc::new(to_primitive(av, None)) as ArrayRef
+            Arc::new(to_primitive::<S>(av, None)) as ArrayRef
         })
     }
 
@@ -218,9 +218,8 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
             .map(|idx| unsafe { f(arr.value_unchecked(idx)) })
             .collect();
 
-        let null_bit_buffer = self.array.data_ref().null_buffer().cloned();
-        let array = Arc::new(av.into_primitive_array::<S>(null_bit_buffer)) as ArrayRef;
-
+        let (_, validity) = self.null_bits();
+        let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
         array.into()
     }
 
@@ -230,9 +229,8 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
         S: DFNumericType,
     {
         let av: AlignedVec<_> = self.downcast_iter().map(f).collect();
-        let null_bit_buffer = self.array.data_ref().null_buffer().cloned();
-        let array = Arc::new(av.into_primitive_array::<S>(null_bit_buffer)) as ArrayRef;
-
+        let (_, validity) = self.null_bits();
+        let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
         array.into()
     }
 

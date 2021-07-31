@@ -198,7 +198,7 @@ impl<'a> Iterator for ListIterNoNull<'a> {
         } else {
             let old = self.current;
             self.current += 1;
-            let array = unsafe { self.array.value_unchecked(old) };
+            let array = unsafe { Arc::from(self.array.value_unchecked(old)) };
             Some(array.into_series())
         }
     }
@@ -218,7 +218,7 @@ impl<'a> DoubleEndedIterator for ListIterNoNull<'a> {
         } else {
             self.current_end -= 1;
 
-            let array = unsafe { self.array.value_unchecked(self.current_end) };
+            let array = unsafe { Arc::from(self.array.value_unchecked(self.current_end)) };
             Some(array.into_series())
         }
     }

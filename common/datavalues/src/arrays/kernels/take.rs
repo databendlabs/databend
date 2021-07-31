@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::mem;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
@@ -31,7 +30,7 @@ pub unsafe fn take_no_null_primitive<T: DFNumericType>(
     let values = Buffer::from_trusted_len_iter(iter);
     let validity = indices.validity().clone();
     Arc::new(PrimitiveArray::from_data(
-        T::get_dtype().to_arrow(),
+        T::data_type().to_arrow(),
         values,
         validity,
     ))

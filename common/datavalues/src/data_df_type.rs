@@ -2,13 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::datatypes::IntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_arrow::arrow::types::NativeType;
-
 use crate::arrays::DataArray;
 use crate::DataField;
-use crate::DataType;
+use crate::data_type::*;
+
+use common_arrow::arrow::types::NativeType;
 
 pub trait DFDataType: Send + Sync {
     fn data_type() -> DataType;
@@ -194,6 +192,34 @@ impl_numeric!(TimestampNanosecondType, i64);
 
 impl_numeric!(IntervalYearMonthType, i32);
 impl_numeric!(IntervalDayTimeType, i64);
+
+pub trait  DFIntegerType: DFNumericType{}
+
+macro_rules! impl_integer{
+    ($ca:ident, $native:ident) => {
+        impl DFIntegerType for $ca {}
+    };
+}
+
+impl_integer!(UInt8Type, u8);
+impl_integer!(UInt16Type, u16);
+impl_integer!(UInt32Type, u32);
+impl_integer!(UInt64Type, u64);
+impl_integer!(Int8Type, i8);
+impl_integer!(Int16Type, i16);
+impl_integer!(Int32Type, i32);
+impl_integer!(Int64Type, i64);
+
+impl_integer!(Date32Type, i32);
+impl_integer!(Date64Type, i64);
+
+impl_integer!(TimestampSecondType, i64);
+impl_integer!(TimestampMillisecondType, i64);
+impl_integer!(TimestampMicrosecondType, i32);
+impl_integer!(TimestampNanosecondType, i64);
+
+impl_integer!(IntervalYearMonthType, i32);
+impl_integer!(IntervalDayTimeType, i64);
 
 pub trait DFFloatType: DFNumericType {}
 impl DFFloatType for Float32Type {}

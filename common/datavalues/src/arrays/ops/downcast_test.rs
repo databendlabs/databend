@@ -55,9 +55,8 @@ fn test_array_as_ref() -> Result<()> {
     );
 
     // Test DFListArray
-    let mut list_value_builder = ArrowPrimitiveArrayBuilder::<UInt16Type>::new(3);
-    list_value_builder.append_slice(&[1u16, 2u16, 3u16]);
-    let mut list_builder = ListPrimitiveArrayBuilder::<UInt16Type>::new(list_value_builder, 3);
+    let mut list_builder = ListPrimitiveArrayBuilder::<UInt16Type>::with_capacity(3, 0);
+    list_builder.append_slice(Some(&[1u16, 2u16, 3u16]));
     let df_list = list_builder.finish();
     let arrow_list = df_list.as_ref();
     let expected = "PrimitiveArray<UInt16>\n[\n  1,\n  2,\n  3,\n]";

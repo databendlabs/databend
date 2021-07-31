@@ -46,11 +46,11 @@ impl ArrayBuilder<bool, BooleanType> for BooleanArrayBuilder {
     /// Appends a null slot into the builder
     #[inline]
     fn append_null(&mut self) {
-        self.builder.append_null().unwrap();
+        self.builder.push_null();
     }
 
     fn finish(&mut self) -> DFBooleanArray {
-        let array = Arc::new(self.builder.finish()) as ArrayRef;
+        let array = self.builder.into_arc();
         array.into()
     }
 }
@@ -85,11 +85,11 @@ where
     /// Appends a null slot into the builder
     #[inline]
     fn append_null(&mut self) {
-        self.builder.append_null().unwrap();
+        self.builder.push_null();
     }
 
     fn finish(&mut self) -> DataArray<T> {
-        let array = Arc::new(self.builder.finish()) as ArrayRef;
+        let array = self.builder.into_arc();
 
         array.into()
     }
@@ -151,7 +151,7 @@ impl Utf8ArrayBuilder {
     }
 
     pub fn finish(&mut self) -> DFUtf8Array {
-        let array = Arc::new(self.builder.finish()) as ArrayRef;
+        let array = self.builder.into_arc();
         array.into()
     }
 }
@@ -269,12 +269,12 @@ type LargeListBooleanBuilder = MutableListArray<i64, MutableBooleanArray>;
 pub struct ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub builder: LargePrimitiveBuilder<T::Native>,
+    pub builder: LargePrimitiveBuilder<T>,
 }
 
 macro_rules! finish_list_builder {
     ($self:ident) => {{
-        let arr = Arc::new($self.builder.finish());
+        let arr = $self.builder.into_arc();
         DFListArray::from(arr as ArrayRef)
     }};
 }
@@ -284,7 +284,7 @@ where T: DFPrimitiveType
 {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = MutablePrimitiveArray::<T::Native>::with_capacity(values_capacity);
-        let builder = LargePrimitiveBuilder::<T::Native>::new_with_capacity(values, capacity);
+        let builder = LargePrimitiveBuilder::<T>::new_with_capacity(values, capacity);
 
         ListPrimitiveArrayBuilder { builder }
     }
@@ -351,7 +351,7 @@ type LargeMutableUtf8Array = MutableUtf8Array<i64>;
 impl ListUtf8ArrayBuilder {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = LargeMutableUtf8Array::with_capacity(values_capacity);
-        let builder = LargeListUtf8Builder::with_capacity_with_capacity(values, capacity);
+        let builder = LargeListUtf8Builder::new_with_capacity(values, capacity);
 
         ListUtf8ArrayBuilder { builder }
     }
@@ -392,7 +392,7 @@ pub struct ListBooleanArrayBuilder {
 impl ListBooleanArrayBuilder {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = MutableBooleanArray::with_capacity(values_capacity);
-        let builder = LargeListBooleanBuilder::with_capacity_with_capacity(values, capacity);
+        let builder = LargeListBooleanBuilder::new_with_capacity(values, capacity);
         Self { builder }
     }
 }
@@ -432,7 +432,7 @@ pub fn get_list_builder(
 ) -> Box<dyn ListBuilderTrait> {
     macro_rules! get_primitive_builder {
         ($type:ty) => {{
-            let builder = ListPrimitiveArrayBuilder::with_capacity(value_capacity, list_capacity);
+            let builder = ListPrimitiveArrayBuilder::<$type>::with_capacity(value_capacity, list_capacity);
             Box::new(builder)
         }};
     }
@@ -472,12 +472,13 @@ impl BinaryArrayBuilder {
     }
 
     #[inline]
-    fn append_null(&mut self) {
+    pub fn append_null(&mut self) {
         self.builder.push_null();
     }
 
     pub fn finish(&mut self) -> DataArray<BinaryType> {
-        let array = self.builder.finish();
-        DFBinaryArray::from_arrow_array(array)
+        let array = self.builder.into_arc();
+        DFBinaryArray::from(array)
     }
 }
+

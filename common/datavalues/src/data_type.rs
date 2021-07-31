@@ -5,14 +5,12 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::IntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit;
+use common_arrow::arrow::datatypes::TimeUnit as ArrowTimeUnit;
+use common_arrow::arrow::datatypes::IntervalUnit as ArrowIntervalUnit;
 
 use crate::DataField;
 
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DataType {
     Null,
     Boolean,
@@ -40,6 +38,51 @@ pub enum DataType {
     Binary,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum TimeUnit {
+    /// Time in seconds.
+    Second,
+    /// Time in milliseconds.
+    Millisecond,
+    /// Time in microseconds.
+    Microsecond,
+    /// Time in nanoseconds.
+    Nanosecond,
+}
+
+impl TimeUnit {
+    pub fn to_arrow(&self) -> ArrowTimeUnit {
+         unsafe {std::mem::transmute(self.clone())}
+    }
+
+    pub fn from_arrow(iu : &ArrowTimeUnit) -> Self {
+        unsafe {std::mem::transmute(iu.clone())}
+    }
+}
+
+
+/// YEAR_MONTH or DAY_TIME interval in SQL style.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum IntervalUnit {
+    /// Indicates the number of elapsed whole months, stored as 4-byte integers.
+    YearMonth,
+    /// Indicates the number of elapsed days and milliseconds,
+    /// stored as 2 contiguous 32-bit integers (8-bytes in total).
+    DayTime,
+}
+
+impl IntervalUnit {
+    pub fn to_arrow(&self) -> ArrowIntervalUnit {
+        unsafe {std::mem::transmute(self.clone())}
+    }
+
+    pub fn from_arrow(iu : &ArrowIntervalUnit) -> Self {
+        unsafe {std::mem::transmute(iu.clone())}
+    }
+}
+
+
+
 impl DataType {
     pub fn to_arrow(&self) -> ArrowDataType {
         use DataType::*;
@@ -59,8 +102,8 @@ impl DataType {
             Utf8 => ArrowDataType::Utf8,
             Date32 => ArrowDataType::Date32,
             Date64 => ArrowDataType::Date64,
-            Timestamp(tu, f) => ArrowDataType::Timestamp(tu.clone(), f.clone()),
-            Interval(tu) => ArrowDataType::Interval(tu.clone()),
+            Timestamp(tu, f) => ArrowDataType::Timestamp(tu.to_arrow(), f.clone()),
+            Interval(tu) => ArrowDataType::Interval(tu.to_arrow()),
             List(dt) => ArrowDataType::List(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
@@ -100,24 +143,12 @@ impl From<&ArrowDataType> for DataType {
             ArrowDataType::Date32 => DataType::Date32,
             ArrowDataType::Date64 => DataType::Date64,
 
-            ArrowDataType::Timestamp(TimeUnit::Second, f) => {
-                DataType::Timestamp(TimeUnit::Second, f.clone())
-            }
-            ArrowDataType::Timestamp(TimeUnit::Millisecond, f) => {
-                DataType::Timestamp(TimeUnit::Millisecond, f.clone())
+            ArrowDataType::Timestamp(tu, f) => {
+                DataType::Timestamp(TimeUnit::from_arrow(tu), f.clone())
             }
 
-            ArrowDataType::Timestamp(TimeUnit::Microsecond, f) => {
-                DataType::Timestamp(TimeUnit::Microsecond, f.clone())
-            }
-            ArrowDataType::Timestamp(TimeUnit::Nanosecond, f) => {
-                DataType::Timestamp(TimeUnit::Nanosecond, f.clone())
-            }
-            ArrowDataType::Interval(IntervalUnit::YearMonth) => {
-                DataType::Interval(IntervalUnit::YearMonth)
-            }
-            ArrowDataType::Interval(IntervalUnit::DayTime) => {
-                DataType::Interval(IntervalUnit::DayTime)
+            ArrowDataType::Interval(fu) => {
+                DataType::Interval(IntervalUnit::from_arrow(fu))
             }
 
             ArrowDataType::Utf8 => DataType::Utf8,

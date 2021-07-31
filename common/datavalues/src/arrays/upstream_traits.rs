@@ -4,10 +4,11 @@
 //! Implementations of upstream traits for DataArray<T>
 use std::borrow::Borrow;
 use std::borrow::Cow;
-use std::iter::FromIterator;
+use std::iter::{FromIterator};
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::get_list_builder;
 use crate::arrays::DataArray;
@@ -27,7 +28,7 @@ use crate::DFUtf8Array;
 impl<T> FromIterator<Option<T::Native>> for DataArray<T>
 where T: DFPrimitiveType
 {
-    fn from_iter<I: IntoIterator<Item = Option<T::Native>>>(iter: I) -> Self {
+    fn from_iter<I: TrustedLen<Item = Option<T::Native>> >(iter: I) -> Self {
         let iter = iter.into_iter();
 
         let arr: PrimitiveArray<T::Native> = match iter.size_hint() {
