@@ -29,7 +29,10 @@ members = [
     "fusestore/store",
 
     # Fuzz
-    "fusequery/fuzz"
+    "fusequery/fuzz",
+
+    # CLI
+    "fusecli/cli"
 ]
 
 [profile.release]
