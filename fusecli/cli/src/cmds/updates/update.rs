@@ -6,8 +6,10 @@ use std::fs;
 use std::fs::File;
 use std::io;
 
+use flate2::read::GzDecoder;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
+use tar::Archive;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -77,6 +79,7 @@ impl Command for UpdateCommand {
         writer.writeln("Latest Tag", latest_tag.as_str());
 
         let bin_name = format!("datafuse--{}.tar.gz", arch);
+
         let binary_url = format!(
             "{}/{}/{}",
             self.conf.download_url.clone(),
@@ -85,18 +88,31 @@ impl Command for UpdateCommand {
         );
 
         let bin_file = format!("{}/{}", bin_dir, bin_name);
-        writer.writeln("Bin home", bin_file.as_str());
+        writer.writeln("Binary", bin_file.as_str());
         writer.writeln("Download", binary_url.as_str());
-
         let res = ureq::get(binary_url.as_str()).call()?;
         let total_size: u64 = res.header("content-length").unwrap().parse().unwrap();
         let pb = ProgressBar::new(total_size);
         pb.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .progress_chars("#>-"));
+                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                .progress_chars("#>-"));
 
-        let mut out = File::create(bin_file).unwrap();
+        let mut out = File::create(bin_file.clone()).unwrap();
         io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).unwrap();
+
+        // Unpack.
+        let tar_gz = File::open(bin_file)?;
+        let tar = GzDecoder::new(tar_gz);
+        let mut archive = Archive::new(tar);
+        let mut files = vec![];
+        for file in archive.entries().unwrap() {
+            let f = file.unwrap();
+            let path = f.path().unwrap();
+            files.push(format!("{}", path.display()))
+        }
+        writer.writeln("Prepare unpack...", format!("{:?}", files).as_str());
+        archive.unpack(bin_dir).unwrap();
+        writer.writeln("Unpack done...", "");
 
         Ok(())
     }
