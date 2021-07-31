@@ -41,7 +41,9 @@ use common_tracing::tracing;
 use crate::configs;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
+use crate::meta_service::sled_open;
 use crate::meta_service::sled_serde::SledOrderedSerde;
+use crate::meta_service::sledkv;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -55,6 +57,8 @@ use crate::meta_service::ShutdownError;
 use crate::meta_service::SledSerde;
 use crate::meta_service::Snapshot;
 use crate::meta_service::StateMachine;
+use crate::meta_service::StateMachineMeta;
+use crate::meta_service::StateMachineMetaKey::LastApplied;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///
@@ -86,6 +90,12 @@ pub struct MetaStore {
     pub log: RaftLog,
 
     /// The Raft state machine.
+    ///
+    /// sled db has its own concurrency control, e.g., batch or transaction.
+    /// But we still need a lock, when installing a snapshot, which is done by replacing the state machine:
+    ///
+    /// - Acquire a read lock to WRITE or READ. Transactional RW relies on sled concurrency control.
+    /// - Acquire a write lock before installing a snapshot, to prevent any write to the db.
     pub state_machine: RwLock<StateMachine>,
 
     pub snapshot_index: Arc<Mutex<u64>>,
@@ -117,19 +127,21 @@ pub struct MetaStore {
 // }
 
 impl MetaStore {
+    fn log_dir(config: &configs::Config) -> String {
+        config.meta_dir.clone() + "/log"
+    }
+
     /// Create a new `MetaStore` instance.
     pub async fn new(id: NodeId, config: &configs::Config) -> common_exception::Result<MetaStore> {
-        let db = sled::open(&config.meta_dir)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("opening sled db: {}", config.meta_dir)
-            })?;
+        let p = Self::log_dir(config);
+        let db = sled_open(&p)?;
 
         // TODO(xp): merge the duplicated snippets in new() and open(), when I got time :DDD
 
         let raft_state = RaftState::create(&db, &id).await?;
         let log = RaftLog::open(&db, config).await?;
 
-        let sm = RwLock::new(StateMachine::default());
+        let sm = RwLock::new(StateMachine::open(config).await?);
         let current_snapshot = RwLock::new(None);
 
         Ok(Self {
@@ -145,15 +157,13 @@ impl MetaStore {
 
     /// Open an existent `MetaStore` instance.
     pub async fn open(config: &configs::Config) -> common_exception::Result<MetaStore> {
-        let db = sled::open(&config.meta_dir)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("opening sled db: {}", config.meta_dir)
-            })?;
+        let p = Self::log_dir(config);
+        let db = sled_open(&p)?;
 
         let raft_state = RaftState::open(&db)?;
         let log = RaftLog::open(&db, config).await?;
 
-        let sm = RwLock::new(StateMachine::default());
+        let sm = RwLock::new(StateMachine::open(config).await?);
         let current_snapshot = RwLock::new(None);
 
         Ok(Self {
@@ -228,7 +238,14 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                     Some((_index, ent)) => ent.log_id,
                     None => (0, 0).into(),
                 };
-                let last_applied_log = sm.last_applied_log;
+
+                let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+
+                let last_applied_log = sm_meta
+                    .get(&LastApplied)?
+                    .map(LogId::from)
+                    .unwrap_or_default();
+
                 let st = InitialState {
                     last_log_id,
                     last_applied_log,
@@ -300,7 +317,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         data: &LogEntry,
     ) -> anyhow::Result<AppliedState> {
         let mut sm = self.state_machine.write().await;
-        let resp = sm.apply(index, data)?;
+        let resp = sm.apply(index, data).await?;
         Ok(resp)
     }
 
@@ -311,7 +328,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     ) -> anyhow::Result<()> {
         let mut sm = self.state_machine.write().await;
         for (index, data) in entries {
-            sm.apply(*index, data)?;
+            sm.apply(*index, data).await?;
         }
         Ok(())
     }
@@ -321,13 +338,22 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
 
         // TODO(xp): add test of small chunk snapshot transfer and installation
-        let (data, last_applied_log);
-        {
+        // TODO(xp): Building a snapshot does not need a lock
+        let (data, last_applied_log) = {
             // Serialize the data of the state machine.
-            let sm = self.state_machine.read().await;
-            data = serde_json::to_vec(&*sm)?;
-            last_applied_log = sm.last_applied_log;
-        } // Release state machine read lock.
+            let sm = self.state_machine.write().await;
+
+            let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+
+            let last_applied = sm_meta
+                .get(&LastApplied)?
+                .map(LogId::from)
+                .unwrap_or_default();
+
+            let view = sm.snapshot();
+            let data = StateMachine::serialize_snapshot(view)?;
+            (data, last_applied)
+        };
 
         let snapshot_size = data.len();
 
@@ -396,28 +422,25 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             data: snapshot.into_inner(),
         };
 
+        tracing::debug!("SNAP META:{:?}", meta);
+
+        // Update the state machine.
         {
-            let t = &new_snapshot.data;
-            let y = std::str::from_utf8(t).unwrap();
-            tracing::debug!("SNAP META:{:?}", meta);
-            tracing::debug!("JSON SNAP DATA:{}", y);
+            let mut sm = self.state_machine.write().await;
+            sm.install_snapshot(&new_snapshot.data).await?;
         }
 
         // Update log.
         {
-            // Remove logs that are included in the snapshot.
-            self.log.range_delete(0..=meta.last_log_id.index).await?;
-
+            // Replace the last log in state machine with a pointer log
+            // TODO(xp): This is not necessary if we stores the committed membership.
             self.log
                 .append(&[Entry::new_snapshot_pointer(meta)])
                 .await?;
-        }
 
-        // Update the state machine.
-        {
-            let new_sm: StateMachine = serde_json::from_slice(&new_snapshot.data)?;
-            let mut sm = self.state_machine.write().await;
-            *sm = new_sm;
+            // Remove logs that are included in the snapshot,
+            // except the last one that is replaced with a snapshot pointer.
+            self.log.range_delete(0..meta.last_log_id.index).await?;
         }
 
         // Update current snapshot.
@@ -469,7 +492,7 @@ impl MetaStore {
             .get_node(node_id)
             .await
             .map(|n| n.address)
-            .ok_or_else(|| ErrorCode::UnknownNode(format!("{}", node_id)))?;
+            .ok_or_else(|| ErrorCode::UnknownNode(format!("node id: {}", node_id)))?;
 
         Ok(addr)
     }
@@ -483,10 +506,12 @@ impl MetaStore {
             .await
             .expect("fail to get membership");
 
-        for i in sm.nodes.keys() {
+        let sm_nodes = sm.sm_tree.as_type::<sledkv::Nodes>();
+        let x = sm_nodes.range_keys(..).expect("fail to list nodes");
+        for node_id in x {
             // it has been added into this cluster and is not a voter.
-            if !ms.contains(i) {
-                rst.insert(*i);
+            if !ms.contains(&node_id) {
+                rst.insert(node_id);
             }
         }
         rst
@@ -640,7 +665,7 @@ impl MetaNode {
 
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn stop(&self) -> common_exception::Result<i32> {
-        // TODO need to be reentrant.
+        // TODO(xp): need to be reentrant.
 
         let mut rx = self.raft.metrics();
 

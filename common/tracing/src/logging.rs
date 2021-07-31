@@ -15,8 +15,8 @@ use tracing_bunyan_formatter::JsonStorageLayer;
 use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::registry::Registry;
 use tracing_subscriber::EnvFilter;
-use tracing_subscriber::Registry;
 
 /// Write logs to stdout.
 pub fn init_default_tracing() {

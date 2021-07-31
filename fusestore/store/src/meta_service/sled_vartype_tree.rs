@@ -23,6 +23,7 @@ pub trait SledValueToKey<K> {
 /// A `SledKVType` defines a key-value type to be stored.
 /// The key type `K` must be serializable with order preserved, i.e. impl trait `SledOrderedSerde`.
 /// The value type `V` can be any serialize impl, i.e. for most cases, to impl trait `SledSerde`.
+#[derive(Debug)]
 pub struct SledVarTypeTree {
     pub name: String,
 

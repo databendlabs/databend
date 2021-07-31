@@ -24,6 +24,7 @@ impl StoreServer {
         Self { conf }
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn serve(&self) -> anyhow::Result<()> {
         let addr = self
             .conf
@@ -41,6 +42,8 @@ impl StoreServer {
         // if !self.conf.boot {
         //     todo!("non-boot mode is not impl yet")
         // }
+
+        tracing::info!("--- starting MetaNode with config: {:?}", self.conf);
 
         let mn = MetaNode::boot(0, &self.conf).await?;
 
