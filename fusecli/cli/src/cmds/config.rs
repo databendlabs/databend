@@ -31,11 +31,9 @@ impl Config {
     pub fn create() -> Self {
         let home_dir = dirs::home_dir().unwrap();
         let datafuse_dir = home_dir.join(".datafuse");
-        Config {
-            namespace: "test".to_string(),
-            datafuse_dir: datafuse_dir.to_str().unwrap().to_string(),
-            download_url: "https://github.com/datafuselabs/datafuse/releases/download".to_string(),
-            tag_url: "https://api.github.com/repos/datafuselabs/datafuse/tags".to_string(),
-        }
+
+        let mut conf = Config::from_args();
+        conf.datafuse_dir = format!("{}/{}", datafuse_dir.to_str().unwrap(), conf.namespace);
+        conf
     }
 }

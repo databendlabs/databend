@@ -19,6 +19,9 @@ pub enum CliError {
 
     #[error("Http error: {0}")]
     Http(Box<ureq::Error>),
+
+    #[error("Serde error: {0}")]
+    Serde(Box<serde_json::Error>),
 }
 
 impl From<io::Error> for CliError {
@@ -36,5 +39,11 @@ impl From<run_script::ScriptError> for CliError {
 impl From<ureq::Error> for CliError {
     fn from(err: ureq::Error) -> CliError {
         CliError::Http(Box::new(err))
+    }
+}
+
+impl From<serde_json::Error> for CliError {
+    fn from(err: serde_json::Error) -> CliError {
+        CliError::Serde(Box::new(err))
     }
 }

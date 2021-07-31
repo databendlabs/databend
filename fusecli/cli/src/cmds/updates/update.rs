@@ -14,6 +14,7 @@ use tar::Archive;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;
+use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::Result;
 
@@ -115,6 +116,11 @@ impl Command for UpdateCommand {
         let mut archive = Archive::new(tar);
         writer.writeln("Unpack to", bin_unpack_dir.as_str());
         archive.unpack(bin_unpack_dir).unwrap();
+
+        // Write status.
+        let mut status = Status::read(self.conf.clone())?;
+        status.latest = latest_tag;
+        status.write()?;
 
         Ok(())
     }
