@@ -89,7 +89,7 @@ impl DFBooleanArray {
     }
 
     pub fn not(&self) -> Result<Self> {
-        let result =  compute::boolean::not(self.downcast_ref());
+        let result = compute::boolean::not(self.downcast_ref());
         Ok(DFBooleanArray::from_arrow_array(result))
     }
 

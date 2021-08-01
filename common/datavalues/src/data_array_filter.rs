@@ -28,10 +28,10 @@ impl DataArrayFilter {
         let filter = build_filter(predicate.downcast_ref())?;
         let filtered_arrays: Vec<Series> = array
             .iter()
-            .map(|a|  {
+            .map(|a| {
                 let c = a.get_array_ref();
                 let c = filter(c.as_ref());
-                let c : Arc<dyn Array> = Arc::from(c);
+                let c: Arc<dyn Array> = Arc::from(c);
                 c.into_series()
             })
             .collect();

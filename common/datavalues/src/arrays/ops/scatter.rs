@@ -100,9 +100,7 @@ impl ArrayScatter for DFUtf8Array {
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
-            builders.push(Utf8ArrayBuilder::with_capacity(
-                self.len(),
-            ));
+            builders.push(Utf8ArrayBuilder::with_capacity(self.len()));
         }
 
         match self.null_count() {

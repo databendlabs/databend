@@ -114,12 +114,11 @@ macro_rules! std_to_data_value {
     };
 }
 
-
 macro_rules! build_constant_series {
     ($ARRAY: ident, $VALUES: expr, $SIZE: expr) => {
         match $VALUES {
-            Some(v) => Arc::new($ARRAY::full(*v, $SIZE)).into_series(),
-            None =>  Arc::new($ARRAY::full_null($SIZE)).into_series(),
+            Some(v) => $ARRAY::full(*v, $SIZE).into_series(),
+            None => $ARRAY::full_null($SIZE).into_series(),
         }
     };
 }
@@ -129,11 +128,9 @@ macro_rules! build_list_series {
         type B = ListPrimitiveArrayBuilder<$TYPE>;
         let mut builder = B::with_capacity(0, $SIZE);
         match $VALUES {
-            None => {
-                (0..$SIZE).for_each(|_| {
-                    builder.append_null();
-                })
-            }
+            None => (0..$SIZE).for_each(|_| {
+                builder.append_null();
+            }),
             Some(v) => {
                 let series = DataValue::try_into_data_array(&v, $D_TYPE)?;
                 builder.append_series(&series);

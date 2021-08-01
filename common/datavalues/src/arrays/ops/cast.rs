@@ -2,11 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::cast;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::NumCast;
-use std::sync::Arc;
+
 use crate::arrays::DataArray;
 use crate::data_df_type::*;
 use crate::series::IntoSeries;
@@ -37,7 +40,7 @@ where
         };
     }
 
-    let ca = Arc::from(cast::cast(ca.array.as_ref(), &N::data_type().to_arrow())?);
+    let ca: ArrayRef = Arc::from(cast::cast(ca.array.as_ref(), &N::data_type().to_arrow())?);
     Ok(ca.into())
 }
 

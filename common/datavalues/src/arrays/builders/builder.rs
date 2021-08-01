@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::array::*;
 use num::Num;
 
@@ -50,7 +48,7 @@ impl ArrayBuilder<bool, BooleanType> for BooleanArrayBuilder {
     }
 
     fn finish(&mut self) -> DFBooleanArray {
-        let array = self.builder.into_arc();
+        let array = self.builder.as_arc();
         array.into()
     }
 }
@@ -89,7 +87,7 @@ where
     }
 
     fn finish(&mut self) -> DataArray<T> {
-        let array = self.builder.into_arc();
+        let array = self.builder.as_arc();
 
         array.into()
     }
@@ -151,7 +149,7 @@ impl Utf8ArrayBuilder {
     }
 
     pub fn finish(&mut self) -> DFUtf8Array {
-        let array = self.builder.into_arc();
+        let array = self.builder.as_arc();
         array.into()
     }
 }
@@ -261,20 +259,19 @@ pub trait ListBuilderTrait {
     fn finish(&mut self) -> DFListArray;
 }
 
-type LargePrimitiveBuilder<T: DFPrimitiveType> =
-    MutableListArray<i64, MutablePrimitiveArray<T::Native>>;
+type LargePrimitiveBuilder<T> = MutableListArray<i64, MutablePrimitiveArray<T>>;
 type LargeListUtf8Builder = MutableListArray<i64, MutableUtf8Array<i64>>;
 type LargeListBooleanBuilder = MutableListArray<i64, MutableBooleanArray>;
 
 pub struct ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub builder: LargePrimitiveBuilder<T>,
+    pub builder: LargePrimitiveBuilder<T::Native>,
 }
 
 macro_rules! finish_list_builder {
     ($self:ident) => {{
-        let arr = $self.builder.into_arc();
+        let arr = $self.builder.as_arc();
         DFListArray::from(arr as ArrayRef)
     }};
 }
@@ -284,7 +281,7 @@ where T: DFPrimitiveType
 {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = MutablePrimitiveArray::<T::Native>::with_capacity(values_capacity);
-        let builder = LargePrimitiveBuilder::<T>::new_with_capacity(values, capacity);
+        let builder = LargePrimitiveBuilder::<T::Native>::new_with_capacity(values, capacity);
 
         ListPrimitiveArrayBuilder { builder }
     }
@@ -432,7 +429,8 @@ pub fn get_list_builder(
 ) -> Box<dyn ListBuilderTrait> {
     macro_rules! get_primitive_builder {
         ($type:ty) => {{
-            let builder = ListPrimitiveArrayBuilder::<$type>::with_capacity(value_capacity, list_capacity);
+            let builder =
+                ListPrimitiveArrayBuilder::<$type>::with_capacity(value_capacity, list_capacity);
             Box::new(builder)
         }};
     }
@@ -477,8 +475,7 @@ impl BinaryArrayBuilder {
     }
 
     pub fn finish(&mut self) -> DataArray<BinaryType> {
-        let array = self.builder.into_arc();
+        let array = self.builder.as_arc();
         DFBinaryArray::from(array)
     }
 }
-

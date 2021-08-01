@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::prelude::*;
-use crate::series::IntoSeries;
 use crate::series::Series;
+use crate::utils::CustomIterTools;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;
@@ -15,8 +16,11 @@ use crate::DFUtf8Array;
 /// A `DFIterator` is an iterator over a `DFArray` which contains DF types. A `DFIterator`
 /// must implement   `DoubleEndedIterator`.
 pub trait DFIterator: DoubleEndedIterator + Send + Sync {}
+unsafe impl<'a, I> TrustedLen for Box<dyn DFIterator<Item = I> + 'a> {}
+
 /// Implement DFIterator for every iterator that implements the needed traits.
-impl<T: ?Sized> DFIterator for T where T: DoubleEndedIterator + Send + Sync {}
+impl<T: ?Sized> DFIterator for T where T: ExactSizeIterator + DoubleEndedIterator + Send + Sync + TrustedLen
+{}
 
 impl<'a, T> IntoIterator for &'a DataArray<T>
 where T: DFNumericType
@@ -25,7 +29,11 @@ where T: DFNumericType
     type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.downcast_iter())
+        Box::new(
+            self.downcast_iter()
+                .map(|x| x.copied())
+                .trust_my_length(self.len()),
+        )
     }
 }
 /// The no null iterator for a BooleanArray
@@ -39,7 +47,7 @@ impl<'a> IntoIterator for &'a DFBooleanArray {
     type Item = Option<bool>;
     type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.downcast_iter())
+        Box::new(self.downcast_iter().trust_my_length(self.len()))
     }
 }
 
@@ -87,7 +95,6 @@ impl<'a> DoubleEndedIterator for BoolIterNoNull<'a> {
 }
 
 impl DFBooleanArray {
-    #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter(
         &self,
     ) -> impl Iterator<Item = bool> + '_ + Send + Sync + DoubleEndedIterator {
@@ -156,7 +163,6 @@ impl<'a> DoubleEndedIterator for Utf8IterNoNull<'a> {
 impl<'a> ExactSizeIterator for Utf8IterNoNull<'a> {}
 
 impl DFUtf8Array {
-    #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter<'a>(
         &'a self,
     ) -> impl Iterator<Item = &'a str> + '_ + Send + Sync + DoubleEndedIterator {
@@ -168,7 +174,7 @@ impl<'a> IntoIterator for &'a DFListArray {
     type Item = Option<Series>;
     type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.downcast_iter())
+        Box::new(self.downcast_iter().trust_my_length(self.len()))
     }
 }
 
@@ -198,7 +204,7 @@ impl<'a> Iterator for ListIterNoNull<'a> {
         } else {
             let old = self.current;
             self.current += 1;
-            let array = unsafe { Arc::from(self.array.value_unchecked(old)) };
+            let array: ArrayRef = Arc::from(unsafe { self.array.value_unchecked(old) });
             Some(array.into_series())
         }
     }
@@ -218,7 +224,8 @@ impl<'a> DoubleEndedIterator for ListIterNoNull<'a> {
         } else {
             self.current_end -= 1;
 
-            let array = unsafe { Arc::from(self.array.value_unchecked(self.current_end)) };
+            let array: ArrayRef =
+                Arc::from(unsafe { self.array.value_unchecked(self.current_end) });
             Some(array.into_series())
         }
     }
@@ -228,7 +235,6 @@ impl<'a> DoubleEndedIterator for ListIterNoNull<'a> {
 impl<'a> ExactSizeIterator for ListIterNoNull<'a> {}
 
 impl DFListArray {
-    #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter(
         &self,
     ) -> impl Iterator<Item = Series> + '_ + Send + Sync + DoubleEndedIterator {

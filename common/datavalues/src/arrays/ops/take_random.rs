@@ -54,9 +54,9 @@ pub trait TakeRandomUtf8 {
 }
 
 pub enum TakeIdx<'a, I, INulls>
-    where
-        I: Iterator<Item=usize>,
-        INulls: Iterator<Item=Option<usize>>,
+where
+    I: Iterator<Item = usize>,
+    INulls: Iterator<Item = Option<usize>>,
 {
     Array(&'a UInt32Array),
     Iter(I),
@@ -69,7 +69,7 @@ pub type TakeIdxIter<'a, I> = TakeIdx<'a, I, Dummy<Option<usize>>>;
 pub type TakeIdxIterNull<'a, INull> = TakeIdx<'a, Dummy<usize>, INull>;
 
 impl<'a, I> From<I> for TakeIdx<'a, I, Dummy<Option<usize>>>
-    where I: Iterator<Item=usize>
+where I: Iterator<Item = usize>
 {
     fn from(iter: I) -> Self {
         TakeIdx::Iter(iter)
@@ -77,7 +77,7 @@ impl<'a, I> From<I> for TakeIdx<'a, I, Dummy<Option<usize>>>
 }
 
 impl<'a, INulls> From<SeriesWrap<INulls>> for TakeIdx<'a, Dummy<usize>, INulls>
-    where INulls: Iterator<Item=Option<usize>>
+where INulls: Iterator<Item = Option<usize>>
 {
     fn from(iter: SeriesWrap<INulls>) -> Self {
         TakeIdx::IterNulls(iter.0)
@@ -110,9 +110,9 @@ pub enum TakeRandBranch<N, S> {
 }
 
 impl<N, S, I> TakeRandom for TakeRandBranch<N, S>
-    where
-        N: TakeRandom<Item=I>,
-        S: TakeRandom<Item=I>,
+where
+    N: TakeRandom<Item = I>,
+    S: TakeRandom<Item = I>,
 {
     type Item = I;
 
@@ -132,11 +132,11 @@ impl<N, S, I> TakeRandom for TakeRandBranch<N, S>
 }
 
 impl<'a, T> IntoTakeRandom<'a> for &'a DataArray<T>
-    where T: DFNumericType
+where T: DFNumericType
 {
     type Item = T::Native;
     type TakeRandom =
-    TakeRandBranch<NumTakeRandomCont<'a, T::Native>, NumTakeRandomSingleArray<'a, T>>;
+        TakeRandBranch<NumTakeRandomCont<'a, T::Native>, NumTakeRandomSingleArray<'a, T>>;
 
     #[inline]
     fn take_rand(&self) -> Self::TakeRandom {
@@ -211,7 +211,7 @@ pub struct NumTakeRandomCont<'a, T> {
 }
 
 impl<'a, T> TakeRandom for NumTakeRandomCont<'a, T>
-    where T: Copy
+where T: Copy
 {
     type Item = T;
 
@@ -227,13 +227,13 @@ impl<'a, T> TakeRandom for NumTakeRandomCont<'a, T>
 }
 
 pub struct NumTakeRandomSingleArray<'a, T>
-    where T: DFNumericType
+where T: DFNumericType
 {
     arr: &'a PrimitiveArray<T::Native>,
 }
 
 impl<'a, T> TakeRandom for NumTakeRandomSingleArray<'a, T>
-    where T: DFNumericType
+where T: DFNumericType
 {
     type Item = T::Native;
 

@@ -15,15 +15,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 
-use serde::Deserialize;
-use serde::Serialize;
+use crate::arrays::ListBuilderTrait;
+use crate::arrays::ListPrimitiveArrayBuilder;
+use crate::data_type::*;
 use crate::prelude::*;
-
 use crate::series::IntoSeries;
 use crate::series::Series;
-use crate::{DataField, DFInt8Array};
-use crate::data_type::*;
-use crate::arrays::{ListPrimitiveArrayBuilder, ListBuilderTrait};
+use crate::DFInt8Array;
+use crate::DataField;
 
 /// A specific value of a data type.
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -161,13 +160,13 @@ impl DataValue {
             DataValue::Float64(values) => Ok(build_constant_series! {DFFloat64Array, values, size}),
 
             DataValue::Utf8(values) => match values {
-                None => Ok(Arc::new(DFUtf8Array::full_null(size)).into_series()),
-                Some(v) => Ok(Arc::new(DFUtf8Array::full(v.deref(), size)).into_series()),
+                None => Ok(DFUtf8Array::full_null(size).into_series()),
+                Some(v) => Ok(DFUtf8Array::full(v.deref(), size).into_series()),
             },
 
             DataValue::Binary(values) => match values {
-                None => Ok(Arc::new(DFBinaryArray::full_null(size)).into_series()),
-                Some(v) => Ok(Arc::new(DFBinaryArray::full(v.deref(), size)).into_series()),
+                None => Ok(DFBinaryArray::full_null(size).into_series()),
+                Some(v) => Ok(DFBinaryArray::full(v.deref(), size).into_series()),
             },
 
             DataValue::List(values, data_type) => match data_type {
@@ -194,15 +193,16 @@ impl DataValue {
                 let mut arrays = vec![];
                 let mut fields = vec![];
                 for (i, x) in v.iter().enumerate() {
-                    let val_array = x.to_series_with_size(size)?.get_array_ref();
+                    let xseries = x.to_series_with_size(size)?;
+                    let val_array = xseries.get_array_ref();
+
+                    fields.push(ArrowField::new(
+                        format!("item_{}", i).as_str(),
+                        val_array.data_type().clone(),
+                        false,
+                    ));
 
                     arrays.push(val_array);
-                    fields.push(
-                        ArrowField::new(
-                            format!("item_{}", i).as_str(),
-                            val_array.data_type().clone(),
-                            false,
-                        ));
                 }
                 let r = Arc::new(StructArray::from_data(fields, arrays, None)) as ArrayRef;
                 Ok(r.into_series())
@@ -252,11 +252,6 @@ impl DataValue {
             ))),
         }
     }
-}
-
-#[inline]
-fn new_null_array_by_type(data_type: &DataType, length: usize) -> ArrayRef {
-    Arc::from(new_null_array(data_type.to_arrow(), length))
 }
 
 // Did not use std::convert:TryFrom

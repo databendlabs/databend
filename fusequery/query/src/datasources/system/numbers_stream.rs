@@ -86,8 +86,9 @@ impl NumbersStream {
         Ok(if current.begin == current.end {
             None
         } else {
-            let mut av = AlignedVec::with_capacity((current.end - current.begin) as usize);
-            unsafe { av.set_len(av.capacity()) };
+            let size = (current.end - current.begin) as usize;
+            let mut av = AlignedVec::with_capacity(size);
+            unsafe { av.set_len(size) };
 
             av.as_mut_slice()
                 .iter_mut()

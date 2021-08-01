@@ -4,11 +4,10 @@
 //! Implementations of upstream traits for DataArray<T>
 use std::borrow::Borrow;
 use std::borrow::Cow;
-use std::iter::{FromIterator};
+use std::iter::FromIterator;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::get_list_builder;
 use crate::arrays::DataArray;
@@ -28,7 +27,7 @@ use crate::DFUtf8Array;
 impl<T> FromIterator<Option<T::Native>> for DataArray<T>
 where T: DFPrimitiveType
 {
-    fn from_iter<I: TrustedLen<Item = Option<T::Native>> >(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = Option<T::Native>>>(iter: I) -> Self {
         let iter = iter.into_iter();
 
         let arr: PrimitiveArray<T::Native> = match iter.size_hint() {
@@ -39,7 +38,7 @@ where T: DFPrimitiveType
                 // somebody can create an iterator that incorrectly gives those bounds.
                 // This will not lead to UB, but will panic.
                 unsafe {
-                    let arr = PrimitiveArray::from_trusted_len_iter(iter);
+                    let arr = PrimitiveArray::from_trusted_len_iter_unchecked(iter);
                     assert_eq!(arr.len(), a);
                     arr
                 }
@@ -144,13 +143,13 @@ impl From<DFUtf8Array> for Vec<Option<String>> {
 
 impl<'a> From<&'a DFBooleanArray> for Vec<Option<bool>> {
     fn from(ca: &'a DFBooleanArray) -> Self {
-        ca.downcast_iter().collect()
+        ca.collect_values()
     }
 }
 
 impl From<DFBooleanArray> for Vec<Option<bool>> {
     fn from(ca: DFBooleanArray) -> Self {
-        ca.downcast_iter().collect()
+        ca.collect_values()
     }
 }
 
@@ -158,7 +157,7 @@ impl<'a, T> From<&'a DataArray<T>> for Vec<Option<T::Native>>
 where T: DFNumericType
 {
     fn from(ca: &'a DataArray<T>) -> Self {
-        ca.downcast_iter().collect()
+        ca.collect_values()
     }
 }
 

@@ -50,8 +50,8 @@ fn test_boolean_array_agg() -> Result<()> {
 
     let expected = [
         DataValue::UInt32(Some(2)),
-        DataValue::UInt32(Some(1)),
-        DataValue::UInt32(Some(0)),
+        DataValue::Boolean(Some(true)),
+        DataValue::Boolean(Some(false)),
         DataValue::Struct(vec![
             DataValue::UInt64(Some(1)),
             DataValue::Boolean(Some(false)),
@@ -63,7 +63,7 @@ fn test_boolean_array_agg() -> Result<()> {
     ];
     let len = value.len();
     for i in 0..len {
-        assert_eq!(value[i], expected[i]);
+        assert_eq!(value[i], expected[i], "in test_{}", i);
     }
     Ok(())
 }

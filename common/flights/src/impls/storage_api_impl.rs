@@ -5,8 +5,9 @@
 
 use std::convert::TryFrom;
 
+// io::ipc::write::common::{encoded_batch, DictionaryTracker, EncodedData, IpcWriteOptions}
 use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
-use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;

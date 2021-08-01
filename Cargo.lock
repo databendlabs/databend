@@ -123,7 +123,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?branch=main#95fe10a9e4574046ac271c1e7279af2d8eea471a"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=ea2f82d#ea2f82d35fc4973117873d814e83831def1ccaff"
 dependencies = [
  "arrow2",
  "bytes",
@@ -136,8 +136,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?branch=main#95fe10a9e4574046ac271c1e7279af2d8eea471a"
+version = "0.2.0"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=ea2f82d#ea2f82d35fc4973117873d814e83831def1ccaff"
 dependencies = [
  "ahash 0.7.4",
  "base64",
@@ -153,11 +153,11 @@ dependencies = [
  "lexical-core",
  "lz4",
  "multiversion",
- "num 0.3.1",
+ "num",
  "packed_simd_2",
  "parquet2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "prettytable-rs",
- "rand 0.7.3",
+ "rand 0.8.4",
  "regex",
  "serde",
  "serde_derive",
@@ -718,7 +718,7 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-io",
- "num 0.4.0",
+ "num",
  "ordered-float 2.7.0",
  "paste",
  "pretty_assertions",
@@ -787,7 +787,7 @@ dependencies = [
  "dyn-clone",
  "indexmap",
  "lazy_static",
- "num 0.4.0",
+ "num",
  "ordered-float 2.7.0",
  "pretty_assertions",
  "serde",
@@ -1717,7 +1717,7 @@ dependencies = [
  "msql-srv",
  "mysql",
  "nom 7.0.0-alpha1",
- "num 0.4.0",
+ "num",
  "num_cpus",
  "paste",
  "pnet",
@@ -1768,7 +1768,7 @@ dependencies = [
  "maplit",
  "metrics",
  "metrics-exporter-prometheus",
- "num 0.4.0",
+ "num",
  "num_cpus",
  "paste",
  "pretty_assertions",
@@ -2994,29 +2994,15 @@ dependencies = [
 
 [[package]]
 name = "num"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b7a8e9be5e039e2ff869df49155f1c06bd01ade2117ec783e56ab0932b67a8f"
-dependencies = [
- "num-bigint 0.3.2",
- "num-complex 0.3.1",
- "num-integer",
- "num-iter",
- "num-rational 0.3.2",
- "num-traits",
-]
-
-[[package]]
-name = "num"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
 dependencies = [
  "num-bigint 0.4.0",
- "num-complex 0.4.0",
+ "num-complex",
  "num-integer",
  "num-iter",
- "num-rational 0.4.0",
+ "num-rational",
  "num-traits",
 ]
 
@@ -3062,15 +3048,6 @@ dependencies = [
 
 [[package]]
 name = "num-complex"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "num-complex"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26873667bbbb7c5182d4a37c1add32cdf09f841af72da53318fdb81543c15085"
@@ -3105,18 +3082,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2021c8337a54d21aca0d59a92577a029af9431cb59b909b03252b9c164fad59"
 dependencies = [
  "autocfg 1.0.1",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "num-rational"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
-dependencies = [
- "autocfg 1.0.1",
- "num-bigint 0.3.2",
  "num-integer",
  "num-traits",
 ]
@@ -3298,7 +3263,8 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/parquet2?branch=main#20a1fb9d705c827e045504a5d5cb01537ba07c27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cab3c2da3dc2e9e5e62fbf409d2c635ac5389ea9fdd5280e3660ae0f900e000"
 dependencies = [
  "bitpacking",
  "brotli",
@@ -3315,8 +3281,7 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cab3c2da3dc2e9e5e62fbf409d2c635ac5389ea9fdd5280e3660ae0f900e000"
+source = "git+https://github.com/datafuse-extras/parquet2?branch=main#20a1fb9d705c827e045504a5d5cb01537ba07c27"
 dependencies = [
  "bitpacking",
  "brotli",

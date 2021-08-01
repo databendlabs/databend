@@ -2,10 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::cmp::Ordering;
-
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::concat;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -22,7 +19,7 @@ impl DataColumnCommon {
 
         let dyn_arrays: Vec<&dyn Array> = arrays.iter().map(|arr| arr.as_ref()).collect();
 
-        let array:Arc<dyn Array> = Arc::from(concat::concatenate(&dyn_arrays)?);
+        let array: Arc<dyn Array> = Arc::from(concat::concatenate(&dyn_arrays)?);
         Ok(array.into())
     }
 }

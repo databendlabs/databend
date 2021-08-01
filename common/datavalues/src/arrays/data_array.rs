@@ -10,14 +10,14 @@ use std::sync::Arc;
 use common_arrow::arrow::array as arrow_array;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::compute::aggregate;
+use common_arrow::arrow::trusted_len::TrustedLen;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::ArrayBuilder;
-use super::BooleanArrayBuilder;
 use crate::data_df_type::*;
 use crate::prelude::*;
+use crate::utils::CustomIterTools;
 use crate::DataType;
 use crate::DataValue;
 
@@ -73,9 +73,7 @@ impl<T> DataArray<T> {
     }
 
     pub fn get_array_memory_size(&self) -> usize {
-        // self.array.gs
-        // TODO:
-        return self.len() * 4;
+        aggregate::estimated_bytes_size(self.array.as_ref())
     }
 
     pub fn slice(&self, offset: usize, length: usize) -> Self {
@@ -115,7 +113,7 @@ impl<T> DataArray<T> {
 }
 
 impl<T> DataArray<T>
-    where T: DFDataType
+where T: DFDataType
 {
     pub fn name(&self) -> String {
         format!("DataArray<{:?}>", T::data_type())
@@ -175,10 +173,10 @@ impl<T> DataArray<T>
 
             DataType::Struct(_) => {
                 let struct_array = &*(arr as *const dyn Array as *const StructArray);
-                let nested_array = Arc::new(struct_array.values()[index].clone());
-                let series = nested_array.clone().into_series();
+                let nested_array = struct_array.values()[index].clone();
+                let series = nested_array.into_series();
 
-                let scalar_vec = (0..nested_array.len())
+                let scalar_vec = (0..series.len())
                     .map(|i| series.try_get(i))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(DataValue::Struct(scalar_vec))
@@ -193,7 +191,7 @@ impl<T> DataArray<T>
 }
 
 impl<T> DataArray<T>
-    where T: DFPrimitiveType
+where T: DFPrimitiveType
 {
     /// Create a new DataArray by taking ownership of the AlignedVec. This operation is zero copy.
     pub fn new_from_aligned_vec(values: AlignedVec<T::Native>) -> Self {
@@ -216,19 +214,22 @@ impl<T> DataArray<T>
 
     pub fn data_views(
         &self,
-    ) -> impl Iterator<Item=&T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
+    ) -> impl Iterator<Item = &T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
     {
         self.downcast_ref().values().as_slice().iter()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter(
         &self,
-    ) -> impl Iterator<Item=T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
-    {
+    ) -> impl Iterator<Item = T::Native>
+           + '_
+           + Send
+           + Sync
+           + ExactSizeIterator
+           + DoubleEndedIterator
+           + TrustedLen {
         // .copied was significantly slower in benchmark, next call did not inline?
-        #[allow(clippy::map_clone)]
-            self.data_views().map(|v| *v)
+        self.data_views().copied().trust_my_length(self.len())
     }
 }
 
@@ -266,7 +267,7 @@ impl<T> Clone for DataArray<T> {
 }
 
 impl<T> std::fmt::Debug for DataArray<T>
-    where T: DFDataType
+where T: DFDataType
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DataArray<{:?}>", self.data_type())

@@ -90,7 +90,7 @@ where T: DFNumericType
         S: DFNumericType,
     {
         let mut av = AlignedVec::<S::Native>::with_capacity(self.len());
-        unsafe { av.set_len(av.capacity()) }
+        unsafe { av.set_len(self.len()) }
 
         let values = self.as_ref().values();
         av.as_mut_slice()
@@ -101,7 +101,7 @@ where T: DFNumericType
             });
 
         let (_, validity) = self.null_bits();
-        let array = Arc::new(to_primitive::<T>(av, validity.clone())) as ArrayRef;
+        let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
         array.into()
     }
 
@@ -111,7 +111,7 @@ where T: DFNumericType
         S: DFNumericType,
     {
         let mut av = AlignedVec::<S::Native>::with_capacity(self.len());
-        unsafe { av.set_len(av.capacity()) }
+        unsafe { av.set_len(self.len()) }
 
         let array = self.downcast_ref();
         let (_, validity) = self.null_bits();
@@ -123,14 +123,14 @@ where T: DFNumericType
                 *num = f(Some(*n));
             });
 
-        let array = Arc::new(to_primitive::<T>(av, validity.clone())) as ArrayRef;
+        let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
         array.into()
     }
 
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(T::Native) -> T::Native + Copy {
         let mut av = AlignedVec::<T::Native>::with_capacity(self.len());
-        unsafe { av.set_len(av.capacity()) }
+        unsafe { av.set_len(self.len()) }
 
         let values = self.as_ref().values();
         av.as_mut_slice()
@@ -151,7 +151,7 @@ where T: DFNumericType
             let ca: NoNull<_> = self.into_no_null_iter().enumerate().map(f).collect();
             ca.into_inner()
         } else {
-            self.downcast_iter()
+            self.into_iter()
                 .enumerate()
                 .map(|(idx, opt_v)| opt_v.map(|v| f((idx, v))))
                 .collect()
@@ -160,7 +160,7 @@ where T: DFNumericType
 
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
     where F: Fn((usize, Option<T::Native>)) -> Option<T::Native> + Copy {
-        self.downcast_iter().enumerate().map(f).collect()
+        self.into_iter().enumerate().map(f).collect()
     }
 }
 
@@ -176,8 +176,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
                 .collect();
 
             let (_, validity) = self.null_bits();
-            let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
-            array.into()
+            Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef
         })
     }
 

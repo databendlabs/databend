@@ -5,12 +5,14 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::TimeUnit as ArrowTimeUnit;
 use common_arrow::arrow::datatypes::IntervalUnit as ArrowIntervalUnit;
+use common_arrow::arrow::datatypes::TimeUnit as ArrowTimeUnit;
 
 use crate::DataField;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub enum DataType {
     Null,
     Boolean,
@@ -38,7 +40,9 @@ pub enum DataType {
     Binary,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub enum TimeUnit {
     /// Time in seconds.
     Second,
@@ -52,17 +56,18 @@ pub enum TimeUnit {
 
 impl TimeUnit {
     pub fn to_arrow(&self) -> ArrowTimeUnit {
-         unsafe {std::mem::transmute(self.clone())}
+        unsafe { std::mem::transmute(self.clone()) }
     }
 
-    pub fn from_arrow(iu : &ArrowTimeUnit) -> Self {
-        unsafe {std::mem::transmute(iu.clone())}
+    pub fn from_arrow(iu: &ArrowTimeUnit) -> Self {
+        unsafe { std::mem::transmute(iu.clone()) }
     }
 }
 
-
 /// YEAR_MONTH or DAY_TIME interval in SQL style.
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub enum IntervalUnit {
     /// Indicates the number of elapsed whole months, stored as 4-byte integers.
     YearMonth,
@@ -73,15 +78,13 @@ pub enum IntervalUnit {
 
 impl IntervalUnit {
     pub fn to_arrow(&self) -> ArrowIntervalUnit {
-        unsafe {std::mem::transmute(self.clone())}
+        unsafe { std::mem::transmute(self.clone()) }
     }
 
-    pub fn from_arrow(iu : &ArrowIntervalUnit) -> Self {
-        unsafe {std::mem::transmute(iu.clone())}
+    pub fn from_arrow(iu: &ArrowIntervalUnit) -> Self {
+        unsafe { std::mem::transmute(iu.clone()) }
     }
 }
-
-
 
 impl DataType {
     pub fn to_arrow(&self) -> ArrowDataType {
@@ -136,7 +139,7 @@ impl From<&ArrowDataType> for DataType {
             ArrowDataType::Boolean => DataType::Boolean,
             ArrowDataType::Float32 => DataType::Float32,
             ArrowDataType::Float64 => DataType::Float64,
-            ArrowDataType::List(f) => {
+            ArrowDataType::List(f) | ArrowDataType::LargeList(f) => {
                 let f: DataField = (f.as_ref()).into();
                 DataType::List(Box::new(f))
             }
@@ -147,15 +150,15 @@ impl From<&ArrowDataType> for DataType {
                 DataType::Timestamp(TimeUnit::from_arrow(tu), f.clone())
             }
 
-            ArrowDataType::Interval(fu) => {
-                DataType::Interval(IntervalUnit::from_arrow(fu))
-            }
+            ArrowDataType::Interval(fu) => DataType::Interval(IntervalUnit::from_arrow(fu)),
 
-            ArrowDataType::Utf8 => DataType::Utf8,
-            ArrowDataType::Binary => DataType::Binary,
+            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::Utf8,
+            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::Binary,
 
             // this is safe, because we define the datatype firstly
-            _ => unimplemented!(),
+            _ => {
+                unimplemented!()
+            }
         }
     }
 }

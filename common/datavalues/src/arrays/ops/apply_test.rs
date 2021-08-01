@@ -5,7 +5,9 @@
 use std::borrow::Cow;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::compute::arithmetics;
+use common_arrow::arrow::compute::arithmetics::basic::add;
+use common_arrow::arrow::compute::boolean::and;
+use common_arrow::arrow::compute::boolean::or;
 use common_exception::Result;
 
 use crate::arrays::ops::apply::ArrayApply;
@@ -17,7 +19,7 @@ use crate::DFUtf8Array;
 use crate::UInt16Type;
 
 fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Type> {
-    let mut builder = PrimitiveArrayBuilder::<UInt16Type>::new(cap);
+    let mut builder = PrimitiveArrayBuilder::<UInt16Type>::with_capacity(cap);
 
     (begin..end).for_each(|index| {
         if index % 3 == 0 {
@@ -102,7 +104,6 @@ fn test_array_apply() -> Result<()> {
     assert_eq!(22, values[2].value(2));
     assert_eq!(0, values[2].value(3));
     assert_eq!(24, values[2].value(4));
-
     assert_eq!(2, values[3].null_count());
     assert_eq!(true, values[3].is_null(0));
     assert_eq!(31, values[3].value(1));
@@ -128,8 +129,8 @@ fn test_array_apply_kernel() -> Result<()> {
     let array2 = new_test_uint16_array(5, 5, 10);
 
     let arrays = vec![
-        array1.apply_kernel(|arr| Arc::new(compute::add(arr, array2.as_ref()).unwrap())),
-        array1.apply_kernel_cast(|arr| Arc::new(compute::add(arr, array2.as_ref()).unwrap())),
+        array1.apply_kernel(|arr| Arc::new(add::add(arr, array2.as_ref()).unwrap())),
+        array1.apply_kernel_cast(|arr| Arc::new(add::add(arr, array2.as_ref()).unwrap())),
     ];
 
     let values = vec![arrays[0].downcast_ref(), arrays[1].downcast_ref()];
@@ -203,8 +204,8 @@ fn test_boolean_array_apply_kernel() -> Result<()> {
     let array2 = new_test_boolean_array(5, 5, 10);
 
     let arrays = vec![
-        array1.apply_kernel(|arr| Arc::new(compute::and(arr, array2.as_ref()).unwrap())),
-        array1.apply_kernel_cast(|arr| Arc::new(compute::or(arr, array2.as_ref()).unwrap())),
+        array1.apply_kernel(|arr| Arc::new(and(arr, array2.as_ref()).unwrap())),
+        array1.apply_kernel_cast(|arr| Arc::new(or(arr, array2.as_ref()).unwrap())),
     ];
 
     let values = vec![arrays[0].downcast_ref(), arrays[1].downcast_ref()];

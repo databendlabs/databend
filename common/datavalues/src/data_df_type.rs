@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use crate::arrays::DataArray;
-use crate::DataField;
-use crate::data_type::*;
-
 use common_arrow::arrow::types::NativeType;
+
+use crate::arrays::DataArray;
+use crate::data_type::*;
+use crate::DataField;
 
 pub trait DFDataType: Send + Sync {
     fn data_type() -> DataType;
@@ -157,7 +157,7 @@ impl_primitive!(Date64Type, i64);
 
 impl_primitive!(TimestampSecondType, i64);
 impl_primitive!(TimestampMillisecondType, i64);
-impl_primitive!(TimestampMicrosecondType, i32);
+impl_primitive!(TimestampMicrosecondType, i64);
 impl_primitive!(TimestampNanosecondType, i64);
 
 impl_primitive!(IntervalYearMonthType, i32);
@@ -193,9 +193,9 @@ impl_numeric!(TimestampNanosecondType, i64);
 impl_numeric!(IntervalYearMonthType, i32);
 impl_numeric!(IntervalDayTimeType, i64);
 
-pub trait  DFIntegerType: DFNumericType{}
+pub trait DFIntegerType: DFNumericType {}
 
-macro_rules! impl_integer{
+macro_rules! impl_integer {
     ($ca:ident, $native:ident) => {
         impl DFIntegerType for $ca {}
     };

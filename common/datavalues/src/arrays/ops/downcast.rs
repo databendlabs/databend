@@ -5,6 +5,8 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitmapIter;
+use common_arrow::arrow::bitmap::utils::ZipValidity;
 
 use crate::arrays::DataArray;
 use crate::prelude::*;
@@ -32,26 +34,15 @@ where T: DFPrimitiveType
         unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) }
     }
 
-    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<&T::Native>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ T::Native, std::slice::Iter<'_, T::Native>> {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) };
         arr.iter()
     }
 
-
-    // pub fn downcast_iter(
-    //     &self,
-    // ) -> impl Iterator<Item = &PrimitiveArray<T::Native>> + DoubleEndedIterator {
-    //     self.chunks.iter().map(|arr| {
-    //         // Safety:
-    //         // This should be the array type in PolarsNumericType
-    //         let arr = &**arr;
-    //         unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) }
-    //     })
-    // }
-
     pub fn collect_values(&self) -> Vec<Option<T::Native>> {
-        self.downcast_iter().collect()
+        let e = self.downcast_iter().map(|c| c.copied());
+        e.collect()
     }
 
     pub fn from_arrow_array(array: PrimitiveArray<T::Native>) -> Self {
@@ -72,7 +63,7 @@ impl DFBooleanArray {
         unsafe { &*(arr as *const dyn Array as *const BooleanArray) }
     }
 
-    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<bool>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> ZipValidity<'_, bool, BitmapIter<'_>> {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const BooleanArray) };
         arr.iter()
@@ -100,13 +91,13 @@ impl DFUtf8Array {
         unsafe { &*(arr as *const dyn Array as *const LargeUtf8Array) }
     }
 
-    pub fn downcast_iter<'a>(&self) -> impl Iterator<Item = Option<&'a str>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ str, Utf8ValuesIter<'_, i64>> {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const LargeUtf8Array) };
         arr.iter()
     }
 
-    pub fn collect_values<'a>(&self) -> Vec<Option<&'a str>> {
+    pub fn collect_values(&self) -> Vec<Option<&'_ str>> {
         self.downcast_iter().collect()
     }
 
@@ -132,9 +123,12 @@ impl DFListArray {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const LargeListArray) };
 
-        arr.iter().map(|a| a.map(|a|  {
-            let c = Arc::from(a);
-        }))
+        arr.iter().map(|a| {
+            a.map(|b| {
+                let c: ArrayRef = Arc::from(b);
+                c.into_series()
+            })
+        })
     }
 
     pub fn from_arrow_array(array: LargeListArray) -> Self {
@@ -153,6 +147,11 @@ impl DFBinaryArray {
     pub fn downcast_ref(&self) -> &LargeBinaryArray {
         let arr = &*self.array;
         unsafe { &*(arr as *const dyn Array as *const LargeBinaryArray) }
+    }
+
+    pub fn collect_values(&self) -> Vec<Option<Vec<u8>>> {
+        let e = self.downcast_ref().iter().map(|c| c.map(|d| d.to_owned()));
+        e.collect()
     }
 
     pub fn from_arrow_array(array: LargeBinaryArray) -> Self {

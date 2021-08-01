@@ -8,10 +8,11 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow;
-use common_arrow::arrow::array::BooleanArray;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
+use common_datavalues::prelude::*;
+use common_datavalues::DFBooleanArray;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
@@ -53,9 +54,11 @@ impl LimitByStream {
             }
         }
 
-        let filter_array = BooleanArray::from(filter_vec);
+        let filter_array = DFBooleanArray::new_from_slice(&filter_vec);
+
         let batch = block.clone().try_into()?;
-        let batch = arrow::compute::filter_record_batch(&batch, &filter_array)?;
+        let batch =
+            arrow::compute::filter::filter_record_batch(&batch, filter_array.downcast_ref())?;
         Some(batch.try_into()).transpose()
     }
 }

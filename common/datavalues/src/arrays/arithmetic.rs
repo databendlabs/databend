@@ -16,64 +16,15 @@ use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute::arithmetics::basic;
 use common_arrow::arrow::compute::arithmetics::negate;
-
 use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::Num;
-use num::NumCast;
-use num::One;
 use num::ToPrimitive;
-use num::Zero;
 
 use crate::arrays::ops::*;
 use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::*;
-
-macro_rules! apply_operand_on_array_by_iter {
-
-    ($self:ident, $rhs:ident, $operand:tt) => {
-            {
-                match ($self.null_count(), $rhs.null_count()) {
-                    (0, 0) => {
-                        let a: NoNull<DataArray<_>> = $self
-                        .into_no_null_iter()
-                        .zip($rhs.into_no_null_iter())
-                        .map(|(left, right)| left $operand right)
-                        .collect();
-                        a.into_inner()
-                    },
-                    (0, _) => {
-                        $self
-                        .into_no_null_iter()
-                        .zip($rhs.downcast_iter())
-                        .map(|(left, opt_right)| opt_right.map(|right| left $operand right))
-                        .collect()
-                    },
-                    (_, 0) => {
-                        $self
-                        .downcast_iter()
-                        .zip($rhs.into_no_null_iter())
-                        .map(|(opt_left, right)| opt_left.map(|left| left $operand right))
-                        .collect()
-                    },
-                    (_, _) => {
-                    $self.downcast_iter()
-                        .zip($rhs.downcast_iter())
-                        .map(|(opt_left, opt_right)| match (opt_left, opt_right) {
-                            (None, None) => None,
-                            (None, Some(_)) => None,
-                            (Some(_), None) => None,
-                            (Some(left), Some(right)) => Some(left $operand right),
-                        })
-                        .collect()
-
-                    }
-                }
-            }
-    }
-}
 
 fn arithmetic_helper<T, Kernel, F>(
     lhs: &DataArray<T>,
@@ -167,7 +118,7 @@ where
     type Output = Result<DataArray<T>>;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, basic::mul::mul,|lhs, rhs| lhs * rhs)
+        arithmetic_helper(self, rhs, basic::mul::mul, |lhs, rhs| lhs * rhs)
     }
 }
 
@@ -185,7 +136,7 @@ where
     type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, basic::div::div,  |lhs, rhs| lhs / rhs)
+        arithmetic_helper(self, rhs, basic::div::div, |lhs, rhs| lhs / rhs)
     }
 }
 
@@ -307,8 +258,8 @@ impl Add for &DFUtf8Array {
 
         // todo! add no_null variants. Need 4 paths.
         Ok(self
-            .into_iter()
-            .zip(rhs.into_iter())
+            .downcast_iter()
+            .zip(rhs.downcast_iter())
             .map(|(opt_l, opt_r)| match (opt_l, opt_r) {
                 (Some(l), Some(r)) => Some(concat_strings(l, r)),
                 _ => None,
@@ -335,7 +286,7 @@ impl Add<&str> for &DFUtf8Array {
                 .map(|l| concat_strings(l, rhs))
                 .collect(),
             _ => self
-                .into_iter()
+                .downcast_iter()
                 .map(|opt_l| opt_l.map(|l| concat_strings(l, rhs)))
                 .collect(),
         })
