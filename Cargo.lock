@@ -864,6 +864,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-stoppable"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-exception",
+ "common-runtime",
+ "common-tracing",
+ "ctrlc",
+ "futures",
+]
+
+[[package]]
 name = "common-store-api"
 version = "0.1.0"
 dependencies = [

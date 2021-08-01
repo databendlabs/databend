@@ -219,6 +219,16 @@ build_exceptions! {
     UnknownKey(6000),
 
 }
+// General errors
+build_exceptions! {
+
+    // A task that already stopped and can not stop twice.
+    AlreadyStarted(7101),
+
+    // A task that already started and can not start twice.
+    AlreadyStopped(7102),
+
+}
 
 pub type Result<T> = std::result::Result<T, ErrorCode>;
 
