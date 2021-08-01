@@ -47,11 +47,15 @@ impl Processor {
     }
 
     pub fn process_run(&mut self) -> Result<()> {
+        let hist_path = format!("{}/history.txt", self.env.conf.datafuse_dir.clone());
+        let _ = self.readline.load_history(hist_path.as_str());
+
         loop {
             let writer = Writer::create();
             let readline = self.readline.readline(self.env.prompt.as_str());
             match readline {
                 Ok(line) => {
+                    self.readline.history_mut().add(line.clone());
                     self.processor_line(writer, line)?;
                 }
                 Err(ReadlineError::Interrupted) => {
@@ -68,6 +72,7 @@ impl Processor {
                 }
             }
         }
+        self.readline.save_history(hist_path.as_str()).unwrap();
         Ok(())
     }
 
