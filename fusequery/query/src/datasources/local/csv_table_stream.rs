@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fs::File;
 use std::sync::Arc;
 use std::task::Poll;
 
-use common_arrow::arrow::csv;
+use common_arrow::arrow::io::csv::read;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -41,23 +42,27 @@ impl CsvTableStream {
         let names: Vec<_> = part.name.split('-').collect();
         let begin: usize = names[1].parse()?;
         let end: usize = names[2].parse()?;
-        let bounds = Some((begin, end));
         let block_size = end - begin;
 
-        let file = File::open(self.file.clone())?;
         let arrow_schema = Arc::new(self.schema.to_arrow());
-        let mut reader: csv::Reader<File> =
-            csv::Reader::new(file, arrow_schema, false, None, block_size, bounds, None);
+        let mut reader = read::ReaderBuilder::new()
+            .from_path(&self.file)
+            .map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
 
-        reader
-            .next()
-            .map(|record| {
-                record
-                    .map_err(ErrorCode::from)
-                    .and_then(|record| record.try_into())
-            })
-            .map(|data_block| data_block.map(Some))
-            .unwrap_or_else(|| Ok(None))
+        let mut rows = vec![read::ByteRecord::default(); block_size];
+        let rows_read = read::read_rows(&mut reader, begin, &mut rows)?;
+        let rows = &rows[..rows_read];
+
+        let record = read::deserialize_batch(
+            rows,
+            arrow_schema.fields(),
+            None,
+            0,
+            read::deserialize_column,
+        )?;
+
+        let block = DataBlock::try_from(record)?;
+        Ok(Some(block))
     }
 }
 

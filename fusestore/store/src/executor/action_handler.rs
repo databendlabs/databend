@@ -5,7 +5,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_arrow::parquet::arrow::ArrowReader;

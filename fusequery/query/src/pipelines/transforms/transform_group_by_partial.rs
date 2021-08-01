@@ -202,11 +202,11 @@ impl Processor for GroupByPartialTransform {
 
                 // Builders.
                 let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-                    .map(|_| BinaryArrayBuilder::new(groups.len() * 4))
+                    .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
                     .collect();
 
                 type KeyBuilder = $key_array_builder;
-                let mut group_key_builder = KeyBuilder::new(groups.len());
+                let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
 
                 let mut bytes = BytesMut::new();
                 for (key, (places, values)) in groups.iter() {
