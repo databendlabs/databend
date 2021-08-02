@@ -185,10 +185,7 @@ jobs:
       if: ${{  github.event.action == 'rerun_perf' }}
       run: |
         echo "bypass build ref image step"
-    - name: Delete all resources
-      if: always()
-      run: |
-        sccache --stop-server
+
     - name: Update status to failure
       if: failure()
       run: |
