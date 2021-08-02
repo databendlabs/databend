@@ -144,6 +144,7 @@ where
     }
 }
 
+#[inline]
 pub fn min_batch(column: &DataColumn) -> Result<DataValue> {
     if column.is_empty() {
         return Ok(DataValue::from(&column.data_type()));
@@ -154,6 +155,7 @@ pub fn min_batch(column: &DataColumn) -> Result<DataValue> {
     }
 }
 
+#[inline]
 pub fn max_batch(column: &DataColumn) -> Result<DataValue> {
     if column.is_empty() {
         return Ok(DataValue::from(&column.data_type()));

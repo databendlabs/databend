@@ -7,10 +7,10 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::datatypes::IntervalUnit;
 use common_exception::Result;
 
 use crate::arrays::*;
+use crate::prelude::*;
 use crate::series::wrap::SeriesWrap;
 use crate::series::*;
 use crate::*;

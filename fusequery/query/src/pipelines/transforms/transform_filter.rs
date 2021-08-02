@@ -94,7 +94,7 @@ impl Processor for FilterTransform {
             let filter_array = filter_array.bool()?.downcast_ref();
             // Convert to arrow record_batch
             let batch = block.try_into()?;
-            let batch = arrow::compute::filter_record_batch(&batch, filter_array)?;
+            let batch = arrow::compute::filter::filter_record_batch(&batch, filter_array)?;
 
             let delta = start.elapsed();
             tracing::debug!("Filter cost: {:?}", delta);

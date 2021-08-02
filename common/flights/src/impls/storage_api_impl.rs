@@ -5,12 +5,13 @@
 
 use std::convert::TryFrom;
 
+// io::ipc::write::common::{encoded_batch, DictionaryTracker, EncodedData, IpcWriteOptions}
 use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
-use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_arrow::arrow_flight::SchemaAsIpc;
 use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -81,7 +82,7 @@ impl StorageApi for StoreClient {
         let res_stream = res.map(move |item| {
             item.map_err(|status| ErrorCode::TokioError(status.to_string()))
                 .and_then(|item| {
-                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), &[])
+                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), true, &[])
                         .map_err(ErrorCode::from)
                 })
                 .and_then(DataBlock::try_from)
@@ -98,7 +99,8 @@ impl StorageApi for StoreClient {
     ) -> common_exception::Result<AppendResult> {
         let ipc_write_opt = IpcWriteOptions::default();
         let arrow_schema: ArrowSchemaRef = Arc::new(scheme_ref.to_arrow());
-        let flight_schema = SchemaAsIpc::new(arrow_schema.as_ref(), &ipc_write_opt).into();
+
+        let flight_schema = flight_data_from_arrow_schema(arrow_schema.as_ref(), &ipc_write_opt);
         let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
         tx.send(flight_schema)
             .await

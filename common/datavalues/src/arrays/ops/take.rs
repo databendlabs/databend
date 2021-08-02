@@ -10,8 +10,8 @@
 
 use std::fmt::Debug;
 
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::compute;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::compute::take;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -19,9 +19,9 @@ use super::TakeIdx;
 use crate::arrays::kernels::*;
 use crate::arrays::DataArray;
 use crate::prelude::*;
-use crate::utils::NoNull;
 use crate::*;
 
+// TODO add unchecked take
 pub trait ArrayTake: Debug {
     /// Take values from DataArray by index.
     ///
@@ -51,14 +51,6 @@ pub trait ArrayTake: Debug {
             "Unsupported take operation for {:?}",
             self,
         )))
-    }
-}
-
-/// Traverse and collect every nth element
-pub trait ArrayTakeEvery<T>: Debug {
-    /// Traverse and collect every nth element in a new array.
-    fn take_every(&self, _n: usize) -> DataArray<T> {
-        unimplemented!()
     }
 }
 
@@ -95,38 +87,23 @@ where T: DFNumericType
                 if self.is_empty() {
                     return Ok(Self::full_null(array.len()));
                 }
-
-                // take(chunks.next(), array, None),
-                match self.null_count() {
-                    0 => Ok(Self::from(
-                        take_no_null_primitive(primitive_array, array) as ArrayRef
-                    )),
-                    _ => {
-                        let taked_array = compute::take(self.array.as_ref(), array, None)?;
-                        Ok(Self::from(taked_array))
-                    }
-                }
+                let taked_array = take::take(self.array.as_ref(), array)?;
+                Ok(Self::from(taked_array))
             }
             TakeIdx::Iter(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = match self.null_count() {
-                    0 => take_no_null_primitive_iter_unchecked(primitive_array, iter) as ArrayRef,
-                    _ => take_primitive_iter_unchecked(primitive_array, iter) as ArrayRef,
-                };
+                let array =
+                    take_primitive_iter_unchecked::<T, _>(primitive_array, iter) as ArrayRef;
                 Ok(Self::from(array))
             }
             TakeIdx::IterNulls(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = match self.null_count() {
-                    0 => {
-                        take_no_null_primitive_opt_iter_unchecked(primitive_array, iter) as ArrayRef
-                    }
-                    _ => take_primitive_opt_iter_unchecked(primitive_array, iter) as ArrayRef,
-                };
+                let array =
+                    take_primitive_opt_iter_unchecked::<T, _>(primitive_array, iter) as ArrayRef;
                 Ok(Self::from(array))
             }
         }
@@ -138,29 +115,7 @@ where T: DFNumericType
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let primitive_array = self.downcast_ref();
-        match indices {
-            TakeIdx::Array(array) => {
-                if self.is_empty() {
-                    return Ok(Self::full_null(array.len()));
-                }
-                let array = compute::take(array, array, None)?;
-                Ok(Self::from(array))
-            }
-            TakeIdx::Iter(iter) => {
-                if self.is_empty() {
-                    return Ok(Self::full_null(iter.size_hint().0));
-                }
-                let array = match self.null_count() {
-                    0 => take_no_null_primitive_iter(primitive_array, iter) as ArrayRef,
-                    _ => take_primitive_iter(primitive_array, iter) as ArrayRef,
-                };
-                Ok(Self::from(array))
-            }
-            TakeIdx::IterNulls(_) => {
-                panic!("not supported in take, only supported in take_unchecked for the join operation")
-            }
-        }
+        unsafe { self.take_unchecked(indices) }
     }
 }
 
@@ -177,27 +132,21 @@ impl ArrayTake for DFBooleanArray {
                 if self.is_empty() {
                     return Ok(Self::full_null(array.len()));
                 }
-                let array = compute::take(array, array, None)?;
+                let array = take::take(array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = match self.null_count() {
-                    0 => take_no_null_bool_iter_unchecked(boolean_array, iter) as ArrayRef,
-                    _ => take_bool_iter_unchecked(boolean_array, iter) as ArrayRef,
-                };
+                let array = take_bool_iter_unchecked(boolean_array, iter) as ArrayRef;
                 Ok(Self::from(array))
             }
             TakeIdx::IterNulls(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = match self.null_count() {
-                    0 => take_no_null_bool_opt_iter_unchecked(boolean_array, iter) as ArrayRef,
-                    _ => take_bool_opt_iter_unchecked(boolean_array, iter) as ArrayRef,
-                };
+                let array = take_bool_opt_iter_unchecked(boolean_array, iter) as ArrayRef;
                 Ok(Self::from(array))
             }
         }
@@ -209,29 +158,7 @@ impl ArrayTake for DFBooleanArray {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let boolean_array = self.downcast_ref();
-        match indices {
-            TakeIdx::Array(array) => {
-                if self.is_empty() {
-                    return Ok(Self::full_null(array.len()));
-                }
-                let array = compute::take(boolean_array, array, None)?;
-                Ok(Self::from(array))
-            }
-            TakeIdx::Iter(iter) => {
-                if self.is_empty() {
-                    return Ok(Self::full_null(iter.size_hint().0));
-                }
-                let array = match self.null_count() {
-                    0 => take_no_null_bool_iter(boolean_array, iter) as ArrayRef,
-                    _ => take_bool_iter(boolean_array, iter) as ArrayRef,
-                };
-                Ok(Self::from(array))
-            }
-            TakeIdx::IterNulls(_) => {
-                panic!("not supported in take, only supported in take_unchecked for the join operation")
-            }
-        }
+        unsafe { self.take_unchecked(indices) }
     }
 }
 
@@ -245,27 +172,21 @@ impl ArrayTake for DFUtf8Array {
         let str_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
-                let array = compute::take(str_array, array, None)?;
+                let array = take::take(str_array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = match self.null_count() {
-                    0 => take_no_null_utf8_iter_unchecked(str_array, iter) as ArrayRef,
-                    _ => take_utf8_iter_unchecked(str_array, iter) as ArrayRef,
-                };
+                let array = take_utf8_iter_unchecked(str_array, iter) as ArrayRef;
                 Ok(Self::from(array))
             }
             TakeIdx::IterNulls(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = match self.null_count() {
-                    0 => take_no_null_utf8_opt_iter_unchecked(str_array, iter) as ArrayRef,
-                    _ => take_utf8_opt_iter_unchecked(str_array, iter) as ArrayRef,
-                };
+                let array = take_utf8_opt_iter_unchecked(str_array, iter) as ArrayRef;
                 Ok(Self::from(array))
             }
         }
@@ -277,26 +198,7 @@ impl ArrayTake for DFUtf8Array {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let str_array = self.downcast_ref();
-        match indices {
-            TakeIdx::Array(array) => {
-                let array = compute::take(str_array, array, None)?;
-                Ok(Self::from(array))
-            }
-            TakeIdx::Iter(iter) => {
-                if self.is_empty() {
-                    return Ok(Self::full_null(iter.size_hint().0));
-                }
-                let array = match self.null_count() {
-                    0 => take_no_null_utf8_iter(str_array, iter) as ArrayRef,
-                    _ => take_utf8_iter(str_array, iter) as ArrayRef,
-                };
-                Ok(Self::from(array))
-            }
-            TakeIdx::IterNulls(_) => {
-                panic!("not supported in take, only supported in take_unchecked for the join operation")
-            }
-        }
+        unsafe { self.take_unchecked(indices) }
     }
 }
 
@@ -319,7 +221,7 @@ impl ArrayTake for DFListArray {
         let list_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
-                let array = compute::take(list_array, array, None)?;
+                let array = take::take(list_array, array)?;
                 Ok(Self::from(array))
             }
             TakeIdx::Iter(iter) => {
@@ -354,50 +256,3 @@ pub trait AsTakeIndex {
 
     fn take_index_len(&self) -> usize;
 }
-
-impl<T> ArrayTakeEvery<T> for DataArray<T>
-where T: DFNumericType
-{
-    fn take_every(&self, n: usize) -> DataArray<T> {
-        if self.null_count() == 0 {
-            let a: NoNull<_> = self.into_no_null_iter().step_by(n).collect();
-            a.into_inner()
-        } else {
-            self.downcast_iter().step_by(n).collect()
-        }
-    }
-}
-
-impl ArrayTakeEvery<BooleanType> for DFBooleanArray {
-    fn take_every(&self, n: usize) -> DFBooleanArray {
-        if self.null_count() == 0 {
-            self.into_no_null_iter().step_by(n).collect()
-        } else {
-            self.downcast_iter().step_by(n).collect()
-        }
-    }
-}
-
-impl ArrayTakeEvery<Utf8Type> for DFUtf8Array {
-    fn take_every(&self, n: usize) -> DFUtf8Array {
-        if self.null_count() == 0 {
-            self.into_no_null_iter().step_by(n).collect()
-        } else {
-            self.downcast_iter().step_by(n).collect()
-        }
-    }
-}
-
-impl ArrayTakeEvery<ListType> for DFListArray {
-    fn take_every(&self, n: usize) -> DFListArray {
-        if self.null_count() == 0 {
-            self.into_no_null_iter().step_by(n).collect()
-        } else {
-            self.downcast_iter().step_by(n).collect()
-        }
-    }
-}
-
-impl ArrayTakeEvery<NullType> for DFNullArray {}
-impl ArrayTakeEvery<StructType> for DFStructArray {}
-impl ArrayTakeEvery<BinaryType> for DFBinaryArray {}

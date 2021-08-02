@@ -8,7 +8,6 @@ use std::usize;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::AlignedVec;
 use common_datavalues::DFUInt64Array;
 use common_exception::Result;
 use common_streams::ProgressStream;
@@ -40,6 +39,7 @@ impl NumbersStream {
         ProgressStream::try_create(stream, ctx.progress_callback()?)
     }
 
+    #[inline]
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if (self.block_index as usize) == self.blocks.len() {
             let partitions = self.ctx.try_get_partitions(1)?;
@@ -87,12 +87,18 @@ impl NumbersStream {
         Ok(if current.begin == current.end {
             None
         } else {
-            let mut av =
-                AlignedVec::with_capacity_len_aligned((current.end - current.begin) as usize);
+            let size = (current.end - current.begin) as usize;
+            let mut av = AlignedVec::with_capacity(size);
 
-            av.iter_mut().enumerate().for_each(|(idx, num)| {
-                *num = current.begin + idx as u64;
-            });
+            unsafe { av.set_len(size) };
+
+            av.as_mut_slice()
+                .iter_mut()
+                .enumerate()
+                .for_each(|(idx, num)| {
+                    *num = current.begin + idx as u64;
+                });
+
             let series = DFUInt64Array::new_from_aligned_vec(av).into_series();
             let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
             Some(block)
