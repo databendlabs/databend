@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::broadcast;
 use common_runtime::tokio::sync::oneshot;
 use common_runtime::tokio::sync::oneshot::error::TryRecvError;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
-use common_exception::Result;
 
 use crate::stop_handle::StopHandle;
 use crate::Stoppable;

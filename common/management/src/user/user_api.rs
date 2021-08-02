@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
-use async_trait::async_trait;
-use common_exception::{Result, ErrorCode};
-use common_metatypes::SeqValue;
 use std::convert::TryFrom;
+
+use async_trait::async_trait;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct UserInfo {
@@ -48,11 +50,11 @@ pub trait UserMgrApi {
         new_salt: Option<V>,
         seq: Option<u64>,
     ) -> Result<Option<u64>>
-        where
-            V: AsRef<str> + Sync + Send;
+    where
+        V: AsRef<str> + Sync + Send;
 
     async fn drop_user<V>(&mut self, username: V, seq: Option<u64>) -> Result<()>
-        where V: AsRef<str> + Send;
+    where V: AsRef<str> + Send;
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {
@@ -64,7 +66,7 @@ impl TryFrom<Vec<u8>> for UserInfo {
             Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
                 "Cannot deserialize user info from bytes. cause {}",
                 serialize_error
-            )))
+            ))),
         }
     }
 }

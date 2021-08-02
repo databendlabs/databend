@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::result::Result;
+
+use crate::ConflictSeq;
 use crate::MatchSeq;
 use crate::MatchSeqExt;
-use crate::ConflictSeq;
 use crate::SeqValue;
-use std::result::Result;
 
 #[test]
 fn test_match_seq_match_seq_value() -> Result<(), ()> {

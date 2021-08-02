@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+use std::convert::TryInto;
+
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -12,7 +14,6 @@ use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_store_api::KVApi;
 use sha2::Digest;
-use std::convert::TryInto;
 
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
@@ -84,7 +85,10 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok((seq_value.0, seq_value.1.try_into()?)),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("username: {}", username.as_ref())))
+            Err(_) => Err(ErrorCode::UnknownUser(format!(
+                "username: {}",
+                username.as_ref()
+            ))),
         }
     }
 

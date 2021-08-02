@@ -6,6 +6,7 @@ use std::convert::TryInto;
 use std::io::Cursor;
 
 use common_arrow::arrow_flight::Action;
+use common_exception::ErrorCode;
 use prost::Message;
 use tonic::Request;
 
@@ -24,7 +25,6 @@ use crate::impls::meta_api_impl::GetTableAction;
 use crate::impls::storage_api_impl::ReadPlanAction;
 use crate::impls::storage_api_impl::TruncateTableAction;
 use crate::protobuf::FlightStoreRequest;
-use common_exception::ErrorCode;
 
 pub trait RequestFor {
     type Reply;
