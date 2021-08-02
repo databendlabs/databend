@@ -9,8 +9,8 @@ use criterion::Criterion;
 use fuse_query::interpreters::SelectInterpreter;
 use fuse_query::sessions::SessionManager;
 use fuse_query::sql::PlanParser;
-use futures::StreamExt;
 use fuse_query::tests::with_max_connections_sessions;
+use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;

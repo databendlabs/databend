@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::cluster::ClusterExecutor;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::BroadcastPlan;
@@ -36,7 +37,6 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
-use common_management::cluster::ClusterExecutor;
 use crate::datasources::TablePtr;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;

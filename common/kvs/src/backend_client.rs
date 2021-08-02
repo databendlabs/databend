@@ -10,11 +10,11 @@ use crate::backends::HttpBackend;
 use crate::backends::LocalBackend;
 use crate::backends::StoreBackend;
 
-pub struct BackendClient {
+pub struct MetadataProvider {
     backend: Box<dyn Backend>,
 }
 
-impl BackendClient {
+impl MetadataProvider {
     pub fn create(uri: String) -> Self {
         let uri = Url::parse(uri.as_str()).unwrap();
 
@@ -37,7 +37,7 @@ impl BackendClient {
             _ => Box::new(StoreBackend::create(new_address)),
         };
 
-        BackendClient { backend }
+        MetadataProvider { backend }
     }
 
     pub async fn get<T>(&self, key: String) -> Result<Option<T>>

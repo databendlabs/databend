@@ -5,8 +5,10 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCode};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_infallible::RwLock;
+use common_management::cluster::ClusterExecutor;
 use common_progress::Progress;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
@@ -16,7 +18,6 @@ use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
 use crate::sessions::Session;
 use crate::sessions::Settings;
-use common_management::cluster::ClusterExecutor;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -85,7 +86,8 @@ impl FuseQueryContextShared {
         }
 
         Err(ErrorCode::UnknownQueryClusterNode(format!(
-            "Unknown FuseQuery node name {}", name
+            "Unknown FuseQuery node name {}",
+            name
         )))
     }
 

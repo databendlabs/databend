@@ -12,12 +12,12 @@ use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
-use crate::interpreters::plan_scheduler::PlanScheduler;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,

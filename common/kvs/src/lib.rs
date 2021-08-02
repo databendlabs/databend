@@ -9,4 +9,4 @@ mod backend_client_test;
 mod backend_client;
 
 pub mod backends;
-pub use backend_client::BackendClient;
+pub use backend_client::MetadataProvider;

@@ -4,12 +4,14 @@
 
 use std::num::NonZeroI32;
 
-use warp::{Filter, Reply, Rejection};
+use common_exception::Result;
+use warp::Filter;
+use warp::Rejection;
+use warp::Reply;
 
 use crate::api::http::debug::pprof::pprof_handler;
 use crate::configs::Config;
 use crate::sessions::SessionManagerRef;
-use common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct PProfRequest {
@@ -37,7 +39,7 @@ impl DebugRouter {
         DebugRouter { sessions }
     }
 
-    pub fn build(&self) -> Result<impl Filter<Extract=impl Reply, Error=Rejection> + Clone> {
+    pub fn build(&self) -> Result<impl Filter<Extract = impl Reply, Error = Rejection> + Clone> {
         let cfg = self.sessions.get_conf();
         Ok(warp::path!("v1" / "configs").map(move || format!("{:?}", cfg)))
     }

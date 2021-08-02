@@ -12,17 +12,19 @@ use std::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_management::cluster::ClusterExecutor;
+use common_management::cluster::ClusterManager;
+use common_management::cluster::ClusterManagerRef;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::future::Either;
 use metrics::counter;
 
-use crate::datasources::DataSource;
-use crate::configs::{Config, ConfigExtractor};
+use crate::configs::Config;
+use crate::configs::ConfigExtractor;
 use crate::datasources::DatabaseCatalog;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use common_management::cluster::{ClusterExecutor, ClusterManagerRef, ClusterManager};
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
@@ -39,7 +41,7 @@ impl SessionManager {
     pub fn from_conf(conf: Config) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
-            conf,
+            conf: conf.clone(),
             max_sessions: max_active_sessions,
             datasource: Arc::new(DatabaseCatalog::try_create()?),
             cluster_manager: ClusterManager::from_conf(conf.extract_cluster()),

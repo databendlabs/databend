@@ -71,7 +71,6 @@ const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 // Cluster.
 const CLUSTER_NAMESPACE: &str = "CLUSTER_NAMESPACE";
 const CLUSTER_REGISTRY_URI: &str = "CLUSTER_REGISTRY_URI";
-const CLUSTER_EXECUTOR_NAME: &str = "CLUSTER_EXECUTOR_NAME";
 const CLUSTER_EXECUTOR_PRIORITY: &str = "CLUSTER_EXECUTOR_PRIORITY";
 
 const TLS_SERVER_CERT: &str = "TLS_SERVER_CERT";
@@ -154,13 +153,10 @@ pub struct Config {
 
     // Namespace.
     #[structopt(long, env = CLUSTER_NAMESPACE, default_value = "namespace_", help = "Namespace of this executor\n")]
-    pub cluster_namespace: String,
+    pub namespace: String,
 
     #[structopt(long, env = CLUSTER_REGISTRY_URI, default_value = "http://127.0.0.1:8080", help = "Cluster registry center URI, 'http://':fuse-query, 'local://': local sled, 'store://': fuse-store\n")]
-    pub cluster_registry_uri: String,
-
-    #[structopt(long, env = CLUSTER_EXECUTOR_NAME, default_value = "executor_", help = "Executor unique name in the namespace\n")]
-    pub cluster_executor_name: String,
+    pub metadata_provider_uri: String,
 
     #[structopt(long, env = CLUSTER_EXECUTOR_PRIORITY, default_value = "0")]
     pub cluster_executor_priority: u8,
@@ -263,9 +259,8 @@ impl Config {
             store_api_password: Password {
                 store_api_password: "root".to_string(),
             },
-            cluster_namespace: "n1".to_string(),
-            cluster_registry_uri: "http://127.0.0.1:8080".to_string(),
-            cluster_executor_name: "".to_string(),
+            namespace: "n1".to_string(),
+            metadata_provider_uri: "http://127.0.0.1:8080".to_string(),
             cluster_executor_priority: 0,
             config_file: "".to_string(),
             tls_server_cert: "".to_string(),
@@ -331,21 +326,15 @@ impl Config {
         env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
 
         // Cluster.
-        env_helper!(mut_config, cluster_namespace, String, CLUSTER_NAMESPACE);
+        env_helper!(mut_config, namespace, String, CLUSTER_NAMESPACE);
         env_helper!(
             mut_config,
-            cluster_registry_uri,
+            metadata_provider_uri,
             String,
             CLUSTER_REGISTRY_URI
         );
 
         // Executor.
-        env_helper!(
-            mut_config,
-            cluster_executor_name,
-            String,
-            CLUSTER_EXECUTOR_NAME
-        );
         env_helper!(
             mut_config,
             cluster_executor_priority,
@@ -354,14 +343,5 @@ impl Config {
         );
 
         Ok(mut_config)
-    }
-
-    pub fn executor_from_config(&self) -> Result<ClusterExecutor> {
-        // Executor using Flight API.
-        ClusterExecutor::create(
-            self.cluster_executor_name.clone(),
-            self.cluster_executor_priority,
-            Address::create(self.flight_api_address.as_str())?,
-        )
     }
 }

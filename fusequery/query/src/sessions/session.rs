@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_management::cluster::ClusterExecutor;
 use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
@@ -19,7 +20,6 @@ use crate::sessions::FuseQueryContextRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
-use common_management::cluster::ClusterExecutor;
 
 pub(in crate::sessions) struct MutableStatus {
     pub(in crate::sessions) abort: bool,
@@ -143,8 +143,8 @@ impl Session {
     }
 
     pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
-        let cluster_manager = self.sessions.get_cluster_manager();
-        cluster_manager.get_executors_by_namespace("".to_string())
+        // self.sessions.get_cluster_manager().get_executors()
+        unimplemented!()
     }
 
     pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {

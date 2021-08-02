@@ -4,6 +4,7 @@
 
 use std::net::SocketAddr;
 
+use common_management::cluster::ClusterManager;
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use fuse_query::api::HttpService;
@@ -15,7 +16,6 @@ use fuse_query::servers::MySQLHandler;
 use fuse_query::servers::ShutdownHandle;
 use fuse_query::sessions::SessionManager;
 use log::info;
-use common_management::cluster::ClusterManager;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

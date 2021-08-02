@@ -1,8 +1,8 @@
-use warp::reply::Response;
 use common_exception::ErrorCode;
-use warp::hyper::Body;
-use warp::http::StatusCode;
 use serde::Serialize;
+use warp::http::StatusCode;
+use warp::hyper::Body;
+use warp::reply::Response;
 
 pub trait JSONResponseHelper {
     fn into_json_response(&self) -> Response;
@@ -16,7 +16,9 @@ pub trait StatusCodeResponseHelper {
     fn into_with_body_response(&self, body: String) -> Response;
 }
 
-impl<T> JSONResponseHelper for T where T: Serialize {
+impl<T> JSONResponseHelper for T
+where T: Serialize
+{
     fn into_json_response(&self) -> Response {
         match serde_json::to_vec(self).map_err(ErrorCode::from) {
             Err(error) => error.into_response(),

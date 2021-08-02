@@ -9,6 +9,7 @@ use common_planners::Expression;
 use common_runtime::tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+
 use crate::api::rpc::FuseQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;

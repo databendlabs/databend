@@ -12,6 +12,7 @@ use common_runtime::tokio::net::TcpListener;
 use common_runtime::tokio::sync::Notify;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
+
 use crate::api::rpc::FuseQueryFlightDispatcher;
 use crate::api::rpc::FuseQueryFlightService;
 use crate::servers::Server as FuseQueryServer;

@@ -1,9 +1,12 @@
-use crate::sessions::SessionManagerRef;
-use warp::Reply;
-use warp::reply::Response;
 use common_exception::Result;
-use crate::api::http::v1::responses::{ErrorCodeResponseHelper, StatusCodeResponseHelper};
 use warp::http::StatusCode;
+use warp::reply::Response;
+use warp::Reply;
+
+use crate::api::http::v1::action::Action;
+use crate::api::http::v1::responses::ErrorCodeResponseHelper;
+use crate::api::http::v1::responses::StatusCodeResponseHelper;
+use crate::sessions::SessionManagerRef;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct NodeIdentifier {
@@ -22,16 +25,19 @@ impl RemoveAction {
 
     fn unregister_cluster_executor(&self) -> Result<String> {
         self.sessions.unregister_executor()?;
-        Ok(String::from("Successfully unregistered the cluster executor."))
+        Ok(String::from(
+            "Successfully unregistered the cluster executor.",
+        ))
     }
 }
 
-impl Reply for RemoveAction {
-    fn into_response(self) -> Response {
-        match self.unregister_cluster_executor() {
-            Err(error) => error.into_response(),
-            Ok(message) => StatusCode::ACCEPTED.into_with_body_response(message),
-        }
+#[async_trait::async_trait]
+impl Action for RemoveAction {
+    async fn do_action_impl(self) -> Response {
+        unimplemented!()
+        // match self.unregister_cluster_executor() {
+        //     Err(error) => error.into_response(),
+        //     Ok(message) => StatusCode::ACCEPTED.into_with_body_response(message),
+        // }
     }
 }
-

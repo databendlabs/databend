@@ -1,9 +1,13 @@
-use crate::sessions::SessionManagerRef;
-use warp::Reply;
-use warp::reply::Response;
 use common_exception::Result;
-use crate::api::http::v1::responses::{ErrorCodeResponseHelper, StatusCodeResponseHelper};
+use common_management::cluster::ClusterExecutor;
 use warp::http::StatusCode;
+use warp::reply::Response;
+use warp::Reply;
+
+use crate::api::http::v1::action::Action;
+use crate::api::http::v1::responses::ErrorCodeResponseHelper;
+use crate::api::http::v1::responses::StatusCodeResponseHelper;
+use crate::sessions::SessionManagerRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct NodeInfo {}
@@ -20,16 +24,20 @@ impl CreateAction {
 
     fn register_cluster_executor(&self) -> Result<String> {
         self.sessions.register_executor()?;
-        Ok(String::from("Successfully registered the cluster executor."))
+        Ok(String::from(
+            "Successfully registered the cluster executor.",
+        ))
     }
 }
 
-impl Reply for CreateAction {
-    fn into_response(self) -> Response {
-        match self.register_cluster_executor() {
-            Err(error) => error.into_response(),
-            Ok(message) => StatusCode::CREATED.into_with_body_response(message),
-        }
+#[async_trait::async_trait]
+impl Action for CreateAction {
+    async fn do_action_impl(self) -> Response {
+        ClusterExecutor::create();
+        self.sessions.get_cluster_manager().add_node()
+        // match self.register_cluster_executor() {
+        //     Err(error) => error.into_response(),
+        //     Ok(message) => StatusCode::CREATED.into_with_body_response(message),
+        // }
     }
 }
-

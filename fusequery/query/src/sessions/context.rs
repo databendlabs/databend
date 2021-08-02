@@ -7,6 +7,7 @@ use std::future::Future;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
@@ -14,9 +15,9 @@ use common_exception::Result;
 use common_flights::Address;
 use common_flights::ConnectionFactory;
 use common_infallible::RwLock;
+use common_management::cluster::ClusterExecutor;
 use common_management::cluster::ClusterManager;
 use common_management::cluster::ClusterManagerRef;
-use common_management::cluster::ClusterExecutor;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -27,6 +28,7 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::api::FlightClient;
 use crate::catalog::utils::TableFunctionMeta;
 use crate::catalog::utils::TableMeta;
 use crate::configs::Config;
@@ -34,8 +36,6 @@ use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::ProcessInfo;
 use crate::sessions::Settings;
-use crate::api::FlightClient;
-use std::time::Duration;
 
 pub struct FuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,

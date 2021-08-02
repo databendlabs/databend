@@ -58,9 +58,8 @@ impl Server for HttpService {
         let router = Router::create(self.sessions.clone());
         let server = warp::serve(router.build()?);
 
-        let conf = self.cfg.clone();
-        let tls_cert = conf.tls_server_cert;
-        let tls_key = conf.tls_server_key;
+        let tls_key = self.sessions.get_conf().tls_server_key.clone();
+        let tls_cert = self.sessions.get_conf().tls_server_cert.clone();
 
         if !tls_cert.is_empty() && !tls_key.is_empty() {
             log::info!("Http API TLS enabled");

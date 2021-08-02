@@ -5,7 +5,7 @@
 use common_exception::Result;
 use common_runtime::tokio;
 
-use crate::BackendClient;
+use crate::MetadataProvider;
 
 #[tokio::test]
 async fn test_backend_client() -> Result<()> {
@@ -14,7 +14,7 @@ async fn test_backend_client() -> Result<()> {
         item: String,
     }
 
-    let client = BackendClient::create("local://xx".to_string());
+    let client = MetadataProvider::create("local://xx".to_string());
     let k1 = "namespace/k1".to_string();
     let v1 = Val {
         item: "v1".to_string(),
