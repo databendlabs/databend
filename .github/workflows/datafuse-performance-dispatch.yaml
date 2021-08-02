@@ -52,7 +52,7 @@ jobs:
         mkdir -p distro
         sccache --show-stats
         mv target/x86_64-unknown-linux-gnu/debug/fuse-query ./distro/fuse-query
-        mv target/x86_64-unknown-linux-gnu/debug//fuse-store ./distro/fuse-store
+        mv target/x86_64-unknown-linux-gnu/debug/fuse-store ./distro/fuse-store
         mv docker/bootstrap.sh ./distro/bootstrap.sh
     - name: Set up QEMU
       if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
@@ -147,7 +147,6 @@ jobs:
       if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
       id: make_debug
       run: |
-        # enable sccache
         sccache --start-server
         echo $HOME
         export SCCACHE_DIR=/home/runner/.cache/sccache
@@ -156,7 +155,7 @@ jobs:
         mkdir -p distro
         sccache --show-stats
         mv target/x86_64-unknown-linux-gnu/debug/fuse-query ./distro/fuse-query
-        mv target/x86_64-unknown-linux-gnu/debug//fuse-store ./distro/fuse-store
+        mv target/x86_64-unknown-linux-gnu/debug/fuse-store ./distro/fuse-store
         mv docker/bootstrap.sh ./distro/bootstrap.sh
     - name: Set up QEMU
       if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
