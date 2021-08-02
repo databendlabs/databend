@@ -1,6 +1,6 @@
 on:
   repository_dispatch:
-    types: [run_perf]
+    types: [run_perf, rerun_perf, rerun_perf_all]
 name: Build Docker Image on official docker hub (primary for benchmarking and CI tests)
 jobs:
   build-current:
