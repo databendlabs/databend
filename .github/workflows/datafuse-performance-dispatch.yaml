@@ -48,7 +48,7 @@ jobs:
         echo $HOME
         export SCCACHE_DIR=/home/runner/.cache/sccache
         export RUSTC_WRAPPER=sccache
-        cargo build --bin=fuse-query --bin=fuse-benchmark --bin=fuse-store --target x86_64-unknown-linux-gnu
+        cargo build --bin=fuse-query --bin=fuse-store --target x86_64-unknown-linux-gnu
         mkdir -p distro
         sccache --show-stats
         mv target/x86_64-unknown-linux-gnu/debug/fuse-query ./distro/fuse-query
@@ -148,7 +148,7 @@ jobs:
         echo $HOME
         export SCCACHE_DIR=/home/runner/.cache/sccache
         export RUSTC_WRAPPER=sccache
-        cargo build --bin=fuse-query --bin=fuse-benchmark --bin=fuse-store --target x86_64-unknown-linux-gnu
+        cargo build --bin=fuse-query --bin=fuse-store --target x86_64-unknown-linux-gnu
         mkdir -p distro
         sccache --show-stats
         mv target/x86_64-unknown-linux-gnu/debug/fuse-query ./distro/fuse-query
