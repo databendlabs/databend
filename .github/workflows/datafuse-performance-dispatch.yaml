@@ -104,7 +104,7 @@ jobs:
       GITHUB_ORG: zhihanz
       GITHUB_REPO: fuse-query
       GITHUB_STATUS_TARGET_URL: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
-      SHA: ${{ github.event.client_payload.CURRENT_BRANCH }}
+      SHA: ${{ github.event.client_payload.REF_BRANCH }}
       PR_NUMBER: ${{ github.event.client_payload.PR_NUMBER }}
       LAST_COMMIT_SHA: ${{ github.event.client_payload.LAST_COMMIT_SHA }}
       UUID: ${{ github.event.client_payload.UUID }}
