@@ -15,8 +15,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 
+use crate::arrays::ListBooleanArrayBuilder;
 use crate::arrays::ListBuilderTrait;
 use crate::arrays::ListPrimitiveArrayBuilder;
+use crate::arrays::ListUtf8ArrayBuilder;
 use crate::data_type::*;
 use crate::prelude::*;
 use crate::series::IntoSeries;
@@ -183,7 +185,36 @@ impl DataValue {
                 DataType::Float32 => build_list_series! {Float32Type, values, size, data_type },
                 DataType::Float64 => build_list_series! {Float64Type, values, size, data_type },
 
-                // DataType::Utf8 => Ok(Arc::new(build_list!(StringBuilder, Utf8, values, size))),
+                DataType::Boolean => {
+                    let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
+                    match values {
+                        Some(v) => {
+                            let series = DataValue::try_into_data_array(v, data_type)?;
+                            (0..size).for_each(|_| {
+                                builder.append_series(&series);
+                            });
+                        }
+                        None => (0..size).for_each(|_| {
+                            builder.append_null();
+                        }),
+                    }
+                    Ok(builder.finish().into_series())
+                }
+                DataType::Utf8 => {
+                    let mut builder = ListUtf8ArrayBuilder::with_capacity(0, size);
+                    match values {
+                        Some(v) => {
+                            let series = DataValue::try_into_data_array(v, data_type)?;
+                            (0..size).for_each(|_| {
+                                builder.append_series(&series);
+                            });
+                        }
+                        None => (0..size).for_each(|_| {
+                            builder.append_null();
+                        }),
+                    }
+                    Ok(builder.finish().into_series())
+                }
                 other => Result::Err(ErrorCode::BadDataValueType(format!(
                     "Unexpected type:{} for DataValue List",
                     other

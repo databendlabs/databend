@@ -133,7 +133,9 @@ macro_rules! build_list_series {
             }),
             Some(v) => {
                 let series = DataValue::try_into_data_array(&v, $D_TYPE)?;
-                builder.append_series(&series);
+                (0..$SIZE).for_each(|_| {
+                    builder.append_series(&series);
+                })
             }
         }
         Ok(builder.finish().into_series())

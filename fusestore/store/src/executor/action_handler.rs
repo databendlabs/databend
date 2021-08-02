@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::fs::File;
+use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -172,7 +172,10 @@ impl ActionHandler {
         let schema = plan.schema;
         let projection = (0..schema.fields().len()).collect::<Vec<_>>();
 
-        let reader = File::open(&part_file)?;
+        // TODO expose a reader from fs
+        let content = self.fs.read_all(&part_file).await?;
+        let reader = Cursor::new(content);
+
         let reader = read::RecordReader::try_new(
             reader,
             Some(projection.to_vec()),
