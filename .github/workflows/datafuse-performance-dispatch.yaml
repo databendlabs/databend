@@ -236,14 +236,9 @@ jobs:
         "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
 
     - name: Checkout tools repo
-      uses: actions/checkout@v2
-      with:
-        repository: datafuselabs/test-infra
-        ref: main
-    - name: build latest binary
       run: |
-        export PATH=$PATH:/usr/local/go/bin
-        make build
+        cp -r /tmp/infra/ ./
+        ls
     - uses: AbsaOSS/k3d-action@v1.5.0
       name: "Create Single Cluster"
       with:
