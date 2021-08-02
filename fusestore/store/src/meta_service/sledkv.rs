@@ -10,7 +10,6 @@ use std::ops::Bound;
 use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
-use async_raft::LogId;
 use common_exception::ErrorCode;
 use sled::IVec;
 
@@ -92,15 +91,6 @@ pub trait SledKV {
         };
         Ok(res)
     }
-}
-
-/// Types for meta data of a raft state machine, e.g. the last applied log id.
-pub struct SMMeta {}
-impl SledKV for SMMeta {
-    const PREFIX: u8 = 0;
-    const NAME: &'static str = "meta";
-    type K = String;
-    type V = LogId;
 }
 
 /// Types for raft log in SledVarTypeTree

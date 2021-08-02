@@ -7,9 +7,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fs::remove_dir_all;
+use std::fs::rename;
 
 use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
+use common_exception::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
@@ -22,13 +25,21 @@ use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::configs;
 use crate::meta_service::placement::rand_n_from_m;
+use crate::meta_service::sled_open;
+use crate::meta_service::sledkv;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 use crate::meta_service::SledSerde;
+use crate::meta_service::SledVarTypeTree;
+use crate::meta_service::StateMachineMeta;
+use crate::meta_service::StateMachineMetaKey::Initialized;
+use crate::meta_service::StateMachineMetaKey::LastApplied;
+use crate::meta_service::StateMachineMetaValue;
 
 /// seq number key to generate seq for the value of a `generic_kv` record.
 const SEQ_GENERIC_KV: &str = "generic_kv";
@@ -38,6 +49,11 @@ const SEQ_DATABASE_ID: &str = "database_id";
 const SEQ_TABLE_ID: &str = "table_id";
 /// seq number key to database meta version
 const SEQ_DATABASE_META_ID: &str = "database_meta_id";
+
+/// sled db tree name for nodes
+// const TREE_NODES: &str = "nodes";
+// const TREE_META: &str = "meta";
+const TREE_STATE_MACHINE: &str = "state_machine";
 
 /// Replication defines the replication strategy.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,10 +71,20 @@ impl Default for Replication {
 /// The state machine of the `MemStore`.
 /// It includes user data and two raft-related informations:
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Debug)]
 pub struct StateMachine {
-    /// raft state: last applied log.
-    pub last_applied_log: LogId,
+    config: configs::Config,
+
+    /// The dedicated sled db to store everything about a state machine.
+    /// A state machine has several trees opened on this db.
+    _db: sled::Db,
+
+    /// The internal sled::Tree to store everything about a state machine:
+    /// - Store initialization state and last applied in keyspace `StateMachineMeta`.
+    /// - Every other state is store in its own keyspace such as `Nodes`.
+    ///
+    /// TODO(xp): migrate other in-memory fields to `sm_tree`.
+    pub sm_tree: SledVarTypeTree,
 
     /// raft state: A mapping of client IDs to their state info:
     /// (serial, RaftResponse)
@@ -73,7 +99,6 @@ pub struct StateMachine {
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
-    pub nodes: HashMap<NodeId, Node>,
 
     pub replication: Replication,
 
@@ -83,8 +108,8 @@ pub struct StateMachine {
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
 
-    /// table parts， db -> (table -> data parts)
-    pub tbl_parts: HashMap<String, HashMap<String, Vec<DataPartInfo>>>,
+    /// table parts， table id -> data parts
+    pub table_parts: HashMap<u64, Vec<DataPartInfo>>,
 
     /// A kv store of all other general purpose information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
@@ -92,15 +117,16 @@ pub struct StateMachine {
     pub kv: BTreeMap<String, (u64, Vec<u8>)>,
 }
 
+/// Initialize state machine for the first time it is brought online.
 #[derive(Debug, Default, Clone)]
-pub struct StateMachineBuilder {
+pub struct StateMachineInitializer {
     /// The number of slots to allocated.
     initial_slots: Option<u64>,
     /// The replication strategy.
     replication: Option<Replication>,
 }
 
-impl StateMachineBuilder {
+impl StateMachineInitializer {
     /// Set the number of slots to boot up a cluster.
     pub fn slots(mut self, n: u64) -> Self {
         self.initial_slots = Some(n);
@@ -113,35 +139,181 @@ impl StateMachineBuilder {
         self
     }
 
-    pub fn build(self) -> common_exception::Result<StateMachine> {
+    /// Initialized the state machine for when it is created.
+    pub fn init(&self, mut sm: StateMachine) -> StateMachine {
         let initial_slots = self.initial_slots.unwrap_or(3);
-        let replication = self.replication.unwrap_or(Replication::Mirror(1));
+        let replication = self.replication.clone().unwrap_or(Replication::Mirror(1));
 
-        let mut m = StateMachine {
-            last_applied_log: LogId { term: 0, index: 0 },
-            client_last_resp: Default::default(),
-            keys: BTreeMap::new(),
-            sequences: BTreeMap::new(),
-            slots: Vec::with_capacity(initial_slots as usize),
-            nodes: HashMap::new(),
-            replication,
-            databases: BTreeMap::new(),
-            tables: BTreeMap::new(),
-            tbl_parts: HashMap::new(),
-            kv: BTreeMap::new(),
-        };
+        sm.replication = replication;
+
+        sm.slots.clear();
+
         for _i in 0..initial_slots {
-            m.slots.push(Slot::default());
+            sm.slots.push(Slot::default());
         }
-        Ok(m)
+
+        sm
+    }
+}
+
+/// A key-value pair in a snapshot is a vec of two `Vec<u8>`.
+type SnapshotKeyValue = Vec<Vec<u8>>;
+
+/// Snapshot data for serialization and for transport.
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+struct SerializableSnapshot {
+    /// A list of kv pairs.
+    kvs: Vec<SnapshotKeyValue>,
+}
+
+impl SerializableSnapshot {
+    /// Convert the snapshot to a `Vec<(type, name, iter)>` format for sled to import.
+    pub fn sled_importable(self) -> Vec<(Vec<u8>, Vec<u8>, impl Iterator<Item = Vec<Vec<u8>>>)> {
+        vec![(
+            "tree".as_bytes().to_vec(),
+            TREE_STATE_MACHINE.as_bytes().to_vec(),
+            self.kvs.into_iter(),
+        )]
     }
 }
 
 impl StateMachine {
-    pub fn builder() -> StateMachineBuilder {
-        StateMachineBuilder {
+    pub fn initializer() -> StateMachineInitializer {
+        StateMachineInitializer {
             ..Default::default()
         }
+    }
+
+    /// Returns the dir for sled:Db to store the raft state machine.
+    fn state_machine_dir(config: &configs::Config) -> String {
+        config.meta_dir.clone() + "/sm"
+    }
+
+    /// Returns the temp dir for sled:Db for rebuilding state machine from snapshot.
+    fn tmp_state_machine_dir(config: &configs::Config) -> String {
+        config.meta_dir.clone() + "/sm-tmp"
+    }
+
+    pub async fn open(config: &configs::Config) -> common_exception::Result<StateMachine> {
+        let p = Self::state_machine_dir(config);
+        let db = sled_open(&p)?;
+
+        let sm_tree = SledVarTypeTree::open(&db, TREE_STATE_MACHINE, config.meta_sync()).await?;
+
+        let sm = StateMachine {
+            config: config.clone(),
+            _db: db,
+
+            sm_tree,
+
+            client_last_resp: Default::default(),
+            keys: BTreeMap::new(),
+            sequences: BTreeMap::new(),
+            slots: Vec::new(),
+
+            replication: Replication::Mirror(1),
+            databases: BTreeMap::new(),
+            tables: BTreeMap::new(),
+            table_parts: HashMap::new(),
+            kv: BTreeMap::new(),
+        };
+
+        let inited = {
+            let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+            sm_meta.get(&Initialized)?
+        };
+
+        if inited.is_some() {
+            Ok(sm)
+        } else {
+            // Run the default init on a new state machine.
+            // TODO(xp): initialization should be customizable.
+            let sm = StateMachine::initializer().init(sm);
+            let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+            sm_meta
+                .insert(&Initialized, &StateMachineMetaValue::Bool(true))
+                .await?;
+            Ok(sm)
+        }
+    }
+
+    /// Create a snapshot.
+    /// TODO(xp): we only need iter one sled::Tree to take a snapshot.
+    pub fn snapshot(&self) -> impl Iterator<Item = Vec<Vec<u8>>> {
+        let its = self._db.export();
+        for (typ, name, it) in its {
+            if typ == b"tree" && name == TREE_STATE_MACHINE.as_bytes() {
+                return it;
+            }
+        }
+        panic!("no tree found: {}", TREE_STATE_MACHINE)
+    }
+
+    /// Serialize a snapshot for transport.
+    /// TODO(xp): This step does not require a lock, since sled::Tree::iter() creates a consistent view on a tree
+    ///           no matter if there are other writes applied to the tree.
+    pub fn serialize_snapshot(
+        view: impl Iterator<Item = Vec<Vec<u8>>>,
+    ) -> common_exception::Result<Vec<u8>> {
+        let mut kvs = Vec::new();
+        for kv in view {
+            kvs.push(kv);
+        }
+
+        let snap = SerializableSnapshot { kvs };
+
+        let snap = serde_json::to_vec(&snap)?;
+        Ok(snap)
+    }
+
+    /// Install a snapshot to build a state machine from it and replace the state machine with the new one.
+    pub async fn install_snapshot(&mut self, data: &[u8]) -> common_exception::Result<()> {
+        // TODO(xp): test install snapshot:
+        //           The rename is not atomic: a correct way should be: create a temp tree, swap state machine.
+
+        let snap: SerializableSnapshot = serde_json::from_slice(data)?;
+
+        let tmp_path = StateMachine::tmp_state_machine_dir(&self.config);
+
+        remove_dir_all(&tmp_path).map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+            format!("remove tmp state machine dir: {}", tmp_path)
+        })?;
+
+        let db = sled_open(&tmp_path)?;
+        db.import(snap.sled_importable());
+
+        // sled::Db does not have a "flush" method, need to flush every tree one by one.
+        for name in db.tree_names() {
+            let n = String::from_utf8(name.to_vec())
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "invalid tree name")?;
+            let t = db
+                .open_tree(&name)
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                    format!("open sled tree: {}", n)
+                })?;
+            t.flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                    format!("flush sled tree: {}", n)
+                })?;
+        }
+
+        // close it, move its data dir, re-open it.
+        drop(db);
+
+        // TODO(xp): use checksum to check consistency?
+
+        // TODO(xp): use a pointer to state machine dir to atomically switch to the new sm dir.
+        let p = StateMachine::state_machine_dir(&self.config);
+        rename(&tmp_path, &p).map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+            format!("rename state machine dir from: {} to: {}", tmp_path, p)
+        })?;
+
+        // reopen and replace
+
+        let new_sm = StateMachine::open(&self.config).await?;
+        *self = new_sm;
+        Ok(())
     }
 
     /// Internal func to get an auto-incr seq number.
@@ -165,8 +337,14 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub fn apply(&mut self, log_id: &LogId, data: &LogEntry) -> anyhow::Result<AppliedState> {
-        self.last_applied_log = *log_id;
+    pub async fn apply(&mut self, log_id: &LogId, data: &LogEntry) -> anyhow::Result<AppliedState> {
+        // TODO(xp): all update need to be done in a tx.
+
+        let sm_meta = self.sm_tree.as_type::<StateMachineMeta>();
+        sm_meta
+            .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
+            .await?;
+
         if let Some(ref txid) = data.txid {
             if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
                 if serial == &txid.serial {
@@ -175,7 +353,7 @@ impl StateMachine {
             }
         }
 
-        let resp = self.apply_non_dup(data)?;
+        let resp = self.apply_non_dup(data).await?;
 
         if let Some(ref txid) = data.txid {
             self.client_last_resp
@@ -189,7 +367,10 @@ impl StateMachine {
     /// This is the only entry to modify state machine.
     /// The `data` is always committed by raft before applying.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub fn apply_non_dup(&mut self, data: &LogEntry) -> common_exception::Result<AppliedState> {
+    pub async fn apply_non_dup(
+        &mut self,
+        data: &LogEntry,
+    ) -> common_exception::Result<AppliedState> {
         match data.cmd {
             Cmd::AddFile { ref key, ref value } => {
                 if self.keys.contains_key(key) {
@@ -214,11 +395,14 @@ impl StateMachine {
                 ref node_id,
                 ref node,
             } => {
-                if self.nodes.contains_key(node_id) {
-                    let prev = self.nodes.get(node_id);
-                    Ok((prev.cloned(), None).into())
+                let sm_nodes = self.sm_tree.as_type::<sledkv::Nodes>();
+
+                let prev = sm_nodes.get(node_id)?;
+
+                if prev.is_some() {
+                    Ok((prev, None).into())
                 } else {
-                    let prev = self.nodes.insert(*node_id, node.clone());
+                    sm_nodes.insert(node_id, node).await?;
                     tracing::info!("applied AddNode: {}={:?}", node_id, node);
                     Ok((prev, Some(node.clone())).into())
                 }
@@ -357,8 +541,8 @@ impl StateMachine {
             Replication::Mirror(x) => x,
         } as usize;
 
-        let mut node_ids = self.nodes.keys().collect::<Vec<&NodeId>>();
-        node_ids.sort();
+        let mut node_ids = self.list_node_ids();
+        node_ids.sort_unstable();
         let total = node_ids.len();
         let node_indexes = rand_n_from_m(total, n)?;
 
@@ -367,9 +551,14 @@ impl StateMachine {
             .get_mut(slot_index)
             .ok_or_else(|| ErrorCode::InvalidConfig(format!("slot not found: {}", slot_index)))?;
 
-        slot.node_ids = node_indexes.iter().map(|i| *node_ids[*i]).collect();
+        slot.node_ids = node_indexes.iter().map(|i| node_ids[*i]).collect();
 
         Ok(())
+    }
+
+    fn list_node_ids(&self) -> Vec<NodeId> {
+        let sm_nodes = self.sm_tree.as_type::<sledkv::Nodes>();
+        sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -381,8 +570,10 @@ impl StateMachine {
     }
 
     pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        let x = self.nodes.get(node_id);
-        x.cloned()
+        // TODO(xp): handle error
+
+        let as_node = self.sm_tree.as_type::<sledkv::Nodes>();
+        as_node.get(node_id).expect("fail to get node")
     }
 
     pub fn get_database(&self, name: &str) -> Option<Database> {
@@ -409,8 +600,14 @@ impl StateMachine {
     }
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
-        let parts = self.tbl_parts.get(db_name);
-        parts.and_then(|m| m.get(table_name)).map(Clone::clone)
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            let table_id = db.tables.get(table_name);
+            if let Some(table_id) = table_id {
+                return self.table_parts.get(table_id).map(Clone::clone);
+            }
+        }
+        None
     }
 
     pub fn append_data_parts(
@@ -419,45 +616,79 @@ impl StateMachine {
         table_name: &str,
         append_res: &AppendResult,
     ) {
-        let part_info = || {
-            append_res
-                .parts
-                .iter()
-                .map(|p| {
-                    let loc = &p.location;
-                    DataPartInfo {
-                        part: Part {
-                            name: loc.clone(),
-                            version: 0,
-                        },
-                        stats: Statistics::new_exact(p.disk_bytes, p.rows),
-                    }
-                })
-                .collect::<Vec<_>>()
-        };
-        self.tbl_parts
-            .entry(db_name.to_string())
-            .and_modify(move |e| {
-                e.entry(table_name.to_string())
-                    .and_modify(|v| v.append(&mut part_info()))
-                    .or_insert_with(part_info);
+        let part_infos = append_res
+            .parts
+            .iter()
+            .map(|p| {
+                let loc = &p.location;
+                DataPartInfo {
+                    part: Part {
+                        name: loc.clone(),
+                        version: 0,
+                    },
+                    stats: Statistics::new_exact(p.disk_bytes, p.rows),
+                }
             })
-            .or_insert_with(|| {
-                [(table_name.to_string(), part_info())]
-                    .iter()
-                    .cloned()
-                    .collect()
-            });
+            .collect::<Vec<_>>();
+
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            let table_id = db.tables.get(table_name);
+            if let Some(table_id) = table_id {
+                for part in part_infos {
+                    let table = self.tables.get_mut(table_id).unwrap();
+                    table.parts.insert(part.part.name.clone());
+                    // These comments are intentionally left here.
+                    // As rustc not smart enough, it says:
+                    // for part in part_infos {
+                    //     ---- move occurs because `part` has type `DataPartInfo`, which does not implement the `Copy` trait
+                    //     .and_modify(|v| v.push(part))
+                    //                 ---        ---- variable moved due to use in closure
+                    //                 |
+                    //                 value moved into closure here
+                    //     .or_insert_with(|| vec![part]);
+                    //                     ^^      ---- use occurs due to use in closure
+                    //                     |
+                    //                     value used here after move
+                    // But obviously the two methods can't happen at the same time.
+                    // ============== previous =============
+                    // self.table_parts
+                    //     .entry(*table_id)
+                    //     .and_modify(|v| v.push(part))
+                    //     .or_insert_with(|| vec![part]);
+                    // ============ previous end ===========
+                    match self.table_parts.get_mut(table_id) {
+                        Some(p) => {
+                            p.push(part);
+                        }
+                        None => {
+                            self.table_parts.insert(*table_id, vec![part]);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
-        self.tbl_parts
-            .get_mut(db_name)
-            .and_then(|t| t.remove(table_name));
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            let table_id = db.tables.get(table_name);
+            if let Some(table_id) = table_id {
+                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
+                self.table_parts.remove(table_id);
+            }
+        }
     }
 
     pub fn remove_db_data_parts(&mut self, db_name: &str) {
-        self.tbl_parts.remove(db_name);
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            for table_id in db.tables.values() {
+                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
+                self.table_parts.remove(table_id);
+            }
+        }
     }
 
     pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {
@@ -503,7 +734,10 @@ impl Placement for StateMachine {
         &self.slots
     }
 
-    fn get_node(&self, node_id: &u64) -> Option<&Node> {
-        self.nodes.get(node_id)
+    fn get_node(&self, node_id: &NodeId) -> Option<Node> {
+        // TODO(xp): dup code: remove get_node in StateMachine impl
+        // TODO(xp): handle error
+        let as_node = self.sm_tree.as_type::<sledkv::Nodes>();
+        as_node.get(node_id).expect("fail to get node")
     }
 }

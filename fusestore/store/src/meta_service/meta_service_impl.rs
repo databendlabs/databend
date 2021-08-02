@@ -36,6 +36,8 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
         let mes = request.into_inner();
         let req: LogEntry = mes.try_into()?;
 
@@ -54,6 +56,8 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<GetReq>,
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
         let req = request.into_inner();
         let resp = self.meta_node.get_file(&req.key).await;
         let rst = match resp {
@@ -77,6 +81,8 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
         let req = request.into_inner();
 
         let ae_req =
@@ -102,6 +108,8 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
         let req = request.into_inner();
 
         let is_req =
@@ -127,6 +135,8 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<RaftMes>,
     ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
         let req = request.into_inner();
 
         let v_req =

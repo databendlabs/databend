@@ -13,13 +13,17 @@ use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
 use crate::meta_service::SledVarTypeTree;
+use crate::meta_service::StateMachineMeta;
+use crate::meta_service::StateMachineMetaKey::Initialized;
+use crate::meta_service::StateMachineMetaKey::LastApplied;
+use crate::meta_service::StateMachineMetaValue;
 use crate::tests::service::new_sled_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_open() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    SledVarTypeTree::open(db, "foo").await?;
+    SledVarTypeTree::open(db, "foo", true).await?;
 
     Ok(())
 }
@@ -28,7 +32,7 @@ async fn test_sled_vartype_tree_open() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_append() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
         (8, Entry {
@@ -84,7 +88,7 @@ async fn test_sled_vartype_tree_append() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_append_values_and_range_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -157,7 +161,7 @@ async fn test_sled_vartype_tree_append_values_and_range_get() -> anyhow::Result<
 async fn test_sled_vartype_tree_range_keys() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -207,7 +211,7 @@ async fn test_sled_vartype_tree_range_keys() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_insert() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     assert!(tree.get::<sledkv::Logs>(&5)?.is_none());
 
@@ -265,7 +269,7 @@ async fn test_sled_vartype_tree_insert() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_contains_key() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     assert!(tree.get::<sledkv::Logs>(&5)?.is_none());
 
@@ -302,7 +306,7 @@ async fn test_sled_vartype_tree_contains_key() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     assert!(tree.get::<sledkv::Logs>(&5)?.is_none());
 
@@ -339,7 +343,7 @@ async fn test_sled_vartype_tree_get() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_last() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     assert!(tree.last::<sledkv::Logs>()?.is_none());
 
@@ -362,19 +366,22 @@ async fn test_sled_vartype_tree_last() -> anyhow::Result<()> {
     ];
 
     tree.append_values::<sledkv::Logs>(&logs).await?;
-    assert_eq!(None, tree.last::<sledkv::SMMeta>()?);
+    assert_eq!(None, tree.last::<StateMachineMeta>()?);
 
     let metas = vec![
-        ("meta1".to_string(), LogId { term: 1, index: 2 }),
-        ("meta2".to_string(), LogId { term: 2, index: 2 }),
+        (
+            LastApplied,
+            StateMachineMetaValue::LogId(LogId { term: 1, index: 2 }),
+        ),
+        (Initialized, StateMachineMetaValue::Bool(true)),
     ];
 
-    tree.append::<sledkv::SMMeta>(&metas).await?;
+    tree.append::<StateMachineMeta>(metas.as_slice()).await?;
 
     assert_eq!(Some((4, logs[1].clone())), tree.last::<sledkv::Logs>()?);
     assert_eq!(
-        Some(("meta2".to_string(), LogId { term: 2, index: 2 })),
-        tree.last::<sledkv::SMMeta>()?
+        Some((Initialized, StateMachineMetaValue::Bool(true))),
+        tree.last::<StateMachineMeta>()?
     );
 
     Ok(())
@@ -384,7 +391,7 @@ async fn test_sled_vartype_tree_last() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_range_delete() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -443,7 +450,7 @@ async fn test_sled_vartype_tree_range_delete() -> anyhow::Result<()> {
 async fn test_sled_vartype_tree_multi_types() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -466,29 +473,35 @@ async fn test_sled_vartype_tree_multi_types() -> anyhow::Result<()> {
     tree.append_values::<sledkv::Logs>(&logs).await?;
 
     let metas = vec![
-        ("meta1".to_string(), LogId { term: 1, index: 2 }),
-        ("meta2".to_string(), LogId { term: 2, index: 2 }),
+        (
+            LastApplied,
+            StateMachineMetaValue::LogId(LogId { term: 1, index: 2 }),
+        ),
+        (Initialized, StateMachineMetaValue::Bool(true)),
     ];
-    tree.append::<sledkv::SMMeta>(&metas).await?;
+    tree.append::<StateMachineMeta>(&metas).await?;
 
     // range get/keys are limited to its own namespace.
     {
         let got = tree.range_get::<sledkv::Logs, _>(..)?;
         assert_eq!(logs, got);
 
-        let got = tree.range_get::<sledkv::SMMeta, _>(..="meta1".to_string())?;
-        assert_eq!(vec![LogId { term: 1, index: 2 }], got);
+        let got = tree.range_get::<StateMachineMeta, _>(..=LastApplied)?;
+        assert_eq!(
+            vec![StateMachineMetaValue::LogId(LogId { term: 1, index: 2 })],
+            got
+        );
 
-        let got = tree.range_get::<sledkv::SMMeta, _>("meta2".to_string()..)?;
-        assert_eq!(vec![LogId { term: 2, index: 2 }], got);
+        let got = tree.range_get::<StateMachineMeta, _>(Initialized..)?;
+        assert_eq!(vec![StateMachineMetaValue::Bool(true)], got);
 
-        let got = tree.range_keys::<sledkv::SMMeta, _>("meta2".to_string()..)?;
-        assert_eq!(vec!["meta2".to_string()], got);
+        let got = tree.range_keys::<StateMachineMeta, _>(Initialized..)?;
+        assert_eq!(vec![Initialized], got);
     }
 
     // range delete are limited to its own namespace.
     {
-        tree.range_delete::<sledkv::SMMeta, _>(.., false).await?;
+        tree.range_delete::<StateMachineMeta, _>(.., false).await?;
 
         let got = tree.range_get::<sledkv::Logs, _>(..)?;
         assert_eq!(logs, got);
@@ -503,7 +516,7 @@ async fn test_sled_vartype_tree_multi_types() -> anyhow::Result<()> {
 async fn test_as_append() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
@@ -560,7 +573,7 @@ async fn test_as_append() -> anyhow::Result<()> {
 async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -634,7 +647,7 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
 async fn test_as_range_keys() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -685,7 +698,7 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 async fn test_as_insert() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     assert_eq!(None, aslog.get(&5)?);
@@ -744,7 +757,7 @@ async fn test_as_insert() -> anyhow::Result<()> {
 async fn test_as_contains_key() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     assert_eq!(None, aslog.get(&5)?);
@@ -782,7 +795,7 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
 async fn test_as_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     assert_eq!(None, aslog.get(&5)?);
@@ -820,7 +833,7 @@ async fn test_as_get() -> anyhow::Result<()> {
 async fn test_as_last() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     assert_eq!(None, aslog.last()?);
@@ -853,7 +866,7 @@ async fn test_as_last() -> anyhow::Result<()> {
 async fn test_as_range_delete() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -913,9 +926,9 @@ async fn test_as_range_delete() -> anyhow::Result<()> {
 async fn test_as_multi_types() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo").await?;
+    let tree = SledVarTypeTree::open(db, "foo", true).await?;
     let aslog = tree.as_type::<sledkv::Logs>();
-    let asmeta = tree.as_type::<sledkv::SMMeta>();
+    let asmeta = tree.as_type::<StateMachineMeta>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -938,8 +951,11 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
     aslog.append_values(&logs).await?;
 
     let metas = vec![
-        ("meta1".to_string(), LogId { term: 1, index: 2 }),
-        ("meta2".to_string(), LogId { term: 2, index: 2 }),
+        (
+            LastApplied,
+            StateMachineMetaValue::LogId(LogId { term: 1, index: 2 }),
+        ),
+        (Initialized, StateMachineMetaValue::Bool(true)),
     ];
     asmeta.append(&metas).await?;
 
@@ -948,14 +964,17 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
         let got = aslog.range_get(..)?;
         assert_eq!(logs, got);
 
-        let got = asmeta.range_get(..="meta1".to_string())?;
-        assert_eq!(vec![LogId { term: 1, index: 2 }], got);
+        let got = asmeta.range_get(..=LastApplied)?;
+        assert_eq!(
+            vec![StateMachineMetaValue::LogId(LogId { term: 1, index: 2 })],
+            got
+        );
 
-        let got = asmeta.range_get("meta2".to_string()..)?;
-        assert_eq!(vec![LogId { term: 2, index: 2 }], got);
+        let got = asmeta.range_get(Initialized..)?;
+        assert_eq!(vec![StateMachineMetaValue::Bool(true)], got);
 
-        let got = asmeta.range_keys("meta2".to_string()..)?;
-        assert_eq!(vec!["meta2".to_string()], got);
+        let got = asmeta.range_keys(Initialized..)?;
+        assert_eq!(vec![Initialized], got);
     }
 
     // range delete are limited to its own namespace.
