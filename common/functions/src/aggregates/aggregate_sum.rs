@@ -180,6 +180,7 @@ where
     }
 }
 
+#[inline]
 pub fn sum_batch(column: &DataColumn) -> Result<DataValue> {
     if column.is_empty() {
         return Ok(DataValue::Null);

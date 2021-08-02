@@ -102,17 +102,17 @@ impl DataType {
             Int64 => ArrowDataType::Int64,
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
-            Utf8 => ArrowDataType::Utf8,
+            Utf8 => ArrowDataType::LargeUtf8,
             Date32 => ArrowDataType::Date32,
             Date64 => ArrowDataType::Date64,
             Timestamp(tu, f) => ArrowDataType::Timestamp(tu.to_arrow(), f.clone()),
             Interval(tu) => ArrowDataType::Interval(tu.to_arrow()),
-            List(dt) => ArrowDataType::List(Box::new(dt.to_arrow())),
+            List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
                 ArrowDataType::Struct(arrows_fields)
             }
-            Binary => ArrowDataType::Binary,
+            Binary => ArrowDataType::LargeBinary,
         }
     }
 }

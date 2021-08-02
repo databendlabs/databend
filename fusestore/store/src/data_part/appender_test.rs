@@ -35,11 +35,10 @@ mod test {
         let block = DataBlock::create_by_array(schema.clone(), vec![col0.clone(), col1.clone()]);
 
         let buffer = write_in_memory(block)?;
-        let mut cursor = Cursor::new(buffer);
-        let reader = read::RecordReader::try_new(cursor, None, None, Arc::new(|_, _| true))?;
-        let iter = reader.into_iter();
-
+        let cursor = Cursor::new(buffer);
+        let mut reader = read::RecordReader::try_new(cursor, None, None, Arc::new(|_, _| true))?;
         let arrow_schema = schema.to_arrow();
+
         if let Some(maybe_batch) = reader.next() {
             let batch = maybe_batch?;
             assert_eq!(batch.schema().as_ref(), &arrow_schema);
@@ -53,8 +52,10 @@ mod test {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_append() -> anyhow::Result<()> {
-        let col0: ArrayRef = Arc::new(Int64Array::from(vec![0, 1, 2]));
-        let col1: ArrayRef = Arc::new(LargeUtf8Array::from(vec!["str1", "str2", "str3"]));
+        let col0: ArrayRef = Arc::new(Int64Array::from_values(vec![0, 1, 2]));
+        let col1: ArrayRef = Arc::new(LargeUtf8Array::from_iter_values(
+            vec!["str1", "str2", "str3"].iter(),
+        ));
 
         let batch = RecordBatch::try_from_iter(vec![("col0", col0), ("col1", col1)])?;
         let schema = batch.schema();

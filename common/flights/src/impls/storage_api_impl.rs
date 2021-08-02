@@ -12,7 +12,6 @@ use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_arrow::arrow_flight::utils::flight_schema_from_arrow_schema;
 use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -83,7 +82,7 @@ impl StorageApi for StoreClient {
         let res_stream = res.map(move |item| {
             item.map_err(|status| ErrorCode::TokioError(status.to_string()))
                 .and_then(|item| {
-                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), false, &[])
+                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), true, &[])
                         .map_err(ErrorCode::from)
                 })
                 .and_then(DataBlock::try_from)

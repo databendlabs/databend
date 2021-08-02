@@ -44,7 +44,7 @@ impl FlightDataStream {
 
                     let arrow_schema = Arc::new(schema.to_arrow());
                     Ok(
-                        flight_data_to_arrow_batch(&flight_data, arrow_schema, false, &[])
+                        flight_data_to_arrow_batch(&flight_data, arrow_schema, true, &[])
                             .map(create_data_block)?,
                     )
                 }
@@ -76,7 +76,7 @@ impl FlightDataStream {
                 Ok(flight_data_to_arrow_batch(
                     &flight_data,
                     Arc::new(schema_ref.to_arrow()),
-                    false,
+                    true,
                     &[],
                 )
                 .map(create_data_block)?)

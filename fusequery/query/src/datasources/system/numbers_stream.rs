@@ -39,6 +39,7 @@ impl NumbersStream {
         ProgressStream::try_create(stream, ctx.progress_callback()?)
     }
 
+    #[inline]
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if (self.block_index as usize) == self.blocks.len() {
             let partitions = self.ctx.try_get_partitions(1)?;

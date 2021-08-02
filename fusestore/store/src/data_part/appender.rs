@@ -5,6 +5,7 @@
 
 use std::convert::TryFrom;
 use std::io::Cursor;
+use std::iter::repeat;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -44,7 +45,7 @@ impl Appender {
             let mut result = AppendResult::default();
             while let Some(flight_data) = stream.next().await {
                 let batch =
-                    flight_data_to_arrow_batch(&flight_data, arrow_schema_ref.clone(), false, &[])?;
+                    flight_data_to_arrow_batch(&flight_data, arrow_schema_ref.clone(), true, &[])?;
                 let block = DataBlock::try_from(batch)?;
                 let (rows, cols, wire_bytes) =
                     (block.num_rows(), block.num_columns(), block.memory_size());
@@ -70,17 +71,17 @@ pub(crate) fn write_in_memory(block: DataBlock) -> Result<Vec<u8>> {
         compression: CompressionCodec::Uncompressed,
         version: Version::V2,
     };
-    let encoding = Encoding::Plain;
+    let encodings: Vec<_> = repeat(Encoding::Plain).take(block.num_columns()).collect();
+    let memory_size = block.memory_size();
     let batch = RecordBatch::try_from(block)?;
 
     let iter = vec![Ok(batch)];
 
-    let row_groups = RowGroupIterator::try_new(iter.into_iter(), &arrow_schema, options, vec![
-        Encoding::Plain,
-    ])?;
+    let row_groups =
+        RowGroupIterator::try_new(iter.into_iter(), &arrow_schema, options, encodings)?;
 
     // Create a new empty file
-    let writer = Vec::with_capacity(block.memory_size());
+    let writer = Vec::with_capacity(memory_size);
     let mut cursor = Cursor::new(writer);
     // Write the file. Note that, at present, any error results in a corrupted file.
     let parquet_schema = row_groups.parquet_schema().clone();

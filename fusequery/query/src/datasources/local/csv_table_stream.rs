@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::convert::TryFrom;
-use std::convert::TryInto;
-use std::fs::File;
 use std::sync::Arc;
 use std::task::Poll;
 
@@ -46,6 +44,7 @@ impl CsvTableStream {
 
         let arrow_schema = Arc::new(self.schema.to_arrow());
         let mut reader = read::ReaderBuilder::new()
+            .has_headers(false)
             .from_path(&self.file)
             .map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
 

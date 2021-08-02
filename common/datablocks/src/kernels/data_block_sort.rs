@@ -70,7 +70,7 @@ impl DataBlock {
                 let left = lhs.try_column_by_name(&f.column_name)?.clone();
                 let left = left.to_array()?;
 
-                let right = lhs.try_column_by_name(&f.column_name)?.clone();
+                let right = rhs.try_column_by_name(&f.column_name)?.clone();
                 let right = right.to_array()?;
 
                 Ok(vec![left.get_array_ref(), right.get_array_ref()])
@@ -104,6 +104,7 @@ impl DataBlock {
         let rhs_indices = (1, 0, rhs.num_rows());
         let slices = merge_sort_slices(once(&lhs_indices), once(&rhs_indices), &comparator);
         let slices = Self::materialize_merge_indices(slices, limit);
+
         let fields = lhs.schema().fields();
         let columns = fields
             .iter()
@@ -164,7 +165,7 @@ impl DataBlock {
         slices: &[MergeSlice],
         limit: Option<usize>,
     ) -> Box<dyn Array> {
-        let slices = slices.into_iter();
+        let slices = slices.iter();
         let len = arrays.iter().map(|array| array.len()).sum();
 
         let limit = limit.unwrap_or(len);
