@@ -1,6 +1,7 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
+
 //! Implementations of upstream traits for DataArray<T>
 use std::borrow::Borrow;
 use std::borrow::Cow;
