@@ -24,6 +24,7 @@ use crate::impls::meta_api_impl::GetTableAction;
 use crate::impls::storage_api_impl::ReadPlanAction;
 use crate::impls::storage_api_impl::TruncateTableAction;
 use crate::protobuf::FlightStoreRequest;
+use common_exception::ErrorCode;
 
 pub trait RequestFor {
     type Reply;
@@ -88,9 +89,9 @@ impl TryInto<StoreDoAction> for Request<Action> {
 
 /// Try convert DoActionAction to tonic::Request<Action>.
 impl TryInto<Request<Action>> for &StoreDoAction {
-    type Error = anyhow::Error;
+    type Error = ErrorCode;
 
-    fn try_into(self) -> Result<Request<Action>, Self::Error> {
+    fn try_into(self) -> common_exception::Result<Request<Action>> {
         let flight_request = FlightStoreRequest {
             body: serde_json::to_string(&self)?,
         };

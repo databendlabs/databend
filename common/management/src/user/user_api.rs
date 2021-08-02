@@ -4,8 +4,9 @@
 //
 
 use async_trait::async_trait;
-use common_exception::Result;
+use common_exception::{Result, ErrorCode};
 use common_metatypes::SeqValue;
+use std::convert::TryFrom;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct UserInfo {
@@ -47,9 +48,23 @@ pub trait UserMgrApi {
         new_salt: Option<V>,
         seq: Option<u64>,
     ) -> Result<Option<u64>>
-    where
-        V: AsRef<str> + Sync + Send;
+        where
+            V: AsRef<str> + Sync + Send;
 
     async fn drop_user<V>(&mut self, username: V, seq: Option<u64>) -> Result<()>
-    where V: AsRef<str> + Send;
+        where V: AsRef<str> + Send;
+}
+
+impl TryFrom<Vec<u8>> for UserInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: Vec<u8>) -> Result<Self> {
+        match serde_json::from_slice(&value) {
+            Ok(user_info) => Ok(user_info),
+            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+                "Cannot deserialize user info from bytes. cause {}",
+                serialize_error
+            )))
+        }
+    }
 }

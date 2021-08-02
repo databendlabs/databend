@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use anyhow::Result;
 use jwt_simple::prelude::*;
+use common_exception::{Result, ToErrorCode, ErrorCode};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FlightClaim {
@@ -23,7 +23,10 @@ impl FlightToken {
 
     pub fn try_create_token(&self, claim: FlightClaim) -> Result<String> {
         let claims = Claims::with_custom_claims(claim, Duration::from_days(3650));
-        self.key.authenticate(claims)
+        self.key.authenticate(claims).map_err_to_code(
+            ErrorCode::AuthenticateFailure,
+            || "Cannot create flight token, because authenticate failure",
+        )
     }
 
     pub fn try_verify_token(&self, token: String) -> Result<FlightClaim> {

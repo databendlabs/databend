@@ -720,6 +720,7 @@ dependencies = [
  "anyhow",
  "backtrace",
  "common-arrow",
+ "prost 0.7.0",
  "serde",
  "serde_json",
  "sqlparser",
@@ -731,7 +732,6 @@ dependencies = [
 name = "common-flights"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "common-arrow",
  "common-datablocks",
@@ -816,10 +816,8 @@ dependencies = [
 name = "common-metatypes"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "pretty_assertions",
  "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -867,7 +865,6 @@ dependencies = [
 name = "common-stoppable"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "common-exception",
  "common-runtime",

@@ -154,6 +154,8 @@ build_exceptions! {
     InitPrometheusFailure(47),
     ScalarSubqueryBadRows(48),
     Overflow(49),
+    InvalidMetaBinaryFormat(50),
+    AuthenticateFailure(51),
 
 
     // uncategorized
@@ -343,6 +345,15 @@ impl From<FromUtf8Error> for ErrorCode {
     fn from(error: FromUtf8Error) -> Self {
         ErrorCode::BadBytes(format!(
             "Bad bytes, cannot parse bytes with UTF8, cause: {}",
+            error
+        ))
+    }
+}
+
+impl From<prost::EncodeError> for ErrorCode {
+    fn from(error: prost::EncodeError) -> Self {
+        ErrorCode::BadBytes(format!(
+            "Bad bytes, cannot parse bytes with prost, cause: {}",
             error
         ))
     }

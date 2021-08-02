@@ -134,10 +134,10 @@ impl StorageApi for StoreClient {
 
         let res = self.client.do_put(req).await?;
 
-        use anyhow::Context;
-        let put_result = res.into_inner().next().await.context("empty response")??;
-        let vec = serde_json::from_slice(&put_result.app_metadata)?;
-        Ok(vec)
+        match res.into_inner().message().await? {
+            Some(res) => Ok(serde_json::from_slice(&res.app_metadata)?),
+            None => Err(ErrorCode::UnknownException("Put result is empty")),
+        }
     }
 
     async fn truncate(
