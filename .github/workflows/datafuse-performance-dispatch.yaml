@@ -316,7 +316,7 @@ jobs:
     - name: Update status to success
       if: success()
       run: |
-          export TARGET_URL=https://${{env.ENDPOINT}}/report/${{ env.PR_NUMBER }}/${{ env.UUID }}/performance.html
+          export TARGET_URL=${{env.ENDPOINT}}/report/${{ env.PR_NUMBER }}/${{ env.UUID }}/performance.html
           curl -i -X POST \
           -H "Authorization: Bearer $GITHUB_TOKEN" \
           -H "Content-Type: application/json" \
