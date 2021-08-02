@@ -77,10 +77,14 @@ jobs:
         context: .
         platforms: linux/amd64
         file: ./docker/cache/Dockerfile
-    - name: Delete all resources
-      if: always()
+    - name: bypass
+      if: ${{  github.event.action == 'rerun_perf' }}
       run: |
-        sccache --stop-server
+        echo "bypass build current image step"
+      #    - name: Delete all resources
+#      if: always()
+#      run: |
+#        sccache --stop-server
     - name: Update status to failure
       if: failure()
       run: |
@@ -104,7 +108,7 @@ jobs:
         echo '{"uuid": "${{ env.UUID }}", "status": "SUCCESS"}' > status.json
         aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./status.json  s3://$BUCKET/s3/test/status.json
   build-release:
-    name: Build current datafuse image
+    name: Build reference datafuse image
     if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
     runs-on: self-hosted
     env:
@@ -177,6 +181,10 @@ jobs:
         context: .
         platforms: linux/amd64
         file: ./docker/cache/Dockerfile
+    - name: bypass
+      if: ${{  github.event.action == 'rerun_perf' }}
+      run: |
+        echo "bypass build ref image step"
     - name: Delete all resources
       if: always()
       run: |
