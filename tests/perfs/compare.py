@@ -100,8 +100,8 @@ tr:nth-child(odd) td {{filter: brightness(90%);}}
     <table class="changes-in-performance">
         <tbody>
             <tr id="changes-in-performance.6">
-            <th>before_score,&nbsp;s</th>
-            <th>after_score,&nbsp;s</th>
+            <th>{},&nbsp;s</th>
+            <th>{},&nbsp;s</th>
             <th>Ratio of speedup&nbsp;(-) or slowdown&nbsp;(+)</th>
             <th>Relative difference (after_score&nbsp;−&nbsp;before_score) / before_score</th>
             <th>Test</th>
@@ -144,7 +144,7 @@ def get_suit_by_name(name):
     return None
 
 
-def compare(releaser, pull, type, region, bucket, rpath, ppath, secret_id, secret_key, output_path, endpoint):
+def compare(releaser, pull, type, region, bucket, rpath, ppath, secret_id, secret_key, output_path, endpoint, rloglink, ploglink):
     global cli
     dict_r = {}
     dict_p = dict()
@@ -162,7 +162,7 @@ def compare(releaser, pull, type, region, bucket, rpath, ppath, secret_id, secre
         suit_name = f.replace("-result.json", "")
         compare_suit(releaser, pull, f, suit_name, type, dict_r.get(f, ''), dict_p.get(f, ''))
 
-    report(releaser, pull, files)
+    report(releaser, pull, files, type, rloglink, ploglink)
     if type == "COS":
         with open('/tmp/performance.html', 'rb') as fp:
             response = cli.put_object(
@@ -222,7 +222,7 @@ def compare_suit(releaser, pull, suit_file, suit_name, type, releaser_suit_url, 
     else:
         stable += 1
 
-def report(releaser, pull, files):
+def report(releaser, pull, files, type, current_log_link, ref_log_link):
     ## todo render the compartions via html template
     global stats
 
@@ -233,9 +233,12 @@ def report(releaser, pull, files):
 
         trs += create_tr(name, state['before_score'], state['after_score'], state['state'], suit['query'],
                          state['type'], state['before_url'], state['after_url'])
-
-    html = template.format(trs)
-
+    before = "current_score"
+    after = "ref_score"
+    if type == 'COS':
+        before = '<a href="{}">current_score</a>'.format(current_log_link)
+        after  = '<a href="{}">ref_score</a>'.format(ref_log_link)
+    html = template.format(before, after, trs)
     with open('/tmp/performance.html','w') as f:
         f.write(html)
         f.close()
@@ -247,17 +250,20 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='fuse perf results compare tools')
     parser.add_argument('-r', '--releaser', help='Perf results directory from release version')
     parser.add_argument('-p', '--pull',  help='Perf results directory from current build')
-    parser.add_argument('-t', '--type', default="local",  help='Set storage endpoint for performance testing, support local and COS')
+    parser.add_argument('-t', '--type', default="local",  help='Set storage endpoint for performance testing, support '
+                                                               'local and COS')
     parser.add_argument('--region', default="",  help='Set storage region')
     parser.add_argument('--bucket', default="",  help='Set storage bucket')
     parser.add_argument('--rpath', default="",  help='absolute path releaser objects')
     parser.add_argument('--ppath', default="",  help='absolute path pull objects')
+    parser.add_argument('--currentLogLink', default="",  help='absolute path store current log')
+    parser.add_argument('--refLogLink', default="",  help='absolute path store ref log')
     parser.add_argument('--secretID', default="",  help='Set storage secret ID')
     parser.add_argument('--secretKey', default="",  help='Set storage secret Key')
     parser.add_argument('--endpoint', default="",  help='Set accelerate endpoint for S3')
     parser.add_argument('-o', '--outputPath', default="",  help='store output in remote object storage')
 
     args = parser.parse_args()
-    code = compare(args.releaser, args.pull, args.type, args.region, args.bucket, args.rpath, args.ppath, args.secretID, args.secretKey, args.outputPath, args.endpoint)
+    code = compare(args.releaser, args.pull, args.type, args.region, args.bucket, args.rpath, args.ppath, args.secretID, args.secretKey, args.outputPath, args.endpoint, args.currentLogLink, args.refLogLink)
 
     sys.exit(code)
