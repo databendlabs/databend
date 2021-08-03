@@ -281,10 +281,10 @@ jobs:
             make resource_apply -j 2;
             echo "Successfully deployed test pods, start to do performance test";
             make run_perf -j 2;
-            kubectl wait --for=condition=complete jobs --all -n default --timeout=1800s 2 > /dev/null;
+            kubectl wait --for=condition=complete jobs --all -n default --timeout=1800s 2>/dev/null;
             echo "Finished performance tests, upload reports";
             make run_compare;
-            kubectl wait --for=condition=complete jobs --all -n default --timeout=1800s 2 > /dev/null
+            kubectl wait --for=condition=complete jobs --all -n default --timeout=1800s 2>/dev/null
     - name: Update status to failure
       if: failure()
       run: |
