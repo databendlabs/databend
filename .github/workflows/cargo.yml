@@ -36,10 +36,8 @@ jobs:
           command: clippy
           args:  -- -D warnings
 
-#      Wait: https://github.com/rust-lang/rust/pull/87468
-#
-#      - name: Check formating
-#        uses: actions-rs/cargo@v1
-#        with:
-#          command: fmt
-#          args: --all -- --check
+      - name: Check formating
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
