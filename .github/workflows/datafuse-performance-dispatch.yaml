@@ -269,7 +269,6 @@ jobs:
         kubectl apply -f ./manifests/lb_configs.yaml
         kubectl delete ns runner-system --ignore-not-found
         kubectl create ns runner-system
-        kubectl apply -f ./manifests/config.yaml
         kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/metallb.yaml
         kubectl wait -n metallb-system --timeout=180s --for condition=Ready --all pods
 
