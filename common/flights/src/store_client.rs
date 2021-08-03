@@ -10,6 +10,7 @@ use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
+use common_exception::Result;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -36,7 +37,7 @@ static AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
     #[tracing::instrument(level = "debug", skip(password))]
-    pub async fn try_create(addr: &str, username: &str, password: &str) -> anyhow::Result<Self> {
+    pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
@@ -73,7 +74,7 @@ impl StoreClient {
         timeout: Duration,
         username: &str,
         password: &str,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> Result<Vec<u8>> {
         let auth = BasicAuth {
             username: username.to_string(),
             password: password.to_string(),
@@ -98,7 +99,7 @@ impl StoreClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_action<T, R>(&mut self, v: T) -> common_exception::Result<R>
+    pub(crate) async fn do_action<T, R>(&mut self, v: T) -> Result<R>
     where
         T: RequestFor<Reply = R>,
         T: Into<StoreDoAction>,

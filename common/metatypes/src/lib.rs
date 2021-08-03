@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
 
-pub use errors::SeqError;
+pub use errors::ConflictSeq;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
 use serde::Deserialize;

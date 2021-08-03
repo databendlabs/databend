@@ -6,6 +6,7 @@ use std::convert::TryInto;
 use std::io::Cursor;
 
 use common_arrow::arrow_flight::Action;
+use common_exception::ErrorCode;
 use prost::Message;
 use tonic::Request;
 
@@ -88,9 +89,9 @@ impl TryInto<StoreDoAction> for Request<Action> {
 
 /// Try convert DoActionAction to tonic::Request<Action>.
 impl TryInto<Request<Action>> for &StoreDoAction {
-    type Error = anyhow::Error;
+    type Error = ErrorCode;
 
-    fn try_into(self) -> Result<Request<Action>, Self::Error> {
+    fn try_into(self) -> common_exception::Result<Request<Action>> {
         let flight_request = FlightStoreRequest {
             body: serde_json::to_string(&self)?,
         };

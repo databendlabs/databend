@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_exception::ErrorCode;
+use common_exception::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::broadcast;
 use common_runtime::tokio::sync::oneshot;
@@ -19,11 +19,11 @@ struct FooTask {}
 
 #[async_trait::async_trait]
 impl Stoppable for FooTask {
-    async fn start(&mut self) -> Result<(), ErrorCode> {
+    async fn start(&mut self) -> Result<()> {
         Ok(())
     }
 
-    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<(), ErrorCode> {
+    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
         tracing::info!("--- FooTask stop, force: {:?}", force);
 
         // block the stop until force stop.
@@ -37,7 +37,7 @@ impl Stoppable for FooTask {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_stoppable() -> anyhow::Result<()> {
+async fn test_stoppable() -> Result<()> {
     // - Create a task and start it.
     // - Stop but the task would block.
     // - Signal the task to force stop.
@@ -49,7 +49,7 @@ async fn test_stoppable() -> anyhow::Result<()> {
 
     // Start the task
 
-    t.start().await?;
+    assert!(t.start().await.is_ok());
 
     // Gracefully stop blocks.
 
@@ -74,13 +74,13 @@ async fn test_stoppable() -> anyhow::Result<()> {
 
     stop_tx.send(()).expect("fail to send force stop");
 
-    fin_rx.await?;
+    assert!(fin_rx.await.is_ok());
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_stop_handle() -> anyhow::Result<()> {
+async fn test_stop_handle() -> Result<()> {
     // - Create 2 tasks and start them.
     // - Stop but the task would block.
     // - Signal the task to force stop.
@@ -94,8 +94,8 @@ async fn test_stop_handle() -> anyhow::Result<()> {
 
     // Start the task
 
-    t1.start().await?;
-    t2.start().await?;
+    assert!(t1.start().await.is_ok());
+    assert!(t2.start().await.is_ok());
 
     let (fin_tx, mut fin_rx) = oneshot::channel::<()>();
 
@@ -130,13 +130,13 @@ async fn test_stop_handle() -> anyhow::Result<()> {
     tracing::info!("--- send force stop");
     stop_tx.send(()).expect("fail to set force stop");
 
-    fin_rx.await?;
+    assert!(fin_rx.await.is_ok());
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_stop_handle_drop() -> anyhow::Result<()> {
+async fn test_stop_handle_drop() -> Result<()> {
     // - Create a task and start it.
     // - Then quit and the Drop should forcibly stop it and the test should not block.
 
@@ -146,7 +146,7 @@ async fn test_stop_handle_drop() -> anyhow::Result<()> {
 
     // Start the task
 
-    t1.start().await?;
+    assert!(t1.start().await.is_ok());
 
     let mut h = StopHandle::create();
     h.push(Box::new(t1));
