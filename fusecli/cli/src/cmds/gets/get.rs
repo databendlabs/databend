@@ -19,13 +19,13 @@ use crate::cmds::Writer;
 use crate::error::Result;
 
 #[derive(Clone)]
-pub struct UpdateCommand {
+pub struct GetCommand {
     conf: Config,
 }
 
-impl UpdateCommand {
+impl GetCommand {
     pub fn create(conf: Config) -> Self {
-        UpdateCommand { conf }
+        GetCommand { conf }
     }
 
     pub fn get_architecture(&self) -> Result<String> {
@@ -57,13 +57,13 @@ impl UpdateCommand {
     }
 }
 
-impl Command for UpdateCommand {
+impl Command for GetCommand {
     fn name(&self) -> &str {
-        "update"
+        "get"
     }
 
     fn about(&self) -> &str {
-        "Check and download the package to local path"
+        "Install or upgrade datafuse package"
     }
 
     fn is(&self, s: &str) -> bool {
