@@ -46,15 +46,11 @@ impl ShutdownHandle {
             shutdown_jobs.push(service.shutdown());
         }
 
-        let shutdown = self.shutdown.clone();
         let sessions = self.sessions.clone();
         let join_all = futures::future::join_all(shutdown_jobs);
         async move {
-            if !shutdown.load(Ordering::Relaxed) {
-                join_all.await;
-                sessions.shutdown(signal).await;
-                shutdown.store(true, Ordering::Relaxed);
-            }
+            join_all.await;
+            sessions.shutdown(signal).await;
         }
     }
 
@@ -65,8 +61,13 @@ impl ShutdownHandle {
 
             log::info!("Received termination signal.");
             log::info!("You can press Ctrl + C again to force shutdown.");
-            let shutdown_services = self.shutdown(Some(receiver));
-            shutdown_services.await;
+            if let Ok(false) =
+                self.shutdown
+                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+            {
+                let shutdown_services = self.shutdown(Some(receiver));
+                shutdown_services.await;
+            }
         }
     }
 
@@ -90,7 +91,10 @@ impl ShutdownHandle {
 
 impl Drop for ShutdownHandle {
     fn drop(&mut self) {
-        if !self.shutdown.load(Ordering::Relaxed) {
+        if let Ok(false) =
+            self.shutdown
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+        {
             futures::executor::block_on(self.shutdown(None));
         }
     }

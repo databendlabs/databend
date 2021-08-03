@@ -142,8 +142,6 @@ async fn test_stop_handle_drop() -> Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_tx, _rx) = broadcast::channel::<()>(1024);
-
     let mut t1 = FooTask::default();
 
     // Start the task

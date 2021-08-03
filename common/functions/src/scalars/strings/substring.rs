@@ -54,8 +54,8 @@ impl Function for SubstringFunction {
         // todo, move these to datavalues
         let value = columns[0].to_array()?;
         let arrow_array = value.get_array_ref();
-        let result =
-            compute::kernels::substring::substring(arrow_array.as_ref(), from, &end)? as ArrayRef;
+        let result = compute::substring::substring(arrow_array.as_ref(), from, &end)?;
+        let result: ArrayRef = Arc::from(result);
         Ok(result.into())
     }
 

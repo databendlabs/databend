@@ -56,11 +56,6 @@ fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
 }
 
 impl ArrayCompare<&Series> for Series {
-    fn eq_missing(&self, rhs: &Series) -> Result<DFBooleanArray> {
-        let (lhs, rhs) = coerce_cmp_lhs_rhs(self, rhs)?;
-        impl_compare!(lhs.as_ref(), rhs.as_ref(), eq_missing)
-    }
-
     /// Create a boolean mask by checking for equality.
     fn eq(&self, rhs: &Series) -> Result<DFBooleanArray> {
         let (lhs, rhs) = coerce_cmp_lhs_rhs(self, rhs)?;

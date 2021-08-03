@@ -37,14 +37,16 @@ impl FlightDataStream {
                             .collect::<Vec<_>>();
 
                         DataBlock::create(
-                            Arc::new(DataSchema::from(record_batch.schema())),
+                            Arc::new(DataSchema::from(record_batch.schema().as_ref())),
                             columns,
                         )
                     }
 
                     let arrow_schema = Arc::new(schema.to_arrow());
-                    Ok(flight_data_to_arrow_batch(&flight_data, arrow_schema, &[])
-                        .map(create_data_block)?)
+                    Ok(
+                        flight_data_to_arrow_batch(&flight_data, arrow_schema, true, &[])
+                            .map(create_data_block)?,
+                    )
                 }
             }
         })
@@ -67,14 +69,17 @@ impl FlightDataStream {
                         .map(|column| DataColumn::Array(column.clone().into_series()))
                         .collect::<Vec<_>>();
 
-                    let schema = DataSchema::from(record_batch.schema());
+                    let schema = DataSchema::from(record_batch.schema().as_ref());
                     DataBlock::create(Arc::new(schema), columns)
                 }
 
-                Ok(
-                    flight_data_to_arrow_batch(&flight_data, Arc::new(schema_ref.to_arrow()), &[])
-                        .map(create_data_block)?,
+                Ok(flight_data_to_arrow_batch(
+                    &flight_data,
+                    Arc::new(schema_ref.to_arrow()),
+                    true,
+                    &[],
                 )
+                .map(create_data_block)?)
             }
         })
     }

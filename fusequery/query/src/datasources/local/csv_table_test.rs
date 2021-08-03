@@ -4,6 +4,7 @@
 
 use std::env;
 
+use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
@@ -126,13 +127,22 @@ async fn test_csv_table_parse_error() -> Result<()> {
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await;
-    assert_eq!(true, result.is_err());
-    if let Err(e) = result {
-        assert_eq!(
-            "Code: 1002, displayText = Parser error: Error while parsing value \'Shanghai\' for column 1 at line 1.",
-            e.to_string()
-        );
-    };
-
+    // integer parse error will result to Null value
+    assert_eq!(false, result.is_err());
+    assert_blocks_sorted_eq(
+        vec![
+            "+---------+---------+---------+---------+",
+            "| column1 | column2 | column3 | column4 |",
+            "+---------+---------+---------+---------+",
+            "| 1       | NULL    | 100     | NULL    |",
+            "| 2       | NULL    | 80      | NULL    |",
+            "| 3       | NULL    | 60      | NULL    |",
+            "| 4       | NULL    | 70      | NULL    |",
+            "| 5       | NULL    | 55      | NULL    |",
+            "| 6       | NULL    | 99      | NULL    |",
+            "+---------+---------+---------+---------+",
+        ],
+        &result.unwrap(),
+    );
     Ok(())
 }
