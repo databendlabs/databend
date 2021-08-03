@@ -239,6 +239,7 @@ jobs:
       run: |
         cp -r /tmp/infra/ ./
         ls
+        cd ./infra
     - uses: AbsaOSS/k3d-action@v1.5.0
       name: "Create Single Cluster"
       with:
