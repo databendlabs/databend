@@ -259,7 +259,9 @@ jobs:
           --timeout 360s
           --wait
     - name: testing environment set up
+      working-directory: ./infra
       run: |
+        ls
         kubectl label node k3d-fusebench-agent-0 test-branch=${{env.CURRENT}}
         kubectl label node k3d-fusebench-agent-1 test-branch=${{env.REFERENCE}}
         kubectl wait -n kube-system --timeout=180s --for condition=Ready --all pods
@@ -270,6 +272,7 @@ jobs:
         kubectl wait -n metallb-system --timeout=180s --for condition=Ready --all pods
 
     - name: Start performance testing
+      working-directory: ./infra
       run: >-
             echo ${{ env.UUID }};
             export ENDPOINT=$(echo $ENDPOINT | grep -oP '(http|https)://\K\S+');
