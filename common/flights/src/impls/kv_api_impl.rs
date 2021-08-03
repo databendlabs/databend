@@ -10,6 +10,7 @@ pub use common_store_api::kv_api::PrefixListReply;
 pub use common_store_api::kv_api::UpsertKVActionResult;
 pub use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
+use common_tracing::tracing;
 
 use crate::action_declare;
 use crate::RequestFor;
@@ -18,6 +19,7 @@ use crate::StoreDoAction;
 
 #[async_trait::async_trait]
 impl KVApi for StoreClient {
+    #[tracing::instrument(level = "debug", skip(self, value))]
     async fn upsert_kv(
         &mut self,
         key: &str,
@@ -35,6 +37,7 @@ impl KVApi for StoreClient {
     /// Delete a kv record that matches key and seq.
     /// Returns the (seq, value) that is deleted.
     /// I.e., if key not found or seq does not match, it returns None.
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn delete_kv(&mut self, key: &str, seq: Option<u64>) -> Result<Option<SeqValue>> {
         let res = self
             .do_action(DeleteKVReq {
@@ -52,6 +55,7 @@ impl KVApi for StoreClient {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn get_kv(&mut self, key: &str) -> Result<GetKVActionResult> {
         self.do_action(GetKVAction {
             key: key.to_string(),
@@ -59,12 +63,14 @@ impl KVApi for StoreClient {
         .await
     }
 
+    #[tracing::instrument(level = "debug", skip(self, keys))]
     async fn mget_kv(&mut self, keys: &[String]) -> common_exception::Result<MGetKVActionResult> {
         let keys = keys.to_vec();
         //keys.iter().map(|k| k.to_string()).collect();
         self.do_action(MGetKVAction { keys }).await
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn prefix_list_kv(&mut self, prefix: &str) -> common_exception::Result<PrefixListReply> {
         self.do_action(PrefixListReq(prefix.to_string())).await
     }

@@ -15,11 +15,12 @@ pub mod raft_txid;
 pub mod raft_types;
 pub mod raftmeta;
 pub mod sled_serde;
-pub mod sled_tree;
+pub mod sled_util;
 pub mod sled_vartype_tree;
 pub mod sledkv;
 pub mod snapshot;
 pub mod state_machine;
+pub mod state_machine_meta;
 
 pub use applied_state::AppliedState;
 pub use cmd::Cmd;
@@ -37,14 +38,17 @@ pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
 pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledSerde;
-pub use sled_tree::SledTree;
-pub use sled_tree::SledValueToKey;
+pub use sled_util::sled_open;
 pub use sled_vartype_tree::AsType;
+pub use sled_vartype_tree::SledValueToKey;
 pub use sled_vartype_tree::SledVarTypeTree;
 pub use snapshot::Snapshot;
 pub use state_machine::Node;
 pub use state_machine::Slot;
 pub use state_machine::StateMachine;
+pub use state_machine_meta::StateMachineMeta;
+pub use state_machine_meta::StateMachineMetaKey;
+pub use state_machine_meta::StateMachineMetaValue;
 
 pub use crate::protobuf::meta_service_client::MetaServiceClient;
 pub use crate::protobuf::meta_service_server::MetaService;
@@ -69,8 +73,6 @@ mod raft_types_test;
 mod raftmeta_test;
 #[cfg(test)]
 mod sled_serde_test;
-#[cfg(test)]
-mod sled_tree_test;
 #[cfg(test)]
 mod sled_vartype_tree_test;
 #[cfg(test)]

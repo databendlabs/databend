@@ -108,7 +108,7 @@ impl Processor for AggregatorPartialTransform {
         let mut bytes = BytesMut::new();
         for (idx, func) in funcs.iter().enumerate() {
             func.serialize(places[idx], &mut bytes)?;
-            let mut array_builder = BinaryArrayBuilder::new(4);
+            let mut array_builder = BinaryArrayBuilder::with_capacity(4);
             array_builder.append_value(&bytes[..]);
             bytes.clear();
             let array = array_builder.finish();

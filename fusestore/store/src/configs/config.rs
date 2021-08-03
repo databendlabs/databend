@@ -81,6 +81,16 @@ pub struct Config {
     )]
     pub meta_dir: String,
 
+    #[structopt(
+        long,
+        env = "FUSE_STORE_META_NO_SYNC",
+        help = concat!("Whether to fsync meta to disk for every meta write(raft log, state machine etc).",
+                      " No-sync brings risks of data loss during a crash.",
+                      " You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING."
+        ),
+    )]
+    pub meta_no_sync: bool,
+
     // raft config
     #[structopt(
         long,
@@ -119,5 +129,10 @@ impl Config {
 
     pub fn meta_api_addr(&self) -> String {
         format!("{}:{}", self.meta_api_host, self.meta_api_port)
+    }
+
+    /// Returns true to fsync after a write operation to meta.
+    pub fn meta_sync(&self) -> bool {
+        !self.meta_no_sync
     }
 }

@@ -8,7 +8,7 @@ use std::fmt::Formatter;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::SeqError;
+use crate::ConflictSeq;
 use crate::SeqValue;
 
 /// Describes what `seq` an operation must match to take effect.
@@ -62,11 +62,11 @@ impl Display for MatchSeq {
 
 pub trait MatchSeqExt<T> {
     /// Match against a some value containing seq by checking if the seq satisfies the condition.
-    fn match_seq(&self, sv: T) -> Result<(), SeqError>;
+    fn match_seq(&self, sv: T) -> Result<(), ConflictSeq>;
 }
 
 impl<U> MatchSeqExt<&Option<SeqValue<U>>> for MatchSeq {
-    fn match_seq(&self, sv: &Option<SeqValue<U>>) -> Result<(), SeqError> {
+    fn match_seq(&self, sv: &Option<SeqValue<U>>) -> Result<(), ConflictSeq> {
         let seq = match sv {
             Some(sv) => sv.0,
             None => 0,
@@ -76,19 +76,19 @@ impl<U> MatchSeqExt<&Option<SeqValue<U>>> for MatchSeq {
 }
 
 impl<U> MatchSeqExt<&SeqValue<U>> for MatchSeq {
-    fn match_seq(&self, sv: &SeqValue<U>) -> Result<(), SeqError> {
+    fn match_seq(&self, sv: &SeqValue<U>) -> Result<(), ConflictSeq> {
         let seq = sv.0;
         self.match_seq(seq)
     }
 }
 
 impl MatchSeqExt<u64> for MatchSeq {
-    fn match_seq(&self, seq: u64) -> Result<(), SeqError> {
+    fn match_seq(&self, seq: u64) -> Result<(), ConflictSeq> {
         match self {
             MatchSeq::Any => Ok(()),
             MatchSeq::Exact(s) if seq == *s => Ok(()),
             MatchSeq::GE(s) if seq >= *s => Ok(()),
-            _ => Err(SeqError::NotMatch {
+            _ => Err(ConflictSeq::NotMatch {
                 want: *self,
                 got: seq,
             }),

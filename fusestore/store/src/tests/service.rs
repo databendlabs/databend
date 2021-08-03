@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_runtime::tokio;
+use common_tracing::tracing;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
@@ -17,14 +18,11 @@ use crate::meta_service::MetaServiceClient;
 use crate::tests::Seq;
 
 // Start one random service and get the session manager.
+#[tracing::instrument(level = "info")]
 pub async fn start_store_server() -> Result<(StoreTestContext, String)> {
-    let mut tc = new_test_context();
+    let tc = new_test_context();
 
-    let addr = next_local_addr();
-
-    // TODO(xp): when testing, new_test_context() should build a random addr for flight
-    //           and fs storage dir
-    tc.config.flight_api_address = addr.clone();
+    let addr = tc.config.flight_api_address.clone();
 
     let srv = StoreServer::create(tc.config.clone());
     tokio::spawn(async move {
@@ -42,11 +40,6 @@ pub fn next_port() -> u32 {
     19000u32 + (*Seq::default() as u32)
 }
 
-pub fn next_local_addr() -> String {
-    let port: u32 = next_port();
-    format!("127.0.0.1:{}", port)
-}
-
 pub struct StoreTestContext {
     #[allow(dead_code)]
     meta_temp_dir: TempDir,
@@ -58,10 +51,35 @@ pub struct StoreTestContext {
 pub fn new_test_context() -> StoreTestContext {
     let mut config = configs::Config::empty();
 
+    // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+    if cfg!(target_os = "macos") {
+        tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+        config.meta_no_sync = true;
+    }
+
     config.meta_api_port = next_port();
+
+    let host = "127.0.0.1";
+
+    {
+        let flight_port = next_port();
+        config.flight_api_address = format!("{}:{}", host, flight_port);
+    }
+
+    {
+        let http_port = next_port();
+        config.http_api_address = format!("{}:{}", host, http_port);
+    }
+
+    {
+        let metric_port = next_port();
+        config.metric_api_address = format!("{}:{}", host, metric_port);
+    }
 
     let t = tempdir().expect("create temp dir to store meta");
     config.meta_dir = t.path().to_str().unwrap().to_string();
+
+    tracing::info!("new test context config: {:?}", config);
 
     StoreTestContext {
         // hold the TempDir until being dropped.
@@ -74,6 +92,7 @@ pub fn new_test_context() -> StoreTestContext {
 pub struct SledTestContext {
     #[allow(dead_code)]
     temp_dir: TempDir,
+    pub config: configs::Config,
     pub db: sled::Db,
 }
 
@@ -82,9 +101,14 @@ pub fn new_sled_test_context() -> SledTestContext {
     let t = tempdir().expect("create temp dir to store meta");
     let tmpdir = t.path().to_str().unwrap().to_string();
 
+    // config for unit test of sled db, meta_sync() is true by default.
+    let config = configs::Config::empty();
+
     SledTestContext {
         // hold the TempDir until being dropped.
         temp_dir: t,
+        config,
+        // TODO(xp): one db per process.
         db: sled::open(tmpdir).expect("open sled db"),
     }
 }

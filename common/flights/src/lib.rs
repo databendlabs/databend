@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 pub use common::flight_result_to_str;
-pub use common::status_err;
 pub use common_store_api::KVApi;
 pub use common_store_api::MetaApi;
 pub use common_store_api::StorageApi;

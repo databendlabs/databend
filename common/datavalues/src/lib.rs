@@ -29,10 +29,6 @@ mod data_value_operator;
 mod data_value_ops;
 #[allow(dead_code)]
 mod utils;
-mod vec;
-
-#[cfg(test)]
-mod vec_test;
 
 pub mod arrays;
 pub mod columns;
@@ -55,4 +51,3 @@ pub use data_value::DataValue;
 pub use data_value::DataValueRef;
 pub use data_value_arithmetic::*;
 pub use data_value_operator::*;
-pub use vec::*;

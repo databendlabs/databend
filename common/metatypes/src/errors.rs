@@ -4,12 +4,10 @@
 
 use serde::Deserialize;
 use serde::Serialize;
-use thiserror::Error;
 
 use crate::MatchSeq;
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum SeqError {
-    #[error("seq not match, expect: {got} {want}")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ConflictSeq {
     NotMatch { want: MatchSeq, got: u64 },
 }

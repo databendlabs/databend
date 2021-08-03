@@ -15,7 +15,6 @@ pub mod tests;
 pub mod api;
 pub mod configs;
 pub mod dfs;
-pub mod engine;
 pub mod executor;
 pub mod fs;
 pub mod localfs;
