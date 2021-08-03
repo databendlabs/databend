@@ -205,8 +205,8 @@ jobs:
       GITHUB_ORG: zhihanz
       GITHUB_REPO: fuse-query
       GITHUB_STATUS_TARGET_URL: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
-      CPU: 3300m
-      MEMORY: 3Gi
+      CPU: 4300m
+      MEMORY: 4Gi
       # define reference and compare branches for performance test
       # suppose branch building for current and reference works well
       CURRENT: ${{ github.event.client_payload.CURRENT_BRANCH }}
