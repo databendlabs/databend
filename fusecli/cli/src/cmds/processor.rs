@@ -13,8 +13,8 @@ use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
 use crate::cmds::Config;
 use crate::cmds::Env;
+use crate::cmds::GetCommand;
 use crate::cmds::HelpCommand;
-use crate::cmds::UpdateCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -32,7 +32,7 @@ impl Processor {
         let sub_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
             Box::new(CommentCommand::create()),
-            Box::new(UpdateCommand::create(conf.clone())),
+            Box::new(GetCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
         ];
 
