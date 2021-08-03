@@ -92,10 +92,10 @@ impl Command for GetCommand {
         {
             Ok(_matches) => {
                 let arch = self.get_architecture()?;
-                writer.writeln("Arch", arch.as_str());
+                writer.write_ok(format!("Arch {}", arch).as_str());
 
                 let latest_tag = self.get_latest_tag()?;
-                writer.writeln("Tag", latest_tag.as_str());
+                writer.write_ok(format!("Tag {}", latest_tag).as_str());
 
                 // Create download dir.
                 let bin_download_dir = format!(
@@ -112,7 +112,6 @@ impl Command for GetCommand {
 
                 let bin_name = format!("datafuse--{}.tar.gz", arch);
                 let bin_file = format!("{}/{}", bin_download_dir, bin_name);
-                writer.writeln("Binary", bin_file.as_str());
                 let exists = Path::new(bin_file.as_str()).exists();
 
                 // Download.
@@ -123,7 +122,6 @@ impl Command for GetCommand {
                         latest_tag,
                         bin_name,
                     );
-                    writer.writeln("Download", binary_url.as_str());
                     let res = ureq::get(binary_url.as_str()).call()?;
                     let total_size: u64 = res.header("content-length").unwrap().parse().unwrap();
                     let pb = ProgressBar::new(total_size);
@@ -133,22 +131,33 @@ impl Command for GetCommand {
 
                     let mut out = File::create(bin_file.clone()).unwrap();
                     io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).unwrap();
+                    writer.write_ok(format!("Download {}", binary_url).as_str());
                 }
+                writer.write_ok(format!("Binary {}", bin_file).as_str());
 
                 // Unpack.
                 let tar_gz = File::open(bin_file)?;
                 let tar = GzDecoder::new(tar_gz);
                 let mut archive = Archive::new(tar);
-                writer.writeln("Unpack to", bin_unpack_dir.as_str());
-                archive.unpack(bin_unpack_dir).unwrap();
+                let res = archive.unpack(bin_unpack_dir.clone());
+                match res {
+                    Ok(_) => {
+                        writer.write_ok(format!("Unpack {}", bin_unpack_dir).as_str());
+                    }
+                    Err(e) => {
+                        writer.write_err(format!("{}", e).as_str());
+                        return Ok(());
+                    }
+                };
 
                 // Write status.
                 let mut status = Status::read(self.conf.clone())?;
                 status.latest = latest_tag;
                 status.write()?;
+                writer.write_ok("Write status");
             }
             Err(err) => {
-                writer.writeln_width("", format!("{}", err).as_str(), 0);
+                writer.write_err(format!("{}", err).as_str());
             }
         }
 

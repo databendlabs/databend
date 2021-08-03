@@ -5,6 +5,8 @@
 use std::io::Stdout;
 use std::io::Write;
 
+use colored::Colorize;
+
 enum WriterOutput {
     Stdout(Stdout),
 }
@@ -25,9 +27,12 @@ impl Writer {
         writeln!(self, "{:width$} {}", name, value, width = width).unwrap();
     }
 
-    pub fn writeln_width(&mut self, name: &str, value: &str, width: usize) {
-        let width = width;
-        writeln!(self, "{:width$} {}", name, value, width = width).unwrap();
+    pub fn write_ok(&mut self, msg: &str) {
+        writeln!(self, "✅ {} {}", "[ok]".bold().green(), msg).unwrap();
+    }
+
+    pub fn write_err(&mut self, msg: &str) {
+        writeln!(self, "{} {}", "[failed]".bold().red(), msg.red()).unwrap();
     }
 }
 
