@@ -6,6 +6,7 @@
 
 # Rust
 target/*
+distro/*
 
 # cargo
 .cargo/
