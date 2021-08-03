@@ -24,6 +24,11 @@ impl Writer {
         let width = 20;
         writeln!(self, "{:width$} {}", name, value, width = width).unwrap();
     }
+
+    pub fn writeln_width(&mut self, name: &str, value: &str, width: usize) {
+        let width = width;
+        writeln!(self, "{:width$} {}", name, value, width = width).unwrap();
+    }
 }
 
 impl Write for Writer {
