@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+use std::convert::TryFrom;
+
 use async_trait::async_trait;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metatypes::SeqValue;
 
@@ -52,4 +55,18 @@ pub trait UserMgrApi {
 
     async fn drop_user<V>(&mut self, username: V, seq: Option<u64>) -> Result<()>
     where V: AsRef<str> + Send;
+}
+
+impl TryFrom<Vec<u8>> for UserInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: Vec<u8>) -> Result<Self> {
+        match serde_json::from_slice(&value) {
+            Ok(user_info) => Ok(user_info),
+            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+                "Cannot deserialize user info from bytes. cause {}",
+                serialize_error
+            ))),
+        }
+    }
 }

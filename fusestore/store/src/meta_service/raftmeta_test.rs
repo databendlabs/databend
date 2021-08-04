@@ -204,13 +204,18 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nid0, tc0) = setup_leader().await?;
-    let mn0 = tc0.meta_nodes[0].clone();
+    {
+        let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
+        let _ent = span.enter();
 
-    let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?;
-    let mn1 = tc1.meta_nodes[0].clone();
+        let (_nid0, tc0) = setup_leader().await?;
+        let mn0 = tc0.meta_nodes[0].clone();
 
-    assert_set_file_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
+        let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?;
+        let mn1 = tc1.meta_nodes[0].clone();
+
+        assert_set_file_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
+    }
 
     Ok(())
 }
@@ -223,35 +228,40 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
-    let all = test_context_nodes(&tcs);
+    {
+        let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
+        let _ent = span.enter();
 
-    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
+        let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+        let all = test_context_nodes(&tcs);
 
-    // test writing to leader and non-leader
-    let key = "t-non-leader-write";
-    for id in 0u64..4 {
-        let mn = &all[id as usize];
-        let rst = mn
-            .write_to_local_leader(LogEntry {
-                txid: None,
-                cmd: Cmd::SetFile {
-                    key: key.to_string(),
-                    value: key.to_string(),
-                },
-            })
-            .await;
+        let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
 
-        let rst = rst?;
+        // test writing to leader and non-leader
+        let key = "t-non-leader-write";
+        for id in 0u64..4 {
+            let mn = &all[id as usize];
+            let rst = mn
+                .write_to_local_leader(LogEntry {
+                    txid: None,
+                    cmd: Cmd::SetFile {
+                        key: key.to_string(),
+                        value: key.to_string(),
+                    },
+                })
+                .await;
 
-        if id == leader_id {
-            assert!(rst.is_ok());
-        } else {
-            assert!(rst.is_err());
-            let e = rst.unwrap_err();
-            match e {
-                RetryableError::ForwardToLeader { leader } => {
-                    assert_eq!(leader_id, leader);
+            let rst = rst?;
+
+            if id == leader_id {
+                assert!(rst.is_ok());
+            } else {
+                assert!(rst.is_err());
+                let e = rst.unwrap_err();
+                match e {
+                    RetryableError::ForwardToLeader { leader } => {
+                        assert_eq!(leader_id, leader);
+                    }
                 }
             }
         }
@@ -269,15 +279,22 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
-    let all = test_context_nodes(&tcs);
+    {
+        let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_set_file");
+        let _ent = span.enter();
 
-    // test writing on every node
-    for id in 0u64..4 {
-        let key = format!("t-write-{}", id);
-        let mn = &all[id as usize];
+        tracing::info!("start");
 
-        assert_set_file_on_specified_node_synced(all.clone(), mn.clone(), &key).await?;
+        let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+        let all = test_context_nodes(&tcs);
+
+        // test writing on every node
+        for id in 0u64..4 {
+            let key = format!("test_meta_node_set_file-key-{}", id);
+            let mn = &all[id as usize];
+
+            assert_set_file_on_specified_node_synced(all.clone(), mn.clone(), &key).await?;
+        }
     }
 
     Ok(())
@@ -290,55 +307,60 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
     common_tracing::init_default_tracing();
 
-    let (_nlog, all_tc) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
-    let all = all_tc
-        .iter()
-        .map(|tc| tc.meta_nodes[0].clone())
-        .collect::<Vec<_>>();
+    {
+        let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_add_database");
+        let _ent = span.enter();
 
-    // ensure cluster works
-    assert_set_file_synced(all.clone(), "foo").await?;
+        let (_nlog, all_tc) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+        let all = all_tc
+            .iter()
+            .map(|tc| tc.meta_nodes[0].clone())
+            .collect::<Vec<_>>();
 
-    // - db name to create
-    // - expected db id
-    let cases: Vec<(&str, bool, u64)> = vec![
-        ("foo", true, 1),
-        ("bar", true, 2),
-        ("foo", true, 1),
-        ("bar", true, 2),
-    ];
+        // ensure cluster works
+        assert_set_file_synced(all.clone(), "foo").await?;
 
-    // Sending AddDatabase request to any node is ok.
-    for (i, (name, not_exists, want_id)) in cases.iter().enumerate() {
-        let mn = &all[i as usize];
+        // - db name to create
+        // - expected db id
+        let cases: Vec<(&str, bool, u64)> = vec![
+            ("foo", true, 1),
+            ("bar", true, 2),
+            ("foo", true, 1),
+            ("bar", true, 2),
+        ];
 
-        let last_applied = mn.raft.metrics().borrow().last_applied;
+        // Sending AddDatabase request to any node is ok.
+        for (i, (name, not_exists, want_id)) in cases.iter().enumerate() {
+            let mn = &all[i as usize];
 
-        let rst = mn
-            .write(LogEntry {
-                txid: None,
-                cmd: Cmd::CreateDatabase {
-                    name: name.to_string(),
-                    if_not_exists: *not_exists,
-                    db: Default::default(),
-                },
-            })
-            .await;
+            let last_applied = mn.raft.metrics().borrow().last_applied;
 
-        assert!(rst.is_ok());
+            let rst = mn
+                .write(LogEntry {
+                    txid: None,
+                    cmd: Cmd::CreateDatabase {
+                        name: name.to_string(),
+                        if_not_exists: *not_exists,
+                        db: Default::default(),
+                    },
+                })
+                .await;
 
-        // No matter if a db is created, the log that tries to create db always applies.
-        assert_applied_index(all.clone(), last_applied + 1).await?;
+            assert!(rst.is_ok());
 
-        for (i, mn) in all.iter().enumerate() {
-            let got = mn.get_database(&name).await;
+            // No matter if a db is created, the log that tries to create db always applies.
+            assert_applied_index(all.clone(), last_applied + 1).await?;
 
-            assert_eq!(
-                *want_id,
-                got.unwrap().database_id,
-                "n{} applied AddDatabase",
-                i
-            );
+            for (i, mn) in all.iter().enumerate() {
+                let got = mn.get_database(&name).await;
+
+                assert_eq!(
+                    *want_id,
+                    got.unwrap().database_id,
+                    "n{} applied AddDatabase",
+                    i
+                );
+            }
         }
     }
 
@@ -351,6 +373,9 @@ async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
     // - Write to leader, check data is replicated.
 
     common_tracing::init_default_tracing();
+
+    let span = tracing::span!(tracing::Level::INFO, "test_meta_node_cluster_1_2_2");
+    let _ent = span.enter();
 
     let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
     let all = test_context_nodes(&tcs);
@@ -416,6 +441,81 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     // check old data
     assert_get_file(meta_nodes, "key1", "key1").await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
+    // TODO(xp): This function will replace `test_meta_node_restart` after disk backed state machine is ready.
+
+    // Test disk backed meta node restart.
+    // - Start a cluster of a solo leader;
+    // - Write one log.
+    // - Restart.
+    // - Check node state:
+    //   - raft hard state
+    //   - raft logs.
+    //   - state machine:
+    //     - Nodes
+    //   - TODO(xp): snapshot is empty, since snapshot is not persisted in this version see `MetaStore`.
+    // - Check cluster:
+    //   - Leader is elected.
+    //   - TODO(xp): Leader starts replication to follower and non-voter.
+    //   - TODO(xp): New log will be successfully written and sync
+    //   - TODO(xp): A new snapshot will be created and transferred  on demand.
+
+    common_tracing::init_default_tracing();
+
+    let mut log_cnt: u64 = 0;
+    let (_id, mut tc) = setup_leader().await?;
+    log_cnt += 2;
+
+    let want_hs;
+    {
+        let leader = tc.meta_nodes.pop().unwrap();
+
+        leader
+            .write_to_local_leader(LogEntry {
+                txid: None,
+                cmd: Cmd::SetFile {
+                    key: "foo".to_string(),
+                    value: "foo".to_string(),
+                },
+            })
+            .await??;
+        log_cnt += 1;
+
+        want_hs = leader.sto.raft_state.read_hard_state().await?;
+
+        leader.stop().await?;
+    }
+
+    tracing::info!("--- reopen MetaNode");
+    let leader = MetaNode::open(&tc.config).await?;
+    log_cnt += 1;
+
+    wait_for_state(&leader, State::Leader).await?;
+    wait_for_log(&leader, log_cnt as u64).await?;
+
+    tracing::info!("--- check hard state");
+    {
+        let hs = leader.sto.raft_state.read_hard_state().await?;
+        assert_eq!(want_hs, hs);
+    }
+
+    tracing::info!("--- check logs");
+    {
+        let logs = leader.sto.log.range_get(..)?;
+        tracing::info!("logs: {:?}", logs);
+        assert_eq!(log_cnt as usize, logs.len());
+    }
+
+    tracing::info!("--- check state machine: nodes");
+    {
+        let node = leader.sto.get_node(&0).await.expect("must not be none");
+        assert_eq!(tc.config.meta_api_addr(), node.address);
+    }
 
     Ok(())
 }

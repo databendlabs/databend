@@ -8,7 +8,7 @@
 pub mod tests;
 
 pub mod api;
-pub mod catalog;
+pub mod catalogs;
 pub mod clusters;
 pub mod configs;
 pub mod datasources;

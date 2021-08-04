@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::cast;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,9 +40,11 @@ where
         };
     }
 
+ 
     if T::data_type() == DataType::Null {
         todo!()
     }
+  
     let ca = cast(&ca.array, &N::data_type().to_arrow())?;
     Ok(ca.into())
 }
@@ -82,7 +87,9 @@ where
         cast_ca(self)
     }
 
-    fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
+    fn 
+  
+  (&self, data_type: &DataType) -> Result<Series> {
         cast_with_type!(self, data_type)
     }
 }

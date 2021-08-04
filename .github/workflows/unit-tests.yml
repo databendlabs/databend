@@ -23,7 +23,6 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
           key: ${{ runner.os }}-cargo-testcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-testcache-${{ secrets.CACHE_RESET_KEY }}-

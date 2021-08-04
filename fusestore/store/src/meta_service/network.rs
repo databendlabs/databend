@@ -74,6 +74,7 @@ impl Network {
         &self,
         node_id: &NodeId,
     ) -> anyhow::Result<MetaServiceClient<Channel>> {
+        // TODO(xp): rename: id: my id; target: the remote id.
         let addr = self.sto.get_node_addr(node_id).await?;
         tracing::info!("connect: id={}: {}", node_id, addr);
         let client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
@@ -84,7 +85,7 @@ impl Network {
 
 #[async_trait]
 impl RaftNetwork<LogEntry> for Network {
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(myid=self.sto.id))]
     async fn append_entries(
         &self,
         target: NodeId,
@@ -93,7 +94,10 @@ impl RaftNetwork<LogEntry> for Network {
         tracing::debug!("append_entries req to: id={}: {:?}", target, rpc);
 
         let mut client = self.make_client(&target).await?;
-        let resp = client.append_entries(rpc).await;
+
+        let req = common_tracing::inject_span_to_tonic_request(rpc);
+
+        let resp = client.append_entries(req).await;
         tracing::debug!("append_entries resp from: id={}: {:?}", target, resp);
 
         let resp = resp?;
@@ -103,7 +107,7 @@ impl RaftNetwork<LogEntry> for Network {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(myid=self.sto.id))]
     async fn install_snapshot(
         &self,
         target: NodeId,
@@ -112,7 +116,8 @@ impl RaftNetwork<LogEntry> for Network {
         tracing::debug!("install_snapshot req to: id={}", target);
 
         let mut client = self.make_client(&target).await?;
-        let resp = client.install_snapshot(rpc).await;
+        let req = common_tracing::inject_span_to_tonic_request(rpc);
+        let resp = client.install_snapshot(req).await;
         tracing::debug!("install_snapshot resp from: id={}: {:?}", target, resp);
 
         let resp = resp?;
@@ -122,12 +127,13 @@ impl RaftNetwork<LogEntry> for Network {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(myid=self.sto.id))]
     async fn vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
         tracing::debug!("vote req to: id={} {:?}", target, rpc);
 
         let mut client = self.make_client(&target).await?;
-        let resp = client.vote(rpc).await;
+        let req = common_tracing::inject_span_to_tonic_request(rpc);
+        let resp = client.vote(req).await;
         tracing::info!("vote: resp from id={} {:?}", target, resp);
 
         let resp = resp?;

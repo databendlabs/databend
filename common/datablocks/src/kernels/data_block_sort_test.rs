@@ -62,3 +62,48 @@ fn test_data_block_sort() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn test_data_block_merge_sort() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::Int64, false),
+        DataField::new("b", DataType::Utf8, false),
+    ]);
+
+    let raw1 = DataBlock::create_by_array(schema.clone(), vec![
+        Series::new(vec![3, 5, 7]),
+        Series::new(vec!["b1", "b2", "b3"]),
+    ]);
+
+    let raw2 = DataBlock::create_by_array(schema.clone(), vec![
+        Series::new(vec![2, 4, 6]),
+        Series::new(vec!["b4", "b5", "b6"]),
+    ]);
+
+    {
+        let options = vec![SortColumnDescription {
+            column_name: "a".to_owned(),
+            asc: true,
+            nulls_first: false,
+        }];
+        let results = DataBlock::merge_sort_block(&raw1, &raw2, &options, None)?;
+
+        assert_eq!(raw1.schema(), results.schema());
+
+        let expected = vec![
+            "+---+----+",
+            "| a | b  |",
+            "+---+----+",
+            "| 2 | b4 |",
+            "| 3 | b1 |",
+            "| 4 | b5 |",
+            "| 5 | b2 |",
+            "| 6 | b6 |",
+            "| 7 | b3 |",
+            "+---+----+",
+        ];
+        crate::assert_blocks_eq(expected, &[results]);
+    }
+
+    Ok(())
+}

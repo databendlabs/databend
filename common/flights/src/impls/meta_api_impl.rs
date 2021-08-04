@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -10,6 +12,7 @@ use common_planners::DropTablePlan;
 pub use common_store_api::CreateDatabaseActionResult;
 pub use common_store_api::CreateTableActionResult;
 pub use common_store_api::DatabaseMetaReply;
+pub use common_store_api::DatabaseMetaSnapshot;
 pub use common_store_api::DropDatabaseActionResult;
 pub use common_store_api::DropTableActionResult;
 pub use common_store_api::GetDatabaseActionResult;
@@ -70,6 +73,14 @@ impl MetaApi for StoreClient {
         table: String,
     ) -> common_exception::Result<GetTableActionResult> {
         self.do_action(GetTableAction { db, table }).await
+    }
+
+    async fn get_table_ext(
+        &mut self,
+        tbl_id: MetaId,
+        tbl_ver: Option<MetaVersion>,
+    ) -> common_exception::Result<GetTableActionResult> {
+        self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
     }
 
     async fn get_database_meta(
@@ -147,6 +158,17 @@ action_declare!(
     GetTableAction,
     GetTableActionResult,
     StoreDoAction::GetTable
+);
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct GetTableExtReq {
+    pub tbl_id: MetaId,
+    pub tbl_ver: Option<MetaVersion>,
+}
+action_declare!(
+    GetTableExtReq,
+    GetTableActionResult,
+    StoreDoAction::GetTableExt
 );
 
 // - get database meta

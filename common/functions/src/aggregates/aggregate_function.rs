@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
+use bytes::BytesMut;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -19,8 +19,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn name(&self) -> &str;
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
-
-    fn as_any(&self) -> &dyn Any;
 
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr;
 
@@ -46,8 +44,9 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     // serialize  the state into binary array
-    fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
-    fn deserialize(&self, _place: StateAddr, _value: &[u8]) -> Result<()>;
+    fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()>;
+
+    fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 

@@ -93,7 +93,7 @@ impl VecHash for DFFloat64Array {
 impl VecHash for DFBinaryArray {
     fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array> {
         let binary_data = self.downcast_ref();
-        let mut builder = PrimitiveArrayBuilder::<UInt64Type>::new(self.len());
+        let mut builder = PrimitiveArrayBuilder::<UInt64Type>::with_capacity(self.len());
 
         (0..self.len()).for_each(|index| {
             if self.is_null(index) {

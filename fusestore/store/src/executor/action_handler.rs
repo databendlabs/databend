@@ -2,16 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
+use common_arrow::arrow::io::parquet::read;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
-use common_arrow::parquet::arrow::ArrowReader;
-use common_arrow::parquet::arrow::ParquetFileArrowReader;
-use common_arrow::parquet::file::reader::SerializedFileReader;
-use common_arrow::parquet::file::serialized_reader::SliceableCursor;
 use common_exception::ErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::ReadAction;
@@ -37,7 +35,7 @@ pub trait ReplySerializer {
 
 pub struct ActionHandler {
     /// The raft-based meta data entry.
-    /// In our design meta serves for both the distributed file system and the catalog storage such as db,tabel etc.
+    /// In our design meta serves for both the distributed file system and the catalogs storage such as db,tabel etc.
     /// Thus in case the `fs` is a Dfs impl, `meta_node` is just a reference to the `Dfs.meta_node`.
     /// TODO(xp): turn on dead_code warning when we finished action handler unit test.
     pub(crate) meta_node: Arc<MetaNode>,
@@ -85,25 +83,6 @@ impl ActionHandler {
     pub async fn execute<S, R>(&self, action: StoreDoAction, s: S) -> common_exception::Result<R>
     where S: ReplySerializer<Output = R> {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
-        //
-        // Technically we can eliminate these kind of duplications by using proc-macros, or eliminate
-        // parts of them by introducing another func like this:
-        //#  async fn invoke<S, O, A, R>(&self, a: A, s: S) -> common_exception::Result<O>
-        //#      where
-        //#          A: Serialize + RequestFor<Reply = R>,
-        //#          S: ReplySerializer<Output = O>,
-        //#          Self: RequestHandler<A>,
-        //#          R: Serialize,
-        //#          <S as ReplySerializer>::Error: Into<ErrorCode>,
-        //#  {
-        //#      let r = self.handle(a).await?;
-        //#      let v = s.serialize(r).map_err(Into::into)?;
-        //#      Ok(v)
-        //#  }
-        //
-        // But, that may be too much, IDEs like "clion" will be confused (and unable to jump around)
-        //
-        // New suggestions/ideas are welcome.
 
         match action {
             // database
@@ -116,6 +95,7 @@ impl ActionHandler {
             StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::DropTable(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::TruncateTable(a) => s.serialize(self.handle(a).await?),
 
             // part
@@ -151,9 +131,6 @@ impl ActionHandler {
             .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
             .await?;
 
-        // let mut meta = self.meta.lock(); //todo(ariesdevil): change to meta_node
-        // meta.append_data_parts(&db_name, &table_name, &res);
-        // Ok(res)
         self.meta_node
             .append_data_parts(&db_name, &table_name, &res)
             .await;
@@ -173,29 +150,26 @@ impl ActionHandler {
             return Err(ErrorCode::IllegalScanPlan("invalid PlanNode passed in"));
         };
 
-        let content = self.fs.read_all(&part_file).await?;
-        let cursor = SliceableCursor::new(content);
-
-        let file_reader = SerializedFileReader::new(cursor)
-            .map_err(|pe| ErrorCode::ReadFileError(format!("parquet error: {}", pe.to_string())))?;
-        let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
-
         // before push_down is passed in, we returns all the columns
         let schema = plan.schema;
         let projection = (0..schema.fields().len()).collect::<Vec<_>>();
 
-        // TODO config
-        let batch_size = 2048;
+        // TODO expose a reader from fs
+        let content = self.fs.read_all(&part_file).await?;
+        let reader = Cursor::new(content);
 
-        let batch_reader = arrow_reader
-            .get_record_reader_by_columns(projection, batch_size)
-            .map_err(|pe| ErrorCode::ReadFileError(format!("parquet error: {}", pe.to_string())))?;
+        let reader = read::RecordReader::try_new(
+            reader,
+            Some(projection.to_vec()),
+            None,
+            Arc::new(|_, _| true),
+        )?;
 
         // For simplicity, we do the conversion in-memory, to be optimized later
         // TODO consider using `parquet_table` and `stream_parquet`
         let write_opt = IpcWriteOptions::default();
         let flights =
-            batch_reader
+            reader
                 .into_iter()
                 .map(|batch| {
                     batch.map(

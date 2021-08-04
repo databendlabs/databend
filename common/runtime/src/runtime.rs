@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::future::Future;
-use std::sync::mpsc;
 use std::thread;
 
 use common_exception::ErrorCode;
@@ -28,22 +27,11 @@ impl Runtime {
             .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))?;
 
         let (send_stop, recv_stop) = oneshot::channel();
-        let (tx, rx) = mpsc::channel();
+
+        let handle = runtime.handle().clone();
 
         // Block the runtime to shutdown.
-        let _ = thread::spawn(move || {
-            tx.send(runtime.handle().clone())
-                .expect("Rx is blocking upper thread.");
-            runtime.block_on(async {
-                tokio::select! {
-                _ = recv_stop => {},
-                }
-            })
-        });
-
-        let handle = rx
-            .recv()
-            .map_err(|e| ErrorCode::UnknownException(format!("{}", e)))?;
+        let _ = thread::spawn(move || runtime.block_on(recv_stop));
 
         Ok(Runtime {
             handle,

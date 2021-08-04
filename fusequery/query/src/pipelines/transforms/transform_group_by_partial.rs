@@ -15,6 +15,7 @@ use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -201,17 +202,18 @@ impl Processor for GroupByPartialTransform {
 
                 // Builders.
                 let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-                    .map(|_| BinaryArrayBuilder::new(groups.len() * 4))
+                    .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
                     .collect();
 
                 type KeyBuilder = $key_array_builder;
-                let mut group_key_builder = KeyBuilder::new(groups.len());
+                let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
+
+                let mut bytes = BytesMut::new();
                 for (key, (places, values)) in groups.iter() {
                     for (idx, func) in funcs.iter().enumerate() {
-                        let mut writer = vec![];
-                        func.serialize(places[idx], &mut writer)?;
-
-                        state_builders[idx].append_value(&writer);
+                        func.serialize(places[idx], &mut bytes)?;
+                        state_builders[idx].append_value(&bytes[..]);
+                        bytes.clear();
                     }
 
                     for (i, value) in values.iter().enumerate() {

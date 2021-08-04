@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0.
 //
 
+use std::convert::TryInto;
+
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -81,16 +83,13 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
             .result
             .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username.as_ref())))?;
 
-        let ms: MatchSeq = seq.into();
-        ms.match_seq(&seq_value)
-            .map_err_to_code(ErrorCode::UnknownUser, || {
-                format!("username: {}", username.as_ref(),)
-            })?;
-
-        let user_info = serde_json::from_slice(&seq_value.1)
-            .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
-
-        Ok((seq_value.0, user_info))
+        match MatchSeq::from(seq).match_seq(&seq_value) {
+            Ok(_) => Ok((seq_value.0, seq_value.1.try_into()?)),
+            Err(_) => Err(ErrorCode::UnknownUser(format!(
+                "username: {}",
+                username.as_ref()
+            ))),
+        }
     }
 
     async fn get_all_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>> {

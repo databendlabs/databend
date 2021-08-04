@@ -65,6 +65,8 @@ const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 const TLS_SERVER_CERT: &str = "TLS_SERVER_CERT";
 const TLS_SERVER_KEY: &str = "TLS_SERVER_KEY";
 
+const DISABLE_REMOTE_CATALOG: &str = "DISABLE_REMOTE_CATALOG";
+
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
@@ -148,6 +150,9 @@ pub struct Config {
 
     #[structopt(long, env = TLS_SERVER_KEY, default_value = "")]
     pub tls_server_key: String,
+
+    #[structopt(long, env =  DISABLE_REMOTE_CATALOG)]
+    pub disable_remote_catalog: bool,
 }
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
@@ -241,6 +246,7 @@ impl Config {
             config_file: "".to_string(),
             tls_server_cert: "".to_string(),
             tls_server_key: "".to_string(),
+            disable_remote_catalog: false,
         }
     }
 

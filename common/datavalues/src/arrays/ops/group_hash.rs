@@ -26,7 +26,7 @@ impl GroupHash for DFUInt8Array {
     fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
         let mut ptr = ptr;
         let array = self.downcast_ref();
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const u8, ptr as *mut u8, 1);
             }
@@ -42,7 +42,7 @@ impl GroupHash for DFInt8Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const i8 as *const u8, ptr as *mut u8, 1);
             }
@@ -58,7 +58,7 @@ impl GroupHash for DFUInt16Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const u16 as *const u8, ptr as *mut u8, 2);
             }
@@ -74,7 +74,7 @@ impl GroupHash for DFInt16Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const i16 as *const u8, ptr as *mut u8, 2);
             }
@@ -90,7 +90,7 @@ impl GroupHash for DFInt32Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const i32 as *const u8, ptr as *mut u8, 4);
             }
@@ -106,7 +106,7 @@ impl GroupHash for DFUInt32Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const u32 as *const u8, ptr as *mut u8, 4);
             }
@@ -139,7 +139,7 @@ impl GroupHash for DFFloat32Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 let bits = value.to_bits();
                 std::ptr::copy_nonoverlapping(&bits as *const u32 as *const u8, ptr as *mut u8, 4);
@@ -155,7 +155,7 @@ impl GroupHash for DFFloat64Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 let bits = value.to_bits();
                 std::ptr::copy_nonoverlapping(&bits as *const u64 as *mut u8, ptr as *mut u8, 8);
@@ -172,7 +172,7 @@ impl GroupHash for DFUInt64Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const u64 as *mut u8, ptr as *mut u8, 8);
             }
@@ -187,7 +187,7 @@ impl GroupHash for DFInt64Array {
         let mut ptr = ptr;
         let array = self.downcast_ref();
 
-        for value in array.values() {
+        for value in array.values().as_slice() {
             unsafe {
                 std::ptr::copy_nonoverlapping(value as *const i64 as *mut u8, ptr as *mut u8, 8);
             }

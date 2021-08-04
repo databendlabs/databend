@@ -4,7 +4,7 @@
 
 use std::convert::TryInto;
 
-use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_datablocks::DataBlock;

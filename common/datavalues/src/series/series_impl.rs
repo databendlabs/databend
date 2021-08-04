@@ -341,25 +341,6 @@ impl Series {
         }
     }
 
-    /// Check if all values in series are equal where `None == None` evaluates to `true`.
-    pub fn series_equal_missing(&self, other: &Series) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        if self.null_count() != other.null_count() {
-            return false;
-        }
-        // if all null and previous check did not return (so other is also all null)
-        if self.null_count() == self.len() {
-            return true;
-        }
-
-        match self.eq_missing(other) {
-            Ok(arr) => arr.all_true(),
-            Err(_) => false,
-        }
-    }
-
     /// Get a pointer to the underlying data of this Series.
     /// Can be useful for fast comparisons.
     pub fn get_data_ptr(&self) -> usize {

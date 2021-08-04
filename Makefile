@@ -21,6 +21,9 @@ build:
 build-debug:
 	bash ./scripts/build/build-debug.sh
 
+cli:
+	bash ./scripts/build/build-cli.sh
+
 unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 
@@ -52,9 +55,14 @@ docker:
 dockerx:
 	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/fuse-query:${TAG} --push
 
-perf-tool:
-	docker build --network host -f docker/perf-tool/Dockerfile -t ${HUB}/perf-tool:${TAG} .
+build-perf-tool:
+	cargo build --target x86_64-unknown-linux-gnu --bin fuse-benchmark
+	mkdir -p ./distro
+	rm ./distro/fuse-benchmark
+	mv ./target/x86_64-unknown-linux-gnu/debug/fuse-benchmark  ./distro
 
+perf-tool: build-perf-tool
+	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
 run-helm:
 	helm upgrade --install datafuse ./charts/datafuse \
 		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308

@@ -1,3 +1,5 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "fuse-query"
 version = "0.1.0"
@@ -5,7 +7,7 @@ description = "A real-time Cloud Distributed Query Engine"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "fuse-query"
@@ -38,6 +40,7 @@ common-tracing = { path = "../../common/tracing" }
 common-profling = { path = "../../common/profiling" }
 common-store-api = { path = "../../common/store-api" }
 common-management = { path = "../../common/management" }
+common-io = { path = "../../common/io" }
 common-metatypes = { path = "../../common/metatypes" }
 
 # Github dependencies
@@ -80,6 +83,7 @@ walkdir = "2.3.2"
 warp = { version = "0.3.1", features = ["tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 bumpalo = "3.7.0"
+lru = "0.6.6"
 
 
 [dev-dependencies]

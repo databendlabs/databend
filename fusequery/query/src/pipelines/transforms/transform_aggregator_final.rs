@@ -85,8 +85,8 @@ impl Processor for AggregatorFinalTransform {
                 let array = binary_array.downcast_ref();
 
                 let place = func.allocate_state(&arena);
-                let data = array.value(0);
-                func.deserialize(place, data)?;
+                let mut data = array.value(0);
+                func.deserialize(place, &mut data)?;
                 func.merge(places[i], place)?;
             }
         }
