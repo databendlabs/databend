@@ -215,7 +215,7 @@ jobs:
       LAST_COMMIT_SHA: ${{ github.event.client_payload.LAST_COMMIT_SHA }}
       UUID: ${{ github.event.client_payload.UUID }}
       ITERATION: 10
-      RERUN: True
+      RERUN: False
       # S3 storage for report and status updates
       CLUSTER_NAME: ${{ github.run_id }}
       REGION: ${{ github.event.client_payload.REGION }}
