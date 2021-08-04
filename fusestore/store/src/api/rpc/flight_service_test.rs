@@ -341,13 +341,13 @@ async fn test_do_append() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let series0 = Series::new(vec![0i64, 1, 2]);
+    let series1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.len() * 2;
+    let expected_rows = series0.len() * 2;
     let expected_cols = 2;
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![col0, col1]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![series0, series1]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
     let stream = futures::stream::iter(batches);
@@ -414,15 +414,17 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let series0 = Series::new(vec![0i64, 1, 2]);
+    let series1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.len() * 2;
+    let rows_of_series0 = series0.len();
+    let rows_of_series1 = series1.len();
+    let expected_rows = rows_of_series0 + rows_of_series1;
     let expected_cols = 2;
 
     let block = DataBlock::create(schema.clone(), vec![
-        DataColumn::Array(col0),
-        DataColumn::Array(col1),
+        DataColumn::Array(series0),
+        DataColumn::Array(series1),
     ]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
@@ -464,6 +466,8 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         assert_eq!(p.cols, expected_cols);
     });
 
+    log::debug!("summary is {:?}", summary);
+
     let plan = ScanPlan {
         schema_name: tbl_name.to_string(),
         ..ScanPlan::empty()
@@ -471,8 +475,14 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let res = client
         .read_plan(db_name.to_string(), tbl_name.to_string(), &plan)
         .await;
-    // TODO d assertions, de-duplicated codes
-    println!("scan res is {:?}", res);
+
+    assert!(res.is_ok());
+    let read_plan_res = res.unwrap();
+    assert!(read_plan_res.is_some());
+    let read_plan = read_plan_res.unwrap();
+    assert_eq!(2, read_plan.len());
+    assert_eq!(read_plan[0].stats.read_rows, rows_of_series0);
+    assert_eq!(read_plan[1].stats.read_rows, rows_of_series1);
 
     Ok(())
 }
