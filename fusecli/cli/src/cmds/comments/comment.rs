@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use ansi_term::Colour::Blue;
+use colored::Colorize;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
@@ -31,7 +31,7 @@ impl Command for CommentCommand {
     }
 
     fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        writer.writeln(format!("{}", Blue.paint(args.as_str())).as_str(), "");
+        writer.writeln(format!("{}", args.green()).as_str());
         Ok(())
     }
 }

@@ -63,15 +63,15 @@ impl Command for VersionCommand {
             _ => ("", "", ""),
         };
 
-        writer.writeln("Datafuse CLI", ver);
+        writer.writeln_width("Datafuse CLI", ver);
         if let Some(sha) = self.cli_sha_info() {
-            writer.writeln("Datafuse CLI SHA256", &sha);
+            writer.writeln_width("Datafuse CLI SHA256", &sha);
         }
-        writer.writeln("Git commit", git);
-        writer.writeln("Build date", ts);
+        writer.writeln_width("Git commit", git);
+        writer.writeln_width("Build date", ts);
 
         if let Some(os) = self.os_info() {
-            writer.writeln("OS version", &os);
+            writer.writeln_width("OS version", &os);
         }
 
         Ok(())
