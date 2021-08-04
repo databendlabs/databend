@@ -32,7 +32,7 @@ impl Command for HelpCommand {
 
     fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
         for cmd in self.commands.iter() {
-            writer.writeln(cmd.name(), cmd.about());
+            writer.writeln_width(cmd.name(), cmd.about());
         }
         Ok(())
     }

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use ansi_term::Colour::Green;
+use colored::Colorize;
 
 use crate::cmds::Config;
 
@@ -16,7 +16,7 @@ impl Env {
         let namespace = conf.namespace.clone();
         Env {
             conf,
-            prompt: format!("[{}] > ", Green.paint(namespace)),
+            prompt: format!("[{}] > ", namespace.green()),
         }
     }
 }

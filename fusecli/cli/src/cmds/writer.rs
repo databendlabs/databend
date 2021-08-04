@@ -22,9 +22,13 @@ impl Writer {
         }
     }
 
-    pub fn writeln(&mut self, name: &str, value: &str) {
+    pub fn writeln_width(&mut self, name: &str, value: &str) {
         let width = 20;
         writeln!(self, "{:width$} {}", name, value, width = width).unwrap();
+    }
+
+    pub fn writeln(&mut self, value: &str) {
+        writeln!(self, "{}", value).unwrap();
     }
 
     pub fn write_ok(&mut self, msg: &str) {

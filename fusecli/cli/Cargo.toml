@@ -19,7 +19,6 @@ path = "src/bin/datafuse-cli.rs"
 # Workspace dependencies
 
 # Crates.io dependencies
-ansi_term = "0.12.1"
 clap = "2.33.3"
 colored = "2.0.0"
 dirs = "3.0.2"
