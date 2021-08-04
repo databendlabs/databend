@@ -12,7 +12,7 @@ sleep 1
 BIN=${1:-debug}
 
 echo 'Start FuseStore...'
-nohup target/${BIN}/fuse-store &
+nohup target/${BIN}/fuse-store --single true &
 echo "Waiting on fuse-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 

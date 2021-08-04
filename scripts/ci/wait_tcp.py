@@ -13,13 +13,13 @@ def tcp_ping(port, timeout):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(('0.0.0.0', port))
-            print("OK {} is listening".format(port))
+            print("OK :{} is listening".format(port))
             return
         except:
-            print("fail")
+            print("not connected to :{}".format(port))
             time.sleep(0.5)
 
-    raise Exception("fail to connect to {}".format(port))
+    raise Exception("fail to connect to :{}".format(port))
 
 
 if __name__ == "__main__":

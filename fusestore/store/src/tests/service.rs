@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_runtime::tokio;
+use common_runtime::tokio::sync::oneshot;
 use common_tracing::tracing;
 use tempfile::tempdir;
 use tempfile::TempDir;
@@ -20,20 +21,25 @@ use crate::tests::Seq;
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
 pub async fn start_store_server() -> Result<(StoreTestContext, String)> {
-    let tc = new_test_context();
+    let mut tc = new_test_context();
+
+    start_store_server_with_context(&mut tc).await?;
 
     let addr = tc.config.flight_api_address.clone();
 
+    Ok((tc, addr))
+}
+
+pub async fn start_store_server_with_context(tc: &mut StoreTestContext) -> Result<()> {
     let srv = StoreServer::create(tc.config.clone());
-    tokio::spawn(async move {
-        srv.serve().await?;
-        Ok::<(), anyhow::Error>(())
-    });
+    let (stop_tx, fin_rx) = srv.start().await?;
+
+    tc.channels = Some((stop_tx, fin_rx));
 
     // TODO(xp): some times the MetaNode takes more than 200 ms to startup, with disk-backed store.
     //           Find out why and using some kind of waiting routine to ensure service is on.
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    Ok((tc, addr))
+    Ok(())
 }
 
 pub fn next_port() -> u32 {
@@ -45,6 +51,11 @@ pub struct StoreTestContext {
     meta_temp_dir: TempDir,
     pub config: configs::Config,
     pub meta_nodes: Vec<Arc<MetaNode>>,
+
+    pub tree_prefix: String,
+
+    /// channel to send to stop StoreServer, and channel for waiting for shutdown to finish.
+    pub channels: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
 }
 
 /// Create a new Config for test, with unique port assigned
@@ -57,7 +68,11 @@ pub fn new_test_context() -> StoreTestContext {
         config.meta_no_sync = true;
     }
 
+    // By default, create a meta node instead of open an existent one.
+    config.single = true;
+
     config.meta_api_port = next_port();
+    let x = config.meta_api_port;
 
     let host = "127.0.0.1";
 
@@ -86,6 +101,11 @@ pub fn new_test_context() -> StoreTestContext {
         meta_temp_dir: t,
         config,
         meta_nodes: vec![],
+
+        // Create a unique tree name prefix for opening same type tree in a same sled::Db
+        tree_prefix: format!("{}-", x),
+
+        channels: None,
     }
 }
 
