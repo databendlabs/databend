@@ -23,6 +23,130 @@ use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_restart() -> anyhow::Result<()> {
+    // Issue 1134  https://github.com/datafuselabs/datafuse/issues/1134
+    // - Start a store server.
+    // - create db and create table
+    // - restart
+    // - Test read the db and read the table.
+
+    common_tracing::init_default_tracing();
+
+    let (mut tc, addr) = crate::tests::start_store_server().await?;
+
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    let db_name = "db1";
+    let table_name = "table1";
+
+    tracing::info!("--- create db");
+    {
+        let plan = CreateDatabasePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+
+        let res = client.create_database(plan.clone()).await;
+        tracing::debug!("create database res: {:?}", res);
+        let res = res?;
+        assert_eq!(1, res.database_id, "first database id is 1");
+    }
+
+    tracing::info!("--- get db");
+    {
+        let res = client.get_database(db_name).await;
+        tracing::debug!("get present database res: {:?}", res);
+        let res = res?;
+        assert_eq!(1, res.database_id, "db1 id is 1");
+        assert_eq!(db_name, res.db, "db1.db is db1");
+    }
+
+    tracing::info!("--- create table {}.{}", db_name, table_name);
+    let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        "number",
+        DataType::UInt64,
+        false,
+    )]));
+    {
+        let plan = CreateTablePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            table: table_name.to_string(),
+            schema: schema.clone(),
+            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            engine: TableEngineType::JSONEachRow,
+        };
+
+        {
+            let res = client.create_table(plan.clone()).await?;
+            assert_eq!(1, res.table_id, "table id is 1");
+
+            let got = client.get_table(db_name.into(), table_name.into()).await?;
+            let want = GetTableActionResult {
+                table_id: 1,
+                db: db_name.into(),
+                name: table_name.into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get created table");
+        }
+    }
+
+    tracing::info!("--- stop StoreServer");
+    {
+        let (stop_tx, fin_rx) = tc.channels.take().unwrap();
+        stop_tx
+            .send(())
+            .map_err(|_| anyhow::anyhow!("fail to send"))?;
+
+        fin_rx.await?;
+
+        drop(client);
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // restart by opening existent meta db
+        tc.config.boot = false;
+        crate::tests::start_store_server_with_context(&mut tc).await?;
+    }
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
+
+    // try to reconnect the restarted server.
+    let mut _client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    // TODO(xp): db and table are still in pure memory store. the following test will no pass.
+
+    // tracing::info!("--- get db");
+    // {
+    //     let res = client.get_database(db_name).await;
+    //     tracing::debug!("get present database res: {:?}", res);
+    //     let res = res?;
+    //     assert_eq!(1, res.database_id, "db1 id is 1");
+    //     assert_eq!(db_name, res.db, "db1.db is db1");
+    // }
+    //
+    // tracing::info!("--- get table");
+    // {
+    //     let got = client
+    //         .get_table(db_name.into(), table_name.into())
+    //         .await
+    //         .unwrap();
+    //     let want = GetTableActionResult {
+    //         table_id: 1,
+    //         db: db_name.into(),
+    //         name: table_name.into(),
+    //         schema: schema.clone(),
+    //     };
+    //     assert_eq!(want, got, "get created table");
+    // }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
@@ -786,7 +910,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
-    let (_, addr) = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let test_db = "db1";

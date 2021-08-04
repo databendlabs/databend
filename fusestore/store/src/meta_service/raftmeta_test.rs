@@ -158,10 +158,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
 
-    let resp = MetaNode::boot(0, &tc.config).await;
-    assert!(resp.is_ok());
-
-    let mn = resp.unwrap();
+    let mn = MetaNode::boot(0, &tc.config).await?;
 
     let got = mn.get_node(&0).await;
     assert_eq!(addr, got.unwrap().address);

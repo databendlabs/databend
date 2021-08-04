@@ -2,9 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use common_exception::ErrorCode;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+
+use crate::meta_service::NodeId;
 
 lazy_static! {
     pub static ref FUSE_COMMIT_VERSION: String = {
@@ -115,6 +118,25 @@ pub struct Config {
         help = "Whether to boot up a new cluster. If already booted, it is ignored"
     )]
     pub boot: bool,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_SINGLE",
+        help = concat!("Single node store. It creates a single node cluster if meta data is not initialized.",
+                      " Otherwise it opens the previous one.",
+                      " This is mainly for testing purpose.")
+    )]
+    pub single: bool,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_ID",
+        default_value = "0",
+        help = concat!("The node id. Only used when this server is not initialized,",
+                      " e.g. --boot or --single for the first time.",
+                      " Otherwise this argument is ignored.")
+    )]
+    pub id: NodeId,
 }
 
 impl Config {
@@ -134,5 +156,15 @@ impl Config {
     /// Returns true to fsync after a write operation to meta.
     pub fn meta_sync(&self) -> bool {
         !self.meta_no_sync
+    }
+
+    pub fn check(&self) -> common_exception::Result<()> {
+        if self.boot && self.single {
+            return Err(ErrorCode::InvalidConfig(
+                "--boot and --single can not be both set",
+            ));
+        }
+
+        Ok(())
     }
 }

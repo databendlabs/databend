@@ -34,6 +34,7 @@ impl SledValueToKey<LogIndex> for Entry<LogEntry> {
 
 impl RaftLog {
     /// Open RaftLog
+    #[tracing::instrument(level = "info", skip(db))]
     pub async fn open(
         db: &sled::Db,
         config: &configs::Config,

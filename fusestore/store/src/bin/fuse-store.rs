@@ -49,8 +49,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // RPC API service.
     {
         let srv = StoreServer::create(conf.clone());
-        info!("RPC API server listening on {}", conf.flight_api_address);
-        srv.serve().await.expect("RPC service error");
+        info!(
+            "FuseStore API server listening on {}",
+            conf.flight_api_address
+        );
+        let (_stop_tx, fin_rx) = srv.start().await.expect("FuseStore service error");
+        fin_rx.await?;
     }
 
     Ok(())
