@@ -216,7 +216,7 @@ jobs:
       UUID: ${{ github.event.client_payload.UUID }}
       ITERATION: 10
       # S3 storage for report and status updates
-      CLUSTER_NAME: fusebench
+      CLUSTER_NAME: ${{ github.run_id }}
       REGION: ${{ github.event.client_payload.REGION }}
       BUCKET: ${{ github.event.client_payload.BUCKET }}
       ENDPOINT: ${{ github.event.client_payload.ENDPOINT }}
