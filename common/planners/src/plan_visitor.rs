@@ -6,7 +6,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, KillPlan};
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -107,6 +107,8 @@ pub trait PlanVisitor {
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
+            PlanNode::KillQuery(plan) => self.visit_kill_query(plan),
+            PlanNode::KillConnection(plan) => self.visit_kill_connection(plan),
         }
     }
 
@@ -255,6 +257,14 @@ pub trait PlanVisitor {
     }
 
     fn visit_truncate_table(&mut self, _: &TruncateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_kill_query(&mut self, _: &KillPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_kill_connection(&mut self, _: &KillPlan) -> Result<()> {
         Ok(())
     }
 }

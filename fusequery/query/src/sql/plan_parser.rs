@@ -11,7 +11,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_infallible::Mutex;
-use common_planners::expand_aggregate_arg_exprs;
+use common_planners::{expand_aggregate_arg_exprs, KillPlan};
 use common_planners::expand_wildcard;
 use common_planners::expr_as_column_expr;
 use common_planners::extract_aliases;
@@ -54,7 +54,7 @@ use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
-use crate::sql::DfCreateDatabase;
+use crate::sql::{DfCreateDatabase, DfKillStatement};
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
@@ -123,12 +123,14 @@ impl PlanParser {
                     "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
                     self.ctx.get_current_database()
                 )
-                .as_str(),
+                    .as_str(),
             ),
             DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
             DfStatement::ShowProcessList(_) => {
                 self.build_from_sql("SELECT * FROM system.processes")
-            }
+            },
+            DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
+            DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
         }
     }
 
@@ -204,6 +206,18 @@ impl PlanParser {
     pub fn sql_use_database_to_plan(&self, use_db: &DfUseDatabase) -> Result<PlanNode> {
         let db = use_db.name.0[0].value.clone();
         Ok(PlanNode::UseDatabase(UseDatabasePlan { db }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_kill_query_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
+        let id = kill.object_id.value.clone();
+        Ok(PlanNode::KillQuery(KillPlan { id }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_kill_connection_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
+        let id = kill.object_id.value.clone();
+        Ok(PlanNode::KillConnection(KillPlan { id }))
     }
 
     #[tracing::instrument(level = "info", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]

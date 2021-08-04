@@ -10,7 +10,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, KillPlan};
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -67,6 +67,8 @@ pub enum PlanNode {
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),
+    KillQuery(KillPlan),
+    KillConnection(KillPlan),
 }
 
 impl PlanNode {
@@ -101,6 +103,8 @@ impl PlanNode {
             PlanNode::InsertInto(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
             PlanNode::SubQueryExpression(v) => v.schema(),
+            PlanNode::KillQuery(v) => v.schema(),
+            PlanNode::KillConnection(v) => v.schema(),
         }
     }
 
@@ -134,6 +138,8 @@ impl PlanNode {
             PlanNode::InsertInto(_) => "InsertIntoPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
+            PlanNode::KillQuery(_) => "KillQuery",
+            PlanNode::KillConnection(_) => "KillConnection",
         }
     }
 

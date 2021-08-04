@@ -13,7 +13,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, KillPlan};
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -94,6 +94,8 @@ pub trait PlanRewriter {
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
+            PlanNode::KillQuery(plan) => self.rewrite_kill_query(plan),
+            PlanNode::KillConnection(plan) => self.rewrite_kill_connection(plan),
         }
     }
 
@@ -325,6 +327,14 @@ pub trait PlanRewriter {
 
     fn rewrite_truncate_table(&mut self, plan: &TruncateTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::TruncateTable(plan.clone()))
+    }
+
+    fn rewrite_kill_query(&mut self, plan: &KillPlan) -> Result<PlanNode> {
+        Ok(PlanNode::KillQuery(plan.clone()))
+    }
+
+    fn rewrite_kill_connection(&mut self, plan: &KillPlan) -> Result<PlanNode> {
+        Ok(PlanNode::KillConnection(plan.clone()))
     }
 }
 

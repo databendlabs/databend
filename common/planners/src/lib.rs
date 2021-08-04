@@ -81,6 +81,7 @@ mod plan_table_drop;
 mod plan_truncate_table;
 mod plan_use_database;
 mod plan_visitor;
+mod plan_kill;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
@@ -154,3 +155,4 @@ pub use plan_table_drop::DropTablePlan;
 pub use plan_truncate_table::TruncateTablePlan;
 pub use plan_use_database::UseDatabasePlan;
 pub use plan_visitor::PlanVisitor;
+pub use plan_kill::KillPlan;
