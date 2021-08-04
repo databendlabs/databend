@@ -10,6 +10,7 @@ use crate::arrays::ArrayCompare;
 use crate::numerical_coercion;
 use crate::DFBooleanArray;
 use crate::DataType;
+use crate::prelude::*;
 
 macro_rules! impl_compare {
     ($self:expr, $rhs:expr, $method:ident) => {{
@@ -33,6 +34,21 @@ macro_rules! impl_compare {
     }};
 }
 
+fn null_to_boolean(s: &Series) -> DFBooleanArray {
+    if s.data_type() == DataType::Null {
+        DFBooleanArray::full_null(s.len())
+    } else {
+        let array_ref =  s.get_array_ref();
+        let validity = array_ref.validity();
+        match validity {
+            Some(v) =>  {
+                DFBooleanArray::new_from_opt_iter( v.into_iter().map(|c| if c {Some(true)} else {None}))
+            }
+            None =>  DFBooleanArray::full(true, s.len()),
+        }
+    }
+}
+
 fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
     if lhs.data_type() == rhs.data_type()
         && (lhs.data_type() == DataType::Utf8 || lhs.data_type() == DataType::Boolean)
@@ -40,8 +56,11 @@ fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
         return Ok((lhs.clone(), rhs.clone()));
     }
 
-    if lhs.data_type() == DataType::Null {
-        todo!()
+    if lhs.data_type() == DataType::Null || rhs.data_type() == DataType::Null {
+        let lhs = null_to_boolean(lhs);
+        let rhs = null_to_boolean(rhs);
+
+        return Ok((lhs.into_series(), rhs.into_series()))
     }
 
     let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;

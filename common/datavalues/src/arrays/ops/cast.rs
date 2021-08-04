@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::sync::Arc;
+use std::fmt::Debug;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::cast;
@@ -12,6 +13,7 @@ use num::NumCast;
 
 use crate::arrays::DataArray;
 use crate::data_df_type::*;
+use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DFDataType;
@@ -19,12 +21,22 @@ use crate::DFNumericType;
 use crate::DataType;
 
 /// Cast `DataArray<T>` to `DataArray<N>`
-pub trait ArrayCast {
+pub trait ArrayCast: Debug {
     /// Cast `DataArray<T>` to `DataArray<N>`
     fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType;
+    where N: DFDataType {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported cast operation for {:?}",
+            self,
+        )))
+    }
 
-    fn cast_with_type(&self, _data_type: &DataType) -> Result<Series>;
+    fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported cast_with_type operation for {:?}",
+            self,
+        )))
+    }
 }
 
 fn cast_ca<N, T>(ca: &DataArray<T>) -> Result<DataArray<N>>
@@ -40,18 +52,14 @@ where
         };
     }
 
- 
-    if T::data_type() == DataType::Null {
-        todo!()
-    }
-  
-    let ca = cast(&ca.array, &N::data_type().to_arrow())?;
+    let ca: ArrayRef = Arc::from(cast::cast(ca.array.as_ref(), &N::data_type().to_arrow())?);
     Ok(ca.into())
 }
 
 macro_rules! cast_with_type {
     ($self:expr, $data_type:expr) => {{
         use crate::data_type::DataType::*;
+
         match $data_type {
             Boolean => ArrayCast::cast::<BooleanType>($self).map(|ca| ca.into_series()),
             Utf8 => ArrayCast::cast::<Utf8Type>($self).map(|ca| ca.into_series()),
@@ -87,9 +95,7 @@ where
         cast_ca(self)
     }
 
-    fn 
-  
-  (&self, data_type: &DataType) -> Result<Series> {
+    fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         cast_with_type!(self, data_type)
     }
 }
@@ -115,16 +121,6 @@ impl ArrayCast for DFBooleanArray {
     }
 }
 
-impl ArrayCast for DFListArray {
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        todo!()
-    }
-
-    fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
-        todo!()
-    }
-}
 
 impl ArrayCast for DFNullArray {
     fn cast<N>(&self) -> Result<DataArray<N>>
@@ -133,28 +129,21 @@ impl ArrayCast for DFNullArray {
     }
 
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        cast_with_type!(self, data_type)
+        //special case for `and(null, true)`, null can cast into boolean array
+        // TODO: add other types match
+       if data_type == &DataType::Boolean {
+          Ok(DFBooleanArray::full_null(self.len()).into_series())
+       } else {
+           Err(ErrorCode::BadDataValueType(format!(
+                "Unsupported cast_with_type operation for {:?}",
+                self,
+        )))
+       }
     }
 }
 
-impl ArrayCast for DFStructArray {
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        todo!()
-    }
 
-    fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
-        todo!()
-    }
-}
 
-impl ArrayCast for DFBinaryArray {
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        todo!()
-    }
-
-    fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
-        todo!()
-    }
-}
+impl ArrayCast for DFListArray {}
+impl ArrayCast for DFBinaryArray {}
+impl ArrayCast for DFStructArray {}
