@@ -17,28 +17,25 @@ use tar::Archive;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;
-use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::Result;
 
 #[derive(Clone)]
-pub struct GetCommand {
+pub struct FetchCommand {
     conf: Config,
     clap: RefCell<App<'static, 'static>>,
 }
 
-impl GetCommand {
+impl FetchCommand {
     pub fn create(conf: Config) -> Self {
         let clap = RefCell::new(
-            App::new("get")
+            App::new("package")
                 .setting(AppSettings::DisableVersion)
                 .setting(AppSettings::DisableHelpSubcommand)
                 .setting(AppSettings::ColoredHelp)
-                .subcommand(App::new("update").about(
-                    "Check already-downloaded packages for available updates and install the newest versions available",
-                )),
+                .subcommand(App::new("fetch").about("Fetch the latest version package")),
         );
-        GetCommand { conf, clap }
+        FetchCommand { conf, clap }
     }
 
     pub fn get_architecture(&self) -> Result<String> {
@@ -70,9 +67,9 @@ impl GetCommand {
     }
 }
 
-impl Command for GetCommand {
+impl Command for FetchCommand {
     fn name(&self) -> &str {
-        "get"
+        "fetch"
     }
 
     fn about(&self) -> &str {
@@ -149,12 +146,6 @@ impl Command for GetCommand {
                         return Ok(());
                     }
                 };
-
-                // Write status.
-                let mut status = Status::read(self.conf.clone())?;
-                status.latest = latest_tag;
-                status.write()?;
-                writer.write_ok("Write status");
             }
             Err(err) => {
                 writer.write_err(format!("{}", err).as_str());
