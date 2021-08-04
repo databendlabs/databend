@@ -626,7 +626,7 @@ impl StateMachine {
                         name: loc.clone(),
                         version: 0,
                     },
-                    stats: Statistics::new_exact(p.disk_bytes, p.rows),
+                    stats: Statistics::new_exact(p.rows, p.disk_bytes),
                 }
             })
             .collect::<Vec<_>>();
