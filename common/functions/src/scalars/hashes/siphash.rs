@@ -54,8 +54,7 @@ impl Function for SipHashFunction {
             | DataType::Binary => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function Error: {} does not support {} type parameters",
-                self.display_name,
-                args[0]
+                self.display_name, args[0]
             ))),
         }
     }
