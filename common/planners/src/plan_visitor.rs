@@ -107,8 +107,7 @@ pub trait PlanVisitor {
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
-            PlanNode::KillQuery(plan) => self.visit_kill_query(plan),
-            PlanNode::KillConnection(plan) => self.visit_kill_connection(plan),
+            PlanNode::Kill(plan) => self.visit_kill_query(plan),
         }
     }
 
@@ -261,10 +260,6 @@ pub trait PlanVisitor {
     }
 
     fn visit_kill_query(&mut self, _: &KillPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_kill_connection(&mut self, _: &KillPlan) -> Result<()> {
         Ok(())
     }
 }

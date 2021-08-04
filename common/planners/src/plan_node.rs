@@ -67,8 +67,7 @@ pub enum PlanNode {
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),
-    KillQuery(KillPlan),
-    KillConnection(KillPlan),
+    Kill(KillPlan),
 }
 
 impl PlanNode {
@@ -103,8 +102,7 @@ impl PlanNode {
             PlanNode::InsertInto(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
             PlanNode::SubQueryExpression(v) => v.schema(),
-            PlanNode::KillQuery(v) => v.schema(),
-            PlanNode::KillConnection(v) => v.schema(),
+            PlanNode::Kill(v) => v.schema(),
         }
     }
 
@@ -138,8 +136,7 @@ impl PlanNode {
             PlanNode::InsertInto(_) => "InsertIntoPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
-            PlanNode::KillQuery(_) => "KillQuery",
-            PlanNode::KillConnection(_) => "KillConnection",
+            PlanNode::Kill(_) => "KillQuery",
         }
     }
 

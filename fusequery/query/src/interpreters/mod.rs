@@ -43,6 +43,7 @@ mod interpreter_truncate_table;
 mod interpreter_use_database;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
+mod interpreter_kill;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;

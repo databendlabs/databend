@@ -10,6 +10,7 @@ use common_datavalues::DataSchemaRef;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct KillPlan {
     pub id: String,
+    pub kill_connection: bool,
 }
 
 impl KillPlan {

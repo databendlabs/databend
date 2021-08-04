@@ -22,6 +22,7 @@ use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::FuseQueryContextRef;
+use crate::interpreters::interpreter_kill::KillInterpreter;
 
 pub struct InterpreterFactory;
 
@@ -40,6 +41,7 @@ impl InterpreterFactory {
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             PlanNode::InsertInto(v) => InsertIntoInterpreter::try_create(ctx, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx, v),
+            PlanNode::Kill(v) => KillInterpreter::try_create(ctx, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()

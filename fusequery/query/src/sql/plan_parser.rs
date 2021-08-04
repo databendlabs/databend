@@ -211,13 +211,13 @@ impl PlanParser {
     #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_kill_query_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
         let id = kill.object_id.value.clone();
-        Ok(PlanNode::KillQuery(KillPlan { id }))
+        Ok(PlanNode::Kill(KillPlan { id, kill_connection: false }))
     }
 
     #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_kill_connection_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
         let id = kill.object_id.value.clone();
-        Ok(PlanNode::KillConnection(KillPlan { id }))
+        Ok(PlanNode::Kill(KillPlan { id, kill_connection: true }))
     }
 
     #[tracing::instrument(level = "info", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]

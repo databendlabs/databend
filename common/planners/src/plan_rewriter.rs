@@ -94,8 +94,7 @@ pub trait PlanRewriter {
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
-            PlanNode::KillQuery(plan) => self.rewrite_kill_query(plan),
-            PlanNode::KillConnection(plan) => self.rewrite_kill_connection(plan),
+            PlanNode::Kill(plan) => self.rewrite_kill(plan),
         }
     }
 
@@ -329,12 +328,8 @@ pub trait PlanRewriter {
         Ok(PlanNode::TruncateTable(plan.clone()))
     }
 
-    fn rewrite_kill_query(&mut self, plan: &KillPlan) -> Result<PlanNode> {
-        Ok(PlanNode::KillQuery(plan.clone()))
-    }
-
-    fn rewrite_kill_connection(&mut self, plan: &KillPlan) -> Result<PlanNode> {
-        Ok(PlanNode::KillConnection(plan.clone()))
+    fn rewrite_kill(&mut self, plan: &KillPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Kill(plan.clone()))
     }
 }
 
