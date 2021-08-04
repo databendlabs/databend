@@ -4,7 +4,7 @@
 
 use structopt::StructOpt;
 
-#[derive(Clone, Debug, PartialEq, StructOpt)]
+#[derive(Clone, Debug, PartialEq, StructOpt, Default)]
 pub struct Config {
     #[structopt(long, env = "NAMESPACE", default_value = "test")]
     pub namespace: String,
@@ -29,10 +29,18 @@ pub struct Config {
 
 impl Config {
     pub fn create() -> Self {
+        let conf = Config::from_args();
+        Self::build(conf)
+    }
+
+    pub fn default() -> Self {
+        let conf: Config = Default::default();
+        Self::build(conf)
+    }
+
+    fn build(mut conf: Config) -> Self {
         let home_dir = dirs::home_dir().unwrap();
         let datafuse_dir = home_dir.join(".datafuse");
-
-        let mut conf = Config::from_args();
         conf.datafuse_dir = format!("{}/{}", datafuse_dir.to_str().unwrap(), conf.namespace);
         conf
     }
