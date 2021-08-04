@@ -25,6 +25,7 @@ use crate::flight_result_to_str;
 use crate::store_do_action::RequestFor;
 use crate::store_do_action::StoreDoAction;
 use crate::ConnectionFactory;
+use crate::RpcClientTlsConfig;
 
 #[derive(Clone)]
 pub struct StoreClient {
@@ -38,10 +39,20 @@ static AUTH_TOKEN_KEY: &str = "auth-token-bin";
 impl StoreClient {
     #[tracing::instrument(level = "debug", skip(password))]
     pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
+        Self::with_tls_conf(addr, username, password, None).await
+    }
+
+    #[tracing::instrument(level = "debug", skip(password))]
+    pub async fn with_tls_conf(
+        addr: &str,
+        username: &str,
+        password: &str,
+        conf: Option<RpcClientTlsConfig>,
+    ) -> Result<Self> {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
-        let channel = ConnectionFactory::create_flight_channel(addr, Some(timeout)).await?;
+        let channel = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf).await?;
 
         let mut client = FlightServiceClient::new(channel.clone());
         let token = StoreClient::handshake(&mut client, timeout, username, password).await?;

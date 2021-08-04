@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flights::RpcClientTlsConfig;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -68,6 +69,13 @@ const TLS_SERVER_KEY: &str = "TLS_SERVER_KEY";
 const DISABLE_REMOTE_CATALOG: &str = "DISABLE_REMOTE_CATALOG";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
+
+const RPC_TLS_SERVER_CERT: &str = "RPC_TLS_SERVER_CERT";
+const RPC_TLS_SERVER_KEY: &str = "RPC_TLS_SERVER_KEY";
+const RPC_TLS_QUERY_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_QUERY_SERVER_ROOT_CA_CERT";
+const RPC_TLS_QUERY_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_QUERY_SERVICE_DOMAIN_NAME";
+const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
+const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -150,6 +158,51 @@ pub struct Config {
 
     #[structopt(long, env = TLS_SERVER_KEY, default_value = "")]
     pub tls_server_key: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_SERVER_CERT",
+        default_value = "",
+        help = "server cert"
+    )]
+    pub rpc_tls_server_cert: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_SERVER_KEY",
+        default_value = "key for server cert"
+    )]
+    pub rpc_tls_server_key: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_QUERY_SERVER_ROOT_CA_CERT",
+        default_value = "",
+        help = "Certificate for client to identify query server"
+    )]
+    pub rpc_tls_query_server_root_ca_cert: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_QUERY_SERVICE_DOMAIN_NAME",
+        default_value = "localhost"
+    )]
+    pub rpc_tls_query_service_domain_name: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT",
+        default_value = "",
+        help = "Certificate for client to identify query server"
+    )]
+    pub rpc_tls_store_server_root_ca_cert: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME",
+        default_value = "localhost"
+    )]
+    pub rpc_tls_store_service_domain_name: String,
 
     #[structopt(long, env =  DISABLE_REMOTE_CATALOG)]
     pub disable_remote_catalog: bool,
@@ -246,6 +299,12 @@ impl Config {
             config_file: "".to_string(),
             tls_server_cert: "".to_string(),
             tls_server_key: "".to_string(),
+            rpc_tls_server_cert: "".to_string(),
+            rpc_tls_server_key: "".to_string(),
+            rpc_tls_query_server_root_ca_cert: "".to_string(),
+            rpc_tls_query_service_domain_name: "localhost".to_string(),
+            rpc_tls_store_server_root_ca_cert: "".to_string(),
+            rpc_tls_store_service_domain_name: "localhost".to_string(),
             disable_remote_catalog: false,
         }
     }
@@ -304,6 +363,68 @@ impl Config {
         env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
         env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
 
+        // for query rpc server
+        env_helper!(mut_config, rpc_tls_server_cert, String, RPC_TLS_SERVER_CERT);
+
+        env_helper!(mut_config, rpc_tls_server_key, String, RPC_TLS_SERVER_KEY);
+
+        // for query rpc client
+        env_helper!(
+            mut_config,
+            rpc_tls_query_server_root_ca_cert,
+            String,
+            RPC_TLS_QUERY_SERVER_ROOT_CA_CERT
+        );
+        env_helper!(
+            mut_config,
+            rpc_tls_query_service_domain_name,
+            String,
+            RPC_TLS_QUERY_SERVICE_DOMAIN_NAME
+        );
+
+        // for store rpc client
+        env_helper!(
+            mut_config,
+            rpc_tls_store_server_root_ca_cert,
+            String,
+            RPC_TLS_STORE_SERVER_ROOT_CA_CERT
+        );
+
+        env_helper!(
+            mut_config,
+            rpc_tls_store_service_domain_name,
+            String,
+            RPC_TLS_STORE_SERVICE_DOMAIN_NAME
+        );
+
         Ok(mut_config)
+    }
+
+    pub fn tls_query_client_conf(&self) -> RpcClientTlsConfig {
+        RpcClientTlsConfig {
+            rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.to_string(),
+            domain_name: self.rpc_tls_query_service_domain_name.to_string(),
+        }
+    }
+
+    pub fn tls_query_cli_enabled(&self) -> bool {
+        !self.rpc_tls_query_server_root_ca_cert.is_empty()
+            && !self.rpc_tls_query_service_domain_name.is_empty()
+    }
+
+    pub fn tls_store_client_conf(&self) -> RpcClientTlsConfig {
+        RpcClientTlsConfig {
+            rpc_tls_server_root_ca_cert: self.rpc_tls_store_server_root_ca_cert.to_string(),
+            domain_name: self.rpc_tls_store_service_domain_name.to_string(),
+        }
+    }
+
+    pub fn tls_store_cli_enabled(&self) -> bool {
+        !self.rpc_tls_store_server_root_ca_cert.is_empty()
+            && !self.rpc_tls_store_service_domain_name.is_empty()
+    }
+
+    pub fn tls_rpc_server_enabled(&self) -> bool {
+        !self.rpc_tls_server_key.is_empty() && !self.rpc_tls_server_cert.is_empty()
     }
 }

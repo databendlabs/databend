@@ -35,6 +35,10 @@ stateless-cluster-test:
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
+stateless-cluster-test-tls:
+	bash ./scripts/build/build-debug.sh
+	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
+
 test: unit-test stateless-test
 
 fmt:

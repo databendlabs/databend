@@ -4,6 +4,8 @@
 
 #[cfg(test)]
 mod flight_service_test;
+#[cfg(test)]
+mod tls_flight_service_test;
 
 mod flight_service;
 mod metrics;
