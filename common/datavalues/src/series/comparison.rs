@@ -8,9 +8,9 @@ use common_exception::Result;
 use super::Series;
 use crate::arrays::ArrayCompare;
 use crate::numerical_coercion;
+use crate::prelude::*;
 use crate::DFBooleanArray;
 use crate::DataType;
-use crate::prelude::*;
 
 macro_rules! impl_compare {
     ($self:expr, $rhs:expr, $method:ident) => {{
@@ -38,13 +38,17 @@ fn null_to_boolean(s: &Series) -> DFBooleanArray {
     if s.data_type() == DataType::Null {
         DFBooleanArray::full_null(s.len())
     } else {
-        let array_ref =  s.get_array_ref();
+        let array_ref = s.get_array_ref();
         let validity = array_ref.validity();
         match validity {
-            Some(v) =>  {
-                DFBooleanArray::new_from_opt_iter( v.into_iter().map(|c| if c {Some(true)} else {None}))
-            }
-            None =>  DFBooleanArray::full(true, s.len()),
+            Some(v) => DFBooleanArray::new_from_opt_iter(v.into_iter().map(|c| {
+                if c {
+                    Some(true)
+                } else {
+                    None
+                }
+            })),
+            None => DFBooleanArray::full(true, s.len()),
         }
     }
 }
@@ -60,7 +64,7 @@ fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
         let lhs = null_to_boolean(lhs);
         let rhs = null_to_boolean(rhs);
 
-        return Ok((lhs.into_series(), rhs.into_series()))
+        return Ok((lhs.into_series(), rhs.into_series()));
     }
 
     let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;

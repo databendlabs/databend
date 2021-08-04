@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::sync::Arc;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::cast;
@@ -121,7 +121,6 @@ impl ArrayCast for DFBooleanArray {
     }
 }
 
-
 impl ArrayCast for DFNullArray {
     fn cast<N>(&self) -> Result<DataArray<N>>
     where N: DFDataType {
@@ -131,18 +130,16 @@ impl ArrayCast for DFNullArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         //special case for `and(null, true)`, null can cast into boolean array
         // TODO: add other types match
-       if data_type == &DataType::Boolean {
-          Ok(DFBooleanArray::full_null(self.len()).into_series())
-       } else {
-           Err(ErrorCode::BadDataValueType(format!(
+        if data_type == &DataType::Boolean {
+            Ok(DFBooleanArray::full_null(self.len()).into_series())
+        } else {
+            Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported cast_with_type operation for {:?}",
                 self,
-        )))
-       }
+            )))
+        }
     }
 }
-
-
 
 impl ArrayCast for DFListArray {}
 impl ArrayCast for DFBinaryArray {}
