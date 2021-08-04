@@ -1860,6 +1860,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "log",
+ "lru",
  "metrics",
  "metrics-exporter-prometheus",
  "msql-srv",

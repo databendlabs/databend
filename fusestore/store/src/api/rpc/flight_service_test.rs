@@ -707,7 +707,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
 
     // Empty Database
     let res = client.get_database_meta(None).await?;
-    assert_eq!(None, res);
+    assert!(res.is_none());
 
     Ok(())
 }
@@ -729,16 +729,16 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 
     let res = client.get_database_meta(None).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(1, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(1, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound < current meta version, returns database meta
     let res = client.get_database_meta(Some(0)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(1, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(1, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound equals current meta version, returns None
     let res = client.get_database_meta(Some(1)).await?;
@@ -765,9 +765,10 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     client.drop_database(plan).await?;
     let res = client.get_database_meta(Some(1)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(0, dbs.len());
+    let snapshot = res.unwrap();
+
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(0, snapshot.db_metas.len());
 
     Ok(())
 }
@@ -809,17 +810,17 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
 
     let res = client.get_database_meta(None).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(1, dbs.len());
-    assert_eq!(1, dbs[0].tables.len());
+    let snapshot = res.unwrap();
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
+    assert_eq!(1, snapshot.tbl_metas.len());
 
     // if lower_bound < current meta version, returns database meta
     let res = client.get_database_meta(Some(0)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound equals current meta version, returns None
     let res = client.get_database_meta(Some(2)).await?;
@@ -841,10 +842,10 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     client.drop_table(plan).await?;
     let res = client.get_database_meta(Some(2)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(3, v);
-    assert_eq!(1, dbs.len());
-    assert_eq!(0, dbs[0].tables.len());
+    let snapshot = res.unwrap();
+    assert_eq!(3, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
+    assert_eq!(0, snapshot.tbl_metas.len());
 
     Ok(())
 }

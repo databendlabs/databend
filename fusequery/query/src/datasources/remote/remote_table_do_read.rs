@@ -7,22 +7,24 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_store_api::ReadAction;
-use common_store_api::StorageApi;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::datasources::remote::remote_table::RemoteTable;
+use crate::datasources::remote::store_client_provider::StoreApis;
 use crate::sessions::FuseQueryContextRef;
 
-impl RemoteTable {
+impl<T> RemoteTable<T>
+where T: 'static + StoreApis + Clone
+{
     #[inline]
     pub(super) async fn do_read(
         &self,
         ctx: FuseQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let client = self.store_client_provider.try_get_client().await?;
+        let client = self.store_api_provider.try_get_store_apis().await?;
         let progress_callback = ctx.progress_callback();
 
         let plan = source_plan.clone();

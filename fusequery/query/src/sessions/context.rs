@@ -11,6 +11,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -21,8 +23,9 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalog::utils::TableFunctionMeta;
-use crate::catalog::utils::TableMeta;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::utils::TableFunctionMeta;
+use crate::catalogs::utils::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
@@ -141,15 +144,14 @@ impl FuseQueryContext {
         self.get_datasource().get_table(database, table)
     }
 
-    // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
-    //
-    // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
-    // Implementation of fetching remote table involves async operations which is not
-    // straight forward (but not infeasible) to do in a non-async method.
-    pub async fn get_remote_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
+    pub async fn get_table_by_id(
+        &self,
+        database: &str,
+        table_id: MetaId,
+        table_ver: Option<MetaVersion>,
+    ) -> Result<Arc<TableMeta>> {
         self.get_datasource()
-            .get_remote_table(database, table)
-            .await
+            .get_table_by_id(database, table_id, table_ver)
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {

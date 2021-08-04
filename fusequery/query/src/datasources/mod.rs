@@ -8,7 +8,7 @@ pub use table::Table;
 pub use table::TablePtr;
 pub use table_function::TableFunction;
 
-pub use crate::catalog::database_catalog::DatabaseCatalog;
+pub use crate::catalogs::impls::database_catalog::DatabaseCatalog;
 
 #[cfg(test)]
 mod common_test;

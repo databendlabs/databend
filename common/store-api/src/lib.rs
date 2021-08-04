@@ -14,6 +14,7 @@ pub use kv_api::UpsertKVActionResult;
 pub use meta_api::CreateDatabaseActionResult;
 pub use meta_api::CreateTableActionResult;
 pub use meta_api::DatabaseMetaReply;
+pub use meta_api::DatabaseMetaSnapshot;
 pub use meta_api::DropDatabaseActionResult;
 pub use meta_api::DropTableActionResult;
 pub use meta_api::GetDatabaseActionResult;

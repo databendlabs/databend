@@ -15,6 +15,7 @@ use crate::datasources::TableFunction;
 pub type TableMeta = DatasourceMeta<Arc<dyn Table>>;
 pub type TableFunctionMeta = DatasourceMeta<Arc<dyn TableFunction>>;
 
+#[derive(Debug)]
 pub struct DatasourceMeta<T> {
     datasource: T,
     id: MetaId,
@@ -65,16 +66,5 @@ impl InMemoryMetas {
         self.name2meta
             .insert(met_ref.datasource().name().to_owned(), met_ref.clone());
         self.id2meta.insert(met_ref.meta_id(), met_ref);
-    }
-
-    pub fn remove(&mut self, name: &str) {
-        match self.name2meta.get(name) {
-            None => {}
-            Some(meta) => {
-                let id = meta.id;
-                self.name2meta.remove(name);
-                self.id2meta.remove(&id);
-            }
-        }
     }
 }

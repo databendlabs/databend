@@ -34,6 +34,7 @@ fn test_default_config() -> Result<()> {
         config_file: "".to_string(),
         tls_server_cert: "".to_string(),
         tls_server_key: "".to_string(),
+        disable_remote_catalog: false,
     };
     let actual = Config::default();
     assert_eq!(actual, expect);
@@ -55,6 +56,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("STORE_API_ADDRESS", "1.2.3.4:1234");
     std::env::set_var("STORE_API_USERNAME", "admin");
     std::env::set_var("STORE_API_PASSWORD", "password!");
+    std::env::set_var("DISABLE_REMOTE_CATALOG", "0");
     std::env::remove_var("CONFIG_FILE");
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
@@ -72,6 +74,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:1234", configured.store_api_address);
     assert_eq!("admin", configured.store_api_username.to_string());
     assert_eq!("password!", configured.store_api_password.to_string());
+    assert_eq!(false, configured.disable_remote_catalog);
 
     // clean up
     std::env::remove_var("FUSE_QUERY_LOG_LEVEL");
