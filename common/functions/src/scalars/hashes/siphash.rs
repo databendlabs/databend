@@ -29,7 +29,7 @@ impl SipHashFunction {
 
 impl Function for SipHashFunction {
     fn name(&self) -> &str {
-        "siphash"
+        &*self.display_name
     }
 
     fn num_arguments(&self) -> usize {
@@ -53,8 +53,8 @@ impl Function for SipHashFunction {
             | DataType::Utf8
             | DataType::Binary => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCode::BadArguments(format!(
-                "Function Error: Siphash does not support {} type parameters",
-                args[0]
+                "Function Error: {} does not support {} type parameters",
+                self.display_name, args[0]
             ))),
         }
     }
@@ -73,6 +73,6 @@ impl Function for SipHashFunction {
 
 impl fmt::Display for SipHashFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "siphash")
+        write!(f, "{}", self.display_name)
     }
 }
