@@ -7,7 +7,7 @@ description = "A real-time Cloud Distributed Query Engine"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2018"
 
 [[bin]]
 name = "fuse-query"

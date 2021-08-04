@@ -3,7 +3,7 @@ cargo-features = ["edition2021"]
 [package]
 name = "fuzz"
 version = "0.1.0"
-edition = "2021"
+edition = "2018"
 publish = false
 
 [[bin]]
