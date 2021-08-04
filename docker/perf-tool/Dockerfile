@@ -7,6 +7,7 @@ COPY ./tests/perfs/perfs.yaml /perfs.yaml
 
 RUN pip install --no-cache-dir pyyaml \
     && pip install -U cos-python-sdk-v5 \
+    && python3 -m pip install configargparse\
     && pip install wget
 ENV BIN_LOCATION "/fuse-benchmark"
 ENV SERVER_HOST "127.0.0.1"
