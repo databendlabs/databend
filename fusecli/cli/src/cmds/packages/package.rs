@@ -23,8 +23,9 @@ impl PackageCommand {
     pub fn create(conf: Config) -> Self {
         let clap = RefCell::new(
             App::new("package")
-                .setting(AppSettings::DisableVersion)
                 .setting(AppSettings::ColoredHelp)
+                .setting(AppSettings::DisableVersion)
+                .setting(AppSettings::DisableHelpSubcommand)
                 .subcommand(
                     App::new("fetch")
                         .setting(AppSettings::DisableVersion)
