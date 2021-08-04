@@ -148,6 +148,14 @@ pub struct Config {
                       " Otherwise this argument is ignored.")
     )]
     pub id: NodeId,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_LOCAL_FS_DIR",
+        help = "Dir for local fs storage",
+        default_value = "./_local_fs"
+    )]
+    pub local_fs_dir: String,
 }
 
 impl Config {

@@ -49,6 +49,7 @@ pub fn next_port() -> u32 {
 pub struct StoreTestContext {
     #[allow(dead_code)]
     meta_temp_dir: TempDir,
+    local_fs_tmp_dir: TempDir,
     pub config: configs::Config,
     pub meta_nodes: Vec<Arc<MetaNode>>,
 
@@ -91,14 +92,19 @@ pub fn new_test_context() -> StoreTestContext {
         config.metric_api_address = format!("{}:{}", host, metric_port);
     }
 
-    let t = tempdir().expect("create temp dir to store meta");
-    config.meta_dir = t.path().to_str().unwrap().to_string();
+    let tmp_meta_dir = tempdir().expect("create temp dir to store meta");
+    config.meta_dir = tmp_meta_dir.path().to_str().unwrap().to_string();
+
+    let tmp_local_fs_dir = tempdir().expect("create local fs dir to store data");
+    config.local_fs_dir = tmp_local_fs_dir.path().to_str().unwrap().to_string();
 
     tracing::info!("new test context config: {:?}", config);
 
     StoreTestContext {
-        // hold the TempDir until being dropped.
-        meta_temp_dir: t,
+        // The TempDir type creates a directory on the file system that is deleted once it goes out of scope
+        // So hold the tmp_meta_dir and tmp_local_fs_dir until being dropped.
+        meta_temp_dir: tmp_meta_dir,
+        local_fs_tmp_dir: tmp_local_fs_dir,
         config,
         meta_nodes: vec![],
 
