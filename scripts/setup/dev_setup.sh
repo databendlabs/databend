@@ -294,6 +294,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   install_pkg clang "$PACKAGE_MANAGER"
   install_pkg llvm "$PACKAGE_MANAGER"
   install_pkg_config "$PACKAGE_MANAGER"
+  install_pkg libssl-dev "$PACKAGE_MANAGER"
 
   install_rustup "$BATCH_MODE"
   install_toolchain "$(cat ./rust-toolchain)"
@@ -332,3 +333,6 @@ You should now be able to build the project by running:
 EOF
 
 exit 0
+
+
+sudo apt-get install pkg-config libssl-dev
