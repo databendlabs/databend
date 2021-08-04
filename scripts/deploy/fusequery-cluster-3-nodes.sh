@@ -10,7 +10,7 @@ killall fuse-store
 sleep 1
 
 echo 'Start one FuseStore...'
-nohup target/debug/fuse-store &
+nohup target/debug/fuse-store --single true &
 echo "Waiting on fuse-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
