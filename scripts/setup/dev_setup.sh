@@ -294,7 +294,28 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   install_pkg clang "$PACKAGE_MANAGER"
   install_pkg llvm "$PACKAGE_MANAGER"
   install_pkg_config "$PACKAGE_MANAGER"
-  install_pkg libssl-dev "$PACKAGE_MANAGER"
+
+  case "$PACKAGE_MANAGER" in
+      apt-get)
+          install_pkg libssl-dev "$PACKAGE_MANAGER"
+          ;;
+      pacman)
+          install_pkg openssl "$PACKAGE_MANAGER"
+          ;;
+      yum)
+          install_pkg openssl-devel "$PACKAGE_MANAGER"
+          ;;
+      dnf)
+          install_pkg openssl-devel "$PACKAGE_MANAGER"
+          ;;
+      brew)
+          install_pkg openssl "$PACKAGE_MANAGER"
+          ;;
+      *)
+          echo "Unable to install openssl with package manager: $PACKAGE_MANAGER"
+          exit 1
+          ;;
+  esac
 
   install_rustup "$BATCH_MODE"
   install_toolchain "$(cat ./rust-toolchain)"
@@ -333,6 +354,3 @@ You should now be able to build the project by running:
 EOF
 
 exit 0
-
-
-sudo apt-get install pkg-config libssl-dev
