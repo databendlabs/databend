@@ -7,6 +7,11 @@ Build:
 $ make cli
 ```
 
+E2E test:
+```bash
+make cli-e2e
+```
+
 Usage:
 ``` 
 $ ./target/release/datafuse-cli 
