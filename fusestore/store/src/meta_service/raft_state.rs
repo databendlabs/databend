@@ -50,9 +50,13 @@ impl RaftState {
                 format!("open tree raft_state: name={}", "")
             })?;
 
+        tracing::debug!("opened tree: {}", K_RAFT_STATE);
+
         let curr_id = t
             .get(K_ID)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "get id")?;
+
+        tracing::debug!("get curr_id: {:?}", curr_id);
 
         let curr_id = match curr_id {
             Some(id) => Some(NodeId::de(id)?),
@@ -82,6 +86,7 @@ impl RaftState {
         Ok((rs, is_open))
     }
 
+    #[tracing::instrument(level = "info", skip(t))]
     fn open(t: sled::Tree, curr_id: NodeId) -> common_exception::Result<(RaftState, bool)> {
         Ok((
             RaftState {
@@ -92,6 +97,7 @@ impl RaftState {
         ))
     }
 
+    #[tracing::instrument(level = "info", skip(tree))]
     async fn create(tree: sled::Tree, id: NodeId) -> common_exception::Result<(RaftState, bool)> {
         let id_ivec = id.ser()?;
 

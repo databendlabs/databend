@@ -152,6 +152,7 @@ impl MetaStore {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
+    #[tracing::instrument(level = "info")]
     pub async fn open_create(
         config: &configs::Config,
         open: Option<()>,

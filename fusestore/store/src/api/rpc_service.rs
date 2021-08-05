@@ -91,7 +91,7 @@ impl StoreServer {
         } else {
             MetaNode::open(&self.conf).await?
         };
-        tracing::info!("Done starting MetaNode");
+        tracing::info!("Done starting MetaNode: {:?}", self.conf);
 
         let dfs = Dfs::create(fs, mn.clone());
 
@@ -116,16 +116,17 @@ impl StoreServer {
         let res = builder
             .add_service(flight_srv)
             .serve_with_shutdown(addr, async move {
-                tracing::info!("StoreServer start to wait for stop signal");
+                tracing::info!("StoreServer start to wait for stop signal: {}", addr);
                 let _ = stop_rx.await;
-                tracing::info!("StoreServer receives stop signal");
+                tracing::info!("StoreServer receives stop signal: {}", addr);
             })
             .await;
 
         let _ = mn.stop().await;
         let s = fin_tx.send(());
         tracing::info!(
-            "StoreServer sending signal of finishing shutdown: res: {:?}",
+            "StoreServer sending signal of finishing shutdown {}: res: {:?}",
+            addr,
             s
         );
 
