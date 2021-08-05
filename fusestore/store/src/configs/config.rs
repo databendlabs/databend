@@ -121,6 +121,17 @@ pub struct Config {
 
     #[structopt(
         long,
+        env = "RPC_TLS_SERVER_CERT",
+        default_value = "",
+        help = "Certificate for server to identify itself"
+    )]
+    pub rpc_tls_server_cert: String,
+
+    #[structopt(long, env = "RPC_TLS_SERVER_KEY", default_value = "")]
+    pub rpc_tls_server_key: String,
+
+    #[structopt(
+        long,
         env = "FUSE_STORE_SINGLE",
         help = concat!("Single node store. It creates a single node cluster if meta data is not initialized.",
                       " Otherwise it opens the previous one.",
@@ -166,5 +177,9 @@ impl Config {
         }
 
         Ok(())
+    }
+
+    pub fn tls_rpc_server_enabled(&self) -> bool {
+        !self.rpc_tls_server_key.is_empty() && !self.rpc_tls_server_cert.is_empty()
     }
 }

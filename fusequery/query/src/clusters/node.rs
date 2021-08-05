@@ -11,6 +11,7 @@ use serde::Serializer;
 
 use super::address::Address;
 use crate::api::FlightClient;
+use crate::configs::Config;
 
 #[derive(Debug)]
 pub struct Node {
@@ -53,8 +54,15 @@ impl Node {
         self.local
     }
 
-    pub async fn get_flight_client(&self) -> Result<FlightClient> {
-        let channel = ConnectionFactory::create_flight_channel(self.address.clone(), None).await;
+    pub async fn get_flight_client(&self, conf: &Config) -> Result<FlightClient> {
+        let tls_conf = if conf.tls_query_cli_enabled() {
+            Some(conf.tls_query_client_conf())
+        } else {
+            None
+        };
+
+        let channel =
+            ConnectionFactory::create_flight_channel(self.address.clone(), None, tls_conf).await;
         channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 }

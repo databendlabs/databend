@@ -80,7 +80,7 @@ impl Processor for RemoteTransform {
 
         let data_schema = self.schema.clone();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-        let mut flight_client = fetch_node.get_flight_client().await?;
+        let mut flight_client = fetch_node.get_flight_client(&context.get_config()).await?;
 
         let ticket = FlightTicket::stream(&self.query_id, &self.stage_id, &self.stream_id);
         flight_client
