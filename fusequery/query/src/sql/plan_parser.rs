@@ -871,6 +871,7 @@ impl PlanParser {
                 sqlparser::ast::Value::Boolean(b) => {
                     Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
                 }
+                sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
                 other => Result::Err(ErrorCode::SyntaxException(format!(
                     "Unsupported value expression: {}, type: {:?}",
                     value, other
