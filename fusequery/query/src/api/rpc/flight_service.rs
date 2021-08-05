@@ -129,6 +129,13 @@ impl FlightService for FuseQueryFlightService {
 
         let do_flight_action = || -> common_exception::Result<FlightResult> {
             match &flight_action {
+                FlightAction::CancelAction(action) => {
+                    let session_id = action.query_id.clone();
+                    let is_aborted = self.dispatcher.is_aborted();
+                    let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+                    session.force_kill_session();
+                    Ok(FlightResult { body: vec![] })
+                }
                 FlightAction::BroadcastAction(action) => {
                     let session_id = action.query_id.clone();
                     let is_aborted = self.dispatcher.is_aborted();

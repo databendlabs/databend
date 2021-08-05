@@ -17,6 +17,7 @@ mod flight_tickets_test;
 pub use flight_actions::BroadcastAction;
 pub use flight_actions::FlightAction;
 pub use flight_actions::ShuffleAction;
+pub use flight_actions::CancelAction;
 pub use flight_client::FlightClient;
 pub use flight_dispatcher::FuseQueryFlightDispatcher;
 pub use flight_service::FuseQueryFlightService;

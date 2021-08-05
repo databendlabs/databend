@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
@@ -18,6 +18,9 @@ use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
+use crate::clusters::Node;
+use crate::api::{FlightAction, CancelAction};
+use common_runtime::tokio::macros::support::Future;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
@@ -38,32 +41,26 @@ impl Interpreter for SelectInterpreter {
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
+        let optimized_plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
 
         let scheduler = PlanScheduler::try_create(self.ctx.clone())?;
-        let scheduled_tasks = scheduler.reschedule(&plan)?;
-        let remote_actions = scheduled_tasks.get_tasks()?;
+        let scheduled_tasks = scheduler.reschedule(&optimized_plan)?;
+        let remote_stage_actions = scheduled_tasks.get_tasks()?;
 
-        let remote_actions_ref = &remote_actions;
-        let prepare_error_handler = move |error: ErrorCode, end: usize| {
-            let mut killed_set = HashSet::new();
-            for (node, _) in remote_actions_ref.iter().take(end) {
-                if killed_set.get(&node.name).is_none() {
-                    // TODO: ISSUE-204 kill prepared query stage
-                    killed_set.insert(node.name.clone());
-                }
-            }
-
-            Result::Err(error)
-        };
-
+        // TODO: maybe panic?
+        let mut scheduled = HashMap::new();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-        for (index, (node, action)) in remote_actions.iter().enumerate() {
+        for (node, action) in remote_stage_actions {
             let mut flight_client = node.get_flight_client().await?;
-            let prepare_query_stage = flight_client.execute_action(action.clone(), timeout);
-            if let Err(error) = prepare_query_stage.await {
-                return prepare_error_handler(error, index);
-            }
+            let executing_action = flight_client.execute_action(action.clone(), timeout);
+
+            match executing_action.await {
+                Ok(_) => { scheduled.insert(node.name.clone(), node.clone()); },
+                Err(error) => {
+                    let scheduled = scheduled.values().cloned().collect();
+                    self.error_handler(error, scheduled).await?;
+                }
+            };
         }
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
@@ -73,5 +70,29 @@ impl Interpreter for SelectInterpreter {
 
     fn schema(&self) -> DataSchemaRef {
         self.select.schema()
+    }
+}
+
+impl SelectInterpreter {
+    async fn error_handler(&self, error: ErrorCode, scheduled: Vec<Arc<Node>>) -> Result<()> {
+        let settings = self.ctx.get_settings();
+        let flight_timeout = settings.get_flight_client_timeout()?;
+
+        for scheduled_node in scheduled {
+            let mut flight_client = scheduled_node.get_flight_client().await?;
+            let cancel_action = self.cancel_flight_action();
+            let executing_action = flight_client.execute_action(cancel_action, flight_timeout);
+            executing_action.await?;
+        }
+
+        Err(error)
+    }
+
+    fn cancel_flight_action(&self) -> FlightAction {
+        FlightAction::CancelAction(
+            CancelAction {
+                query_id: self.ctx.get_id()
+            }
+        )
     }
 }

@@ -7,6 +7,7 @@
 pub use http_service::HttpService;
 pub use rpc::BroadcastAction;
 pub use rpc::FlightAction;
+pub use rpc::CancelAction;
 pub use rpc::FlightClient;
 pub use rpc::FlightTicket;
 pub use rpc::ShuffleAction;

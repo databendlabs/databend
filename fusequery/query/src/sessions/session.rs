@@ -154,10 +154,6 @@ impl Session {
         Ok(self.sessions.get_cluster())
     }
 
-    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.sessions.processes_info()
-    }
-
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.sessions.clone()
     }

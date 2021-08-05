@@ -83,8 +83,7 @@ impl Processor for RemoteTransform {
         let mut flight_client = fetch_node.get_flight_client().await?;
 
         let ticket = FlightTicket::stream(&self.query_id, &self.stage_id, &self.stream_id);
-        flight_client
-            .fetch_stream(ticket, data_schema, timeout)
-            .await
+        // TODO: cancel action if stream is not complete
+        flight_client.fetch_stream(ticket, data_schema, timeout).await
     }
 }
