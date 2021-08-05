@@ -27,16 +27,14 @@ pub struct RpcService {
     pub(crate) sessions: SessionManagerRef,
     pub(crate) abort_notify: Arc<Notify>,
     pub(crate) dispatcher: Arc<FuseQueryFlightDispatcher>,
-    pub(crate) conf: Config,
 }
 
 impl RpcService {
-    pub fn create(conf: Config, sessions: SessionManagerRef) -> Box<dyn FuseQueryServer> {
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn FuseQueryServer> {
         Box::new(Self {
             sessions,
             abort_notify: Arc::new(Notify::new()),
             dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
-            conf,
         })
     }
 
@@ -65,12 +63,12 @@ impl RpcService {
         let sessions = self.sessions.clone();
         let flight_dispatcher = self.dispatcher.clone();
         let flight_api_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
-        let conf = &self.conf;
+        let conf = self.sessions.get_conf();
         let builder = Server::builder();
         let mut builder = if conf.tls_rpc_server_enabled() {
             log::info!("fuse query tls rpc enabled");
             builder
-                .tls_config(Self::server_tls_config(&self.conf).await.map_err(|e| {
+                .tls_config(Self::server_tls_config(conf).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
                         "failed to load server tls config: {}",
                         e.to_string()

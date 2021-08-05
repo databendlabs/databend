@@ -37,7 +37,6 @@ async fn test_tls_rpc_server() -> Result<()> {
         sessions: session_manager.clone(),
         abort_notify: Arc::new(Notify::new()),
         dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
-        conf,
     };
     let addr_str = addr.to_string();
     let stream = TcpListenerStream::new(listener);
@@ -82,7 +81,6 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
         sessions: session_manager.clone(),
         abort_notify: Arc::new(Notify::new()),
         dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
-        conf,
     };
     let stream = TcpListenerStream::new(listener);
     let r = srv.start_with_incoming(stream).await;
