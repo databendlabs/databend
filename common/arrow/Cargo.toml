@@ -15,9 +15,9 @@ simd = ["arrow/simd"]
 # Workspace dependencies
 
 # Github dependencies
-arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", rev = "8190d11" }
-arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "8190d11" }
-parquet = {package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", branch = "main"}
+arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", rev = "d545253" }
+arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "d545253" }
+parquet = {package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", rev = "05854c0"}
 # Crates.io dependencies
 
 [dev-dependencies]
