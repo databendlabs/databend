@@ -114,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // RPC API service.
     {
         let addr = conf.flight_api_address.parse::<std::net::SocketAddr>()?;
-        let mut srv = RpcService::create(conf.clone(), session_manager.clone());
+        let mut srv = RpcService::create(session_manager.clone());
         let listening = srv.start(addr).await?;
         shutdown_handle.add_service(srv);
         info!("RPC API server listening on {}", listening);
