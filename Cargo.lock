@@ -117,7 +117,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=8190d11#8190d1142cc2d0c56491998fbebed99633677bca"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=d545253#d545253e30fa9060e1f74b973df378ef2d82fec2"
 dependencies = [
  "arrow2",
  "bytes",
@@ -131,7 +131,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.2.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=8190d11#8190d1142cc2d0c56491998fbebed99633677bca"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=d545253#d545253e30fa9060e1f74b973df378ef2d82fec2"
 dependencies = [
  "ahash 0.7.4",
  "base64",
@@ -149,7 +149,7 @@ dependencies = [
  "multiversion",
  "num",
  "packed_simd_2",
- "parquet2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parquet2 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "prettytable-rs",
  "rand 0.8.4",
  "regex",
@@ -708,7 +708,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
- "parquet2 0.1.0 (git+https://github.com/datafuse-extras/parquet2?branch=main)",
+ "parquet2 0.2.0 (git+https://github.com/datafuse-extras/parquet2?rev=05854c0)",
 ]
 
 [[package]]
@@ -3445,9 +3445,9 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cab3c2da3dc2e9e5e62fbf409d2c635ac5389ea9fdd5280e3660ae0f900e000"
+checksum = "b50de05bf09185870980353a9734df91b617750439b2bded36fb975f39abfb50"
 dependencies = [
  "bitpacking",
  "brotli",
@@ -3463,8 +3463,8 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/parquet2?branch=main#20a1fb9d705c827e045504a5d5cb01537ba07c27"
+version = "0.2.0"
+source = "git+https://github.com/datafuse-extras/parquet2?rev=05854c0#05854c08a455bfc6e56350db37350ada526112b6"
 dependencies = [
  "bitpacking",
  "brotli",
@@ -6014,18 +6014,18 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.6.1+zstd.1.4.9"
+version = "0.9.0+zstd.1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5de55e77f798f205d8561b8fe2ef57abfb6e0ff2abe7fd3c089e119cdb5631a3"
+checksum = "07749a5dc2cb6b36661290245e350f15ec3bbb304e493db54a1d354480522ccd"
 dependencies = [
  "zstd-safe",
 ]
 
 [[package]]
 name = "zstd-safe"
-version = "3.0.1+zstd.1.4.9"
+version = "4.1.1+zstd.1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1387cabcd938127b30ce78c4bf00b30387dddf704e3f0881dbc4ff62b5566f8c"
+checksum = "c91c90f2c593b003603e5e0493c837088df4469da25aafff8bce42ba48caf079"
 dependencies = [
  "libc",
  "zstd-sys",
@@ -6033,9 +6033,9 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "1.4.20+zstd.1.4.9"
+version = "1.6.1+zstd.1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebd5b733d7cf2d9447e2c3e76a5589b4f5e5ae065c22a2bc0b023cbc331b6c8e"
+checksum = "615120c7a2431d16cf1cf979e7fc31ba7a5b5e5707b29c8a99e5dbf8a8392a33"
 dependencies = [
  "cc",
  "libc",
