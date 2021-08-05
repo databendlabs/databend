@@ -130,10 +130,12 @@ impl FlightService for FuseQueryFlightService {
         let do_flight_action = || -> common_exception::Result<FlightResult> {
             match &flight_action {
                 FlightAction::CancelAction(action) => {
+                    // We only destroy when session is exist
                     let session_id = action.query_id.clone();
-                    let is_aborted = self.dispatcher.is_aborted();
-                    let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
-                    session.force_kill_session();
+                    if let Some(session) = self.sessions.get_session(&session_id) {
+                        session.force_kill_session();
+                    }
+
                     Ok(FlightResult { body: vec![] })
                 }
                 FlightAction::BroadcastAction(action) => {

@@ -114,12 +114,9 @@ impl SessionManager {
         Ok(SessionRef::create(session))
     }
 
-    pub fn get_session(self: &Arc<Self>, id: &String) -> Result<SessionRef> {
+    pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
         let sessions = self.active_sessions.read();
-        match sessions.get(id) {
-            None => Err(ErrorCode::UnknownSession(format!("Not found session id {}", id))),
-            Some(sessions) => Ok(SessionRef::create(sessions.clone()))
-        }
+        sessions.get(id).map(|session| SessionRef::create(session.clone()))
     }
 
     #[allow(clippy::ptr_arg)]
