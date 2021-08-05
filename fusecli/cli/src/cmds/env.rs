@@ -13,7 +13,7 @@ pub struct Env {
 
 impl Env {
     pub fn create(conf: Config) -> Self {
-        let namespace = conf.namespace.clone();
+        let namespace = conf.group.clone();
         Env {
             conf,
             prompt: format!("[{}] > ", namespace.green()),

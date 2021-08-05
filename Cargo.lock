@@ -1336,6 +1336,7 @@ dependencies = [
  "flate2",
  "indicatif",
  "pretty_assertions",
+ "prettytable-rs",
  "run_script",
  "rustyline",
  "serde",
