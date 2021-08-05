@@ -148,12 +148,18 @@ impl ConnectionFactory {
 
                 let mut endpoint = if let Some(conf) = rpc_client_config {
                     log::info!("tls rpc enabled");
-                    let client_tls_config = Self::client_tls_config(&conf)
-                        .await
-                        .map_err(|e| ErrorCode::TLSConfigurationFailuer(e.to_string()))?;
-                    builder
-                        .tls_config(client_tls_config)
-                        .map_err(|e| ErrorCode::TLSConfigurationFailuer(e.to_string()))?
+                    let client_tls_config = Self::client_tls_config(&conf).await.map_err(|e| {
+                        ErrorCode::TLSConfigurationFailure(format!(
+                            "loading client tls config failure: {} ",
+                            e.to_string()
+                        ))
+                    })?;
+                    builder.tls_config(client_tls_config).map_err(|e| {
+                        ErrorCode::TLSConfigurationFailure(format!(
+                            "builder tls_config failure: {}",
+                            e.to_string()
+                        ))
+                    })?
                 } else {
                     builder
                 };

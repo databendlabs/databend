@@ -71,13 +71,13 @@ impl RpcService {
             log::info!("fuse query tls rpc enabled");
             builder
                 .tls_config(Self::server_tls_config(&self.conf).await.map_err(|e| {
-                    ErrorCode::TLSConfigurationFailuer(format!(
+                    ErrorCode::TLSConfigurationFailure(format!(
                         "failed to load server tls config: {}",
                         e.to_string()
                     ))
                 })?)
                 .map_err(|e| {
-                    ErrorCode::TLSConfigurationFailuer(format!(
+                    ErrorCode::TLSConfigurationFailure(format!(
                         "failed to invoke tls_config: {}",
                         e.to_string()
                     ))

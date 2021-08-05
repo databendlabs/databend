@@ -88,7 +88,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     let r = srv.start_with_incoming(stream).await;
     assert!(r.is_err());
     let e = r.unwrap_err();
-    assert_eq!(e.code(), ErrorCode::TLSConfigurationFailuer("").code());
+    assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());
     Ok(())
 }
 
@@ -103,6 +103,6 @@ async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
     let r = ConnectionFactory::create_flight_channel("fake:1234", None, Some(client_conf)).await;
     assert!(r.is_err());
     let e = r.unwrap_err();
-    assert_eq!(e.code(), ErrorCode::TLSConfigurationFailuer("").code());
+    assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());
     Ok(())
 }

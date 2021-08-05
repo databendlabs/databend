@@ -38,7 +38,7 @@ impl StoreServer {
         let (fin_tx, fin_rx) = oneshot::channel::<()>();
 
         let tls_conf = Self::tls_config(&self.conf).await.map_err(|e| {
-            ErrorCode::TLSConfigurationFailuer(format!(
+            ErrorCode::TLSConfigurationFailure(format!(
                 "failed to build ServerTlsConfig, {}",
                 e.to_string()
             ))
@@ -106,7 +106,7 @@ impl StoreServer {
         let mut builder = if let Some(conf) = tls_conf {
             tracing::info!("TLS RPC enabled");
             builder.tls_config(conf).map_err(|e| {
-                ErrorCode::TLSConfigurationFailuer(format!(
+                ErrorCode::TLSConfigurationFailure(format!(
                     "server tls_config failure {}",
                     e.to_string()
                 ))

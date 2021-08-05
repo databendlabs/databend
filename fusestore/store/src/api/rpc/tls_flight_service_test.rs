@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_flights::MetaApi;
 use common_flights::RpcClientTlsConfig;
@@ -71,7 +70,7 @@ async fn test_flight_tls_client_config_failure() -> anyhow::Result<()> {
 
     assert!(r.is_err());
     if let Err(e) = r {
-        assert_eq!(e.code(), ErrorCode::TLSConfigurationFailuer("").code());
+        assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());
     }
     Ok(())
 }
