@@ -10,6 +10,7 @@ use clap::AppSettings;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::FetchCommand;
+use crate::cmds::ListCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
 
@@ -31,6 +32,12 @@ impl PackageCommand {
                         .setting(AppSettings::DisableVersion)
                         .setting(AppSettings::ColoredHelp)
                         .about("Fetch the latest version package"),
+                )
+                .subcommand(
+                    App::new("list")
+                        .setting(AppSettings::DisableVersion)
+                        .setting(AppSettings::ColoredHelp)
+                        .about("List all the packages"),
                 ),
         );
         PackageCommand { conf, clap }
@@ -61,6 +68,10 @@ impl Command for PackageCommand {
                 Some("fetch") => {
                     let fetch = FetchCommand::create(self.conf.clone());
                     fetch.exec(writer, args)?;
+                }
+                Some("list") => {
+                    let list = ListCommand::create(self.conf.clone());
+                    list.exec(writer, args)?;
                 }
                 _ => writer.write_err("unknown command, usage: package -h"),
             },
