@@ -41,16 +41,18 @@ impl RaftState {
     #[tracing::instrument(level = "info", skip(db))]
     pub async fn open_create(
         db: &sled::Db,
+        config: &configs::Config,
         open: Option<()>,
-        create: Option<&configs::Config>,
+        create: Option<()>,
     ) -> common_exception::Result<(RaftState, bool)> {
+        let tree_name = config.tree_name(K_RAFT_STATE);
         let t = db
-            .open_tree(K_RAFT_STATE)
+            .open_tree(&tree_name)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
                 format!("open tree raft_state: name={}", "")
             })?;
 
-        tracing::debug!("opened tree: {}", K_RAFT_STATE);
+        tracing::debug!("opened tree: {}", tree_name);
 
         let curr_id = t
             .get(K_ID)
@@ -73,28 +75,22 @@ impl RaftState {
                 )));
             }
             (Some(_), None, None) => panic!("no open no create"),
-            (None, Some(_), Some(&ref config)) => Self::create(t, config.id).await?,
+            (None, Some(_), Some(_)) => Self::create(t, config.id).await?,
             (None, Some(_), None) => {
                 return Err(ErrorCode::MetaStoreNotFound(
                     "raft state absent, can not open",
                 ));
             }
-            (None, None, Some(&ref config)) => Self::create(t, config.id).await?,
+            (None, None, Some(_)) => Self::create(t, config.id).await?,
             (None, None, None) => panic!("no open no create"),
         };
 
         Ok((rs, is_open))
     }
 
-    #[tracing::instrument(level = "info", skip(t))]
-    fn open(t: sled::Tree, curr_id: NodeId) -> common_exception::Result<(RaftState, bool)> {
-        Ok((
-            RaftState {
-                id: curr_id,
-                tree: t,
-            },
-            true,
-        ))
+    #[tracing::instrument(level = "info", skip(tree))]
+    fn open(tree: sled::Tree, id: NodeId) -> common_exception::Result<(RaftState, bool)> {
+        Ok((RaftState { id, tree }, true))
     }
 
     #[tracing::instrument(level = "info", skip(tree))]
@@ -110,7 +106,7 @@ impl RaftState {
             .await
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush raft state creation")?;
 
-        tracing::info!("flushed");
+        tracing::info!("flushed RaftState");
 
         Ok((RaftState { id, tree }, false))
     }

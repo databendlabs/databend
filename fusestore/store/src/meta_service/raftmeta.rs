@@ -39,9 +39,9 @@ use common_runtime::tokio::task::JoinHandle;
 use common_tracing::tracing;
 
 use crate::configs;
+use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
-use crate::meta_service::sled_open;
 use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::sledkv;
 use crate::meta_service::AppliedState;
@@ -127,10 +127,6 @@ pub struct MetaStore {
 // }
 
 impl MetaStore {
-    fn log_dir(config: &configs::Config) -> String {
-        config.meta_dir.clone() + "/log"
-    }
-
     /// Create a new `MetaStore` instance.
     #[tracing::instrument(level = "info")]
     pub async fn new(id: NodeId, config: &configs::Config) -> common_exception::Result<MetaStore> {
@@ -158,11 +154,9 @@ impl MetaStore {
         open: Option<()>,
         create: Option<()>,
     ) -> common_exception::Result<(MetaStore, bool)> {
-        let p = Self::log_dir(config);
-        let db = sled_open(&p)?;
+        let db = get_sled_db();
 
-        let (raft_state, is_open) =
-            RaftState::open_create(&db, open.map(|_| ()), create.map(|_| config)).await?;
+        let (raft_state, is_open) = RaftState::open_create(&db, config, open, create).await?;
         tracing::info!("RaftState opened is_open: {}", is_open);
 
         let log = RaftLog::open(&db, config).await?;

@@ -22,6 +22,7 @@ use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
+use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 use crate::tests::service::StoreTestContext;
 
@@ -153,7 +154,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -170,7 +171,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let (_nid0, tc) = setup_leader().await?;
     let mn0 = tc.meta_nodes[0].clone();
@@ -199,7 +200,7 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
@@ -223,7 +224,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     // - Write to the raft node on the leader, expect Ok.
     // - Write to the raft node on the non-leader, expect ForwardToLeader error.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
@@ -274,7 +275,7 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
 
     // TODO: test MetaNode.write during leader changes.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_set_file");
@@ -302,7 +303,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Assert that every node handles AddDatabase request correctly.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_add_database");
@@ -369,7 +370,7 @@ async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
     // - Bring up a cluster with 1 leader, 2 followers and 2 non-voters.
     // - Write to leader, check data is replicated.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let span = tracing::span!(tracing::Level::INFO, "test_meta_node_cluster_1_2_2");
     let _ent = span.enter();
@@ -390,7 +391,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Check old data an new written data.
 
     // TODO(xp): this only tests for in-memory storage.
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let (_nid0, tc0) = setup_leader().await?;
     let mn0 = tc0.meta_nodes[0].clone();
@@ -462,7 +463,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     //   - TODO(xp): New log will be successfully written and sync
     //   - TODO(xp): A new snapshot will be created and transferred  on demand.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let mut log_cnt: u64 = 0;
     let (_id, mut tc) = setup_leader().await?;

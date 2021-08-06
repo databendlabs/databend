@@ -156,6 +156,13 @@ pub struct Config {
         default_value = "./_local_fs"
     )]
     pub local_fs_dir: String,
+
+    #[structopt(
+        long,
+        default_value = "",
+        help = "For test only: specifies the tree name prefix"
+    )]
+    pub sled_tree_prefix: String,
 }
 
 impl Config {
@@ -189,5 +196,12 @@ impl Config {
 
     pub fn tls_rpc_server_enabled(&self) -> bool {
         !self.rpc_tls_server_key.is_empty() && !self.rpc_tls_server_cert.is_empty()
+    }
+
+    /// Create a unique sled::Tree name by prepending a unique prefix.
+    /// So that multiple instance that depends on a sled::Tree can be used in one process.
+    /// sled does not allow to open multiple `sled::Db` in one process.
+    pub fn tree_name(&self, name: &str) -> String {
+        format!("{}{}", self.sled_tree_prefix, name)
     }
 }
