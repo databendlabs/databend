@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 use clap::App;
 use clap::AppSettings;
+use clap::Arg;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -44,7 +45,10 @@ impl PackageCommand {
                     App::new("switch")
                         .setting(AppSettings::DisableVersion)
                         .setting(AppSettings::ColoredHelp)
-                        .about("Switch the active datafuse to a specified version"),
+                        .about("Switch the active datafuse to a specified version")
+                        .arg(Arg::with_name("version").required(true).help(
+                            "Version of datafuse package, e.g. v0.4.69-nightly. Check the versions: package list"
+                        ))
                 ),
         );
         PackageCommand { conf, clap }
@@ -81,8 +85,9 @@ impl Command for PackageCommand {
                     list.exec(writer, args)?;
                 }
                 Some("switch") => {
+                    let val = matches.subcommand().1.unwrap().value_of("version").unwrap();
                     let switch = SwitchCommand::create(self.conf.clone());
-                    switch.exec(writer, args)?;
+                    switch.exec(writer, val.to_string())?;
                 }
                 _ => writer.write_err("unknown command, usage: package -h"),
             },

@@ -4,11 +4,9 @@
 
 use std::fs;
 
-use prettytable::Cell;
-use prettytable::Row;
-use prettytable::Table;
-
 use crate::cmds::Config;
+use crate::cmds::ListCommand;
+use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::Result;
 
@@ -22,23 +20,33 @@ impl SwitchCommand {
         SwitchCommand { conf }
     }
 
-    pub fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+    pub fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
         let bin_dir = format!("{}/bin", self.conf.datafuse_dir.clone());
         let paths = fs::read_dir(bin_dir)?;
 
-        let mut table = Table::new();
-        // Title.
-        table.add_row(Row::new(vec![Cell::new("Version"), Cell::new("Path")]));
+        let mut exists = false;
         for path in paths {
-            let path = path.unwrap();
-            let mut row = vec![];
-            row.push(Cell::new(
-                path.path().file_name().unwrap().to_str().unwrap(),
-            ));
-            row.push(Cell::new(format!("{}", path.path().display(),).as_str()));
-            table.add_row(Row::new(row));
+            let path = path.unwrap().path();
+            let version = path.file_name().unwrap().to_string_lossy().into_owned();
+            if version == args {
+                exists = true;
+                break;
+            }
         }
-        table.print(writer).unwrap();
+
+        if !exists {
+            writer.write_err(format!("Can't found version: {}, package list:", args).as_str());
+            let list = ListCommand::create(self.conf.clone());
+            list.exec(writer, args)?;
+            return Ok(());
+        }
+
+        // Write to status.
+        let mut status = Status::read(self.conf.clone())?;
+        status.version = args.clone();
+        status.write()?;
+
+        writer.write_ok(format!("Package switch to {}", args).as_str());
 
         Ok(())
     }
