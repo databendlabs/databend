@@ -44,7 +44,6 @@ async fn test_http_service_tls_server() -> Result<()> {
     // kick off
     let client = reqwest::Client::builder()
         .add_root_certificate(cert)
-        .danger_accept_invalid_hostnames(true)
         .build()
         .unwrap();
     let resp = client.get(url).send().await;
