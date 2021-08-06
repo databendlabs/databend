@@ -7,21 +7,26 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio;
 use common_runtime::tokio::net::TcpListener;
 use common_runtime::tokio::sync::Notify;
 use tokio_stream::wrappers::TcpListenerStream;
+use tonic::transport::Identity;
 use tonic::transport::Server;
+use tonic::transport::ServerTlsConfig;
 
 use crate::api::rpc::FuseQueryFlightDispatcher;
 use crate::api::rpc::FuseQueryFlightService;
+use crate::configs::Config;
 use crate::servers::Server as FuseQueryServer;
 use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
-    sessions: SessionManagerRef,
-    abort_notify: Arc<Notify>,
-    dispatcher: Arc<FuseQueryFlightDispatcher>,
+    pub(crate) sessions: SessionManagerRef,
+    pub(crate) abort_notify: Arc<Notify>,
+    pub(crate) dispatcher: Arc<FuseQueryFlightDispatcher>,
 }
 
 impl RpcService {
@@ -45,6 +50,47 @@ impl RpcService {
             notified.notified().await;
         }
     }
+
+    async fn server_tls_config(conf: &Config) -> Result<ServerTlsConfig> {
+        let cert = tokio::fs::read(conf.rpc_tls_server_cert.as_str()).await?;
+        let key = tokio::fs::read(conf.rpc_tls_server_key.as_str()).await?;
+        let server_identity = Identity::from_pem(cert, key);
+        let tls_conf = ServerTlsConfig::new().identity(server_identity);
+        Ok(tls_conf)
+    }
+
+    pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
+        let sessions = self.sessions.clone();
+        let flight_dispatcher = self.dispatcher.clone();
+        let flight_api_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
+        let conf = self.sessions.get_conf();
+        let builder = Server::builder();
+        let mut builder = if conf.tls_rpc_server_enabled() {
+            log::info!("fuse query tls rpc enabled");
+            builder
+                .tls_config(Self::server_tls_config(conf).await.map_err(|e| {
+                    ErrorCode::TLSConfigurationFailure(format!(
+                        "failed to load server tls config: {}",
+                        e.to_string()
+                    ))
+                })?)
+                .map_err(|e| {
+                    ErrorCode::TLSConfigurationFailure(format!(
+                        "failed to invoke tls_config: {}",
+                        e.to_string()
+                    ))
+                })?
+        } else {
+            builder
+        };
+
+        let server = builder
+            .add_service(FlightServiceServer::new(flight_api_service))
+            .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
+
+        common_runtime::tokio::spawn(server);
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -56,16 +102,8 @@ impl FuseQueryServer for RpcService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let sessions = self.sessions.clone();
-        let flight_dispatcher = self.dispatcher.clone();
-        let flight_api_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
-
-        let (listener_stream, listening) = Self::listener_tcp(listening).await?;
-        let server = Server::builder()
-            .add_service(FlightServiceServer::new(flight_api_service))
-            .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
-
-        common_runtime::tokio::spawn(server);
-        Ok(listening)
+        let (listener_stream, listener_addr) = Self::listener_tcp(listening).await?;
+        self.start_with_incoming(listener_stream).await?;
+        Ok(listener_addr)
     }
 }

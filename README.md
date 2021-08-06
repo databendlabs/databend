@@ -31,7 +31,6 @@ Built to make the Data Cloud easy!
 </div>
 </div>
 
-[![Stargazers over time](https://starchart.cc/datafuselabs/datafuse.svg)](https://starchart.cc/datafuselabs/datafuse)
 
 ## Principles
 

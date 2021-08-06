@@ -5,6 +5,9 @@
 
 use common_datavalues::DataSchemaRef;
 use common_metatypes::Database;
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
+use common_metatypes::Table;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -40,7 +43,13 @@ pub struct GetTableActionResult {
     pub schema: DataSchemaRef,
 }
 
-pub type DatabaseMetaReply = Option<(u64, Vec<Database>)>;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DatabaseMetaSnapshot {
+    pub meta_ver: u64,
+    pub db_metas: Vec<(String, Database)>,
+    pub tbl_metas: Vec<(u64, Table)>,
+}
+pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
 
 #[async_trait::async_trait]
 pub trait MetaApi {
@@ -73,8 +82,14 @@ pub trait MetaApi {
         table: String,
     ) -> common_exception::Result<GetTableActionResult>;
 
+    async fn get_table_ext(
+        &mut self,
+        table_id: MetaId,
+        db_ver: Option<MetaVersion>,
+    ) -> common_exception::Result<GetTableActionResult>;
+
     async fn get_database_meta(
         &mut self,
         current_ver: Option<u64>,
-    ) -> common_exception::Result<Option<(u64, Vec<Database>)>>;
+    ) -> common_exception::Result<DatabaseMetaReply>;
 }

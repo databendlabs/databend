@@ -23,6 +23,130 @@ use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_restart() -> anyhow::Result<()> {
+    // Issue 1134  https://github.com/datafuselabs/datafuse/issues/1134
+    // - Start a store server.
+    // - create db and create table
+    // - restart
+    // - Test read the db and read the table.
+
+    common_tracing::init_default_tracing();
+
+    let (mut tc, addr) = crate::tests::start_store_server().await?;
+
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    let db_name = "db1";
+    let table_name = "table1";
+
+    tracing::info!("--- create db");
+    {
+        let plan = CreateDatabasePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+
+        let res = client.create_database(plan.clone()).await;
+        tracing::debug!("create database res: {:?}", res);
+        let res = res?;
+        assert_eq!(1, res.database_id, "first database id is 1");
+    }
+
+    tracing::info!("--- get db");
+    {
+        let res = client.get_database(db_name).await;
+        tracing::debug!("get present database res: {:?}", res);
+        let res = res?;
+        assert_eq!(1, res.database_id, "db1 id is 1");
+        assert_eq!(db_name, res.db, "db1.db is db1");
+    }
+
+    tracing::info!("--- create table {}.{}", db_name, table_name);
+    let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        "number",
+        DataType::UInt64,
+        false,
+    )]));
+    {
+        let plan = CreateTablePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            table: table_name.to_string(),
+            schema: schema.clone(),
+            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            engine: TableEngineType::JSONEachRow,
+        };
+
+        {
+            let res = client.create_table(plan.clone()).await?;
+            assert_eq!(1, res.table_id, "table id is 1");
+
+            let got = client.get_table(db_name.into(), table_name.into()).await?;
+            let want = GetTableActionResult {
+                table_id: 1,
+                db: db_name.into(),
+                name: table_name.into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get created table");
+        }
+    }
+
+    tracing::info!("--- stop StoreServer");
+    {
+        let (stop_tx, fin_rx) = tc.channels.take().unwrap();
+        stop_tx
+            .send(())
+            .map_err(|_| anyhow::anyhow!("fail to send"))?;
+
+        fin_rx.await?;
+
+        drop(client);
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // restart by opening existent meta db
+        tc.config.boot = false;
+        crate::tests::start_store_server_with_context(&mut tc).await?;
+    }
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
+
+    // try to reconnect the restarted server.
+    let mut _client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    // TODO(xp): db and table are still in pure memory store. the following test will no pass.
+
+    // tracing::info!("--- get db");
+    // {
+    //     let res = client.get_database(db_name).await;
+    //     tracing::debug!("get present database res: {:?}", res);
+    //     let res = res?;
+    //     assert_eq!(1, res.database_id, "db1 id is 1");
+    //     assert_eq!(db_name, res.db, "db1.db is db1");
+    // }
+    //
+    // tracing::info!("--- get table");
+    // {
+    //     let got = client
+    //         .get_table(db_name.into(), table_name.into())
+    //         .await
+    //         .unwrap();
+    //     let want = GetTableActionResult {
+    //         table_id: 1,
+    //         db: db_name.into(),
+    //         name: table_name.into(),
+    //         schema: schema.clone(),
+    //     };
+    //     assert_eq!(want, got, "get created table");
+    // }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
@@ -341,13 +465,13 @@ async fn test_do_append() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let series0 = Series::new(vec![0i64, 1, 2]);
+    let series1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.len() * 2;
+    let expected_rows = series0.len() * 2;
     let expected_cols = 2;
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![col0, col1]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![series0, series1]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
     let stream = futures::stream::iter(batches);
@@ -414,15 +538,17 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let series0 = Series::new(vec![0i64, 1, 2]);
+    let series1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.len() * 2;
+    let rows_of_series0 = series0.len();
+    let rows_of_series1 = series1.len();
+    let expected_rows = rows_of_series0 + rows_of_series1;
     let expected_cols = 2;
 
     let block = DataBlock::create(schema.clone(), vec![
-        DataColumn::Array(col0),
-        DataColumn::Array(col1),
+        DataColumn::Array(series0),
+        DataColumn::Array(series1),
     ]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
@@ -464,6 +590,8 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         assert_eq!(p.cols, expected_cols);
     });
 
+    log::debug!("summary is {:?}", summary);
+
     let plan = ScanPlan {
         schema_name: tbl_name.to_string(),
         ..ScanPlan::empty()
@@ -471,8 +599,14 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let res = client
         .read_plan(db_name.to_string(), tbl_name.to_string(), &plan)
         .await;
-    // TODO d assertions, de-duplicated codes
-    println!("scan res is {:?}", res);
+
+    assert!(res.is_ok());
+    let read_plan_res = res.unwrap();
+    assert!(read_plan_res.is_some());
+    let read_plan = read_plan_res.unwrap();
+    assert_eq!(2, read_plan.len());
+    assert_eq!(read_plan[0].stats.read_rows, rows_of_series0);
+    assert_eq!(read_plan[1].stats.read_rows, rows_of_series1);
 
     Ok(())
 }
@@ -707,7 +841,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
 
     // Empty Database
     let res = client.get_database_meta(None).await?;
-    assert_eq!(None, res);
+    assert!(res.is_none());
 
     Ok(())
 }
@@ -729,16 +863,16 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 
     let res = client.get_database_meta(None).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(1, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(1, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound < current meta version, returns database meta
     let res = client.get_database_meta(Some(0)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(1, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(1, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound equals current meta version, returns None
     let res = client.get_database_meta(Some(1)).await?;
@@ -765,9 +899,10 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     client.drop_database(plan).await?;
     let res = client.get_database_meta(Some(1)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(0, dbs.len());
+    let snapshot = res.unwrap();
+
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(0, snapshot.db_metas.len());
 
     Ok(())
 }
@@ -775,7 +910,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
-    let (_, addr) = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let test_db = "db1";
@@ -809,17 +944,17 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
 
     let res = client.get_database_meta(None).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(1, dbs.len());
-    assert_eq!(1, dbs[0].tables.len());
+    let snapshot = res.unwrap();
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
+    assert_eq!(1, snapshot.tbl_metas.len());
 
     // if lower_bound < current meta version, returns database meta
     let res = client.get_database_meta(Some(0)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound equals current meta version, returns None
     let res = client.get_database_meta(Some(2)).await?;
@@ -841,10 +976,10 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     client.drop_table(plan).await?;
     let res = client.get_database_meta(Some(2)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(3, v);
-    assert_eq!(1, dbs.len());
-    assert_eq!(0, dbs[0].tables.len());
+    let snapshot = res.unwrap();
+    assert_eq!(3, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
+    assert_eq!(0, snapshot.tbl_metas.len());
 
     Ok(())
 }

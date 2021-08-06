@@ -54,7 +54,7 @@ impl Interpreter for SelectInterpreter {
         match self.schedule_query(&mut scheduled).await {
             Ok(stream) => Ok(ScheduledStream::create(scheduled, stream, self.ctx.clone())),
             Err(error) => {
-                Self::error_handler(scheduled, timeout, self.ctx.get_id()).await;
+                Self::error_handler(scheduled, &self.ctx, timeout).await;
                 Err(error)
             }
         }
@@ -77,7 +77,7 @@ impl SelectInterpreter {
 
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
         for (node, action) in remote_stage_actions {
-            let mut flight_client = node.get_flight_client().await?;
+            let mut flight_client = node.get_flight_client(&self.ctx.get_config()).await?;
             let executing_action = flight_client.execute_action(action.clone(), timeout);
 
             executing_action.await?;
@@ -89,9 +89,10 @@ impl SelectInterpreter {
         in_local_pipeline.execute().await
     }
 
-    async fn error_handler(scheduled: Scheduled, timeout: u64, query_id: String) {
+    async fn error_handler(scheduled: Scheduled, context: &FuseQueryContextRef, timeout: u64) {
+        let query_id = context.get_id();
         for (_stream_name, scheduled_node) in scheduled {
-            match scheduled_node.get_flight_client().await {
+            match scheduled_node.get_flight_client(&context.get_config()).await {
                 Err(cause) => {
                     log::error!(
                         "Cannot cancel action for {}, cause: {}",
@@ -141,10 +142,9 @@ impl ScheduledStream {
     }
 
     fn cancel_scheduled_action(&self) -> Result<()> {
-        let query_id = self.context.get_id();
         let scheduled = self.scheduled.clone();
         let timeout = self.context.get_settings().get_flight_client_timeout()?;
-        let error_handler = SelectInterpreter::error_handler(scheduled, timeout, query_id);
+        let error_handler = SelectInterpreter::error_handler(scheduled, &self.context, timeout);
         futures::executor::block_on(error_handler);
         Ok(())
     }

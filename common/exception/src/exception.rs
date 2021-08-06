@@ -156,7 +156,8 @@ build_exceptions! {
     Overflow(49),
     InvalidMetaBinaryFormat(50),
     AuthenticateFailure(51),
-    UnknownSession(52),
+    TLSConfigurationFailure(52),
+    UnknownSession(53),
 
 
     // uncategorized
@@ -193,6 +194,11 @@ build_exceptions! {
 
     MetaStoreDamaged(2401),
     MetaStoreAlreadyExists(2402),
+    MetaStoreNotFound(2403),
+
+    // FuseStore server error
+
+    FuseStoreError(2501),
 
 
     // TODO

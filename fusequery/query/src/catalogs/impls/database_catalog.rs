@@ -4,6 +4,7 @@
 //
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -14,44 +15,61 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
-use common_planners::TableOptions;
 use common_store_api::MetaApi;
 
-use crate::catalog::utils::TableFunctionMeta;
-use crate::catalog::utils::TableMeta;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
+use crate::catalogs::meta_store_client::DBMetaStoreClient;
+use crate::catalogs::utils::TableFunctionMeta;
+use crate::catalogs::utils::TableMeta;
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::LocalFactory;
-use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteFactory;
-use crate::datasources::remote::RemoteTable;
 use crate::datasources::system::SystemFactory;
 use crate::datasources::Database;
+
+// min id for system tables (inclusive)
+pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;
+// max id for system tables (exclusive)
+pub const SYS_TBL_ID_END: u64 = SYS_TBL_ID_BEGIN + 10000;
+
+// min id for system tables (inclusive)
+// max id for local tables is u64:MAX
+pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
 
 // Maintain all the databases of user.
 pub struct DatabaseCatalog {
     databases: RwLock<HashMap<String, Arc<dyn Database>>>,
     table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
+    meta_store_cli: Arc<dyn DBMetaStoreClient>,
     remote_factory: RemoteFactory,
+    disable_remote: bool,
 }
 
 impl DatabaseCatalog {
     pub fn try_create() -> Result<Self> {
         let conf = Config::default();
-        DatabaseCatalog::try_create_with_config(&conf)
+        Self::try_create_with_config(&conf)
     }
 
     pub fn try_create_with_config(conf: &Config) -> Result<Self> {
+        let remote_factory = RemoteFactory::new(conf);
+        let store_client_provider = remote_factory.store_client_provider();
+
         let mut datasource = DatabaseCatalog {
             databases: Default::default(),
             table_functions: Default::default(),
-            remote_factory: RemoteFactory::new(conf),
+            remote_factory,
+            meta_store_cli: Arc::new(RemoteMetaStoreClient::create(Arc::new(
+                store_client_provider,
+            ))),
+            disable_remote: conf.disable_remote_catalog,
         };
 
         datasource.register_system_database()?;
         datasource.register_local_database()?;
         datasource.register_default_database()?;
-        datasource.register_remote_database()?;
         Ok(datasource)
     }
 
@@ -82,12 +100,6 @@ impl DatabaseCatalog {
         self.insert_databases(databases)
     }
 
-    // Register remote database with Remote engine.
-    fn register_remote_database(&mut self) -> Result<()> {
-        let databases = self.remote_factory.load_databases()?;
-        self.insert_databases(databases)
-    }
-
     // Register default database with Local engine.
     fn register_default_database(&mut self) -> Result<()> {
         let default_db = LocalDatabase::create();
@@ -98,106 +110,96 @@ impl DatabaseCatalog {
     }
 }
 
-impl DatabaseCatalog {
-    pub fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        let db_lock = self.databases.read();
-        let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("Unknown database: '{}'", db_name))
-        })?;
-        Ok(database.clone())
+#[async_trait::async_trait]
+impl Catalog for DatabaseCatalog {
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+        self.databases.read().get(db_name).map_or_else(
+            || {
+                if !self.disable_remote {
+                    self.meta_store_cli.get_database(db_name)
+                } else {
+                    Err(ErrorCode::UnknownDatabase(format!(
+                        "Unknown database {}",
+                        &db_name
+                    )))
+                }
+            },
+            |v| Ok(v.clone()),
+        )
     }
 
-    pub fn get_databases(&self) -> Result<Vec<String>> {
-        let mut results = vec![];
-        for (k, _v) in self.databases.read().iter() {
-            results.push(k.clone());
+    fn get_databases(&self) -> Result<Vec<String>> {
+        let locals = self.databases.read();
+
+        if self.disable_remote {
+            return Ok(locals
+                .iter()
+                .map(|(k, _v)| k.to_owned())
+                .collect::<Vec<_>>());
         }
-        Ok(results)
+
+        // merge with remote meta data
+        let locals = locals.iter().map(|(k, _v)| k).collect::<HashSet<_>>();
+        let remotes = self.meta_store_cli.get_databases()?;
+        let remotes = remotes.iter().collect::<HashSet<_>>();
+        let db_names = remotes.union(&locals);
+        let mut r = db_names.into_iter().cloned().collect::<Vec<_>>();
+        r.sort();
+        Ok(r.into_iter().cloned().collect())
     }
 
-    pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
-        let db_lock = self.databases.read();
-        let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("Unknown database: '{}'", db_name))
-        })?;
-
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
+        let database = self.get_database(db_name)?;
         let table = database.get_table(table_name)?;
         Ok(table.clone())
     }
 
-    pub fn get_table_by_id(
+    fn get_table_by_id(
         &self,
         db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        let db_lock = self.databases.read();
-        let database = db_lock.get(db_name).ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("Unknown database: '{}'", db_name))
-        })?;
-
+        let database = self.get_database(db_name)?;
         let table = database.get_table_by_id(table_id, table_version)?;
         Ok(table.clone())
     }
 
-    pub async fn get_remote_table(
-        &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<TableMeta>> {
-        match self.get_table(db_name, table_name) {
-            Ok(t) if t.datasource().is_local() => Err(ErrorCode::LogicalError(format!(
-                "local table {}.{} exists, which is used as remote",
-                db_name, table_name
-            ))),
-            tbl @ Ok(_) => tbl,
-            _ => {
-                let cli_provider = self.remote_factory.store_client_provider();
-                let mut store_cli = cli_provider.try_get_client().await?;
-                let res = store_cli
-                    .get_table(db_name.to_string(), table_name.to_string())
-                    .await?;
-                let remote_table = RemoteTable::try_create(
-                    db_name.to_string(),
-                    table_name.to_string(),
-                    res.schema,
-                    self.remote_factory.store_client_provider().clone(),
-                    TableOptions::new(),
-                )?;
-
-                // Remote_table we've got here is NOT cached.
-                //
-                // Since we should solve the metadata synchronization problem in a more reasonable way,
-                // let's postpone it until we have taken all the things into account.
-                Ok(Arc::new(TableMeta::new(
-                    Arc::from(remote_table),
-                    res.table_id,
-                )))
-            }
-        }
-    }
-
-    pub fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
+    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
         let mut results = vec![];
-        for (k, v) in self.databases.read().iter() {
+        let mut db_names = HashSet::new();
+        for (db_name, v) in self.databases.read().iter() {
             let tables = v.get_tables()?;
             for table in tables {
-                results.push((k.clone(), table.clone()));
+                results.push((db_name.clone(), table.clone()));
             }
+            db_names.insert(db_name.clone());
         }
+
+        if !self.disable_remote {
+            let mut remotes = self
+                .meta_store_cli
+                .get_all_tables()?
+                .into_iter()
+                // local and system dbs should shadow remote db
+                .filter(|(n, _)| !db_names.contains(n))
+                .collect::<Vec<_>>();
+            results.append(&mut remotes);
+        }
+
         Ok(results)
     }
 
-    pub fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>> {
+    fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>> {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock.get(name).ok_or_else(|| {
             ErrorCode::UnknownTableFunction(format!("Unknown table function: '{}'", name))
         })?;
-
+        // no function of remote database for the time being
         Ok(table.clone())
     }
 
-    pub async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
         if self.databases.read().get(db_name).is_some() {
             return if plan.if_not_exists {
@@ -221,34 +223,29 @@ impl DatabaseCatalog {
                     .store_client_provider()
                     .try_get_client()
                     .await?;
-                client.create_database(plan.clone()).await.map(|_| {
-                    let database = RemoteDatabase::create(
-                        self.remote_factory.store_client_provider(),
-                        plan.db.clone(),
-                    );
-                    self.databases
-                        .write()
-                        .insert(plan.db.clone(), Arc::new(database));
-                })?;
+                client.create_database(plan.clone()).await?;
             }
         }
         Ok(())
     }
 
-    pub async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-        if self.databases.read().get(db_name).is_none() {
-            return if plan.if_exists {
-                Ok(())
-            } else {
-                Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: '{}'",
-                    plan.db
-                )))
-            };
-        }
+        let db = self.get_database(db_name);
+        let database = match db {
+            Err(_) => {
+                if plan.if_exists {
+                    return Ok(());
+                } else {
+                    return Err(ErrorCode::UnknownDatabase(format!(
+                        "Unknown database: '{}'",
+                        plan.db
+                    )));
+                }
+            }
+            Ok(v) => v,
+        };
 
-        let database = self.get_database(db_name)?;
         if database.is_local() {
             self.databases.write().remove(db_name);
         } else {

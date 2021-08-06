@@ -11,8 +11,6 @@ use common_flights::StoreClient;
 use crate::configs::Config;
 use crate::datasources::remote::store_client_provider::StoreClientProvider;
 use crate::datasources::remote::store_client_provider::TryGetStoreClient;
-use crate::datasources::remote::RemoteDatabase;
-use crate::datasources::Database;
 
 pub struct RemoteFactory {
     store_client_provider: StoreClientProvider,
@@ -23,15 +21,6 @@ impl RemoteFactory {
         RemoteFactory {
             store_client_provider: Arc::new(ClientProvider::new(conf)),
         }
-    }
-
-    pub fn load_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        // Load databases from remote.
-        let databases: Vec<Arc<dyn Database>> = vec![Arc::new(RemoteDatabase::create(
-            self.store_client_provider.clone(),
-            "for_test".to_string(),
-        ))];
-        Ok(databases)
     }
 
     pub fn store_client_provider(&self) -> StoreClientProvider {
@@ -51,10 +40,17 @@ impl ClientProvider {
 #[async_trait::async_trait]
 impl TryGetStoreClient for ClientProvider {
     async fn try_get_client(&self) -> Result<StoreClient> {
-        let client = StoreClient::try_create(
+        let tls_conf = if self.conf.tls_store_cli_enabled() {
+            Some(self.conf.tls_store_client_conf())
+        } else {
+            None
+        };
+
+        let client = StoreClient::with_tls_conf(
             &self.conf.store_api_address,
             self.conf.store_api_username.as_ref(),
             self.conf.store_api_password.as_ref(),
+            tls_conf,
         )
         .await
         .map_err(ErrorCode::from)?;

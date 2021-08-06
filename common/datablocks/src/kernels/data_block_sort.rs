@@ -103,7 +103,7 @@ impl DataBlock {
         let lhs_indices = (0, 0, lhs.num_rows());
         let rhs_indices = (1, 0, rhs.num_rows());
         let slices = merge_sort_slices(once(&lhs_indices), once(&rhs_indices), &comparator);
-        let slices = Self::materialize_merge_indices(slices, limit);
+        let slices = slices.to_vec(limit);
 
         let fields = lhs.schema().fields();
         let columns = fields
@@ -130,34 +130,6 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::create(lhs.schema().clone(), columns))
-    }
-
-    fn materialize_merge_indices<
-        'a,
-        L: Iterator<Item = &'a MergeSlice>,
-        R: Iterator<Item = &'a MergeSlice>,
-    >(
-        slices: MergeSortSlices<'a, L, R>,
-        limit: Option<usize>,
-    ) -> Vec<MergeSlice> {
-        match limit {
-            Some(limit) => {
-                let mut v = Vec::with_capacity(limit);
-                let mut current_len = 0;
-                for (index, start, len) in slices {
-                    v.push((index, start, len));
-
-                    if len + current_len >= limit {
-                        break;
-                    } else {
-                        current_len += len;
-                    }
-                }
-
-                v
-            }
-            None => slices.into_iter().collect(),
-        }
     }
 
     pub fn take_arrays_by_slices(

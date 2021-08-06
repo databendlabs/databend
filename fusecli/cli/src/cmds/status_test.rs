@@ -8,11 +8,11 @@ use crate::error::Result;
 
 #[test]
 fn test_status() -> Result<()> {
-    let mut conf = Config::create();
+    let mut conf = Config::default();
     conf.datafuse_dir = "/tmp/".to_string();
 
     let mut status = Status::read(conf)?;
-    status.latest = "xx".to_string();
+    status.version = "xx".to_string();
     status.write()?;
 
     Ok(())

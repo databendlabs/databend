@@ -24,6 +24,7 @@ use crate::impls::meta_api_impl::GetDatabaseMetaAction;
 use crate::impls::meta_api_impl::GetTableAction;
 use crate::impls::storage_api_impl::ReadPlanAction;
 use crate::impls::storage_api_impl::TruncateTableAction;
+use crate::meta_api_impl::GetTableExtReq;
 use crate::protobuf::FlightStoreRequest;
 
 pub trait RequestFor {
@@ -55,6 +56,7 @@ pub enum StoreDoAction {
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
     GetTable(GetTableAction),
+    GetTableExt(GetTableExtReq),
     GetDatabaseMeta(GetDatabaseMetaAction),
     ReadPlan(ReadPlanAction),
     TruncateTable(TruncateTableAction),

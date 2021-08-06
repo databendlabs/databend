@@ -50,6 +50,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
+use crate::catalogs::catalog::Catalog;
 use crate::functions::ContextFunction;
 use crate::sessions::FuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -892,6 +893,7 @@ impl PlanParser {
                 sqlparser::ast::Value::Boolean(b) => {
                     Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
                 }
+                sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
                 other => Result::Err(ErrorCode::SyntaxException(format!(
                     "Unsupported value expression: {}, type: {:?}",
                     value, other

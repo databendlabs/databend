@@ -50,6 +50,8 @@ impl Processor for SourceTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let db = self.source_plan.db.clone();
         let table = self.source_plan.table.clone();
+        let table_id = self.source_plan.table_id;
+        let table_ver = self.source_plan.table_version;
         let remote = self.source_plan.remote;
 
         tracing::debug!(
@@ -59,12 +61,7 @@ impl Processor for SourceTransform {
             remote
         );
 
-        let table = if remote {
-            let remote_table = self.ctx.get_remote_table(db.as_str(), table.as_str());
-            remote_table.await?
-        } else {
-            self.ctx.get_table(db.as_str(), table.as_str())?
-        };
+        let table = self.ctx.get_table_by_id(&db, table_id, table_ver).await?;
 
         let table_stream = table.datasource().read(self.ctx.clone(), &self.source_plan);
 

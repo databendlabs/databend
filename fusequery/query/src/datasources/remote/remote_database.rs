@@ -4,34 +4,33 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
-use common_store_api::MetaApi;
 
-use crate::catalog::utils::InMemoryMetas;
-use crate::catalog::utils::TableFunctionMeta;
-use crate::catalog::utils::TableMeta;
-use crate::datasources::remote::remote_table::RemoteTable;
-use crate::datasources::remote::store_client_provider::StoreClientProvider;
+use crate::catalogs::meta_store_client::DBMetaStoreClient;
+use crate::catalogs::utils::TableFunctionMeta;
+use crate::catalogs::utils::TableMeta;
 use crate::datasources::Database;
 
 pub struct RemoteDatabase {
+    _id: MetaId,
     name: String,
-    store_client_provider: StoreClientProvider,
-    tables: RwLock<InMemoryMetas>,
+    meta_client: Arc<dyn DBMetaStoreClient>,
 }
 
 impl RemoteDatabase {
-    pub fn create(store_client_provider: StoreClientProvider, name: String) -> Self {
-        RemoteDatabase {
-            name,
-            store_client_provider,
-            tables: RwLock::new(InMemoryMetas::new()),
+    pub fn create_new(
+        id: MetaId,
+        name: impl Into<String>,
+        cli: Arc<dyn DBMetaStoreClient>,
+    ) -> Self {
+        Self {
+            _id: id,
+            name: name.into(),
+            meta_client: cli,
         }
     }
 }
@@ -51,31 +50,20 @@ impl Database for RemoteDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        match self.tables.read().name2meta.get(table_name) {
-            Some(tbl) => Ok(tbl.clone()),
-            None => Err(ErrorCode::UnknownTable(format!(
-                "Unknown table: '{}'",
-                table_name
-            ))),
-        }
+        self.meta_client.get_table(&self.name, table_name)
     }
 
     fn get_table_by_id(
         &self,
         table_id: MetaId,
-        _table_version: Option<MetaVersion>,
+        table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        match self.tables.read().id2meta.get(&table_id) {
-            Some(tbl) => Ok(tbl.clone()),
-            None => Err(ErrorCode::UnknownTable(format!(
-                "unknown table id {}",
-                table_id
-            ))),
-        }
+        self.meta_client
+            .get_table_by_id(&self.name, table_id, table_version)
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        Ok(self.tables.read().name2meta.values().cloned().collect())
+        self.meta_client.get_db_tables(&self.name)
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
@@ -83,56 +71,10 @@ impl Database for RemoteDatabase {
     }
 
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        let db_name = plan.db.as_str();
-        let table_name = plan.table.as_str();
-        if self.tables.read().name2meta.get(table_name).is_some() {
-            return if plan.if_not_exists {
-                Ok(())
-            } else {
-                return Err(ErrorCode::UnImplement(format!(
-                    "Table: '{}.{}' already exists.",
-                    db_name, table_name
-                )));
-            };
-        }
-
-        // Call remote create.
-        let clone = plan.clone();
-        let provider = self.store_client_provider.clone();
-        let table = RemoteTable::try_create(
-            plan.db,
-            plan.table,
-            plan.schema,
-            provider.clone(),
-            plan.options,
-        )?;
-        let mut client = provider.try_get_client().await?;
-        client.create_table(clone).await.map(|t| {
-            let mut tables = self.tables.write();
-            tables.insert(TableMeta::new(table.into(), t.table_id));
-        })?;
-        Ok(())
+        self.meta_client.create_table(plan).await
     }
 
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        let table_name = plan.table.as_str();
-        if self.tables.read().name2meta.get(table_name).is_none() {
-            return if plan.if_exists {
-                Ok(())
-            } else {
-                Err(ErrorCode::UnknownTable(format!(
-                    "Unknown table: '{}.{}'",
-                    plan.db, plan.table
-                )))
-            };
-        }
-
-        // Call remote create.
-        let mut client = self.store_client_provider.try_get_client().await?;
-        client.drop_table(plan.clone()).await.map(|_| {
-            let mut tables = self.tables.write();
-            tables.remove(table_name);
-        })?;
-        Ok(())
+        self.meta_client.drop_table(plan).await
     }
 }
