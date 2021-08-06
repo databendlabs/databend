@@ -20,13 +20,17 @@ use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::configs::RpcClientTlsConfig;
 use crate::sessions::SessionManager;
+use crate::tests::tls_constants::TEST_CA_CERT;
+use crate::tests::tls_constants::TEST_CN_NAME;
+use crate::tests::tls_constants::TEST_SERVER_CERT;
+use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
     // setup
     let mut conf = Config::default();
-    conf.rpc_tls_server_key = "../../tests/data/certs/server.key".to_owned();
-    conf.rpc_tls_server_cert = "../../tests/data/certs/server.pem".to_owned();
+    conf.rpc_tls_server_key = TEST_SERVER_KEY.to_owned();
+    conf.rpc_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
     let cluster = Cluster::create_global(conf.clone())?;
     let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
@@ -43,8 +47,8 @@ async fn test_tls_rpc_server() -> Result<()> {
     srv.start_with_incoming(stream).await?;
 
     let client_conf = RpcClientTlsConfig {
-        rpc_tls_server_root_ca_cert: "../../tests/data/certs/ca.pem".to_string(),
-        domain_name: "localhost".to_string(),
+        rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),
+        domain_name: TEST_CN_NAME.to_string(),
     };
 
     // normal case
@@ -95,7 +99,7 @@ async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
     // setup, invalid cert locations
     let client_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../../tests/data/certs/nowhere.pem".to_string(),
-        domain_name: "localhost".to_string(),
+        domain_name: TEST_CN_NAME.to_string(),
     };
 
     let r = ConnectionFactory::create_flight_channel("fake:1234", None, Some(client_conf)).await;
