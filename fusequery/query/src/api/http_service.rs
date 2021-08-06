@@ -24,7 +24,7 @@ pub struct HttpService {
 }
 
 impl HttpService {
-    pub fn create(cfg: Config, cluster: ClusterRef) -> Box<dyn Server> {
+    pub fn create(cfg: Config, cluster: ClusterRef) -> Box<Self> {
         Box::new(HttpService {
             cfg,
             cluster,
