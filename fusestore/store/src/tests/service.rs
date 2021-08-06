@@ -46,8 +46,8 @@ pub fn next_port() -> u32 {
     19000u32 + (*Seq::default() as u32)
 }
 
+#[allow(dead_code)]
 pub struct StoreTestContext {
-    #[allow(dead_code)]
     meta_temp_dir: TempDir,
     local_fs_tmp_dir: TempDir,
     pub config: configs::Config,
