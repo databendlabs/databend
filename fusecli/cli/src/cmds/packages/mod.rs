@@ -5,3 +5,4 @@
 pub mod fetch;
 pub mod list;
 pub mod package;
+pub mod switch;

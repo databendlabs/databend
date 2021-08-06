@@ -27,6 +27,7 @@ OS version           thinkpad 20.04 (kernel 5.10.0-1038-oem)
 version              Datafuse CLI version
 comment              # your comments
 package              Package command
+
 [test] > package -h
 package 
 
@@ -37,13 +38,26 @@ FLAGS:
     -h, --help    Prints help information
 
 SUBCOMMANDS:
-    fetch    Fetch the latest version package
+    fetch     Fetch the latest version package
+    list      List all the packages
+    switch    Switch the active datafuse to a specified version
 
 [test] > package fetch
 ✅ [ok] Arch x86_64-unknown-linux-gnu
 ✅ [ok] Tag v0.4.69-nightly
 ✅ [ok] Binary /home/bohu/.datafuse/test/downloads/v0.4.69-nightly/datafuse--x86_64-unknown-linux-gnu.tar.gz
 ✅ [ok] Unpack /home/bohu/.datafuse/test/bin/v0.4.69-nightly
+
+[test] > package list
++-----------------+-----------------------------------------------+---------+
+| Version         | Path                                          | Current |
++-----------------+-----------------------------------------------+---------+
+| v0.4.69-nightly | /home/bohu/.datafuse/test/bin/v0.4.69-nightly | ✅      |
++-----------------+-----------------------------------------------+---------+
+| v0.4.68-nightly | /home/bohu/.datafuse/test/bin/v0.4.68-nightly |         |
++-----------------+-----------------------------------------------+---------+
+[test] > package switch v0.4.68-nightly
+✅ [ok] Package switch to v0.4.68-nightly
 [test] > 
 
 ```

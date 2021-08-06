@@ -13,7 +13,7 @@ use crate::error::Result;
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct Status {
     path: String,
-    pub latest: String,
+    pub version: String,
 }
 
 impl Status {
@@ -25,7 +25,7 @@ impl Status {
             let file = File::create(status_path.as_str())?;
             let status = Status {
                 path: status_path.clone(),
-                latest: "".to_string(),
+                version: "".to_string(),
             };
             serde_json::to_writer(&file, &status)?;
         }

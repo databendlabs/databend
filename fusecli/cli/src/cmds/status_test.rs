@@ -12,7 +12,7 @@ fn test_status() -> Result<()> {
     conf.datafuse_dir = "/tmp/".to_string();
 
     let mut status = Status::read(conf)?;
-    status.latest = "xx".to_string();
+    status.version = "xx".to_string();
     status.write()?;
 
     Ok(())
