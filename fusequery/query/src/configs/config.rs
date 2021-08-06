@@ -163,14 +163,14 @@ pub struct Config {
         long,
         env = "RPC_TLS_SERVER_CERT",
         default_value = "",
-        help = "server cert"
+        help = "rpc server cert"
     )]
     pub rpc_tls_server_cert: String,
 
     #[structopt(
         long,
         env = "RPC_TLS_SERVER_KEY",
-        default_value = "key for server cert"
+        default_value = "key for rpc server cert"
     )]
     pub rpc_tls_server_key: String,
 
@@ -178,7 +178,7 @@ pub struct Config {
         long,
         env = "RPC_TLS_QUERY_SERVER_ROOT_CA_CERT",
         default_value = "",
-        help = "Certificate for client to identify query server"
+        help = "Certificate for client to identify query rpc server"
     )]
     pub rpc_tls_query_server_root_ca_cert: String,
 
@@ -193,7 +193,7 @@ pub struct Config {
         long,
         env = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT",
         default_value = "",
-        help = "Certificate for client to identify query server"
+        help = "Certificate for client to identify store rpc server"
     )]
     pub rpc_tls_store_server_root_ca_cert: String,
 
