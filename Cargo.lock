@@ -1345,6 +1345,7 @@ dependencies = [
  "structopt",
  "sysinfo 0.20.0",
  "tar",
+ "tempfile",
  "thiserror",
  "ureq",
 ]
