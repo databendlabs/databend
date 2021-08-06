@@ -4,8 +4,9 @@
 
 use std::fs;
 
-use colored::Colorize;
 use comfy_table::Cell;
+use comfy_table::CellAlignment;
+use comfy_table::Color;
 use comfy_table::Table;
 
 use crate::cmds::Config;
@@ -51,16 +52,16 @@ impl ListCommand {
                 .into_owned();
             let mut row = vec![];
             row.push(Cell::new(version.as_str()));
-            row.push(Cell::new(format!("{}", path.path().display(),).as_str()));
+            row.push(Cell::new(format!("{}", path.path().display(),)));
 
-            let mut current_marker = "".to_string();
+            let mut current_marker = Cell::new("");
             if current == version {
-                current_marker = format!("{}", "✅ ".blue());
+                current_marker = Cell::new("☑").fg(Color::Green);
             }
-            row.push(Cell::new(current_marker.as_str()));
+            row.push(current_marker.set_alignment(CellAlignment::Center));
             table.add_row(row);
         }
-        writer.writeln(&table.to_string());
+        writer.writeln(&table.trim_fmt());
 
         Ok(())
     }
