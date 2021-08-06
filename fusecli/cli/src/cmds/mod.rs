@@ -23,6 +23,7 @@ pub use helps::help::HelpCommand;
 pub use packages::fetch::FetchCommand;
 pub use packages::list::ListCommand;
 pub use packages::package::PackageCommand;
+pub use packages::switch::SwitchCommand;
 pub use processor::Processor;
 pub use status::Status;
 pub use versions::version::VersionCommand;

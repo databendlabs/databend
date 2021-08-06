@@ -11,6 +11,7 @@ use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::FetchCommand;
 use crate::cmds::ListCommand;
+use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
 
@@ -38,6 +39,12 @@ impl PackageCommand {
                         .setting(AppSettings::DisableVersion)
                         .setting(AppSettings::ColoredHelp)
                         .about("List all the packages"),
+                )
+                .subcommand(
+                    App::new("switch")
+                        .setting(AppSettings::DisableVersion)
+                        .setting(AppSettings::ColoredHelp)
+                        .about("Switch the active datafuse to a specified version"),
                 ),
         );
         PackageCommand { conf, clap }
@@ -72,6 +79,10 @@ impl Command for PackageCommand {
                 Some("list") => {
                     let list = ListCommand::create(self.conf.clone());
                     list.exec(writer, args)?;
+                }
+                Some("switch") => {
+                    let switch = SwitchCommand::create(self.conf.clone());
+                    switch.exec(writer, args)?;
                 }
                 _ => writer.write_err("unknown command, usage: package -h"),
             },
