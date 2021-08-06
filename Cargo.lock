@@ -1840,7 +1840,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "msql-srv",
  "mysql",
- "nom 7.0.0-alpha1",
+ "nom 7.0.0-alpha2",
  "num",
  "num_cpus",
  "paste",
@@ -2920,7 +2920,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "mysql_common",
- "nom 7.0.0-alpha1",
+ "nom 7.0.0-alpha2",
 ]
 
 [[package]]
@@ -3109,9 +3109,9 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "7.0.0-alpha1"
+version = "7.0.0-alpha2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd43cd1e53168596e629accc602ada1297f5125fed588d62cf8be81175b46002"
+checksum = "39881f3ef37da4bfa8ce3478d840baaed5fdfc6560c0b91006924ec191a756bf"
 dependencies = [
  "lexical-core",
  "memchr",
