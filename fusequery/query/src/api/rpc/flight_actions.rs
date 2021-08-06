@@ -117,7 +117,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.query_id.clone(),
             FlightAction::PrepareShuffleAction(action) => action.query_id.clone(),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -125,7 +125,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.stage_id.clone(),
             FlightAction::PrepareShuffleAction(action) => action.stage_id.clone(),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -133,7 +133,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.sinks.clone(),
             FlightAction::PrepareShuffleAction(action) => action.sinks.clone(),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -141,7 +141,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.plan.clone(),
             FlightAction::PrepareShuffleAction(action) => action.plan.clone(),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -149,7 +149,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(_) => None,
             FlightAction::PrepareShuffleAction(action) => Some(action.scatters_expression.clone()),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 }
@@ -186,7 +186,7 @@ impl TryInto<Action> for FlightAction {
             FlightAction::CancelAction(cancel_action) => Ok(Action {
                 r#type: String::from("CancelAction"),
                 body: cancel_action.try_into()?,
-            })
+            }),
         }
     }
 }

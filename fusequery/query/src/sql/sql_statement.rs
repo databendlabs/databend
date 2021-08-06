@@ -11,7 +11,8 @@ use nom::character::complete::digit1;
 use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
-use sqlparser::ast::{ColumnDef, Ident};
+use sqlparser::ast::ColumnDef;
+use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement as SQLStatement;
@@ -118,7 +119,7 @@ pub enum DfStatement {
 
     // Kill
     KillQuery(DfKillStatement),
-    KillConn(DfKillStatement)
+    KillConn(DfKillStatement),
 }
 
 /// Comment hints from SQL.

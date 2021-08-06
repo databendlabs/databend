@@ -34,6 +34,7 @@ mod interpreter_describe_table;
 mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_insert_into;
+mod interpreter_kill;
 mod interpreter_select;
 mod interpreter_setting;
 mod interpreter_show_create_table;
@@ -43,7 +44,6 @@ mod interpreter_truncate_table;
 mod interpreter_use_database;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
-mod interpreter_kill;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;

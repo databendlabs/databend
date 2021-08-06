@@ -114,9 +114,12 @@ impl SessionManager {
         Ok(SessionRef::create(session))
     }
 
+    #[allow(clippy::ptr_arg)]
     pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
         let sessions = self.active_sessions.read();
-        sessions.get(id).map(|session| SessionRef::create(session.clone()))
+        sessions
+            .get(id)
+            .map(|session| SessionRef::create(session.clone()))
     }
 
     #[allow(clippy::ptr_arg)]
@@ -126,7 +129,7 @@ impl SessionManager {
         self.active_sessions.write().remove(session_id);
     }
 
-    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output=()> {
+    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             log::info!("Waiting for current connections to close.");

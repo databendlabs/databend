@@ -11,18 +11,16 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::api::{FlightTicket, FlightClient};
+use crate::api::FlightClient;
+use crate::api::FlightTicket;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
-use crate::clusters::Node;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct RemoteTransform {
     ticket: FlightTicket,
     fetch_node_name: String,
     schema: DataSchemaRef,
-    is_complete: AtomicBool,
     pub ctx: FuseQueryContextRef,
 }
 
@@ -38,7 +36,6 @@ impl RemoteTransform {
             fetch_node_name,
             schema,
             ctx: context,
-            is_complete: AtomicBool::new(false),
         })
     }
 
@@ -73,13 +70,16 @@ impl Processor for RemoteTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!(
             "execute, flight_ticket {:?}, node name:{:#}...",
-            self.ticket, self.fetch_node_name
+            self.ticket,
+            self.fetch_node_name
         );
 
         let data_schema = self.schema.clone();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
 
         let mut flight_client = self.flight_client().await?;
-        flight_client.fetch_stream(self.ticket.clone(), data_schema, timeout).await
+        flight_client
+            .fetch_stream(self.ticket.clone(), data_schema, timeout)
+            .await
     }
 }

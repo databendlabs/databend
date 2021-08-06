@@ -23,6 +23,7 @@ use common_planners::StagePlan;
 use common_planners::SubQueriesSetPlan;
 use common_tracing::tracing;
 
+use crate::api::FlightTicket;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
@@ -40,7 +41,6 @@ use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
 use crate::sessions::FuseQueryContextRef;
-use crate::api::FlightTicket;
 
 pub struct PipelineBuilder {
     ctx: FuseQueryContextRef,
@@ -105,17 +105,14 @@ impl PipelineBuilder {
         let mut pipeline = Pipeline::create(self.ctx.clone());
 
         for fetch_node in &plan.fetch_nodes {
-            let flight_ticket = FlightTicket::stream(
-                &plan.query_id,
-                &plan.stage_id,
-                &plan.stream_id,
-            );
+            let flight_ticket =
+                FlightTicket::stream(&plan.query_id, &plan.stage_id, &plan.stream_id);
 
             pipeline.add_source(Arc::new(RemoteTransform::try_create(
                 flight_ticket,
                 self.ctx.clone(),
-                /* fetch_node_name */fetch_node.clone(),
-                /* fetch_stream_schema */plan.schema.clone(),
+                /* fetch_node_name */ fetch_node.clone(),
+                /* fetch_stream_schema */ plan.schema.clone(),
             )?))?;
         }
 

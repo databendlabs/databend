@@ -17,7 +17,6 @@ use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 

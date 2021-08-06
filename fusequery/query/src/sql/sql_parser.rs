@@ -24,13 +24,14 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::{DfCreateDatabase, DfKillStatement};
+use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
+use crate::sql::DfKillStatement;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfShowDatabases;
 use crate::sql::DfShowProcessList;
@@ -394,8 +395,10 @@ impl<'a> DfParser<'a> {
 
     // Parse 'KILL statement'.
     fn parse_kill<F>(&mut self, f: F) -> Result<DfStatement, ParserError>
-        where F: Fn(DfKillStatement) -> DfStatement {
-        Ok(f(DfKillStatement { object_id: self.parser.parse_identifier()? }))
+    where F: Fn(DfKillStatement) -> DfStatement {
+        Ok(f(DfKillStatement {
+            object_id: self.parser.parse_identifier()?,
+        }))
     }
 
     // Parse 'KILL statement'.

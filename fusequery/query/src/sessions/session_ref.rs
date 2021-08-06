@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
+use std::sync::Arc;
 
 use crate::sessions::Session;
 

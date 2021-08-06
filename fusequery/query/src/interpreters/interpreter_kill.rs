@@ -5,8 +5,9 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
-use common_exception::{Result, ErrorCode};
-use common_planners::{UseDatabasePlan, KillPlan};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::KillPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -33,8 +34,11 @@ impl Interpreter for KillInterpreter {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let id = &self.plan.id;
-        match self.ctx.get_sessions_manager().get_session(&id) {
-            None => Err(ErrorCode::UnknownSession(format!("Not found session id {}", id))),
+        match self.ctx.get_sessions_manager().get_session(id) {
+            None => Err(ErrorCode::UnknownSession(format!(
+                "Not found session id {}",
+                id
+            ))),
             Some(kill_session) if self.plan.kill_connection => {
                 kill_session.force_kill_session();
                 let schema = Arc::new(DataSchema::empty());

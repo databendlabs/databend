@@ -10,7 +10,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::{AggregatorFinalPlan, KillPlan};
+use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
@@ -23,6 +23,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;

@@ -2,29 +2,32 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::{HashSet, HashMap};
+use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::SelectPlan;
+use common_runtime::tokio::macros::support::Pin;
+use common_runtime::tokio::macros::support::Poll;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::Stream;
+use futures::StreamExt;
 
-use crate::interpreters::plan_scheduler::{PlanScheduler, Tasks};
+use crate::api::CancelAction;
+use crate::api::FlightAction;
+use crate::clusters::Node;
+use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContextRef;
-use crate::clusters::Node;
-use crate::api::{FlightAction, CancelAction};
-use common_runtime::tokio::macros::support::{Future, Pin, Poll};
-use futures::{Stream, StreamExt};
-use common_datablocks::DataBlock;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::Context;
 
 pub struct SelectInterpreter {
     ctx: FuseQueryContextRef,
@@ -49,9 +52,7 @@ impl Interpreter for SelectInterpreter {
         let mut scheduled = Scheduled::new();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
         match self.schedule_query(&mut scheduled).await {
-            Ok(stream) => {
-                Ok(ScheduledStream::create(scheduled, stream, self.ctx.clone()))
-            },
+            Ok(stream) => Ok(ScheduledStream::create(scheduled, stream, self.ctx.clone())),
             Err(error) => {
                 Self::error_handler(scheduled, timeout, self.ctx.get_id()).await;
                 Err(error)
@@ -90,13 +91,12 @@ impl SelectInterpreter {
 
     async fn error_handler(scheduled: Scheduled, timeout: u64, query_id: String) {
         for (_stream_name, scheduled_node) in scheduled {
-            let mut flight_client = scheduled_node.get_flight_client().await;
-
-            match flight_client {
+            match scheduled_node.get_flight_client().await {
                 Err(cause) => {
                     log::error!(
                         "Cannot cancel action for {}, cause: {}",
-                        scheduled_node.name, cause
+                        scheduled_node.name,
+                        cause
                     );
                 }
                 Ok(mut flight_client) => {
@@ -105,7 +105,8 @@ impl SelectInterpreter {
                     if let Err(cause) = executing_action.await {
                         log::error!(
                             "Cannot cancel action for {}, cause:{}",
-                            scheduled_node.name, cause
+                            scheduled_node.name,
+                            cause
                         );
                     }
                 }
@@ -119,8 +120,8 @@ impl SelectInterpreter {
 }
 
 struct ScheduledStream {
-    complete: AtomicBool,
     scheduled: Scheduled,
+    is_success: AtomicBool,
     context: FuseQueryContextRef,
     inner: SendableDataBlockStream,
 }
@@ -135,7 +136,7 @@ impl ScheduledStream {
             inner,
             scheduled,
             context,
-            complete: AtomicBool::new(false),
+            is_success: AtomicBool::new(false),
         })
     }
 
@@ -151,7 +152,7 @@ impl ScheduledStream {
 
 impl Drop for ScheduledStream {
     fn drop(&mut self) {
-        if !self.complete.load(Ordering::Relaxed) {
+        if !self.is_success.load(Ordering::Relaxed) {
             if let Err(cause) = self.cancel_scheduled_action() {
                 log::error!("Cannot cancel action, cause: {:?}", cause);
             }
@@ -159,17 +160,16 @@ impl Drop for ScheduledStream {
     }
 }
 
-
 impl Stream for ScheduledStream {
     type Item = Result<DataBlock>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.inner.poll_next_unpin(cx).map(|x| match x {
             None => {
-                self.complete.store(true, Ordering::Relaxed);
+                self.is_success.store(true, Ordering::Relaxed);
                 None
-            },
-            other => other
+            }
+            other => other,
         })
     }
 }

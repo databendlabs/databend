@@ -8,6 +8,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
+use crate::interpreters::interpreter_kill::KillInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
@@ -22,7 +23,6 @@ use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::FuseQueryContextRef;
-use crate::interpreters::interpreter_kill::KillInterpreter;
 
 pub struct InterpreterFactory;
 

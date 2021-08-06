@@ -27,7 +27,7 @@ use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::FuseQueryContextShared;
-use crate::sessions::{ProcessInfo, SessionManagerRef};
+use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
 pub struct FuseQueryContext {
