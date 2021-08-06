@@ -102,8 +102,8 @@ impl FuseQueryServer for RpcService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let (listener_stream, listening) = Self::listener_tcp(listening).await?;
+        let (listener_stream, listener_addr) = Self::listener_tcp(listening).await?;
         self.start_with_incoming(listener_stream).await?;
-        Ok(listening)
+        Ok(listener_addr)
     }
 }

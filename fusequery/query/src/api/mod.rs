@@ -18,4 +18,6 @@ mod rpc;
 mod rpc_service;
 
 #[cfg(test)]
+mod http_service_test;
+#[cfg(test)]
 mod rpc_service_test;
