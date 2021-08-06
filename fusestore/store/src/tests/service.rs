@@ -51,6 +51,7 @@ pub fn next_port() -> u32 {
 pub struct StoreTestContext {
     #[allow(dead_code)]
     meta_temp_dir: TempDir,
+    #[allow(dead_code)]
     local_fs_tmp_dir: TempDir,
     pub config: configs::Config,
     pub meta_nodes: Vec<Arc<MetaNode>>,
