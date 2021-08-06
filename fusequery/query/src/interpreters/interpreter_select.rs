@@ -92,7 +92,10 @@ impl SelectInterpreter {
     async fn error_handler(scheduled: Scheduled, context: &FuseQueryContextRef, timeout: u64) {
         let query_id = context.get_id();
         for (_stream_name, scheduled_node) in scheduled {
-            match scheduled_node.get_flight_client(&context.get_config()).await {
+            match scheduled_node
+                .get_flight_client(&context.get_config())
+                .await
+            {
                 Err(cause) => {
                     log::error!(
                         "Cannot cancel action for {}, cause: {}",
