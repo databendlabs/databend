@@ -11,37 +11,42 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::api::FlightTicket;
+use crate::api::{FlightTicket, FlightClient};
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::FuseQueryContextRef;
+use crate::clusters::Node;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct RemoteTransform {
-    query_id: String,
-    stage_id: String,
-    stream_id: String,
+    ticket: FlightTicket,
     fetch_node_name: String,
     schema: DataSchemaRef,
+    is_complete: AtomicBool,
     pub ctx: FuseQueryContextRef,
 }
 
 impl RemoteTransform {
     pub fn try_create(
-        query_id: String,
-        stage_id: String,
-        stream_id: String,
+        ticket: FlightTicket,
+        context: FuseQueryContextRef,
         fetch_node_name: String,
         schema: DataSchemaRef,
-        ctx: FuseQueryContextRef,
-    ) -> Result<Self> {
-        Ok(Self {
-            query_id,
-            stage_id,
-            stream_id,
+    ) -> Result<RemoteTransform> {
+        Ok(RemoteTransform {
+            ticket,
             fetch_node_name,
             schema,
-            ctx,
+            ctx: context,
+            is_complete: AtomicBool::new(false),
         })
+    }
+
+    async fn flight_client(&self) -> Result<FlightClient> {
+        let context = self.ctx.clone();
+        let cluster = context.try_get_cluster()?;
+        let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
+        fetch_node.get_flight_client().await
     }
 }
 
@@ -67,23 +72,14 @@ impl Processor for RemoteTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!(
-            "execute, query id:{:#}, stage id:{:#}, stream:{:#}, node name:{:#}...",
-            self.query_id,
-            self.stage_id,
-            self.stream_id,
-            self.fetch_node_name
+            "execute, flight_ticket {:?}, node name:{:#}...",
+            self.ticket, self.fetch_node_name
         );
-
-        let context = self.ctx.clone();
-        let cluster = context.try_get_cluster()?;
-        let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
 
         let data_schema = self.schema.clone();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-        let mut flight_client = fetch_node.get_flight_client().await?;
 
-        let ticket = FlightTicket::stream(&self.query_id, &self.stage_id, &self.stream_id);
-        // TODO: cancel action if stream is not complete
-        flight_client.fetch_stream(ticket, data_schema, timeout).await
+        let mut flight_client = self.flight_client().await?;
+        flight_client.fetch_stream(self.ticket.clone(), data_schema, timeout).await
     }
 }
