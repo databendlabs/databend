@@ -70,9 +70,7 @@ impl StoreServer {
 
         tracing::info!("flight addr: {}", addr);
 
-        // TODO(xp): add local fs dir to config and use it.
-        let p = tempfile::tempdir()?;
-        let fs = LocalFS::try_create(p.path().to_str().unwrap().into())?;
+        let fs = LocalFS::try_create(self.conf.local_fs_dir.clone())?;
 
         // - boot mode: create the first node in a new cluster.
         // - TODO(xp): join mode: create a new node to join a cluster.
