@@ -63,8 +63,8 @@ const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
 const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
 const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 
-const TLS_SERVER_CERT: &str = "TLS_SERVER_CERT";
-const TLS_SERVER_KEY: &str = "TLS_SERVER_KEY";
+const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
+const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
 
 const DISABLE_REMOTE_CATALOG: &str = "DISABLE_REMOTE_CATALOG";
 
@@ -153,11 +153,11 @@ pub struct Config {
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
 
-    #[structopt(long, env = TLS_SERVER_CERT, default_value = "")]
-    pub tls_server_cert: String,
+    #[structopt(long, env = API_TLS_SERVER_CERT, default_value = "")]
+    pub api_tls_server_cert: String,
 
-    #[structopt(long, env = TLS_SERVER_KEY, default_value = "")]
-    pub tls_server_key: String,
+    #[structopt(long, env = API_TLS_SERVER_KEY, default_value = "")]
+    pub api_tls_server_key: String,
 
     #[structopt(
         long,
@@ -297,8 +297,8 @@ impl Config {
                 store_api_password: "root".to_string(),
             },
             config_file: "".to_string(),
-            tls_server_cert: "".to_string(),
-            tls_server_key: "".to_string(),
+            api_tls_server_cert: "".to_string(),
+            api_tls_server_key: "".to_string(),
             rpc_tls_server_cert: "".to_string(),
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
@@ -362,6 +362,11 @@ impl Config {
         env_helper!(mut_config, store_api_address, String, STORE_API_ADDRESS);
         env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
         env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
+
+        // for api http service
+        env_helper!(mut_config, api_tls_server_cert, String, API_TLS_SERVER_CERT);
+
+        env_helper!(mut_config, api_tls_server_key, String, API_TLS_SERVER_KEY);
 
         // for query rpc server
         env_helper!(mut_config, rpc_tls_server_cert, String, RPC_TLS_SERVER_CERT);

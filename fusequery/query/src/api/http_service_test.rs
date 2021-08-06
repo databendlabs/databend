@@ -20,8 +20,8 @@ use crate::servers::Server;
 async fn test_http_service_tls_server() -> Result<()> {
     let mut conf = Config::default();
 
-    conf.tls_server_key = "../../tests/data/certs/server.key".to_owned();
-    conf.tls_server_cert = "../../tests/data/certs/server.pem".to_owned();
+    conf.api_tls_server_key = "../../tests/data/certs/server.key".to_owned();
+    conf.api_tls_server_cert = "../../tests/data/certs/server.pem".to_owned();
 
     let addr_str = "127.0.0.1:0";
     let cluster = Cluster::create_global(conf.clone())?;
