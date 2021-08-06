@@ -10,7 +10,7 @@ use super::Series;
 
 ///! Create a visual representation of record batches
 pub fn pretty_format_series(results: &[Series]) -> Result<String> {
-    Ok(create_table(results)?.to_string())
+    Ok(create_table(results)?.trim_fmt())
 }
 
 pub fn assert_series_eq(expect: Vec<&str>, series: &[Series]) {
