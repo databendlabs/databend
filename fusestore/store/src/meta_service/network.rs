@@ -69,23 +69,23 @@ impl Network {
         Network { sto }
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.sto.id))]
-    pub async fn make_client(
-        &self,
-        node_id: &NodeId,
-    ) -> anyhow::Result<MetaServiceClient<Channel>> {
-        // TODO(xp): rename: id: my id; target: the remote id.
-        let addr = self.sto.get_node_addr(node_id).await?;
-        tracing::info!("connect: id={}: {}", node_id, addr);
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.sto.id))]
+    pub async fn make_client(&self, target: &NodeId) -> anyhow::Result<MetaServiceClient<Channel>> {
+        let addr = self.sto.get_node_addr(target).await?;
+
+        tracing::info!("connect: target={}: {}", target, addr);
+
         let client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-        tracing::info!("connected: id={}: {}", node_id, addr);
+
+        tracing::info!("connected: target={}: {}", target, addr);
+
         Ok(client)
     }
 }
 
 #[async_trait]
 impl RaftNetwork<LogEntry> for Network {
-    #[tracing::instrument(level = "debug", skip(self), fields(myid=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
     async fn append_entries(
         &self,
         target: NodeId,
@@ -107,7 +107,7 @@ impl RaftNetwork<LogEntry> for Network {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(myid=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
     async fn install_snapshot(
         &self,
         target: NodeId,
@@ -127,7 +127,7 @@ impl RaftNetwork<LogEntry> for Network {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(myid=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
     async fn vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
         tracing::debug!("vote req to: id={} {:?}", target, rpc);
 

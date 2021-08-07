@@ -37,7 +37,6 @@ pub struct ActionHandler {
     /// The raft-based meta data entry.
     /// In our design meta serves for both the distributed file system and the catalogs storage such as db,tabel etc.
     /// Thus in case the `fs` is a Dfs impl, `meta_node` is just a reference to the `Dfs.meta_node`.
-    /// TODO(xp): turn on dead_code warning when we finished action handler unit test.
     pub(crate) meta_node: Arc<MetaNode>,
     fs: Arc<dyn FileSystem>,
 }
