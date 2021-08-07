@@ -29,9 +29,9 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- new MetaStore");
     {
-        let (ms, is_open) = MetaStore::open_create(&tc.config, None, Some(())).await?;
+        let ms = MetaStore::open_create(&tc.config, None, Some(())).await?;
         assert_eq!(id, ms.id);
-        assert!(!is_open);
+        assert!(!ms.is_open());
         assert_eq!(None, ms.read_hard_state().await?);
 
         tracing::info!("--- update MetaStore");
@@ -45,9 +45,9 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- reopen MetaStore");
     {
-        let (ms, is_open) = MetaStore::open_create(&tc.config, Some(()), None).await?;
+        let ms = MetaStore::open_create(&tc.config, Some(()), None).await?;
         assert_eq!(id, ms.id);
-        assert!(is_open);
+        assert!(ms.is_open());
         assert_eq!(
             Some(HardState {
                 current_term: 10,

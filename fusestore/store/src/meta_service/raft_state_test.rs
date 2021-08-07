@@ -19,7 +19,8 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     let mut tc = new_sled_test_context();
     let db = &tc.db;
     tc.config.id = 3;
-    let (rs, is_open) = RaftState::open_create(db, &tc.config, None, Some(())).await?;
+    let rs = RaftState::open_create(db, &tc.config, None, Some(())).await?;
+    let is_open = rs.is_open();
 
     assert_eq!(3, rs.id);
     assert!(!is_open);
@@ -52,13 +53,15 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
     let mut tc = new_sled_test_context();
     let db = &tc.db;
     tc.config.id = 3;
-    let (rs, is_open) = RaftState::open_create(db, &tc.config, None, Some(())).await?;
+    let rs = RaftState::open_create(db, &tc.config, None, Some(())).await?;
+    let is_open = rs.is_open();
 
     assert_eq!(3, rs.id);
     assert!(!is_open);
 
     tc.config.id = 1000;
-    let (rs, is_open) = RaftState::open_create(db, &tc.config, Some(()), None).await?;
+    let rs = RaftState::open_create(db, &tc.config, Some(()), None).await?;
+    let is_open = rs.is_open();
     assert_eq!(3, rs.id);
     assert!(is_open);
     Ok(())
@@ -71,7 +74,8 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     let mut tc = new_sled_test_context();
     let db = &tc.db;
     tc.config.id = 3;
-    let (rs, is_open) = RaftState::open_create(db, &tc.config, Some(()), Some(())).await?;
+    let rs = RaftState::open_create(db, &tc.config, Some(()), Some(())).await?;
+    let is_open = rs.is_open();
 
     assert_eq!(3, rs.id);
     assert!(!is_open);
@@ -88,7 +92,7 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
     let mut tc = new_sled_test_context();
     let db = &tc.db;
     tc.config.id = 3;
-    let (rs, _) = RaftState::open_create(db, &tc.config, None, Some(())).await?;
+    let rs = RaftState::open_create(db, &tc.config, None, Some(())).await?;
 
     assert_eq!(3, rs.id);
 
