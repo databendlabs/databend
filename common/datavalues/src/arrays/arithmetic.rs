@@ -27,10 +27,11 @@ use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::*;
 
-fn arithmetic_helper<T, Kernel, F>(
+fn arithmetic_helper<T, Kernel, SKernel, F>(
     lhs: &DataArray<T>,
     rhs: &DataArray<T>,
     kernel: Kernel,
+    scalar_kernel: SKernel,
     operation: F,
 ) -> Result<DataArray<T>>
 where
@@ -44,6 +45,7 @@ where
         &PrimitiveArray<T::Native>,
         &PrimitiveArray<T::Native>,
     ) -> std::result::Result<PrimitiveArray<T::Native>, ArrowError>,
+    SKernel: Fn(&PrimitiveArray<T::Native>, &T::Native) -> PrimitiveArray<T::Native>,
     F: Fn(T::Native, T::Native) -> T::Native,
 {
     let ca = match (lhs.len(), rhs.len()) {
@@ -58,7 +60,10 @@ where
             let opt_rhs = rhs.get(0);
             match opt_rhs {
                 None => DataArray::full_null(lhs.len()),
-                Some(rhs) => lhs.apply(|lhs| operation(lhs, rhs)),
+                Some(rhs) => {
+                    let array = Arc::new(scalar_kernel(lhs.downcast_ref(), &rhs)) as ArrayRef;
+                    array.into()
+                }
             }
         }
         (1, _) => {
@@ -85,7 +90,13 @@ where
     type Output = Result<DataArray<T>>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, basic::add::add, |lhs, rhs| lhs + rhs)
+        arithmetic_helper(
+            self,
+            rhs,
+            basic::add::add,
+            basic::add::add_scalar,
+            |lhs, rhs| lhs + rhs,
+        )
     }
 }
 
@@ -102,7 +113,13 @@ where
     type Output = Result<DataArray<T>>;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, basic::sub::sub, |lhs, rhs| lhs - rhs)
+        arithmetic_helper(
+            self,
+            rhs,
+            basic::sub::sub,
+            basic::sub::sub_scalar,
+            |lhs, rhs| lhs - rhs,
+        )
     }
 }
 
@@ -119,7 +136,13 @@ where
     type Output = Result<DataArray<T>>;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, basic::mul::mul, |lhs, rhs| lhs * rhs)
+        arithmetic_helper(
+            self,
+            rhs,
+            basic::mul::mul,
+            basic::mul::mul_scalar,
+            |lhs, rhs| lhs * rhs,
+        )
     }
 }
 
@@ -137,7 +160,13 @@ where
     type Output = Result<DataArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(self, rhs, basic::div::div, |lhs, rhs| lhs / rhs)
+        arithmetic_helper(
+            self,
+            rhs,
+            basic::div::div,
+            basic::div::div_scalar,
+            |lhs, rhs| lhs / rhs,
+        )
     }
 }
 
@@ -165,7 +194,7 @@ where
         match (rhs.len(), dtype) {
             // TODO(sundy): add more specific cases
             // TODO(sundy): fastmod https://lemire.me/blog/2019/02/08/faster-remainders-when-the-divisor-is-a-constant-beating-compilers-and-libdivide/
-            (1, DataType::UInt8) => {
+            (1111, DataType::UInt8) => {
                 let opt_rhs = rhs.get(0);
                 match opt_rhs {
                     None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
@@ -178,7 +207,13 @@ where
             }
 
             _ => {
-                let array = arithmetic_helper(self, rhs, basic::rem::rem, |lhs, rhs| lhs % rhs)?;
+                let array = arithmetic_helper(
+                    self,
+                    rhs,
+                    basic::rem::rem,
+                    basic::rem::rem_scalar,
+                    |lhs, rhs| lhs % rhs,
+                )?;
                 Ok(array.into_series())
             }
         }
