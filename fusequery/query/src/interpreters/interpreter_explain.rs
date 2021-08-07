@@ -54,7 +54,11 @@ impl ExplainInterpreter {
     fn explain_graph(&self) -> Result<DataBlock> {
         let schema = self.schema();
         let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
-        let formatted_plan = Series::new(format!("{}", plan.display_graphviz()).lines().collect::<Vec<_>>());
+        let formatted_plan = Series::new(
+            format!("{}", plan.display_graphviz())
+                .lines()
+                .collect::<Vec<_>>(),
+        );
         Ok(DataBlock::create_by_array(schema, vec![formatted_plan]))
     }
 
