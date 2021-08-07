@@ -72,6 +72,7 @@ impl Default for Replication {
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
 #[derive(Debug)]
 pub struct StateMachine {
+    // TODO(xp): config is not required. Remove it after snapshot is done.
     config: configs::Config,
 
     /// The dedicated sled db to store everything about a state machine.
