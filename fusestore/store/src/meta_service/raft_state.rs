@@ -22,6 +22,9 @@ use crate::meta_service::SledSerde;
 pub struct RaftState {
     pub id: NodeId,
 
+    /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
+    is_open: bool,
+
     /// A unique prefix for opening multiple RaftState in a same sled::Db
     // tree_prefix: String,
     tree: sled::Tree,
@@ -34,6 +37,12 @@ const K_HARD_STATE: &str = "hard_state";
 impl SledSerde for HardState {}
 
 impl RaftState {
+    pub fn is_open(&self) -> bool {
+        self.is_open
+    }
+}
+
+impl RaftState {
     /// Open/create a raft state in a sled db.
     /// 1. If `open` is `Some`,  it tries to open an existent RaftState if there is one.
     /// 2. If `create` is `Some`, it tries to initialize a new RaftState if there is not one.
@@ -44,7 +53,7 @@ impl RaftState {
         config: &configs::Config,
         open: Option<()>,
         create: Option<()>,
-    ) -> common_exception::Result<(RaftState, bool)> {
+    ) -> common_exception::Result<RaftState> {
         let tree_name = config.tree_name(K_RAFT_STATE);
         let t = db
             .open_tree(&tree_name)
@@ -65,7 +74,7 @@ impl RaftState {
             None => None,
         };
 
-        let (rs, is_open) = match (curr_id, open, create) {
+        let rs = match (curr_id, open, create) {
             (Some(curr_id), Some(_), Some(_)) => Self::open(t, curr_id)?,
             (Some(curr_id), Some(_), None) => Self::open(t, curr_id)?,
             (Some(x), None, Some(_)) => {
@@ -85,16 +94,20 @@ impl RaftState {
             (None, None, None) => panic!("no open no create"),
         };
 
-        Ok((rs, is_open))
+        Ok(rs)
     }
 
     #[tracing::instrument(level = "info", skip(tree))]
-    fn open(tree: sled::Tree, id: NodeId) -> common_exception::Result<(RaftState, bool)> {
-        Ok((RaftState { id, tree }, true))
+    fn open(tree: sled::Tree, id: NodeId) -> common_exception::Result<RaftState> {
+        Ok(RaftState {
+            id,
+            is_open: true,
+            tree,
+        })
     }
 
     #[tracing::instrument(level = "info", skip(tree))]
-    async fn create(tree: sled::Tree, id: NodeId) -> common_exception::Result<(RaftState, bool)> {
+    async fn create(tree: sled::Tree, id: NodeId) -> common_exception::Result<RaftState> {
         let id_ivec = id.ser()?;
 
         tree.insert(K_ID, id_ivec)
@@ -108,7 +121,11 @@ impl RaftState {
 
         tracing::info!("flushed RaftState");
 
-        Ok((RaftState { id, tree }, false))
+        Ok(RaftState {
+            id,
+            is_open: false,
+            tree,
+        })
     }
 
     pub async fn write_hard_state(&self, hs: &HardState) -> common_exception::Result<()> {

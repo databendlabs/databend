@@ -75,6 +75,9 @@ pub struct MetaStore {
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
     pub id: NodeId,
 
+    /// If the instance is opened from an existent state(e.g. load from disk) or created.
+    is_open: bool,
+
     /// The sled db for log and raft_state.
     /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
     /// This db is also used to generate a locally unique id.
@@ -127,22 +130,28 @@ pub struct MetaStore {
 // }
 
 impl MetaStore {
+    /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
+    /// TODO(xp): introduce a trait to define this behavior?
+    pub fn is_open(&self) -> bool {
+        self.is_open
+    }
+}
+
+impl MetaStore {
     /// Open an existent `MetaStore` instance or create an new one:
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    /// Returns MetaStore instance and a bool indicating if it is opened from a previous state.
-    ///
-    /// TODO(xp): make the is_open flag a field of MetaStore, maybe introduce a trait to define this behavior
     #[tracing::instrument(level = "info")]
     pub async fn open_create(
         config: &configs::Config,
         open: Option<()>,
         create: Option<()>,
-    ) -> common_exception::Result<(MetaStore, bool)> {
+    ) -> common_exception::Result<MetaStore> {
         let db = get_sled_db();
 
-        let (raft_state, is_open) = RaftState::open_create(&db, config, open, create).await?;
+        let raft_state = RaftState::open_create(&db, config, open, create).await?;
+        let is_open = raft_state.is_open();
         tracing::info!("RaftState opened is_open: {}", is_open);
 
         let log = RaftLog::open(&db, config).await?;
@@ -151,18 +160,16 @@ impl MetaStore {
         let sm = RwLock::new(StateMachine::open(config).await?);
         let current_snapshot = RwLock::new(None);
 
-        Ok((
-            Self {
-                id: raft_state.id,
-                _db: db,
-                raft_state,
-                log,
-                state_machine: sm,
-                snapshot_index: Arc::new(Mutex::new(0)),
-                current_snapshot,
-            },
+        Ok(Self {
+            id: raft_state.id,
             is_open,
-        ))
+            _db: db,
+            raft_state,
+            log,
+            state_machine: sm,
+            snapshot_index: Arc::new(Mutex::new(0)),
+            current_snapshot,
+        })
     }
 
     /// Get a handle to the state machine for testing purposes.
@@ -671,7 +678,8 @@ impl MetaNode {
         create: Option<()>,
         boot: Option<()>,
     ) -> common_exception::Result<(Arc<MetaNode>, bool)> {
-        let (sto, is_open) = MetaStore::open_create(config, open, create).await?;
+        let sto = MetaStore::open_create(config, open, create).await?;
+        let is_open = sto.is_open();
         let sto = Arc::new(sto);
         let mut b = MetaNode::builder(config).sto(sto.clone());
 
