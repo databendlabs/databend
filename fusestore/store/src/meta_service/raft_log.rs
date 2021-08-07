@@ -106,6 +106,6 @@ impl RaftLog {
     }
 
     fn logs(&self) -> AsType<sledkv::Logs> {
-        self.inner.as_type()
+        self.inner.key_space()
     }
 }

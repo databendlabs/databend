@@ -241,7 +241,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                     None => (0, 0).into(),
                 };
 
-                let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+                let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
 
                 let last_applied_log = sm_meta
                     .get(&LastApplied)?
@@ -345,7 +345,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             // Serialize the data of the state machine.
             let sm = self.state_machine.write().await;
 
-            let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
 
             let last_applied = sm_meta
                 .get(&LastApplied)?
@@ -508,7 +508,7 @@ impl MetaStore {
             .await
             .expect("fail to get membership");
 
-        let sm_nodes = sm.sm_tree.as_type::<sledkv::Nodes>();
+        let sm_nodes = sm.sm_tree.key_space::<sledkv::Nodes>();
         let x = sm_nodes.range_keys(..).expect("fail to list nodes");
         for node_id in x {
             // it has been added into this cluster and is not a voter.
@@ -840,7 +840,6 @@ impl MetaNode {
         node_id: NodeId,
         config: &configs::Config,
     ) -> common_exception::Result<Arc<MetaNode>> {
-        // TODO test MetaNode::new() on a booted store.
         // TODO(xp): what if fill in the node info into an empty state-machine, then MetaNode can be started without delaying grpc.
 
         let mut config = config.clone();

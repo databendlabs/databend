@@ -30,7 +30,7 @@ async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config).await?;
     sm.sm_tree
-        .as_type::<sledkv::Nodes>()
+        .key_space::<sledkv::Nodes>()
         .append(&[
             (1, Node::default()),
             (3, Node::default()),
@@ -71,7 +71,7 @@ async fn test_state_machine_init_slots() -> anyhow::Result<()> {
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config).await?;
     sm.sm_tree
-        .as_type::<sledkv::Nodes>()
+        .key_space::<sledkv::Nodes>()
         .append(&[
             (1, Node::default()),
             (3, Node::default()),
