@@ -54,14 +54,14 @@ impl ExplainInterpreter {
     fn explain_graph(&self) -> Result<DataBlock> {
         let schema = self.schema();
         let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
-        let formatted_plan = Series::new(vec![format!("{}", plan.display_graphviz()).as_str()]);
+        let formatted_plan = Series::new(format!("{}", plan.display_graphviz()).lines().collect::<Vec<_>>());
         Ok(DataBlock::create_by_array(schema, vec![formatted_plan]))
     }
 
     fn explain_syntax(&self) -> Result<DataBlock> {
         let schema = self.schema();
         let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
-        let formatted_plan = Series::new(vec![format!("{:?}", plan).as_str()]);
+        let formatted_plan = Series::new(format!("{:?}", plan).lines().collect::<Vec<_>>());
         Ok(DataBlock::create_by_array(schema, vec![formatted_plan]))
     }
 
@@ -70,7 +70,7 @@ impl ExplainInterpreter {
         let plan = Optimizers::without_scatters(self.ctx.clone()).optimize(&self.explain.input)?;
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let pipeline = pipeline_builder.build(&plan)?;
-        let formatted_pipeline = Series::new(vec![format!("{:?}", pipeline).as_str()]);
+        let formatted_pipeline = Series::new(format!("{:?}", pipeline).lines().collect::<Vec<_>>());
         Ok(DataBlock::create_by_array(schema, vec![formatted_pipeline]))
     }
 }
