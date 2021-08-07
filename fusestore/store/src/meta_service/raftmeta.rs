@@ -127,27 +127,13 @@ pub struct MetaStore {
 // }
 
 impl MetaStore {
-    /// Create a new `MetaStore` instance.
-    #[tracing::instrument(level = "info")]
-    pub async fn new(id: NodeId, config: &configs::Config) -> common_exception::Result<MetaStore> {
-        // TODO: move id into config.
-        let mut config = config.clone();
-        config.id = id;
-
-        let (ms, _is_open) = Self::open_create(&config, None, Some(())).await?;
-        Ok(ms)
-    }
-
-    /// Open an existent `MetaStore` instance.
-    pub async fn open(config: &configs::Config) -> common_exception::Result<MetaStore> {
-        let (ms, _is_open) = Self::open_create(config, Some(()), None).await?;
-        Ok(ms)
-    }
-
     /// Open an existent `MetaStore` instance or create an new one:
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
+    /// Returns MetaStore instance and a bool indicating if it is opened from a previous state.
+    ///
+    /// TODO(xp): make the is_open flag a field of MetaStore, maybe introduce a trait to define this behavior
     #[tracing::instrument(level = "info")]
     pub async fn open_create(
         config: &configs::Config,
