@@ -724,10 +724,7 @@ impl Placement for StateMachine {
         &self.slots
     }
 
-    fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        // TODO(xp): dup code: remove get_node in StateMachine impl
-        // TODO(xp): handle error
-        let as_node = self.sm_tree.as_type::<sledkv::Nodes>();
-        as_node.get(node_id).expect("fail to get node")
+    fn get_placement_node(&self, node_id: &NodeId) -> Option<Node> {
+        self.get_node(node_id)
     }
 }
