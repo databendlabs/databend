@@ -1,2 +1,19 @@
-LimitTransform × 1 processor\n  ProjectionTransform × 1 processor\n    ExpressionTransform × 1 processor\n      AggregatorFinalTransform × 1 processor\n        Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)\n          AggregatorPartialTransform × 8 processors\n            ExpressionTransform × 8 processors\n              FilterTransform × 8 processors\n                SourceTransform × 8 processors
-LimitTransform × 1 processor\n  Merge (ProjectionTransform × 8 processors) to (LimitTransform × 1)\n    ProjectionTransform × 8 processors\n      HavingTransform × 8 processors\n        Mixed (GroupByFinalTransform × 1 processor) to (HavingTransform × 8 processors)\n          GroupByFinalTransform × 1 processor\n            Merge (GroupByPartialTransform × 8 processors) to (GroupByFinalTransform × 1)\n              GroupByPartialTransform × 8 processors\n                ExpressionTransform × 8 processors\n                  SourceTransform × 8 processors
+LimitTransform × 1 processor
+  ProjectionTransform × 1 processor
+    ExpressionTransform × 1 processor
+      AggregatorFinalTransform × 1 processor
+        Merge (AggregatorPartialTransform × 8 processors) to (AggregatorFinalTransform × 1)
+          AggregatorPartialTransform × 8 processors
+            ExpressionTransform × 8 processors
+              FilterTransform × 8 processors
+                SourceTransform × 8 processors
+LimitTransform × 1 processor
+  Merge (ProjectionTransform × 8 processors) to (LimitTransform × 1)
+    ProjectionTransform × 8 processors
+      HavingTransform × 8 processors
+        Mixed (GroupByFinalTransform × 1 processor) to (HavingTransform × 8 processors)
+          GroupByFinalTransform × 1 processor
+            Merge (GroupByPartialTransform × 8 processors) to (GroupByFinalTransform × 1)
+              GroupByPartialTransform × 8 processors
+                ExpressionTransform × 8 processors
+                  SourceTransform × 8 processors
