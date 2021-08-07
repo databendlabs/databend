@@ -52,7 +52,11 @@ impl StoreClient {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
-        let channel = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf).await?;
+        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf).await;
+
+        tracing::debug!("connecting to {}, res: {:?}", addr, res);
+
+        let channel = res?;
 
         let mut client = FlightServiceClient::new(channel.clone());
         let token = StoreClient::handshake(&mut client, timeout, username, password).await?;

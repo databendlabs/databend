@@ -144,7 +144,7 @@ impl ConnectionFactory {
                 inner_connector.set_keepalive(None);
                 inner_connector.enforce_http(false);
 
-                let builder = Channel::builder(uri);
+                let builder = Channel::builder(uri.clone());
 
                 let mut endpoint = if let Some(conf) = rpc_client_config {
                     log::info!("tls rpc enabled");
@@ -171,8 +171,8 @@ impl ConnectionFactory {
                 match endpoint.connect_with_connector(inner_connector).await {
                     Ok(channel) => Result::Ok(channel),
                     Err(error) => Result::Err(ErrorCode::CannotConnectNode(format!(
-                        "Cannot to RPC server: {}",
-                        error
+                        "Cannot to RPC server: {:?} error: {}",
+                        uri, error
                     ))),
                 }
             }

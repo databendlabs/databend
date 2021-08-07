@@ -22,6 +22,8 @@ use common_runtime::tokio;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 
+use crate::tests::service::init_store_unittest;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_restart() -> anyhow::Result<()> {
     // Issue 1134  https://github.com/datafuselabs/datafuse/issues/1134
@@ -30,7 +32,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
     // - restart
     // - Test read the db and read the table.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let (mut tc, addr) = crate::tests::start_store_server().await?;
 
@@ -148,7 +150,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     // 1. Service starts.
     let (_tc, addr) = crate::tests::start_store_server().await?;
@@ -214,7 +216,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_get_table() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
     use std::sync::Arc;
 
     use common_datavalues::DataField;
@@ -341,7 +343,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_drop_table() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
     use std::sync::Arc;
 
     use common_datavalues::DataField;
@@ -446,7 +448,8 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_append() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
+
     use std::sync::Arc;
 
     use common_datavalues::prelude::*;
@@ -519,7 +522,7 @@ async fn test_do_append() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scan_partition() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
     use std::sync::Arc;
 
     use common_datavalues::prelude::*;
@@ -613,7 +616,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_generic_kv() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     {
         let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv");
@@ -835,7 +838,7 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
     let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -848,7 +851,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
     let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -909,7 +912,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
     let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 

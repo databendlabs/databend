@@ -43,6 +43,7 @@ use crate::executor::ActionHandler;
 use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
 use crate::meta_service::MetaNode;
+use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 use crate::tests::service::StoreTestContext;
 
@@ -51,7 +52,7 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
     // - Bring up an ActionHandler backed with a Dfs
     // - Assert pulling file works fine.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let dir = tempdir()?;
     let root = dir.path();
@@ -86,7 +87,8 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert retrieving database.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
+
     struct D {
         plan: CreateDatabasePlan,
         want: common_exception::Result<CreateDatabaseActionResult>,
@@ -154,7 +156,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     struct T {
         db_name: &'static str,
@@ -226,7 +228,7 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     struct T {
         db_name: &'static str,
@@ -307,7 +309,8 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert retrieving database.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
+
     struct D {
         plan: CreateDatabasePlan,
         want: common_exception::Result<CreateDatabaseActionResult>,
@@ -430,7 +433,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     struct T {
         db_name: &'static str,
@@ -542,7 +545,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     struct T {
         db_name: &'static str,

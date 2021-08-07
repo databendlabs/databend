@@ -44,6 +44,12 @@ impl SledVarTypeTree {
         tree_name: N,
         sync: bool,
     ) -> common_exception::Result<Self> {
+        // During testing, every tree name must be unique.
+        if cfg!(test) {
+            let x = tree_name.as_ref();
+            let x = &x[0..5];
+            assert_eq!(x, b"test-");
+        }
         let t = db
             .open_tree(&tree_name)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || {

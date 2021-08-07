@@ -8,7 +8,6 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fs::remove_dir_all;
-use std::fs::rename;
 
 use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
@@ -27,7 +26,7 @@ use serde::Serialize;
 
 use crate::configs;
 use crate::meta_service::placement::rand_n_from_m;
-use crate::meta_service::sled_open;
+use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::sledkv;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
@@ -184,21 +183,17 @@ impl StateMachine {
         }
     }
 
-    /// Returns the dir for sled:Db to store the raft state machine.
-    fn state_machine_dir(config: &configs::Config) -> String {
-        config.meta_dir.clone() + "/sm"
-    }
-
     /// Returns the temp dir for sled:Db for rebuilding state machine from snapshot.
     fn tmp_state_machine_dir(config: &configs::Config) -> String {
         config.meta_dir.clone() + "/sm-tmp"
     }
 
     pub async fn open(config: &configs::Config) -> common_exception::Result<StateMachine> {
-        let p = Self::state_machine_dir(config);
-        let db = sled_open(&p)?;
+        let db = get_sled_db();
 
-        let sm_tree = SledVarTypeTree::open(&db, TREE_STATE_MACHINE, config.meta_sync()).await?;
+        let tree_name = config.tree_name(TREE_STATE_MACHINE);
+
+        let sm_tree = SledVarTypeTree::open(&db, &tree_name, config.meta_sync()).await?;
 
         let sm = StateMachine {
             config: config.clone(),
@@ -279,7 +274,8 @@ impl StateMachine {
             format!("remove tmp state machine dir: {}", tmp_path)
         })?;
 
-        let db = sled_open(&tmp_path)?;
+        let db = get_sled_db();
+        // TODO(xp): with a shared db import is now allowed. It populate the entire db.
         db.import(snap.sled_importable());
 
         // sled::Db does not have a "flush" method, need to flush every tree one by one.
@@ -302,14 +298,8 @@ impl StateMachine {
         drop(db);
 
         // TODO(xp): use checksum to check consistency?
-
         // TODO(xp): use a pointer to state machine dir to atomically switch to the new sm dir.
-        let p = StateMachine::state_machine_dir(&self.config);
-        rename(&tmp_path, &p).map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-            format!("rename state machine dir from: {} to: {}", tmp_path, p)
-        })?;
-
-        // reopen and replace
+        // TODO(xp): reopen and replace
 
         let new_sm = StateMachine::open(&self.config).await?;
         *self = new_sm;
