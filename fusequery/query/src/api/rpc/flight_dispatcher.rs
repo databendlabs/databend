@@ -27,6 +27,7 @@ use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
+use crate::api::rpc::flight_tickets::StreamTicket;
 
 struct StreamInfo {
     #[allow(unused)]
@@ -59,18 +60,13 @@ impl FuseQueryFlightDispatcher {
         self.abort.load(Ordering::Relaxed)
     }
 
-    pub fn get_stream(
-        &self,
-        query_id: &str,
-        stage_id: &str,
-        stream: &str,
-    ) -> Result<mpsc::Receiver<Result<DataBlock>>> {
-        let stage_name = format!("{}/{}", query_id, stage_id);
+    pub fn get_stream(&self, ticket: &StreamTicket) -> Result<mpsc::Receiver<Result<DataBlock>>> {
+        let stage_name = format!("{}/{}", ticket.query_id, ticket.stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
             notify.notify_waiters();
         }
 
-        let stream_name = format!("{}/{}", stage_name, stream);
+        let stream_name = format!("{}/{}", stage_name, ticket.stream);
         match self.streams.write().remove(&stream_name) {
             Some(stream_info) => Ok(stream_info.rx),
             None => Err(ErrorCode::NotFoundStream("Stream is not found")),
@@ -218,9 +214,10 @@ impl FuseQueryFlightDispatcher {
 
             if let Err(error) = forward_blocks.await {
                 for tx in &sinks_tx {
-                    // Ignore send error
-                    let send_error_message = tx.send(Err(error.clone()));
-                    let _ = send_error_message.await;
+                    if !tx.is_closed() {
+                        let send_error_message = tx.send(Err(error.clone()));
+                        let _ignore_send_error = send_error_message.await;
+                    }
                 }
             }
         })?;

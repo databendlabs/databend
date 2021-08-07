@@ -92,11 +92,7 @@ impl FlightService for FuseQueryFlightService {
 
         match ticket {
             FlightTicket::StreamTicket(steam_ticket) => {
-                let receiver = self.dispatcher.get_stream(
-                    &steam_ticket.query_id,
-                    &steam_ticket.stage_id,
-                    &steam_ticket.stream,
-                )?;
+                let receiver = self.dispatcher.get_stream(&steam_ticket)?;
 
                 Ok(RawResponse::new(
                     Box::pin(FlightDataStream::create(receiver)) as FlightStream<FlightData>,
@@ -133,6 +129,7 @@ impl FlightService for FuseQueryFlightService {
                     // We only destroy when session is exist
                     let session_id = action.query_id.clone();
                     if let Some(session) = self.sessions.get_session(&session_id) {
+                        // TODO: remove streams
                         session.force_kill_session();
                     }
 

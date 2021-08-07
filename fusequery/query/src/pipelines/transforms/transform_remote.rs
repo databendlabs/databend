@@ -77,9 +77,9 @@ impl Processor for RemoteTransform {
         let data_schema = self.schema.clone();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
 
+        let fetch_ticket = self.ticket.clone();
         let mut flight_client = self.flight_client().await?;
-        flight_client
-            .fetch_stream(self.ticket.clone(), data_schema, timeout)
-            .await
+        let fetch_stream = flight_client.fetch_stream(fetch_ticket, data_schema, timeout);
+        Ok(Box::pin(self.ctx.try_create_abortable(fetch_stream.await?)?))
     }
 }
