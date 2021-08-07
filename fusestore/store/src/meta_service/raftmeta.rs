@@ -127,27 +127,13 @@ pub struct MetaStore {
 // }
 
 impl MetaStore {
-    /// Create a new `MetaStore` instance.
-    #[tracing::instrument(level = "info")]
-    pub async fn new(id: NodeId, config: &configs::Config) -> common_exception::Result<MetaStore> {
-        // TODO: move id into config.
-        let mut config = config.clone();
-        config.id = id;
-
-        let (ms, _is_open) = Self::open_create(&config, None, Some(())).await?;
-        Ok(ms)
-    }
-
-    /// Open an existent `MetaStore` instance.
-    pub async fn open(config: &configs::Config) -> common_exception::Result<MetaStore> {
-        let (ms, _is_open) = Self::open_create(config, Some(()), None).await?;
-        Ok(ms)
-    }
-
     /// Open an existent `MetaStore` instance or create an new one:
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
+    /// Returns MetaStore instance and a bool indicating if it is opened from a previous state.
+    ///
+    /// TODO(xp): make the is_open flag a field of MetaStore, maybe introduce a trait to define this behavior
     #[tracing::instrument(level = "info")]
     pub async fn open_create(
         config: &configs::Config,
@@ -241,7 +227,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                     None => (0, 0).into(),
                 };
 
-                let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+                let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
 
                 let last_applied_log = sm_meta
                     .get(&LastApplied)?
@@ -345,7 +331,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             // Serialize the data of the state machine.
             let sm = self.state_machine.write().await;
 
-            let sm_meta = sm.sm_tree.as_type::<StateMachineMeta>();
+            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
 
             let last_applied = sm_meta
                 .get(&LastApplied)?
@@ -508,7 +494,7 @@ impl MetaStore {
             .await
             .expect("fail to get membership");
 
-        let sm_nodes = sm.sm_tree.as_type::<sledkv::Nodes>();
+        let sm_nodes = sm.sm_tree.key_space::<sledkv::Nodes>();
         let x = sm_nodes.range_keys(..).expect("fail to list nodes");
         for node_id in x {
             // it has been added into this cluster and is not a voter.
@@ -840,7 +826,6 @@ impl MetaNode {
         node_id: NodeId,
         config: &configs::Config,
     ) -> common_exception::Result<Arc<MetaNode>> {
-        // TODO test MetaNode::new() on a booted store.
         // TODO(xp): what if fill in the node info into an empty state-machine, then MetaNode can be started without delaying grpc.
 
         let mut config = config.clone();
