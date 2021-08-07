@@ -17,15 +17,15 @@ fn test_aggregate_combinator_function() -> Result<()> {
         name: &'static str,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumn>,
+        arrays: Vec<Series>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumn> = vec![
-        Series::new(vec![4 as i64, 3, 2, 1, 3, 4]).into(),
-        Series::new(vec![true, true, false, true, true, true]).into(),
+    let arrays: Vec<Series> = vec![
+        Series::new(vec![4 as i64, 3, 2, 1, 3, 4]),
+        Series::new(vec![true, true, false, true, true, true]),
     ];
 
     let args = vec![
@@ -39,7 +39,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             args: vec![args[0].clone()],
             display: "count",
             func_name: "countdistinct",
-            columns: vec![columns[0].clone()],
+            arrays: vec![arrays[0].clone()],
             expect: DataValue::UInt64(Some(4)),
             error: "",
         },
@@ -48,7 +48,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sumdistinct",
-            columns: vec![columns[0].clone()],
+            arrays: vec![arrays[0].clone()],
             expect: DataValue::UInt64(Some(10)),
             error: "",
         },
@@ -57,7 +57,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             args: args.clone(),
             display: "count",
             func_name: "countif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::UInt64(Some(10)),
             error: "",
         },
@@ -66,7 +66,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             args: args.clone(),
             display: "min",
             func_name: "minif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::UInt64(Some(1)),
             error: "",
         },
@@ -75,7 +75,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             args: args.clone(),
             display: "max",
             func_name: "maxif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::UInt64(Some(4)),
             error: "",
         },
@@ -84,7 +84,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             args: args.clone(),
             display: "sum",
             func_name: "sumif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::UInt64(Some(30)),
             error: "",
         },
@@ -93,25 +93,25 @@ fn test_aggregate_combinator_function() -> Result<()> {
             args: args.clone(),
             display: "avg",
             func_name: "avgif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::UInt64(Some(3)),
             error: "",
         },
     ];
 
     for t in tests {
-        let rows = t.columns[0].len();
+        let rows = t.arrays[0].len();
 
         let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
             let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
             let place1 = func.allocate_state(&arena);
-            func.accumulate(place1, &t.columns, rows)?;
+            func.accumulate(place1, &t.arrays, rows)?;
 
             // Second.
             let place2 = func.allocate_state(&arena);
-            func.accumulate(place2, &t.columns, rows)?;
+            func.accumulate(place2, &t.arrays, rows)?;
 
             func.merge(place1, place2)?;
             let result = func.merge_result(place1)?;
@@ -138,15 +138,15 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         name: &'static str,
         args: Vec<DataField>,
         display: &'static str,
-        columns: Vec<DataColumn>,
+        arrays: Vec<Series>,
         expect: DataValue,
         error: &'static str,
         func_name: &'static str,
     }
 
-    let columns: Vec<DataColumn> = vec![
-        DFInt64Array::new_from_slice(&vec![]).into(),
-        DFBooleanArray::new_from_slice(&vec![]).into(),
+    let arrays: Vec<Series> = vec![
+        DFInt64Array::new_from_slice(&vec![]).into_series(),
+        DFBooleanArray::new_from_slice(&vec![]).into_series(),
     ];
 
     let args = vec![
@@ -160,7 +160,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             args: vec![args[0].clone()],
             display: "count",
             func_name: "countdistinct",
-            columns: vec![columns[0].clone()],
+            arrays: vec![arrays[0].clone()],
             expect: DataValue::UInt64(Some(0)),
             error: "",
         },
@@ -169,7 +169,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sumdistinct",
-            columns: vec![columns[0].clone()],
+            arrays: vec![arrays[0].clone()],
             expect: DataValue::Int64(None),
             error: "",
         },
@@ -178,7 +178,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             args: args.clone(),
             display: "count",
             func_name: "countif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::UInt64(Some(0)),
             error: "",
         },
@@ -187,7 +187,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             args: args.clone(),
             display: "min",
             func_name: "minif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::Int64(None),
             error: "",
         },
@@ -196,7 +196,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             args: args.clone(),
             display: "max",
             func_name: "maxif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::Int64(None),
             error: "",
         },
@@ -205,7 +205,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             args: args.clone(),
             display: "sum",
             func_name: "sumif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::Int64(None),
             error: "",
         },
@@ -214,25 +214,25 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             args: args.clone(),
             display: "avg",
             func_name: "avgif",
-            columns: columns.clone(),
+            arrays: arrays.clone(),
             expect: DataValue::Float64(None),
             error: "",
         },
     ];
 
     for t in tests {
-        let rows = t.columns[0].len();
+        let rows = t.arrays[0].len();
 
         let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
             let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
             let place1 = func.allocate_state(&arena);
-            func.accumulate(place1, &t.columns, rows)?;
+            func.accumulate(place1, &t.arrays, rows)?;
 
             // Second.
             let place2 = func.allocate_state(&arena);
-            func.accumulate(place2, &t.columns, rows)?;
+            func.accumulate(place2, &t.arrays, rows)?;
             func.merge(place1, place2)?;
 
             let result = func.merge_result(place1)?;

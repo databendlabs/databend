@@ -97,29 +97,16 @@ where
         (state as *mut AggregateArgMinMaxState<T>) as StateAddr
     }
 
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        _input_rows: usize,
-    ) -> Result<()> {
-        if columns[0].is_empty() {
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
+        if arrays[0].is_empty() {
             return Ok(());
         }
 
-        let arg_result = match &columns[1] {
-            DataColumn::Constant(value, _) => Ok(DataValue::Struct(vec![
-                DataValue::UInt64(Some(0)),
-                value.clone(),
-            ])),
-            DataColumn::Array(array) => {
-                if self.is_min {
-                    array.arg_min()
-                } else {
-                    array.arg_max()
-                }
-            }
-        }?;
+        let arg_result = if self.is_min {
+            arrays[1].arg_min()?
+        } else {
+            arrays[1].arg_max()?
+        };
 
         if let DataValue::Struct(index_value) = arg_result {
             if index_value[0].is_null() {
@@ -128,7 +115,7 @@ where
             let value: Result<T> = DFTryFrom::try_from(index_value[1].clone());
 
             if let Ok(v) = value {
-                let data = columns[0].try_get(index_value[0].as_u64()? as usize)?;
+                let data = arrays[0].try_get(index_value[0].as_u64()? as usize)?;
                 let state = AggregateArgMinMaxState::<T>::get(place);
                 state.add(v, data, self.is_min);
             }
@@ -137,11 +124,11 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
-        let value = columns[1].try_get(row)?;
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
+        let value = arrays[1].try_get(row)?;
         let value: Result<T> = DFTryFrom::try_from(value);
         if let Ok(v) = value {
-            let data = columns[0].try_get(row)?;
+            let data = arrays[0].try_get(row)?;
             let state = AggregateArgMinMaxState::<T>::get(place);
             state.add(v, data, self.is_min);
         }

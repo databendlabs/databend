@@ -163,35 +163,39 @@ impl_primitive!(TimestampNanosecondType, i64);
 impl_primitive!(IntervalYearMonthType, i32);
 impl_primitive!(IntervalDayTimeType, i64);
 
-pub trait DFNumericType: DFPrimitiveType {}
+pub trait DFNumericType: DFPrimitiveType {
+    type LargestType: DFNumericType;
+}
 
 macro_rules! impl_numeric {
-    ($ca:ident, $native:ident) => {
-        impl DFNumericType for $ca {}
+    ($ca:ident, $lg: ident) => {
+        impl DFNumericType for $ca {
+            type LargestType = $lg;
+        }
     };
 }
 
-impl_numeric!(UInt8Type, u8);
-impl_numeric!(UInt16Type, u16);
-impl_numeric!(UInt32Type, u32);
-impl_numeric!(UInt64Type, u64);
-impl_numeric!(Int8Type, i8);
-impl_numeric!(Int16Type, i16);
-impl_numeric!(Int32Type, i32);
-impl_numeric!(Int64Type, i64);
-impl_numeric!(Float32Type, f32);
-impl_numeric!(Float64Type, f64);
+impl_numeric!(UInt8Type, UInt64Type);
+impl_numeric!(UInt16Type, UInt64Type);
+impl_numeric!(UInt32Type, UInt64Type);
+impl_numeric!(UInt64Type, UInt64Type);
+impl_numeric!(Int8Type, Int64Type);
+impl_numeric!(Int16Type, Int64Type);
+impl_numeric!(Int32Type, Int64Type);
+impl_numeric!(Int64Type, Int64Type);
+impl_numeric!(Float32Type, Float64Type);
+impl_numeric!(Float64Type, Float64Type);
 
-impl_numeric!(Date32Type, i32);
-impl_numeric!(Date64Type, i64);
+impl_numeric!(Date32Type, Int64Type);
+impl_numeric!(Date64Type, Int64Type);
 
-impl_numeric!(TimestampSecondType, i64);
-impl_numeric!(TimestampMillisecondType, i64);
-impl_numeric!(TimestampMicrosecondType, i32);
-impl_numeric!(TimestampNanosecondType, i64);
+impl_numeric!(TimestampSecondType, Int64Type);
+impl_numeric!(TimestampMillisecondType, Int64Type);
+impl_numeric!(TimestampMicrosecondType, Int64Type);
+impl_numeric!(TimestampNanosecondType, Int64Type);
 
-impl_numeric!(IntervalYearMonthType, i32);
-impl_numeric!(IntervalDayTimeType, i64);
+impl_numeric!(IntervalYearMonthType, Int64Type);
+impl_numeric!(IntervalDayTimeType, Int64Type);
 
 pub trait DFIntegerType: DFNumericType {}
 

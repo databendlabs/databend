@@ -7,7 +7,6 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::prelude::*;
 use crate::series::Series;
-use crate::utils::CustomIterTools;
 use crate::DFBooleanArray;
 use crate::DFListArray;
 use crate::DFNumericType;

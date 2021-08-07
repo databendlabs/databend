@@ -117,27 +117,21 @@ impl PlanBuilder {
         Ok(match mode {
             AggregateMode::Partial => {
                 let fields = RewriteHelper::exprs_to_fields(aggr_expr, &schema_before_groupby)?;
+
                 let mut partial_fields = fields
                     .iter()
                     .map(|f| DataField::new(f.name(), DataType::Binary, false))
                     .collect::<Vec<_>>();
 
                 if !group_expr.is_empty() {
-                    // Fields. [aggrs,  group_keys...,  key]
+                    // Fields. [aggrs,  key]
                     // aggrs: aggr_len aggregate states
-                    // group_keys:  group_len, group by key columns
                     // key: Varint by hash method
 
-                    let mut group_cols = vec![];
-                    for expr in group_expr.iter() {
-                        group_cols.push(expr.column_name());
-                        let field = expr.to_data_field(&schema_before_groupby)?;
-                        partial_fields.push(field);
-                    }
-
+                    let group_cols: Vec<String> =
+                        group_expr.iter().map(|expr| expr.column_name()).collect();
                     let sample_block = DataBlock::empty_with_schema(schema_before_groupby);
                     let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
-                    // partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
                     partial_fields.push(DataField::new("_group_by_key", method.data_type(), false));
                 }
 

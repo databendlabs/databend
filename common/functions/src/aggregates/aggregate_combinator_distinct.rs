@@ -130,10 +130,10 @@ impl AggregateFunction for AggregateDistinctCombinator {
         (state as *mut AggregateDistinctState) as StateAddr
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
         let state = AggregateDistinctState::get(place);
 
-        let values = columns
+        let values = arrays
             .iter()
             .map(|c| c.try_get(row))
             .collect::<Result<Vec<_>>>()?;
@@ -196,17 +196,14 @@ impl AggregateFunction for AggregateDistinctCombinator {
                 })
                 .collect::<Vec<_>>();
 
-            let columns = results
+            let arrays = results
                 .iter()
                 .enumerate()
-                .map(|(i, v)| {
-                    DataValue::try_into_data_array(v, self.arguments[i].data_type())
-                        .map(DataColumn::Array)
-                })
+                .map(|(i, v)| DataValue::try_into_data_array(v, self.arguments[i].data_type()))
                 .collect::<Result<Vec<_>>>()?;
 
             self.nested
-                .accumulate(state.nested_addr, &columns, state.set.len())?;
+                .accumulate(state.nested_addr, &arrays, state.set.len())?;
             // merge_result
             self.nested.merge_result(state.nested_addr)
         }

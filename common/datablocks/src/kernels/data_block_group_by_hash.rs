@@ -139,6 +139,14 @@ impl HashMethodSerializer {
         let v = array.as_ref().value(row);
         v.to_owned()
     }
+
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<Vec<u8>>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        Ok(vec![])
+    }
 }
 impl HashMethod for HashMethodSerializer {
     type HashKey = Vec<u8>;
@@ -192,6 +200,14 @@ impl HashMethodKeysU8 {
     pub fn get_key(&self, array: &DFUInt8Array, row: usize) -> u8 {
         array.as_ref().value(row)
     }
+
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<u8>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        Ok(vec![])
+    }
 }
 
 impl HashMethod for HashMethodKeysU8 {
@@ -208,6 +224,13 @@ impl HashMethodKeysU16 {
     #[inline]
     pub fn get_key(&self, array: &DFUInt16Array, row: usize) -> u16 {
         array.as_ref().value(row)
+    }
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<u16>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        Ok(vec![])
     }
 }
 
@@ -226,6 +249,19 @@ impl HashMethodKeysU32 {
     pub fn get_key(&self, array: &DFUInt32Array, row: usize) -> u32 {
         array.as_ref().value(row)
     }
+
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<u32>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        let mut s = Vec::with_capacity(group_fields.len());
+        for _f in group_fields.iter() {
+            let array = DFUInt8Array::full(3, keys.len());
+            s.push(array.into_series());
+        }
+        Ok(s)
+    }
 }
 
 impl HashMethod for HashMethodKeysU32 {
@@ -242,6 +278,14 @@ impl HashMethodKeysU64 {
     #[inline]
     pub fn get_key(&self, array: &DFUInt64Array, row: usize) -> u64 {
         array.as_ref().value(row)
+    }
+
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<u64>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        Ok(vec![])
     }
 }
 

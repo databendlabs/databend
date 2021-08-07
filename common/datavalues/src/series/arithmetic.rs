@@ -150,6 +150,7 @@ where
         + num::Zero
         + num::One
         + num::ToPrimitive
+        + num::traits::AsPrimitive<u8>
         + num::NumCast,
     DataArray<T>: IntoSeries,
 {

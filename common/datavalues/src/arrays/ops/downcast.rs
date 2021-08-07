@@ -29,6 +29,7 @@ where T: DFPrimitiveType
 impl<T> DataArray<T>
 where T: DFPrimitiveType
 {
+    #[inline]
     pub fn downcast_ref(&self) -> &PrimitiveArray<T::Native> {
         let arr = &*self.array;
         unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) }
@@ -58,6 +59,7 @@ impl AsRef<BooleanArray> for DFBooleanArray {
 }
 
 impl DFBooleanArray {
+    #[inline]
     pub fn downcast_ref(&self) -> &BooleanArray {
         let arr = &*self.array;
         unsafe { &*(arr as *const dyn Array as *const BooleanArray) }
@@ -86,6 +88,7 @@ impl AsRef<LargeUtf8Array> for DFUtf8Array {
 }
 
 impl DFUtf8Array {
+    #[inline]
     pub fn downcast_ref(&self) -> &LargeUtf8Array {
         let arr = &*self.array;
         unsafe { &*(arr as *const dyn Array as *const LargeUtf8Array) }

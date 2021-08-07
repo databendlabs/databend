@@ -40,7 +40,14 @@ where
         };
     }
 
-    let ca: ArrayRef = Arc::from(cast::cast(ca.array.as_ref(), &N::data_type().to_arrow())?);
+    // we enable ignore_overflow by default
+    let ca: ArrayRef = Arc::from(cast::cast(
+        ca.array.as_ref(),
+        &N::data_type().to_arrow(),
+        cast::CastOptions {
+            ignore_overflow: true,
+        },
+    )?);
     Ok(ca.into())
 }
 

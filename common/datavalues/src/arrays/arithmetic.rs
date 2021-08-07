@@ -19,6 +19,7 @@ use common_arrow::arrow::compute::arithmetics::negate;
 use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num::cast::AsPrimitive;
 use num::ToPrimitive;
 
 use crate::arrays::ops::*;
@@ -156,25 +157,23 @@ where
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
         + ToPrimitive
+        + AsPrimitive<u8>
         + num::Zero
         + num::One,
 {
     pub fn rem(&self, rhs: &Self, dtype: &DataType) -> Result<Series> {
         match (rhs.len(), dtype) {
-            // TODO: add more specific cases
+            // TODO(sundy): add more specific cases
+            // TODO(sundy): fastmod https://lemire.me/blog/2019/02/08/faster-remainders-when-the-divisor-is-a-constant-beating-compilers-and-libdivide/
             (1, DataType::UInt8) => {
                 let opt_rhs = rhs.get(0);
                 match opt_rhs {
                     None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
-                    Some(rhs) => unsafe {
-                        let array: DFUInt8Array = self.apply_cast_numeric(|a| {
-                            let v = a % rhs;
-                            let j = &v as *const T::Native as *const u8;
-
-                            *j
-                        });
+                    Some(rhs) => {
+                        let array: DFUInt8Array =
+                            self.apply_cast_numeric(|a| AsPrimitive::<u8>::as_(a % rhs));
                         Ok(array.into_series())
-                    },
+                    }
                 }
             }
 

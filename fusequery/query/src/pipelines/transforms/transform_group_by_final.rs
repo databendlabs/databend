@@ -91,11 +91,17 @@ impl Processor for GroupByFinalTransform {
             .map(|x| x.column_name())
             .collect::<Vec<_>>();
 
+        let group_fields = self
+            .group_exprs
+            .iter()
+            .map(|c| c.to_data_field(&self.schema_before_group_by))
+            .collect::<Result<Vec<_>>>()?;
+
         let start = Instant::now();
         let arena = Bump::new();
 
         let mut stream = self.input.execute().await?;
-        let sample_block = DataBlock::empty_with_schema(self.schema.clone());
+        let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
         macro_rules! apply {
@@ -107,7 +113,7 @@ impl Processor for GroupByFinalTransform {
                     let mut groups = groups_locker.write();
                     let block = block?;
 
-                    let key_array = block.column(aggr_funcs_len + group_expr_len).to_array()?;
+                    let key_array = block.column(aggr_funcs_len).to_array()?;
                     let key_array: $key_array_type = key_array.$downcast_fn()?;
 
                     let states_series = (0..aggr_funcs_len)
@@ -132,14 +138,9 @@ impl Processor for GroupByFinalTransform {
                                     func.deserialize(place, &mut data)?;
                                     places.push(place);
                                 }
-                                let mut values = Vec::with_capacity(group_expr_len);
-                                for i in 0..group_expr_len {
-                                    values.push(block.column(i + aggr_funcs_len).try_get(row)?);
-                                }
-
-                                groups.insert(group_key, (places, values));
+                                groups.insert(group_key, places);
                             }
-                            Some((places, _)) => {
+                            Some(places) => {
                                 for (i, func) in aggr_funcs.iter().enumerate() {
                                     let mut data = states_binary_arrays[i].value(row);
                                     let place = func.allocate_state(&arena);
@@ -156,14 +157,6 @@ impl Processor for GroupByFinalTransform {
                 // Collect the merge states.
                 let groups = groups_locker.read();
 
-                let mut group_values: Vec<Vec<DataValue>> = {
-                    let mut values = vec![];
-                    for _i in 0..group_expr_len {
-                        values.push(vec![])
-                    }
-                    values
-                };
-
                 let mut aggr_values: Vec<Vec<DataValue>> = {
                     let mut values = vec![];
                     for _i in 0..aggr_funcs_len {
@@ -171,10 +164,9 @@ impl Processor for GroupByFinalTransform {
                     }
                     values
                 };
-                for (_key, (places, values)) in groups.iter() {
-                    for (i, value) in values.iter().enumerate() {
-                        group_values[i].push(value.clone());
-                    }
+                let mut keys = Vec::with_capacity(groups.len());
+                for (key, places) in groups.iter() {
+                    keys.push(key.clone());
 
                     for (i, func) in aggr_funcs.iter().enumerate() {
                         let merge = func.merge_result(places[i])?;
@@ -192,11 +184,9 @@ impl Processor for GroupByFinalTransform {
                     )?);
                 }
 
-                for (i, value) in group_values.iter().enumerate() {
-                    columns.push(DataValue::try_into_data_array(
-                        value.as_slice(),
-                        &self.group_exprs[i].to_data_type(&self.schema_before_group_by)?,
-                    )?);
+                {
+                    let group_columns = $hash_method.de_group_columns(keys, &group_fields)?;
+                    columns.extend_from_slice(&group_columns);
                 }
 
                 let mut blocks = vec![];
@@ -217,19 +207,19 @@ impl Processor for GroupByFinalTransform {
             ($method: ident, $apply: ident) => {{
                 match $method {
                     HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method,  &DFBinaryArray, binary,   RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>}
+                        apply! { hash_method,  &DFBinaryArray, binary,   RwLock<HashMap<Vec<u8>, Vec<usize>, ahash::RandomState>>}
                     }
                     HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , &DFUInt8Array, u8,  RwLock<HashMap<u8, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt8Array, u8,  RwLock<HashMap<u8, Vec<usize>, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , &DFUInt16Array, u16,  RwLock<HashMap<u16, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt16Array, u16,  RwLock<HashMap<u16, Vec<usize>, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , &DFUInt32Array, u32,  RwLock<HashMap<u32, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt32Array, u32,  RwLock<HashMap<u32, Vec<usize>, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , &DFUInt64Array, u64,  RwLock<HashMap<u64, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt64Array, u64,  RwLock<HashMap<u64, Vec<usize>, ahash::RandomState>> }
                     }
                 }
             }};

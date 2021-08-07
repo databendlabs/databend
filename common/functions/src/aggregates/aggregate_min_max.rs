@@ -87,17 +87,12 @@ where
         (state as *mut AggregateMinMaxState<T>) as StateAddr
     }
 
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        _input_rows: usize,
-    ) -> Result<()> {
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
         let value = if self.is_min {
-            min_batch(&columns[0])
+            arrays[0].min()?
         } else {
-            max_batch(&columns[0])
-        }?;
+            arrays[0].max()?
+        };
 
         let value: Result<T> = DFTryFrom::try_from(value);
         if let Ok(v) = value {
@@ -107,8 +102,8 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
-        let value = columns[0].try_get(row)?;
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
+        let value = arrays[0].try_get(row)?;
         let value: Result<T> = DFTryFrom::try_from(value);
         if let Ok(v) = value {
             let state = AggregateMinMaxState::<T>::get(place);
@@ -141,28 +136,6 @@ where
         let state = AggregateMinMaxState::<T>::get(place);
         let value = state.value.clone();
         Ok(value.into())
-    }
-}
-
-#[inline]
-pub fn min_batch(column: &DataColumn) -> Result<DataValue> {
-    if column.is_empty() {
-        return Ok(DataValue::from(&column.data_type()));
-    }
-    match column {
-        DataColumn::Constant(value, _) => Ok(value.clone()),
-        DataColumn::Array(array) => array.min(),
-    }
-}
-
-#[inline]
-pub fn max_batch(column: &DataColumn) -> Result<DataValue> {
-    if column.is_empty() {
-        return Ok(DataValue::from(&column.data_type()));
-    }
-    match column {
-        DataColumn::Constant(value, _) => Ok(value.clone()),
-        DataColumn::Array(array) => array.max(),
     }
 }
 

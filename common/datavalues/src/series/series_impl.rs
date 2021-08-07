@@ -354,4 +354,9 @@ impl Series {
             unsafe { std::mem::transmute::<&dyn SeriesTrait, (usize, usize)>(object) };
         data_ptr
     }
+
+    pub fn static_cast<T>(&self) -> &DataArray<T> {
+        let object = self.0.deref();
+        unsafe { &*(object as *const dyn SeriesTrait as *const DataArray<T>) }
+    }
 }

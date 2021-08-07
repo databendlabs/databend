@@ -12,8 +12,6 @@ use common_exception::Result;
 use common_io::prelude::*;
 use num::NumCast;
 
-use super::aggregate_count::count_batch;
-use super::aggregate_sum::sum_batch;
 use super::GetState;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
@@ -94,24 +92,19 @@ where
         (state as *mut AggregateAvgState<SumT>) as StateAddr
     }
 
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        _input_rows: usize,
-    ) -> Result<()> {
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
         let state = AggregateAvgState::<SumT>::get(place);
-        let value = sum_batch(&columns[0])?;
-        let count = count_batch(&columns[0]);
+        let value = arrays[0].sum()?;
+        let count = arrays[0].len() - arrays[0].null_count();
         let opt_sum: Option<SumT> = DFTryFrom::try_from(value).ok();
 
         state.add(&opt_sum, count as u64);
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
         let state = AggregateAvgState::<SumT>::get(place);
-        let value = columns[0].try_get(row)?;
+        let value = arrays[0].try_get(row)?;
 
         let opt_sum: Option<T> = DFTryFrom::try_from(value).ok();
         let opt_sum: Option<SumT> = match opt_sum {
