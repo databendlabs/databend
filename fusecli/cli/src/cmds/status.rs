@@ -42,7 +42,6 @@ impl Status {
             .write(true)
             .truncate(true)
             .open(self.path.clone())?;
-        println!("{:?}", self);
         serde_json::to_writer(&file, self)?;
         Ok(())
     }
