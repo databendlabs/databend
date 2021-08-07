@@ -221,12 +221,12 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     type Snapshot = Cursor<Vec<u8>>;
     type ShutdownError = ShutdownError;
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_membership_config(&self) -> anyhow::Result<MembershipConfig> {
         self.get_membership_from_log(None).await
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
         let hard_state = self.raft_state.read_hard_state().await?;
 
@@ -266,13 +266,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self, hs), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, hs), fields(id=self.id))]
     async fn save_hard_state(&self, hs: &HardState) -> anyhow::Result<()> {
         self.raft_state.write_hard_state(hs).await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_log_entries(&self, start: u64, stop: u64) -> anyhow::Result<Vec<Entry<LogEntry>>> {
         // Invalid request, return empty vec.
         if start > stop {
@@ -283,7 +283,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(self.log.range_get(start..stop)?)
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> anyhow::Result<()> {
         if stop.as_ref().map(|stop| &start > stop).unwrap_or(false) {
             tracing::error!("invalid request, start > stop");
@@ -299,20 +299,20 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, entry), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, entry), fields(id=self.id))]
     async fn append_entry_to_log(&self, entry: &Entry<LogEntry>) -> anyhow::Result<()> {
         self.log.insert(entry).await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
     async fn replicate_to_log(&self, entries: &[Entry<LogEntry>]) -> anyhow::Result<()> {
         // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
         self.log.append(entries).await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn apply_entry_to_state_machine(
         &self,
         index: &LogId,
@@ -323,7 +323,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
     async fn replicate_to_state_machine(
         &self,
         entries: &[(&LogId, &LogEntry)],
@@ -335,7 +335,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn do_log_compaction(&self) -> anyhow::Result<CurrentSnapshotData<Self::Snapshot>> {
         // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
 
@@ -403,12 +403,12 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         })
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn create_snapshot(&self) -> anyhow::Result<Box<Self::Snapshot>> {
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
-    #[tracing::instrument(level = "info", skip(self, snapshot), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, snapshot), fields(id=self.id))]
     async fn finalize_snapshot_installation(
         &self,
         meta: &SnapshotMeta,
@@ -451,7 +451,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_current_snapshot(
         &self,
     ) -> anyhow::Result<Option<CurrentSnapshotData<Self::Snapshot>>> {
@@ -739,7 +739,7 @@ impl MetaNode {
             joined += 1;
         }
 
-        tracing::info!("shutdown: myid={}", self.sto.id);
+        tracing::info!("shutdown: id={}", self.sto.id);
         Ok(joined)
     }
 

@@ -34,6 +34,8 @@ impl StoreServer {
 
     /// Start store server and returns two channel to send shutdown signal and receive signal when shutdown finished.
     pub async fn start(self) -> Result<(oneshot::Sender<()>, oneshot::Receiver<()>), ErrorCode> {
+        // TODO(xp): move component startup from serve() to start().
+        //           block as long as possible to reduce unknown startup time cost.
         let (stop_tx, stop_rx) = oneshot::channel::<()>();
         let (fin_tx, fin_rx) = oneshot::channel::<()>();
 
