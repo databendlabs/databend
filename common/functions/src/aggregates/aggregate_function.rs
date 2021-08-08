@@ -6,7 +6,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use common_datavalues::columns::DataColumn;
+use common_datavalues::series::Series;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -15,6 +15,9 @@ use common_exception::Result;
 use super::StateAddr;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
+
+/// AggregateFunction
+/// In AggregateFunction, all datablock columns are not ConstantColumn, we take the column as Series
 pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn name(&self) -> &str;
     fn return_type(&self) -> Result<DataType>;
@@ -22,24 +25,14 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr;
 
-    // accumulate is to accumulate the columns in batch mode
+    // accumulate is to accumulate the arrays in batch mode
     // common used when there is no group by for aggregate function
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        input_rows: usize,
-    ) -> Result<()> {
-        (0..input_rows).try_for_each(|row| self.accumulate_row(place, row, columns))
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
+        (0..input_rows).try_for_each(|row| self.accumulate_row(place, row, arrays))
     }
 
     // used when we need to caclulate row by row
-    fn accumulate_row(
-        &self,
-        _place: StateAddr,
-        _row: usize,
-        _columns: &[DataColumn],
-    ) -> Result<()> {
+    fn accumulate_row(&self, _place: StateAddr, _row: usize, _arrays: &[Series]) -> Result<()> {
         Ok(())
     }
 

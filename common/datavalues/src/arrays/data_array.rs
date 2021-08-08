@@ -17,7 +17,6 @@ use common_exception::Result;
 
 use crate::data_df_type::*;
 use crate::prelude::*;
-use crate::utils::CustomIterTools;
 use crate::DataType;
 use crate::DataValue;
 
@@ -35,34 +34,42 @@ impl<T> DataArray<T> {
         }
     }
 
+    #[inline]
     pub fn data_type(&self) -> DataType {
         DataType::try_from(self.array.data_type()).unwrap()
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.array.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[inline]
     pub fn is_null(&self, row: usize) -> bool {
         self.array.is_null(row)
     }
 
+    #[inline]
     pub fn null_count(&self) -> usize {
         self.array.null_count()
     }
 
+    #[inline]
     pub fn all_is_null(&self) -> bool {
         self.null_count() == self.len()
     }
 
+    #[inline]
     pub fn get_array_ref(&self) -> ArrayRef {
         self.array.clone()
     }
 
+    #[inline]
     /// Get the null count and the buffer of bits representing null values
     pub fn null_bits(&self) -> (usize, &Option<Bitmap>) {
         (self.array.null_count(), self.array.validity())
@@ -216,7 +223,7 @@ where T: DFPrimitiveType
         &self,
     ) -> impl Iterator<Item = &T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
     {
-        self.downcast_ref().values().as_slice().iter()
+        self.downcast_ref().values().iter()
     }
 
     pub fn into_no_null_iter(

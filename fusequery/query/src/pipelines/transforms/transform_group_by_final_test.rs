@@ -66,7 +66,7 @@ async fn test_transform_final_group_by() -> Result<()> {
     let block = &result[0];
     assert_eq!(block.num_columns(), 3);
 
-    // SELECT SUM(number), AVG(number), number ... GROUP BY numbers(5);
+    // SELECT SUM(number), AVG(number), number from numbers(5) group by number;
     let expected = vec![
         "+-------------+-------------+--------+",
         "| sum(number) | avg(number) | number |",

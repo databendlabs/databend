@@ -142,6 +142,12 @@ impl DataColumn {
         }
     }
 
+    #[inline]
+    pub fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+        let array = self.to_array()?;
+        array.serialize(vec)
+    }
+
     /// # Safety
     /// Note this doesn't do any bound checking, for performance reason.
     #[inline]

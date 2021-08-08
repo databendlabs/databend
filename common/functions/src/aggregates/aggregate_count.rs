@@ -57,27 +57,22 @@ impl AggregateFunction for AggregateCountFunction {
         (state as *mut AggregateCountState) as StateAddr
     }
 
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        input_rows: usize,
-    ) -> Result<()> {
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
         let state = AggregateCountState::get(place);
         if self.arguments.is_empty() {
             state.count += input_rows as u64;
         } else {
-            state.count += count_batch(&columns[0]) as u64;
+            state.count += (input_rows - arrays[0].null_count()) as u64;
         }
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, _row: usize, columns: &[DataColumn]) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
         let state = AggregateCountState::get(place);
         if self.arguments.is_empty() {
             state.count += 1;
         } else {
-            state.count += count_batch(&columns[0]) as u64;
+            state.count += arrays[0].is_null(row) as u64;
         }
         Ok(())
     }
@@ -109,15 +104,5 @@ impl AggregateFunction for AggregateCountFunction {
 impl fmt::Display for AggregateCountFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
-    }
-}
-
-pub fn count_batch(column: &DataColumn) -> usize {
-    if column.is_empty() {
-        return 0;
-    }
-    match column {
-        DataColumn::Constant(_, size) => *size,
-        DataColumn::Array(array) => array.len() - array.null_count(),
     }
 }

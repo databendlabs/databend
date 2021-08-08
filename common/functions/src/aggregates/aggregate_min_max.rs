@@ -6,8 +6,8 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 
+use common_arrow::arrow::array::Array;
 use common_datavalues::prelude::*;
-use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -17,22 +17,38 @@ use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::apply_numeric_creator;
-use crate::apply_string_creator;
+use crate::dispatch_numeric_types;
 
-struct AggregateMinMaxState<T> {
-    pub value: Option<T>,
+pub trait AggregateMinMaxState: Send + Sync + 'static {
+    fn default() -> Self;
+    fn get_state<'a>(place: StateAddr) -> &'a mut Self;
+    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()>;
+    fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()>;
+    fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
+    fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
+    fn merge_result(&mut self) -> Result<DataValue>;
 }
 
-impl<'a, T> GetState<'a, AggregateMinMaxState<T>> for AggregateMinMaxState<T> {}
+struct NumericState<T: DFNumericType> {
+    pub value: Option<T::Native>,
+}
 
-impl<T> AggregateMinMaxState<T>
+struct Utf8State {
+    pub value: Option<String>,
+}
+
+impl<'a, T> GetState<'a, NumericState<T>> for NumericState<T> where T: DFNumericType {}
+impl<'a> GetState<'a, Utf8State> for Utf8State {}
+
+impl<T> NumericState<T>
 where
-    T: std::cmp::PartialOrd + Clone,
-    Option<T>: BinarySer + BinaryDe,
+    T: DFNumericType,
+    T::Native: std::cmp::PartialOrd + Clone + BinarySer + BinaryDe,
+    Option<T::Native>: Into<DataValue>,
 {
-    #[inline(always)]
-    fn add(&mut self, other: T, is_min: bool) {
+    #[inline]
+    fn merge_value(&mut self, other: T::Native, is_min: bool) {
         match &self.value {
             Some(a) => {
                 let ord = a.partial_cmp(&other);
@@ -46,14 +62,135 @@ where
             _ => self.value = Some(other),
         }
     }
+}
+
+impl<T> AggregateMinMaxState for NumericState<T>
+where
+    T: DFNumericType,
+    T::Native: std::cmp::PartialOrd + Clone + BinarySer + BinaryDe + DFTryFrom<DataValue>,
+    Option<T::Native>: Into<DataValue>,
+{
+    fn default() -> Self {
+        Self { value: None }
+    }
+
+    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
+        Self::get(place)
+    }
+
+    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
+        let array: &DataArray<T> = series.static_cast();
+        let array = array.downcast_ref();
+
+        if array
+            .validity()
+            .as_ref()
+            .map(|c| c.get_bit(row))
+            .unwrap_or(true)
+        {
+            let other = array.value(row);
+            self.merge_value(other, is_min);
+        }
+        Ok(())
+    }
+
+    fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()> {
+        let c = if is_min { series.min() } else { series.max() }?;
+        let other: Result<T::Native> = DFTryFrom::try_from(c);
+        if let Ok(other) = other {
+            self.merge_value(other, is_min);
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()> {
+        if let Some(other) = rhs.value {
+            self.merge_value(other, is_min);
+        }
+        Ok(())
+    }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         self.value.serialize_to_buf(writer)
     }
-
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<T>::deserialize(reader)?;
+        self.value = Option::<T::Native>::deserialize(reader)?;
         Ok(())
+    }
+
+    fn merge_result(&mut self) -> Result<DataValue> {
+        Ok(self.value.into())
+    }
+}
+
+impl Utf8State {
+    fn merge_value(&mut self, other: &str, is_min: bool) {
+        match &self.value {
+            Some(a) => {
+                let ord = a.as_str().partial_cmp(other);
+                match (ord, is_min) {
+                    (Some(Ordering::Greater), true) | (Some(Ordering::Less), false) => {
+                        self.value = Some(other.to_string())
+                    }
+                    _ => {}
+                }
+            }
+            _ => self.value = Some(other.to_string()),
+        }
+    }
+}
+impl AggregateMinMaxState for Utf8State {
+    fn default() -> Self {
+        Self { value: None }
+    }
+
+    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
+        Self::get(place)
+    }
+
+    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
+        let array: &DataArray<Utf8Type> = series.static_cast();
+        let array = array.downcast_ref();
+
+        if array
+            .validity()
+            .as_ref()
+            .map(|c| c.get_bit(row))
+            .unwrap_or(true)
+        {
+            let other = array.value(row);
+            self.merge_value(other, is_min);
+        }
+        Ok(())
+    }
+
+    fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()> {
+        let c = if is_min { series.min() } else { series.max() }?;
+        let other: Result<String> = DFTryFrom::try_from(c);
+        if let Ok(other) = other {
+            self.merge_value(other.as_str(), is_min);
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()> {
+        if let Some(other) = &rhs.value {
+            self.merge_value(other.as_str(), is_min);
+        }
+        Ok(())
+    }
+
+    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
+        self.value.serialize_to_buf(writer)
+    }
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        self.value = Option::<String>::deserialize(reader)?;
+        Ok(())
+    }
+
+    fn merge_result(&mut self) -> Result<DataValue> {
+        let v = self.value.clone();
+        Ok(v.into())
     }
 }
 
@@ -66,9 +203,7 @@ pub struct AggregateMinMaxFunction<T> {
 }
 
 impl<T> AggregateFunction for AggregateMinMaxFunction<T>
-where
-    T: std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static,
-    Option<T>: BinarySer + BinaryDe + Into<DataValue>,
+where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static,
 {
     fn name(&self) -> &str {
         "AggregateMinMaxFunction"
@@ -83,86 +218,39 @@ where
     }
 
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(AggregateMinMaxState::<T> { value: None });
-        (state as *mut AggregateMinMaxState<T>) as StateAddr
+        let state = arena.alloc(T::default());
+        (state as *mut T) as StateAddr
     }
 
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        _input_rows: usize,
-    ) -> Result<()> {
-        let value = if self.is_min {
-            min_batch(&columns[0])
-        } else {
-            max_batch(&columns[0])
-        }?;
-
-        let value: Result<T> = DFTryFrom::try_from(value);
-        if let Ok(v) = value {
-            let state = AggregateMinMaxState::<T>::get(place);
-            state.add(v, self.is_min);
-        }
-        Ok(())
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
+        let state = T::get_state(place);
+        state.add_batch(&arrays[0], self.is_min)
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
-        let value = columns[0].try_get(row)?;
-        let value: Result<T> = DFTryFrom::try_from(value);
-        if let Ok(v) = value {
-            let state = AggregateMinMaxState::<T>::get(place);
-            state.add(v, self.is_min);
-        }
-        Ok(())
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
+        let state = T::get_state(place);
+        state.add(&arrays[0], row, self.is_min)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = AggregateMinMaxState::<T>::get(place);
+        let state = T::get_state(place);
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = AggregateMinMaxState::<T>::get(place);
+        let state = T::get_state(place);
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = AggregateMinMaxState::<T>::get(rhs);
-        if let Some(v) = &rhs.value {
-            let state = AggregateMinMaxState::<T>::get(place);
-            state.add(v.clone(), self.is_min);
-        }
-
-        Ok(())
+        let rhs = T::get_state(rhs);
+        let state = T::get_state(place);
+        state.merge(rhs, self.is_min)
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = AggregateMinMaxState::<T>::get(place);
-        let value = state.value.clone();
-        Ok(value.into())
-    }
-}
-
-#[inline]
-pub fn min_batch(column: &DataColumn) -> Result<DataValue> {
-    if column.is_empty() {
-        return Ok(DataValue::from(&column.data_type()));
-    }
-    match column {
-        DataColumn::Constant(value, _) => Ok(value.clone()),
-        DataColumn::Array(array) => array.min(),
-    }
-}
-
-#[inline]
-pub fn max_batch(column: &DataColumn) -> Result<DataValue> {
-    if column.is_empty() {
-        return Ok(DataValue::from(&column.data_type()));
-    }
-    match column {
-        DataColumn::Constant(value, _) => Ok(value.clone()),
-        DataColumn::Array(array) => array.max(),
+        let state = T::get_state(place);
+        state.merge_result()
     }
 }
 
@@ -173,9 +261,7 @@ impl<T> fmt::Display for AggregateMinMaxFunction<T> {
 }
 
 impl<T> AggregateMinMaxFunction<T>
-where
-    T: std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static,
-    Option<T>: BinarySer + BinaryDe + Into<DataValue>,
+where T: AggregateMinMaxState
 {
     pub fn try_create_min(
         display_name: &str,
@@ -202,40 +288,44 @@ where
     }
 }
 
-pub fn try_create_aggregate_min_function(
-    display_name: &str,
-    arguments: Vec<DataField>,
-) -> Result<Arc<dyn AggregateFunction>> {
-    assert_unary_arguments(display_name, arguments.len())?;
-
-    let data_type = arguments[0].data_type();
-    let ty = data_type.clone();
-    let args = arguments.clone();
-    let c =
-        apply_numeric_creator! { ty, AggregateMinMaxFunction, try_create_min, display_name, args};
-
-    if c.is_ok() {
-        return c;
-    }
-
-    apply_string_creator! {data_type, AggregateMinMaxFunction, try_create_min, display_name, arguments}
+macro_rules! creator {
+    ($T: ident, $data_type: expr, $is_min: expr, $display_name: expr, $arguments: expr) => {
+        if $T::data_type() == $data_type {
+            type AggState = NumericState<$T>;
+            if $is_min {
+                return AggregateMinMaxFunction::<AggState>::try_create_min(
+                    $display_name,
+                    $arguments,
+                );
+            } else {
+                return AggregateMinMaxFunction::<AggState>::try_create_max(
+                    $display_name,
+                    $arguments,
+                );
+            }
+        }
+    };
 }
 
-pub fn try_create_aggregate_max_function(
+pub fn try_create_aggregate_minmax_function(
+    is_min: bool,
     display_name: &str,
     arguments: Vec<DataField>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
-
     let data_type = arguments[0].data_type();
-    let ty = data_type.clone();
-    let args = arguments.clone();
-    let c =
-        apply_numeric_creator! { ty, AggregateMinMaxFunction, try_create_max, display_name, args};
 
-    if c.is_ok() {
-        return c;
+    dispatch_numeric_types! {creator, data_type.clone(), is_min, display_name, arguments}
+    if data_type == &DataType::Utf8 {
+        if is_min {
+            return AggregateMinMaxFunction::<Utf8State>::try_create_min(display_name, arguments);
+        } else {
+            return AggregateMinMaxFunction::<Utf8State>::try_create_max(display_name, arguments);
+        }
     }
 
-    apply_string_creator! {data_type, AggregateMinMaxFunction, try_create_max, display_name, arguments}
+    Err(ErrorCode::BadDataValueType(format!(
+        "AggregateMinMaxFunction does not support type '{:?}'",
+        data_type
+    )))
 }

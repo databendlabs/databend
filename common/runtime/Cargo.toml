@@ -15,7 +15,7 @@ common-exception = {path = "../exception"}
 # Github dependencies
 
 # Crates.io dependencies
-tokio = { version = "1.8.2", features = ["macros", "rt","rt-multi-thread", "sync"] }
+tokio = { version = "1.8.2", features = ["macros", "rt","rt-multi-thread", "sync", "fs"] }
 
 [dev-dependencies]
 

@@ -4,11 +4,9 @@
 
 use common_exception::Result;
 
-use super::aggregate_arg_min_max::try_create_aggregate_arg_max_function;
-use super::aggregate_arg_min_max::try_create_aggregate_arg_min_function;
+use super::aggregate_arg_min_max::try_create_aggregate_arg_minmax_function;
 use super::aggregate_avg::try_create_aggregate_avg_function;
-use super::aggregate_min_max::try_create_aggregate_max_function;
-use super::aggregate_min_max::try_create_aggregate_min_function;
+use super::aggregate_min_max::try_create_aggregate_minmax_function;
 use super::aggregate_sum::try_create_aggregate_sum_function;
 use crate::aggregates::aggregate_function_factory::FactoryCombinatorFuncRef;
 use crate::aggregates::aggregate_function_factory::FactoryFuncRef;
@@ -24,14 +22,22 @@ impl Aggregators {
         // FuseQuery always uses lowercase function names to get functions.
         map.insert("count".into(), AggregateCountFunction::try_create);
         map.insert("sum".into(), try_create_aggregate_sum_function);
-        map.insert("min".into(), try_create_aggregate_min_function);
-        map.insert("max".into(), try_create_aggregate_max_function);
         map.insert("avg".into(), try_create_aggregate_avg_function);
-        map.insert("argmin".into(), try_create_aggregate_arg_min_function);
-        map.insert("argmax".into(), try_create_aggregate_arg_max_function);
+
+        map.insert("min".into(), |display_name, arguments| {
+            try_create_aggregate_minmax_function(true, display_name, arguments)
+        });
+        map.insert("max".into(), |display_name, arguments| {
+            try_create_aggregate_minmax_function(false, display_name, arguments)
+        });
+        map.insert("argMin".into(), |display_name, arguments| {
+            try_create_aggregate_arg_minmax_function(true, display_name, arguments)
+        });
+        map.insert("argMax".into(), |display_name, arguments| {
+            try_create_aggregate_arg_minmax_function(false, display_name, arguments)
+        });
 
         map.insert("uniq".into(), AggregateDistinctCombinator::try_create_uniq);
-
         Ok(())
     }
 

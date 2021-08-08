@@ -75,6 +75,7 @@ pub trait BinaryWriteBuf {
     fn write_uvarint(&mut self, v: u64) -> Result<()>;
 }
 
+// We must ensure there are enough buffer to write because BytesMut do not implicitly grow the buffer.
 impl<T> BinaryWriteBuf for T
 where T: BufMut
 {

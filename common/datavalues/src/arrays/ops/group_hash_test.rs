@@ -13,10 +13,9 @@ fn test_group_hash() -> Result<()> {
     // Create DFUint16Array
     let df_uint16_array = DFUInt16Array::new_from_iter(1u16..4u16);
     // Create a buffer
-    let buffer = Box::new([0u16, 0, 0]);
-    let ptr: *const [u16; 3] = &*buffer;
-
-    let _ = df_uint16_array.group_hash(ptr as usize, 2);
+    let mut buffer = Box::new([0u16, 0, 0]);
+    let ptr = buffer.as_mut_ptr() as *mut u8;
+    let _ = df_uint16_array.fixed_hash(ptr, 2);
 
     assert_eq!(buffer[0], 1);
     assert_eq!(buffer[1], 2);

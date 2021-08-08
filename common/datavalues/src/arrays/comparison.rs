@@ -331,7 +331,7 @@ macro_rules! impl_cmp_numeric_utf8_list {
                     (Some(_), None) => None,
                     (Some(left), Some(right)) => Some(left.$cmp_method(&right)),
                 })
-                .collect(),
+                .collect_trusted(),
         }
     }};
 }

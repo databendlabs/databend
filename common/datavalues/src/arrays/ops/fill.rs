@@ -7,6 +7,7 @@ use common_exception::Result;
 use crate::arrays::builders::Utf8ArrayBuilder;
 use crate::arrays::BinaryArrayBuilder;
 use crate::arrays::DataArray;
+use crate::prelude::CustomIterTools;
 use crate::series::Series;
 use crate::utils::NoNull;
 use crate::DFBinaryArray;
@@ -74,7 +75,8 @@ where T: DFPrimitiveType
     where T::Native: Copy {
         (0..length)
             .map(|_| value)
-            .collect::<NoNull<DataArray<T>>>()
+            .trust_my_length(length)
+            .collect_trusted::<NoNull<DataArray<T>>>()
             .into_inner()
     }
 }
@@ -83,18 +85,27 @@ impl<T> ArrayFullNull for DataArray<T>
 where T: DFPrimitiveType
 {
     fn full_null(length: usize) -> Self {
-        (0..length).map(|_| None).collect::<Self>()
+        (0..length)
+            .map(|_| None)
+            .trust_my_length(length)
+            .collect_trusted::<Self>()
     }
 }
 impl ArrayFull<bool> for DFBooleanArray {
     fn full(value: bool, length: usize) -> Self {
-        (0..length).map(|_| value).collect::<DFBooleanArray>()
+        (0..length)
+            .map(|_| value)
+            .trust_my_length(length)
+            .collect_trusted::<DFBooleanArray>()
     }
 }
 
 impl ArrayFullNull for DFBooleanArray {
     fn full_null(length: usize) -> Self {
-        (0..length).map(|_| None).collect::<Self>()
+        (0..length)
+            .map(|_| None)
+            .trust_my_length(length)
+            .collect_trusted::<Self>()
     }
 }
 

@@ -4,6 +4,7 @@
 mod arithmetic;
 mod comparison;
 mod date_wrap;
+mod de;
 mod series_debug;
 mod series_impl;
 mod wrap;

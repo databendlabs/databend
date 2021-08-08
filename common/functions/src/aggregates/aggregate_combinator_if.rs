@@ -79,25 +79,19 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.allocate_state(arena)
     }
 
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        _input_rows: usize,
-    ) -> Result<()> {
-        if columns.is_empty() {
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
+        if arrays.is_empty() {
             return Ok(());
         };
 
-        let boolean_array = columns[self.argument_len - 1].to_array()?;
-        let boolean_array = boolean_array.cast_with_type(&DataType::Boolean)?;
+        let boolean_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
         let boolean_array = boolean_array.bool()?;
 
         let arrow_filter_array = boolean_array.downcast_ref();
         let bitmap = arrow_filter_array.values();
 
         let mut column_array = Vec::with_capacity(self.argument_len - 1);
-        let row_size = match columns.len() - 1 {
+        let row_size = match arrays.len() - 1 {
             0 => {
                 // if it has no args, only return the row_count
                 if boolean_array.null_count() > 0 {
@@ -115,25 +109,22 @@ impl AggregateFunction for AggregateIfCombinator {
             }
             1 => {
                 // single array handle
-                let array = columns[0].to_array()?;
                 let data = arrow::compute::filter::filter(
-                    array.get_array_ref().as_ref(),
+                    arrays[0].get_array_ref().as_ref(),
                     arrow_filter_array,
                 )?;
                 let data: ArrayRef = Arc::from(data);
-                column_array.push(DataColumn::from(data));
+                column_array.push(data.into_series());
                 column_array[0].len()
             }
             _ => {
                 // multi array handle
                 let mut args_array = Vec::with_capacity(self.argument_len - 1);
-                for column in columns.iter().take(self.argument_len - 1) {
-                    let array = column.to_array()?;
-                    args_array.push(array);
+                for column in arrays.iter().take(self.argument_len - 1) {
+                    args_array.push(column.clone());
                 }
                 let data = DataArrayFilter::filter_batch_array(args_array, boolean_array)?;
                 data.into_iter()
-                    .map(DataColumn::from)
                     .for_each(|column| column_array.push(column));
                 column_array[0].len()
             }
@@ -143,8 +134,8 @@ impl AggregateFunction for AggregateIfCombinator {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
-        self.nested.accumulate_row(place, row, columns)
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
+        self.nested.accumulate_row(place, row, arrays)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

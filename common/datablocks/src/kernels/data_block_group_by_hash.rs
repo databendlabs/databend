@@ -5,13 +5,10 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DFBinaryArray;
-use common_datavalues::DFUInt16Array;
-use common_datavalues::DFUInt32Array;
-use common_datavalues::DFUInt64Array;
-use common_datavalues::DFUInt8Array;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -23,6 +20,7 @@ type GroupBlock<T> = Vec<(T, Vec<DataValue>, DataBlock)>;
 pub trait HashMethod {
     type HashKey: std::cmp::Eq + Hash + Clone + Debug;
 
+    fn name(&self) -> String;
     /// Hash group based on row index then return indices and keys.
     /// For example:
     /// row_idx, A
@@ -109,7 +107,11 @@ pub trait HashMethod {
     fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+pub type HashMethodKeysU8 = HashMethodFixedKeys<UInt8Type>;
+pub type HashMethodKeysU16 = HashMethodFixedKeys<UInt16Type>;
+pub type HashMethodKeysU32 = HashMethodFixedKeys<UInt32Type>;
+pub type HashMethodKeysU64 = HashMethodFixedKeys<UInt64Type>;
+
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
     KeysU8(HashMethodKeysU8),
@@ -119,6 +121,15 @@ pub enum HashMethodKind {
 }
 
 impl HashMethodKind {
+    pub fn name(&self) -> String {
+        match self {
+            HashMethodKind::Serializer(v) => v.name(),
+            HashMethodKind::KeysU8(v) => v.name(),
+            HashMethodKind::KeysU16(v) => v.name(),
+            HashMethodKind::KeysU32(v) => v.name(),
+            HashMethodKind::KeysU64(v) => v.name(),
+        }
+    }
     pub fn data_type(&self) -> DataType {
         match self {
             HashMethodKind::Serializer(_) => DataType::Binary,
@@ -139,9 +150,34 @@ impl HashMethodSerializer {
         let v = array.as_ref().value(row);
         v.to_owned()
     }
+
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<Vec<u8>>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
+        let rows = keys.len();
+
+        let mut res = Vec::with_capacity(group_fields.len());
+        for f in group_fields.iter() {
+            let data_type = f.data_type();
+            let mut deserializer = data_type.create_deserializer(rows)?;
+
+            for (_row, key) in keys.iter_mut().enumerate() {
+                deserializer.de(key)?;
+            }
+            res.push(deserializer.finish_to_series());
+        }
+        Ok(res)
+    }
 }
 impl HashMethod for HashMethodSerializer {
     type HashKey = Vec<u8>;
+
+    fn name(&self) -> String {
+        "Serializer".to_string()
+    }
 
     fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
         let mut group_keys = Vec::with_capacity(rows);
@@ -161,112 +197,101 @@ impl HashMethod for HashMethodSerializer {
             }
 
             for col in group_columns {
-                DataColumn::serialize(col, &mut group_keys)?;
+                col.serialize(&mut group_keys)?;
             }
         }
         Ok(group_keys)
     }
 }
 
-macro_rules! build_primitive_keys {
-    ($group_columns: ident, $rows: ident) => {{
-        let mut group_keys = vec![0; $rows];
-        let mut offsize = 0;
-        let ptr = group_keys.as_mut_ptr() as *mut u8;
-        let step = std::mem::size_of::<Self::HashKey>();
+pub struct HashMethodFixedKeys<T> {
+    t: PhantomData<T>,
+}
 
+impl<T> HashMethodFixedKeys<T>
+where T: DFNumericType
+{
+    pub fn default() -> Self {
+        HashMethodFixedKeys { t: PhantomData }
+    }
+
+    #[inline]
+    pub fn get_key(&self, array: &DataArray<T>, row: usize) -> T::Native {
+        array.as_ref().value(row)
+    }
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<T::Native>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        let mut keys = keys;
+        let rows = keys.len();
+        let step = std::mem::size_of::<T::Native>();
+        let length = rows * step;
+        let capacity = keys.capacity() * step;
+        let mutptr = keys.as_mut_ptr() as *mut u8;
+        let vec8 = unsafe {
+            std::mem::forget(keys);
+            // construct new vec
+            Vec::from_raw_parts(mutptr, length, capacity)
+        };
+
+        let mut res = Vec::with_capacity(group_fields.len());
+        let mut offsize = 0;
+        for f in group_fields.iter() {
+            let data_type = f.data_type();
+            let mut deserializer = data_type.create_deserializer(rows)?;
+            let reader = vec8.as_slice();
+            deserializer.de_batch(&reader[offsize..], step, rows)?;
+            res.push(deserializer.finish_to_series());
+
+            offsize += common_datavalues::numeric_byte_size(data_type)?;
+        }
+        Ok(res)
+    }
+}
+
+impl<T> HashMethod for HashMethodFixedKeys<T>
+where
+    T: DFNumericType,
+    T::Native: std::cmp::Eq + Hash + Clone + Debug,
+{
+    type HashKey = T::Native;
+
+    fn name(&self) -> String {
+        format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
+    }
+
+    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
+        let step = std::mem::size_of::<T::Native>();
+        let mut group_keys: Vec<T::Native> = vec![T::Native::default(); rows];
+        let ptr = group_keys.as_mut_ptr() as *mut u8;
+        let mut offsize = 0;
         let mut size = step;
         while size > 0 {
-            build(size, &mut offsize, $group_columns, ptr, step)?;
+            build(size, &mut offsize, group_columns, ptr, step)?;
             size /= 2;
         }
-
         Ok(group_keys)
-    }};
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU8 {}
-impl HashMethodKeysU8 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt8Array, row: usize) -> u8 {
-        array.as_ref().value(row)
     }
 }
 
-impl HashMethod for HashMethodKeysU8 {
-    type HashKey = u8;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU16 {}
-impl HashMethodKeysU16 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt16Array, row: usize) -> u16 {
-        array.as_ref().value(row)
-    }
-}
-
-impl HashMethod for HashMethodKeysU16 {
-    type HashKey = u16;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU32 {}
-impl HashMethodKeysU32 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt32Array, row: usize) -> u32 {
-        array.as_ref().value(row)
-    }
-}
-
-impl HashMethod for HashMethodKeysU32 {
-    type HashKey = u32;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU64 {}
-impl HashMethodKeysU64 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt64Array, row: usize) -> u64 {
-        array.as_ref().value(row)
-    }
-}
-
-impl HashMethod for HashMethodKeysU64 {
-    type HashKey = u64;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
+#[inline]
 fn build(
     mem_size: usize,
     offsize: &mut usize,
     group_columns: &[&DataColumn],
-    ptr: *mut u8,
+    writer: *mut u8,
     step: usize,
 ) -> Result<()> {
     for col in group_columns.iter() {
         let data_type = col.data_type();
         let size = common_datavalues::numeric_byte_size(&data_type)?;
         if size == mem_size {
-            let start_ptr = ptr as usize + *offsize;
             let series = col.to_array()?;
-            series.group_hash(start_ptr, step)?;
+
+            let writer = unsafe { writer.add(*offsize) };
+            series.fixed_hash(writer, step)?;
             *offsize += size;
         }
     }
