@@ -62,7 +62,7 @@ where
                     _ => {}
                 }
             }
-            _ => {
+            None => {
                 self.value = Some(other);
                 self.data = data;
             }
@@ -133,10 +133,12 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        self.value.serialize_to_buf(writer)
+        self.value.serialize_to_buf(writer)?;
+        self.data.serialize_to_buf(writer)
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         self.value = Option::<T::Native>::deserialize(reader)?;
+        self.data = DataValue::deserialize(reader)?;
         Ok(())
     }
 
@@ -223,10 +225,13 @@ impl AggregateArgMinMaxState for Utf8State {
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        self.value.serialize_to_buf(writer)
+        self.value.serialize_to_buf(writer)?;
+        self.data.serialize_to_buf(writer)
     }
+
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         self.value = Option::<String>::deserialize(reader)?;
+        self.data = DataValue::deserialize(reader)?;
         Ok(())
     }
 

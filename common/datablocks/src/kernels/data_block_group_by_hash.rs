@@ -197,7 +197,7 @@ impl HashMethod for HashMethodSerializer {
             }
 
             for col in group_columns {
-                DataColumn::serialize(col, &mut group_keys)?;
+                col.serialize(&mut group_keys)?;
             }
         }
         Ok(group_keys)
@@ -263,24 +263,16 @@ where
     }
 
     fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        let step = std::mem::size_of::<Self::HashKey>();
-        let mut group_keys: Vec<u8> = vec![0; rows * step];
-
+        let step = std::mem::size_of::<T::Native>();
+        let mut group_keys: Vec<T::Native> = vec![T::Native::default(); rows];
+        let ptr = group_keys.as_mut_ptr() as *mut u8;
         let mut offsize = 0;
         let mut size = step;
         while size > 0 {
-            build(
-                size,
-                &mut offsize,
-                group_columns,
-                group_keys.as_mut_ptr(),
-                step,
-            )?;
+            build(size, &mut offsize, group_columns, ptr, step)?;
             size /= 2;
         }
-
-        todo!();
-        // Ok(group_keys)
+        Ok(group_keys)
     }
 }
 
@@ -299,7 +291,7 @@ fn build(
             let series = col.to_array()?;
 
             let writer = unsafe { writer.add(*offsize) };
-            series.group_hash(writer, step)?;
+            series.fixed_hash(writer, step)?;
             *offsize += size;
         }
     }
