@@ -93,7 +93,14 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         let context = self.session.create_context();
 
         context.attach_query_info(query);
-        DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))?;
+        match DFQueryResultWriter::create(writer).write(self.base.do_query(query, context)) {
+            Ok(_) => {},
+            Err(e) => {
+                let query_str = String::from(query);
+                let new_error = e.add_message(query_str);
+                return Err(new_error);
+            }
+        };
 
         histogram!(
             super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
