@@ -6,6 +6,7 @@ mod context;
 mod number;
 mod parse_query;
 mod sessions;
+pub(crate) mod tls_constants;
 
 pub use context::try_create_cluster_context;
 pub use context::try_create_context;

@@ -7,6 +7,7 @@ use common_tracing::init_tracing_with_file;
 use fuse_store::api::HttpService;
 use fuse_store::api::StoreServer;
 use fuse_store::configs::Config;
+use fuse_store::meta_service::raft_db::init_sled_db;
 use fuse_store::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
@@ -27,6 +28,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "FuseStore v-{}",
         *fuse_store::configs::config::FUSE_COMMIT_VERSION
     );
+
+    init_sled_db(conf.meta_dir.clone());
 
     // Metric API service.
     {

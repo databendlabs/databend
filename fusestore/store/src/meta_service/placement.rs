@@ -31,7 +31,7 @@ pub trait Placement {
 
         slot.node_ids
             .iter()
-            .map(|nid| self.get_node(nid).unwrap())
+            .map(|nid| self.get_placement_node(nid).unwrap())
             .collect()
     }
 
@@ -50,7 +50,8 @@ pub trait Placement {
 
     fn get_slots(&self) -> &[Slot];
 
-    fn get_node(&self, node_id: &NodeId) -> Option<Node>;
+    /// Returns a node.
+    fn get_placement_node(&self, node_id: &NodeId) -> Option<Node>;
 }
 
 /// Evenly chooses `n` elements from `m` elements

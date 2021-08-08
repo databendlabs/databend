@@ -13,6 +13,8 @@ use tempfile::TempDir;
 
 use crate::api::StoreServer;
 use crate::configs;
+use crate::meta_service::raft_db::get_sled_db;
+use crate::meta_service::raft_db::init_temp_sled_db;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
@@ -49,10 +51,12 @@ pub fn next_port() -> u32 {
 pub struct StoreTestContext {
     #[allow(dead_code)]
     meta_temp_dir: TempDir,
-    pub config: configs::Config,
-    pub meta_nodes: Vec<Arc<MetaNode>>,
+    #[allow(dead_code)]
+    local_fs_tmp_dir: TempDir,
 
-    pub tree_prefix: String,
+    pub config: configs::Config,
+
+    pub meta_nodes: Vec<Arc<MetaNode>>,
 
     /// channel to send to stop StoreServer, and channel for waiting for shutdown to finish.
     pub channels: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
@@ -68,11 +72,13 @@ pub fn new_test_context() -> StoreTestContext {
         config.meta_no_sync = true;
     }
 
+    // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
+    config.sled_tree_prefix = format!("test-{}-", next_port());
+
     // By default, create a meta node instead of open an existent one.
     config.single = true;
 
     config.meta_api_port = next_port();
-    let x = config.meta_api_port;
 
     let host = "127.0.0.1";
 
@@ -91,45 +97,41 @@ pub fn new_test_context() -> StoreTestContext {
         config.metric_api_address = format!("{}:{}", host, metric_port);
     }
 
-    let t = tempdir().expect("create temp dir to store meta");
-    config.meta_dir = t.path().to_str().unwrap().to_string();
+    let tmp_meta_dir = tempdir().expect("create temp dir to store meta");
+    config.meta_dir = tmp_meta_dir.path().to_str().unwrap().to_string();
+
+    let tmp_local_fs_dir = tempdir().expect("create local fs dir to store data");
+    config.local_fs_dir = tmp_local_fs_dir.path().to_str().unwrap().to_string();
 
     tracing::info!("new test context config: {:?}", config);
 
     StoreTestContext {
-        // hold the TempDir until being dropped.
-        meta_temp_dir: t,
+        // The TempDir type creates a directory on the file system that is deleted once it goes out of scope
+        // So hold the tmp_meta_dir and tmp_local_fs_dir until being dropped.
+        meta_temp_dir: tmp_meta_dir,
+        local_fs_tmp_dir: tmp_local_fs_dir,
         config,
         meta_nodes: vec![],
-
-        // Create a unique tree name prefix for opening same type tree in a same sled::Db
-        tree_prefix: format!("{}-", x),
 
         channels: None,
     }
 }
 
 pub struct SledTestContext {
-    #[allow(dead_code)]
-    temp_dir: TempDir,
     pub config: configs::Config,
     pub db: sled::Db,
 }
 
 /// Create a new context for testing sled
 pub fn new_sled_test_context() -> SledTestContext {
-    let t = tempdir().expect("create temp dir to store meta");
-    let tmpdir = t.path().to_str().unwrap().to_string();
-
     // config for unit test of sled db, meta_sync() is true by default.
-    let config = configs::Config::empty();
+    let mut config = configs::Config::empty();
+
+    config.sled_tree_prefix = format!("test-{}-", next_port());
 
     SledTestContext {
-        // hold the TempDir until being dropped.
-        temp_dir: t,
         config,
-        // TODO(xp): one db per process.
-        db: sled::open(tmpdir).expect("open sled db"),
+        db: get_sled_db(),
     }
 }
 
@@ -141,4 +143,13 @@ pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {
     let rst = client.get(req).await?.into_inner();
     assert_eq!("", rst.value, "connected");
     Ok(())
+}
+
+/// 1. Open a temp sled::Db for all tests.
+/// 2. initialize tracing
+pub fn init_store_unittest() {
+    let t = tempdir().expect("create temp dir to store meta");
+    init_temp_sled_db(t);
+
+    common_tracing::init_default_tracing();
 }

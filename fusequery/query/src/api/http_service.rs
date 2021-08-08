@@ -24,7 +24,7 @@ pub struct HttpService {
 }
 
 impl HttpService {
-    pub fn create(cfg: Config, cluster: ClusterRef) -> Box<dyn Server> {
+    pub fn create(cfg: Config, cluster: ClusterRef) -> Box<Self> {
         Box::new(HttpService {
             cfg,
             cluster,
@@ -61,8 +61,8 @@ impl Server for HttpService {
         let server = warp::serve(router.router()?);
 
         let conf = self.cfg.clone();
-        let tls_cert = conf.tls_server_cert;
-        let tls_key = conf.tls_server_key;
+        let tls_cert = conf.api_tls_server_cert;
+        let tls_key = conf.api_tls_server_key;
 
         if !tls_cert.is_empty() && !tls_key.is_empty() {
             log::info!("Http API TLS enabled");

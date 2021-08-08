@@ -121,6 +121,17 @@ pub struct Config {
 
     #[structopt(
         long,
+        env = "RPC_TLS_SERVER_CERT",
+        default_value = "",
+        help = "Certificate for server to identify itself"
+    )]
+    pub rpc_tls_server_cert: String,
+
+    #[structopt(long, env = "RPC_TLS_SERVER_KEY", default_value = "")]
+    pub rpc_tls_server_key: String,
+
+    #[structopt(
+        long,
         env = "FUSE_STORE_SINGLE",
         help = concat!("Single node store. It creates a single node cluster if meta data is not initialized.",
                       " Otherwise it opens the previous one.",
@@ -137,6 +148,21 @@ pub struct Config {
                       " Otherwise this argument is ignored.")
     )]
     pub id: NodeId,
+
+    #[structopt(
+        long,
+        env = "FUSE_STORE_LOCAL_FS_DIR",
+        help = "Dir for local fs storage",
+        default_value = "./_local_fs"
+    )]
+    pub local_fs_dir: String,
+
+    #[structopt(
+        long,
+        default_value = "",
+        help = "For test only: specifies the tree name prefix"
+    )]
+    pub sled_tree_prefix: String,
 }
 
 impl Config {
@@ -166,5 +192,16 @@ impl Config {
         }
 
         Ok(())
+    }
+
+    pub fn tls_rpc_server_enabled(&self) -> bool {
+        !self.rpc_tls_server_key.is_empty() && !self.rpc_tls_server_cert.is_empty()
+    }
+
+    /// Create a unique sled::Tree name by prepending a unique prefix.
+    /// So that multiple instance that depends on a sled::Tree can be used in one process.
+    /// sled does not allow to open multiple `sled::Db` in one process.
+    pub fn tree_name(&self, name: &str) -> String {
+        format!("{}{}", self.sled_tree_prefix, name)
     }
 }

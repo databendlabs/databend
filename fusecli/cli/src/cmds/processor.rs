@@ -76,7 +76,7 @@ impl Processor {
 
     pub fn processor_line(&self, mut writer: Writer, line: String) -> Result<()> {
         if let Some(cmd) = self.commands.iter().find(|c| c.is(&*line)) {
-            cmd.exec(&mut writer, line)?;
+            cmd.exec(&mut writer, line.trim().to_string())?;
         } else {
             writeln!(writer, "Unknown command, usage: help").unwrap();
         }

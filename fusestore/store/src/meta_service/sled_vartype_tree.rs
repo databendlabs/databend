@@ -44,6 +44,12 @@ impl SledVarTypeTree {
         tree_name: N,
         sync: bool,
     ) -> common_exception::Result<Self> {
+        // During testing, every tree name must be unique.
+        if cfg!(test) {
+            let x = tree_name.as_ref();
+            let x = &x[0..5];
+            assert_eq!(x, b"test-");
+        }
         let t = db
             .open_tree(&tree_name)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
@@ -58,8 +64,8 @@ impl SledVarTypeTree {
         Ok(rl)
     }
 
-    /// Borrows the SledVarTypeTree and creates a wrapper with access limited to a specified namespace `KV`.
-    pub fn as_type<KV: SledKV>(&self) -> AsType<KV> {
+    /// Borrows the SledVarTypeTree and creates a wrapper with access limited to a specified key space `KV`.
+    pub fn key_space<KV: SledKV>(&self) -> AsType<KV> {
         AsType::<KV> {
             inner: self,
             phantom: PhantomData,
@@ -100,8 +106,6 @@ impl SledVarTypeTree {
     /// Retrieve the last key value pair.
     pub fn last<KV>(&self) -> common_exception::Result<Option<(KV::K, KV::V)>>
     where KV: SledKV {
-        // TODO(xp): last should be limited to the value range
-
         let range = (
             Bound::Unbounded,
             KV::serialize_bound(Bound::Unbounded, "right")?,

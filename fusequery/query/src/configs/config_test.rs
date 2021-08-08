@@ -32,8 +32,14 @@ fn test_default_config() -> Result<()> {
             store_api_password: "root".to_string(),
         },
         config_file: "".to_string(),
-        tls_server_cert: "".to_string(),
-        tls_server_key: "".to_string(),
+        api_tls_server_cert: "".to_string(),
+        api_tls_server_key: "".to_string(),
+        rpc_tls_server_cert: "".to_string(),
+        rpc_tls_server_key: "".to_string(),
+        rpc_tls_query_server_root_ca_cert: "".to_string(),
+        rpc_tls_query_service_domain_name: "localhost".to_string(),
+        rpc_tls_store_server_root_ca_cert: "".to_string(),
+        rpc_tls_store_service_domain_name: "localhost".to_string(),
         disable_remote_catalog: false,
     };
     let actual = Config::default();

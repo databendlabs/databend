@@ -245,10 +245,8 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         match rst {
             AppliedState::Table { prev, .. } => {
                 if prev.is_some() || if_exists {
-                    eprintln!(">>> table dropped");
                     Ok(DropTableActionResult {})
                 } else {
-                    eprintln!(">>> table not found");
                     Err(ErrorCode::UnknownTable(format!(
                         "table not found: {:}",
                         table_name

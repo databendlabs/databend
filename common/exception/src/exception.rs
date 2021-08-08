@@ -156,6 +156,7 @@ build_exceptions! {
     Overflow(49),
     InvalidMetaBinaryFormat(50),
     AuthenticateFailure(51),
+    TLSConfigurationFailure(52),
 
 
     // uncategorized

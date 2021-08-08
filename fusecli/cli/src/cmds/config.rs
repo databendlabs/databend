@@ -6,8 +6,8 @@ use structopt::StructOpt;
 
 #[derive(Clone, Debug, PartialEq, StructOpt, Default)]
 pub struct Config {
-    #[structopt(long, env = "NAMESPACE", default_value = "test")]
-    pub namespace: String,
+    #[structopt(long, env = "GROUP", default_value = "test")]
+    pub group: String,
 
     #[structopt(long, env = "DATAFUSE_DIR", default_value = ".datafuse")]
     pub datafuse_dir: String,
@@ -41,7 +41,7 @@ impl Config {
     fn build(mut conf: Config) -> Self {
         let home_dir = dirs::home_dir().unwrap();
         let datafuse_dir = home_dir.join(".datafuse");
-        conf.datafuse_dir = format!("{}/{}", datafuse_dir.to_str().unwrap(), conf.namespace);
+        conf.datafuse_dir = format!("{}/{}", datafuse_dir.to_str().unwrap(), conf.group);
         conf
     }
 }

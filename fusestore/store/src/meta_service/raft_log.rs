@@ -39,7 +39,8 @@ impl RaftLog {
         db: &sled::Db,
         config: &configs::Config,
     ) -> common_exception::Result<RaftLog> {
-        let inner = SledVarTypeTree::open(db, TREE_RAFT_LOG, config.meta_sync()).await?;
+        let tree_name = config.tree_name(TREE_RAFT_LOG);
+        let inner = SledVarTypeTree::open(db, &tree_name, config.meta_sync()).await?;
         let rl = RaftLog { inner };
         Ok(rl)
     }
@@ -105,6 +106,6 @@ impl RaftLog {
     }
 
     fn logs(&self) -> AsType<sledkv::Logs> {
-        self.inner.as_type()
+        self.inner.key_space()
     }
 }

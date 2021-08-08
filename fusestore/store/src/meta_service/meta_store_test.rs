@@ -8,6 +8,7 @@ use common_runtime::tokio;
 use common_tracing::tracing;
 
 use crate::meta_service::MetaStore;
+use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -20,13 +21,17 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     // TODO check log
     // TODO check state machine
 
+    init_store_unittest();
+
     let id = 3;
-    let tc = new_test_context();
+    let mut tc = new_test_context();
+    tc.config.id = id;
 
     tracing::info!("--- new MetaStore");
     {
-        let ms = MetaStore::new(id, &tc.config).await?;
+        let ms = MetaStore::open_create(&tc.config, None, Some(())).await?;
         assert_eq!(id, ms.id);
+        assert!(!ms.is_open());
         assert_eq!(None, ms.read_hard_state().await?);
 
         tracing::info!("--- update MetaStore");
@@ -40,8 +45,9 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- reopen MetaStore");
     {
-        let ms = MetaStore::open(&tc.config).await?;
+        let ms = MetaStore::open_create(&tc.config, Some(()), None).await?;
         assert_eq!(id, ms.id);
+        assert!(ms.is_open());
         assert_eq!(
             Some(HardState {
                 current_term: 10,

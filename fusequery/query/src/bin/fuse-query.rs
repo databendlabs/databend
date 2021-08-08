@@ -13,6 +13,7 @@ use fuse_query::configs::Config;
 use fuse_query::metrics::MetricService;
 use fuse_query::servers::ClickHouseHandler;
 use fuse_query::servers::MySQLHandler;
+use fuse_query::servers::Server;
 use fuse_query::servers::ShutdownHandle;
 use fuse_query::sessions::SessionManager;
 use log::info;

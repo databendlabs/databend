@@ -104,7 +104,7 @@ jobs:
   build-release:
     name: Build reference datafuse image
     if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
-    runs-on: self-hosted
+    runs-on: perf-runner
     env:
       GITHUB_TOKEN: ${{ github.token }}
       GITHUB_ORG: datafuselabs
@@ -198,7 +198,7 @@ jobs:
   run_funcbench:
     name: Running datafuse single performance testing
     if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
-    runs-on: self-hosted
+    runs-on: perf-runner
     needs: [build-current, build-release]
     env:
       GITHUB_TOKEN: ${{ github.token }}

@@ -9,5 +9,5 @@ publish = false
 edition = "2021"
 
 [dependencies]
-vergen = "5.1.14"
+vergen = "5.1.15"
 run_script = "^0.8.0"

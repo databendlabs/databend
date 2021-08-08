@@ -17,22 +17,27 @@ use crate::meta_service::StateMachineMeta;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 use crate::meta_service::StateMachineMetaValue;
+use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_sled_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_open() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    SledVarTypeTree::open(db, "foo", true).await?;
+    SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_append() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
         (8, Entry {
@@ -86,9 +91,11 @@ async fn test_sled_vartype_tree_append() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_append_values_and_range_get() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -159,9 +166,11 @@ async fn test_sled_vartype_tree_append_values_and_range_get() -> anyhow::Result<
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_range_keys() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -209,9 +218,11 @@ async fn test_sled_vartype_tree_range_keys() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_insert() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     assert!(tree.get::<sledkv::Logs>(&5)?.is_none());
 
@@ -267,9 +278,11 @@ async fn test_sled_vartype_tree_insert() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_contains_key() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     assert!(tree.get::<sledkv::Logs>(&5)?.is_none());
 
@@ -304,9 +317,11 @@ async fn test_sled_vartype_tree_contains_key() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_get() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     assert!(tree.get::<sledkv::Logs>(&5)?.is_none());
 
@@ -341,9 +356,11 @@ async fn test_sled_vartype_tree_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_last() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     assert!(tree.last::<sledkv::Logs>()?.is_none());
 
@@ -389,9 +406,11 @@ async fn test_sled_vartype_tree_last() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_range_delete() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -448,9 +467,11 @@ async fn test_sled_vartype_tree_range_delete() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_vartype_tree_multi_types() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -514,10 +535,12 @@ async fn test_sled_vartype_tree_multi_types() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_append() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
         (8, Entry {
@@ -537,7 +560,7 @@ async fn test_as_append() -> anyhow::Result<()> {
         }),
     ];
 
-    aslog.append(&logs).await?;
+    log_tree.append(&logs).await?;
 
     let want: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -557,13 +580,13 @@ async fn test_as_append() -> anyhow::Result<()> {
         },
     ];
 
-    let got = aslog.range_get(0..)?;
+    let got = log_tree.range_get(0..)?;
     assert_eq!(want, got);
 
-    let got = aslog.range_get(0..=5)?;
+    let got = log_tree.range_get(0..=5)?;
     assert_eq!(want[0..1], got);
 
-    let got = aslog.range_get(6..9)?;
+    let got = log_tree.range_get(6..9)?;
     assert_eq!(want[1..], got);
 
     Ok(())
@@ -571,10 +594,12 @@ async fn test_as_append() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -609,46 +634,48 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
         },
     ];
 
-    aslog.append_values(&logs).await?;
+    log_tree.append_values(&logs).await?;
 
-    let got = aslog.range_get(0..)?;
+    let got = log_tree.range_get(0..)?;
     assert_eq!(logs, got);
 
-    let got = aslog.range_get(0..=2)?;
+    let got = log_tree.range_get(0..=2)?;
     assert_eq!(logs[0..1], got);
 
-    let got = aslog.range_get(0..3)?;
+    let got = log_tree.range_get(0..3)?;
     assert_eq!(logs[0..1], got);
 
-    let got = aslog.range_get(0..5)?;
+    let got = log_tree.range_get(0..5)?;
     assert_eq!(logs[0..2], got);
 
-    let got = aslog.range_get(0..10)?;
+    let got = log_tree.range_get(0..10)?;
     assert_eq!(logs[0..3], got);
 
-    let got = aslog.range_get(0..11)?;
+    let got = log_tree.range_get(0..11)?;
     assert_eq!(logs[0..4], got);
 
-    let got = aslog.range_get(9..11)?;
+    let got = log_tree.range_get(9..11)?;
     assert_eq!(logs[2..4], got);
 
-    let got = aslog.range_get(10..256)?;
+    let got = log_tree.range_get(10..256)?;
     assert_eq!(logs[3..4], got);
 
-    let got = aslog.range_get(10..257)?;
+    let got = log_tree.range_get(10..257)?;
     assert_eq!(logs[3..5], got);
 
-    let got = aslog.range_get(257..)?;
+    let got = log_tree.range_get(257..)?;
     assert_eq!(logs[5..], got);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_keys() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -665,30 +692,30 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
         },
     ];
 
-    aslog.append_values(&logs).await?;
+    log_tree.append_values(&logs).await?;
 
-    let got = aslog.range_keys(0..)?;
+    let got = log_tree.range_keys(0..)?;
     assert_eq!(vec![2, 9, 10], got);
 
-    let got = aslog.range_keys(0..=2)?;
+    let got = log_tree.range_keys(0..=2)?;
     assert_eq!(vec![2], got);
 
-    let got = aslog.range_keys(0..3)?;
+    let got = log_tree.range_keys(0..3)?;
     assert_eq!(vec![2], got);
 
-    let got = aslog.range_keys(0..10)?;
+    let got = log_tree.range_keys(0..10)?;
     assert_eq!(vec![2, 9], got);
 
-    let got = aslog.range_keys(0..11)?;
+    let got = log_tree.range_keys(0..11)?;
     assert_eq!(vec![2, 9, 10], got);
 
-    let got = aslog.range_keys(9..11)?;
+    let got = log_tree.range_keys(9..11)?;
     assert_eq!(vec![9, 10], got);
 
-    let got = aslog.range_keys(10..256)?;
+    let got = log_tree.range_keys(10..256)?;
     assert_eq!(vec![10], got);
 
-    let got = aslog.range_keys(11..)?;
+    let got = log_tree.range_keys(11..)?;
     assert_eq!(Vec::<LogIndex>::new(), got);
 
     Ok(())
@@ -696,12 +723,14 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_insert() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
-    assert_eq!(None, aslog.get(&5)?);
+    assert_eq!(None, log_tree.get(&5)?);
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -722,10 +751,10 @@ async fn test_as_insert() -> anyhow::Result<()> {
     ];
 
     for log in logs.iter() {
-        aslog.insert_value(log).await?;
+        log_tree.insert_value(log).await?;
     }
 
-    assert_eq!(logs, aslog.range_get(..)?);
+    assert_eq!(logs, log_tree.range_get(..)?);
 
     // insert and override
 
@@ -734,7 +763,7 @@ async fn test_as_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = aslog.insert_value(&override_2).await?;
+    let prev = log_tree.insert_value(&override_2).await?;
     assert_eq!(Some(logs[0].clone()), prev);
 
     // insert and override nothing
@@ -747,7 +776,7 @@ async fn test_as_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = aslog.insert_value(&override_nothing).await?;
+    let prev = log_tree.insert_value(&override_nothing).await?;
     assert_eq!(None, prev);
 
     Ok(())
@@ -755,12 +784,14 @@ async fn test_as_insert() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_contains_key() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
-    assert_eq!(None, aslog.get(&5)?);
+    assert_eq!(None, log_tree.get(&5)?);
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -780,25 +811,27 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
         },
     ];
 
-    aslog.append_values(&logs).await?;
+    log_tree.append_values(&logs).await?;
 
-    assert!(!aslog.contains_key(&1)?);
-    assert!(aslog.contains_key(&2)?);
-    assert!(!aslog.contains_key(&3)?);
-    assert!(aslog.contains_key(&4)?);
-    assert!(!aslog.contains_key(&5)?);
+    assert!(!log_tree.contains_key(&1)?);
+    assert!(log_tree.contains_key(&2)?);
+    assert!(!log_tree.contains_key(&3)?);
+    assert!(log_tree.contains_key(&4)?);
+    assert!(!log_tree.contains_key(&5)?);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_get() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
-    assert_eq!(None, aslog.get(&5)?);
+    assert_eq!(None, log_tree.get(&5)?);
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -818,25 +851,27 @@ async fn test_as_get() -> anyhow::Result<()> {
         },
     ];
 
-    aslog.append_values(&logs).await?;
+    log_tree.append_values(&logs).await?;
 
-    assert_eq!(None, aslog.get(&1)?);
-    assert_eq!(Some(logs[0].clone()), aslog.get(&2)?);
-    assert_eq!(None, aslog.get(&3)?);
-    assert_eq!(Some(logs[1].clone()), aslog.get(&4)?);
-    assert_eq!(None, aslog.get(&5)?);
+    assert_eq!(None, log_tree.get(&1)?);
+    assert_eq!(Some(logs[0].clone()), log_tree.get(&2)?);
+    assert_eq!(None, log_tree.get(&3)?);
+    assert_eq!(Some(logs[1].clone()), log_tree.get(&4)?);
+    assert_eq!(None, log_tree.get(&5)?);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_last() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
-    assert_eq!(None, aslog.last()?);
+    assert_eq!(None, log_tree.last()?);
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -856,18 +891,20 @@ async fn test_as_last() -> anyhow::Result<()> {
         },
     ];
 
-    aslog.append_values(&logs).await?;
-    assert_eq!(Some((4, logs[1].clone())), aslog.last()?);
+    log_tree.append_values(&logs).await?;
+    assert_eq!(Some((4, logs[1].clone())), log_tree.last()?);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_delete() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -902,33 +939,35 @@ async fn test_as_range_delete() -> anyhow::Result<()> {
         },
     ];
 
-    aslog.append_values(&logs).await?;
-    aslog.range_delete(0.., false).await?;
-    assert_eq!(logs[5..], aslog.range_get(0..)?);
+    log_tree.append_values(&logs).await?;
+    log_tree.range_delete(0.., false).await?;
+    assert_eq!(logs[5..], log_tree.range_get(0..)?);
 
-    aslog.append_values(&logs).await?;
-    aslog.range_delete(1.., false).await?;
-    assert_eq!(logs[5..], aslog.range_get(0..)?);
+    log_tree.append_values(&logs).await?;
+    log_tree.range_delete(1.., false).await?;
+    assert_eq!(logs[5..], log_tree.range_get(0..)?);
 
-    aslog.append_values(&logs).await?;
-    aslog.range_delete(3.., true).await?;
-    assert_eq!(logs[0..1], aslog.range_get(0..)?);
+    log_tree.append_values(&logs).await?;
+    log_tree.range_delete(3.., true).await?;
+    assert_eq!(logs[0..1], log_tree.range_get(0..)?);
 
-    aslog.append_values(&logs).await?;
-    aslog.range_delete(3..10, true).await?;
-    assert_eq!(logs[0..1], aslog.range_get(0..5)?);
-    assert_eq!(logs[3..], aslog.range_get(5..)?);
+    log_tree.append_values(&logs).await?;
+    log_tree.range_delete(3..10, true).await?;
+    assert_eq!(logs[0..1], log_tree.range_get(0..5)?);
+    assert_eq!(logs[3..], log_tree.range_get(5..)?);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_multi_types() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledVarTypeTree::open(db, "foo", true).await?;
-    let aslog = tree.as_type::<sledkv::Logs>();
-    let asmeta = tree.as_type::<StateMachineMeta>();
+    let tree = SledVarTypeTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sledkv::Logs>();
+    let sm_meta = tree.key_space::<StateMachineMeta>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -948,7 +987,7 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
         },
     ];
 
-    aslog.append_values(&logs).await?;
+    log_tree.append_values(&logs).await?;
 
     let metas = vec![
         (
@@ -957,31 +996,31 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
         ),
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
-    asmeta.append(&metas).await?;
+    sm_meta.append(&metas).await?;
 
     // range get/keys are limited to its own namespace.
     {
-        let got = aslog.range_get(..)?;
+        let got = log_tree.range_get(..)?;
         assert_eq!(logs, got);
 
-        let got = asmeta.range_get(..=LastApplied)?;
+        let got = sm_meta.range_get(..=LastApplied)?;
         assert_eq!(
             vec![StateMachineMetaValue::LogId(LogId { term: 1, index: 2 })],
             got
         );
 
-        let got = asmeta.range_get(Initialized..)?;
+        let got = sm_meta.range_get(Initialized..)?;
         assert_eq!(vec![StateMachineMetaValue::Bool(true)], got);
 
-        let got = asmeta.range_keys(Initialized..)?;
+        let got = sm_meta.range_keys(Initialized..)?;
         assert_eq!(vec![Initialized], got);
     }
 
     // range delete are limited to its own namespace.
     {
-        asmeta.range_delete(.., false).await?;
+        sm_meta.range_delete(.., false).await?;
 
-        let got = aslog.range_get(..)?;
+        let got = log_tree.range_get(..)?;
         assert_eq!(logs, got);
     }
 
