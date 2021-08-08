@@ -42,8 +42,8 @@ use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
+use crate::meta_service::sled_key_space;
 use crate::meta_service::sled_serde::SledOrderedSerde;
-use crate::meta_service::sledkv;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -501,7 +501,7 @@ impl MetaStore {
             .await
             .expect("fail to get membership");
 
-        let sm_nodes = sm.sm_tree.key_space::<sledkv::Nodes>();
+        let sm_nodes = sm.sm_tree.key_space::<sled_key_space::Nodes>();
         let x = sm_nodes.range_keys(..).expect("fail to list nodes");
         for node_id in x {
             // it has been added into this cluster and is not a voter.

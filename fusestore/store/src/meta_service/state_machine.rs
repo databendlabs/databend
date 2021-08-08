@@ -27,14 +27,14 @@ use serde::Serialize;
 use crate::configs;
 use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::raft_db::get_sled_db;
-use crate::meta_service::sledkv;
+use crate::meta_service::sled_key_space;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 use crate::meta_service::SledSerde;
-use crate::meta_service::SledVarTypeTree;
+use crate::meta_service::SledTree;
 use crate::meta_service::StateMachineMeta;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
@@ -84,7 +84,7 @@ pub struct StateMachine {
     /// - Every other state is store in its own keyspace such as `Nodes`.
     ///
     /// TODO(xp): migrate other in-memory fields to `sm_tree`.
-    pub sm_tree: SledVarTypeTree,
+    pub sm_tree: SledTree,
 
     /// raft state: A mapping of client IDs to their state info:
     /// (serial, RaftResponse)
@@ -194,7 +194,7 @@ impl StateMachine {
 
         let tree_name = config.tree_name(TREE_STATE_MACHINE);
 
-        let sm_tree = SledVarTypeTree::open(&db, &tree_name, config.meta_sync()).await?;
+        let sm_tree = SledTree::open(&db, &tree_name, config.meta_sync()).await?;
 
         let sm = StateMachine {
             config: config.clone(),
@@ -386,7 +386,7 @@ impl StateMachine {
                 ref node_id,
                 ref node,
             } => {
-                let sm_nodes = self.sm_tree.key_space::<sledkv::Nodes>();
+                let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
 
                 let prev = sm_nodes.get(node_id)?;
 
@@ -548,7 +548,7 @@ impl StateMachine {
     }
 
     fn list_node_ids(&self) -> Vec<NodeId> {
-        let sm_nodes = self.sm_tree.key_space::<sledkv::Nodes>();
+        let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
         sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
@@ -563,7 +563,7 @@ impl StateMachine {
     pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // TODO(xp): handle error
 
-        let sm_nodes = self.sm_tree.key_space::<sledkv::Nodes>();
+        let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
         sm_nodes.get(node_id).expect("fail to get node")
     }
 

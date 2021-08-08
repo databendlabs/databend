@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::meta_service::sledkv::SledKV;
+use crate::meta_service::sled_key_space::SledKeySpace;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
 
@@ -94,7 +94,7 @@ impl From<StateMachineMetaValue> for bool {
     }
 }
 
-impl SledKV for StateMachineMeta {
+impl SledKeySpace for StateMachineMeta {
     const PREFIX: u8 = 0;
     const NAME: &'static str = "meta";
     type K = StateMachineMetaKey;

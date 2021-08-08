@@ -7,13 +7,13 @@ use common_exception::ErrorCode;
 use common_tracing::tracing;
 
 use crate::configs;
-use crate::meta_service::AsType;
+use crate::meta_service::AsKeySpace;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftStateKV;
 use crate::meta_service::RaftStateKey;
 use crate::meta_service::RaftStateValue;
 use crate::meta_service::SledSerde;
-use crate::meta_service::SledVarTypeTree;
+use crate::meta_service::SledTree;
 
 /// Raft state stores everything else other than log and state machine, which includes:
 /// id: NodeId,
@@ -29,7 +29,7 @@ pub struct RaftState {
     is_open: bool,
 
     /// A sled tree with key space support.
-    pub(crate) inner: SledVarTypeTree,
+    pub(crate) inner: SledTree,
 }
 
 const TREE_RAFT_STATE: &str = "raft_state";
@@ -55,7 +55,7 @@ impl RaftState {
         create: Option<()>,
     ) -> common_exception::Result<RaftState> {
         let tree_name = config.tree_name(TREE_RAFT_STATE);
-        let inner = SledVarTypeTree::open(db, &tree_name, config.meta_sync()).await?;
+        let inner = SledTree::open(db, &tree_name, config.meta_sync()).await?;
 
         let state = inner.key_space::<RaftStateKV>();
         let curr_id = state.get(&RaftStateKey::Id)?.map(NodeId::from);
@@ -145,7 +145,7 @@ impl RaftState {
     }
 
     /// Returns a borrowed sled tree key space to store meta of raft log
-    pub fn state(&self) -> AsType<RaftStateKV> {
+    pub fn state(&self) -> AsKeySpace<RaftStateKV> {
         self.inner.key_space()
     }
 }

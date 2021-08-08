@@ -20,8 +20,9 @@ use crate::meta_service::NodeId;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
 
-/// Defines a key-value type to be stored in SledVarTypeTree.
-pub trait SledKV {
+/// Defines a key space in sled::Tree that has its own key value type.
+/// And a prefix that is used to distinguish keys from different spaces in a SledTree.
+pub trait SledKeySpace {
     /// Prefix is a unique u8 that is prepended before the serialized key, to identify a namespace in sled::Tree.
     const PREFIX: u8;
 
@@ -93,18 +94,18 @@ pub trait SledKV {
     }
 }
 
-/// Types for raft log in SledVarTypeTree
+/// Types for raft log in SledTree
 pub struct Logs {}
-impl SledKV for Logs {
+impl SledKeySpace for Logs {
     const PREFIX: u8 = 1;
     const NAME: &'static str = "log";
     type K = LogIndex;
     type V = Entry<LogEntry>;
 }
 
-/// Types for Node in SledVarTypeTree
+/// Types for Node in SledTree
 pub struct Nodes {}
-impl SledKV for Nodes {
+impl SledKeySpace for Nodes {
     const PREFIX: u8 = 2;
     const NAME: &'static str = "node";
     type K = NodeId;
