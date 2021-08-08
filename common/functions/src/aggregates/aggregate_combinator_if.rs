@@ -84,7 +84,9 @@ impl AggregateFunction for AggregateIfCombinator {
             return Ok(());
         };
 
-        let boolean_array = arrays[self.argument_len - 1].bool()?;
+        let boolean_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
+        let boolean_array = boolean_array.bool()?;
+
         let arrow_filter_array = boolean_array.downcast_ref();
         let bitmap = arrow_filter_array.values();
 
