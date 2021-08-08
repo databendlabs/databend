@@ -29,7 +29,7 @@ unit-test:
 
 stateless-test:
 	bash ./scripts/build/build-debug.sh
-	bash ./scripts/ci/ci-run-stateless-tests.sh
+	bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 stateless-cluster-test:
 	bash ./scripts/build/build-debug.sh

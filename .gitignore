@@ -21,6 +21,7 @@ perf.*
 *.stdout
 *.out
 *.swp
+_local_fs/*
 _logs/*
 _meta/*
 
