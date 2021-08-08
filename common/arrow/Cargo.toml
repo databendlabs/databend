@@ -12,6 +12,8 @@ edition = "2021"
 simd = ["arrow/simd"]
 
 [dependencies] # In alphabetical order
+packed_simd_2 = "0.3.4"
+
 # Workspace dependencies
 
 # Github dependencies

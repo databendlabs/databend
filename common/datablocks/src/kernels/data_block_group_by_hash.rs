@@ -16,8 +16,9 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::DataBlock;
+use fxhash::FxHashMap;
 
-type GroupIndices<T> = HashMap<T, (Vec<u32>, Vec<DataValue>), ahash::RandomState>;
+type GroupIndices<T> = FxHashMap<T, (Vec<u32>, Vec<DataValue>)>;
 type GroupBlock<T> = Vec<(T, Vec<DataValue>, DataBlock)>;
 
 pub trait HashMethod {
@@ -97,7 +98,6 @@ pub trait HashMethod {
         let group_indices = self.group_by_get_indices(block, column_names)?;
         // Table for <(group_key, keys, block)>
         let mut group_blocks = GroupBlock::<Self::HashKey>::with_capacity(group_indices.len());
-
         for (group_key, (group_indices, group_keys)) in group_indices {
             let take_block = DataBlock::block_take_by_indices(block, column_names, &group_indices)?;
             group_blocks.push((group_key, group_keys, take_block));

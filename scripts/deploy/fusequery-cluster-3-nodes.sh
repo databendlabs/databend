@@ -10,27 +10,27 @@ killall fuse-store
 sleep 1
 
 echo 'Start one FuseStore...'
-nohup target/debug/fuse-store --single true &
+nohup target/release/fuse-store --single true &
 echo "Waiting on fuse-store 10 seconds..."
-python scripts/ci/wait_tcp.py --timeout 5 --port 9191
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 echo 'Start FuseQuery node-1'
-nohup target/debug/fuse-query -c scripts/deploy/config/fusequery-node-1.toml &
+nohup target/release/fuse-query -c scripts/deploy/config/fusequery-node-1.toml &
 
 echo "Waiting on node-1..."
-python scripts/ci/wait_tcp.py --timeout 5 --port 9091
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 9091
 
 echo 'Start FuseQuery node-2'
-nohup target/debug/fuse-query -c scripts/deploy/config/fusequery-node-2.toml &
+nohup target/release/fuse-query -c scripts/deploy/config/fusequery-node-2.toml &
 
 echo "Waiting on node-2..."
-python scripts/ci/wait_tcp.py --timeout 5 --port 9092
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 9092
 
 echo 'Start FuseQuery node-3'
-nohup target/debug/fuse-query -c scripts/deploy/config/fusequery-node-3.toml &
+nohup target/release/fuse-query -c scripts/deploy/config/fusequery-node-3.toml &
 
 echo "Waiting on node-3..."
-python scripts/ci/wait_tcp.py --timeout 5 --port 9093
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 9093
 
 curl http://127.0.0.1:8081/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster1","address":"127.0.0.1:9091", "priority":3, "cpus":8}'
 curl http://127.0.0.1:8081/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster2","address":"127.0.0.1:9092", "priority":3, "cpus":8}'

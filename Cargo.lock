@@ -689,6 +689,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
+ "packed_simd_2",
  "parquet2 0.2.0 (git+https://github.com/datafuse-extras/parquet2?rev=05854c0)",
 ]
 
@@ -710,6 +711,8 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-infallible",
+ "fxhash",
+ "itertools 0.10.1",
 ]
 
 [[package]]
@@ -2015,6 +2018,15 @@ version = "0.1.0"
 dependencies = [
  "fuse-query",
  "honggfuzz",
+]
+
+[[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]

@@ -21,3 +21,5 @@ common-infallible = {path = "../infallible"}
 # Crates.io dependencies
 ahash = "0.7.4"
 comfy-table = "4.0.1"
+itertools="0.10.1"
+fxhash="0.2.1"

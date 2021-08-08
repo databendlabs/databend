@@ -31,7 +31,7 @@ lazy_static! {
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
-    #[structopt(long, env = "FUSE_STORE_LOG_LEVEL", default_value = "INFO")]
+    #[structopt(long, env = "FUSE_STORE_LOG_LEVEL", default_value = "DEBUG")]
     pub log_level: String,
 
     #[structopt(long, env = "FUSE_STORE_LOG_DIR", default_value = "./_logs")]
