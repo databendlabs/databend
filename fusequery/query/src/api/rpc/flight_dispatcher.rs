@@ -20,11 +20,11 @@ use tokio_stream::StreamExt;
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
+use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::FlightAction;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::SessionRef;
-use crate::api::rpc::flight_tickets::StreamTicket;
 
 struct StreamInfo {
     #[allow(unused)]
@@ -101,7 +101,7 @@ impl FuseQueryFlightDispatcher {
     fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline_builder = PipelineBuilder::create(action_context.clone());
+        let pipeline_builder = PipelineBuilder::create(action_context);
         let mut pipeline = pipeline_builder.build(&action.get_plan())?;
 
         let action_sinks = action.get_sinks();
@@ -144,7 +144,7 @@ impl FuseQueryFlightDispatcher {
     where T: FlightScatter + Send + 'static {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline_builder = PipelineBuilder::create(action_context.clone());
+        let pipeline_builder = PipelineBuilder::create(action_context);
         let mut pipeline = pipeline_builder.build(&action.get_plan())?;
 
         let action_query_id = action.get_query_id();

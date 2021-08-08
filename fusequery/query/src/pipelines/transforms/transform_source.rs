@@ -29,9 +29,11 @@ impl SourceTransform {
     async fn read_table(&self, db: &str) -> Result<SendableDataBlockStream> {
         let table_id = self.source_plan.table_id;
         let table_ver = self.source_plan.table_version;
-        let table = self.ctx.get_table_by_id(&db, table_id, table_ver).await?;
+        let table = self.ctx.get_table_by_id(db, table_id, table_ver).await?;
         let table_stream = table.datasource().read(self.ctx.clone(), &self.source_plan);
-        Ok(Box::pin(self.ctx.try_create_abortable(table_stream.await?)?))
+        Ok(Box::pin(
+            self.ctx.try_create_abortable(table_stream.await?)?,
+        ))
     }
 }
 
