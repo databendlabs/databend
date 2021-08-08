@@ -94,7 +94,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 
         context.attach_query_info(query);
         match DFQueryResultWriter::create(writer).write(self.base.do_query(query, context)) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 let query_str = String::from(query);
                 let new_error = e.add_message(query_str);
