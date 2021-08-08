@@ -90,6 +90,7 @@ impl AggregateFunction for AggregateIfCombinator {
         };
 
         let boolean_array = columns[self.argument_len - 1].to_array()?;
+        let boolean_array = boolean_array.cast_with_type(&DataType::Boolean)?;
         let boolean_array = boolean_array.bool()?;
 
         let arrow_filter_array = boolean_array.downcast_ref();
