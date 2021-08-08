@@ -53,12 +53,9 @@ where
     }
 
     // we enable ignore_overflow by default
-    let ca: ArrayRef = Arc::from(cast::cast(
+    let ca: ArrayRef = Arc::from(cast::wrapping_cast(
         ca.array.as_ref(),
         &N::data_type().to_arrow(),
-        cast::CastOptions {
-            ignore_overflow: true,
-        },
     )?);
     Ok(ca.into())
 }

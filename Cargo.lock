@@ -111,11 +111,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-<<<<<<< HEAD
-source = "git+https://github.com/datafuse-extras/arrow2?rev=4cba9c#4cba9cbd7e97a635c10d16eb9519c0f69e00d666"
-=======
-source = "git+https://github.com/datafuse-extras/arrow2?rev=e92f47a#e92f47a1ec70f22f07ca8ed5af371e2112d2df3c"
->>>>>>> master
+source = "git+https://github.com/datafuse-extras/arrow2?rev=647fddb#647fddb7a6e35f185f8256bc99e8a24f9f78d026"
 dependencies = [
  "arrow2",
  "bytes",
@@ -129,11 +125,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.2.0"
-<<<<<<< HEAD
-source = "git+https://github.com/datafuse-extras/arrow2?rev=4cba9c#4cba9cbd7e97a635c10d16eb9519c0f69e00d666"
-=======
-source = "git+https://github.com/datafuse-extras/arrow2?rev=e92f47a#e92f47a1ec70f22f07ca8ed5af371e2112d2df3c"
->>>>>>> master
+source = "git+https://github.com/datafuse-extras/arrow2?rev=647fddb#647fddb7a6e35f185f8256bc99e8a24f9f78d026"
 dependencies = [
  "ahash 0.7.4",
  "base64",
@@ -153,10 +145,6 @@ dependencies = [
  "num",
  "packed_simd_2",
  "parquet2 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
-<<<<<<< HEAD
- "prettytable-rs",
-=======
->>>>>>> master
  "rand 0.8.4",
  "regex",
  "serde",
@@ -442,9 +430,9 @@ checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 
 [[package]]
 name = "cargo-platform"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0226944a63d1bf35a3b5f948dd7c59e263db83695c9e8bffc4037de02e30f1d7"
+checksum = "cbdb825da8a5df079a43676dbe042702f1707b1109f713a01420fbb4cc71fa27"
 dependencies = [
  "serde",
 ]
@@ -2510,9 +2498,9 @@ dependencies = [
 
 [[package]]
 name = "jobserver"
-version = "0.1.22"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "972f5ae5d1cb9c6ae417789196c803205313edde988685da5e3aae0827b9e7fd"
+checksum = "f5ca711fd837261e14ec9e674f092cbb931d3fa1482b017ae59328ddc6f3212b"
 dependencies = [
  "libc",
 ]
@@ -3782,9 +3770,9 @@ checksum = "57e35a3326b75e49aa85f5dc6ec15b41108cf5aee58eabb1f274dd18b73c2451"
 
 [[package]]
 name = "predicates-tree"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15f553275e5721409451eb85e15fd9a860a6e5ab4496eb215987502b5f5391f2"
+checksum = "d7dd0fd014130206c9352efbdc92be592751b2b9274dff685348341082c6ea3d"
 dependencies = [
  "predicates-core",
  "treeline",
@@ -4147,9 +4135,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.2.9"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ab49abadf3f9e1c4bc499e8845e152ad87d2ad2d30371841171169e9d75feee"
+checksum = "8383f39639269cde97d255a32bdb68c047337295414940c68bdd30c2e13203ff"
 dependencies = [
  "bitflags",
 ]
@@ -4677,9 +4665,9 @@ checksum = "76a77a8fd93886010f05e7ea0720e569d6d16c65329dbe3ec033bbbccccb017b"
 
 [[package]]
 name = "slab"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
+checksum = "c307a32c1c5c437f38c7fd45d753050587732ba8628319fbdf12a7e289ccc590"
 
 [[package]]
 name = "sled"
@@ -5619,12 +5607,12 @@ dependencies = [
 
 [[package]]
 name = "twox-hash"
-version = "1.6.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04f8ab788026715fa63b31960869617cba39117e520eb415b0139543e325ab59"
+checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.7.3",
+ "cfg-if 1.0.0",
+ "rand 0.8.4",
  "static_assertions",
 ]
 
