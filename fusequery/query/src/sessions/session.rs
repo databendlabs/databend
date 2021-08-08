@@ -99,7 +99,6 @@ impl Session {
     pub fn force_kill_query(self: &Arc<Self>) {
         let mut mutable_state = self.mutable_state.lock();
 
-        mutable_state.abort = true;
         if let Some(context_shared) = mutable_state.context_shared.take() {
             context_shared.kill(/* shutdown executing query */);
         }
