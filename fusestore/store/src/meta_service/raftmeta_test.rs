@@ -484,7 +484,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await??;
         log_cnt += 1;
 
-        want_hs = leader.sto.raft_state.read_hard_state().await?;
+        want_hs = leader.sto.raft_state.read_hard_state()?;
 
         leader.stop().await?;
     }
@@ -498,7 +498,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     tracing::info!("--- check hard state");
     {
-        let hs = leader.sto.raft_state.read_hard_state().await?;
+        let hs = leader.sto.raft_state.read_hard_state()?;
         assert_eq!(want_hs, hs);
     }
 

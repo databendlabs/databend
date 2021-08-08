@@ -178,7 +178,7 @@ impl MetaStore {
     }
 
     pub async fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
-        self.raft_state.read_hard_state().await
+        self.raft_state.read_hard_state()
     }
 }
 
@@ -221,7 +221,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
     #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
-        let hard_state = self.raft_state.read_hard_state().await?;
+        let hard_state = self.raft_state.read_hard_state()?;
 
         let membership = self.get_membership_config().await?;
         let sm = self.state_machine.read().await;

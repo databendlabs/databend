@@ -105,6 +105,7 @@ impl RaftLog {
         self.logs().insert_value(log).await
     }
 
+    /// Returns a borrowed key space in sled::Tree for logs
     fn logs(&self) -> AsType<sledkv::Logs> {
         self.inner.key_space()
     }
