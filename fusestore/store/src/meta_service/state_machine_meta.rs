@@ -64,14 +64,6 @@ impl SledOrderedSerde for StateMachineMetaKey {
 
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
     }
-
-    fn order_preserved_serialize(&self, _buf: &mut [u8]) {
-        unimplemented!("no need")
-    }
-
-    fn order_preserved_deserialize(_buf: &[u8]) -> Self {
-        unimplemented!("no need")
-    }
 }
 
 impl SledSerde for StateMachineMetaValue {}
