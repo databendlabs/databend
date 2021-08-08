@@ -22,6 +22,7 @@ use crate::impls::meta_api_impl::DropTableAction;
 use crate::impls::meta_api_impl::GetDatabaseAction;
 use crate::impls::meta_api_impl::GetDatabaseMetaAction;
 use crate::impls::meta_api_impl::GetTableAction;
+use crate::impls::session_api_impl::KillSessionReq;
 use crate::impls::storage_api_impl::ReadPlanAction;
 use crate::impls::storage_api_impl::TruncateTableAction;
 use crate::meta_api_impl::GetTableExtReq;
@@ -67,6 +68,9 @@ pub enum StoreDoAction {
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),
     DeleteKV(DeleteKVReq),
+
+    // session
+    KillSession(KillSessionReq),
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
