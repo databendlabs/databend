@@ -5,13 +5,10 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DFBinaryArray;
-use common_datavalues::DFUInt16Array;
-use common_datavalues::DFUInt32Array;
-use common_datavalues::DFUInt64Array;
-use common_datavalues::DFUInt8Array;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -109,7 +106,11 @@ pub trait HashMethod {
     fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+pub type HashMethodKeysU8 = HashMethodFixedKeys<UInt8Type>;
+pub type HashMethodKeysU16 = HashMethodFixedKeys<UInt16Type>;
+pub type HashMethodKeysU32 = HashMethodFixedKeys<UInt32Type>;
+pub type HashMethodKeysU64 = HashMethodFixedKeys<UInt64Type>;
+
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
     KeysU8(HashMethodKeysU8),
@@ -145,7 +146,20 @@ impl HashMethodSerializer {
         keys: Vec<Vec<u8>>,
         group_fields: &[DataField],
     ) -> Result<Vec<Series>> {
-        Ok(vec![])
+        let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
+        let rows = keys.len();
+
+        let mut res = Vec::with_capacity(group_fields.len());
+        for f in group_fields.iter() {
+            let data_type = f.data_type();
+            let mut deserializer = data_type.create_deserializer(rows)?;
+
+            for (_row, key) in keys.iter_mut().enumerate() {
+                deserializer.de(key)?;
+            }
+            res.push(deserializer.finish_to_series());
+        }
+        Ok(res)
     }
 }
 impl HashMethod for HashMethodSerializer {
@@ -176,127 +190,76 @@ impl HashMethod for HashMethodSerializer {
     }
 }
 
-macro_rules! build_primitive_keys {
-    ($group_columns: ident, $rows: ident) => {{
-        let mut group_keys = vec![0; $rows];
+pub struct HashMethodFixedKeys<T> {
+    t: PhantomData<T>,
+}
+
+impl<T> HashMethodFixedKeys<T>
+where T: DFNumericType
+{
+    pub fn new() -> Self {
+        HashMethodFixedKeys { t: PhantomData }
+    }
+
+    #[inline]
+    pub fn get_key(&self, array: &DataArray<T>, row: usize) -> T::Native {
+        array.as_ref().value(row)
+    }
+    pub fn de_group_columns(
+        &self,
+        keys: Vec<T::Native>,
+        group_fields: &[DataField],
+    ) -> Result<Vec<Series>> {
+        let mut keys = keys;
+        let rows = keys.len();
+        let step = std::mem::size_of::<T::Native>();
+        let length = rows * step;
+        let capacity = keys.capacity() * step;
+        let mutptr = keys.as_mut_ptr() as *mut u8;
+        let vec8 = unsafe {
+            std::mem::forget(keys);
+            // construct new vec
+            Vec::from_raw_parts(mutptr, length, capacity)
+        };
+
+        let mut res = Vec::with_capacity(group_fields.len());
+        for f in group_fields.iter() {
+            let data_type = f.data_type();
+            let size = common_datavalues::numeric_byte_size(data_type)?;
+            let mut deserializer = data_type.create_deserializer(rows)?;
+            let reader = vec8.as_slice();
+            deserializer.de_batch(&reader[size..], step, rows)?;
+
+            res.push(deserializer.finish_to_series());
+        }
+        Ok(res)
+    }
+}
+
+impl<T> HashMethod for HashMethodFixedKeys<T>
+where
+    T: DFNumericType,
+    T::Native: std::cmp::Eq + Hash + Clone + Debug,
+{
+    type HashKey = T::Native;
+
+    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
+        let mut group_keys = vec![Self::HashKey::default(); rows];
         let mut offsize = 0;
         let ptr = group_keys.as_mut_ptr() as *mut u8;
         let step = std::mem::size_of::<Self::HashKey>();
 
         let mut size = step;
         while size > 0 {
-            build(size, &mut offsize, $group_columns, ptr, step)?;
+            build(size, &mut offsize, group_columns, ptr, step)?;
             size /= 2;
         }
 
         Ok(group_keys)
-    }};
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU8 {}
-impl HashMethodKeysU8 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt8Array, row: usize) -> u8 {
-        array.as_ref().value(row)
-    }
-
-    pub fn de_group_columns(
-        &self,
-        keys: Vec<u8>,
-        group_fields: &[DataField],
-    ) -> Result<Vec<Series>> {
-        Ok(vec![])
     }
 }
 
-impl HashMethod for HashMethodKeysU8 {
-    type HashKey = u8;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU16 {}
-impl HashMethodKeysU16 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt16Array, row: usize) -> u16 {
-        array.as_ref().value(row)
-    }
-    pub fn de_group_columns(
-        &self,
-        keys: Vec<u16>,
-        group_fields: &[DataField],
-    ) -> Result<Vec<Series>> {
-        Ok(vec![])
-    }
-}
-
-impl HashMethod for HashMethodKeysU16 {
-    type HashKey = u16;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU32 {}
-impl HashMethodKeysU32 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt32Array, row: usize) -> u32 {
-        array.as_ref().value(row)
-    }
-
-    pub fn de_group_columns(
-        &self,
-        keys: Vec<u32>,
-        group_fields: &[DataField],
-    ) -> Result<Vec<Series>> {
-        let mut s = Vec::with_capacity(group_fields.len());
-        for _f in group_fields.iter() {
-            let array = DFUInt8Array::full(3, keys.len());
-            s.push(array.into_series());
-        }
-        Ok(s)
-    }
-}
-
-impl HashMethod for HashMethodKeysU32 {
-    type HashKey = u32;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct HashMethodKeysU64 {}
-impl HashMethodKeysU64 {
-    #[inline]
-    pub fn get_key(&self, array: &DFUInt64Array, row: usize) -> u64 {
-        array.as_ref().value(row)
-    }
-
-    pub fn de_group_columns(
-        &self,
-        keys: Vec<u64>,
-        group_fields: &[DataField],
-    ) -> Result<Vec<Series>> {
-        Ok(vec![])
-    }
-}
-
-impl HashMethod for HashMethodKeysU64 {
-    type HashKey = u64;
-
-    fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        build_primitive_keys! {group_columns, rows}
-    }
-}
-
+#[inline]
 fn build(
     mem_size: usize,
     offsize: &mut usize,

@@ -34,12 +34,9 @@ fn test_data_block_group_by_hash() -> Result<()> {
         "b".to_string(),
         "c".to_string(),
     ])?;
-    assert_eq!(
-        method,
-        HashMethodKind::KeysU32(HashMethodKeysU32::default())
-    );
+    assert_eq!(method, HashMethodKind::KeysU32(HashMethodKeysU32::new()));
 
-    let hash = HashMethodKeysU32::default();
+    let hash = HashMethodKeysU32::new();
     let columns = vec!["a", "b", "c"];
 
     let mut group_columns = Vec::with_capacity(columns.len());
