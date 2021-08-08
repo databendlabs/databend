@@ -518,7 +518,6 @@ pub struct MetaNodeBuilder {
     config: Option<Config>,
     sto: Option<Arc<MetaStore>>,
     monitor_metrics: bool,
-    start_grpc_service: bool,
     addr: Option<String>,
 }
 
@@ -559,16 +558,15 @@ impl MetaNodeBuilder {
             MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
         }
 
-        if self.start_grpc_service {
-            let addr = if let Some(a) = self.addr.take() {
-                a
-            } else {
-                sto.get_node_addr(&node_id).await?
-            };
-            tracing::info!("about to start grpc on {}", addr);
+        let addr = if let Some(a) = self.addr.take() {
+            a
+        } else {
+            sto.get_node_addr(&node_id).await?
+        };
+        tracing::info!("about to start grpc on {}", addr);
 
-            MetaNode::start_grpc(mn.clone(), &addr).await?;
-        }
+        MetaNode::start_grpc(mn.clone(), &addr).await?;
+
         Ok(mn)
     }
 
@@ -578,10 +576,6 @@ impl MetaNodeBuilder {
     }
     pub fn sto(mut self, sto: Arc<MetaStore>) -> Self {
         self.sto = Some(sto);
-        self
-    }
-    pub fn start_grpc_service(mut self, b: bool) -> Self {
-        self.start_grpc_service = b;
         self
     }
     pub fn addr(mut self, a: String) -> Self {
@@ -603,7 +597,6 @@ impl MetaNode {
             config: Some(raft_config),
             sto: None,
             monitor_metrics: true,
-            start_grpc_service: true,
             addr: None,
         }
     }
