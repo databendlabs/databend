@@ -68,7 +68,7 @@ build-perf-tool:
 perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
 run-helm:
-	helm upgrade --install datafuse ./charts/datafuse \
+	helm upgrade --install datafuse ./deploy/charts/datafuse \
 		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
