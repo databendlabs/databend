@@ -95,11 +95,12 @@ impl Processor for FilterTransform {
             let filter_array = filter_array.bool()?.downcast_ref();
             // Convert to arrow record_batch
 
-            let mut filter_exit_true =  filter_array.values().chunks::<u64>();
+            let mut filter_exit_true = filter_array.values().chunks::<u64>();
 
-            if !filter_exit_true.any(|p| p  > 0) && !filter_exit_true.remainder_iter().any(|p| p){
-                return  Ok(DataBlock::empty())
+            if !filter_exit_true.any(|p| p > 0) && !filter_exit_true.remainder_iter().any(|p| p) {
+                return Ok(DataBlock::empty());
             }
+             
             let batch = block.try_into()?;
             let batch = arrow::compute::filter::filter_record_batch(&batch, filter_array)?;
 
