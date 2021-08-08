@@ -25,6 +25,7 @@ async fn test_explain_interpreter() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);
+        assert_eq!(block.column(0).len(), 4);
 
         let expected = vec![
             "+-----------------------------------------------------------------------------------------------------------------------+",
