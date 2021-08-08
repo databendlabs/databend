@@ -24,19 +24,17 @@ fn test_data_block_group_by_hash() -> Result<()> {
     ]);
 
     let method = DataBlock::choose_hash_method(&block, &vec!["a".to_string(), "x".to_string()])?;
-    assert_eq!(
-        method,
-        HashMethodKind::Serializer(HashMethodSerializer::default())
-    );
+    assert_eq!(method.name(), HashMethodSerializer::default().name(),);
 
     let method = DataBlock::choose_hash_method(&block, &vec![
         "a".to_string(),
         "b".to_string(),
         "c".to_string(),
     ])?;
-    assert_eq!(method, HashMethodKind::KeysU32(HashMethodKeysU32::new()));
 
-    let hash = HashMethodKeysU32::new();
+    assert_eq!(method.name(), HashMethodKeysU32::default().name());
+
+    let hash = HashMethodKeysU32::default();
     let columns = vec!["a", "b", "c"];
 
     let mut group_columns = Vec::with_capacity(columns.len());

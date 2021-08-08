@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use bytes::BufMut;
+use bytes::BytesMut;
+
 use crate::binary_write::put_uvarint;
 
 #[test]
@@ -13,4 +16,8 @@ fn test_put_uvarint() {
 
     assert_eq!(actual, 3);
     assert_eq!(buffer, expected);
+
+    let mut bytes = BytesMut::new();
+    bytes.put_slice(b"src");
+    assert_eq!(&bytes[..], b"src");
 }

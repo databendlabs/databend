@@ -151,7 +151,7 @@ macro_rules! impl_dyn_arrays {
                 cast_and_apply!(self, vec_hash, hasher)
             }
 
-            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+            fn group_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
                 cast_and_apply!(self, group_hash, ptr, step)
             }
 

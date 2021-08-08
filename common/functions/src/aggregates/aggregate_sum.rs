@@ -12,7 +12,7 @@ use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
-use num::NumCast;
+use num::traits::AsPrimitive;
 
 use super::AggregateFunctionRef;
 use super::GetState;
@@ -50,22 +50,6 @@ where
     }
 }
 
-trait SumTrait:
-    NumCast
-    + DFTryFrom<DataValue>
-    + Into<DataValue>
-    + Clone
-    + Copy
-    + Default
-    + std::ops::Add<Output = Self>
-    + BinarySer
-    + BinaryDe
-    + Send
-    + Sync
-    + 'static
-{
-}
-
 #[derive(Clone)]
 pub struct AggregateSumFunction<T, SumT> {
     display_name: String,
@@ -79,9 +63,14 @@ where
     T: DFNumericType,
     SumT: DFNumericType,
 
-    T::Native: NumCast + DFTryFrom<DataValue> + Clone + Into<DataValue> + Send + Sync + 'static,
-    SumT::Native: NumCast
+    T::Native: AsPrimitive<SumT::Native>
         + DFTryFrom<DataValue>
+        + Clone
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
+    SumT::Native: DFTryFrom<DataValue>
         + Into<DataValue>
         + Clone
         + Copy
@@ -126,7 +115,7 @@ where
     }
 
     fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let array: &DataArray<SumT> = arrays[0].static_cast::<SumT>();
+        let array: &DataArray<T> = arrays[0].static_cast::<T>();
         let array = array.downcast_ref();
 
         if array
@@ -136,7 +125,7 @@ where
             .unwrap_or(true)
         {
             let state = AggregateSumState::<SumT::Native>::get(place);
-            state.add(array.value(row));
+            state.add(array.value(row).as_());
         }
         Ok(())
     }
@@ -177,9 +166,14 @@ where
     T: DFNumericType,
     SumT: DFNumericType,
 
-    T::Native: NumCast + DFTryFrom<DataValue> + Clone + Into<DataValue> + Send + Sync + 'static,
-    SumT::Native: NumCast
+    T::Native: AsPrimitive<SumT::Native>
         + DFTryFrom<DataValue>
+        + Clone
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
+    SumT::Native: DFTryFrom<DataValue>
         + Into<DataValue>
         + Clone
         + Copy

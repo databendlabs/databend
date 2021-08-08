@@ -4,17 +4,17 @@
 
 #[macro_export]
 macro_rules! dispatch_numeric_types {
-    ($dispatch: ident, $data_type: expr, $($args:expr),*) => {
-        $dispatch! { UInt8Type, $data_type, $($args),* }
-        $dispatch! { UInt16Type, $data_type, $($args),* }
-        $dispatch! { UInt32Type, $data_type, $($args),* }
-        $dispatch! { UInt64Type, $data_type, $($args),* }
-        $dispatch! { Int8Type, $data_type, $($args),* }
-        $dispatch! { Int16Type, $data_type, $($args),* }
-        $dispatch! { Int32Type, $data_type, $($args),* }
-        $dispatch! { Int64Type, $data_type, $($args),* }
-        $dispatch! { Float32Type, $data_type, $($args),* }
-        $dispatch! { Float64Type, $data_type, $($args),* }
+    ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
+        $dispatch! { UInt8Type, $data_type,      $($args),* }
+        $dispatch! { UInt16Type, $data_type,     $($args),* }
+        $dispatch! { UInt32Type, $data_type,     $($args),* }
+        $dispatch! { UInt64Type, $data_type,     $($args),* }
+        $dispatch! { Int8Type, $data_type,       $($args),* }
+        $dispatch! { Int16Type, $data_type,      $($args),* }
+        $dispatch! { Int32Type, $data_type,      $($args),* }
+        $dispatch! { Int64Type, $data_type,      $($args),* }
+        $dispatch! { Float32Type, $data_type,    $($args),* }
+        $dispatch! { Float64Type, $data_type,    $($args),* }
     };
 }
 

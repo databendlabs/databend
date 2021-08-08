@@ -29,10 +29,10 @@ impl DataBlock {
             }
         }
         match group_key_len {
-            1 => Ok(HashMethodKind::KeysU8(HashMethodKeysU8::new())),
-            2 => Ok(HashMethodKind::KeysU16(HashMethodKeysU16::new())),
-            3..=4 => Ok(HashMethodKind::KeysU32(HashMethodKeysU32::new())),
-            5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::new())),
+            1 => Ok(HashMethodKind::KeysU8(HashMethodKeysU8::default())),
+            2 => Ok(HashMethodKind::KeysU16(HashMethodKeysU16::default())),
+            3..=4 => Ok(HashMethodKind::KeysU32(HashMethodKeysU32::default())),
+            5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
     }

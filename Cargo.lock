@@ -710,6 +710,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-infallible",
+ "common-io",
 ]
 
 [[package]]
@@ -4340,6 +4341,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-native-certs"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a07b7c1885bd8ed3831c289b7870b13ef46fe0e856d288c30d9cc17d75a2092"
+dependencies = [
+ "openssl-probe",
+ "rustls",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5339,6 +5352,7 @@ dependencies = [
  "pin-project",
  "prost 0.7.0",
  "prost-derive 0.7.0",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls",
  "tokio-stream",

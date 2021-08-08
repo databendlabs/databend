@@ -107,7 +107,7 @@ macro_rules! impl_dyn_array {
                 self.0.vec_hash(hasher)
             }
 
-            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
+            fn group_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
                 self.0.group_hash(ptr, step)
             }
 
