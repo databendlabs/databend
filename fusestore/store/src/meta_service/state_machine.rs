@@ -493,24 +493,21 @@ impl StateMachine {
                     return Ok((prev.clone(), prev).into());
                 }
 
-                let new_seq = self.incr_seq(SEQ_GENERIC_KV);
-                let record_value = (new_seq, value.clone());
-                self.kv.insert(key.clone(), record_value.clone());
+                let record_value = if let Some(v) = value {
+                    let new_seq = self.incr_seq(SEQ_GENERIC_KV);
+
+                    let record_value = (new_seq, v.clone());
+                    self.kv.insert(key.clone(), record_value.clone());
+
+                    Some(record_value)
+                } else {
+                    self.kv.remove(key);
+
+                    None
+                };
+
                 tracing::debug!("applied UpsertKV: {} {:?}", key, record_value);
-
-                Ok((prev, Some(record_value)).into())
-            }
-
-            Cmd::DeleteKV { ref key, ref seq } => {
-                let prev = self.kv.get(key).cloned();
-
-                if seq.match_seq(&prev).is_err() {
-                    return Ok((prev.clone(), prev).into());
-                }
-
-                self.kv.remove(key);
-                tracing::debug!("applied DeleteByKeyKV: {} {}", key, seq);
-                Ok((prev, None).into())
+                Ok((prev, record_value).into())
             }
         }
     }

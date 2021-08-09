@@ -335,7 +335,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                 cmd: Cmd::UpsertKV {
                     key: c.key.clone(),
                     seq: c.seq.clone(),
-                    value: c.value.clone(),
+                    value: Some(c.value.clone()),
                 },
             })
             .await?;
@@ -413,7 +413,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
             cmd: Cmd::UpsertKV {
                 key: "foo".to_string(),
                 seq: MatchSeq::Any,
-                value: "x".as_bytes().to_vec(),
+                value: Some(b"x".to_vec()),
             },
         })
         .await?;
@@ -422,9 +422,10 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let resp = sm
             .apply_non_dup(&LogEntry {
                 txid: None,
-                cmd: Cmd::DeleteKV {
+                cmd: Cmd::UpsertKV {
                     key: c.key.clone(),
                     seq: c.seq.clone(),
+                    value: None,
                 },
             })
             .await?;

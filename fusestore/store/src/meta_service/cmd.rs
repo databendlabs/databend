@@ -18,27 +18,16 @@ use crate::meta_service::Node;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Cmd {
     /// AKA put-if-absent. add a key-value record only when key is absent.
-    AddFile {
-        key: String,
-        value: String,
-    },
+    AddFile { key: String, value: String },
 
     /// Override the record with key.
-    SetFile {
-        key: String,
-        value: String,
-    },
+    SetFile { key: String, value: String },
 
     /// Increment the sequence number generator specified by `key` and returns the new value.
-    IncrSeq {
-        key: String,
-    },
+    IncrSeq { key: String },
 
     /// Add node if absent
-    AddNode {
-        node_id: NodeId,
-        node: Node,
-    },
+    AddNode { node_id: NodeId, node: Node },
 
     /// Add a database if absent
     CreateDatabase {
@@ -78,16 +67,15 @@ pub enum Cmd {
     /// Update or insert a general purpose kv store
     UpsertKV {
         key: String,
+
         /// Since a sequence number is always positive, using Exact(0) to perform an add-if-absent operation.
-        /// GE(1) to perform an update-any operation.
-        /// Exact(n) to perform an update on some specified version.
-        /// Any to perform an update or insert that always takes effect.
+        /// - GE(1) to perform an update-any operation.
+        /// - Exact(n) to perform an update on some specified version.
+        /// - Any to perform an update or insert that always takes effect.
         seq: MatchSeq,
-        value: Vec<u8>,
-    },
-    DeleteKV {
-        key: String,
-        seq: MatchSeq,
+
+        /// The value to set. A `None` indicates to delete it.
+        value: Option<Vec<u8>>,
     },
 }
 
@@ -145,9 +133,6 @@ impl fmt::Display for Cmd {
             }
             Cmd::UpsertKV { key, seq, value } => {
                 write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)
-            }
-            Cmd::DeleteKV { key, seq } => {
-                write!(f, "delete_by_key_kv: {}({:?})", key, seq)
             }
         }
     }
