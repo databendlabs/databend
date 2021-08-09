@@ -85,7 +85,7 @@ pub enum Cmd {
         seq: MatchSeq,
         value: Vec<u8>,
     },
-    DeleteKVByKey {
+    DeleteKV {
         key: String,
         seq: MatchSeq,
     },
@@ -146,7 +146,7 @@ impl fmt::Display for Cmd {
             Cmd::UpsertKV { key, seq, value } => {
                 write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)
             }
-            Cmd::DeleteKVByKey { key, seq } => {
+            Cmd::DeleteKV { key, seq } => {
                 write!(f, "delete_by_key_kv: {}({:?})", key, seq)
             }
         }
