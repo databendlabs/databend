@@ -1,15 +1,15 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "common-metatypes"
 version = "0.1.0"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-thiserror = "1.0.26"
 
 [dev-dependencies]
-anyhow = "1.0.42"
 pretty_assertions = "0.7"

@@ -7,12 +7,17 @@ use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 
+use crate::configs::Config;
 use crate::datasources::system::*;
 use crate::datasources::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let config = Config {
+        disable_remote_catalog: true,
+        ..Config::default()
+    };
+    let ctx = crate::tests::try_create_context_with_conf(config)?;
     let table = DatabasesTable::create();
     let source_plan = table.read_plan(
         ctx.clone(),
@@ -26,14 +31,13 @@ async fn test_tables_table() -> Result<()> {
     assert_eq!(block.num_columns(), 1);
 
     let expected = vec![
-        "+----------+",
-        "| name     |",
-        "+----------+",
-        "| default  |",
-        "| for_test |",
-        "| local    |",
-        "| system   |",
-        "+----------+",
+        "+---------+",
+        "| name    |",
+        "+---------+",
+        "| default |",
+        "| local   |",
+        "| system  |",
+        "+---------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

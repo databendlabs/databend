@@ -9,17 +9,31 @@ use std::ops::RangeBounds;
 
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
+use common_tracing::tracing;
 
 use crate::meta_service::sledkv::SledKV;
-use crate::meta_service::SledValueToKey;
+
+/// Extract key from a value of sled tree that includes its key.
+pub trait SledValueToKey<K> {
+    fn to_key(&self) -> K;
+}
 
 /// SledVarTypeTree is a wrapper of sled::Tree that provides access of more than one key-value
 /// types.
 /// A `SledKVType` defines a key-value type to be stored.
 /// The key type `K` must be serializable with order preserved, i.e. impl trait `SledOrderedSerde`.
 /// The value type `V` can be any serialize impl, i.e. for most cases, to impl trait `SledSerde`.
+#[derive(Debug)]
 pub struct SledVarTypeTree {
     pub name: String,
+
+    /// Whether to fsync after an write operation.
+    /// With sync==false, it WONT fsync even when user tell it to sync.
+    /// This is only used for testing when fsync is quite slow.
+    /// E.g. File::sync_all takes 10 ~ 30 ms on a Mac.
+    /// See: https://github.com/drmingdrmer/sledtest/blob/500929ab0b89afe547143a38fde6fe85d88f1f80/src/ben_sync.rs
+    sync: bool,
+
     pub(crate) tree: sled::Tree,
 }
 
@@ -28,6 +42,7 @@ impl SledVarTypeTree {
     pub async fn open<N: AsRef<[u8]> + Display>(
         db: &sled::Db,
         tree_name: N,
+        sync: bool,
     ) -> common_exception::Result<Self> {
         let t = db
             .open_tree(&tree_name)
@@ -37,6 +52,7 @@ impl SledVarTypeTree {
 
         let rl = SledVarTypeTree {
             name: format!("{}", tree_name),
+            sync,
             tree: t,
         };
         Ok(rl)
@@ -109,6 +125,7 @@ impl SledVarTypeTree {
     }
 
     /// Delete kvs that are in `range`.
+    #[tracing::instrument(level = "debug", skip(self, range))]
     pub async fn range_delete<KV, R>(&self, range: R, flush: bool) -> common_exception::Result<()>
     where
         KV: SledKV,
@@ -134,7 +151,10 @@ impl SledVarTypeTree {
                 format!("batch delete: {}", range_mes,)
             })?;
 
-        if flush {
+        if flush && self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-range-delete");
+            let _ent = span.enter();
+
             self.tree
                 .flush_async()
                 .await
@@ -211,16 +231,22 @@ impl SledVarTypeTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append")?;
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-append");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
+        }
 
         Ok(())
     }
 
     /// Append many values into SledVarTypeTree.
     /// This could be used in cases the key is included in value and a value should impl trait `IntoKey` to retrieve the key from a value.
+    #[tracing::instrument(level = "debug", skip(self, values))]
     pub async fn append_values<KV>(&self, values: &[KV::V]) -> common_exception::Result<()>
     where
         KV: SledKV,
@@ -241,16 +267,22 @@ impl SledVarTypeTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append_values")?;
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-append-values");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
+        }
 
         Ok(())
     }
 
     /// Insert a single kv.
     /// Returns the last value if it is set.
+    #[tracing::instrument(level = "debug", skip(self, value))]
     pub async fn insert<KV>(
         &self,
         key: &KV::K,
@@ -274,17 +306,23 @@ impl SledVarTypeTree {
             Some(x) => Some(KV::deserialize_value(x)?),
         };
 
-        self.tree
-            .flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("flush insert_value {}", key)
-            })?;
+        if self.sync {
+            let span = tracing::span!(tracing::Level::DEBUG, "flush-insert");
+            let _ent = span.enter();
+
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                    format!("flush insert_value {}", key)
+                })?;
+        }
 
         Ok(prev)
     }
 
     /// Insert a single kv, Retrieve the key from value.
+    #[tracing::instrument(level = "debug", skip(self, value))]
     pub async fn insert_value<KV>(&self, value: &KV::V) -> common_exception::Result<Option<KV::V>>
     where
         KV: SledKV,

@@ -13,6 +13,7 @@ use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 
+use crate::catalogs::catalog::Catalog;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::FuseQueryContextRef;
 

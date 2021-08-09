@@ -7,4 +7,5 @@ mod config_test;
 
 pub mod config;
 
+pub use common_flights::RpcClientTlsConfig;
 pub use config::Config;

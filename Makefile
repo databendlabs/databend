@@ -21,6 +21,9 @@ build:
 build-debug:
 	bash ./scripts/build/build-debug.sh
 
+cli:
+	bash ./scripts/build/build-cli.sh
+
 unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 
@@ -31,6 +34,10 @@ stateless-test:
 stateless-cluster-test:
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
+
+stateless-cluster-test-tls:
+	bash ./scripts/build/build-debug.sh
+	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
 test: unit-test stateless-test
 
@@ -52,9 +59,14 @@ docker:
 dockerx:
 	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/fuse-query:${TAG} --push
 
-perf-tool:
-	docker build --network host -f docker/perf-tool/Dockerfile -t ${HUB}/perf-tool:${TAG} .
+build-perf-tool:
+	cargo build --target x86_64-unknown-linux-gnu --bin fuse-benchmark
+	mkdir -p ./distro
+	rm ./distro/fuse-benchmark
+	mv ./target/x86_64-unknown-linux-gnu/debug/fuse-benchmark  ./distro
 
+perf-tool: build-perf-tool
+	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
 run-helm:
 	helm upgrade --install datafuse ./charts/datafuse \
 		--set image.repository=${HUB}/fuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308
@@ -66,4 +78,8 @@ clean:
 
 docker_release:
 	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/datafuse:${TAG} --push
+
+cli-e2e:
+	cargo build --bin datafuse-cli --out-dir fusecli/cli/e2e -Z unstable-options
+	(cd ./fusecli/cli/e2e && python3 e2e.py)
 .PHONY: setup test run build fmt lint docker clean

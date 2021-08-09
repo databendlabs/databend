@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_arrow::arrow_flight;
-use tonic::Status;
 
 pub fn flight_result_to_str(r: &arrow_flight::Result) -> String {
     match std::str::from_utf8(&r.body) {
@@ -12,10 +11,13 @@ pub fn flight_result_to_str(r: &arrow_flight::Result) -> String {
     }
 }
 
-pub fn status_err(status: Status) -> anyhow::Error {
-    anyhow::anyhow!(
-        "status: {}: {}",
-        status.code().description(),
-        status.message(),
-    )
+#[derive(Clone, Debug)]
+pub struct RpcClientTlsConfig {
+    pub rpc_tls_server_root_ca_cert: String,
+    pub domain_name: String,
+}
+impl RpcClientTlsConfig {
+    pub fn enabled(&self) -> bool {
+        !self.rpc_tls_server_root_ca_cert.is_empty() && !self.domain_name.is_empty()
+    }
 }

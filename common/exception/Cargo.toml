@@ -1,13 +1,15 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "common-exception"
 version = "0.1.0"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [dependencies] # In alphabetical order
-common-arrow = {path = "../arrow"}
+common-arrow = { path = "../arrow" }
 
 anyhow = "1.0.42"
 backtrace = "0.3.60"
@@ -15,7 +17,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0.26"
 tonic = "0.4.3"
+prost = "0.7.0"
 
 # Github dependencies
-sqlparser =  { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193"}
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193" }
 

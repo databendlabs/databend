@@ -2,32 +2,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::ops::Deref;
 use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
+use common_tracing::tracing;
 
+use crate::configs;
+use crate::meta_service::sledkv;
+use crate::meta_service::AsType;
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
 use crate::meta_service::SledSerde;
-use crate::meta_service::SledTree;
 use crate::meta_service::SledValueToKey;
+use crate::meta_service::SledVarTypeTree;
 
 const TREE_RAFT_LOG: &str = "raft_log";
 
 /// RaftLog stores the logs of a raft node.
 /// It is part of MetaStore.
 pub struct RaftLog {
-    inner: SledTree<LogIndex, Entry<LogEntry>>,
-}
-
-/// Allows to access directly the internal SledTree.
-impl Deref for RaftLog {
-    type Target = SledTree<LogIndex, Entry<LogEntry>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    pub(crate) inner: SledVarTypeTree,
 }
 
 impl SledSerde for Entry<LogEntry> {}
@@ -40,11 +34,26 @@ impl SledValueToKey<LogIndex> for Entry<LogEntry> {
 
 impl RaftLog {
     /// Open RaftLog
-    pub async fn open(db: &sled::Db) -> common_exception::Result<RaftLog> {
-        let rl = RaftLog {
-            inner: SledTree::open(db, TREE_RAFT_LOG).await?,
-        };
+    #[tracing::instrument(level = "info", skip(db))]
+    pub async fn open(
+        db: &sled::Db,
+        config: &configs::Config,
+    ) -> common_exception::Result<RaftLog> {
+        let inner = SledVarTypeTree::open(db, TREE_RAFT_LOG, config.meta_sync()).await?;
+        let rl = RaftLog { inner };
         Ok(rl)
+    }
+
+    pub fn contains_key(&self, key: &LogIndex) -> common_exception::Result<bool> {
+        self.logs().contains_key(key)
+    }
+
+    pub fn get(&self, key: &LogIndex) -> common_exception::Result<Option<Entry<LogEntry>>> {
+        self.logs().get(key)
+    }
+
+    pub fn last(&self) -> common_exception::Result<Option<(LogIndex, Entry<LogEntry>)>> {
+        self.logs().last()
     }
 
     /// Delete logs that are in `range`.
@@ -64,7 +73,17 @@ impl RaftLog {
     ///
     pub async fn range_delete<R>(&self, range: R) -> common_exception::Result<()>
     where R: RangeBounds<LogIndex> {
-        self.inner.range_delete(range, true).await
+        self.logs().range_delete(range, true).await
+    }
+
+    pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<LogIndex>>
+    where R: RangeBounds<LogIndex> {
+        self.logs().range_keys(range)
+    }
+
+    pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<Entry<LogEntry>>>
+    where R: RangeBounds<LogIndex> {
+        self.logs().range_get(range)
     }
 
     /// Append logs into RaftLog.
@@ -73,14 +92,19 @@ impl RaftLog {
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
     pub async fn append(&self, logs: &[Entry<LogEntry>]) -> common_exception::Result<()> {
-        self.inner.append_values(logs).await
+        self.logs().append_values(logs).await
     }
 
     /// Insert a single log.
+    #[tracing::instrument(level = "debug", skip(self, log), fields(log_id=format!("{}",log.log_id).as_str()))]
     pub async fn insert(
         &self,
         log: &Entry<LogEntry>,
     ) -> common_exception::Result<Option<Entry<LogEntry>>> {
-        self.inner.insert_value(log).await
+        self.logs().insert_value(log).await
+    }
+
+    fn logs(&self) -> AsType<sledkv::Logs> {
+        self.inner.as_type()
     }
 }

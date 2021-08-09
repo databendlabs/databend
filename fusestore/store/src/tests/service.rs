@@ -6,6 +6,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_runtime::tokio;
+use common_runtime::tokio::sync::oneshot;
+use common_tracing::tracing;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
@@ -17,34 +19,31 @@ use crate::meta_service::MetaServiceClient;
 use crate::tests::Seq;
 
 // Start one random service and get the session manager.
+#[tracing::instrument(level = "info")]
 pub async fn start_store_server() -> Result<(StoreTestContext, String)> {
     let mut tc = new_test_context();
 
-    let addr = next_local_addr();
+    start_store_server_with_context(&mut tc).await?;
 
-    // TODO(xp): when testing, new_test_context() should build a random addr for flight
-    //           and fs storage dir
-    tc.config.flight_api_address = addr.clone();
+    let addr = tc.config.flight_api_address.clone();
 
+    Ok((tc, addr))
+}
+
+pub async fn start_store_server_with_context(tc: &mut StoreTestContext) -> Result<()> {
     let srv = StoreServer::create(tc.config.clone());
-    tokio::spawn(async move {
-        srv.serve().await?;
-        Ok::<(), anyhow::Error>(())
-    });
+    let (stop_tx, fin_rx) = srv.start().await?;
+
+    tc.channels = Some((stop_tx, fin_rx));
 
     // TODO(xp): some times the MetaNode takes more than 200 ms to startup, with disk-backed store.
     //           Find out why and using some kind of waiting routine to ensure service is on.
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    Ok((tc, addr))
+    Ok(())
 }
 
 pub fn next_port() -> u32 {
     19000u32 + (*Seq::default() as u32)
-}
-
-pub fn next_local_addr() -> String {
-    let port: u32 = next_port();
-    format!("127.0.0.1:{}", port)
 }
 
 pub struct StoreTestContext {
@@ -52,28 +51,68 @@ pub struct StoreTestContext {
     meta_temp_dir: TempDir,
     pub config: configs::Config,
     pub meta_nodes: Vec<Arc<MetaNode>>,
+
+    pub tree_prefix: String,
+
+    /// channel to send to stop StoreServer, and channel for waiting for shutdown to finish.
+    pub channels: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
 }
 
 /// Create a new Config for test, with unique port assigned
 pub fn new_test_context() -> StoreTestContext {
     let mut config = configs::Config::empty();
 
+    // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+    if cfg!(target_os = "macos") {
+        tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+        config.meta_no_sync = true;
+    }
+
+    // By default, create a meta node instead of open an existent one.
+    config.single = true;
+
     config.meta_api_port = next_port();
+    let x = config.meta_api_port;
+
+    let host = "127.0.0.1";
+
+    {
+        let flight_port = next_port();
+        config.flight_api_address = format!("{}:{}", host, flight_port);
+    }
+
+    {
+        let http_port = next_port();
+        config.http_api_address = format!("{}:{}", host, http_port);
+    }
+
+    {
+        let metric_port = next_port();
+        config.metric_api_address = format!("{}:{}", host, metric_port);
+    }
 
     let t = tempdir().expect("create temp dir to store meta");
     config.meta_dir = t.path().to_str().unwrap().to_string();
+
+    tracing::info!("new test context config: {:?}", config);
 
     StoreTestContext {
         // hold the TempDir until being dropped.
         meta_temp_dir: t,
         config,
         meta_nodes: vec![],
+
+        // Create a unique tree name prefix for opening same type tree in a same sled::Db
+        tree_prefix: format!("{}-", x),
+
+        channels: None,
     }
 }
 
 pub struct SledTestContext {
     #[allow(dead_code)]
     temp_dir: TempDir,
+    pub config: configs::Config,
     pub db: sled::Db,
 }
 
@@ -82,9 +121,14 @@ pub fn new_sled_test_context() -> SledTestContext {
     let t = tempdir().expect("create temp dir to store meta");
     let tmpdir = t.path().to_str().unwrap().to_string();
 
+    // config for unit test of sled db, meta_sync() is true by default.
+    let config = configs::Config::empty();
+
     SledTestContext {
         // hold the TempDir until being dropped.
         temp_dir: t,
+        config,
+        // TODO(xp): one db per process.
         db: sled::open(tmpdir).expect("open sled db"),
     }
 }

@@ -8,6 +8,7 @@ use common_exception::Result;
 use super::Series;
 use crate::arrays::ArrayCompare;
 use crate::numerical_coercion;
+use crate::prelude::*;
 use crate::DFBooleanArray;
 use crate::DataType;
 
@@ -33,11 +34,37 @@ macro_rules! impl_compare {
     }};
 }
 
+fn null_to_boolean(s: &Series) -> DFBooleanArray {
+    if s.data_type() == DataType::Null {
+        DFBooleanArray::full_null(s.len())
+    } else {
+        let array_ref = s.get_array_ref();
+        let validity = array_ref.validity();
+        match validity {
+            Some(v) => DFBooleanArray::new_from_opt_iter(v.into_iter().map(|c| {
+                if c {
+                    Some(true)
+                } else {
+                    None
+                }
+            })),
+            None => DFBooleanArray::full(true, s.len()),
+        }
+    }
+}
+
 fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
     if lhs.data_type() == rhs.data_type()
         && (lhs.data_type() == DataType::Utf8 || lhs.data_type() == DataType::Boolean)
     {
         return Ok((lhs.clone(), rhs.clone()));
+    }
+
+    if lhs.data_type() == DataType::Null || rhs.data_type() == DataType::Null {
+        let lhs = null_to_boolean(lhs);
+        let rhs = null_to_boolean(rhs);
+
+        return Ok((lhs.into_series(), rhs.into_series()));
     }
 
     let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;
@@ -56,11 +83,6 @@ fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
 }
 
 impl ArrayCompare<&Series> for Series {
-    fn eq_missing(&self, rhs: &Series) -> Result<DFBooleanArray> {
-        let (lhs, rhs) = coerce_cmp_lhs_rhs(self, rhs)?;
-        impl_compare!(lhs.as_ref(), rhs.as_ref(), eq_missing)
-    }
-
     /// Create a boolean mask by checking for equality.
     fn eq(&self, rhs: &Series) -> Result<DFBooleanArray> {
         let (lhs, rhs) = coerce_cmp_lhs_rhs(self, rhs)?;

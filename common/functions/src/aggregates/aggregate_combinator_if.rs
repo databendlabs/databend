@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
 use std::fmt;
 
+use bytes::BytesMut;
 use common_arrow::arrow;
+use common_arrow::arrow::array::*;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -74,10 +75,6 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.nullable(input_schema)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
         self.nested.allocate_state(arena)
     }
@@ -96,6 +93,7 @@ impl AggregateFunction for AggregateIfCombinator {
         let boolean_array = boolean_array.bool()?;
 
         let arrow_filter_array = boolean_array.downcast_ref();
+        let bitmap = arrow_filter_array.values();
 
         let mut column_array = Vec::with_capacity(self.argument_len - 1);
         let row_size = match columns.len() - 1 {
@@ -104,18 +102,24 @@ impl AggregateFunction for AggregateIfCombinator {
                 if boolean_array.null_count() > 0 {
                     // this greatly simplifies subsequent filtering code
                     // now we only have a boolean mask to deal with
-                    arrow::compute::prep_null_mask_filter(arrow_filter_array)
-                        .values()
-                        .count_set_bits()
+                    let boolean_bm = arrow_filter_array.validity();
+                    let res = combine_validities(&Some(bitmap.clone()), boolean_bm);
+                    match res {
+                        Some(v) => v.len() - v.null_count(),
+                        None => 0,
+                    }
                 } else {
-                    arrow_filter_array.values().count_set_bits()
+                    bitmap.len() - bitmap.null_count()
                 }
             }
             1 => {
                 // single array handle
                 let array = columns[0].to_array()?;
-                let data =
-                    arrow::compute::filter(array.get_array_ref().as_ref(), arrow_filter_array)?;
+                let data = arrow::compute::filter::filter(
+                    array.get_array_ref().as_ref(),
+                    arrow_filter_array,
+                )?;
+                let data: ArrayRef = Arc::from(data);
                 column_array.push(DataColumn::from(data));
                 column_array[0].len()
             }
@@ -142,11 +146,11 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.accumulate_row(place, row, columns)
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         self.nested.serialize(place, writer)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         self.nested.deserialize(place, reader)
     }
 

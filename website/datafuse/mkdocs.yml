@@ -194,6 +194,7 @@ nav:
         - FuseQuery Expression: rfcs/query/0002-plan-expression.md
         - FuseQuery Shuffle: rfcs/query/0003-data-shuffle.md
         - FuseStore Design: rfcs/store/0001-store-design.md
+        - Performance Test: rfcs/query/0004-performance-test.md
   - Performance: overview/performance.md
 
 # Google Analytics

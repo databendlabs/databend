@@ -184,42 +184,54 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 }
             },
             false => match column.data_type() {
-                DataType::Int8 => {
-                    result.column(name, column.i8()?.downcast_ref().values().to_owned())
-                }
-                DataType::Int16 => {
-                    result.column(name, column.i16()?.downcast_ref().values().to_owned())
-                }
-                DataType::Int32 => {
-                    result.column(name, column.i32()?.downcast_ref().values().to_owned())
-                }
-                DataType::Int64 => {
-                    result.column(name, column.i64()?.downcast_ref().values().to_owned())
-                }
-                DataType::UInt8 => {
-                    result.column(name, column.u8()?.downcast_ref().values().to_owned())
-                }
-                DataType::UInt16 => {
-                    result.column(name, column.u16()?.downcast_ref().values().to_owned())
-                }
-                DataType::UInt32 => {
-                    result.column(name, column.u32()?.downcast_ref().values().to_owned())
-                }
-                DataType::UInt64 => {
-                    result.column(name, column.u64()?.downcast_ref().values().to_owned())
-                }
-                DataType::Float32 => {
-                    result.column(name, column.f32()?.downcast_ref().values().to_owned())
-                }
-                DataType::Float64 => {
-                    result.column(name, column.f64()?.downcast_ref().values().to_owned())
-                }
-                DataType::Date32 => {
-                    result.column(name, column.date32()?.downcast_ref().values().to_owned())
-                }
-                DataType::Date64 => {
-                    result.column(name, column.date64()?.downcast_ref().values().to_owned())
-                }
+                DataType::Int8 => result.column(
+                    name,
+                    column.i8()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::Int16 => result.column(
+                    name,
+                    column.i16()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::Int32 => result.column(
+                    name,
+                    column.i32()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::Int64 => result.column(
+                    name,
+                    column.i64()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::UInt8 => result.column(
+                    name,
+                    column.u8()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::UInt16 => result.column(
+                    name,
+                    column.u16()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::UInt32 => result.column(
+                    name,
+                    column.u32()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::UInt64 => result.column(
+                    name,
+                    column.u64()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::Float32 => result.column(
+                    name,
+                    column.f32()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::Float64 => result.column(
+                    name,
+                    column.f64()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::Date32 => result.column(
+                    name,
+                    column.date32()?.downcast_ref().values().as_slice().to_vec(),
+                ),
+                DataType::Date64 => result.column(
+                    name,
+                    column.date64()?.downcast_ref().values().as_slice().to_vec(),
+                ),
                 DataType::Utf8 => {
                     let vs: Vec<&str> =
                         column.utf8()?.downcast_iter().map(|c| c.unwrap()).collect();

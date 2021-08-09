@@ -6,6 +6,8 @@
 
 # Rust
 target/*
+distro/*
+fusecli/cli/e2e/datafuse-cli
 
 # cargo
 .cargo/

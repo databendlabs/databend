@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use common_arrow::arrow::util::bit_util::ceil;
+use common_datavalues::prelude::ceil;
 use common_exception::Result;
 
 use crate::DataBlock;

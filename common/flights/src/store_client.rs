@@ -10,6 +10,8 @@ use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
+use common_exception::Result;
+use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
 use log::info;
@@ -23,6 +25,7 @@ use crate::flight_result_to_str;
 use crate::store_do_action::RequestFor;
 use crate::store_do_action::StoreDoAction;
 use crate::ConnectionFactory;
+use crate::RpcClientTlsConfig;
 
 #[derive(Clone)]
 pub struct StoreClient {
@@ -34,11 +37,22 @@ pub struct StoreClient {
 static AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
-    pub async fn try_create(addr: &str, username: &str, password: &str) -> anyhow::Result<Self> {
+    #[tracing::instrument(level = "debug", skip(password))]
+    pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
+        Self::with_tls_conf(addr, username, password, None).await
+    }
+
+    #[tracing::instrument(level = "debug", skip(password))]
+    pub async fn with_tls_conf(
+        addr: &str,
+        username: &str,
+        password: &str,
+        conf: Option<RpcClientTlsConfig>,
+    ) -> Result<Self> {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
-        let channel = ConnectionFactory::create_flight_channel(addr, Some(timeout)).await?;
+        let channel = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf).await?;
 
         let mut client = FlightServiceClient::new(channel.clone());
         let token = StoreClient::handshake(&mut client, timeout, username, password).await?;
@@ -65,12 +79,13 @@ impl StoreClient {
     }
 
     /// Handshake.
+    #[tracing::instrument(level = "debug", skip(client, password))]
     async fn handshake(
         client: &mut FlightServiceClient<Channel>,
         timeout: Duration,
         username: &str,
         password: &str,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> Result<Vec<u8>> {
         let auth = BasicAuth {
             username: username.to_string(),
             password: password.to_string(),
@@ -94,14 +109,17 @@ impl StoreClient {
         Ok(token)
     }
 
-    pub(crate) async fn do_action<T, R>(&mut self, v: T) -> common_exception::Result<R>
+    #[tracing::instrument(level = "debug", skip(self, v))]
+    pub(crate) async fn do_action<T, R>(&mut self, v: T) -> Result<R>
     where
         T: RequestFor<Reply = R>,
         T: Into<StoreDoAction>,
         R: DeserializeOwned,
     {
         let act: StoreDoAction = v.into();
-        let mut req: Request<Action> = (&act).try_into()?;
+        let req: Request<Action> = (&act).try_into()?;
+        let mut req = common_tracing::inject_span_to_tonic_request(req);
+
         req.set_timeout(self.timeout);
 
         let mut stream = self.client.do_action(req).await?.into_inner();

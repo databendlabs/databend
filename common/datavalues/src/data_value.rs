@@ -5,28 +5,29 @@
 // Borrow from apache/arrow/rust/datafusion/src/functions.rs
 // See notice.md
 
-use std::convert::TryFrom;
 use std::fmt;
-use std::iter::repeat;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::datatypes::IntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde::Deserialize;
-use serde::Serialize;
+use common_io::prelude::*;
 
+use crate::arrays::ListBooleanArrayBuilder;
+use crate::arrays::ListBuilderTrait;
+use crate::arrays::ListPrimitiveArrayBuilder;
+use crate::arrays::ListUtf8ArrayBuilder;
+use crate::data_type::*;
+use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
+use crate::DFInt8Array;
 use crate::DataField;
-use crate::DataType;
 
 /// A specific value of a data type.
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum DataValue {
     /// Base type.
     Null,
@@ -141,159 +142,108 @@ impl DataValue {
         self.to_series_with_size(1)
     }
 
-    pub fn to_arrow_array_with_size(&self, size: usize) -> Result<ArrayRef> {
+    pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
         match self {
-            DataValue::Null => Ok(Arc::new(NullArray::new(size))),
-            DataValue::Boolean(e) => match e {
-                Some(v) => Ok(Arc::new(BooleanArray::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::Boolean, size)),
+            DataValue::Null => {
+                let array = Arc::new(NullArray::new_null(size)) as ArrayRef;
+                let array: DFNullArray = array.into();
+                Ok(array.into_series())
+            }
+            DataValue::Boolean(values) => Ok(build_constant_series! {DFBooleanArray, values, size}),
+            DataValue::Int8(values) => Ok(build_constant_series! {DFInt8Array, values, size}),
+            DataValue::Int16(values) => Ok(build_constant_series! {DFInt16Array, values, size}),
+            DataValue::Int32(values) => Ok(build_constant_series! {DFInt32Array, values, size}),
+            DataValue::Int64(values) => Ok(build_constant_series! {DFInt64Array, values, size}),
+            DataValue::UInt8(values) => Ok(build_constant_series! {DFUInt8Array, values, size}),
+            DataValue::UInt16(values) => Ok(build_constant_series! {DFUInt16Array, values, size}),
+            DataValue::UInt32(values) => Ok(build_constant_series! {DFUInt32Array, values, size}),
+            DataValue::UInt64(values) => Ok(build_constant_series! {DFUInt64Array, values, size}),
+            DataValue::Float32(values) => Ok(build_constant_series! {DFFloat32Array, values, size}),
+            DataValue::Float64(values) => Ok(build_constant_series! {DFFloat64Array, values, size}),
+
+            DataValue::Utf8(values) => match values {
+                None => Ok(DFUtf8Array::full_null(size).into_series()),
+                Some(v) => Ok(DFUtf8Array::full(v.deref(), size).into_series()),
             },
-            DataValue::Int8(e) => match e {
-                Some(v) => Ok(Arc::new(Int8Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::Int8, size)),
+
+            DataValue::Binary(values) => match values {
+                None => Ok(DFBinaryArray::full_null(size).into_series()),
+                Some(v) => Ok(DFBinaryArray::full(v.deref(), size).into_series()),
             },
-            DataValue::Int16(e) => match e {
-                Some(v) => Ok(Arc::new(Int16Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::Int16, size)),
-            },
-            DataValue::Int32(e) => match e {
-                Some(v) => Ok(Arc::new(Int32Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::Int32, size)),
-            },
-            DataValue::Int64(e) => match e {
-                Some(v) => Ok(Arc::new(Int64Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::Int64, size)),
-            },
-            DataValue::UInt8(e) => match e {
-                Some(v) => Ok(Arc::new(UInt8Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::UInt8, size)),
-            },
-            DataValue::UInt16(e) => match e {
-                Some(v) => Ok(Arc::new(UInt16Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::UInt16, size)),
-            },
-            DataValue::UInt32(e) => match e {
-                Some(v) => Ok(Arc::new(UInt32Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::UInt32, size)),
-            },
-            DataValue::UInt64(e) => match e {
-                Some(v) => Ok(Arc::new(UInt64Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::UInt64, size)),
-            },
-            DataValue::Float32(e) => match e {
-                Some(v) => Ok(Arc::new(Float32Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::Float32, size)),
-            },
-            DataValue::Float64(e) => match e {
-                Some(v) => Ok(Arc::new(Float64Array::from(vec![*v; size])) as ArrayRef),
-                None => Ok(new_null_array_by_type(&DataType::Float64, size)),
-            },
-            DataValue::Utf8(e) => match e {
-                Some(v) => Ok(Arc::new(StringArray::from(vec![v.deref(); size]))),
-                None => Ok(new_null_array_by_type(&DataType::Utf8, size)),
-            },
-            DataValue::Binary(e) => match e {
-                Some(v) => Ok(Arc::new(BinaryArray::from(vec![v.deref(); size]))),
-                None => Ok(new_null_array_by_type(&DataType::Binary, size)),
-            },
-            DataValue::Date32(e) => match e {
-                Some(value) => Ok(Arc::new(Date32Array::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(&DataType::Date32, size)),
-            },
-            DataValue::Date64(e) => match e {
-                Some(value) => Ok(Arc::new(Date64Array::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(&DataType::Date64, size)),
-            },
-            DataValue::TimestampSecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampSecondArray::from_iter_values(
-                    repeat(*value).take(size),
-                ))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Second, None),
-                    size,
-                )),
-            },
-            DataValue::TimestampMillisecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampMillisecondArray::from_iter_values(
-                    repeat(*value).take(size),
-                ))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Millisecond, None),
-                    size,
-                )),
-            },
-            DataValue::TimestampMicrosecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampMicrosecondArray::from_value(
-                    *value, size,
-                ))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Microsecond, None),
-                    size,
-                )),
-            },
-            DataValue::TimestampNanosecond(e) => match e {
-                Some(value) => Ok(Arc::new(TimestampNanosecondArray::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Timestamp(TimeUnit::Nanosecond, None),
-                    size,
-                )),
-            },
-            DataValue::IntervalDayTime(e) => match e {
-                Some(value) => Ok(Arc::new(IntervalDayTimeArray::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Interval(IntervalUnit::DayTime),
-                    size,
-                )),
-            },
-            DataValue::IntervalYearMonth(e) => match e {
-                Some(value) => Ok(Arc::new(IntervalYearMonthArray::from_value(*value, size))),
-                None => Ok(new_null_array_by_type(
-                    &DataType::Interval(IntervalUnit::YearMonth),
-                    size,
-                )),
-            },
+
             DataValue::List(values, data_type) => match data_type {
-                DataType::Int8 => Ok(Arc::new(build_list!(Int8Builder, Int8, values, size))),
-                DataType::Int16 => Ok(Arc::new(build_list!(Int16Builder, Int16, values, size))),
-                DataType::Int32 => Ok(Arc::new(build_list!(Int32Builder, Int32, values, size))),
-                DataType::Int64 => Ok(Arc::new(build_list!(Int64Builder, Int64, values, size))),
-                DataType::UInt8 => Ok(Arc::new(build_list!(UInt8Builder, UInt8, values, size))),
-                DataType::UInt16 => Ok(Arc::new(build_list!(UInt16Builder, UInt16, values, size))),
-                DataType::UInt32 => Ok(Arc::new(build_list!(UInt32Builder, UInt32, values, size))),
-                DataType::UInt64 => Ok(Arc::new(build_list!(UInt64Builder, UInt64, values, size))),
-                DataType::Float32 => {
-                    Ok(Arc::new(build_list!(Float32Builder, Float32, values, size)))
+                DataType::Int8 => build_list_series! {Int8Type, values, size, data_type },
+                DataType::Int16 => build_list_series! {Int16Type, values, size, data_type },
+                DataType::Int32 => build_list_series! {Int32Type, values, size, data_type },
+                DataType::Int64 => build_list_series! {Int64Type, values, size, data_type },
+
+                DataType::UInt8 => build_list_series! {UInt8Type, values, size, data_type },
+                DataType::UInt16 => build_list_series! {UInt16Type, values, size, data_type },
+                DataType::UInt32 => build_list_series! {UInt32Type, values, size, data_type },
+                DataType::UInt64 => build_list_series! {UInt64Type, values, size, data_type },
+
+                DataType::Float32 => build_list_series! {Float32Type, values, size, data_type },
+                DataType::Float64 => build_list_series! {Float64Type, values, size, data_type },
+
+                DataType::Boolean => {
+                    let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
+                    match values {
+                        Some(v) => {
+                            let series = DataValue::try_into_data_array(v, data_type)?;
+                            (0..size).for_each(|_| {
+                                builder.append_series(&series);
+                            });
+                        }
+                        None => (0..size).for_each(|_| {
+                            builder.append_null();
+                        }),
+                    }
+                    Ok(builder.finish().into_series())
                 }
-                DataType::Float64 => {
-                    Ok(Arc::new(build_list!(Float64Builder, Float64, values, size)))
+                DataType::Utf8 => {
+                    let mut builder = ListUtf8ArrayBuilder::with_capacity(0, size);
+                    match values {
+                        Some(v) => {
+                            let series = DataValue::try_into_data_array(v, data_type)?;
+                            (0..size).for_each(|_| {
+                                builder.append_series(&series);
+                            });
+                        }
+                        None => (0..size).for_each(|_| {
+                            builder.append_null();
+                        }),
+                    }
+                    Ok(builder.finish().into_series())
                 }
-                DataType::Utf8 => Ok(Arc::new(build_list!(StringBuilder, Utf8, values, size))),
                 other => Result::Err(ErrorCode::BadDataValueType(format!(
                     "Unexpected type:{} for DataValue List",
                     other
                 ))),
             },
             DataValue::Struct(v) => {
-                let mut array = vec![];
+                let mut arrays = vec![];
+                let mut fields = vec![];
                 for (i, x) in v.iter().enumerate() {
-                    let val_array = x.to_arrow_array_with_size(1)?;
-                    array.push((
-                        ArrowField::new(
-                            format!("item_{}", i).as_str(),
-                            val_array.data_type().clone(),
-                            false,
-                        ),
-                        val_array as ArrayRef,
-                    ));
-                }
-                Ok(Arc::new(StructArray::from(array)))
-            }
-        }
-    }
+                    let xseries = x.to_series_with_size(size)?;
+                    let val_array = xseries.get_array_ref();
 
-    pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
-        let array = self.to_arrow_array_with_size(size)?;
-        Ok(array.into_series())
+                    fields.push(ArrowField::new(
+                        format!("item_{}", i).as_str(),
+                        val_array.data_type().clone(),
+                        false,
+                    ));
+
+                    arrays.push(val_array);
+                }
+                let r = Arc::new(StructArray::from_data(fields, arrays, None)) as ArrayRef;
+                Ok(r.into_series())
+            }
+
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{} for DataValue",
+                other
+            ))),
+        }
     }
 
     pub fn to_values(&self, size: usize) -> Result<Vec<DataValue>> {
@@ -335,9 +285,10 @@ impl DataValue {
     }
 }
 
-#[inline]
-fn new_null_array_by_type(data_type: &DataType, length: usize) -> ArrayRef {
-    new_null_array(&data_type.to_arrow(), length)
+// Did not use std::convert:TryFrom
+// Because we do not need custom type error.
+pub trait DFTryFrom<T>: Sized {
+    fn try_from(value: T) -> Result<Self>;
 }
 
 typed_cast_from_data_value_to_std!(Int8, i8);
@@ -351,6 +302,7 @@ typed_cast_from_data_value_to_std!(UInt64, u64);
 typed_cast_from_data_value_to_std!(Float32, f32);
 typed_cast_from_data_value_to_std!(Float64, f64);
 typed_cast_from_data_value_to_std!(Boolean, bool);
+typed_cast_from_data_value_to_std!(Utf8, String);
 
 std_to_data_value!(Int8, i8);
 std_to_data_value!(Int16, i16);
@@ -373,6 +325,12 @@ impl From<&str> for DataValue {
 impl From<String> for DataValue {
     fn from(x: String) -> Self {
         DataValue::Utf8(Some(x))
+    }
+}
+
+impl From<Option<String>> for DataValue {
+    fn from(x: Option<String>) -> Self {
+        DataValue::Utf8(x)
     }
 }
 
@@ -502,5 +460,25 @@ impl fmt::Debug for DataValue {
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
+    }
+}
+
+impl BinarySer for DataValue {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
+        let bs = serde_json::to_string(self)?;
+        writer.write_string(bs)
+    }
+
+    fn serialize_to_buf<W: BufMut>(&self, writer: &mut W) -> Result<()> {
+        let bs = serde_json::to_string(self)?;
+        writer.write_string(bs)
+    }
+}
+
+impl BinaryDe for DataValue {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> Result<Self> {
+        let str = reader.read_string()?;
+        let value: DataValue = serde_json::from_str(&str)?;
+        Ok(value)
     }
 }

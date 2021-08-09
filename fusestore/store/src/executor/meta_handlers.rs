@@ -8,7 +8,8 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow_flight;
+use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCode;
 use common_flights::meta_api_impl::CreateDatabaseAction;
@@ -16,6 +17,7 @@ use common_flights::meta_api_impl::CreateDatabaseActionResult;
 use common_flights::meta_api_impl::CreateTableAction;
 use common_flights::meta_api_impl::CreateTableActionResult;
 use common_flights::meta_api_impl::DatabaseMetaReply;
+use common_flights::meta_api_impl::DatabaseMetaSnapshot;
 use common_flights::meta_api_impl::DropDatabaseAction;
 use common_flights::meta_api_impl::DropDatabaseActionResult;
 use common_flights::meta_api_impl::DropTableAction;
@@ -25,6 +27,7 @@ use common_flights::meta_api_impl::GetDatabaseActionResult;
 use common_flights::meta_api_impl::GetDatabaseMetaAction;
 use common_flights::meta_api_impl::GetTableAction;
 use common_flights::meta_api_impl::GetTableActionResult;
+use common_flights::meta_api_impl::GetTableExtReq;
 use common_metatypes::Database;
 use common_metatypes::Table;
 use log::info;
@@ -165,9 +168,8 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let options = common_arrow::arrow::ipc::writer::IpcWriteOptions::default();
-        let flight_data: FlightData =
-            arrow_flight::SchemaAsIpc::new(&plan.schema.to_arrow(), &options).into();
+        let options = IpcWriteOptions::default();
+        let flight_data = flight_data_from_arrow_schema(&plan.schema.to_arrow(), &options);
 
         let table = Table {
             table_id: 0,
@@ -296,11 +298,48 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 }
 
 #[async_trait::async_trait]
+impl RequestHandler<GetTableExtReq> for ActionHandler {
+    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<GetTableActionResult> {
+        // TODO duplicated code
+        let table_id = act.tbl_id;
+        let result = self.meta_node.get_table(&table_id).await;
+        match result {
+            Some(table) => {
+                let arrow_schema = ArrowSchema::try_from(&FlightData {
+                    data_header: table.schema,
+                    ..Default::default()
+                })
+                .map_err(|e| {
+                    ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
+                })?;
+                let rst = GetTableActionResult {
+                    table_id: table.table_id,
+                    // TODO rm these filed
+                    db: "".to_owned(),
+                    name: "".to_owned(), // TODO for each version of table, we duplicates the name at present
+                    schema: Arc::new(arrow_schema.into()),
+                };
+                Ok(rst)
+            }
+            None => Err(ErrorCode::UnknownTable(format!(
+                "table of id {} not found",
+                act.tbl_id
+            ))),
+        }
+    }
+}
+
+#[async_trait::async_trait]
 impl RequestHandler<GetDatabaseMetaAction> for ActionHandler {
     async fn handle(
         &self,
         req: GetDatabaseMetaAction,
     ) -> common_exception::Result<DatabaseMetaReply> {
-        Ok(self.meta_node.get_database_meta(req.ver_lower_bound).await)
+        let res = self.meta_node.get_database_meta(req.ver_lower_bound).await;
+        Ok(res.map(|(v, dbs, tbls)| DatabaseMetaSnapshot {
+            meta_ver: v,
+            db_metas: dbs,
+            tbl_metas: tbls,
+        }))
     }
 }

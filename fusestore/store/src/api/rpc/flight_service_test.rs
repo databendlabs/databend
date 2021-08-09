@@ -4,6 +4,7 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_flights::meta_api_impl::DropTableActionResult;
 use common_flights::meta_api_impl::GetTableActionResult;
 use common_flights::KVApi;
 use common_flights::MetaApi;
@@ -20,6 +21,130 @@ use common_planners::TableEngineType;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_restart() -> anyhow::Result<()> {
+    // Issue 1134  https://github.com/datafuselabs/datafuse/issues/1134
+    // - Start a store server.
+    // - create db and create table
+    // - restart
+    // - Test read the db and read the table.
+
+    common_tracing::init_default_tracing();
+
+    let (mut tc, addr) = crate::tests::start_store_server().await?;
+
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    let db_name = "db1";
+    let table_name = "table1";
+
+    tracing::info!("--- create db");
+    {
+        let plan = CreateDatabasePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+
+        let res = client.create_database(plan.clone()).await;
+        tracing::debug!("create database res: {:?}", res);
+        let res = res?;
+        assert_eq!(1, res.database_id, "first database id is 1");
+    }
+
+    tracing::info!("--- get db");
+    {
+        let res = client.get_database(db_name).await;
+        tracing::debug!("get present database res: {:?}", res);
+        let res = res?;
+        assert_eq!(1, res.database_id, "db1 id is 1");
+        assert_eq!(db_name, res.db, "db1.db is db1");
+    }
+
+    tracing::info!("--- create table {}.{}", db_name, table_name);
+    let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        "number",
+        DataType::UInt64,
+        false,
+    )]));
+    {
+        let plan = CreateTablePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            table: table_name.to_string(),
+            schema: schema.clone(),
+            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            engine: TableEngineType::JSONEachRow,
+        };
+
+        {
+            let res = client.create_table(plan.clone()).await?;
+            assert_eq!(1, res.table_id, "table id is 1");
+
+            let got = client.get_table(db_name.into(), table_name.into()).await?;
+            let want = GetTableActionResult {
+                table_id: 1,
+                db: db_name.into(),
+                name: table_name.into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get created table");
+        }
+    }
+
+    tracing::info!("--- stop StoreServer");
+    {
+        let (stop_tx, fin_rx) = tc.channels.take().unwrap();
+        stop_tx
+            .send(())
+            .map_err(|_| anyhow::anyhow!("fail to send"))?;
+
+        fin_rx.await?;
+
+        drop(client);
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // restart by opening existent meta db
+        tc.config.boot = false;
+        crate::tests::start_store_server_with_context(&mut tc).await?;
+    }
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
+
+    // try to reconnect the restarted server.
+    let mut _client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    // TODO(xp): db and table are still in pure memory store. the following test will no pass.
+
+    // tracing::info!("--- get db");
+    // {
+    //     let res = client.get_database(db_name).await;
+    //     tracing::debug!("get present database res: {:?}", res);
+    //     let res = res?;
+    //     assert_eq!(1, res.database_id, "db1 id is 1");
+    //     assert_eq!(db_name, res.db, "db1.db is db1");
+    // }
+    //
+    // tracing::info!("--- get table");
+    // {
+    //     let got = client
+    //         .get_table(db_name.into(), table_name.into())
+    //         .await
+    //         .unwrap();
+    //     let want = GetTableActionResult {
+    //         table_id: 1,
+    //         db: db_name.into(),
+    //         name: table_name.into(),
+    //         schema: schema.clone(),
+    //     };
+    //     assert_eq!(want, got, "get created table");
+    // }
+
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
@@ -215,6 +340,111 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_drop_table() -> anyhow::Result<()> {
+    common_tracing::init_default_tracing();
+    use std::sync::Arc;
+
+    use common_datavalues::DataField;
+    use common_datavalues::DataSchema;
+    use common_flights::StoreClient;
+    use common_planners::CreateDatabasePlan;
+    use common_planners::CreateTablePlan;
+    use common_planners::DatabaseEngineType;
+    use common_planners::TableEngineType;
+
+    tracing::info!("init logging");
+
+    // 1. Service starts.
+    let (_tc, addr) = crate::tests::start_store_server().await?;
+
+    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    let db_name = "db1";
+    let tbl_name = "tb2";
+
+    {
+        // prepare db
+        let plan = CreateDatabasePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        };
+
+        let res = client.create_database(plan.clone()).await;
+
+        tracing::info!("create database res: {:?}", res);
+
+        let res = res.unwrap();
+        assert_eq!(1, res.database_id, "first database id is 1");
+    }
+    {
+        // create table and fetch it
+
+        // Table schema with metadata(due to serde issue).
+        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "number",
+            DataType::UInt64,
+            false,
+        )]));
+
+        // Create table plan.
+        let plan = CreateTablePlan {
+            if_not_exists: false,
+            db: db_name.to_string(),
+            table: tbl_name.to_string(),
+            schema: schema.clone(),
+            // TODO check get_table
+            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            // TODO
+            engine: TableEngineType::JSONEachRow,
+        };
+
+        {
+            // create table OK
+            let res = client.create_table(plan.clone()).await.unwrap();
+            assert_eq!(1, res.table_id, "table id is 1");
+
+            let got = client
+                .get_table(db_name.into(), tbl_name.into())
+                .await
+                .unwrap();
+            let want = GetTableActionResult {
+                table_id: 1,
+                db: db_name.into(),
+                name: tbl_name.into(),
+                schema: schema.clone(),
+            };
+            assert_eq!(want, got, "get created table");
+        }
+
+        {
+            // drop table
+            let plan = DropTablePlan {
+                if_exists: true,
+                db: db_name.to_string(),
+                table: tbl_name.to_string(),
+            };
+            let res = client.drop_table(plan.clone()).await.unwrap();
+            assert_eq!(DropTableActionResult {}, res, "drop table {}", tbl_name)
+        }
+
+        {
+            let res = client.get_table(db_name.into(), tbl_name.into()).await;
+            let status = res.err().unwrap();
+            assert_eq!(
+                format!("Code: 25, displayText = table not found: {}.", tbl_name),
+                status.to_string(),
+                "get dropped table {}",
+                tbl_name
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_append() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
     use std::sync::Arc;
@@ -235,13 +465,13 @@ async fn test_do_append() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let series0 = Series::new(vec![0i64, 1, 2]);
+    let series1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.len() * 2;
+    let expected_rows = series0.len() * 2;
     let expected_cols = 2;
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![col0, col1]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![series0, series1]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
     let stream = futures::stream::iter(batches);
@@ -308,15 +538,17 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let db_name = "test_db";
     let tbl_name = "test_tbl";
 
-    let col0 = Series::new(vec![0i64, 1, 2]);
-    let col1 = Series::new(vec!["str1", "str2", "str3"]);
+    let series0 = Series::new(vec![0i64, 1, 2]);
+    let series1 = Series::new(vec!["str1", "str2", "str3"]);
 
-    let expected_rows = col0.len() * 2;
+    let rows_of_series0 = series0.len();
+    let rows_of_series1 = series1.len();
+    let expected_rows = rows_of_series0 + rows_of_series1;
     let expected_cols = 2;
 
     let block = DataBlock::create(schema.clone(), vec![
-        DataColumn::Array(col0),
-        DataColumn::Array(col1),
+        DataColumn::Array(series0),
+        DataColumn::Array(series1),
     ]);
     let batches = vec![block.clone(), block];
     let num_batch = batches.len();
@@ -358,6 +590,8 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         assert_eq!(p.cols, expected_cols);
     });
 
+    log::debug!("summary is {:?}", summary);
+
     let plan = ScanPlan {
         schema_name: tbl_name.to_string(),
         ..ScanPlan::empty()
@@ -365,8 +599,14 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let res = client
         .read_plan(db_name.to_string(), tbl_name.to_string(), &plan)
         .await;
-    // TODO d assertions, de-duplicated codes
-    println!("scan res is {:?}", res);
+
+    assert!(res.is_ok());
+    let read_plan_res = res.unwrap();
+    assert!(read_plan_res.is_some());
+    let read_plan = read_plan_res.unwrap();
+    assert_eq!(2, read_plan.len());
+    assert_eq!(read_plan[0].stats.read_rows, rows_of_series0);
+    assert_eq!(read_plan[1].stats.read_rows, rows_of_series1);
 
     Ok(())
 }
@@ -375,214 +615,219 @@ async fn test_scan_partition() -> anyhow::Result<()> {
 async fn test_flight_generic_kv() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
 
-    let (_tc, addr) = crate::tests::start_store_server().await?;
-
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-
     {
-        // write
-        let res = client
-            .upsert_kv("foo", MatchSeq::Any, "bar".to_string().into_bytes())
-            .await?;
-        assert_eq!(None, res.prev);
-        assert_eq!(Some((1, "bar".to_string().into_bytes())), res.result);
-    }
+        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv");
+        let _ent = span.enter();
 
-    {
-        // write fails with unmatched seq
-        let res = client
-            .upsert_kv("foo", MatchSeq::Exact(2), "bar".to_string().into_bytes())
-            .await?;
-        assert_eq!(
-            Some((1, "bar".to_string().into_bytes())),
-            res.prev,
-            "old value"
-        );
-        assert_eq!(None, res.result, "Nothing changed");
-    }
+        let (_tc, addr) = crate::tests::start_store_server().await?;
 
-    {
-        // write done with matching seq
-        let res = client
-            .upsert_kv("foo", MatchSeq::Exact(1), "wow".to_string().into_bytes())
-            .await?;
-        assert_eq!(
-            Some((1, "bar".to_string().into_bytes())),
-            res.prev,
-            "old value"
-        );
-        assert_eq!(
-            Some((2, "wow".to_string().into_bytes())),
-            res.result,
-            "new value"
-        );
-    }
+        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
-    // mget
+        {
+            // write
+            let res = client
+                .upsert_kv("foo", MatchSeq::Any, "bar".to_string().into_bytes())
+                .await?;
+            assert_eq!(None, res.prev);
+            assert_eq!(Some((1, "bar".to_string().into_bytes())), res.result);
+        }
 
-    {
-        let res = client.get_kv("foo").await?;
-        assert_eq!(Some((2, "wow".to_string().into_bytes())), res.result);
+        {
+            // write fails with unmatched seq
+            let res = client
+                .upsert_kv("foo", MatchSeq::Exact(2), "bar".to_string().into_bytes())
+                .await?;
+            assert_eq!(
+                Some((1, "bar".to_string().into_bytes())),
+                res.prev,
+                "old value"
+            );
+            assert_eq!(None, res.result, "Nothing changed");
+        }
 
-        client
-            .upsert_kv(
-                "another_key",
-                MatchSeq::Any,
-                "value of ak".to_string().into_bytes(),
-            )
-            .await?;
-        let res = client
-            .mget_kv(&vec!["foo".to_string(), "another_key".to_string()])
-            .await?;
-        assert_eq!(res.result, vec![
-            Some((2, "wow".to_string().into_bytes())),
-            // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
-            Some((3, "value of ak".to_string().into_bytes())),
-        ]);
+        {
+            // write done with matching seq
+            let res = client
+                .upsert_kv("foo", MatchSeq::Exact(1), "wow".to_string().into_bytes())
+                .await?;
+            assert_eq!(
+                Some((1, "bar".to_string().into_bytes())),
+                res.prev,
+                "old value"
+            );
+            assert_eq!(
+                Some((2, "wow".to_string().into_bytes())),
+                res.result,
+                "new value"
+            );
+        }
 
-        let res = client
-            .mget_kv(&vec!["foo".to_string(), "key_no exist".to_string()])
-            .await?;
-        assert_eq!(res.result, vec![
-            Some((2, "wow".to_string().into_bytes())),
-            None
-        ]);
-    }
+        // mget
 
-    // prefix list
+        {
+            let res = client.get_kv("foo").await?;
+            assert_eq!(Some((2, "wow".to_string().into_bytes())), res.result);
 
-    let mut values = vec![];
-    {
-        client
-            .upsert_kv("t", MatchSeq::Any, "".as_bytes().to_vec())
-            .await?;
-
-        for i in 0..9 {
-            let key = format!("__users/{}", i);
-            let val = format!("val_{}", i);
-            values.push(val.clone());
             client
-                .upsert_kv(&key, MatchSeq::Any, val.as_bytes().to_vec())
+                .upsert_kv(
+                    "another_key",
+                    MatchSeq::Any,
+                    "value of ak".to_string().into_bytes(),
+                )
+                .await?;
+            let res = client
+                .mget_kv(&vec!["foo".to_string(), "another_key".to_string()])
+                .await?;
+            assert_eq!(res.result, vec![
+                Some((2, "wow".to_string().into_bytes())),
+                // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
+                Some((3, "value of ak".to_string().into_bytes())),
+            ]);
+
+            let res = client
+                .mget_kv(&vec!["foo".to_string(), "key_no exist".to_string()])
+                .await?;
+            assert_eq!(res.result, vec![
+                Some((2, "wow".to_string().into_bytes())),
+                None
+            ]);
+        }
+
+        // prefix list
+
+        let mut values = vec![];
+        {
+            client
+                .upsert_kv("t", MatchSeq::Any, "".as_bytes().to_vec())
+                .await?;
+
+            for i in 0..9 {
+                let key = format!("__users/{}", i);
+                let val = format!("val_{}", i);
+                values.push(val.clone());
+                client
+                    .upsert_kv(&key, MatchSeq::Any, val.as_bytes().to_vec())
+                    .await?;
+            }
+            client
+                .upsert_kv("v", MatchSeq::Any, "".as_bytes().to_vec())
                 .await?;
         }
-        client
-            .upsert_kv("v", MatchSeq::Any, "".as_bytes().to_vec())
-            .await?;
-    }
 
-    let res = client.prefix_list_kv("__users/").await?;
-    assert_eq!(
-        res.iter()
-            .map(|(_key, (_s, val))| val.clone())
-            .collect::<Vec<_>>(),
-        values
-            .iter()
-            .map(|v| v.as_bytes().to_vec())
-            .collect::<Vec<_>>()
-    );
+        let res = client.prefix_list_kv("__users/").await?;
+        assert_eq!(
+            res.iter()
+                .map(|(_key, (_s, val))| val.clone())
+                .collect::<Vec<_>>(),
+            values
+                .iter()
+                .map(|v| v.as_bytes().to_vec())
+                .collect::<Vec<_>>()
+        );
 
-    // delete
-    {
-        let test_key = "test_key";
-        client
-            .upsert_kv(
-                test_key,
-                MatchSeq::Any,
-                "value of ak".to_string().into_bytes(),
-            )
-            .await?;
+        // delete
+        {
+            let test_key = "test_key";
+            client
+                .upsert_kv(
+                    test_key,
+                    MatchSeq::Any,
+                    "value of ak".to_string().into_bytes(),
+                )
+                .await?;
 
-        let current = client.get_kv(test_key).await?;
-        if let Some((seq, _val)) = current.result {
-            // seq mismatch
-            let wrong_seq = Some(seq + 1);
-            let res = client.delete_kv(test_key, wrong_seq).await?;
+            let current = client.get_kv(test_key).await?;
+            if let Some((seq, _val)) = current.result {
+                // seq mismatch
+                let wrong_seq = Some(seq + 1);
+                let res = client.delete_kv(test_key, wrong_seq).await?;
+                assert!(res.is_none());
+
+                // seq match
+                let res = client.delete_kv(test_key, Some(seq)).await?;
+                assert!(res.is_some());
+
+                // read nothing
+                let r = client.get_kv(test_key).await?;
+                assert!(r.result.is_none());
+            } else {
+                panic!("expecting a value, but got nothing");
+            }
+
+            // key not exist
+            let res = client.delete_kv("not exists", None).await?;
             assert!(res.is_none());
 
-            // seq match
-            let res = client.delete_kv(test_key, Some(seq)).await?;
-            assert!(res.is_some());
+            // do not care seq
+            client
+                .upsert_kv(
+                    test_key,
+                    MatchSeq::Any,
+                    "value of ak".to_string().into_bytes(),
+                )
+                .await?;
 
-            // read nothing
-            let r = client.get_kv(test_key).await?;
-            assert!(r.result.is_none());
-        } else {
-            panic!("expecting a value, but got nothing");
+            let res = client.delete_kv(test_key, None).await?;
+            assert!(res.is_some());
         }
 
-        // key not exist
-        let res = client.delete_kv("not exists", None).await?;
-        assert!(res.is_none());
+        // update
+        {
+            let test_key = "test_key_for_update";
+            let r = client
+                .upsert_kv(
+                    test_key,
+                    MatchSeq::GE(1),
+                    "value of ak".to_string().into_bytes(),
+                )
+                .await?;
+            assert!(r.result.is_none());
 
-        // do not care seq
-        client
-            .upsert_kv(
-                test_key,
-                MatchSeq::Any,
-                "value of ak".to_string().into_bytes(),
-            )
-            .await?;
+            let r = client
+                .upsert_kv(
+                    test_key,
+                    MatchSeq::Any,
+                    "value of ak".to_string().into_bytes(),
+                )
+                .await?;
+            assert!(r.result.is_some());
+            let seq = r.result.unwrap().0;
 
-        let res = client.delete_kv(test_key, None).await?;
-        assert!(res.is_some());
-    }
+            // unmatched seq
+            let r = client
+                .upsert_kv(
+                    test_key,
+                    MatchSeq::Exact(seq + 1),
+                    "value of ak".to_string().into_bytes(),
+                )
+                .await?;
+            assert!(r.result.is_none());
 
-    // update
-    {
-        let test_key = "test_key_for_update";
-        let r = client
-            .upsert_kv(
-                test_key,
-                MatchSeq::GE(1),
-                "value of ak".to_string().into_bytes(),
-            )
-            .await?;
-        assert!(r.result.is_none());
+            // matched seq
+            let r = client
+                .upsert_kv(
+                    test_key,
+                    MatchSeq::Exact(seq),
+                    "value of ak".to_string().into_bytes(),
+                )
+                .await?;
+            assert!(r.result.is_some());
 
-        let r = client
-            .upsert_kv(
-                test_key,
-                MatchSeq::Any,
-                "value of ak".to_string().into_bytes(),
-            )
-            .await?;
-        assert!(r.result.is_some());
-        let seq = r.result.unwrap().0;
+            // blind update
+            let r = client
+                .upsert_kv(
+                    test_key,
+                    MatchSeq::GE(1),
+                    "brand new value".to_string().into_bytes(),
+                )
+                .await?;
+            assert!(r.result.is_some());
 
-        // unmatched seq
-        let r = client
-            .upsert_kv(
-                test_key,
-                MatchSeq::Exact(seq + 1),
-                "value of ak".to_string().into_bytes(),
-            )
-            .await?;
-        assert!(r.result.is_none());
-
-        // matched seq
-        let r = client
-            .upsert_kv(
-                test_key,
-                MatchSeq::Exact(seq),
-                "value of ak".to_string().into_bytes(),
-            )
-            .await?;
-        assert!(r.result.is_some());
-
-        // blind update
-        let r = client
-            .upsert_kv(
-                test_key,
-                MatchSeq::GE(1),
-                "brand new value".to_string().into_bytes(),
-            )
-            .await?;
-        assert!(r.result.is_some());
-
-        // value updated
-        let kv = client.get_kv(test_key).await?;
-        assert!(kv.result.is_some());
-        assert_eq!(kv.result.unwrap().1, "brand new value".as_bytes());
+            // value updated
+            let kv = client.get_kv(test_key).await?;
+            assert!(kv.result.is_some());
+            assert_eq!(kv.result.unwrap().1, "brand new value".as_bytes());
+        }
     }
 
     Ok(())
@@ -596,7 +841,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
 
     // Empty Database
     let res = client.get_database_meta(None).await?;
-    assert_eq!(None, res);
+    assert!(res.is_none());
 
     Ok(())
 }
@@ -618,16 +863,16 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 
     let res = client.get_database_meta(None).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(1, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(1, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound < current meta version, returns database meta
     let res = client.get_database_meta(Some(0)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(1, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(1, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound equals current meta version, returns None
     let res = client.get_database_meta(Some(1)).await?;
@@ -654,9 +899,10 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     client.drop_database(plan).await?;
     let res = client.get_database_meta(Some(1)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(0, dbs.len());
+    let snapshot = res.unwrap();
+
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(0, snapshot.db_metas.len());
 
     Ok(())
 }
@@ -664,7 +910,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     common_tracing::init_default_tracing();
-    let (_, addr) = crate::tests::start_store_server().await?;
+    let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let test_db = "db1";
@@ -698,17 +944,17 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
 
     let res = client.get_database_meta(None).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(1, dbs.len());
-    assert_eq!(1, dbs[0].tables.len());
+    let snapshot = res.unwrap();
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
+    assert_eq!(1, snapshot.tbl_metas.len());
 
     // if lower_bound < current meta version, returns database meta
     let res = client.get_database_meta(Some(0)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(2, v);
-    assert_eq!(1, dbs.len());
+    let snapshot = res.unwrap();
+    assert_eq!(2, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
 
     // if lower_bound equals current meta version, returns None
     let res = client.get_database_meta(Some(2)).await?;
@@ -730,10 +976,10 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     client.drop_table(plan).await?;
     let res = client.get_database_meta(Some(2)).await?;
     assert!(res.is_some());
-    let (v, dbs) = res.unwrap();
-    assert_eq!(3, v);
-    assert_eq!(1, dbs.len());
-    assert_eq!(0, dbs[0].tables.len());
+    let snapshot = res.unwrap();
+    assert_eq!(3, snapshot.meta_ver);
+    assert_eq!(1, snapshot.db_metas.len());
+    assert_eq!(0, snapshot.tbl_metas.len());
 
     Ok(())
 }

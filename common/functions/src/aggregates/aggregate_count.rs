@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
-use std::convert::TryInto;
 use std::fmt;
 
+use bytes::BytesMut;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::*;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_state::GetState;
@@ -52,10 +52,6 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(false)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
         let state = arena.alloc(AggregateCountState { count: 0 });
         (state as *mut AggregateCountState) as StateAddr
@@ -64,32 +60,36 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate(
         &self,
         place: StateAddr,
-        _columns: &[DataColumn],
+        columns: &[DataColumn],
         input_rows: usize,
     ) -> Result<()> {
         let state = AggregateCountState::get(place);
-        state.count += input_rows as u64;
-
+        if self.arguments.is_empty() {
+            state.count += input_rows as u64;
+        } else {
+            state.count += count_batch(&columns[0]) as u64;
+        }
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, _row: usize, _columns: &[DataColumn]) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, _row: usize, columns: &[DataColumn]) -> Result<()> {
         let state = AggregateCountState::get(place);
-        state.count += 1;
+        if self.arguments.is_empty() {
+            state.count += 1;
+        } else {
+            state.count += count_batch(&columns[0]) as u64;
+        }
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = AggregateCountState::get(place);
-        let bs = state.count.to_be_bytes();
-        writer.extend_from_slice(&bs);
-        Ok(())
+        writer.write_uvarint(state.count)
     }
 
-    fn deserialize(&self, place: StateAddr, value: &[u8]) -> Result<()> {
+    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = AggregateCountState::get(place);
-        state.count = u64::from_be_bytes(value.try_into().unwrap());
-        Ok(())
+        reader.read_to_uvarint(&mut state.count)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
@@ -109,5 +109,15 @@ impl AggregateFunction for AggregateCountFunction {
 impl fmt::Display for AggregateCountFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
+    }
+}
+
+pub fn count_batch(column: &DataColumn) -> usize {
+    if column.is_empty() {
+        return 0;
+    }
+    match column {
+        DataColumn::Constant(_, size) => *size,
+        DataColumn::Array(array) => array.len() - array.null_count(),
     }
 }

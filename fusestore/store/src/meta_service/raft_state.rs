@@ -5,7 +5,9 @@
 use async_raft::storage::HardState;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
+use common_tracing::tracing;
 
+use crate::configs;
 use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::NodeId;
 use crate::meta_service::SledSerde;
@@ -19,6 +21,9 @@ use crate::meta_service::SledSerde;
 #[derive(Debug, Clone)]
 pub struct RaftState {
     pub id: NodeId,
+
+    /// A unique prefix for opening multiple RaftState in a same sled::Db
+    // tree_prefix: String,
     tree: sled::Tree,
 }
 
@@ -29,65 +34,79 @@ const K_HARD_STATE: &str = "hard_state";
 impl SledSerde for HardState {}
 
 impl RaftState {
-    /// Create a new sled db backed RaftState.
-    /// Initialize with id and empty hard state.
-    pub async fn create(db: &sled::Db, node_id: &NodeId) -> common_exception::Result<RaftState> {
+    /// Open/create a raft state in a sled db.
+    /// 1. If `open` is `Some`,  it tries to open an existent RaftState if there is one.
+    /// 2. If `create` is `Some`, it tries to initialize a new RaftState if there is not one.
+    /// If none of them is `Some`, it is a programming error and will panic.
+    #[tracing::instrument(level = "info", skip(db))]
+    pub async fn open_create(
+        db: &sled::Db,
+        open: Option<()>,
+        create: Option<&configs::Config>,
+    ) -> common_exception::Result<(RaftState, bool)> {
         let t = db
             .open_tree(K_RAFT_STATE)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "open tree raft_state")?;
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("open tree raft_state: name={}", "")
+            })?;
 
-        let prev_id = t
+        let curr_id = t
             .get(K_ID)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "get id")?;
 
-        if prev_id.is_some() {
-            return Err(ErrorCode::MetaStoreAlreadyExists(format!(
-                "exist: id={:?}",
-                NodeId::de(&prev_id.unwrap())
-            )));
-        }
-
-        let rs = RaftState {
-            id: *node_id,
-            tree: t,
+        let curr_id = match curr_id {
+            Some(id) => Some(NodeId::de(id)?),
+            None => None,
         };
 
-        let id_ivec = node_id.ser()?;
-        rs.tree
-            .insert(K_ID, id_ivec)
+        let (rs, is_open) = match (curr_id, open, create) {
+            (Some(curr_id), Some(_), Some(_)) => Self::open(t, curr_id)?,
+            (Some(curr_id), Some(_), None) => Self::open(t, curr_id)?,
+            (Some(x), None, Some(_)) => {
+                return Err(ErrorCode::MetaStoreAlreadyExists(format!(
+                    "raft state present id={}, can not create",
+                    x
+                )));
+            }
+            (Some(_), None, None) => panic!("no open no create"),
+            (None, Some(_), Some(&ref config)) => Self::create(t, config.id).await?,
+            (None, Some(_), None) => {
+                return Err(ErrorCode::MetaStoreNotFound(
+                    "raft state absent, can not open",
+                ));
+            }
+            (None, None, Some(&ref config)) => Self::create(t, config.id).await?,
+            (None, None, None) => panic!("no open no create"),
+        };
+
+        Ok((rs, is_open))
+    }
+
+    fn open(t: sled::Tree, curr_id: NodeId) -> common_exception::Result<(RaftState, bool)> {
+        Ok((
+            RaftState {
+                id: curr_id,
+                tree: t,
+            },
+            true,
+        ))
+    }
+
+    async fn create(tree: sled::Tree, id: NodeId) -> common_exception::Result<(RaftState, bool)> {
+        let id_ivec = id.ser()?;
+
+        tree.insert(K_ID, id_ivec)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "write id")?;
 
-        rs.tree
-            .flush_async()
+        tracing::info!("inserted id: {}", K_ID);
+
+        tree.flush_async()
             .await
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush raft state creation")?;
 
-        Ok(rs)
-    }
+        tracing::info!("flushed");
 
-    /// Open an existent raft state in a sled db.
-    /// If the node id is not found, it is treated as an error opening nonexistent raft state.
-    pub fn open(db: &sled::Db) -> common_exception::Result<RaftState> {
-        let t = db
-            .open_tree("raft_state")
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "open tree raft_state")?;
-
-        let id = t
-            .get(K_ID)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "read id")?;
-
-        let id = match id {
-            Some(id) => id,
-            None => {
-                return Err(ErrorCode::MetaStoreDamaged("id not found"));
-            }
-        };
-
-        let rs = RaftState {
-            id: NodeId::de(id)?,
-            tree: t,
-        };
-        Ok(rs)
+        Ok((RaftState { id, tree }, false))
     }
 
     pub async fn write_hard_state(&self, hs: &HardState) -> common_exception::Result<()> {
