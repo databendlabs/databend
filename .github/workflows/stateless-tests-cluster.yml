@@ -16,7 +16,9 @@ jobs:
           - { os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false }
           # Macos
           - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
-      - uses: actions/checkout@v2
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
 
       - name: Rust setup
         run: |
