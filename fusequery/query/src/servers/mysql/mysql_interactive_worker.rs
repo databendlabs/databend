@@ -93,7 +93,9 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         let context = self.session.create_context();
 
         context.attach_query_info(query);
-        if let Err(cause) = DFQueryResultWriter::create(writer).write(self.base.do_query(query, context)) {
+        if let Err(cause) =
+            DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))
+        {
             let new_error = cause.add_message(query.to_string());
             return Err(new_error);
         };
