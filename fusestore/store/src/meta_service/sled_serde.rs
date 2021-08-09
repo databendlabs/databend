@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::mem::size_of_val;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
@@ -36,26 +35,11 @@ pub trait SledSerde: Serialize + DeserializeOwned + Sized {
 /// A type that is used as a sled db key should be serialized with order preserved, such as log index.
 pub trait SledOrderedSerde: Serialize + DeserializeOwned + Sized {
     /// (ser)ialize a value to `sled::IVec`.
-    fn ser(&self) -> Result<IVec, ErrorCode> {
-        let size = size_of_val(self);
-        let mut buf = vec![0; size];
-
-        self.order_preserved_serialize(&mut buf);
-        Ok(buf.into())
-    }
+    fn ser(&self) -> Result<IVec, ErrorCode>;
 
     /// (de)serialize a value from `sled::IVec`.
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
-    where Self: Sized {
-        let v = Self::order_preserved_deserialize(v.as_ref());
-        Ok(v)
-    }
-
-    /// serialize keep the same ordering as original value
-    fn order_preserved_serialize(&self, buf: &mut [u8]);
-
-    /// deserialize from the order preserved bytes
-    fn order_preserved_deserialize(buf: &[u8]) -> Self;
+    where Self: Sized;
 }
 
 /// Serialize/deserialize(ser/de) to/from range to sled IVec range.

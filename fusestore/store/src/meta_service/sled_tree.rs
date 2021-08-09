@@ -11,20 +11,20 @@ use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
 
-use crate::meta_service::sledkv::SledKV;
+use crate::meta_service::sled_key_space::SledKeySpace;
 
 /// Extract key from a value of sled tree that includes its key.
 pub trait SledValueToKey<K> {
     fn to_key(&self) -> K;
 }
 
-/// SledVarTypeTree is a wrapper of sled::Tree that provides access of more than one key-value
+/// SledTree is a wrapper of sled::Tree that provides access of more than one key-value
 /// types.
 /// A `SledKVType` defines a key-value type to be stored.
 /// The key type `K` must be serializable with order preserved, i.e. impl trait `SledOrderedSerde`.
 /// The value type `V` can be any serialize impl, i.e. for most cases, to impl trait `SledSerde`.
-#[derive(Debug)]
-pub struct SledVarTypeTree {
+#[derive(Debug, Clone)]
+pub struct SledTree {
     pub name: String,
 
     /// Whether to fsync after an write operation.
@@ -37,8 +37,8 @@ pub struct SledVarTypeTree {
     pub(crate) tree: sled::Tree,
 }
 
-impl SledVarTypeTree {
-    /// Open SledVarTypeTree
+impl SledTree {
+    /// Open SledTree
     pub async fn open<N: AsRef<[u8]> + Display>(
         db: &sled::Db,
         tree_name: N,
@@ -56,7 +56,9 @@ impl SledVarTypeTree {
                 format!("open tree: {}", tree_name)
             })?;
 
-        let rl = SledVarTypeTree {
+        tracing::debug!("SledTree opened tree: {}", tree_name);
+
+        let rl = SledTree {
             name: format!("{}", tree_name),
             sync,
             tree: t,
@@ -64,17 +66,17 @@ impl SledVarTypeTree {
         Ok(rl)
     }
 
-    /// Borrows the SledVarTypeTree and creates a wrapper with access limited to a specified key space `KV`.
-    pub fn key_space<KV: SledKV>(&self) -> AsType<KV> {
-        AsType::<KV> {
+    /// Borrows the SledTree and creates a wrapper with access limited to a specified key space `KV`.
+    pub fn key_space<KV: SledKeySpace>(&self) -> AsKeySpace<KV> {
+        AsKeySpace::<KV> {
             inner: self,
             phantom: PhantomData,
         }
     }
 
     /// Return true if the tree contains the key.
-    pub fn contains_key<KV: SledKV>(&self, key: &KV::K) -> common_exception::Result<bool>
-    where KV: SledKV {
+    pub fn contains_key<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<bool>
+    where KV: SledKeySpace {
         let got = self
             .tree
             .contains_key(KV::serialize_key(key)?)
@@ -86,8 +88,8 @@ impl SledVarTypeTree {
     }
 
     /// Retrieve the value of key.
-    pub fn get<KV: SledKV>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>>
-    where KV: SledKV {
+    pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>>
+    where KV: SledKeySpace {
         let got = self
             .tree
             .get(KV::serialize_key(key)?)
@@ -105,7 +107,7 @@ impl SledVarTypeTree {
 
     /// Retrieve the last key value pair.
     pub fn last<KV>(&self) -> common_exception::Result<Option<(KV::K, KV::V)>>
-    where KV: SledKV {
+    where KV: SledKeySpace {
         let range = (
             Bound::Unbounded,
             KV::serialize_bound(Bound::Unbounded, "right")?,
@@ -132,7 +134,7 @@ impl SledVarTypeTree {
     #[tracing::instrument(level = "debug", skip(self, range))]
     pub async fn range_delete<KV, R>(&self, range: R, flush: bool) -> common_exception::Result<()>
     where
-        KV: SledKV,
+        KV: SledKeySpace,
         R: RangeBounds<KV::K>,
     {
         let mut batch = sled::Batch::default();
@@ -173,7 +175,7 @@ impl SledVarTypeTree {
     /// Get keys in `range`
     pub fn range_keys<KV, R>(&self, range: R) -> common_exception::Result<Vec<KV::K>>
     where
-        KV: SledKV,
+        KV: SledKeySpace,
         R: RangeBounds<KV::K>,
     {
         let mut res = vec![];
@@ -197,7 +199,7 @@ impl SledVarTypeTree {
     /// Get values of key in `range`
     pub fn range_get<KV, R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
     where
-        KV: SledKV,
+        KV: SledKeySpace,
         R: RangeBounds<KV::K>,
     {
         let mut res = vec![];
@@ -219,9 +221,9 @@ impl SledVarTypeTree {
         Ok(res)
     }
 
-    /// Append many key-values into SledVarTypeTree.
+    /// Append many key-values into SledTree.
     pub async fn append<KV>(&self, kvs: &[(KV::K, KV::V)]) -> common_exception::Result<()>
-    where KV: SledKV {
+    where KV: SledKeySpace {
         let mut batch = sled::Batch::default();
 
         for (key, value) in kvs.iter() {
@@ -248,12 +250,12 @@ impl SledVarTypeTree {
         Ok(())
     }
 
-    /// Append many values into SledVarTypeTree.
+    /// Append many values into SledTree.
     /// This could be used in cases the key is included in value and a value should impl trait `IntoKey` to retrieve the key from a value.
     #[tracing::instrument(level = "debug", skip(self, values))]
     pub async fn append_values<KV>(&self, values: &[KV::V]) -> common_exception::Result<()>
     where
-        KV: SledKV,
+        KV: SledKeySpace,
         KV::V: SledValueToKey<KV::K>,
     {
         let mut batch = sled::Batch::default();
@@ -293,7 +295,7 @@ impl SledVarTypeTree {
         value: &KV::V,
     ) -> common_exception::Result<Option<KV::V>>
     where
-        KV: SledKV,
+        KV: SledKeySpace,
     {
         let k = KV::serialize_key(key)?;
         let v = KV::serialize_value(value)?;
@@ -329,7 +331,7 @@ impl SledVarTypeTree {
     #[tracing::instrument(level = "debug", skip(self, value))]
     pub async fn insert_value<KV>(&self, value: &KV::V) -> common_exception::Result<Option<KV::V>>
     where
-        KV: SledKV,
+        KV: SledKeySpace,
         KV::V: SledValueToKey<KV::K>,
     {
         let key = value.to_key();
@@ -339,7 +341,7 @@ impl SledVarTypeTree {
     /// Build a string describing the range for a range operation.
     fn range_message<KV, R>(&self, range: &R) -> String
     where
-        KV: SledKV,
+        KV: SledKeySpace,
         R: RangeBounds<KV::K>,
     {
         format!(
@@ -352,13 +354,13 @@ impl SledVarTypeTree {
     }
 }
 
-/// AsType borrows the internal SledVarTypeTree with access limited to a specified namespace `KV`.
-pub struct AsType<'a, KV: SledKV> {
-    inner: &'a SledVarTypeTree,
+/// It borrows the internal SledTree with access limited to a specified namespace `KV`.
+pub struct AsKeySpace<'a, KV: SledKeySpace> {
+    inner: &'a SledTree,
     phantom: PhantomData<KV>,
 }
 
-impl<'a, KV: SledKV> AsType<'a, KV> {
+impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn contains_key(&self, key: &KV::K) -> common_exception::Result<bool> {
         self.inner.contains_key::<KV>(key)
     }

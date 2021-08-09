@@ -8,20 +8,20 @@ use async_raft::raft::Entry;
 use common_tracing::tracing;
 
 use crate::configs;
-use crate::meta_service::sledkv;
-use crate::meta_service::AsType;
+use crate::meta_service::sled_key_space;
+use crate::meta_service::AsKeySpace;
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
 use crate::meta_service::SledSerde;
+use crate::meta_service::SledTree;
 use crate::meta_service::SledValueToKey;
-use crate::meta_service::SledVarTypeTree;
 
 const TREE_RAFT_LOG: &str = "raft_log";
 
 /// RaftLog stores the logs of a raft node.
 /// It is part of MetaStore.
 pub struct RaftLog {
-    pub(crate) inner: SledVarTypeTree,
+    pub(crate) inner: SledTree,
 }
 
 impl SledSerde for Entry<LogEntry> {}
@@ -40,7 +40,7 @@ impl RaftLog {
         config: &configs::Config,
     ) -> common_exception::Result<RaftLog> {
         let tree_name = config.tree_name(TREE_RAFT_LOG);
-        let inner = SledVarTypeTree::open(db, &tree_name, config.meta_sync()).await?;
+        let inner = SledTree::open(db, &tree_name, config.meta_sync()).await?;
         let rl = RaftLog { inner };
         Ok(rl)
     }
@@ -105,7 +105,8 @@ impl RaftLog {
         self.logs().insert_value(log).await
     }
 
-    fn logs(&self) -> AsType<sledkv::Logs> {
+    /// Returns a borrowed key space in sled::Tree for logs
+    fn logs(&self) -> AsKeySpace<sled_key_space::Logs> {
         self.inner.key_space()
     }
 }

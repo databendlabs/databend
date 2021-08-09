@@ -98,7 +98,7 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
 
     // read got a None
 
-    let got = rs.read_hard_state().await?;
+    let got = rs.read_hard_state()?;
     assert_eq!(None, got);
 
     // write hard state
@@ -112,7 +112,36 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
 
     // read the written
 
-    let got = rs.read_hard_state().await?;
+    let got = rs.read_hard_state()?;
     assert_eq!(Some(hs), got);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
+    // - create a raft state
+    // - write state machine id and the read it.
+    init_store_unittest();
+
+    let mut tc = new_sled_test_context();
+    let db = &tc.db;
+    tc.config.id = 3;
+    let rs = RaftState::open_create(db, &tc.config, None, Some(())).await?;
+
+    // read got a None
+
+    let got = rs.read_state_machine_id()?;
+    assert_eq!((0, 0), got);
+
+    // write hard state
+
+    let smid = (1, 2);
+
+    rs.write_state_machine_id(&smid).await?;
+
+    // read the written
+
+    let got = rs.read_state_machine_id()?;
+    assert_eq!((1, 2), got);
     Ok(())
 }

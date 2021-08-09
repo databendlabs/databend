@@ -42,8 +42,8 @@ use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
+use crate::meta_service::sled_key_space;
 use crate::meta_service::sled_serde::SledOrderedSerde;
-use crate::meta_service::sledkv;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -178,7 +178,7 @@ impl MetaStore {
     }
 
     pub async fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
-        self.raft_state.read_hard_state().await
+        self.raft_state.read_hard_state()
     }
 }
 
@@ -221,7 +221,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
     #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
-        let hard_state = self.raft_state.read_hard_state().await?;
+        let hard_state = self.raft_state.read_hard_state()?;
 
         let membership = self.get_membership_config().await?;
         let sm = self.state_machine.read().await;
@@ -501,7 +501,7 @@ impl MetaStore {
             .await
             .expect("fail to get membership");
 
-        let sm_nodes = sm.sm_tree.key_space::<sledkv::Nodes>();
+        let sm_nodes = sm.sm_tree.key_space::<sled_key_space::Nodes>();
         let x = sm_nodes.range_keys(..).expect("fail to list nodes");
         for node_id in x {
             // it has been added into this cluster and is not a voter.
@@ -518,7 +518,6 @@ pub struct MetaNodeBuilder {
     config: Option<Config>,
     sto: Option<Arc<MetaStore>>,
     monitor_metrics: bool,
-    start_grpc_service: bool,
     addr: Option<String>,
 }
 
@@ -559,16 +558,15 @@ impl MetaNodeBuilder {
             MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
         }
 
-        if self.start_grpc_service {
-            let addr = if let Some(a) = self.addr.take() {
-                a
-            } else {
-                sto.get_node_addr(&node_id).await?
-            };
-            tracing::info!("about to start grpc on {}", addr);
+        let addr = if let Some(a) = self.addr.take() {
+            a
+        } else {
+            sto.get_node_addr(&node_id).await?
+        };
+        tracing::info!("about to start grpc on {}", addr);
 
-            MetaNode::start_grpc(mn.clone(), &addr).await?;
-        }
+        MetaNode::start_grpc(mn.clone(), &addr).await?;
+
         Ok(mn)
     }
 
@@ -578,10 +576,6 @@ impl MetaNodeBuilder {
     }
     pub fn sto(mut self, sto: Arc<MetaStore>) -> Self {
         self.sto = Some(sto);
-        self
-    }
-    pub fn start_grpc_service(mut self, b: bool) -> Self {
-        self.start_grpc_service = b;
         self
     }
     pub fn addr(mut self, a: String) -> Self {
@@ -603,7 +597,6 @@ impl MetaNode {
             config: Some(raft_config),
             sto: None,
             monitor_metrics: true,
-            start_grpc_service: true,
             addr: None,
         }
     }
