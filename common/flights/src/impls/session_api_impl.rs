@@ -11,27 +11,24 @@ use crate::StoreClient;
 use crate::StoreDoAction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct KillSessionReq {
-    pub session_id: String,
+pub struct KillQueryReq {
+    pub query_id: String,
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct KillSessionReply;
 
 #[async_trait::async_trait]
 impl SessionApi for StoreClient {
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn kill(&mut self, session_id: String) -> Result<()> {
-        self.do_action(KillSessionReq { session_id }).await
+    async fn kill_query(&mut self, query_id: String) -> Result<()> {
+        self.do_action(KillQueryReq { query_id }).await
     }
 }
 
-impl RequestFor for KillSessionReq {
+impl RequestFor for KillQueryReq {
     type Reply = ();
 }
 
-impl From<KillSessionReq> for StoreDoAction {
-    fn from(act: KillSessionReq) -> Self {
-        StoreDoAction::KillSession(act)
+impl From<KillQueryReq> for StoreDoAction {
+    fn from(act: KillQueryReq) -> Self {
+        StoreDoAction::KillQuery(act)
     }
 }

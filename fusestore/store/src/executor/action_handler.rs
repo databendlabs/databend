@@ -108,7 +108,7 @@ impl ActionHandler {
             StoreDoAction::DeleteKV(a) => s.serialize(self.handle(a).await?),
 
             // session
-            StoreDoAction::KillSession(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::KillQuery(a) => s.serialize(self.handle(a).await?),
         }
     }
 

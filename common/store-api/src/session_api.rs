@@ -5,5 +5,5 @@
 
 #[async_trait::async_trait]
 pub trait SessionApi {
-    async fn kill(&mut self, session_id: String) -> common_exception::Result<()>;
+    async fn kill_query(&mut self, query_id: String) -> common_exception::Result<()>;
 }
