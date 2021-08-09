@@ -14,10 +14,10 @@ use common_flights::kv_api_impl::PrefixListReply;
 use common_flights::kv_api_impl::PrefixListReq;
 use common_flights::kv_api_impl::UpsertKVAction;
 use common_flights::kv_api_impl::UpsertKVActionResult;
-use Cmd::DeleteKV;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
+use crate::meta_service::cmd::Cmd::UpsertKV;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -30,7 +30,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
             cmd: Cmd::UpsertKV {
                 key: act.key,
                 seq: act.seq,
-                value: act.value,
+                value: Some(act.value),
             },
         };
         let rst = self
@@ -75,9 +75,10 @@ impl RequestHandler<DeleteKVReq> for ActionHandler {
     async fn handle(&self, act: DeleteKVReq) -> common_exception::Result<DeleteKVReply> {
         let cr = LogEntry {
             txid: None,
-            cmd: DeleteKV {
+            cmd: UpsertKV {
                 key: act.key,
                 seq: act.seq.into(),
+                value: None,
             },
         };
 
