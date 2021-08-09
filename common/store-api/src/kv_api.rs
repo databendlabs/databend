@@ -33,14 +33,8 @@ pub trait KVApi {
         &mut self,
         key: &str,
         seq: MatchSeq,
-        value: Vec<u8>,
+        value: Option<Vec<u8>>,
     ) -> common_exception::Result<UpsertKVActionResult>;
-
-    async fn delete_kv(
-        &mut self,
-        key: &str,
-        seq: Option<u64>,
-    ) -> common_exception::Result<Option<SeqValue>>;
 
     async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
 
