@@ -7,7 +7,15 @@ env:
 jobs:
   test:
     name: "Tests"
-    runs-on: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        config:
+          # Linux
+          - { os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false }
+          # Macos
+          - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
     steps:
       - name: Checkout source code
         uses: actions/checkout@v2
