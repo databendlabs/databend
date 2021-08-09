@@ -8,8 +8,6 @@ use common_exception::Result;
 use crate::arrays::builders::*;
 use crate::arrays::get_list_builder;
 use crate::prelude::*;
-use crate::DFBooleanArray;
-use crate::DFUInt16Array;
 
 #[test]
 fn test_take_random() -> Result<()> {

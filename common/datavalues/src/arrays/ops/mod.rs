@@ -15,6 +15,7 @@ mod take_random;
 mod take_single;
 mod to_values;
 mod vec_hash;
+mod contain;
 
 #[cfg(test)]
 mod agg_test;
@@ -34,6 +35,9 @@ mod scatter_test;
 mod take_random_test;
 #[cfg(test)]
 mod take_test;
+#[cfg(test)]
+mod contain_test;
+
 
 pub use agg::*;
 pub use apply::*;
@@ -48,3 +52,4 @@ pub use take_random::*;
 pub use take_single::*;
 pub use to_values::*;
 pub use vec_hash::*;
+pub use contain::*;
