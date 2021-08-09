@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::mem::size_of_val;
+
 use async_raft::LogId;
 pub use async_raft::NodeId;
 use byteorder::BigEndian;
@@ -17,12 +19,19 @@ pub type Term = u64;
 
 /// NodeId, LogIndex and Term need to be serialized with order preserved, for listing items.
 impl SledOrderedSerde for u64 {
-    fn order_preserved_serialize(&self, buf: &mut [u8]) {
-        BigEndian::write_u64(buf, *self);
+    fn ser(&self) -> Result<IVec, ErrorCode> {
+        let size = size_of_val(self);
+        let mut buf = vec![0; size];
+
+        BigEndian::write_u64(&mut buf, *self);
+        Ok(buf.into())
     }
 
-    fn order_preserved_deserialize(buf: &[u8]) -> Self {
-        BigEndian::read_u64(buf)
+    /// (de)serialize a value from `sled::IVec`.
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
+    where Self: Sized {
+        let res = BigEndian::read_u64(v.as_ref());
+        Ok(res)
     }
 }
 
@@ -35,14 +44,6 @@ impl SledOrderedSerde for String {
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
         Ok(String::from_utf8(v.as_ref().to_vec())?)
-    }
-
-    fn order_preserved_serialize(&self, _buf: &mut [u8]) {
-        todo!()
-    }
-
-    fn order_preserved_deserialize(_buf: &[u8]) -> Self {
-        todo!()
     }
 }
 

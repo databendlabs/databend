@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::meta_service::sledkv::SledKV;
+use crate::meta_service::sled_key_space::SledKeySpace;
 use crate::meta_service::NodeId;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
@@ -86,14 +86,6 @@ impl SledOrderedSerde for RaftStateKey {
 
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
     }
-
-    fn order_preserved_serialize(&self, _buf: &mut [u8]) {
-        unimplemented!("no need")
-    }
-
-    fn order_preserved_deserialize(_buf: &[u8]) -> Self {
-        unimplemented!("no need")
-    }
 }
 
 impl SledSerde for RaftStateValue {}
@@ -125,9 +117,9 @@ impl From<RaftStateValue> for (u64, u64) {
     }
 }
 
-impl SledKV for RaftStateKV {
+impl SledKeySpace for RaftStateKV {
     const PREFIX: u8 = 4;
-    const NAME: &'static str = "meta";
+    const NAME: &'static str = "raft-state";
     type K = RaftStateKey;
     type V = RaftStateValue;
 }

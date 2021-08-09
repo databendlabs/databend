@@ -9,7 +9,7 @@ use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::sledkv;
+use crate::meta_service::sled_key_space;
 use crate::meta_service::state_machine::Replication;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
@@ -30,7 +30,7 @@ async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config).await?;
     sm.sm_tree
-        .key_space::<sledkv::Nodes>()
+        .key_space::<sled_key_space::Nodes>()
         .append(&[
             (1, Node::default()),
             (3, Node::default()),
@@ -71,7 +71,7 @@ async fn test_state_machine_init_slots() -> anyhow::Result<()> {
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config).await?;
     sm.sm_tree
-        .key_space::<sledkv::Nodes>()
+        .key_space::<sled_key_space::Nodes>()
         .append(&[
             (1, Node::default()),
             (3, Node::default()),

@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::meta_service::sledkv::SledKV;
+use crate::meta_service::sled_key_space::SledKeySpace;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
 
@@ -64,14 +64,6 @@ impl SledOrderedSerde for StateMachineMetaKey {
 
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
     }
-
-    fn order_preserved_serialize(&self, _buf: &mut [u8]) {
-        unimplemented!("no need")
-    }
-
-    fn order_preserved_deserialize(_buf: &[u8]) -> Self {
-        unimplemented!("no need")
-    }
 }
 
 impl SledSerde for StateMachineMetaValue {}
@@ -94,7 +86,7 @@ impl From<StateMachineMetaValue> for bool {
     }
 }
 
-impl SledKV for StateMachineMeta {
+impl SledKeySpace for StateMachineMeta {
     const PREFIX: u8 = 0;
     const NAME: &'static str = "meta";
     type K = StateMachineMetaKey;
