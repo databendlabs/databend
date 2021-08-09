@@ -1,5 +1,4 @@
 [workspace]
-
 members = [
     # Common
     "common/allocators",
@@ -23,17 +22,17 @@ members = [
     "common/management",
     "common/io",
 
-    # FuseQuery
-    "fusequery/query",
+    # Datafuse Query
+    "query",
 
-    # FuseStore
-    "fusestore/store",
+    # Datafuse Store
+    "store",
 
-    # Fuzz
-    "fusequery/fuzz",
+    # Datafuse SQL Fuzz
+    "query/fuzz",
 
     # CLI
-    "fusecli/cli"
+    "cli"
 ]
 
 [profile.release]

@@ -42,4 +42,4 @@ pretty_assertions = "0.7"
 tempfile = "3.2.0"
 
 [build-dependencies]
-common-building = {path = "../../common/building"}
+common-building = {path = "../common/building"}
