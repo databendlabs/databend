@@ -108,10 +108,7 @@ impl SledTree {
     /// Retrieve the last key value pair.
     pub fn last<KV>(&self) -> common_exception::Result<Option<(KV::K, KV::V)>>
     where KV: SledKeySpace {
-        let range = (
-            Bound::Unbounded,
-            KV::serialize_bound(Bound::Unbounded, "right")?,
-        );
+        let range = KV::serialize_range(&(Bound::Unbounded::<KV::K>, Bound::Unbounded::<KV::K>))?;
 
         let mut it = self.tree.range(range).rev();
         let last = it.next();

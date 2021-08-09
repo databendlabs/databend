@@ -28,14 +28,15 @@ use crate::configs;
 use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::sled_key_space;
+use crate::meta_service::sled_key_space::StateMachineMeta;
 use crate::meta_service::AppliedState;
+use crate::meta_service::AsKeySpace;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 use crate::meta_service::SledSerde;
 use crate::meta_service::SledTree;
-use crate::meta_service::StateMachineMeta;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 use crate::meta_service::StateMachineMetaValue;
@@ -215,7 +216,7 @@ impl StateMachine {
         };
 
         let inited = {
-            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+            let sm_meta = sm.sm_meta();
             sm_meta.get(&Initialized)?
         };
 
@@ -225,7 +226,7 @@ impl StateMachine {
             // Run the default init on a new state machine.
             // TODO(xp): initialization should be customizable.
             let sm = StateMachine::initializer().init(sm);
-            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+            let sm_meta = sm.sm_meta();
             sm_meta
                 .insert(&Initialized, &StateMachineMetaValue::Bool(true))
                 .await?;
@@ -331,7 +332,7 @@ impl StateMachine {
     pub async fn apply(&mut self, log_id: &LogId, data: &LogEntry) -> anyhow::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
 
-        let sm_meta = self.sm_tree.key_space::<StateMachineMeta>();
+        let sm_meta = self.sm_meta();
         sm_meta
             .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
             .await?;
@@ -386,7 +387,7 @@ impl StateMachine {
                 ref node_id,
                 ref node,
             } => {
-                let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
+                let sm_nodes = self.nodes();
 
                 let prev = sm_nodes.get(node_id)?;
 
@@ -545,7 +546,7 @@ impl StateMachine {
     }
 
     fn list_node_ids(&self) -> Vec<NodeId> {
-        let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
+        let sm_nodes = self.nodes();
         sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
@@ -560,7 +561,7 @@ impl StateMachine {
     pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // TODO(xp): handle error
 
-        let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
+        let sm_nodes = self.nodes();
         sm_nodes.get(node_id).expect("fail to get node")
     }
 
@@ -691,6 +692,19 @@ impl StateMachine {
             .take_while(|(k, _)| k.starts_with(prefix))
             .map(|v| (v.0.clone(), v.1.clone()))
             .collect()
+    }
+}
+
+/// Key space support
+impl StateMachine {
+    pub fn sm_meta(&self) -> AsKeySpace<StateMachineMeta> {
+        self.sm_tree.key_space()
+    }
+    pub fn nodes(&self) -> AsKeySpace<sled_key_space::Nodes> {
+        self.sm_tree.key_space()
+    }
+    pub fn files(&self) -> AsKeySpace<sled_key_space::Files> {
+        self.sm_tree.key_space()
     }
 }
 

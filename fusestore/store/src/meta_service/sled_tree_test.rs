@@ -9,11 +9,12 @@ use async_raft::LogId;
 use common_runtime::tokio;
 
 use crate::meta_service::sled_key_space;
+use crate::meta_service::sled_key_space::SledKeySpace;
+use crate::meta_service::sled_key_space::StateMachineMeta;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
 use crate::meta_service::SledTree;
-use crate::meta_service::StateMachineMeta;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 use crate::meta_service::StateMachineMetaValue;
@@ -361,6 +362,10 @@ async fn test_sledtree_get() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_last() -> anyhow::Result<()> {
     init_store_unittest();
+
+    /// This test assumes the following order.
+    /// To ensure a last() does not returns item from another key space with smaller prefix
+    assert!(sled_key_space::Logs::PREFIX < StateMachineMeta::PREFIX);
 
     let tc = new_sled_test_context();
     let db = &tc.db;
