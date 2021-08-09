@@ -11,7 +11,7 @@ edition = "2021"
 [dependencies] # In alphabetical order
 common-runtime = {path = "../runtime"}
 
-opentelemetry = { version = "0.15", default-features = false, features = ["trace", "rt-tokio"] }
+opentelemetry = { version = "0.16", default-features = false, features = ["trace", "rt-tokio"] }
 opentelemetry-jaeger = "0.14"
 tonic = "0.4.3"
 tracing = "0.1.26"
