@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::fmt::Debug;
+use std::collections::HashSet;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -15,6 +18,8 @@ use crate::arrays::PrimitiveArrayBuilder;
 use crate::arrays::Utf8ArrayBuilder;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
+use common_arrow::arrow::compute::kernels::comparison::contains;
+use common_arrow::arrow::compute::kernels::comparison::contains_utf8;
 
 pub trait ArrayContain: Debug {
     /// # Safety
@@ -22,7 +27,7 @@ pub trait ArrayContain: Debug {
     ///
     unsafe fn contain_unchecked(
         &self,
-        _list: &Self,
+        _list: &DFListArray,
     ) -> Result<Self>
     where
         Self: std::marker::Sized,
@@ -37,12 +42,12 @@ pub trait ArrayContain: Debug {
 impl<T> ArrayContain for DataArray<T>
 where T: DFNumericType
 {
-    unsafe fn contain_unchecked(&self, list: &Self) -> Result<Self>
+    unsafe fn contain_unchecked(&self, list: &DFListArray) -> Result<DFBooleanArray>
     where Self: std::marker::Sized,
     {
-        let array = self.downcast_ref();
-        
-
-
+        let arrow_array = self.downcast_ref();
+        let arrow_list = list.downcast_ref();
+        let arrow_res = contain(arrow_array, arrow_list);
+        Ok(DFBooleanArray::from_arrow_array(arrow_res)) 
     }
 }
