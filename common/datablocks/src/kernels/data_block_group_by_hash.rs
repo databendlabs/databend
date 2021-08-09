@@ -8,7 +8,6 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DFBinaryArray;
 use common_datavalues::DataValue;
 use common_exception::Result;
 

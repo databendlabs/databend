@@ -23,6 +23,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;
@@ -67,6 +68,7 @@ pub enum PlanNode {
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),
+    Kill(KillPlan),
 }
 
 impl PlanNode {
@@ -101,6 +103,7 @@ impl PlanNode {
             PlanNode::InsertInto(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
             PlanNode::SubQueryExpression(v) => v.schema(),
+            PlanNode::Kill(v) => v.schema(),
         }
     }
 
@@ -134,6 +137,7 @@ impl PlanNode {
             PlanNode::InsertInto(_) => "InsertIntoPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
+            PlanNode::Kill(_) => "KillQuery",
         }
     }
 

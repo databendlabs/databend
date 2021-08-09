@@ -9,7 +9,6 @@ use common_io::prelude::BinaryRead;
 use super::ArrayDeserializer;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
-use crate::DFUtf8Array;
 use crate::Utf8Type;
 
 pub struct Utf8ArrayBuilder {

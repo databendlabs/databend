@@ -15,17 +15,15 @@ use common_exception::ToErrorCode;
 use common_infallible::RwLock;
 use common_runtime::tokio::sync::mpsc::Sender;
 use common_runtime::tokio::sync::*;
-use common_streams::AbortStream;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
+use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::FlightAction;
-use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::FuseQueryContext;
-use crate::sessions::FuseQueryContextRef;
 use crate::sessions::SessionRef;
 
 struct StreamInfo {
@@ -59,18 +57,13 @@ impl FuseQueryFlightDispatcher {
         self.abort.load(Ordering::Relaxed)
     }
 
-    pub fn get_stream(
-        &self,
-        query_id: &str,
-        stage_id: &str,
-        stream: &str,
-    ) -> Result<mpsc::Receiver<Result<DataBlock>>> {
-        let stage_name = format!("{}/{}", query_id, stage_id);
+    pub fn get_stream(&self, ticket: &StreamTicket) -> Result<mpsc::Receiver<Result<DataBlock>>> {
+        let stage_name = format!("{}/{}", ticket.query_id, ticket.stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
             notify.notify_waiters();
         }
 
-        let stream_name = format!("{}/{}", stage_name, stream);
+        let stream_name = format!("{}/{}", stage_name, ticket.stream);
         match self.streams.write().remove(&stream_name) {
             Some(stream_info) => Ok(stream_info.rx),
             None => Err(ErrorCode::NotFoundStream("Stream is not found")),
@@ -108,8 +101,8 @@ impl FuseQueryFlightDispatcher {
     fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline_builder = PipelineBuilder::create(action_context.clone());
-        let pipeline = pipeline_builder.build(&action.get_plan())?;
+        let pipeline_builder = PipelineBuilder::create(action_context);
+        let mut pipeline = pipeline_builder.build(&action.get_plan())?;
 
         let action_sinks = action.get_sinks();
         let action_query_id = action.get_query_id();
@@ -125,11 +118,9 @@ impl FuseQueryFlightDispatcher {
 
         query_context.execute_task(async move {
             let _session = session;
-            let action_context = action_context;
             wait_start(stage_name, stages_notify).await;
-            let abortable_stream = Self::execute(pipeline, &action_context).await;
 
-            match abortable_stream {
+            match pipeline.execute().await {
                 Err(error) => {
                     tx.send(Err(error)).await.ok();
                 }
@@ -153,8 +144,8 @@ impl FuseQueryFlightDispatcher {
     where T: FlightScatter + Send + 'static {
         let query_context = session.create_context();
         let action_context = FuseQueryContext::new(query_context.clone());
-        let pipeline_builder = PipelineBuilder::create(action_context.clone());
-        let pipeline = pipeline_builder.build(&action.get_plan())?;
+        let pipeline_builder = PipelineBuilder::create(action_context);
+        let mut pipeline = pipeline_builder.build(&action.get_plan())?;
 
         let action_query_id = action.get_query_id();
         let action_stage_id = action.get_stage_id();
@@ -192,12 +183,11 @@ impl FuseQueryFlightDispatcher {
 
         query_context.execute_task(async move {
             let _session = session;
-            let action_context = action_context;
             wait_start(stage_name, stages_notify).await;
 
             let sinks_tx_ref = &sinks_tx;
             let forward_blocks = async move {
-                let mut abortable_stream = Self::execute(pipeline, &action_context).await?;
+                let mut abortable_stream = pipeline.execute().await?;
                 while let Some(item) = abortable_stream.next().await {
                     let forward_blocks = flight_scatter.execute(&item?)?;
 
@@ -218,19 +208,15 @@ impl FuseQueryFlightDispatcher {
 
             if let Err(error) = forward_blocks.await {
                 for tx in &sinks_tx {
-                    // Ignore send error
-                    let send_error_message = tx.send(Err(error.clone()));
-                    let _ = send_error_message.await;
+                    if !tx.is_closed() {
+                        let send_error_message = tx.send(Err(error.clone()));
+                        let _ignore_send_error = send_error_message.await;
+                    }
                 }
             }
         })?;
 
         Ok(())
-    }
-
-    async fn execute(mut pipeline: Pipeline, ctx: &FuseQueryContextRef) -> Result<AbortStream> {
-        let data_stream = pipeline.execute().await?;
-        ctx.try_create_abortable(data_stream)
     }
 
     fn create_stage_streams(

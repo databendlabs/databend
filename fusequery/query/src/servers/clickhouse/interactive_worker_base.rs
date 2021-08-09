@@ -54,8 +54,7 @@ impl InteractiveWorkerBase {
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
                 let async_data_stream = interpreter.execute();
-                let data_stream = async_data_stream.await?;
-                let mut abort_stream = ctx.try_create_abortable(data_stream)?;
+                let mut data_stream = async_data_stream.await?;
 
                 let mut interval_stream = IntervalStream::new(interval(Duration::from_millis(30)));
                 let cancel = Arc::new(AtomicBool::new(false));
@@ -72,7 +71,7 @@ impl InteractiveWorkerBase {
                 });
 
                 ctx.execute_task(async move {
-                    while let Some(block) = abort_stream.next().await {
+                    while let Some(block) = data_stream.next().await {
                         tx2.send(BlockItem::Block(block)).await.ok();
                     }
 

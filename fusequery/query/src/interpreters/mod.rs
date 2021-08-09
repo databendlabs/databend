@@ -34,6 +34,7 @@ mod interpreter_describe_table;
 mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_insert_into;
+mod interpreter_kill;
 mod interpreter_select;
 mod interpreter_setting;
 mod interpreter_show_create_table;

@@ -12,7 +12,6 @@ use clickhouse_srv::types::Block;
 use clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::DFUInt8Array;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::channel::mpsc::Receiver;

@@ -11,7 +11,6 @@ use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
-use crate::DFNumericType;
 
 pub struct PrimitiveArrayBuilder<T>
 where

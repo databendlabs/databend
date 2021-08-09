@@ -4,8 +4,7 @@
 
 use common_arrow::arrow::types::NativeType;
 
-use crate::arrays::DataArray;
-use crate::data_type::*;
+use super::data_type::*;
 use crate::DataField;
 
 pub trait DFDataType: Send + Sync {
@@ -28,6 +27,7 @@ impl_df_datatype!(UInt8Type, UInt8);
 impl_df_datatype!(UInt16Type, UInt16);
 impl_df_datatype!(UInt32Type, UInt32);
 impl_df_datatype!(UInt64Type, UInt64);
+
 impl_df_datatype!(Int8Type, Int8);
 impl_df_datatype!(Int16Type, Int16);
 impl_df_datatype!(Int32Type, Int32);
@@ -99,36 +99,6 @@ impl DFDataType for StructType {
     }
 }
 
-pub type DFNullArray = DataArray<NullType>;
-pub type DFInt8Array = DataArray<Int8Type>;
-pub type DFUInt8Array = DataArray<UInt8Type>;
-pub type DFInt16Array = DataArray<Int16Type>;
-pub type DFUInt16Array = DataArray<UInt16Type>;
-pub type DFInt32Array = DataArray<Int32Type>;
-pub type DFUInt32Array = DataArray<UInt32Type>;
-pub type DFInt64Array = DataArray<Int64Type>;
-pub type DFUInt64Array = DataArray<UInt64Type>;
-
-pub type DFBooleanArray = DataArray<BooleanType>;
-
-pub type DFFloat32Array = DataArray<Float32Type>;
-pub type DFFloat64Array = DataArray<Float64Type>;
-
-pub type DFUtf8Array = DataArray<Utf8Type>;
-pub type DFListArray = DataArray<ListType>;
-pub type DFStructArray = DataArray<StructType>;
-pub type DFBinaryArray = DataArray<BinaryType>;
-
-pub type DFDate32Array = DataArray<Date32Type>;
-pub type DFDate64Array = DataArray<Date64Type>;
-
-pub type DFTimestampSecondArray = DataArray<TimestampSecondType>;
-pub type DFTimestampMillisecondArray = DataArray<TimestampMillisecondType>;
-pub type DFTimestampMicrosecondArray = DataArray<TimestampMicrosecondType>;
-pub type DFTimestampNanosecondArray = DataArray<TimestampNanosecondType>;
-pub type DFIntervalYearMonthArray = DataArray<IntervalYearMonthType>;
-pub type DFIntervalDayTimeArray = DataArray<IntervalDayTimeType>;
-
 pub trait DFPrimitiveType: Send + Sync + DFDataType + 'static {
     type Native: NativeType;
 }
@@ -165,37 +135,43 @@ impl_primitive!(IntervalDayTimeType, i64);
 
 pub trait DFNumericType: DFPrimitiveType {
     type LargestType: DFNumericType;
+    const SIGN: bool;
+    const FLOATING: bool;
+    const SIZE: usize;
 }
 
 macro_rules! impl_numeric {
-    ($ca:ident, $lg: ident) => {
+    ($ca:ident, $lg: ident, $sign: expr, $floating: expr, $size: expr) => {
         impl DFNumericType for $ca {
             type LargestType = $lg;
+            const SIGN: bool = $sign;
+            const FLOATING: bool = $floating;
+            const SIZE: usize = $size;
         }
     };
 }
 
-impl_numeric!(UInt8Type, UInt64Type);
-impl_numeric!(UInt16Type, UInt64Type);
-impl_numeric!(UInt32Type, UInt64Type);
-impl_numeric!(UInt64Type, UInt64Type);
-impl_numeric!(Int8Type, Int64Type);
-impl_numeric!(Int16Type, Int64Type);
-impl_numeric!(Int32Type, Int64Type);
-impl_numeric!(Int64Type, Int64Type);
-impl_numeric!(Float32Type, Float64Type);
-impl_numeric!(Float64Type, Float64Type);
+impl_numeric!(UInt8Type, UInt64Type, false, false, 1);
+impl_numeric!(UInt16Type, UInt64Type, false, false, 2);
+impl_numeric!(UInt32Type, UInt64Type, false, false, 4);
+impl_numeric!(UInt64Type, UInt64Type, false, false, 8);
+impl_numeric!(Int8Type, Int64Type, true, false, 1);
+impl_numeric!(Int16Type, Int64Type, true, false, 2);
+impl_numeric!(Int32Type, Int64Type, true, false, 4);
+impl_numeric!(Int64Type, Int64Type, true, false, 8);
+impl_numeric!(Float32Type, Float64Type, true, true, 4);
+impl_numeric!(Float64Type, Float64Type, true, true, 8);
 
-impl_numeric!(Date32Type, Int64Type);
-impl_numeric!(Date64Type, Int64Type);
+impl_numeric!(Date32Type, Int64Type, true, false, 4);
+impl_numeric!(Date64Type, Int64Type, true, false, 8);
 
-impl_numeric!(TimestampSecondType, Int64Type);
-impl_numeric!(TimestampMillisecondType, Int64Type);
-impl_numeric!(TimestampMicrosecondType, Int64Type);
-impl_numeric!(TimestampNanosecondType, Int64Type);
+impl_numeric!(TimestampSecondType, Int64Type, true, false, 8);
+impl_numeric!(TimestampMillisecondType, Int64Type, true, false, 8);
+impl_numeric!(TimestampMicrosecondType, Int64Type, true, false, 8);
+impl_numeric!(TimestampNanosecondType, Int64Type, true, false, 8);
 
-impl_numeric!(IntervalYearMonthType, Int64Type);
-impl_numeric!(IntervalDayTimeType, Int64Type);
+impl_numeric!(IntervalYearMonthType, Int64Type, true, false, 4);
+impl_numeric!(IntervalDayTimeType, Int64Type, true, false, 8);
 
 pub trait DFIntegerType: DFNumericType {}
 
@@ -219,7 +195,7 @@ impl_integer!(Date64Type, i64);
 
 impl_integer!(TimestampSecondType, i64);
 impl_integer!(TimestampMillisecondType, i64);
-impl_integer!(TimestampMicrosecondType, i32);
+impl_integer!(TimestampMicrosecondType, i64);
 impl_integer!(TimestampNanosecondType, i64);
 
 impl_integer!(IntervalYearMonthType, i32);

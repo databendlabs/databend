@@ -132,6 +132,8 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config).await?;
 
@@ -188,6 +190,8 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_test_context();
     let mut m = StateMachine::open(&tc.config).await?;
 
@@ -267,6 +271,8 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
+    init_store_unittest();
+
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config).await?;
 
@@ -300,9 +306,21 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         case("foo", MatchSeq::Exact(5), "b", None, None),
         case("foo", MatchSeq::Any, "a", None, Some((1, "a"))),
         case("foo", MatchSeq::Any, "b", Some((1, "a")), Some((2, "b"))),
-        case("foo", MatchSeq::Exact(5), "b", Some((2, "b")), None),
+        case(
+            "foo",
+            MatchSeq::Exact(5),
+            "b",
+            Some((2, "b")),
+            Some((2, "b")),
+        ),
         case("bar", MatchSeq::Exact(0), "x", None, Some((3, "x"))),
-        case("bar", MatchSeq::Exact(0), "y", Some((3, "x")), None),
+        case(
+            "bar",
+            MatchSeq::Exact(0),
+            "y",
+            Some((3, "x")),
+            Some((3, "x")),
+        ),
         case("bar", MatchSeq::GE(1), "y", Some((3, "x")), Some((4, "y"))),
     ];
 
@@ -348,6 +366,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
+    init_store_unittest();
+
     struct T {
         // input:
         key: String,
@@ -402,7 +422,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let resp = sm
             .apply_non_dup(&LogEntry {
                 txid: None,
-                cmd: Cmd::DeleteKVByKey {
+                cmd: Cmd::DeleteKV {
                     key: c.key.clone(),
                     seq: c.seq.clone(),
                 },

@@ -15,13 +15,6 @@ use num::NumCast;
 use num::Zero;
 
 use crate::prelude::*;
-use crate::DFBinaryArray;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFNullArray;
-use crate::DFNumericType;
-use crate::DFStructArray;
-use crate::DFUtf8Array;
 
 /// Same common aggregators
 pub trait ArrayAgg: Debug {

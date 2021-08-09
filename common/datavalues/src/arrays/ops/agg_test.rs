@@ -6,9 +6,6 @@ use common_exception::Result;
 
 use crate::arrays::ops::agg::ArrayAgg;
 use crate::prelude::*;
-use crate::DFBooleanArray;
-use crate::DFUInt16Array;
-use crate::DFUtf8Array;
 
 #[test]
 fn test_array_agg() -> Result<()> {

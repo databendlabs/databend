@@ -8,7 +8,6 @@ use std::usize;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::DFUInt64Array;
 use common_exception::Result;
 use common_streams::ProgressStream;
 use futures::stream::Stream;

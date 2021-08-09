@@ -18,9 +18,8 @@ use num::Num;
 use num::NumCast;
 
 use super::DataArray;
-use crate::arrays::*;
+use crate::prelude::*;
 use crate::series::Series;
-use crate::*;
 
 pub trait NumComp: Num + NumCast + PartialOrd {}
 

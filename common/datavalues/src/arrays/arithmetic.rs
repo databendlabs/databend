@@ -25,7 +25,6 @@ use num::ToPrimitive;
 use crate::arrays::ops::*;
 use crate::arrays::DataArray;
 use crate::prelude::*;
-use crate::*;
 
 fn arithmetic_helper<T, Kernel, SKernel, F>(
     lhs: &DataArray<T>,
