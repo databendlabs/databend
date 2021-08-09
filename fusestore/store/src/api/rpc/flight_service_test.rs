@@ -626,10 +626,10 @@ async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
         let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         client
-            .upsert_kv("k1", MatchSeq::Any, b"v1".to_vec())
+            .upsert_kv("k1", MatchSeq::Any, Some(b"v1".to_vec()))
             .await?;
         client
-            .upsert_kv("k2", MatchSeq::Any, b"v2".to_vec())
+            .upsert_kv("k2", MatchSeq::Any, Some(b"v2".to_vec()))
             .await?;
 
         let res = client
@@ -663,7 +663,7 @@ async fn test_flight_generic_kv_list() -> anyhow::Result<()> {
         let mut values = vec![];
         {
             client
-                .upsert_kv("t", MatchSeq::Any, "".as_bytes().to_vec())
+                .upsert_kv("t", MatchSeq::Any, Some("".as_bytes().to_vec()))
                 .await?;
 
             for i in 0..9 {
@@ -671,11 +671,11 @@ async fn test_flight_generic_kv_list() -> anyhow::Result<()> {
                 let val = format!("val_{}", i);
                 values.push(val.clone());
                 client
-                    .upsert_kv(&key, MatchSeq::Any, val.as_bytes().to_vec())
+                    .upsert_kv(&key, MatchSeq::Any, Some(val.as_bytes().to_vec()))
                     .await?;
             }
             client
-                .upsert_kv("v", MatchSeq::Any, "".as_bytes().to_vec())
+                .upsert_kv("v", MatchSeq::Any, Some(b"".to_vec()))
                 .await?;
         }
 
@@ -706,19 +706,21 @@ async fn test_flight_generic_kv_delete() -> anyhow::Result<()> {
 
         let test_key = "test_key";
         client
-            .upsert_kv(test_key, MatchSeq::Any, b"v1".to_vec())
+            .upsert_kv(test_key, MatchSeq::Any, Some(b"v1".to_vec()))
             .await?;
 
         let current = client.get_kv(test_key).await?;
         if let Some((seq, _val)) = current.result {
             // seq mismatch
             let wrong_seq = Some(seq + 1);
-            let res = client.delete_kv(test_key, wrong_seq).await?;
-            assert!(res.is_none());
+            let res = client.upsert_kv(test_key, wrong_seq.into(), None).await?;
+            assert_eq!(res.prev, res.result);
 
             // seq match
-            let res = client.delete_kv(test_key, Some(seq)).await?;
-            assert!(res.is_some());
+            let res = client
+                .upsert_kv(test_key, MatchSeq::Exact(seq), None)
+                .await?;
+            assert!(res.result.is_none());
 
             // read nothing
             let r = client.get_kv(test_key).await?;
@@ -728,16 +730,17 @@ async fn test_flight_generic_kv_delete() -> anyhow::Result<()> {
         }
 
         // key not exist
-        let res = client.delete_kv("not exists", None).await?;
-        assert!(res.is_none());
+        let res = client.upsert_kv("not exists", MatchSeq::Any, None).await?;
+        assert_eq!(None, res.prev);
+        assert_eq!(None, res.result);
 
         // do not care seq
         client
-            .upsert_kv(test_key, MatchSeq::Any, b"v2".to_vec())
+            .upsert_kv(test_key, MatchSeq::Any, Some(b"v2".to_vec()))
             .await?;
 
-        let res = client.delete_kv(test_key, None).await?;
-        assert_eq!(Some((2, b"v2".to_vec())), res);
+        let res = client.upsert_kv(test_key, MatchSeq::Any, None).await?;
+        assert_eq!((Some((2, b"v2".to_vec())), None), (res.prev, res.result));
     }
     Ok(())
 }
@@ -755,33 +758,33 @@ async fn test_flight_generic_kv_update() -> anyhow::Result<()> {
         let test_key = "test_key_for_update";
 
         let r = client
-            .upsert_kv(test_key, MatchSeq::GE(1), b"v1".to_vec())
+            .upsert_kv(test_key, MatchSeq::GE(1), Some(b"v1".to_vec()))
             .await?;
         assert_eq!((None, None), (r.prev, r.result), "not changed");
 
         let r = client
-            .upsert_kv(test_key, MatchSeq::Any, b"v1".to_vec())
+            .upsert_kv(test_key, MatchSeq::Any, Some(b"v1".to_vec()))
             .await?;
         assert_eq!(Some((1, b"v1".to_vec())), r.result);
         let seq = r.result.unwrap().0;
 
         // unmatched seq
         let r = client
-            .upsert_kv(test_key, MatchSeq::Exact(seq + 1), b"v2".to_vec())
+            .upsert_kv(test_key, MatchSeq::Exact(seq + 1), Some(b"v2".to_vec()))
             .await?;
         assert_eq!(Some((1, b"v1".to_vec())), r.prev);
         assert_eq!(Some((1, b"v1".to_vec())), r.result);
 
         // matched seq
         let r = client
-            .upsert_kv(test_key, MatchSeq::Exact(seq), b"v2".to_vec())
+            .upsert_kv(test_key, MatchSeq::Exact(seq), Some(b"v2".to_vec()))
             .await?;
         assert_eq!(Some((1, b"v1".to_vec())), r.prev);
         assert_eq!(Some((2, b"v2".to_vec())), r.result);
 
         // blind update
         let r = client
-            .upsert_kv(test_key, MatchSeq::GE(1), b"v3".to_vec())
+            .upsert_kv(test_key, MatchSeq::GE(1), Some(b"v3".to_vec()))
             .await?;
         assert_eq!(Some((2, b"v2".to_vec())), r.prev);
         assert_eq!(Some((3, b"v3".to_vec())), r.result);
@@ -809,7 +812,7 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
         {
             // write
             let res = client
-                .upsert_kv("foo", MatchSeq::Any, "bar".to_string().into_bytes())
+                .upsert_kv("foo", MatchSeq::Any, Some(b"bar".to_vec()))
                 .await?;
             assert_eq!(None, res.prev);
             assert_eq!(Some((1, "bar".to_string().into_bytes())), res.result);
@@ -818,7 +821,7 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
         {
             // write fails with unmatched seq
             let res = client
-                .upsert_kv("foo", MatchSeq::Exact(2), b"bar".to_vec())
+                .upsert_kv("foo", MatchSeq::Exact(2), Some(b"bar".to_vec()))
                 .await?;
             assert_eq!(
                 (Some((1, b"bar".to_vec())), Some((1, b"bar".to_vec())),),
@@ -830,7 +833,7 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
         {
             // write done with matching seq
             let res = client
-                .upsert_kv("foo", MatchSeq::Exact(1), b"wow".to_vec())
+                .upsert_kv("foo", MatchSeq::Exact(1), Some(b"wow".to_vec()))
                 .await?;
             assert_eq!(Some((1, b"bar".to_vec())), res.prev, "old value");
             assert_eq!(Some((2, b"wow".to_vec())), res.result, "new value");
