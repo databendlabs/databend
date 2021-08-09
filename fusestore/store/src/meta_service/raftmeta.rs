@@ -922,11 +922,7 @@ impl MetaNode {
         if ver <= lower_bound {
             None
         } else {
-            let dbs = sm
-                .get_databases()
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<Vec<_>>();
+            let dbs = sm.get_databases();
             let tbls = sm
                 .tables
                 .iter()

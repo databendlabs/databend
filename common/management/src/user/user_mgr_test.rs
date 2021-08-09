@@ -31,9 +31,8 @@ mock! {
             &mut self,
             key: &str,
             seq: MatchSeq,
-            value: Vec<u8>,
+            value: Option<Vec<u8>>,
         ) -> common_exception::Result<UpsertKVActionResult>;
-    async fn delete_kv(&mut self, key: &str, seq: Option<u64>) -> common_exception::Result<Option<SeqValue>>;
 
     async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
 
@@ -69,7 +68,7 @@ mod add {
         let test_salt = "test_salt";
         let new_user = NewUser::new(test_user_name, test_password, test_salt);
         let user_info = UserInfo::from(new_user);
-        let value = serde_json::to_vec(&user_info)?;
+        let value = Some(serde_json::to_vec(&user_info)?);
 
         let test_key = USER_API_KEY_PREFIX.to_string() + test_user_name;
         let test_seq = MatchSeq::Exact(0);
@@ -421,13 +420,19 @@ mod drop {
     async fn test_drop_user_normal_case() -> common_exception::Result<()> {
         let mut kv = MockKV::new();
         let test_key = USER_API_KEY_PREFIX.to_string() + "test";
-        kv.expect_delete_kv()
+        kv.expect_upsert_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
+                predicate::eq(MatchSeq::Any),
                 predicate::eq(None),
             )
             .times(1)
-            .returning(|_k, _seq| Ok(Some((1, vec![]))));
+            .returning(|_k, _seq, _none| {
+                Ok(UpsertKVActionResult {
+                    prev: Some((1, vec![])),
+                    result: None,
+                })
+            });
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.drop_user("test", None).await;
         assert!(res.is_ok());
@@ -439,13 +444,19 @@ mod drop {
     async fn test_drop_user_unknown() -> common_exception::Result<()> {
         let mut v = MockKV::new();
         let test_key = USER_API_KEY_PREFIX.to_string() + "test";
-        v.expect_delete_kv()
+        v.expect_upsert_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
+                predicate::eq(MatchSeq::Any),
                 predicate::eq(None),
             )
             .times(1)
-            .returning(|_k, _seq| Ok(None));
+            .returning(|_k, _seq, _none| {
+                Ok(UpsertKVActionResult {
+                    prev: None,
+                    result: None,
+                })
+            });
         let mut user_mgr = UserMgr::new(v);
         let res = user_mgr.drop_user("test", None).await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -496,7 +507,7 @@ mod update {
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::GE(1)),
-                predicate::eq(new_value_with_old_salt),
+                predicate::eq(Some(new_value_with_old_salt)),
             )
             .times(1)
             .return_once(|_, _, _| {
@@ -536,7 +547,7 @@ mod update {
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::GE(1)),
-                predicate::eq(new_value),
+                predicate::eq(Some(new_value)),
             )
             .times(1)
             .return_once(|_, _, _| {

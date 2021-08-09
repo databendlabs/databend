@@ -513,3 +513,45 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_get_databases() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_test_context();
+    let mut m = StateMachine::open(&tc.config).await?;
+
+    struct T {
+        name: &'static str,
+    }
+
+    fn case(name: &'static str) -> T {
+        T { name }
+    }
+
+    let cases: Vec<T> = vec![case("foo"), case("bar"), case("wow")];
+
+    for ref c in cases {
+        // add
+
+        m.apply_non_dup(&LogEntry {
+            txid: None,
+            cmd: Cmd::CreateDatabase {
+                name: c.name.to_string(),
+                if_not_exists: true,
+                db: Default::default(),
+            },
+        })
+        .await?;
+    }
+    let dbs = m.get_databases();
+    let mut db_names: Vec<String> = dbs.iter().map(|v| v.0.clone()).collect();
+    db_names.sort();
+    assert_eq!(
+        vec!["bar".to_string(), "foo".to_string(), "wow".to_string()],
+        db_names,
+        "get: {}",
+        db_names.join(",")
+    );
+    Ok(())
+}

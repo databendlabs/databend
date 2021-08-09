@@ -1,7 +1,7 @@
 // Copyright 2020-2021 The Datafuse Authors.
 //
 // SPDX-License-Identifier: Apache-2.0.
-
+#![feature(type_ascription)]
 #[allow(clippy::all)]
 pub mod protobuf {
     // tonic::include_proto!("store_meta");

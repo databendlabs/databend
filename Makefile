@@ -40,6 +40,7 @@ stateless-cluster-test-tls:
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
 test: unit-test stateless-test
+	$(info ************ All tests passed! You are lucky!  ************)
 
 fmt:
 	cargo fmt

@@ -24,6 +24,7 @@ perf.*
 _local_fs/*
 _logs/*
 _meta/*
+_local_fs/*
 
 # for tests in mac
 *.stderr-e
