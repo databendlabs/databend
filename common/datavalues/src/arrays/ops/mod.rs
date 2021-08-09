@@ -33,7 +33,6 @@ mod scatter_test;
 #[cfg(test)]
 mod take_random_test;
 
-
 pub use agg::*;
 pub use apply::*;
 pub use boolean::*;
