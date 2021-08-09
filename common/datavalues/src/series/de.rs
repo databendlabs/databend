@@ -6,7 +6,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::DataType;
 
 macro_rules! creator {
     ($T: ident, $data_type: expr, $capacity: expr) => {

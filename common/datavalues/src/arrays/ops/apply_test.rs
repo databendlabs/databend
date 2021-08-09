@@ -15,7 +15,6 @@ use crate::arrays::ops::apply::ArrayApplyKernel;
 use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::BooleanType;
-use crate::DFUtf8Array;
 use crate::UInt16Type;
 
 fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Type> {

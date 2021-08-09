@@ -11,14 +11,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use num::NumCast;
 
-use crate::arrays::DataArray;
-use crate::data_df_type::*;
 use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
-use crate::DFDataType;
-use crate::DFNumericType;
-use crate::DataType;
 
 /// Cast `DataArray<T>` to `DataArray<N>`
 pub trait ArrayCast: Debug {
@@ -62,7 +57,7 @@ where
 
 macro_rules! cast_with_type {
     ($self:expr, $data_type:expr) => {{
-        use crate::data_type::DataType::*;
+        use crate::types::DataType::*;
 
         match $data_type {
             Boolean => ArrayCast::cast::<BooleanType>($self).map(|ca| ca.into_series()),

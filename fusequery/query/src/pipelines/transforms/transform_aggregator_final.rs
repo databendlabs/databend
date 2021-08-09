@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DFBinaryArray;
+use common_datavalues::prelude::DFBinaryArray;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionRef;

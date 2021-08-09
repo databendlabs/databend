@@ -7,9 +7,6 @@ use common_exception::Result;
 
 use crate::arrays::builders::*;
 use crate::prelude::*;
-use crate::DFBooleanArray;
-use crate::DFUInt16Array;
-use crate::DFUtf8Array;
 use crate::UInt16Type;
 
 #[test]

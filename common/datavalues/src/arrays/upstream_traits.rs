@@ -12,16 +12,10 @@ use common_arrow::arrow::array::*;
 
 use super::get_list_builder;
 use crate::arrays::DataArray;
-use crate::prelude::AlignedVec;
-use crate::prelude::LargeUtf8Array;
+use crate::prelude::*;
 use crate::series::Series;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFNumericType;
-use crate::DFPrimitiveType;
-use crate::DFUtf8Array;
 
 /// FromIterator trait
 
