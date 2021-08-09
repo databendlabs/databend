@@ -4,8 +4,6 @@
 //
 
 use common_exception::ErrorCode;
-use common_flights::kv_api_impl::DeleteKVReply;
-use common_flights::kv_api_impl::DeleteKVReq;
 use common_flights::kv_api_impl::GetKVAction;
 use common_flights::kv_api_impl::GetKVActionResult;
 use common_flights::kv_api_impl::MGetKVAction;
@@ -17,7 +15,6 @@ use common_flights::kv_api_impl::UpsertKVActionResult;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::cmd::Cmd::UpsertKV;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -30,7 +27,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
             cmd: Cmd::UpsertKV {
                 key: act.key,
                 seq: act.seq,
-                value: Some(act.value),
+                value: act.value,
             },
         };
         let rst = self
@@ -67,30 +64,5 @@ impl RequestHandler<PrefixListReq> for ActionHandler {
     async fn handle(&self, act: PrefixListReq) -> common_exception::Result<PrefixListReply> {
         let result = self.meta_node.prefix_list_kv(&(act.0)).await;
         Ok(result)
-    }
-}
-
-#[async_trait::async_trait]
-impl RequestHandler<DeleteKVReq> for ActionHandler {
-    async fn handle(&self, act: DeleteKVReq) -> common_exception::Result<DeleteKVReply> {
-        let cr = LogEntry {
-            txid: None,
-            cmd: UpsertKV {
-                key: act.key,
-                seq: act.seq.into(),
-                value: None,
-            },
-        };
-
-        let rst = self
-            .meta_node
-            .write(cr)
-            .await
-            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
-
-        match rst {
-            AppliedState::KV { prev, result } => Ok(DeleteKVReply { prev, result }),
-            _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
-        }
     }
 }

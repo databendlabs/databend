@@ -10,7 +10,6 @@ use common_exception::ErrorCode;
 use prost::Message;
 use tonic::Request;
 
-use crate::impls::kv_api_impl::DeleteKVReq;
 use crate::impls::kv_api_impl::GetKVAction;
 use crate::impls::kv_api_impl::MGetKVAction;
 use crate::impls::kv_api_impl::PrefixListReq;
@@ -67,7 +66,6 @@ pub enum StoreDoAction {
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),
-    DeleteKV(DeleteKVReq),
 
     // session
     KillQuery(KillQueryReq),
