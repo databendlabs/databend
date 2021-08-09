@@ -103,7 +103,7 @@ tr:nth-child(odd) td {{filter: brightness(90%);}}
             <th>{},&nbsp;s</th>
             <th>{},&nbsp;s</th>
             <th>Ratio of speedup&nbsp;(-) or slowdown&nbsp;(+)</th>
-            <th>Relative difference (after_score&nbsp;&minus&nbsp;before_score) / before_score</th>
+            <th>Relative difference (after_score&nbsp;&minus;&nbsp;before_score) / before_score</th>
             <th>Test</th>
             <th>Status</th>
             <th>Query</th>
