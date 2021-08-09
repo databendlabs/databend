@@ -5,6 +5,7 @@
 
 pub mod kv_api;
 mod meta_api;
+mod session_api;
 mod storage_api;
 
 pub use kv_api::GetKVActionResult;
@@ -20,6 +21,7 @@ pub use meta_api::DropTableActionResult;
 pub use meta_api::GetDatabaseActionResult;
 pub use meta_api::GetTableActionResult;
 pub use meta_api::MetaApi;
+pub use session_api::SessionApi;
 pub use storage_api::AppendResult;
 pub use storage_api::BlockStream;
 pub use storage_api::DataPartInfo;
