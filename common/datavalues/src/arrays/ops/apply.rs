@@ -10,7 +10,6 @@ use common_arrow::arrow::compute::arity::unary;
 use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::utils::NoNull;
-use crate::*;
 
 macro_rules! apply {
     ($self:expr, $f:expr) => {{

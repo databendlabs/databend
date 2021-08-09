@@ -7,10 +7,7 @@ use common_exception::Result;
 use num::Num;
 
 use crate::arrays::DataArray;
-use crate::data_df_type::*;
 use crate::prelude::*;
-use crate::DFListArray;
-use crate::DFPrimitiveType;
 
 pub trait ArrayBuilder<N, T> {
     fn append_value(&mut self, val: N);

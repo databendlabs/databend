@@ -6,15 +6,10 @@ use std::sync::Arc;
 use common_arrow::arrow::array::*;
 
 use crate::arrays::DataArray;
-use crate::prelude::LargeListArray;
-use crate::prelude::LargeUtf8Array;
+use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::series::SeriesWrap;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFNumericType;
-use crate::DFUtf8Array;
 
 /// Random access
 pub trait TakeRandom {

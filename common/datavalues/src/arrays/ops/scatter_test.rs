@@ -9,9 +9,6 @@ use crate::arrays::builders::*;
 use crate::arrays::get_list_builder;
 use crate::arrays::ops::scatter::ArrayScatter;
 use crate::prelude::*;
-use crate::DFBooleanArray;
-use crate::DFUInt16Array;
-use crate::DFUtf8Array;
 
 #[test]
 fn test_scatter() -> Result<()> {

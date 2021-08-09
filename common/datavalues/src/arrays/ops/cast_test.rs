@@ -5,7 +5,6 @@
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::DFUInt16Array;
 
 #[test]
 fn test_array_cast() -> Result<()> {

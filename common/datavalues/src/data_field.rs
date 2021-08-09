@@ -5,6 +5,7 @@
 use common_arrow::arrow::datatypes::Field as ArrowField;
 
 use crate::DataType;
+
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord,
 )]
