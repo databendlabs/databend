@@ -58,7 +58,7 @@ impl ErrorCode {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
-    pub fn add_message(self, msg: impl AsRef<str>) -> Self {        
+    pub fn add_message(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
             display_text: format!("{}\n{}", msg.as_ref(), self.display_text),
