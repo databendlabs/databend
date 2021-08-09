@@ -490,7 +490,7 @@ impl StateMachine {
             } => {
                 let prev = self.kv.get(key).cloned();
                 if seq.match_seq(&prev).is_err() {
-                    return Ok((prev, None).into());
+                    return Ok((prev.clone(), prev).into());
                 }
 
                 let new_seq = self.incr_seq(SEQ_GENERIC_KV);
@@ -501,7 +501,7 @@ impl StateMachine {
                 Ok((prev, Some(record_value)).into())
             }
 
-            Cmd::DeleteKVByKey { ref key, ref seq } => {
+            Cmd::DeleteKV { ref key, ref seq } => {
                 let prev = self.kv.get(key).cloned();
 
                 if seq.match_seq(&prev).is_err() {
