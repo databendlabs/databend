@@ -30,6 +30,10 @@ mod fill_test;
 mod group_hash_test;
 #[cfg(test)]
 mod scatter_test;
+#[cfg(test)]
+mod take_random_test;
+#[cfg(test)]
+mod take_test;
 
 pub use agg::*;
 pub use apply::*;

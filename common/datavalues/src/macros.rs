@@ -21,7 +21,7 @@ macro_rules! dispatch_numeric_types {
 #[macro_export]
 macro_rules! match_data_type_apply_macro_ca {
     ($self:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
-        use crate::DataType;
+
         match $self.data_type() {
             DataType::Utf8 => $macro_utf8!($self.utf8().unwrap() $(, $opt_args)*),
             DataType::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),

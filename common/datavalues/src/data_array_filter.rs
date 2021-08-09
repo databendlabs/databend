@@ -9,7 +9,6 @@ use common_arrow::arrow::compute::filter::build_filter;
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::DFBooleanArray;
 
 pub struct DataArrayFilter;
 

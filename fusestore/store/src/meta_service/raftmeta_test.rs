@@ -284,6 +284,7 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
         tracing::info!("start");
 
         let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+
         let all = test_context_nodes(&tcs);
 
         // test writing on every node
@@ -650,7 +651,8 @@ async fn setup_non_voter(
 /// Write one log on leader, check all nodes replicated the log.
 /// Returns the number log committed.
 async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
-    let leader = meta_nodes[0].clone();
+    let leader_id = meta_nodes[0].get_leader().await;
+    let leader = meta_nodes[leader_id as usize].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
     tracing::info!("leader: last_applied={}", last_applied);
@@ -679,7 +681,8 @@ async fn assert_set_file_on_specified_node_synced(
     write_to: Arc<MetaNode>,
     key: &str,
 ) -> anyhow::Result<u64> {
-    let leader = meta_nodes[0].clone();
+    let leader_id = meta_nodes[0].get_leader().await;
+    let leader = meta_nodes[leader_id as usize].clone();
 
     let last_applied = leader.raft.metrics().borrow().last_applied;
     tracing::info!("leader: last_applied={}", last_applied);

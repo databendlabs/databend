@@ -5,16 +5,9 @@
 use common_exception::Result;
 
 use crate::arrays::builders::Utf8ArrayBuilder;
-use crate::arrays::BinaryArrayBuilder;
-use crate::arrays::DataArray;
-use crate::prelude::CustomIterTools;
+use crate::prelude::*;
 use crate::series::Series;
 use crate::utils::NoNull;
-use crate::DFBinaryArray;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFPrimitiveType;
-use crate::DFUtf8Array;
 
 #[derive(Copy, Clone, Debug)]
 pub enum FillNoneStrategy {

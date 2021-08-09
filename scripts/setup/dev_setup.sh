@@ -330,6 +330,28 @@ if [[ "$OPERATIONS" == "true" ]]; then
   if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
     install_pkg coreutils "$PACKAGE_MANAGER"
   fi
+  #for mysql client
+  case "$PACKAGE_MANAGER" in
+      apt-get)
+          install_pkg mysql-client "$PACKAGE_MANAGER"
+          ;;
+      pacman)
+          install_pkg mysql-clients "$PACKAGE_MANAGER"
+          ;;
+      yum)
+          install_pkg mysql "$PACKAGE_MANAGER"
+          ;;
+      dnf)
+          install_pkg mysql "$PACKAGE_MANAGER"
+          ;;
+      brew)
+          install_pkg mysql "$PACKAGE_MANAGER"
+          ;;
+      *)
+          echo "Unable to install mysql client with package manager: $PACKAGE_MANAGER"
+          exit 1
+          ;;
+  esac
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then

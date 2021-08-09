@@ -6,15 +6,10 @@ use std::sync::Arc;
 use common_arrow::arrow::array::*;
 
 use crate::arrays::DataArray;
-use crate::prelude::LargeListArray;
-use crate::prelude::LargeUtf8Array;
+use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::series::SeriesWrap;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFNumericType;
-use crate::DFUtf8Array;
 
 /// Random access
 pub trait TakeRandom {
@@ -64,11 +59,11 @@ where
     IterNulls(INulls),
 }
 
-pub type Dummy<T> = std::iter::Once<T>;
-pub type TakeIdxIter<'a, I> = TakeIdx<'a, I, Dummy<Option<usize>>>;
-pub type TakeIdxIterNull<'a, INull> = TakeIdx<'a, Dummy<usize>, INull>;
+pub type DummyIter<T> = std::iter::Once<T>;
+pub type TakeIdxIter<'a, I> = TakeIdx<'a, I, DummyIter<Option<usize>>>;
+pub type TakeIdxIterNull<'a, INull> = TakeIdx<'a, DummyIter<usize>, INull>;
 
-impl<'a, I> From<I> for TakeIdx<'a, I, Dummy<Option<usize>>>
+impl<'a, I> From<I> for TakeIdx<'a, I, DummyIter<Option<usize>>>
 where I: Iterator<Item = usize>
 {
     fn from(iter: I) -> Self {
@@ -76,7 +71,7 @@ where I: Iterator<Item = usize>
     }
 }
 
-impl<'a, INulls> From<SeriesWrap<INulls>> for TakeIdx<'a, Dummy<usize>, INulls>
+impl<'a, INulls> From<SeriesWrap<INulls>> for TakeIdx<'a, DummyIter<usize>, INulls>
 where INulls: Iterator<Item = Option<usize>>
 {
     fn from(iter: SeriesWrap<INulls>) -> Self {

@@ -6,7 +6,7 @@ use common_exception::Result;
 
 use crate::arrays::builders::*;
 use crate::arrays::ops::group_hash::GroupHash;
-use crate::DFUInt16Array;
+use crate::prelude::DFUInt16Array;
 
 #[test]
 fn test_group_hash() -> Result<()> {

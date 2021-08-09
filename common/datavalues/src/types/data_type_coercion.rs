@@ -7,7 +7,7 @@ use std::cmp;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataType;
+use crate::prelude::DataType;
 use crate::DataValueArithmeticOperator;
 
 /// Determine if a DataType is signed numeric or not

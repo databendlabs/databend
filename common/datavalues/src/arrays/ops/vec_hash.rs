@@ -11,17 +11,6 @@ use common_exception::Result;
 use super::ArrayApply;
 use crate::arrays::DataArray;
 use crate::prelude::*;
-use crate::DFBinaryArray;
-use crate::DFBooleanArray;
-use crate::DFFloat32Array;
-use crate::DFFloat64Array;
-use crate::DFHasher;
-use crate::DFIntegerType;
-use crate::DFListArray;
-use crate::DFNullArray;
-use crate::DFStructArray;
-use crate::DFUInt64Array;
-use crate::DFUtf8Array;
 use crate::UInt64Type;
 
 pub trait VecHash: Debug {

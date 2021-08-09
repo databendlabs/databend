@@ -7,14 +7,21 @@ env:
 jobs:
   build:
     name: "Tests"
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        config:
+          # Linux
+          - { os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false }
+          # Macos
+          - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
     steps:
       - uses: actions/checkout@v2
 
       - name: Rust setup
         run: |
-          bash ./scripts/setup/dev_setup.sh
-
+          bash ./scripts/setup/dev_setup.sh -o -t
       - name: Cache cargo registry
         uses: actions/cache@v2
         with:
