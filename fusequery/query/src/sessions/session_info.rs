@@ -11,6 +11,7 @@ use crate::sessions::Settings;
 
 pub struct ProcessInfo {
     pub id: String,
+    pub typ: String,
     pub state: String,
     pub database: String,
     #[allow(unused)]
@@ -28,6 +29,7 @@ impl Session {
     fn to_process_info(self: &Arc<Self>, status: &MutableStatus) -> ProcessInfo {
         ProcessInfo {
             id: self.id.clone(),
+            typ: self.typ.clone(),
             state: self.process_state(status),
             database: status.current_database.clone(),
             settings: status.session_settings.clone(),
@@ -45,12 +47,25 @@ impl Session {
     }
 
     fn process_extra_info(self: &Arc<Self>, status: &MutableStatus) -> Option<String> {
-        status.context_shared.as_ref().and_then(|context_shared| {
-            context_shared
-                .running_query
-                .read()
-                .as_ref()
-                .map(Clone::clone)
-        })
+        match self.typ.as_str() {
+            "RPCSession" => Session::rpc_extra_info(status),
+            _ => Session::query_extra_info(status),
+        }
+    }
+
+    fn rpc_extra_info(status: &MutableStatus) -> Option<String> {
+        match status.context_shared.as_ref() {
+            None => None,
+            Some(_) => Some(String::from("Partial cluster query stage")),
+        }
+    }
+
+    fn query_extra_info(status: &MutableStatus) -> Option<String> {
+        status.context_shared.as_ref().and_then(|context_shared| context_shared
+            .running_query
+            .read()
+            .as_ref()
+            .map(Clone::clone)
+        )
     }
 }
