@@ -28,6 +28,7 @@ use crate::Expressions;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::PlanBuilder;
@@ -94,6 +95,7 @@ pub trait PlanRewriter {
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
+            PlanNode::Kill(plan) => self.rewrite_kill(plan),
         }
     }
 
@@ -325,6 +327,10 @@ pub trait PlanRewriter {
 
     fn rewrite_truncate_table(&mut self, plan: &TruncateTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::TruncateTable(plan.clone()))
+    }
+
+    fn rewrite_kill(&mut self, plan: &KillPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Kill(plan.clone()))
     }
 }
 

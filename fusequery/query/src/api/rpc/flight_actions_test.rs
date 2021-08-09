@@ -28,6 +28,7 @@ async fn test_shuffle_action_try_into() -> Result<()> {
     let to_action: Action = from_action.try_into()?;
     let from_action: FlightAction = to_action.try_into()?;
     match from_action {
+        FlightAction::CancelAction(_) => assert!(false),
         FlightAction::BroadcastAction(_) => assert!(false),
         FlightAction::PrepareShuffleAction(action) => {
             assert_eq!(action.query_id, "query_id");

@@ -16,13 +16,12 @@ jobs:
           - { os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false }
           # Macos
           - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
-    steps:
       - uses: actions/checkout@v2
 
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh
-
+          bash ./scripts/setup/dev_setup.sh -o
       - name: Cache cargo registry
         uses: actions/cache@v2
         with:

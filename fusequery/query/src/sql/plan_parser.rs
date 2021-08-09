@@ -30,6 +30,7 @@ use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::InsertIntoPlan;
+use common_planners::KillPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -60,6 +61,7 @@ use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
+use crate::sql::DfKillStatement;
 use crate::sql::DfParser;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfStatement;
@@ -130,6 +132,8 @@ impl PlanParser {
             DfStatement::ShowProcessList(_) => {
                 self.build_from_sql("SELECT * FROM system.processes")
             }
+            DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
+            DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
         }
     }
 
@@ -205,6 +209,24 @@ impl PlanParser {
     pub fn sql_use_database_to_plan(&self, use_db: &DfUseDatabase) -> Result<PlanNode> {
         let db = use_db.name.0[0].value.clone();
         Ok(PlanNode::UseDatabase(UseDatabasePlan { db }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_kill_query_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
+        let id = kill.object_id.value.clone();
+        Ok(PlanNode::Kill(KillPlan {
+            id,
+            kill_connection: false,
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_kill_connection_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
+        let id = kill.object_id.value.clone();
+        Ok(PlanNode::Kill(KillPlan {
+            id,
+            kill_connection: true,
+        }))
     }
 
     #[tracing::instrument(level = "info", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]

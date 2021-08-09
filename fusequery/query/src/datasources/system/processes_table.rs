@@ -102,7 +102,8 @@ impl Table for ProcessesTable {
         ctx: FuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let processes_info = ctx.processes_info();
+        let sessions_manager = ctx.get_sessions_manager();
+        let processes_info = sessions_manager.processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_host = Vec::with_capacity(processes_info.len());

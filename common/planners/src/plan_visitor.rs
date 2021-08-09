@@ -20,6 +20,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::PlanNode;
@@ -107,6 +108,7 @@ pub trait PlanVisitor {
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
+            PlanNode::Kill(plan) => self.visit_kill_query(plan),
         }
     }
 
@@ -255,6 +257,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_truncate_table(&mut self, _: &TruncateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_kill_query(&mut self, _: &KillPlan) -> Result<()> {
         Ok(())
     }
 }
