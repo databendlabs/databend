@@ -96,8 +96,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         match DFQueryResultWriter::create(writer).write(self.base.do_query(query, context)) {
             Ok(_) => {}
             Err(e) => {
-                let query_str = String::from(query);
-                let new_error = e.add_message(query_str);
+                let new_error = e.add_message(query.to_string());
                 return Err(new_error);
             }
         };
