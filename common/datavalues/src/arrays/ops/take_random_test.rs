@@ -46,7 +46,7 @@ fn test_take_random() -> Result<()> {
     assert!(result.series_equal(&expected));
 
     // Test DFUtf8Array
-    let mut utf8_builder = Utf8ArrayBuilder::new(3, 2);
+    let mut utf8_builder = Utf8ArrayBuilder::with_capacity(3);
     utf8_builder.append_value("1a");
     utf8_builder.append_value("2b");
     utf8_builder.append_value("3c");

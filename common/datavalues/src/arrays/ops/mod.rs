@@ -32,6 +32,8 @@ mod group_hash_test;
 mod scatter_test;
 #[cfg(test)]
 mod take_random_test;
+#[cfg(test)]
+mod take_test;
 
 pub use agg::*;
 pub use apply::*;
