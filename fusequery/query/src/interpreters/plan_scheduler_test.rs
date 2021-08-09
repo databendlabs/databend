@@ -59,6 +59,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
+            FlightAction::CancelAction(_) => assert!(false),
             FlightAction::BroadcastAction(_) => assert!(false),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
         }
@@ -139,6 +140,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
+            FlightAction::CancelAction(_) => assert!(false),
             FlightAction::BroadcastAction(_) => assert!(false),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
         }
@@ -239,6 +241,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
+            FlightAction::CancelAction(_) => assert!(false),
             FlightAction::BroadcastAction(_) => assert!(false),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
         }

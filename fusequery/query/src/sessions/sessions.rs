@@ -84,11 +84,12 @@ impl SessionManager {
                 let session = Session::try_create(
                     self.conf.clone(),
                     uuid::Uuid::new_v4().to_string(),
+                    typ.into(),
                     self.clone(),
                 )?;
 
                 sessions.insert(session.get_id(), session.clone());
-                Ok(SessionRef::create(typ.into(), session))
+                Ok(SessionRef::create(session))
             }
         }
     }
@@ -102,14 +103,26 @@ impl SessionManager {
             Occupied(entry) => entry.get().clone(),
             Vacant(_) if aborted => return Err(ErrorCode::AbortedSession("Aborting server.")),
             Vacant(entry) => {
-                let session =
-                    Session::try_create(self.conf.clone(), entry.key().clone(), self.clone())?;
+                let session = Session::try_create(
+                    self.conf.clone(),
+                    entry.key().clone(),
+                    String::from("RPCSession"),
+                    self.clone(),
+                )?;
 
                 entry.insert(session).clone()
             }
         };
 
-        Ok(SessionRef::create(String::from("RpcSession"), session))
+        Ok(SessionRef::create(session))
+    }
+
+    #[allow(clippy::ptr_arg)]
+    pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
+        let sessions = self.active_sessions.read();
+        sessions
+            .get(id)
+            .map(|session| SessionRef::create(session.clone()))
     }
 
     #[allow(clippy::ptr_arg)]
@@ -144,7 +157,7 @@ impl SessionManager {
             active_sessions
                 .read()
                 .values()
-                .for_each(Session::force_kill);
+                .for_each(Session::force_kill_session);
         }
     }
 

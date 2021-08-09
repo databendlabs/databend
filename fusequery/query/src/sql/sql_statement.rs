@@ -12,6 +12,7 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 use sqlparser::ast::ColumnDef;
+use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement as SQLStatement;
@@ -84,6 +85,11 @@ pub struct DfUseDatabase {
     pub name: ObjectName,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfKillStatement {
+    pub object_id: Ident,
+}
+
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement {
@@ -110,6 +116,10 @@ pub enum DfStatement {
 
     // ProcessList
     ShowProcessList(DfShowProcessList),
+
+    // Kill
+    KillQuery(DfKillStatement),
+    KillConn(DfKillStatement),
 }
 
 /// Comment hints from SQL.

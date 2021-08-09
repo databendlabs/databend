@@ -157,6 +157,7 @@ build_exceptions! {
     InvalidMetaBinaryFormat(50),
     AuthenticateFailure(51),
     TLSConfigurationFailure(52),
+    UnknownSession(53),
 
 
     // uncategorized

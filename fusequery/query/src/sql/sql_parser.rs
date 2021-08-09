@@ -31,6 +31,7 @@ use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
+use crate::sql::DfKillStatement;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfShowDatabases;
 use crate::sql::DfShowProcessList;
@@ -172,6 +173,7 @@ impl<'a> DfParser<'a> {
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),
+                        "KILL" => self.parse_kill_query(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => {
@@ -389,6 +391,24 @@ impl<'a> DfParser<'a> {
 
         let name = self.parser.parse_object_name()?;
         Ok(DfStatement::UseDatabase(DfUseDatabase { name }))
+    }
+
+    // Parse 'KILL statement'.
+    fn parse_kill<F>(&mut self, f: F) -> Result<DfStatement, ParserError>
+    where F: Fn(DfKillStatement) -> DfStatement {
+        Ok(f(DfKillStatement {
+            object_id: self.parser.parse_identifier()?,
+        }))
+    }
+
+    // Parse 'KILL statement'.
+    fn parse_kill_query(&mut self) -> Result<DfStatement, ParserError> {
+        match self.consume_token("KILL") {
+            true if self.consume_token("QUERY") => self.parse_kill(DfStatement::KillQuery),
+            true if self.consume_token("CONNECTION") => self.parse_kill(DfStatement::KillConn),
+            true => self.parse_kill(DfStatement::KillConn),
+            false => self.expected("Must KILL", self.parser.peek_token()),
+        }
     }
 
     fn parse_database_engine(&mut self) -> Result<DatabaseEngineType, ParserError> {

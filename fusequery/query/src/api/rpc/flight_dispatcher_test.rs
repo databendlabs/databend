@@ -10,6 +10,7 @@ use common_runtime::tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
+use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::rpc::FuseQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
@@ -20,7 +21,8 @@ use crate::tests::try_create_sessions;
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     let dispatcher = FuseQueryFlightDispatcher::create();
 
-    let get_stream = dispatcher.get_stream("query_id", "stage_id", "stream_id");
+    let stream = stream_ticket("query_id", "stage_id", "stream_id");
+    let get_stream = dispatcher.get_stream(&stream);
 
     match get_stream {
         Ok(_) => assert!(
@@ -55,7 +57,8 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
             }),
         )?;
 
-        let receiver = flight_dispatcher.get_stream(&query_id, &stage_id, &stream_id)?;
+        let stream = stream_ticket(&query_id, &stage_id, &stream_id);
+        let receiver = flight_dispatcher.get_stream(&stream)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
@@ -96,7 +99,8 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
             }),
         )?;
 
-        let receiver = flight_dispatcher.get_stream(&query_id, &stage_id, "stream_1")?;
+        let stream_1 = stream_ticket(&query_id, &stage_id, "stream_1");
+        let receiver = flight_dispatcher.get_stream(&stream_1)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
@@ -112,7 +116,8 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
 
         assert_blocks_eq(expect, &collect_data_blocks.await?);
 
-        let receiver = flight_dispatcher.get_stream(&query_id, &stage_id, "stream_2")?;
+        let stream_2 = stream_ticket(&query_id, &stage_id, "stream_2");
+        let receiver = flight_dispatcher.get_stream(&stream_2)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
@@ -129,6 +134,14 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn stream_ticket(query_id: &str, stage_id: &str, stream: &str) -> StreamTicket {
+    StreamTicket {
+        query_id: query_id.to_string(),
+        stage_id: stage_id.to_string(),
+        stream: stream.to_string(),
+    }
 }
 
 fn generate_uuids(size: usize) -> (Option<String>, Option<String>, Option<String>) {

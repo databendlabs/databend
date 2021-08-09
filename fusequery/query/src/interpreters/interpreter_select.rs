@@ -2,16 +2,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::SelectPlan;
+use common_runtime::tokio::macros::support::Pin;
+use common_runtime::tokio::macros::support::Poll;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::Stream;
+use futures::StreamExt;
 
+use crate::api::CancelAction;
+use crate::api::FlightAction;
+use crate::clusters::Node;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -38,32 +48,40 @@ impl Interpreter for SelectInterpreter {
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
+        // TODO: maybe panic?
+        let mut scheduled = Scheduled::new();
+        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
+        match self.schedule_query(&mut scheduled).await {
+            Ok(stream) => Ok(ScheduledStream::create(scheduled, stream, self.ctx.clone())),
+            Err(error) => {
+                Self::error_handler(scheduled, &self.ctx, timeout).await;
+                Err(error)
+            }
+        }
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.select.schema()
+    }
+}
+
+type Scheduled = HashMap<String, Arc<Node>>;
+
+impl SelectInterpreter {
+    async fn schedule_query(&self, scheduled: &mut Scheduled) -> Result<SendableDataBlockStream> {
+        let optimized_plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
 
         let scheduler = PlanScheduler::try_create(self.ctx.clone())?;
-        let scheduled_tasks = scheduler.reschedule(&plan)?;
-        let remote_actions = scheduled_tasks.get_tasks()?;
-
-        let remote_actions_ref = &remote_actions;
-        let prepare_error_handler = move |error: ErrorCode, end: usize| {
-            let mut killed_set = HashSet::new();
-            for (node, _) in remote_actions_ref.iter().take(end) {
-                if killed_set.get(&node.name).is_none() {
-                    // TODO: ISSUE-204 kill prepared query stage
-                    killed_set.insert(node.name.clone());
-                }
-            }
-
-            Result::Err(error)
-        };
+        let scheduled_tasks = scheduler.reschedule(&optimized_plan)?;
+        let remote_stage_actions = scheduled_tasks.get_tasks()?;
 
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-        for (index, (node, action)) in remote_actions.iter().enumerate() {
+        for (node, action) in remote_stage_actions {
             let mut flight_client = node.get_flight_client(&self.ctx.get_config()).await?;
-            let prepare_query_stage = flight_client.execute_action(action.clone(), timeout);
-            if let Err(error) = prepare_query_stage.await {
-                return prepare_error_handler(error, index);
-            }
+            let executing_action = flight_client.execute_action(action.clone(), timeout);
+
+            executing_action.await?;
+            scheduled.insert(node.name.clone(), node.clone());
         }
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
@@ -71,7 +89,90 @@ impl Interpreter for SelectInterpreter {
         in_local_pipeline.execute().await
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.select.schema()
+    async fn error_handler(scheduled: Scheduled, context: &FuseQueryContextRef, timeout: u64) {
+        let query_id = context.get_id();
+        for (_stream_name, scheduled_node) in scheduled {
+            match scheduled_node
+                .get_flight_client(&context.get_config())
+                .await
+            {
+                Err(cause) => {
+                    log::error!(
+                        "Cannot cancel action for {}, cause: {}",
+                        scheduled_node.name,
+                        cause
+                    );
+                }
+                Ok(mut flight_client) => {
+                    let cancel_action = Self::cancel_flight_action(query_id.clone());
+                    let executing_action = flight_client.execute_action(cancel_action, timeout);
+                    if let Err(cause) = executing_action.await {
+                        log::error!(
+                            "Cannot cancel action for {}, cause:{}",
+                            scheduled_node.name,
+                            cause
+                        );
+                    }
+                }
+            };
+        }
+    }
+
+    fn cancel_flight_action(query_id: String) -> FlightAction {
+        FlightAction::CancelAction(CancelAction { query_id })
+    }
+}
+
+struct ScheduledStream {
+    scheduled: Scheduled,
+    is_success: AtomicBool,
+    context: FuseQueryContextRef,
+    inner: SendableDataBlockStream,
+}
+
+impl ScheduledStream {
+    pub fn create(
+        scheduled: Scheduled,
+        inner: SendableDataBlockStream,
+        context: FuseQueryContextRef,
+    ) -> SendableDataBlockStream {
+        Box::pin(ScheduledStream {
+            inner,
+            scheduled,
+            context,
+            is_success: AtomicBool::new(false),
+        })
+    }
+
+    fn cancel_scheduled_action(&self) -> Result<()> {
+        let scheduled = self.scheduled.clone();
+        let timeout = self.context.get_settings().get_flight_client_timeout()?;
+        let error_handler = SelectInterpreter::error_handler(scheduled, &self.context, timeout);
+        futures::executor::block_on(error_handler);
+        Ok(())
+    }
+}
+
+impl Drop for ScheduledStream {
+    fn drop(&mut self) {
+        if !self.is_success.load(Ordering::Relaxed) {
+            if let Err(cause) = self.cancel_scheduled_action() {
+                log::error!("Cannot cancel action, cause: {:?}", cause);
+            }
+        }
+    }
+}
+
+impl Stream for ScheduledStream {
+    type Item = Result<DataBlock>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.inner.poll_next_unpin(cx).map(|x| match x {
+            None => {
+                self.is_success.store(true, Ordering::Relaxed);
+                None
+            }
+            other => other,
+        })
     }
 }

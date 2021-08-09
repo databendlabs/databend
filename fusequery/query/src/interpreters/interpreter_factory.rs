@@ -8,6 +8,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
+use crate::interpreters::interpreter_kill::KillInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
@@ -40,6 +41,7 @@ impl InterpreterFactory {
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
             PlanNode::InsertInto(v) => InsertIntoInterpreter::try_create(ctx, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx, v),
+            PlanNode::Kill(v) => KillInterpreter::try_create(ctx, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()
