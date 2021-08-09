@@ -60,7 +60,8 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn try_get(&self, index: usize) -> Result<DataValue>;
 
     fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array>;
-    fn group_hash(&self, ptr: usize, step: usize) -> Result<()>;
+    fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()>;
+    fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()>;
 
     fn subtract(&self, rhs: &Series) -> Result<Series>;
     fn add_to(&self, rhs: &Series) -> Result<Series>;
@@ -341,25 +342,6 @@ impl Series {
         }
     }
 
-    /// Check if all values in series are equal where `None == None` evaluates to `true`.
-    pub fn series_equal_missing(&self, other: &Series) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        if self.null_count() != other.null_count() {
-            return false;
-        }
-        // if all null and previous check did not return (so other is also all null)
-        if self.null_count() == self.len() {
-            return true;
-        }
-
-        match self.eq_missing(other) {
-            Ok(arr) => arr.all_true(),
-            Err(_) => false,
-        }
-    }
-
     /// Get a pointer to the underlying data of this Series.
     /// Can be useful for fast comparisons.
     pub fn get_data_ptr(&self) -> usize {
@@ -372,5 +354,10 @@ impl Series {
         let (data_ptr, _vtable_ptr) =
             unsafe { std::mem::transmute::<&dyn SeriesTrait, (usize, usize)>(object) };
         data_ptr
+    }
+
+    pub fn static_cast<T>(&self) -> &DataArray<T> {
+        let object = self.0.deref();
+        unsafe { &*(object as *const dyn SeriesTrait as *const DataArray<T>) }
     }
 }

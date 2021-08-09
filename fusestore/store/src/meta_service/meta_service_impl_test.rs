@@ -16,11 +16,12 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
+use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_add_file() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -60,7 +61,7 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_set_file() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -102,7 +103,7 @@ async fn test_meta_server_set_file() -> anyhow::Result<()> {
 async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
     // Test Cmd::AddFile, Cmd::SetFile, Cma::GetFile
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -197,7 +198,7 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -236,7 +237,7 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     // - Bring up a cluster of one leader and one non-voter
     // - Assert that writing on the non-voter returns ForwardToLeader error
 
-    common_tracing::init_default_tracing();
+    init_store_unittest();
 
     let tc0 = new_test_context();
     let tc1 = new_test_context();

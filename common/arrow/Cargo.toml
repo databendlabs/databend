@@ -1,10 +1,12 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "common-arrow"
 version = "0.1.0"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [features]
 simd = ["arrow/simd"]
@@ -13,11 +15,9 @@ simd = ["arrow/simd"]
 # Workspace dependencies
 
 # Github dependencies
-
-arrow = { git="https://github.com/datafuse-extras/arrow-rs", rev = "86d127b" }
-arrow-flight = {git="https://github.com/datafuse-extras/arrow-rs", rev = "86d127b" }
-parquet = { git="https://github.com/datafuse-extras/arrow-rs", rev = "86d127b", features = ["arrow"] }
-
+arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", rev = "647fddb" }
+arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "647fddb" }
+parquet = {package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", rev = "05854c0"}
 # Crates.io dependencies
 
 [dev-dependencies]

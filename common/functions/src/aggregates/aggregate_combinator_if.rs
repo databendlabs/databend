@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
 use std::fmt;
 
+use bytes::BytesMut;
 use common_arrow::arrow;
+use common_arrow::arrow::array::*;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -74,61 +75,56 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.nullable(input_schema)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
         self.nested.allocate_state(arena)
     }
 
-    fn accumulate(
-        &self,
-        place: StateAddr,
-        columns: &[DataColumn],
-        _input_rows: usize,
-    ) -> Result<()> {
-        if columns.is_empty() {
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
+        if arrays.is_empty() {
             return Ok(());
         };
 
-        let boolean_array = columns[self.argument_len - 1].to_array()?;
+        let boolean_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
         let boolean_array = boolean_array.bool()?;
 
         let arrow_filter_array = boolean_array.downcast_ref();
+        let bitmap = arrow_filter_array.values();
 
         let mut column_array = Vec::with_capacity(self.argument_len - 1);
-        let row_size = match columns.len() - 1 {
+        let row_size = match arrays.len() - 1 {
             0 => {
                 // if it has no args, only return the row_count
                 if boolean_array.null_count() > 0 {
                     // this greatly simplifies subsequent filtering code
                     // now we only have a boolean mask to deal with
-                    arrow::compute::prep_null_mask_filter(arrow_filter_array)
-                        .values()
-                        .count_set_bits()
+                    let boolean_bm = arrow_filter_array.validity();
+                    let res = combine_validities(&Some(bitmap.clone()), boolean_bm);
+                    match res {
+                        Some(v) => v.len() - v.null_count(),
+                        None => 0,
+                    }
                 } else {
-                    arrow_filter_array.values().count_set_bits()
+                    bitmap.len() - bitmap.null_count()
                 }
             }
             1 => {
                 // single array handle
-                let array = columns[0].to_array()?;
-                let data =
-                    arrow::compute::filter(array.get_array_ref().as_ref(), arrow_filter_array)?;
-                column_array.push(DataColumn::from(data));
+                let data = arrow::compute::filter::filter(
+                    arrays[0].get_array_ref().as_ref(),
+                    arrow_filter_array,
+                )?;
+                let data: ArrayRef = Arc::from(data);
+                column_array.push(data.into_series());
                 column_array[0].len()
             }
             _ => {
                 // multi array handle
                 let mut args_array = Vec::with_capacity(self.argument_len - 1);
-                for column in columns.iter().take(self.argument_len - 1) {
-                    let array = column.to_array()?;
-                    args_array.push(array);
+                for column in arrays.iter().take(self.argument_len - 1) {
+                    args_array.push(column.clone());
                 }
                 let data = DataArrayFilter::filter_batch_array(args_array, boolean_array)?;
                 data.into_iter()
-                    .map(DataColumn::from)
                     .for_each(|column| column_array.push(column));
                 column_array[0].len()
             }
@@ -138,15 +134,15 @@ impl AggregateFunction for AggregateIfCombinator {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, columns: &[DataColumn]) -> Result<()> {
-        self.nested.accumulate_row(place, row, columns)
+    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
+        self.nested.accumulate_row(place, row, arrays)
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         self.nested.serialize(place, writer)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &[u8]) -> Result<()> {
+    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         self.nested.deserialize(place, reader)
     }
 

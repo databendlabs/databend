@@ -13,11 +13,10 @@ use futures::channel::*;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::FuseQueryContextShared;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
-use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
@@ -34,6 +33,7 @@ pub(in crate::sessions) struct MutableStatus {
 #[derive(Clone)]
 pub struct Session {
     pub(in crate::sessions) id: String,
+    pub(in crate::sessions) typ: String,
     pub(in crate::sessions) config: Config,
     pub(in crate::sessions) sessions: SessionManagerRef,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
@@ -44,10 +44,12 @@ impl Session {
     pub fn try_create(
         config: Config,
         id: String,
+        typ: String,
         sessions: SessionManagerRef,
     ) -> Result<Arc<Session>> {
         Ok(Arc::new(Session {
             id,
+            typ,
             config,
             sessions,
             ref_count: Arc::new(AtomicUsize::new(0)),
@@ -66,6 +68,10 @@ impl Session {
         self.id.clone()
     }
 
+    pub fn get_type(self: &Arc<Self>) -> String {
+        self.typ.clone()
+    }
+
     pub fn is_aborting(self: &Arc<Self>) -> bool {
         self.mutable_state.lock().abort
     }
@@ -74,8 +80,8 @@ impl Session {
         let mut mutable_state = self.mutable_state.lock();
 
         mutable_state.abort = true;
-        if let Some(io_shutdown) = mutable_state.io_shutdown_tx.take() {
-            if mutable_state.context_shared.is_none() {
+        if mutable_state.context_shared.is_none() {
+            if let Some(io_shutdown) = mutable_state.io_shutdown_tx.take() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
                     // We ignore this error because the receiver is return cancelled error.
@@ -85,17 +91,17 @@ impl Session {
         }
     }
 
-    pub fn force_kill(self: &Arc<Self>) {
-        {
-            let mut mutable_state = self.mutable_state.lock();
-
-            mutable_state.abort = true;
-            if let Some(context_shared) = mutable_state.context_shared.take() {
-                context_shared.kill(/* shutdown executing query */);
-            }
-        }
-
+    pub fn force_kill_session(self: &Arc<Self>) {
+        self.force_kill_query();
         self.kill(/* shutdown io stream */);
+    }
+
+    pub fn force_kill_query(self: &Arc<Self>) {
+        let mut mutable_state = self.mutable_state.lock();
+
+        if let Some(context_shared) = mutable_state.context_shared.take() {
+            context_shared.kill(/* shutdown executing query */);
+        }
     }
 
     pub fn create_context(self: &Arc<Self>) -> FuseQueryContextRef {
@@ -146,11 +152,11 @@ impl Session {
         Ok(self.sessions.get_cluster())
     }
 
-    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.sessions.processes_info()
+    pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
+        self.sessions.clone()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
+    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.sessions.get_datasource()
     }
 }

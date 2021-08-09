@@ -84,6 +84,12 @@ fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name: "truncate-table-passed",
+            sql: "TRUNCATE TABLE db1.t1",
+            expect: "",
+            error: "",
+        },
+        Test {
             name: "cast-passed",
             sql: "select cast('1' as int)",
             expect: "Projection: cast(1 as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
@@ -129,19 +135,19 @@ fn test_plan_parser() -> Result<()> {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
-            error: "",
+            error: "Code: 25, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 2, displayText = not support value expressions other than literal value yet.",
+            error: "Code: 25, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 2, displayText = only supports simple value tuples as source of insertion.",
+            error: "Code: 25, displayText = Unknown table: 't'.",
         },
         Test {
             name: "select-full",
@@ -166,6 +172,24 @@ fn test_plan_parser() -> Result<()> {
             expect: "",
             error: "Code: 2, displayText = CTE is not yet implement.",
         },
+        Test {
+            name: "kleene-logic-null",
+            sql: "select * from numbers(10) where null",
+            expect: "\
+            Projection: number:UInt64\
+            \n  Filter: NULL\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            error: "",
+        },
+        Test {
+            name: "kleene-logic-null-and-true",
+            sql: "select * from numbers(10) where null and true",
+            expect: "\
+            Projection: number:UInt64\
+            \n  Filter: (NULL AND true)\
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            error: "",
+        }
     ];
 
     let ctx = crate::tests::try_create_context()?;

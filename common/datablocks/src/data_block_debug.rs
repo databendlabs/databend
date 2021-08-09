@@ -10,7 +10,7 @@ use crate::DataBlock;
 
 ///! Create a visual representation of record batches
 pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
-    Ok(create_table(results)?.to_string())
+    Ok(create_table(results)?.trim_fmt())
 }
 
 pub fn assert_blocks_eq(expect: Vec<&str>, blocks: &[DataBlock]) {

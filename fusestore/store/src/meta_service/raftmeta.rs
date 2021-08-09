@@ -39,8 +39,10 @@ use common_runtime::tokio::task::JoinHandle;
 use common_tracing::tracing;
 
 use crate::configs;
+use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
+use crate::meta_service::sled_key_space;
 use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
@@ -55,6 +57,8 @@ use crate::meta_service::ShutdownError;
 use crate::meta_service::SledSerde;
 use crate::meta_service::Snapshot;
 use crate::meta_service::StateMachine;
+use crate::meta_service::StateMachineMeta;
+use crate::meta_service::StateMachineMetaKey::LastApplied;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///
@@ -71,6 +75,9 @@ pub struct MetaStore {
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
     pub id: NodeId,
 
+    /// If the instance is opened from an existent state(e.g. load from disk) or created.
+    is_open: bool,
+
     /// The sled db for log and raft_state.
     /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
     /// This db is also used to generate a locally unique id.
@@ -86,6 +93,12 @@ pub struct MetaStore {
     pub log: RaftLog,
 
     /// The Raft state machine.
+    ///
+    /// sled db has its own concurrency control, e.g., batch or transaction.
+    /// But we still need a lock, when installing a snapshot, which is done by replacing the state machine:
+    ///
+    /// - Acquire a read lock to WRITE or READ. Transactional RW relies on sled concurrency control.
+    /// - Acquire a write lock before installing a snapshot, to prevent any write to the db.
     pub state_machine: RwLock<StateMachine>,
 
     pub snapshot_index: Arc<Mutex<u64>>,
@@ -117,47 +130,39 @@ pub struct MetaStore {
 // }
 
 impl MetaStore {
-    /// Create a new `MetaStore` instance.
-    pub async fn new(id: NodeId, config: &configs::Config) -> common_exception::Result<MetaStore> {
-        let db = sled::open(&config.meta_dir)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("opening sled db: {}", config.meta_dir)
-            })?;
-
-        // TODO(xp): merge the duplicated snippets in new() and open(), when I got time :DDD
-
-        let raft_state = RaftState::create(&db, &id).await?;
-        let log = RaftLog::open(&db).await?;
-
-        let sm = RwLock::new(StateMachine::default());
-        let current_snapshot = RwLock::new(None);
-
-        Ok(Self {
-            id,
-            _db: db,
-            raft_state,
-            log,
-            state_machine: sm,
-            snapshot_index: Arc::new(Mutex::new(0)),
-            current_snapshot,
-        })
+    /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
+    /// TODO(xp): introduce a trait to define this behavior?
+    pub fn is_open(&self) -> bool {
+        self.is_open
     }
+}
 
-    /// Open an existent `MetaStore` instance.
-    pub async fn open(config: &configs::Config) -> common_exception::Result<MetaStore> {
-        let db = sled::open(&config.meta_dir)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("opening sled db: {}", config.meta_dir)
-            })?;
+impl MetaStore {
+    /// Open an existent `MetaStore` instance or create an new one:
+    /// 1. If `open` is `Some`, try to open an existent one.
+    /// 2. If `create` is `Some`, try to create one.
+    /// Otherwise it panic
+    #[tracing::instrument(level = "info")]
+    pub async fn open_create(
+        config: &configs::Config,
+        open: Option<()>,
+        create: Option<()>,
+    ) -> common_exception::Result<MetaStore> {
+        let db = get_sled_db();
 
-        let raft_state = RaftState::open(&db)?;
-        let log = RaftLog::open(&db).await?;
+        let raft_state = RaftState::open_create(&db, config, open, create).await?;
+        let is_open = raft_state.is_open();
+        tracing::info!("RaftState opened is_open: {}", is_open);
 
-        let sm = RwLock::new(StateMachine::default());
+        let log = RaftLog::open(&db, config).await?;
+        tracing::info!("RaftLog opened");
+
+        let sm = RwLock::new(StateMachine::open(config).await?);
         let current_snapshot = RwLock::new(None);
 
         Ok(Self {
             id: raft_state.id,
+            is_open,
             _db: db,
             raft_state,
             log,
@@ -173,7 +178,7 @@ impl MetaStore {
     }
 
     pub async fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
-        self.raft_state.read_hard_state().await
+        self.raft_state.read_hard_state()
     }
 }
 
@@ -186,8 +191,8 @@ impl MetaStore {
     ) -> anyhow::Result<MembershipConfig> {
         //TODO(xp): test it
         let it = match upto_index {
-            Some(upto) => self.log.tree.range(0.ser()?..=upto.ser()?).rev(),
-            None => self.log.tree.range(0.ser()?..).rev(),
+            Some(upto) => self.log.inner.tree.range(0.ser()?..=upto.ser()?).rev(),
+            None => self.log.inner.tree.range(0.ser()?..).rev(),
         };
 
         for ivec in it {
@@ -209,14 +214,14 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     type Snapshot = Cursor<Vec<u8>>;
     type ShutdownError = ShutdownError;
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_membership_config(&self) -> anyhow::Result<MembershipConfig> {
         self.get_membership_from_log(None).await
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
-        let hard_state = self.raft_state.read_hard_state().await?;
+        let hard_state = self.raft_state.read_hard_state()?;
 
         let membership = self.get_membership_config().await?;
         let sm = self.state_machine.read().await;
@@ -228,7 +233,14 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                     Some((_index, ent)) => ent.log_id,
                     None => (0, 0).into(),
                 };
-                let last_applied_log = sm.last_applied_log;
+
+                let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+
+                let last_applied_log = sm_meta
+                    .get(&LastApplied)?
+                    .map(LogId::from)
+                    .unwrap_or_default();
+
                 let st = InitialState {
                     last_log_id,
                     last_applied_log,
@@ -247,13 +259,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self, hs), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, hs), fields(id=self.id))]
     async fn save_hard_state(&self, hs: &HardState) -> anyhow::Result<()> {
         self.raft_state.write_hard_state(hs).await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_log_entries(&self, start: u64, stop: u64) -> anyhow::Result<Vec<Entry<LogEntry>>> {
         // Invalid request, return empty vec.
         if start > stop {
@@ -264,7 +276,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(self.log.range_get(start..stop)?)
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> anyhow::Result<()> {
         if stop.as_ref().map(|stop| &start > stop).unwrap_or(false) {
             tracing::error!("invalid request, start > stop");
@@ -280,54 +292,63 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, entry), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, entry), fields(id=self.id))]
     async fn append_entry_to_log(&self, entry: &Entry<LogEntry>) -> anyhow::Result<()> {
         self.log.insert(entry).await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
     async fn replicate_to_log(&self, entries: &[Entry<LogEntry>]) -> anyhow::Result<()> {
         // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
         self.log.append(entries).await?;
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn apply_entry_to_state_machine(
         &self,
         index: &LogId,
         data: &LogEntry,
     ) -> anyhow::Result<AppliedState> {
         let mut sm = self.state_machine.write().await;
-        let resp = sm.apply(index, data)?;
+        let resp = sm.apply(index, data).await?;
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "info", skip(self, entries), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
     async fn replicate_to_state_machine(
         &self,
         entries: &[(&LogId, &LogEntry)],
     ) -> anyhow::Result<()> {
         let mut sm = self.state_machine.write().await;
         for (index, data) in entries {
-            sm.apply(*index, data)?;
+            sm.apply(*index, data).await?;
         }
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn do_log_compaction(&self) -> anyhow::Result<CurrentSnapshotData<Self::Snapshot>> {
         // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
 
         // TODO(xp): add test of small chunk snapshot transfer and installation
-        let (data, last_applied_log);
-        {
+        // TODO(xp): Building a snapshot does not need a lock
+        let (data, last_applied_log) = {
             // Serialize the data of the state machine.
-            let sm = self.state_machine.read().await;
-            data = serde_json::to_vec(&*sm)?;
-            last_applied_log = sm.last_applied_log;
-        } // Release state machine read lock.
+            let sm = self.state_machine.write().await;
+
+            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+
+            let last_applied = sm_meta
+                .get(&LastApplied)?
+                .map(LogId::from)
+                .unwrap_or_default();
+
+            let view = sm.snapshot();
+            let data = StateMachine::serialize_snapshot(view)?;
+            (data, last_applied)
+        };
 
         let snapshot_size = data.len();
 
@@ -375,12 +396,12 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         })
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn create_snapshot(&self) -> anyhow::Result<Box<Self::Snapshot>> {
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
-    #[tracing::instrument(level = "info", skip(self, snapshot), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self, snapshot), fields(id=self.id))]
     async fn finalize_snapshot_installation(
         &self,
         meta: &SnapshotMeta,
@@ -396,28 +417,25 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             data: snapshot.into_inner(),
         };
 
+        tracing::debug!("SNAP META:{:?}", meta);
+
+        // Update the state machine.
         {
-            let t = &new_snapshot.data;
-            let y = std::str::from_utf8(t).unwrap();
-            tracing::debug!("SNAP META:{:?}", meta);
-            tracing::debug!("JSON SNAP DATA:{}", y);
+            let mut sm = self.state_machine.write().await;
+            sm.install_snapshot(&new_snapshot.data).await?;
         }
 
         // Update log.
         {
-            // Remove logs that are included in the snapshot.
-            self.log.range_delete(0..=meta.last_log_id.index).await?;
-
+            // Replace the last log in state machine with a pointer log
+            // TODO(xp): This is not necessary if we stores the committed membership.
             self.log
                 .append(&[Entry::new_snapshot_pointer(meta)])
                 .await?;
-        }
 
-        // Update the state machine.
-        {
-            let new_sm: StateMachine = serde_json::from_slice(&new_snapshot.data)?;
-            let mut sm = self.state_machine.write().await;
-            *sm = new_sm;
+            // Remove logs that are included in the snapshot,
+            // except the last one that is replaced with a snapshot pointer.
+            self.log.range_delete(0..meta.last_log_id.index).await?;
         }
 
         // Update current snapshot.
@@ -426,7 +444,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(myid=self.id))]
+    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn get_current_snapshot(
         &self,
     ) -> anyhow::Result<Option<CurrentSnapshotData<Self::Snapshot>>> {
@@ -469,7 +487,7 @@ impl MetaStore {
             .get_node(node_id)
             .await
             .map(|n| n.address)
-            .ok_or_else(|| ErrorCode::UnknownNode(format!("{}", node_id)))?;
+            .ok_or_else(|| ErrorCode::UnknownNode(format!("node id: {}", node_id)))?;
 
         Ok(addr)
     }
@@ -483,10 +501,12 @@ impl MetaStore {
             .await
             .expect("fail to get membership");
 
-        for i in sm.nodes.keys() {
+        let sm_nodes = sm.sm_tree.key_space::<sled_key_space::Nodes>();
+        let x = sm_nodes.range_keys(..).expect("fail to list nodes");
+        for node_id in x {
             // it has been added into this cluster and is not a voter.
-            if !ms.contains(i) {
-                rst.insert(*i);
+            if !ms.contains(&node_id) {
+                rst.insert(node_id);
             }
         }
         rst
@@ -498,7 +518,7 @@ pub struct MetaNodeBuilder {
     config: Option<Config>,
     sto: Option<Arc<MetaStore>>,
     monitor_metrics: bool,
-    start_grpc_service: bool,
+    addr: Option<String>,
 }
 
 impl MetaNodeBuilder {
@@ -538,11 +558,15 @@ impl MetaNodeBuilder {
             MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
         }
 
-        if self.start_grpc_service {
-            let addr = sto.get_node_addr(&node_id).await?;
-            tracing::info!("about to start grpc on {}", addr);
-            MetaNode::start_grpc(mn.clone(), &addr).await?;
-        }
+        let addr = if let Some(a) = self.addr.take() {
+            a
+        } else {
+            sto.get_node_addr(&node_id).await?
+        };
+        tracing::info!("about to start grpc on {}", addr);
+
+        MetaNode::start_grpc(mn.clone(), &addr).await?;
+
         Ok(mn)
     }
 
@@ -554,8 +578,8 @@ impl MetaNodeBuilder {
         self.sto = Some(sto);
         self
     }
-    pub fn start_grpc_service(mut self, b: bool) -> Self {
-        self.start_grpc_service = b;
+    pub fn addr(mut self, a: String) -> Self {
+        self.addr = Some(a);
         self
     }
     pub fn monitor_metrics(mut self, b: bool) -> Self {
@@ -573,7 +597,7 @@ impl MetaNode {
             config: Some(raft_config),
             sto: None,
             monitor_metrics: true,
-            start_grpc_service: true,
+            addr: None,
         }
     }
 
@@ -631,16 +655,49 @@ impl MetaNode {
     /// Start a MetaStore node from initialized store.
     #[tracing::instrument(level = "info")]
     pub async fn open(config: &configs::Config) -> common_exception::Result<Arc<MetaNode>> {
-        let sto = MetaStore::open(config).await?;
-        let sto = Arc::new(sto);
-        let b = MetaNode::builder(config).node_id(sto.id).sto(sto);
+        let (mn, _is_open) = Self::open_create_boot(config, Some(()), None, None).await?;
+        Ok(mn)
+    }
 
-        b.build().await
+    /// Open or create a MetaStore node.
+    /// Optionally boot a single node cluster.
+    /// 1. If `open` is `Some`, try to open an existent one.
+    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
+    /// 3. If `boot` is `Some` and it is just created, try to initialize a single-node cluster.
+    #[tracing::instrument(level = "info")]
+    pub async fn open_create_boot(
+        config: &configs::Config,
+        open: Option<()>,
+        create: Option<()>,
+        boot: Option<()>,
+    ) -> common_exception::Result<(Arc<MetaNode>, bool)> {
+        let sto = MetaStore::open_create(config, open, create).await?;
+        let is_open = sto.is_open();
+        let sto = Arc::new(sto);
+        let mut b = MetaNode::builder(config).sto(sto.clone());
+
+        if is_open {
+            // read id from sto, read listening addr from sto
+            b = b.node_id(sto.id);
+        } else {
+            // read id from config, read listening addr from config.
+            b = b.node_id(config.id).addr(config.meta_api_addr());
+        }
+
+        let mn = b.build().await?;
+
+        tracing::info!("MetaNode started: {:?}", config);
+
+        if !is_open && boot.is_some() {
+            mn.init_cluster(config.meta_api_addr()).await?;
+        }
+
+        Ok((mn, is_open))
     }
 
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn stop(&self) -> common_exception::Result<i32> {
-        // TODO need to be reentrant.
+        // TODO(xp): need to be reentrant.
 
         let mut rx = self.raft.metrics();
 
@@ -669,7 +726,7 @@ impl MetaNode {
             joined += 1;
         }
 
-        tracing::info!("shutdown: myid={}", self.sto.id);
+        tracing::info!("shutdown: id={}", self.sto.id);
         Ok(joined)
     }
 
@@ -734,22 +791,32 @@ impl MetaNode {
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
         let mn = MetaNode::boot_non_voter(node_id, config).await?;
+        mn.init_cluster(config.meta_api_addr()).await?;
+
+        Ok(mn)
+    }
+
+    // Initialized a single node cluster by:
+    // - Initializing raft membership.
+    // - Adding current node into the meta data.
+    #[tracing::instrument(level = "info", skip(self))]
+    pub async fn init_cluster(&self, addr: String) -> common_exception::Result<()> {
+        let node_id = self.sto.id;
 
         let mut cluster_node_ids = HashSet::new();
         cluster_node_ids.insert(node_id);
 
-        let rst = mn
+        let rst = self
             .raft
             .initialize(cluster_node_ids)
             .await
             .map_err(|x| ErrorCode::MetaServiceError(format!("{:?}", x)))?;
 
-        tracing::info!("booted, rst: {:?}", rst);
+        tracing::info!("initialized cluster, rst: {:?}", rst);
 
-        let addr = config.meta_api_addr();
-        mn.add_node(node_id, addr).await?;
+        self.add_node(node_id, addr).await?;
 
-        Ok(mn)
+        Ok(())
     }
 
     /// Boot a node that is going to join an existent cluster.
@@ -760,28 +827,14 @@ impl MetaNode {
         node_id: NodeId,
         config: &configs::Config,
     ) -> common_exception::Result<Arc<MetaNode>> {
-        // TODO test MetaNode::new() on a booted store.
-        // TODO: Before calling this func, the node should be added as a non-voter to leader.
         // TODO(xp): what if fill in the node info into an empty state-machine, then MetaNode can be started without delaying grpc.
 
-        // When booting, there is addr stored in local store.
-        // Thus we need to start grpc manually.
-        let sto = MetaStore::new(node_id, config).await?;
+        let mut config = config.clone();
+        config.id = node_id;
 
-        let b = MetaNode::builder(config)
-            .node_id(node_id)
-            .start_grpc_service(false)
-            .sto(Arc::new(sto));
+        let (mn, _is_open) = Self::open_create_boot(&config, None, Some(()), None).await?;
 
-        let mn = b.build().await?;
-
-        let addr = config.meta_api_addr();
-
-        // Manually start the grpc, since no addr is stored yet.
-        // We can not use the startup routine for initialized node.
-        MetaNode::start_grpc(mn.clone(), &addr).await?;
-
-        tracing::info!("booted non-voter: {}={}", node_id, &addr);
+        tracing::info!("booted non-voter: {:?}", config);
 
         Ok(mn)
     }
@@ -855,6 +908,32 @@ impl MetaNode {
 
         let sm = self.sto.state_machine.read().await;
         sm.get_database(name)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_database_meta(
+        &self,
+        lower_bound: Option<u64>,
+    ) -> Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.state_machine.read().await;
+        let ver = sm.get_database_meta_ver();
+        if ver <= lower_bound {
+            None
+        } else {
+            let dbs = sm
+                .get_databases()
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<Vec<_>>();
+            let tbls = sm
+                .tables
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect::<Vec<_>>();
+            Some((ver.unwrap_or(0), dbs, tbls))
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

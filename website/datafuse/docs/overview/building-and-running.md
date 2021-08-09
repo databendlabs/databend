@@ -19,7 +19,7 @@ This document describes how to build and run [FuseQuery](https://github.com/data
 
     ```markdown
     $ curl -fsS https://raw.githubusercontent.com/datafuselabs/datafuse/master/scripts/installer/install-datafuse.sh | bash
-   ```
+    ```
 
 === "From source"
 

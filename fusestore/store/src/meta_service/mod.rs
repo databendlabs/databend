@@ -9,14 +9,19 @@ pub mod log_entry;
 pub mod meta_service_impl;
 pub mod network;
 pub mod placement;
+pub mod raft_db;
 pub mod raft_log;
 pub mod raft_state;
+pub mod raft_state_kv;
 pub mod raft_txid;
 pub mod raft_types;
 pub mod raftmeta;
+pub mod sled_key_space;
 pub mod sled_serde;
+pub mod sled_tree;
 pub mod snapshot;
 pub mod state_machine;
+pub mod state_machine_meta;
 
 pub use applied_state::AppliedState;
 pub use cmd::Cmd;
@@ -26,17 +31,27 @@ pub use log_entry::LogEntry;
 pub use meta_service_impl::MetaServiceImpl;
 pub use network::Network;
 pub use placement::Placement;
+pub use raft_state_kv::RaftStateKV;
+pub use raft_state_kv::RaftStateKey;
+pub use raft_state_kv::RaftStateValue;
 pub use raft_txid::RaftTxId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
+pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledSerde;
+pub use sled_tree::AsKeySpace;
+pub use sled_tree::SledTree;
+pub use sled_tree::SledValueToKey;
 pub use snapshot::Snapshot;
 pub use state_machine::Node;
 pub use state_machine::Slot;
 pub use state_machine::StateMachine;
+pub use state_machine_meta::StateMachineMeta;
+pub use state_machine_meta::StateMachineMetaKey;
+pub use state_machine_meta::StateMachineMetaValue;
 
 pub use crate::protobuf::meta_service_client::MetaServiceClient;
 pub use crate::protobuf::meta_service_server::MetaService;
@@ -61,5 +76,7 @@ mod raft_types_test;
 mod raftmeta_test;
 #[cfg(test)]
 mod sled_serde_test;
+#[cfg(test)]
+mod sled_tree_test;
 #[cfg(test)]
 mod state_machine_test;

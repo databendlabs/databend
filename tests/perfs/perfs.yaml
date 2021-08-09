@@ -6,26 +6,37 @@ config:
 
 perfs:
   - name: Aggregation avg
-    query: SELECT avg(number) from numbers_mt(100000000000)
+    query: SELECT avg(number) from numbers_mt(100000000)
 
   - name: Aggregation count
-    query: SELECT count(number) from numbers_mt(100000000000)
+    query: SELECT count(number) from numbers_mt(100000000)
     iterations: 2
 
   - name: Aggregation max
-    query: SELECT max(number) from numbers_mt(100000000000);
+    query: SELECT max(number) from numbers_mt(100000000);
 
   - name: Aggregation sum
-    query: SELECT sum(number) from numbers_mt(100000000000)
+    query: SELECT sum(number) from numbers_mt(100000000)
 
   - name: Sort
-    query: SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 10
+    query: SELECT number FROM numbers_mt(1000000) ORDER BY number DESC LIMIT 10
 
   - name: Substring
-    query: SELECT substring(cast(number as text) from 3) from numbers_mt(1000000) where number > 100 order by number desc limit 10
+    query: SELECT substring(cast(number as text) from 3) from numbers_mt(100000) where number > 100 order by number desc limit 10
 
   - name: Group By
-    query: SELECT max(number) as max,sum(number) as sum FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 ORDER BY max
+    query: SELECT max(number) as max,sum(number) as sum FROM numbers_mt(10000000) GROUP BY number % 3, number % 4, number % 5 ORDER BY max
 
+  - name: Filter Eq
+    query: SELECT cout() FROM numbers_mt(100000000) where number = 10000
+
+  - name: Filter Neq
+    query: SELECT cout() FROM numbers_mt(100000000) where number != 10000
+
+  - name: Filter Gt
+    query: SELECT cout() FROM numbers_mt(100000000) where number > 10000
+
+  - name: Filter GtLt
+    query: SELECT cout() FROM numbers_mt(100000000) where number > 10000 and number <= 100000000
 
 

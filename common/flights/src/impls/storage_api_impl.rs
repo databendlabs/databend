@@ -5,12 +5,13 @@
 
 use std::convert::TryFrom;
 
+// io::ipc::write::common::{encoded_batch, DictionaryTracker, EncodedData, IpcWriteOptions}
 use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
-use common_arrow::arrow::ipc::writer::IpcWriteOptions;
+use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
+use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_arrow::arrow_flight::SchemaAsIpc;
 use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -23,11 +24,13 @@ pub use common_store_api::DataPartInfo;
 pub use common_store_api::ReadAction;
 pub use common_store_api::ReadPlanResult;
 pub use common_store_api::StorageApi;
+pub use common_store_api::TruncateTableResult;
 use common_streams::SendableDataBlockStream;
 use futures::SinkExt;
 use futures::StreamExt;
 use tonic::Request;
 
+use crate::action_declare;
 use crate::impls::storage_api_impl_utils;
 pub use crate::impls::storage_api_impl_utils::get_meta;
 use crate::RequestFor;
@@ -39,16 +42,18 @@ use crate::StoreDoGet;
 pub struct ReadPlanAction {
     pub scan_plan: ScanPlan,
 }
+action_declare!(ReadPlanAction, ReadPlanResult, StoreDoAction::ReadPlan);
 
-impl RequestFor for ReadPlanAction {
-    type Reply = ReadPlanResult;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct TruncateTableAction {
+    pub db: String,
+    pub table: String,
 }
-
-impl From<ReadPlanAction> for StoreDoAction {
-    fn from(act: ReadPlanAction) -> Self {
-        StoreDoAction::ReadPlan(act)
-    }
-}
+action_declare!(
+    TruncateTableAction,
+    TruncateTableResult,
+    StoreDoAction::TruncateTable
+);
 
 #[async_trait::async_trait]
 impl StorageApi for StoreClient {
@@ -77,7 +82,7 @@ impl StorageApi for StoreClient {
         let res_stream = res.map(move |item| {
             item.map_err(|status| ErrorCode::TokioError(status.to_string()))
                 .and_then(|item| {
-                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), &[])
+                    flight_data_to_arrow_batch(&item, arrow_schema.clone(), true, &[])
                         .map_err(ErrorCode::from)
                 })
                 .and_then(DataBlock::try_from)
@@ -94,9 +99,9 @@ impl StorageApi for StoreClient {
     ) -> common_exception::Result<AppendResult> {
         let ipc_write_opt = IpcWriteOptions::default();
         let arrow_schema: ArrowSchemaRef = Arc::new(scheme_ref.to_arrow());
-        let flight_schema = SchemaAsIpc::new(arrow_schema.as_ref(), &ipc_write_opt).into();
-        let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
 
+        let flight_schema = flight_data_from_arrow_schema(arrow_schema.as_ref(), &ipc_write_opt);
+        let (mut tx, flight_stream) = futures::channel::mpsc::channel(100);
         tx.send(flight_schema)
             .await
             .map_err(|send_err| ErrorCode::BrokenChannel(send_err.to_string()))?;
@@ -131,9 +136,17 @@ impl StorageApi for StoreClient {
 
         let res = self.client.do_put(req).await?;
 
-        use anyhow::Context;
-        let put_result = res.into_inner().next().await.context("empty response")??;
-        let vec = serde_json::from_slice(&put_result.app_metadata)?;
-        Ok(vec)
+        match res.into_inner().message().await? {
+            Some(res) => Ok(serde_json::from_slice(&res.app_metadata)?),
+            None => Err(ErrorCode::UnknownException("Put result is empty")),
+        }
+    }
+
+    async fn truncate(
+        &mut self,
+        db: String,
+        table: String,
+    ) -> common_exception::Result<TruncateTableResult> {
+        self.do_action(TruncateTableAction { db, table }).await
     }
 }

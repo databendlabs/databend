@@ -28,6 +28,11 @@ pub struct BroadcastAction {
     pub sinks: Vec<String>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CancelAction {
+    pub query_id: String,
+}
+
 impl TryInto<ShuffleAction> for Vec<u8> {
     type Error = Status;
 
@@ -76,10 +81,35 @@ impl TryInto<Vec<u8>> for BroadcastAction {
     }
 }
 
+impl TryInto<CancelAction> for Vec<u8> {
+    type Error = Status;
+
+    fn try_into(self) -> Result<CancelAction, Self::Error> {
+        match std::str::from_utf8(&self) {
+            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            Ok(utf8_body) => match serde_json::from_str::<CancelAction>(utf8_body) {
+                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+                Ok(action) => Ok(action),
+            },
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for CancelAction {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
+            "Logical error: cannot serialize BroadcastAction."
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum FlightAction {
     PrepareShuffleAction(ShuffleAction),
     BroadcastAction(BroadcastAction),
+    CancelAction(CancelAction),
 }
 
 impl FlightAction {
@@ -87,6 +117,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.query_id.clone(),
             FlightAction::PrepareShuffleAction(action) => action.query_id.clone(),
+            _ => unimplemented!(),
         }
     }
 
@@ -94,6 +125,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.stage_id.clone(),
             FlightAction::PrepareShuffleAction(action) => action.stage_id.clone(),
+            _ => unimplemented!(),
         }
     }
 
@@ -101,6 +133,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.sinks.clone(),
             FlightAction::PrepareShuffleAction(action) => action.sinks.clone(),
+            _ => unimplemented!(),
         }
     }
 
@@ -108,6 +141,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(action) => action.plan.clone(),
             FlightAction::PrepareShuffleAction(action) => action.plan.clone(),
+            _ => unimplemented!(),
         }
     }
 
@@ -115,6 +149,7 @@ impl FlightAction {
         match self {
             FlightAction::BroadcastAction(_) => None,
             FlightAction::PrepareShuffleAction(action) => Some(action.scatters_expression.clone()),
+            _ => unimplemented!(),
         }
     }
 }
@@ -126,6 +161,7 @@ impl TryInto<FlightAction> for Action {
         match self.r#type.as_str() {
             "PrepareShuffleAction" => Ok(FlightAction::PrepareShuffleAction(self.body.try_into()?)),
             "BroadcastAction" => Ok(FlightAction::BroadcastAction(self.body.try_into()?)),
+            "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 un_implemented
@@ -146,6 +182,10 @@ impl TryInto<Action> for FlightAction {
             FlightAction::BroadcastAction(broadcast_action) => Ok(Action {
                 r#type: String::from("BroadcastAction"),
                 body: broadcast_action.try_into()?,
+            }),
+            FlightAction::CancelAction(cancel_action) => Ok(Action {
+                r#type: String::from("CancelAction"),
+                body: cancel_action.try_into()?,
             }),
         }
     }

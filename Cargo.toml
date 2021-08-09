@@ -19,7 +19,9 @@ members = [
     "common/tracing",
     "common/profiling",
     "common/store-api",
+    "common/stoppable",
     "common/management",
+    "common/io",
 
     # FuseQuery
     "fusequery/query",
@@ -28,7 +30,10 @@ members = [
     "fusestore/store",
 
     # Fuzz
-    "fusequery/fuzz"
+    "fusequery/fuzz",
+
+    # CLI
+    "fusecli/cli"
 ]
 
 [profile.release]

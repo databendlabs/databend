@@ -7,10 +7,10 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::datatypes::IntervalUnit;
 use common_exception::Result;
 
 use crate::arrays::*;
+use crate::prelude::*;
 use crate::series::wrap::SeriesWrap;
 use crate::series::*;
 use crate::*;
@@ -151,8 +151,12 @@ macro_rules! impl_dyn_arrays {
                 cast_and_apply!(self, vec_hash, hasher)
             }
 
-            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
-                cast_and_apply!(self, group_hash, ptr, step)
+            fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
+                cast_and_apply!(self, fixed_hash, ptr, step)
+            }
+
+            fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+                cast_and_apply!(self, serialize, vec)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {

@@ -7,12 +7,18 @@ use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 
+use crate::configs::Config;
 use crate::datasources::system::*;
 use crate::datasources::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let config = Config {
+        disable_remote_catalog: true,
+        ..Config::default()
+    };
+
+    let ctx = crate::tests::try_create_context_with_conf(config)?;
     let table = TablesTable::create();
     let source_plan = table.read_plan(
         ctx.clone(),

@@ -23,6 +23,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::ProjectionPlan;
@@ -34,6 +35,7 @@ use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
+use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -60,11 +62,13 @@ pub enum PlanNode {
     CreateTable(CreateTablePlan),
     DescribeTable(DescribeTablePlan),
     DropTable(DropTablePlan),
+    TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),
+    Kill(KillPlan),
 }
 
 impl PlanNode {
@@ -92,12 +96,14 @@ impl PlanNode {
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
+            PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
             PlanNode::UseDatabase(v) => v.schema(),
             PlanNode::InsertInto(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
             PlanNode::SubQueryExpression(v) => v.schema(),
+            PlanNode::Kill(v) => v.schema(),
         }
     }
 
@@ -124,12 +130,14 @@ impl PlanNode {
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
+            PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
             PlanNode::UseDatabase(_) => "UseDatabasePlan",
             PlanNode::InsertInto(_) => "InsertIntoPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
+            PlanNode::Kill(_) => "KillQuery",
         }
     }
 

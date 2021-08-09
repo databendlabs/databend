@@ -4,6 +4,8 @@
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use common_arrow::arrow::bitmap::Bitmap;
+
 pub struct Wrap<T>(pub T);
 
 impl<T> Deref for Wrap<T> {
@@ -67,5 +69,14 @@ pub fn get_iter_capacity<T, I: Iterator<Item = T>>(iter: &I) -> usize {
         (_lower, Some(upper)) => upper,
         (0, None) => 1024,
         (lower, None) => lower,
+    }
+}
+
+pub fn combine_validities(lhs: &Option<Bitmap>, rhs: &Option<Bitmap>) -> Option<Bitmap> {
+    match (lhs, rhs) {
+        (Some(lhs), None) => Some(lhs.clone()),
+        (None, Some(rhs)) => Some(rhs.clone()),
+        (None, None) => None,
+        (Some(lhs), Some(rhs)) => Some(lhs & rhs),
     }
 }

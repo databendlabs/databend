@@ -9,6 +9,9 @@
 #[macro_use]
 mod macros;
 
+#[cfg(test)]
+mod data_array_filter_test;
+
 #[allow(dead_code)]
 mod bit_util;
 mod data_array_filter;
@@ -26,10 +29,6 @@ mod data_value_operator;
 mod data_value_ops;
 #[allow(dead_code)]
 mod utils;
-mod vec;
-
-#[cfg(test)]
-mod vec_test;
 
 pub mod arrays;
 pub mod columns;
@@ -47,8 +46,8 @@ pub use data_schema::DataSchemaRefExt;
 pub use data_type::DataType;
 pub use data_type::*;
 pub use data_type_coercion::*;
+pub use data_value::DFTryFrom;
 pub use data_value::DataValue;
 pub use data_value::DataValueRef;
 pub use data_value_arithmetic::*;
 pub use data_value_operator::*;
-pub use vec::*;

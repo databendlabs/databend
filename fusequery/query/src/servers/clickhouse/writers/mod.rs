@@ -4,4 +4,6 @@
 
 mod query_writer;
 
+pub use query_writer::from_clickhouse_block;
+pub use query_writer::to_clickhouse_block;
 pub use query_writer::QueryWriter;

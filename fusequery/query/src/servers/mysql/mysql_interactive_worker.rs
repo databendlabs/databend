@@ -159,9 +159,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
             let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
             let data_stream = runtime.block_on(interpreter.execute())?;
-            let abort_stream = context.try_create_abortable(data_stream)?;
 
-            runtime.block_on(abort_stream.collect::<Result<Vec<DataBlock>>>())
+            runtime.block_on(data_stream.collect::<Result<Vec<DataBlock>>>())
         };
         let blocks = fetch_query_blocks();
         match blocks {

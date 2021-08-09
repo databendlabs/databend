@@ -1,10 +1,12 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "common-functions"
 version = "0.1.0"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
@@ -12,6 +14,7 @@ common-arrow = {path = "../arrow"}
 common-datavalues = {path = "../datavalues"}
 common-infallible = {path = "../infallible"}
 common-exception = {path = "../exception"}
+common-io = {path = "../io"}
 
 # Github dependencies
 
@@ -23,6 +26,10 @@ bumpalo = "3.7.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bytes = "1.0.1"
+unicase = "2.6.0"
+num = "^0.4"
+ordered-float = "2.7"
+
 
 
 [dev-dependencies]

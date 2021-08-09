@@ -4,8 +4,10 @@
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
+use fuse_store::api::HttpService;
 use fuse_store::api::StoreServer;
 use fuse_store::configs::Config;
+use fuse_store::meta_service::raft_db::init_sled_db;
 use fuse_store::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
@@ -27,6 +29,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         *fuse_store::configs::config::FUSE_COMMIT_VERSION
     );
 
+    init_sled_db(conf.meta_dir.clone());
+
     // Metric API service.
     {
         let srv = MetricService::create(conf.clone());
@@ -36,11 +40,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Metric API server listening on {}", conf.metric_api_address);
     }
 
+    // HTTP API service.
+    {
+        let mut srv = HttpService::create(conf.clone());
+        info!("HTTP API server listening on {}", conf.http_api_address);
+        tokio::spawn(async move {
+            srv.start().await.expect("HTTP: admin api error");
+        });
+    }
+
     // RPC API service.
     {
         let srv = StoreServer::create(conf.clone());
-        info!("RPC API server listening on {}", conf.flight_api_address);
-        srv.serve().await.expect("RPC service error");
+        info!(
+            "FuseStore API server listening on {}",
+            conf.flight_api_address
+        );
+        let (_stop_tx, fin_rx) = srv.start().await.expect("FuseStore service error");
+        fin_rx.await?;
     }
 
     Ok(())

@@ -9,6 +9,7 @@ use common_planners::InsertIntoPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::catalog::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::FuseQueryContextRef;
@@ -35,6 +36,7 @@ impl Interpreter for InsertIntoInterpreter {
         let database = datasource.get_database(self.plan.db_name.as_str())?;
         let table = database.get_table(self.plan.tbl_name.as_str())?;
         table
+            .datasource()
             .append_data(self.ctx.clone(), self.plan.clone())
             .await?;
         Ok(Box::pin(DataBlockStream::create(

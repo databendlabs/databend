@@ -31,12 +31,14 @@ use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
+use crate::sql::DfKillStatement;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfShowDatabases;
 use crate::sql::DfShowProcessList;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
+use crate::sql::DfTruncateTable;
 use crate::sql::DfUseDatabase;
 
 // Use `Parser::expected` instead, if possible
@@ -147,7 +149,6 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_explain()
                     }
-
                     Keyword::SHOW => {
                         self.parser.next_token();
 
@@ -165,9 +166,14 @@ impl<'a> DfParser<'a> {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
                     }
+                    Keyword::TRUNCATE => {
+                        self.parser.next_token();
+                        self.parse_truncate()
+                    }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),
+                        "KILL" => self.parse_kill_query(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => {
@@ -387,6 +393,24 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::UseDatabase(DfUseDatabase { name }))
     }
 
+    // Parse 'KILL statement'.
+    fn parse_kill<F>(&mut self, f: F) -> Result<DfStatement, ParserError>
+    where F: Fn(DfKillStatement) -> DfStatement {
+        Ok(f(DfKillStatement {
+            object_id: self.parser.parse_identifier()?,
+        }))
+    }
+
+    // Parse 'KILL statement'.
+    fn parse_kill_query(&mut self) -> Result<DfStatement, ParserError> {
+        match self.consume_token("KILL") {
+            true if self.consume_token("QUERY") => self.parse_kill(DfStatement::KillQuery),
+            true if self.consume_token("CONNECTION") => self.parse_kill(DfStatement::KillConn),
+            true => self.parse_kill(DfStatement::KillConn),
+            false => self.expected("Must KILL", self.parser.peek_token()),
+        }
+    }
+
     fn parse_database_engine(&mut self) -> Result<DatabaseEngineType, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
@@ -448,16 +472,17 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match &*w.value {
                 "Parquet" => Ok(TableEngineType::Parquet),
-                "JSONEachRaw" => Ok(TableEngineType::JsonEachRaw),
+                "JSONEachRow" => Ok(TableEngineType::JSONEachRow),
                 "CSV" => Ok(TableEngineType::Csv),
                 "Null" => Ok(TableEngineType::Null),
+                "Memory" => Ok(TableEngineType::Memory),
                 _ => self.expected(
-                    "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                    "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                     Token::Word(w),
                 ),
             },
             unexpected => self.expected(
-                "Engine must one of Parquet, JSONEachRaw, Null or CSV",
+                "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                 unexpected,
             ),
         }
@@ -475,6 +500,20 @@ impl<'a> DfParser<'a> {
                 _ => self.expected("show create statement", Token::Word(w)),
             },
             unexpected => self.expected("show create statement", unexpected),
+        }
+    }
+
+    fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => {
+                    let table_name = self.parser.parse_object_name()?;
+                    let trunc = DfTruncateTable { name: table_name };
+                    Ok(DfStatement::TruncateTable(trunc))
+                }
+                _ => self.expected("truncate statement", Token::Word(w)),
+            },
+            unexpected => self.expected("truncate statement", unexpected),
         }
     }
 

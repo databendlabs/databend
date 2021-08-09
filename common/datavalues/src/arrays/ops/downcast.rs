@@ -4,17 +4,12 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::array::BinaryArray;
-use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::array::ListArray;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::array::StringArray;
-use common_arrow::arrow::array::StructArray;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitmapIter;
+use common_arrow::arrow::bitmap::utils::ZipValidity;
 
 use crate::arrays::DataArray;
-use crate::series::IntoSeries;
+use crate::prelude::*;
 use crate::series::Series;
 use crate::DFBinaryArray;
 use crate::DFBooleanArray;
@@ -23,10 +18,10 @@ use crate::DFPrimitiveType;
 use crate::DFStructArray;
 use crate::DFUtf8Array;
 
-impl<T> AsRef<PrimitiveArray<T>> for DataArray<T>
+impl<T> AsRef<PrimitiveArray<T::Native>> for DataArray<T>
 where T: DFPrimitiveType
 {
-    fn as_ref(&self) -> &PrimitiveArray<T> {
+    fn as_ref(&self) -> &PrimitiveArray<T::Native> {
         self.downcast_ref()
     }
 }
@@ -34,22 +29,24 @@ where T: DFPrimitiveType
 impl<T> DataArray<T>
 where T: DFPrimitiveType
 {
-    pub fn downcast_ref(&self) -> &PrimitiveArray<T> {
+    #[inline]
+    pub fn downcast_ref(&self) -> &PrimitiveArray<T::Native> {
         let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T>) }
+        unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) }
     }
 
-    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<T::Native>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ T::Native, std::slice::Iter<'_, T::Native>> {
         let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T>) };
+        let arr = unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) };
         arr.iter()
     }
 
     pub fn collect_values(&self) -> Vec<Option<T::Native>> {
-        self.downcast_iter().collect()
+        let e = self.downcast_iter().map(|c| c.copied());
+        e.collect()
     }
 
-    pub fn from_arrow_array(array: PrimitiveArray<T>) -> Self {
+    pub fn from_arrow_array(array: PrimitiveArray<T::Native>) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
     }
@@ -62,12 +59,13 @@ impl AsRef<BooleanArray> for DFBooleanArray {
 }
 
 impl DFBooleanArray {
+    #[inline]
     pub fn downcast_ref(&self) -> &BooleanArray {
         let arr = &*self.array;
         unsafe { &*(arr as *const dyn Array as *const BooleanArray) }
     }
 
-    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<bool>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> ZipValidity<'_, bool, BitmapIter<'_>> {
         let arr = &*self.array;
         let arr = unsafe { &*(arr as *const dyn Array as *const BooleanArray) };
         arr.iter()
@@ -83,72 +81,83 @@ impl DFBooleanArray {
     }
 }
 
-impl AsRef<StringArray> for DFUtf8Array {
-    fn as_ref(&self) -> &StringArray {
+impl AsRef<LargeUtf8Array> for DFUtf8Array {
+    fn as_ref(&self) -> &LargeUtf8Array {
         self.downcast_ref()
     }
 }
 
 impl DFUtf8Array {
-    pub fn downcast_ref(&self) -> &StringArray {
+    #[inline]
+    pub fn downcast_ref(&self) -> &LargeUtf8Array {
         let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const StringArray) }
+        unsafe { &*(arr as *const dyn Array as *const LargeUtf8Array) }
     }
 
-    pub fn downcast_iter<'a>(&self) -> impl Iterator<Item = Option<&'a str>> + DoubleEndedIterator {
+    pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ str, Utf8ValuesIter<'_, i64>> {
         let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const StringArray) };
+        let arr = unsafe { &*(arr as *const dyn Array as *const LargeUtf8Array) };
         arr.iter()
     }
 
-    pub fn collect_values<'a>(&self) -> Vec<Option<&'a str>> {
+    pub fn collect_values(&self) -> Vec<Option<&'_ str>> {
         self.downcast_iter().collect()
     }
 
-    pub fn from_arrow_array(array: StringArray) -> Self {
+    pub fn from_arrow_array(array: LargeUtf8Array) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
     }
 }
 
-impl AsRef<ListArray> for DFListArray {
-    fn as_ref(&self) -> &ListArray {
+impl AsRef<LargeListArray> for DFListArray {
+    fn as_ref(&self) -> &LargeListArray {
         self.downcast_ref()
     }
 }
 
 impl DFListArray {
-    pub fn downcast_ref(&self) -> &ListArray {
+    pub fn downcast_ref(&self) -> &LargeListArray {
         let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const ListArray) }
+        unsafe { &*(arr as *const dyn Array as *const LargeListArray) }
     }
 
     pub fn downcast_iter(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator {
         let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const ListArray) };
+        let arr = unsafe { &*(arr as *const dyn Array as *const LargeListArray) };
 
-        arr.iter().map(|a| a.map(|a| a.into_series()))
+        arr.iter().map(|a| {
+            a.map(|b| {
+                let c: ArrayRef = Arc::from(b);
+                c.into_series()
+            })
+        })
     }
 
-    pub fn from_arrow_array(array: ListArray) -> Self {
+    pub fn from_arrow_array(array: LargeListArray) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
     }
 }
 
-impl AsRef<BinaryArray> for DFBinaryArray {
-    fn as_ref(&self) -> &BinaryArray {
+impl AsRef<LargeBinaryArray> for DFBinaryArray {
+    fn as_ref(&self) -> &LargeBinaryArray {
         self.downcast_ref()
     }
 }
 
 impl DFBinaryArray {
-    pub fn downcast_ref(&self) -> &BinaryArray {
+    pub fn downcast_ref(&self) -> &LargeBinaryArray {
         let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const BinaryArray) }
+        unsafe { &*(arr as *const dyn Array as *const LargeBinaryArray) }
     }
 
-    pub fn from_arrow_array(array: BinaryArray) -> Self {
+    pub fn collect_values(&self) -> Vec<Option<Vec<u8>>> {
+        let e = self.downcast_ref().iter().map(|c| c.map(|d| d.to_owned()));
+        e.collect()
+    }
+
+    pub fn from_arrow_array(array: LargeBinaryArray) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
     }

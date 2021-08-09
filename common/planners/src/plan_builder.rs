@@ -22,7 +22,6 @@ use crate::ExplainPlan;
 use crate::ExplainType;
 use crate::Expression;
 use crate::ExpressionPlan;
-use crate::Extras;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::LimitByPlan;
@@ -30,7 +29,6 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::RewriteHelper;
-use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SortPlan;
 
@@ -119,27 +117,21 @@ impl PlanBuilder {
         Ok(match mode {
             AggregateMode::Partial => {
                 let fields = RewriteHelper::exprs_to_fields(aggr_expr, &schema_before_groupby)?;
+
                 let mut partial_fields = fields
                     .iter()
                     .map(|f| DataField::new(f.name(), DataType::Binary, false))
                     .collect::<Vec<_>>();
 
                 if !group_expr.is_empty() {
-                    // Fields. [aggrs,  group_keys...,  key]
+                    // Fields. [aggrs,  key]
                     // aggrs: aggr_len aggregate states
-                    // group_keys:  group_len, group by key columns
                     // key: Varint by hash method
 
-                    let mut group_cols = vec![];
-                    for expr in group_expr.iter() {
-                        group_cols.push(expr.column_name());
-                        let field = expr.to_data_field(&schema_before_groupby)?;
-                        partial_fields.push(field);
-                    }
-
+                    let group_cols: Vec<String> =
+                        group_expr.iter().map(|expr| expr.column_name()).collect();
                     let sample_block = DataBlock::empty_with_schema(schema_before_groupby);
                     let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
-                    // partial_fields.push(DataField::new("_group_keys", DataType::Utf8, false));
                     partial_fields.push(DataField::new("_group_by_key", method.data_type(), false));
                 }
 
@@ -194,39 +186,6 @@ impl PlanBuilder {
             aggr_expr,
             group_expr,
         )
-    }
-
-    /// Scan a data source
-    pub fn scan(
-        schema_name: &str,
-        _table_name: &str,
-        table_schema: &DataSchema,
-        projection: Option<Vec<usize>>,
-        table_args: Option<Expression>,
-        limit: Option<usize>,
-    ) -> Result<Self> {
-        let table_schema = DataSchemaRef::new(table_schema.clone());
-        let projected_schema = projection.clone().map(|p| {
-            DataSchemaRefExt::create(p.iter().map(|i| table_schema.field(*i).clone()).collect())
-                .as_ref()
-                .clone()
-        });
-        let projected_schema = match projected_schema {
-            None => table_schema.clone(),
-            Some(v) => Arc::new(v),
-        };
-
-        Ok(Self::from(&PlanNode::Scan(ScanPlan {
-            schema_name: schema_name.to_owned(),
-            table_schema,
-            projected_schema,
-            table_args,
-            push_downs: Extras {
-                projection,
-                filters: vec![],
-                limit,
-            },
-        })))
     }
 
     /// Apply a filter

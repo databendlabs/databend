@@ -7,9 +7,7 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::sync::Arc;
 
-use common_arrow::parquet::arrow::ArrowReader;
-use common_arrow::parquet::arrow::ParquetFileArrowReader;
-use common_arrow::parquet::file::reader::SerializedFileReader;
+use common_arrow::arrow::io::parquet::read;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -66,27 +64,21 @@ fn read_file(
     tx: Sender<Option<Result<DataBlock>>>,
     projection: &[usize],
 ) -> Result<()> {
-    let file_reader = File::open(file).map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
-    let file_reader = SerializedFileReader::new(file_reader)
-        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-    let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(file_reader));
+    let reader = File::open(file)?;
+    let reader = read::RecordReader::try_new(
+        reader,
+        Some(projection.to_vec()),
+        None,
+        Arc::new(|_, _| true),
+    )?;
 
-    // TODO projection, row filters, batch size configurable, schema judgement
-    let batch_size = 2048;
-    let mut batch_reader = arrow_reader
-        .get_record_reader_by_columns(projection.to_owned(), batch_size)
-        .map_err(|exception| ErrorCode::ParquetError(exception.to_string()))?;
-
-    loop {
-        match batch_reader.next() {
-            Some(Ok(batch)) => {
+    for maybe_batch in reader {
+        match maybe_batch {
+            Ok(batch) => {
                 tx.send(Some(Ok(batch.try_into()?)))
                     .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
             }
-            None => {
-                break;
-            }
-            Some(Err(e)) => {
+            Err(e) => {
                 let err_msg = format!("Error reading batch from {:?}: {}", file, e.to_string());
 
                 tx.send(Some(Result::Err(ErrorCode::CannotReadFile(
@@ -98,6 +90,7 @@ fn read_file(
             }
         }
     }
+
     Ok(())
 }
 
@@ -132,6 +125,8 @@ impl Table for ParquetTable {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
+            table_id: scan.table_id,
+            table_version: scan.table_version,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),

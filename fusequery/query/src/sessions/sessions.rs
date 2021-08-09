@@ -20,14 +20,14 @@ use metrics::counter;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::DatabaseCatalog;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) cluster: ClusterRef,
-    pub(in crate::sessions) datasource: Arc<DataSource>,
+    pub(in crate::sessions) datasource: Arc<DatabaseCatalog>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -40,7 +40,7 @@ impl SessionManager {
         Ok(Arc::new(SessionManager {
             conf: Config::default(),
             cluster: Cluster::empty(),
-            datasource: Arc::new(DataSource::try_create()?),
+            datasource: Arc::new(DatabaseCatalog::try_create()?),
 
             max_sessions: max_mysql_sessions as usize,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
@@ -52,20 +52,23 @@ impl SessionManager {
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
+            datasource: Arc::new(DatabaseCatalog::try_create_with_config(&conf)?),
             conf,
             cluster,
-            datasource: Arc::new(DataSource::try_create()?),
-
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
+    }
+
+    pub fn get_conf(&self) -> &Config {
+        &self.conf
     }
 
     pub fn get_cluster(self: &Arc<Self>) -> ClusterRef {
         self.cluster.clone()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DataSource> {
+    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.datasource.clone()
     }
 
@@ -81,11 +84,12 @@ impl SessionManager {
                 let session = Session::try_create(
                     self.conf.clone(),
                     uuid::Uuid::new_v4().to_string(),
+                    typ.into(),
                     self.clone(),
                 )?;
 
                 sessions.insert(session.get_id(), session.clone());
-                Ok(SessionRef::create(typ.into(), session))
+                Ok(SessionRef::create(session))
             }
         }
     }
@@ -99,14 +103,26 @@ impl SessionManager {
             Occupied(entry) => entry.get().clone(),
             Vacant(_) if aborted => return Err(ErrorCode::AbortedSession("Aborting server.")),
             Vacant(entry) => {
-                let session =
-                    Session::try_create(self.conf.clone(), entry.key().clone(), self.clone())?;
+                let session = Session::try_create(
+                    self.conf.clone(),
+                    entry.key().clone(),
+                    String::from("RPCSession"),
+                    self.clone(),
+                )?;
 
                 entry.insert(session).clone()
             }
         };
 
-        Ok(SessionRef::create(String::from("RpcSession"), session))
+        Ok(SessionRef::create(session))
+    }
+
+    #[allow(clippy::ptr_arg)]
+    pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
+        let sessions = self.active_sessions.read();
+        sessions
+            .get(id)
+            .map(|session| SessionRef::create(session.clone()))
     }
 
     #[allow(clippy::ptr_arg)]
@@ -141,7 +157,7 @@ impl SessionManager {
             active_sessions
                 .read()
                 .values()
-                .for_each(Session::force_kill);
+                .for_each(Session::force_kill_session);
         }
     }
 

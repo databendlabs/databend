@@ -1,5 +1,4 @@
 #!coding: utf-8
-
 import yaml
 import re
 import subprocess
@@ -22,15 +21,13 @@ stable = 0
 
 stats = {}
 
-def build_COSclient(secretID, secretKey, Region):
+def build_COSclient(secretID, secretKey, Region, Endpoint):
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     secret_id = secretID
     secret_key = secretKey
     region = Region
-    token = None         # TODO(zhihanz) support token for client
-    scheme = 'https'
-    config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key, Token=token, Scheme=scheme)
+    config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key, Scheme="https", Domain=Endpoint)
     client = CosS3Client(config)
     return client
 
@@ -44,17 +41,18 @@ def get_perf(client, bucket, key, output):
 
 
 # store all S3 report files to output directory
+# Problem: list_object cannot be used for global acceleration(COS)
 def retrieve_all_files(client, bucket, path, output_dir):
-    response = client.list_objects(
+    response = response = client.get_object(
         Bucket=bucket,
-        Prefix=path,
-        Delimiter='/',
-        MaxKeys=100,
+        Key=os.path.join(path, "index.json"),
     )
+    index = json.load(response['Body'].get_raw_stream())
     file_dict = {}
-    for elem in response['Contents']:
-        file_name = elem['Key'].split('/')[-1]
-        u = get_perf(client, bucket, elem['Key'], '{}/{}'.format(output_dir, file_name))
+    for elem in index['Contents']:
+        print(elem)
+        file_name = elem['file_name']
+        u = get_perf(client, bucket, elem['path'], os.path.join(output_dir, file_name))
         file_dict[file_name] = u
     return file_dict
 
@@ -102,10 +100,10 @@ tr:nth-child(odd) td {{filter: brightness(90%);}}
     <table class="changes-in-performance">
         <tbody>
             <tr id="changes-in-performance.6">
-            <th>before_score,&nbsp;s</th>
-            <th>after_score,&nbsp;s</th>
+            <th>{},&nbsp;s</th>
+            <th>{},&nbsp;s</th>
             <th>Ratio of speedup&nbsp;(-) or slowdown&nbsp;(+)</th>
-            <th>Relative difference (after_score&nbsp;−&nbsp;before_score) / before_score</th>
+            <th>Relative difference (after_score&nbsp;&minus;&nbsp;before_score) / before_score</th>
             <th>Test</th>
             <th>Status</th>
             <th>Query</th>
@@ -146,12 +144,12 @@ def get_suit_by_name(name):
     return None
 
 
-def compare(releaser, pull, type, region, bucket, rpath, ppath, secret_id, secret_key, output_path):
+def compare(releaser, pull, type, region, bucket, rpath, ppath, secret_id, secret_key, output_path, endpoint, rloglink, ploglink):
     global cli
     dict_r = {}
     dict_p = dict()
     if type == "COS":
-        cli = build_COSclient(secretID=secret_id, secretKey=secret_key, Region=region)
+        cli = build_COSclient(secretID=secret_id, secretKey=secret_key, Region=region, Endpoint=endpoint)
         dict_r = retrieve_all_files(cli, bucket, rpath, releaser)
         dict_p = retrieve_all_files(cli, bucket, ppath, pull)
 
@@ -164,7 +162,7 @@ def compare(releaser, pull, type, region, bucket, rpath, ppath, secret_id, secre
         suit_name = f.replace("-result.json", "")
         compare_suit(releaser, pull, f, suit_name, type, dict_r.get(f, ''), dict_p.get(f, ''))
 
-    report(releaser, pull, files)
+    report(releaser, pull, files, type, rloglink, ploglink)
     if type == "COS":
         with open('/tmp/performance.html', 'rb') as fp:
             response = cli.put_object(
@@ -224,7 +222,7 @@ def compare_suit(releaser, pull, suit_file, suit_name, type, releaser_suit_url, 
     else:
         stable += 1
 
-def report(releaser, pull, files):
+def report(releaser, pull, files, type, current_log_link, ref_log_link):
     ## todo render the compartions via html template
     global stats
 
@@ -235,9 +233,12 @@ def report(releaser, pull, files):
 
         trs += create_tr(name, state['before_score'], state['after_score'], state['state'], suit['query'],
                          state['type'], state['before_url'], state['after_url'])
-
-    html = template.format(trs)
-
+    before = "current_score"
+    after = "ref_score"
+    if type == 'COS':
+        before = '<a href="{}">current_score</a>'.format(current_log_link)
+        after  = '<a href="{}">ref_score</a>'.format(ref_log_link)
+    html = template.format(before, after, trs)
     with open('/tmp/performance.html','w') as f:
         f.write(html)
         f.close()
@@ -249,16 +250,20 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='fuse perf results compare tools')
     parser.add_argument('-r', '--releaser', help='Perf results directory from release version')
     parser.add_argument('-p', '--pull',  help='Perf results directory from current build')
-    parser.add_argument('-t', '--type', default="local",  help='Set storage endpoint for performance testing, support local and COS')
+    parser.add_argument('-t', '--type', default="local",  help='Set storage endpoint for performance testing, support '
+                                                               'local and COS')
     parser.add_argument('--region', default="",  help='Set storage region')
     parser.add_argument('--bucket', default="",  help='Set storage bucket')
     parser.add_argument('--rpath', default="",  help='absolute path releaser objects')
     parser.add_argument('--ppath', default="",  help='absolute path pull objects')
+    parser.add_argument('--currentLogLink', default="",  help='absolute path store current log')
+    parser.add_argument('--refLogLink', default="",  help='absolute path store ref log')
     parser.add_argument('--secretID', default="",  help='Set storage secret ID')
     parser.add_argument('--secretKey', default="",  help='Set storage secret Key')
+    parser.add_argument('--endpoint', default="",  help='Set accelerate endpoint for S3')
     parser.add_argument('-o', '--outputPath', default="",  help='store output in remote object storage')
 
     args = parser.parse_args()
-    code = compare(args.releaser, args.pull, args.type, args.region, args.bucket, args.rpath, args.ppath, args.secretID, args.secretKey, args.outputPath)
+    code = compare(args.releaser, args.pull, args.type, args.region, args.bucket, args.rpath, args.ppath, args.secretID, args.secretKey, args.outputPath, args.endpoint, args.currentLogLink, args.refLogLink)
 
     sys.exit(code)

@@ -1,3 +1,5 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "fuse-store"
 version = "0.1.0"
@@ -5,7 +7,7 @@ description = "A Cloud Distributed MergeTree Storage Engine"
 authors = ["FuseStore Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "fuse-store"
@@ -26,6 +28,7 @@ common-functions = {path = "../../common/functions"}
 common-infallible = {path = "../../common/infallible"}
 common-metatypes = {path = "../../common/metatypes"}
 common-planners = {path = "../../common/planners"}
+common-profling = { path = "../../common/profiling" }
 common-runtime = {path = "../../common/runtime"}
 common-tracing = {path = "../../common/tracing"}
 
@@ -34,7 +37,7 @@ common-tracing = {path = "../../common/tracing"}
 
 # Crates.io dependencies
 anyhow = "1.0.42"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.6" }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.7" }
 async-trait = "0.1"
 byteorder = "1.1.0"
 env_logger = "0.9"
@@ -51,16 +54,18 @@ prost = "0.7"
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sled = { version = "0.34.6", features = ["event_log", "pretty_backtrace"]}
+sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1",default-features = false }
 structopt = "0.3"
-structopt-toml = "0.4.5"
+structopt-toml = "0.5.0"
 tempfile = "3.2.0"
 thiserror = "1.0.26"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
-tonic = "0.4.3"
-uuid = { version = "0.8", features = ["serde", "v4"] }
+tonic = { version = "0.4.3", features = ["tls"]}
+
 sha2 = "0.9.5"
+uuid = { version = "0.8", features = ["serde", "v4"] }
+warp = { version = "0.3.1", features = ["tls"] }
 
 [dev-dependencies]
 env_logger = "*"

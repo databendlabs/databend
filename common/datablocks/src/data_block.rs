@@ -7,6 +7,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow;
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::series::IntoSeries;
@@ -47,9 +48,9 @@ impl DataBlock {
     pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
         let mut columns = vec![];
         for f in schema.fields().iter() {
-            columns.push(DataColumn::Array(
-                arrow::array::new_empty_array(&f.data_type().to_arrow()).into_series(),
-            ))
+            let array = arrow::array::new_empty_array(f.data_type().to_arrow());
+            let array: ArrayRef = Arc::from(array);
+            columns.push(DataColumn::Array(array.into_series()))
         }
         DataBlock { schema, columns }
     }
@@ -152,7 +153,7 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = ErrorCode;
 
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
-        let schema = Arc::new(v.schema().into());
+        let schema = Arc::new(v.schema().as_ref().into());
         let series = v
             .columns()
             .iter()

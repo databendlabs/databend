@@ -28,6 +28,7 @@ use crate::Expressions;
 use crate::FilterPlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
+use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::PlanBuilder;
@@ -41,6 +42,7 @@ use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
+use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
@@ -92,6 +94,8 @@ pub trait PlanRewriter {
             PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
+            PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
+            PlanNode::Kill(plan) => self.rewrite_kill(plan),
         }
     }
 
@@ -319,6 +323,14 @@ pub trait PlanRewriter {
 
     fn rewrite_show_create_table(&mut self, plan: &ShowCreateTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowCreateTable(plan.clone()))
+    }
+
+    fn rewrite_truncate_table(&mut self, plan: &TruncateTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::TruncateTable(plan.clone()))
+    }
+
+    fn rewrite_kill(&mut self, plan: &KillPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Kill(plan.clone()))
     }
 }
 

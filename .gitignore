@@ -6,6 +6,8 @@
 
 # Rust
 target/*
+distro/*
+fusecli/cli/e2e/datafuse-cli
 
 # cargo
 .cargo/
@@ -19,6 +21,7 @@ perf.*
 *.stdout
 *.out
 *.swp
+_local_fs/*
 _logs/*
 _meta/*
 
@@ -29,3 +32,5 @@ tests/perfs/*-result.json
 
 # python
 venv/
+
+tls/certs/*

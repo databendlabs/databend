@@ -1,3 +1,5 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "fuse-query"
 version = "0.1.0"
@@ -5,7 +7,7 @@ description = "A real-time Cloud Distributed Query Engine"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "fuse-query"
@@ -38,12 +40,14 @@ common-tracing = { path = "../../common/tracing" }
 common-profling = { path = "../../common/profiling" }
 common-store-api = { path = "../../common/store-api" }
 common-management = { path = "../../common/management" }
+common-io = { path = "../../common/io" }
+common-metatypes = { path = "../../common/metatypes" }
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "5a7ae3d" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "ed40333" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0db7cfa" }
-clickhouse-srv = { git = "https://github.com/zhang2014/clickhouse-srv", branch = "support_abort" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193" }
+clickhouse-srv = "0.3.1"
 
 
 # Crates.io dependencies
@@ -61,7 +65,7 @@ log = "0.4"
 metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
-nom = "7.0.0-alpha1"
+nom = "7.0.0-alpha2"
 num_cpus = "1.0"
 paste = "^1.0"
 pnet = "0.28.0"
@@ -70,21 +74,23 @@ rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
-structopt-toml = "0.4.5"
+structopt-toml = "0.5.0"
 threadpool = "1.8.1"
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
-tonic = "0.4"
+tonic = "0.4.3"
 walkdir = "2.3.2"
-warp = "0.3.1"
+warp = { version = "0.3.1", features = ["tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 bumpalo = "3.7.0"
+lru = "0.6.6"
 
 
 [dev-dependencies]
 pretty_assertions = "0.7"
 criterion = "0.3"
 mysql = "21.0.1"
+reqwest = { version = "0.11", features = ["json"] }
 
 [build-dependencies]
 common-building = {path = "../../common/building"}

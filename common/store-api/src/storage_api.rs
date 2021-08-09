@@ -76,6 +76,9 @@ pub struct AppendResult {
     pub tx_id: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TruncateTableResult {}
+
 // TODO A better name, we already have a SendableDataBlockStream
 pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
@@ -103,4 +106,10 @@ pub trait StorageApi {
         scheme_ref: DataSchemaRef,
         mut block_stream: BlockStream,
     ) -> common_exception::Result<AppendResult>;
+
+    async fn truncate(
+        &mut self,
+        db: String,
+        table: String,
+    ) -> common_exception::Result<TruncateTableResult>;
 }

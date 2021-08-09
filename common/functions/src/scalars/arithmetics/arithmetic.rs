@@ -26,16 +26,16 @@ pub struct ArithmeticFunction {
 impl ArithmeticFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
-        map.insert("+", ArithmeticPlusFunction::try_create_func);
-        map.insert("plus", ArithmeticPlusFunction::try_create_func);
-        map.insert("-", ArithmeticMinusFunction::try_create_func);
-        map.insert("minus", ArithmeticMinusFunction::try_create_func);
-        map.insert("*", ArithmeticMulFunction::try_create_func);
-        map.insert("multiply", ArithmeticMulFunction::try_create_func);
-        map.insert("/", ArithmeticDivFunction::try_create_func);
-        map.insert("divide", ArithmeticDivFunction::try_create_func);
-        map.insert("%", ArithmeticModuloFunction::try_create_func);
-        map.insert("modulo", ArithmeticModuloFunction::try_create_func);
+        map.insert("+".into(), ArithmeticPlusFunction::try_create_func);
+        map.insert("plus".into(), ArithmeticPlusFunction::try_create_func);
+        map.insert("-".into(), ArithmeticMinusFunction::try_create_func);
+        map.insert("minus".into(), ArithmeticMinusFunction::try_create_func);
+        map.insert("*".into(), ArithmeticMulFunction::try_create_func);
+        map.insert("multiply".into(), ArithmeticMulFunction::try_create_func);
+        map.insert("/".into(), ArithmeticDivFunction::try_create_func);
+        map.insert("divide".into(), ArithmeticDivFunction::try_create_func);
+        map.insert("%".into(), ArithmeticModuloFunction::try_create_func);
+        map.insert("modulo".into(), ArithmeticModuloFunction::try_create_func);
         Ok(())
     }
 

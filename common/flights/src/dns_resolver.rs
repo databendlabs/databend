@@ -20,8 +20,12 @@ use hyper::client::HttpConnector;
 use hyper::service::Service;
 use hyper::Uri;
 use lazy_static::lazy_static;
+use tonic::transport::Certificate;
 use tonic::transport::Channel;
+use tonic::transport::ClientTlsConfig;
 use trust_dns_resolver::TokioAsyncResolver;
+
+use crate::common::RpcClientTlsConfig;
 
 pub struct DNSResolver {
     inner: TokioAsyncResolver,
@@ -127,6 +131,7 @@ impl ConnectionFactory {
     pub async fn create_flight_channel(
         addr: impl ToString,
         timeout: Option<Duration>,
+        rpc_client_config: Option<RpcClientTlsConfig>,
     ) -> Result<Channel> {
         match format!("http://{}", addr.to_string()).parse::<Uri>() {
             Err(error) => Result::Err(ErrorCode::BadAddressFormat(format!(
@@ -139,7 +144,25 @@ impl ConnectionFactory {
                 inner_connector.set_keepalive(None);
                 inner_connector.enforce_http(false);
 
-                let mut endpoint = Channel::builder(uri);
+                let builder = Channel::builder(uri.clone());
+
+                let mut endpoint = if let Some(conf) = rpc_client_config {
+                    log::info!("tls rpc enabled");
+                    let client_tls_config = Self::client_tls_config(&conf).await.map_err(|e| {
+                        ErrorCode::TLSConfigurationFailure(format!(
+                            "loading client tls config failure: {} ",
+                            e.to_string()
+                        ))
+                    })?;
+                    builder.tls_config(client_tls_config).map_err(|e| {
+                        ErrorCode::TLSConfigurationFailure(format!(
+                            "builder tls_config failure: {}",
+                            e.to_string()
+                        ))
+                    })?
+                } else {
+                    builder
+                };
 
                 if let Some(timeout) = timeout {
                     endpoint = endpoint.timeout(timeout);
@@ -148,11 +171,22 @@ impl ConnectionFactory {
                 match endpoint.connect_with_connector(inner_connector).await {
                     Ok(channel) => Result::Ok(channel),
                     Err(error) => Result::Err(ErrorCode::CannotConnectNode(format!(
-                        "Cannot to RPC server: {}",
-                        error
+                        "Cannot to RPC server: {:?} error: {}",
+                        uri, error
                     ))),
                 }
             }
         }
+    }
+
+    async fn client_tls_config(conf: &RpcClientTlsConfig) -> Result<ClientTlsConfig> {
+        let server_root_ca_cert =
+            tokio::fs::read(conf.rpc_tls_server_root_ca_cert.as_str()).await?;
+        let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
+
+        let tls = ClientTlsConfig::new()
+            .domain_name(conf.domain_name.to_string())
+            .ca_certificate(server_root_ca_cert);
+        Ok(tls)
     }
 }

@@ -1,1 +1,9 @@
-Limit: 1\n  Projection: (sum((number + 1)) + 2) as sumx:UInt64\n    Expression: (sum((number + 1)) + 2):UInt64 (Before Projection)\n      AggregatorFinal: groupBy=[[]], aggr=[[sum((number + 1))]]\n        RedistributeStage[expr: 0]\n          AggregatorPartial: groupBy=[[]], aggr=[[sum((number + 1))]]\n            Expression: (number + 1):UInt64 (Before GroupBy)\n              Filter: ((number + 1) = 4)\n                ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 80000, read_bytes: 640000]
+Limit: 1
+  Projection: (sum((number + 1)) + 2) as sumx:UInt64
+    Expression: (sum((number + 1)) + 2):UInt64 (Before Projection)
+      AggregatorFinal: groupBy=[[]], aggr=[[sum((number + 1))]]
+        RedistributeStage[expr: 0]
+          AggregatorPartial: groupBy=[[]], aggr=[[sum((number + 1))]]
+            Expression: (number + 1):UInt64 (Before GroupBy)
+              Filter: ((number + 1) = 4)
+                ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 80000, read_bytes: 640000]

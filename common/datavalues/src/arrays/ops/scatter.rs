@@ -20,6 +20,16 @@ use crate::*;
 pub trait ArrayScatter: Debug {
     /// # Safety
     /// Note this doesn't do any bound checking, for performance reason.
+
+    /// scatter_unchecked() partitions the input array into multiple arrays.
+    /// _indices: an iterateor of vector whose length is the same as the array.
+    /// The element of _indices indicates which group the corresponding row
+    /// in the input array belongs to.
+    /// _scattered_size: the number of partitions
+    ///
+    /// Example: if the input array has four rows [1, 2, 3, 4] and
+    /// _indices = [0, 1, 0, 1] and _scatter_size = 2,
+    /// then the output would be a vector of two arrays: [1, 3] and [2, 4].
     unsafe fn scatter_unchecked(
         &self,
         _indices: &mut dyn Iterator<Item = u64>,
@@ -50,7 +60,7 @@ where T: DFNumericType
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
-            builders.push(PrimitiveArrayBuilder::<T>::new(self.len()));
+            builders.push(PrimitiveArrayBuilder::<T>::with_capacity(self.len()));
         }
 
         match self.null_count() {
@@ -90,10 +100,7 @@ impl ArrayScatter for DFUtf8Array {
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
-            builders.push(Utf8ArrayBuilder::new(
-                self.len(),
-                self.get_array_memory_size(),
-            ));
+            builders.push(Utf8ArrayBuilder::with_capacity(self.len()));
         }
 
         match self.null_count() {
@@ -133,7 +140,7 @@ impl ArrayScatter for DFBooleanArray {
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
-            builders.push(BooleanArrayBuilder::new(self.len()));
+            builders.push(BooleanArrayBuilder::with_capacity(self.len()));
         }
 
         match self.null_count() {
@@ -216,7 +223,7 @@ impl ArrayScatter for DFBinaryArray {
         let mut builders = Vec::with_capacity(scattered_size);
         let guess_scattered_len = ((self.len() as f64) * 1.1 / (scattered_size as f64)) as usize;
         for _i in 0..scattered_size {
-            let builder = BinaryArrayBuilder::new(guess_scattered_len);
+            let builder = BinaryArrayBuilder::with_capacity(guess_scattered_len);
             builders.push(builder);
         }
 

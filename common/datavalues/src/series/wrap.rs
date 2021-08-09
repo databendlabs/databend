@@ -107,8 +107,12 @@ macro_rules! impl_dyn_array {
                 self.0.vec_hash(hasher)
             }
 
-            fn group_hash(&self, ptr: usize, step: usize) -> Result<()> {
-                self.0.group_hash(ptr, step)
+            fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
+                self.0.fixed_hash(ptr, step)
+            }
+
+            fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+                self.0.serialize(vec)
             }
 
             fn subtract(&self, rhs: &Series) -> Result<Series> {
@@ -293,7 +297,9 @@ macro_rules! impl_dyn_array {
             }
 
             fn bool(&self) -> Result<&DFBooleanArray> {
-                if matches!(self.0.data_type(), DataType::Boolean) {
+                if matches!(self.0.data_type(), DataType::Boolean)
+                    || matches!(self.0.data_type(), DataType::Null)
+                {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBooleanArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(

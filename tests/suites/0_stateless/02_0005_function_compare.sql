@@ -12,3 +12,6 @@ select * from system.databases where name like '_ef_ul_';
 -- not like
 select * from system.databases where name not like '%sys%' order by name;
 select * from system.databases where name not like '_ef_ul_' order by name;
+
+select * from numbers(10) where null = true;
+select * from numbers(10) where null and true;

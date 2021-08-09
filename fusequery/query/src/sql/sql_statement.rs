@@ -12,6 +12,7 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 use sqlparser::ast::ColumnDef;
+use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement as SQLStatement;
@@ -61,6 +62,11 @@ pub struct DfDropTable {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfTruncateTable {
+    pub name: ObjectName,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
@@ -77,6 +83,11 @@ pub struct DfDropDatabase {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfUseDatabase {
     pub name: ObjectName,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfKillStatement {
+    pub object_id: Ident,
 }
 
 /// Tokens parsed by `DFParser` are converted into these values.
@@ -98,12 +109,17 @@ pub enum DfStatement {
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
+    TruncateTable(DfTruncateTable),
 
     // Settings.
     ShowSettings(DfShowSettings),
 
     // ProcessList
     ShowProcessList(DfShowProcessList),
+
+    // Kill
+    KillQuery(DfKillStatement),
+    KillConn(DfKillStatement),
 }
 
 /// Comment hints from SQL.

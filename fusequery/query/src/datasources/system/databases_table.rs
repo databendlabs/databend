@@ -15,6 +15,7 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::catalog::Catalog;
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
 
@@ -61,6 +62,8 @@ impl Table for DatabasesTable {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
+            table_id: scan.table_id,
+            table_version: scan.table_version,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),

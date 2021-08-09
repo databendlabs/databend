@@ -37,7 +37,7 @@ impl ClickHouseSession for InteractiveWorker {
         context.attach_query_info(&ctx.state.query);
         let mut query_writer = QueryWriter::create(ctx.client_revision, conn, context.clone());
 
-        let get_query_result = InteractiveWorkerBase::do_query(&ctx.state.query, context);
+        let get_query_result = InteractiveWorkerBase::do_query(ctx, context);
         query_writer.write(get_query_result.await).await?;
 
         histogram!(

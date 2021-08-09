@@ -11,6 +11,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -21,13 +23,14 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::utils::TableFunctionMeta;
+use crate::catalogs::utils::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
-use crate::datasources::Table;
-use crate::datasources::TableFunction;
+use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::FuseQueryContextShared;
-use crate::sessions::ProcessInfo;
+use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
 pub struct FuseQueryContext {
@@ -133,26 +136,25 @@ impl FuseQueryContext {
         self.shared.try_get_cluster()
     }
 
-    pub fn get_datasource(&self) -> Arc<DataSource> {
+    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
         self.shared.get_datasource()
     }
 
-    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
         self.get_datasource().get_table(database, table)
     }
 
-    // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
-    //
-    // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
-    // Implementation of fetching remote table involves async operations which is not
-    // straight forward (but not infeasible) to do in a non-async method.
-    pub async fn get_remote_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    pub async fn get_table_by_id(
+        &self,
+        database: &str,
+        table_id: MetaId,
+        table_ver: Option<MetaVersion>,
+    ) -> Result<Arc<TableMeta>> {
         self.get_datasource()
-            .get_remote_table(database, table)
-            .await
+            .get_table_by_id(database, table_id, table_ver)
     }
 
-    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn TableFunction>> {
+    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {
         self.get_datasource().get_table_function(function_name)
     }
 
@@ -208,8 +210,8 @@ impl FuseQueryContext {
         self.shared.attach_query_info(query);
     }
 
-    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.shared.session.processes_info()
+    pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
+        self.shared.session.get_sessions_manager()
     }
 }
 

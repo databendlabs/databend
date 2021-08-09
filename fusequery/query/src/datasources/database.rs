@@ -5,11 +5,13 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::datasources::Table;
-use crate::datasources::TableFunction;
+use crate::catalogs::utils::TableFunctionMeta;
+use crate::catalogs::utils::TableMeta;
 
 #[async_trait::async_trait]
 pub trait Database: Sync + Send {
@@ -19,13 +21,20 @@ pub trait Database: Sync + Send {
     fn is_local(&self) -> bool;
 
     /// Get one table by name.
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>>;
+    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>>;
+
+    /// Get table by meta id
+    fn get_table_by_id(
+        &self,
+        table_id: MetaId,
+        table_version: Option<MetaVersion>,
+    ) -> Result<Arc<TableMeta>>;
 
     /// Get all tables.
-    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>>;
+    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>>;
 
     /// Get database table functions.
-    fn get_table_functions(&self) -> Result<Vec<Arc<dyn TableFunction>>>;
+    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>>;
 
     /// DDL
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;

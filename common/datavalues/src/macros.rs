@@ -3,6 +3,22 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #[macro_export]
+macro_rules! dispatch_numeric_types {
+    ($dispatch: ident, $data_type: expr, $($args:expr),*) => {
+        $dispatch! { UInt8Type, $data_type, $($args),* }
+        $dispatch! { UInt16Type, $data_type, $($args),* }
+        $dispatch! { UInt32Type, $data_type, $($args),* }
+        $dispatch! { UInt64Type, $data_type, $($args),* }
+        $dispatch! { Int8Type, $data_type, $($args),* }
+        $dispatch! { Int16Type, $data_type, $($args),* }
+        $dispatch! { Int32Type, $data_type, $($args),* }
+        $dispatch! { Int64Type, $data_type, $($args),* }
+        $dispatch! { Float32Type, $data_type, $($args),* }
+        $dispatch! { Float64Type, $data_type, $($args),* }
+    };
+}
+
+#[macro_export]
 macro_rules! match_data_type_apply_macro_ca {
     ($self:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
         use crate::DataType;
@@ -83,9 +99,7 @@ macro_rules! format_data_value_with_option {
 
 macro_rules! typed_cast_from_data_value_to_std {
     ($SCALAR:ident, $NATIVE:ident) => {
-        impl TryFrom<DataValue> for $NATIVE {
-            type Error = ErrorCode;
-
+        impl DFTryFrom<DataValue> for $NATIVE {
             fn try_from(value: DataValue) -> Result<Self> {
                 match value {
                     DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),
@@ -116,52 +130,37 @@ macro_rules! std_to_data_value {
     };
 }
 
-macro_rules! build_list {
-    ($VALUE_BUILDER_TY:ident, $SCALAR_TY:ident, $VALUES:expr, $SIZE:expr) => {{
-        use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-        use common_arrow::arrow::datatypes::Field as ArrowField;
+macro_rules! build_constant_series {
+    ($ARRAY: ident, $VALUES: expr, $SIZE: expr) => {
         match $VALUES {
-            // the return on the macro is necessary, to short-circuit and return ArrayRef
-            None => {
-                return Ok(common_arrow::arrow::array::new_null_array(
-                    &ArrowDataType::List(Box::new(ArrowField::new(
-                        "item",
-                        ArrowDataType::$SCALAR_TY,
-                        true,
-                    ))),
-                    $SIZE,
-                ))
-            }
-            Some(values) => {
-                let mut builder = ListBuilder::new($VALUE_BUILDER_TY::new(values.len()));
+            Some(v) => $ARRAY::full(*v, $SIZE).into_series(),
+            None => $ARRAY::full_null($SIZE).into_series(),
+        }
+    };
+}
 
-                for _ in 0..$SIZE {
-                    for scalar_value in values {
-                        match scalar_value {
-                            DataValue::$SCALAR_TY(Some(v)) => {
-                                builder.values().append_value(v.clone()).unwrap()
-                            }
-                            DataValue::$SCALAR_TY(None) => {
-                                builder.values().append_null().unwrap();
-                            }
-                            _ => {
-                                return Result::Err(ErrorCode::BadDataValueType(
-                                    "Incompatible DataValue for list",
-                                ))
-                            }
-                        };
-                    }
-                    builder.append(true).unwrap();
-                }
-                builder.finish()
+macro_rules! build_list_series {
+    ($TYPE:ident,  $VALUES:expr, $SIZE:expr, $D_TYPE: expr) => {{
+        type B = ListPrimitiveArrayBuilder<$TYPE>;
+        let mut builder = B::with_capacity(0, $SIZE);
+        match $VALUES {
+            None => (0..$SIZE).for_each(|_| {
+                builder.append_null();
+            }),
+            Some(v) => {
+                let series = DataValue::try_into_data_array(&v, $D_TYPE)?;
+                (0..$SIZE).for_each(|_| {
+                    builder.append_series(&series);
+                })
             }
         }
+        Ok(builder.finish().into_series())
     }};
 }
 
 macro_rules! try_build_array {
     ($VALUE_BUILDER_TY:ident, $DF_TY:ident, $SCALAR_TY:ident, $VALUES:expr) => {{
-        let mut builder = $VALUE_BUILDER_TY::<crate::$DF_TY>::new($VALUES.len());
+        let mut builder = $VALUE_BUILDER_TY::<crate::$DF_TY>::with_capacity($VALUES.len());
         for value in $VALUES.iter() {
             match value {
                 DataValue::$SCALAR_TY(Some(v)) => builder.append_value(*v),
@@ -174,7 +173,7 @@ macro_rules! try_build_array {
 
     // Boolean
     ($VALUES:expr) => {{
-        let mut builder = BooleanArrayBuilder::new($VALUES.len());
+        let mut builder = BooleanArrayBuilder::with_capacity($VALUES.len());
         for value in $VALUES.iter() {
             match value {
                 DataValue::Boolean(Some(v)) => builder.append_value(*v),
@@ -187,7 +186,7 @@ macro_rules! try_build_array {
 
     // utf8
     ($utf8:ident, $VALUES:expr) => {{
-        let mut builder = Utf8ArrayBuilder::new($VALUES.len(), $VALUES.len() * 4);
+        let mut builder = Utf8ArrayBuilder::with_capacity($VALUES.len());
         for value in $VALUES.iter() {
             match value {
                 DataValue::Utf8(Some(v)) => builder.append_value(v),

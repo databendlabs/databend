@@ -8,6 +8,6 @@ pub mod seq;
 
 pub use seq::Seq;
 pub use service::assert_meta_connection;
-pub use service::next_local_addr;
 pub use service::next_port;
 pub use service::start_store_server;
+pub use service::start_store_server_with_context;

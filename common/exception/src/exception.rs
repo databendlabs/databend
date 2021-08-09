@@ -153,6 +153,11 @@ build_exceptions! {
     BadBytes(46),
     InitPrometheusFailure(47),
     ScalarSubqueryBadRows(48),
+    Overflow(49),
+    InvalidMetaBinaryFormat(50),
+    AuthenticateFailure(51),
+    TLSConfigurationFailure(52),
+    UnknownSession(53),
 
 
     // uncategorized
@@ -189,6 +194,11 @@ build_exceptions! {
 
     MetaStoreDamaged(2401),
     MetaStoreAlreadyExists(2402),
+    MetaStoreNotFound(2403),
+
+    // FuseStore server error
+
+    FuseStoreError(2501),
 
 
     // TODO
@@ -216,6 +226,16 @@ build_exceptions! {
 
     // kv-api error codes
     UnknownKey(6000),
+
+}
+// General errors
+build_exceptions! {
+
+    // A task that already stopped and can not stop twice.
+    AlreadyStarted(7101),
+
+    // A task that already started and can not start twice.
+    AlreadyStopped(7102),
 
 }
 
@@ -332,6 +352,15 @@ impl From<FromUtf8Error> for ErrorCode {
     fn from(error: FromUtf8Error) -> Self {
         ErrorCode::BadBytes(format!(
             "Bad bytes, cannot parse bytes with UTF8, cause: {}",
+            error
+        ))
+    }
+}
+
+impl From<prost::EncodeError> for ErrorCode {
+    fn from(error: prost::EncodeError) -> Self {
+        ErrorCode::BadBytes(format!(
+            "Bad bytes, cannot parse bytes with prost, cause: {}",
             error
         ))
     }

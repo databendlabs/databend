@@ -2,8 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-mod arrow_builder;
+mod boolean;
 mod builder;
+mod primitive;
+mod utf8;
 
-pub use arrow_builder::*;
+pub use boolean::*;
 pub use builder::*;
+pub use primitive::*;
+pub use utf8::*;

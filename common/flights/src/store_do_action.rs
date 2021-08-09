@@ -6,6 +6,7 @@ use std::convert::TryInto;
 use std::io::Cursor;
 
 use common_arrow::arrow_flight::Action;
+use common_exception::ErrorCode;
 use prost::Message;
 use tonic::Request;
 
@@ -19,8 +20,11 @@ use crate::impls::meta_api_impl::CreateTableAction;
 use crate::impls::meta_api_impl::DropDatabaseAction;
 use crate::impls::meta_api_impl::DropTableAction;
 use crate::impls::meta_api_impl::GetDatabaseAction;
+use crate::impls::meta_api_impl::GetDatabaseMetaAction;
 use crate::impls::meta_api_impl::GetTableAction;
 use crate::impls::storage_api_impl::ReadPlanAction;
+use crate::impls::storage_api_impl::TruncateTableAction;
+use crate::meta_api_impl::GetTableExtReq;
 use crate::protobuf::FlightStoreRequest;
 
 pub trait RequestFor {
@@ -45,16 +49,17 @@ macro_rules! action_declare {
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum StoreDoAction {
-    // meta-database
+    // database meta
     CreateDatabase(CreateDatabaseAction),
     GetDatabase(GetDatabaseAction),
     DropDatabase(DropDatabaseAction),
-    // meta-table
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
     GetTable(GetTableAction),
-    // storage
+    GetTableExt(GetTableExtReq),
+    GetDatabaseMeta(GetDatabaseMetaAction),
     ReadPlan(ReadPlanAction),
+    TruncateTable(TruncateTableAction),
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
@@ -86,9 +91,9 @@ impl TryInto<StoreDoAction> for Request<Action> {
 
 /// Try convert DoActionAction to tonic::Request<Action>.
 impl TryInto<Request<Action>> for &StoreDoAction {
-    type Error = anyhow::Error;
+    type Error = ErrorCode;
 
-    fn try_into(self) -> Result<Request<Action>, Self::Error> {
+    fn try_into(self) -> common_exception::Result<Request<Action>> {
         let flight_request = FlightStoreRequest {
             body: serde_json::to_string(&self)?,
         };

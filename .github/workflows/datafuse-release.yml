@@ -42,14 +42,27 @@ jobs:
         shell: bash
 
       - name: Pack binaries
-        run: tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz fuse-query fuse-store
+        run: |
+          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz fuse-query fuse-store
+          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-cli-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-cli
 
-      - name: Release
+      - name: Release datafuse
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: datafuse-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.*
           asset_name: datafuse-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}
+          tag: ${{ github.ref }}
+          file_glob: true
+          overwrite: true
+          body: ${{ steps.changelog_reader.outputs.log_entry }}
+
+      - name: Release datafuse-cli
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: datafuse-cli-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: datafuse-cli-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true

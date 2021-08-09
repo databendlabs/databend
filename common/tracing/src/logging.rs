@@ -2,8 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::env;
 use std::sync::Once;
 
+use opentelemetry::global;
+use opentelemetry::sdk::propagation::TraceContextPropagator;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
@@ -12,27 +15,58 @@ use tracing_bunyan_formatter::JsonStorageLayer;
 use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::registry::Registry;
 use tracing_subscriber::EnvFilter;
-use tracing_subscriber::Registry;
 
 /// Write logs to stdout.
 pub fn init_default_tracing() {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        init_tracing_stdout("error");
+        init_tracing_stdout();
     });
 }
 
-fn init_tracing_stdout(level: &str) {
+/// Init logging and tracing.
+///
+/// To enable reporting tracing data to jaeger, set env var `FUSE_JAEGER` to non-empty value.
+/// A local tracing collection(maybe for testing) can be done with a local jaeger server.
+/// To report tracing data and view it:
+///   docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
+///   FUSE_JAEGER=on RUST_LOG=trace cargo test
+///   open http://localhost:16686/
+///
+/// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
+///   FUSE_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
+///
+// TODO(xp): use FUSE_JAEGER to assign jaeger server address.
+fn init_tracing_stdout() {
     let fmt_layer = fmt::Layer::default()
         .with_thread_ids(true)
+        .with_thread_names(true)
+        .pretty()
         .with_ansi(true)
         .with_span_events(fmt::format::FmtSpan::FULL);
 
+    let fuse_jaeger = env::var("FUSE_JAEGER").unwrap_or_else(|_| "".to_string());
+    let ot_layer = if !fuse_jaeger.is_empty() {
+        global::set_text_map_propagator(TraceContextPropagator::new());
+
+        let tracer = opentelemetry_jaeger::new_pipeline()
+            .with_service_name("fuse-store")
+            .install_batch(opentelemetry::runtime::Tokio)
+            .expect("install");
+
+        let ot_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+        Some(ot_layer)
+    } else {
+        None
+    };
+
     let subscriber = Registry::default()
-        .with(EnvFilter::new(level))
-        .with(fmt_layer);
+        .with(EnvFilter::from_default_env())
+        .with(fmt_layer)
+        .with(ot_layer);
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("error setting global tracing subscriber");

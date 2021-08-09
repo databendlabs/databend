@@ -15,6 +15,7 @@ use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -121,7 +122,7 @@ impl Processor for GroupByPartialTransform {
 
         let mut stream = self.input.execute().await?;
         let arena = Bump::new();
-        let sample_block = DataBlock::empty_with_schema(self.schema.clone());
+        let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
         macro_rules! apply {
@@ -132,49 +133,42 @@ impl Processor for GroupByPartialTransform {
                 while let Some(block) = stream.next().await {
                     let block = block?;
                     // 1.1 and 1.2.
-                    let group_blocks = $hash_method.group_by(&block, &group_cols)?;
+                    let mut group_columns = Vec::with_capacity(group_cols.len());
+                    {
+                        for col in group_cols.iter() {
+                            group_columns.push(block.try_column_by_name(col)?);
+                        }
+                    }
+
+                    let mut aggr_arg_columns = Vec::with_capacity(aggr_cols.len());
+                    for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
+                        let arg_columns = arg_names[idx]
+                            .iter()
+                            .map(|arg| block.try_column_by_name(arg).and_then(|c| c.to_array()))
+                            .collect::<Result<Vec<Series>>>()?;
+                        aggr_arg_columns.push(arg_columns);
+                    }
+
+                    let group_keys = $hash_method.build_keys(&group_columns, block.num_rows())?;
+                    let mut groups = groups_locker.write();
                     // 1.3 Apply take blocks to aggregate function by group_key.
                     {
-                        for (group_key, group_keys, take_block) in group_blocks {
-                            let rows = take_block.num_rows();
-
-                            let mut groups = groups_locker.write();
-                            match groups.get_mut(&group_key) {
+                        for (row, group_key) in group_keys.iter().enumerate() {
+                            match groups.get_mut(group_key) {
                                 // New group.
                                 None => {
                                     let mut places = Vec::with_capacity(aggr_cols.len());
-                                    for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
-                                        let func = funcs[idx].clone();
+                                    for (idx, arg_columns) in aggr_arg_columns.iter().enumerate() {
                                         let place = funcs[idx].allocate_state(&arena);
-
-                                        let arg_columns = arg_names[idx]
-                                            .iter()
-                                            .map(|arg| {
-                                                take_block
-                                                    .try_column_by_name(arg)
-                                                    .map(|c| c.clone())
-                                            })
-                                            .collect::<Result<Vec<DataColumn>>>()?;
-                                        func.accumulate(place, &arg_columns, rows)?;
-
+                                        funcs[idx].accumulate_row(place, row, arg_columns)?;
                                         places.push(place);
                                     }
-
-                                    groups.insert(group_key.clone(), (places, group_keys));
+                                    groups.insert(group_key.clone(), places);
                                 }
                                 // Accumulate result against the take block by indices.
-                                Some((places, _)) => {
-                                    for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
-                                        let arg_columns = arg_names[idx]
-                                            .iter()
-                                            .map(|arg| {
-                                                take_block
-                                                    .try_column_by_name(arg)
-                                                    .map(|c| c.clone())
-                                            })
-                                            .collect::<Result<Vec<DataColumn>>>()?;
-
-                                        funcs[idx].accumulate(places[idx], &arg_columns, rows)?
+                                Some(places) => {
+                                    for (idx, arg_columns) in aggr_arg_columns.iter().enumerate() {
+                                        funcs[idx].accumulate_row(places[idx], row, arg_columns)?;
                                     }
                                 }
                             }
@@ -194,42 +188,28 @@ impl Processor for GroupByPartialTransform {
                     )));
                 }
 
-                let mut group_arrays = Vec::with_capacity(group_cols.len());
-                for _i in 0..group_cols.len() {
-                    group_arrays.push(Vec::with_capacity(groups.len()));
-                }
-
                 // Builders.
                 let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-                    .map(|_| BinaryArrayBuilder::new(groups.len() * 4))
+                    .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
                     .collect();
 
                 type KeyBuilder = $key_array_builder;
-                let mut group_key_builder = KeyBuilder::new(groups.len());
-                for (key, (places, values)) in groups.iter() {
+                let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
+
+                let mut bytes = BytesMut::new();
+                for (key, places) in groups.iter() {
                     for (idx, func) in funcs.iter().enumerate() {
-                        let mut writer = vec![];
-                        func.serialize(places[idx], &mut writer)?;
-
-                        state_builders[idx].append_value(&writer);
+                        func.serialize(places[idx], &mut bytes)?;
+                        state_builders[idx].append_value(&bytes[..]);
+                        bytes.clear();
                     }
 
-                    for (i, value) in values.iter().enumerate() {
-                        group_arrays[i].push(value.clone());
-                    }
-                    // Keys
                     group_key_builder.append_value((*key).clone());
                 }
 
                 let mut columns: Vec<Series> = Vec::with_capacity(self.schema.fields().len());
                 for mut builder in state_builders {
                     columns.push(builder.finish().into_series());
-                }
-                for (i, values) in group_arrays.iter().enumerate() {
-                    columns.push(DataValue::try_into_data_array(
-                        values,
-                        &self.group_exprs[i].to_data_type(&self.schema_before_group_by)?,
-                    )?)
                 }
                 let array = group_key_builder.finish();
                 columns.push(array.into_series());
@@ -247,19 +227,19 @@ impl Processor for GroupByPartialTransform {
             ($method: ident, $apply: ident) => {{
                 match $method {
                     HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, (Vec<usize>, Vec<DataValue>), ahash::RandomState>>}
+                        apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, Vec<usize>, ahash::RandomState>>}
                     }
                     HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, Vec<usize>, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, Vec<usize>, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, Vec<usize>, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, (Vec<usize>, Vec<DataValue>), ahash::RandomState>> }
+                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, Vec<usize>, ahash::RandomState>> }
                     }
                 }
             }};

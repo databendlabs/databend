@@ -4,9 +4,7 @@
 
 use std::str::FromStr;
 
-use common_arrow::arrow::datatypes::TimeUnit;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -25,6 +23,7 @@ impl SQLCommon {
             SQLDataType::SmallInt => Ok(DataType::Int16),
             SQLDataType::Char(_) => Ok(DataType::Utf8),
             SQLDataType::Varchar(_) => Ok(DataType::Utf8),
+            SQLDataType::String => Ok(DataType::Utf8),
             SQLDataType::Text => Ok(DataType::Utf8),
             SQLDataType::Decimal(_, _) => Ok(DataType::Float64),
             SQLDataType::Float(_) => Ok(DataType::Float32),

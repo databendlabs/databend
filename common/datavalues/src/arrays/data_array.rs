@@ -9,17 +9,14 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array as arrow_array;
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::datatypes::IntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::compute::aggregate;
+use common_arrow::arrow::trusted_len::TrustedLen;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::data_df_type::*;
-use crate::series::IntoSeries;
-use crate::series::Series;
-use crate::series::SeriesTrait;
-use crate::vec::AlignedVec;
+use crate::prelude::*;
 use crate::DataType;
 use crate::DataValue;
 
@@ -37,45 +34,45 @@ impl<T> DataArray<T> {
         }
     }
 
+    #[inline]
     pub fn data_type(&self) -> DataType {
         DataType::try_from(self.array.data_type()).unwrap()
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.array.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[inline]
     pub fn is_null(&self, row: usize) -> bool {
         self.array.is_null(row)
     }
 
+    #[inline]
     pub fn null_count(&self) -> usize {
         self.array.null_count()
     }
 
+    #[inline]
     pub fn all_is_null(&self) -> bool {
         self.null_count() == self.len()
     }
 
+    #[inline]
     pub fn get_array_ref(&self) -> ArrayRef {
         self.array.clone()
     }
 
+    #[inline]
     /// Get the null count and the buffer of bits representing null values
-    pub fn null_bits(&self) -> (usize, Option<Buffer>) {
-        let data = self.array.data();
-
-        (
-            data.null_count(),
-            data.null_bitmap().as_ref().map(|bitmap| {
-                let buff = bitmap.buffer_ref();
-                buff.clone()
-            }),
-        )
+    pub fn null_bits(&self) -> (usize, &Option<Bitmap>) {
+        (self.array.null_count(), self.array.validity())
     }
 
     pub fn limit(&self, num_elements: usize) -> Self {
@@ -83,12 +80,12 @@ impl<T> DataArray<T> {
     }
 
     pub fn get_array_memory_size(&self) -> usize {
-        self.array.get_array_memory_size()
+        aggregate::estimated_bytes_size(self.array.as_ref())
     }
 
     pub fn slice(&self, offset: usize, length: usize) -> Self {
-        let array = self.array.slice(offset, length);
-        array.into()
+        let array = Arc::from(self.array.slice(offset, length));
+        Self::from(array)
     }
 
     /// Unpack a array to the same physical type.
@@ -147,7 +144,7 @@ where T: DFDataType
 
         // TODO: insert types
         match T::data_type() {
-            DataType::Utf8 => downcast_and_pack!(StringArray, Utf8),
+            DataType::Utf8 => downcast_and_pack!(LargeUtf8Array, Utf8),
             DataType::Boolean => downcast_and_pack!(BooleanArray, Boolean),
             DataType::UInt8 => downcast_and_pack!(UInt8Array, UInt8),
             DataType::UInt16 => downcast_and_pack!(UInt16Array, UInt16),
@@ -159,40 +156,17 @@ where T: DFDataType
             DataType::Int64 => downcast_and_pack!(Int64Array, Int64),
             DataType::Float32 => downcast_and_pack!(Float32Array, Float32),
             DataType::Float64 => downcast_and_pack!(Float64Array, Float64),
-            DataType::Date32 => downcast_and_pack!(Date32Array, Date32),
-            DataType::Date64 => downcast_and_pack!(Date64Array, Date64),
-
-            DataType::Timestamp(TimeUnit::Second, _) => {
-                downcast_and_pack!(TimestampSecondArray, TimestampSecond)
-            }
-            DataType::Timestamp(TimeUnit::Millisecond, _) => {
-                downcast_and_pack!(TimestampMillisecondArray, TimestampMillisecond)
-            }
-            DataType::Timestamp(TimeUnit::Microsecond, _) => {
-                downcast_and_pack!(TimestampMicrosecondArray, TimestampMicrosecond)
-            }
-            DataType::Timestamp(TimeUnit::Nanosecond, _) => {
-                downcast_and_pack!(TimestampNanosecondArray, TimestampNanosecond)
-            }
-
-            DataType::Interval(IntervalUnit::YearMonth) => {
-                downcast_and_pack!(IntervalYearMonthArray, IntervalYearMonth)
-            }
-
-            DataType::Interval(IntervalUnit::DayTime) => {
-                downcast_and_pack!(IntervalDayTimeArray, IntervalDayTime)
-            }
 
             DataType::Binary => {
-                downcast_and_pack!(BinaryArray, Binary)
+                downcast_and_pack!(LargeBinaryArray, Binary)
             }
 
             DataType::List(fs) => {
-                let list_array = &*(arr as *const dyn Array as *const ListArray);
+                let list_array = &*(arr as *const dyn Array as *const LargeListArray);
                 let value = match list_array.is_null(index) {
                     true => None,
                     false => {
-                        let nested_array = list_array.value(index);
+                        let nested_array: Arc<dyn Array> = Arc::from(list_array.value(index));
                         let series = nested_array.into_series();
                         let scalar_vec = (0..series.len())
                             .map(|i| series.try_get(i))
@@ -206,10 +180,10 @@ where T: DFDataType
 
             DataType::Struct(_) => {
                 let struct_array = &*(arr as *const dyn Array as *const StructArray);
-                let nested_array = struct_array.column(index);
-                let series = nested_array.clone().into_series();
+                let nested_array = struct_array.values()[index].clone();
+                let series = nested_array.into_series();
 
-                let scalar_vec = (0..nested_array.len())
+                let scalar_vec = (0..series.len())
                     .map(|i| series.try_get(i))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(DataValue::Struct(scalar_vec))
@@ -227,17 +201,17 @@ impl<T> DataArray<T>
 where T: DFPrimitiveType
 {
     /// Create a new DataArray by taking ownership of the AlignedVec. This operation is zero copy.
-    pub fn new_from_aligned_vec(v: AlignedVec<T::Native>) -> Self {
-        let array = v.into_primitive_array::<T>(None);
+    pub fn new_from_aligned_vec(values: AlignedVec<T::Native>) -> Self {
+        let array = to_primitive::<T>(values, None);
         Self::new(Arc::new(array))
     }
 
     /// Nullify values in slice with an existing null bitmap
     pub fn new_from_owned_with_null_bitmap(
         values: AlignedVec<T::Native>,
-        buffer: Option<Buffer>,
+        validity: Option<Bitmap>,
     ) -> Self {
-        let array = values.into_primitive_array::<T>(buffer);
+        let array = to_primitive::<T>(values, validity);
         Self::new(Arc::new(array))
     }
 
@@ -252,14 +226,17 @@ where T: DFPrimitiveType
         self.downcast_ref().values().iter()
     }
 
-    #[allow(clippy::wrong_self_convention)]
     pub fn into_no_null_iter(
         &self,
-    ) -> impl Iterator<Item = T::Native> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator
-    {
+    ) -> impl Iterator<Item = T::Native>
+           + '_
+           + Send
+           + Sync
+           + ExactSizeIterator
+           + DoubleEndedIterator
+           + TrustedLen {
         // .copied was significantly slower in benchmark, next call did not inline?
-        #[allow(clippy::map_clone)]
-        self.data_views().map(|v| *v)
+        self.data_views().copied().trust_my_length(self.len())
     }
 }
 
@@ -275,6 +252,12 @@ impl DFListArray {
 impl<T> From<arrow_array::ArrayRef> for DataArray<T> {
     fn from(array: arrow_array::ArrayRef) -> Self {
         Self::new(array)
+    }
+}
+
+impl<T> From<Box<dyn Array>> for DataArray<T> {
+    fn from(array: Box<dyn Array>) -> Self {
+        Self::new(Arc::from(array))
     }
 }
 
@@ -296,4 +279,12 @@ where T: DFDataType
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DataArray<{:?}>", self.data_type())
     }
+}
+
+#[inline]
+pub fn to_primitive<T: DFPrimitiveType>(
+    values: AlignedVec<T::Native>,
+    validity: Option<Bitmap>,
+) -> PrimitiveArray<T::Native> {
+    PrimitiveArray::from_data(T::data_type().to_arrow(), values.into(), validity)
 }
