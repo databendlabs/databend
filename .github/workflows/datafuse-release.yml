@@ -35,23 +35,21 @@ jobs:
           args: --release --target=${{ matrix.config.target }}
           use-cross: ${{ matrix.config.cross }}
 
-      - name: Get tag name
-        id: tag_name
-        run: |
-          echo ::set-output name=current_version::${GITHUB_REF#refs/tags/v}
-        shell: bash
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
 
       - name: Pack binaries
         run: |
-          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz fuse-query fuse-store
-          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-cli-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-cli
+          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz fuse-query fuse-store
+          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-cli
 
       - name: Release datafuse
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: datafuse-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.*
-          asset_name: datafuse-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}
+          file: datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true
@@ -61,8 +59,8 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: datafuse-cli-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}.*
-          asset_name: datafuse-cli-${{ steps.tag_name.outputs.VERSION }}-${{ matrix.config.target }}
+          file: datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true
