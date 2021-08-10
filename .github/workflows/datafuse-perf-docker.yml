@@ -1,4 +1,4 @@
-name: Push to Dockerhub
+name: Push Performance tools to Dockerhub
 on:
   push:
     branches: master
@@ -13,6 +13,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-buildcache-
+            ${{ runner.os }}-cargo-
+
       - name: Build Perf Tool
         run: |
           make build-perf-tool

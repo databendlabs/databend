@@ -41,7 +41,7 @@ jobs:
           ref: ${{ env.SHA }}
       - name: build all binary
         if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
-        id: make_debug
+        id: make_release
         run: |
           # enable sccache
           sccache --start-server
@@ -51,8 +51,8 @@ jobs:
           cargo build --bin=datafuse-query --bin=datafuse-store --target x86_64-unknown-linux-gnu
           mkdir -p distro
           sccache --show-stats
-          mv target/x86_64-unknown-linux-gnu/debug/datafuse-query ./distro/datafuse-query
-          mv target/x86_64-unknown-linux-gnu/debug/datafuse-store ./distro/datafuse-store
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-query ./distro/datafuse-query
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-store ./distro/datafuse-store
           mv docker/bootstrap.sh ./distro/bootstrap.sh
       - name: Set up QEMU
         if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
@@ -148,8 +148,8 @@ jobs:
           cargo build --bin=datafuse-query --bin=datafuse-store --target x86_64-unknown-linux-gnu --release
           mkdir -p distro
           sccache --show-stats
-          mv target/x86_64-unknown-linux-gnu/debug/datafuse-query ./distro/datafuse-query
-          mv target/x86_64-unknown-linux-gnu/debug/datafuse-store ./distro/datafuse-store
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-query ./distro/datafuse-query
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-store ./distro/datafuse-store
           mv docker/bootstrap.sh ./distro/bootstrap.sh
       - name: Set up QEMU
         if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
