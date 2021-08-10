@@ -69,5 +69,19 @@ impl fmt::Display for Table {
     }
 }
 
+impl Table {
+    pub fn deserialize_from_vec(v: &[u8]) -> Option<Self> {
+        let table: Result<Table, Box<bincode::ErrorKind>> = bincode::deserialize(v);
+        if let Ok(table) = table {
+            return Some(table);
+        }
+        None
+    }
+
+    pub fn serialize_into_vec(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
+    }
+}
+
 pub type MetaVersion = u64;
 pub type MetaId = u64;

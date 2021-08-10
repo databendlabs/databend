@@ -56,6 +56,7 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
 const DB_PREFIX: &str = "df_db_";
+const TBL_PREFIX: &str = "df_table_";
 
 /// Replication defines the replication strategy.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -104,12 +105,6 @@ pub struct StateMachine {
     pub slots: Vec<Slot>,
 
     pub replication: Replication,
-
-    /// db name to database mapping
-    pub databases: BTreeMap<String, Database>,
-
-    /// table id to table mapping
-    pub tables: BTreeMap<u64, Table>,
 
     /// table parts， table id -> data parts
     pub table_parts: HashMap<u64, Vec<DataPartInfo>>,
@@ -211,8 +206,6 @@ impl StateMachine {
             slots: Vec::new(),
 
             replication: Replication::Mirror(1),
-            databases: BTreeMap::new(),
-            tables: BTreeMap::new(),
             table_parts: HashMap::new(),
             kv: BTreeMap::new(),
         };
@@ -458,8 +451,8 @@ impl StateMachine {
 
                 if db.tables.contains_key(table_name) {
                     let table_id = db.tables.get(table_name).unwrap();
-                    let prev = self.tables.get(table_id);
-                    Ok((prev.cloned(), prev.cloned()).into())
+                    let prev = self.get_table(table_id);
+                    Ok((prev.clone(), prev).into())
                 } else {
                     let table = Table {
                         table_id: self.incr_seq(SEQ_TABLE_ID),
@@ -469,10 +462,22 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID);
                     db.tables.insert(table_name.clone(), table.table_id);
                     self.upsert_kv(db_name, &MatchSeq::Any, &Some(db.serialize_into_vec()));
-                    self.tables.insert(table.table_id, table.clone());
+                    let table_key: &String = &[TBL_PREFIX, &table.table_id.to_string()].join("");
+                    let (prev, result) = self.upsert_kv(
+                        table_key,
+                        &MatchSeq::Any,
+                        &Some(table.serialize_into_vec()),
+                    );
+                    let de_table = |r: Option<SeqValue>| -> Option<Table> {
+                        if let Some(r) = r {
+                            Table::deserialize_from_vec(&r.1)
+                        } else {
+                            None::<Table>
+                        }
+                    };
                     tracing::debug!("applied CreateTable: {}={:?}", table_name, table);
 
-                    Ok((None, Some(table)).into())
+                    Ok((de_table(prev), de_table(result)).into())
                 }
             }
 
@@ -488,13 +493,22 @@ impl StateMachine {
                     let tbl_id = tbl_id.to_owned();
                     db.tables.remove(table_name);
                     self.upsert_kv(db_name, &MatchSeq::Any, &Some(db.serialize_into_vec()));
-                    let prev = self.tables.remove(&tbl_id);
+                    let table_key: &String = &[TBL_PREFIX, &tbl_id.to_string()].join("");
+                    let (prev, result) = self.upsert_kv(table_key, &MatchSeq::Any, &None);
 
                     self.remove_table_data_parts(db_name, table_name);
 
+                    let de_table = |r: Option<SeqValue>| -> Option<Table> {
+                        if let Some(r) = r {
+                            Table::deserialize_from_vec(&r.1)
+                        } else {
+                            None::<Table>
+                        }
+                    };
+
                     self.incr_seq(SEQ_DATABASE_META_ID);
 
-                    Ok((prev, None).into())
+                    Ok((de_table(prev), de_table(result)).into())
                 } else {
                     Ok((None::<Table>, None::<Table>).into())
                 }
@@ -623,8 +637,29 @@ impl StateMachine {
     }
 
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
-        let x = self.tables.get(tid);
-        x.cloned()
+        let table_key: &String = &[TBL_PREFIX, &tid.to_string()].join("");
+
+        let v = self.get_kv(table_key);
+        if let Some(v) = v {
+            return Table::deserialize_from_vec(&v.1);
+        }
+        None
+    }
+
+    pub fn get_tables(&self) -> Vec<(u64, Table)> {
+        let r = self.prefix_list_kv(TBL_PREFIX);
+        r.iter()
+            .map(|v| {
+                let tbl_key = v.0.clone();
+                let tbl_id = tbl_key
+                    .strip_prefix(TBL_PREFIX)
+                    .map(|t| t.parse::<u64>().unwrap());
+                (
+                    tbl_id.unwrap(),
+                    Table::deserialize_from_vec(&v.1 .1).unwrap(),
+                )
+            })
+            .collect()
     }
 
     pub fn get_kv(&self, key: &str) -> Option<SeqValue> {
@@ -676,8 +711,10 @@ impl StateMachine {
             let table_id = db.tables.get(table_name);
             if let Some(table_id) = table_id {
                 for part in part_infos {
-                    let table = self.tables.get_mut(table_id).unwrap();
+                    let mut table = self.get_table(table_id).unwrap();
                     table.parts.insert(part.part.name.clone());
+                    let table_key: &String = &[TBL_PREFIX, &table_id.to_string()].join("");
+                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()));
                     // These comments are intentionally left here.
                     // As rustc not smart enough, it says:
                     // for part in part_infos {
@@ -721,8 +758,13 @@ impl StateMachine {
         if let Some(db) = db {
             let table_id = db.tables.get(table_name);
             if let Some(table_id) = table_id {
-                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
-                self.table_parts.remove(table_id);
+                let table = self.get_table(table_id);
+                if let Some(mut table) = table {
+                    table.parts.clear();
+                    let table_key: &String = &[TBL_PREFIX, &table_id.to_string()].join("");
+                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()));
+                    self.table_parts.remove(table_id);
+                }
             }
         }
     }
@@ -737,8 +779,13 @@ impl StateMachine {
         let db = self.get_database(&db_name);
         if let Some(db) = db {
             for table_id in db.tables.values() {
-                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
-                self.table_parts.remove(table_id);
+                let table = self.get_table(table_id);
+                if let Some(mut table) = table {
+                    table.parts.clear();
+                    let table_key: &String = &[TBL_PREFIX, &table_id.to_string()].join("");
+                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()));
+                    self.table_parts.remove(table_id);
+                }
             }
         }
     }

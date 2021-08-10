@@ -923,11 +923,8 @@ impl MetaNode {
             None
         } else {
             let dbs = sm.get_databases();
-            let tbls = sm
-                .tables
-                .iter()
-                .map(|(k, v)| (*k, v.clone()))
-                .collect::<Vec<_>>();
+            let tbls = sm.get_tables();
+
             Some((ver.unwrap_or(0), dbs, tbls))
         }
     }
