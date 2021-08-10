@@ -1,7 +1,7 @@
 HUB ?= datafuselabs
 TAG ?= latest
 PLATFORM ?= linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
-
+VERSION ?= latest
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -62,7 +62,6 @@ dockerx:
 build-perf-tool:
 	cargo build --target x86_64-unknown-linux-gnu --bin fuse-benchmark
 	mkdir -p ./distro
-	rm ./distro/fuse-benchmark
 	mv ./target/x86_64-unknown-linux-gnu/debug/fuse-benchmark  ./distro
 
 perf-tool: build-perf-tool
@@ -77,7 +76,7 @@ clean:
 	cargo clean
 
 docker_release:
-	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/datafuse:${TAG} --push
+	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/datafuse:${TAG} --build-arg version=$VERSION --push
 
 cli-e2e:
 	cargo build --bin datafuse-cli --out-dir fusecli/cli/e2e -Z unstable-options
