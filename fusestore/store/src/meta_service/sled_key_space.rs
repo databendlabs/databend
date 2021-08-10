@@ -11,6 +11,7 @@ use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
 use common_exception::ErrorCode;
+use common_metatypes::SeqValue;
 use sled::IVec;
 
 use crate::meta_service::LogEntry;
@@ -145,4 +146,13 @@ impl SledKeySpace for Files {
     const NAME: &'static str = "files";
     type K = String;
     type V = String;
+}
+
+/// Key-Value Types for storing general purpose kv in sled::Tree:
+pub struct GenericKV {}
+impl SledKeySpace for GenericKV {
+    const PREFIX: u8 = 6;
+    const NAME: &'static str = "generic-kv";
+    type K = String;
+    type V = SeqValue;
 }
