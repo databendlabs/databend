@@ -92,25 +92,27 @@ where
             });
         }
 
+        if self.is_empty() {
+            return Ok(DataValue::from(self.data_type()));
+        }
+
         let mut sum = <T::LargestType as DFPrimitiveType>::Native::default();
         if null_count == 0 {
             //fast path
             array.values().as_slice().iter().for_each(|f| {
                 sum += f.as_();
             });
-        } else {
-            if let Some(c) = array.validity() {
-                array
-                    .values()
-                    .as_slice()
-                    .iter()
-                    .zip(c.into_iter())
-                    .for_each(|(f, v)| {
-                        if v {
-                            sum += f.as_();
-                        }
-                    });
-            }
+        } else if let Some(c) = array.validity() {
+            array
+                .values()
+                .as_slice()
+                .iter()
+                .zip(c.into_iter())
+                .for_each(|(f, v)| {
+                    if v {
+                        sum += f.as_();
+                    }
+                });
         }
         Ok(sum.into())
     }
