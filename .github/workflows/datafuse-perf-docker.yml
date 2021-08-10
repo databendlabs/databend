@@ -1,4 +1,4 @@
-name: Push to Dockerhub
+name: Push Performance tools to Dockerhub
 on:
   push:
     branches: master
@@ -9,13 +9,18 @@ on:
       - '**Dockerfile'
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: perf-runner
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
       - name: Build Perf Tool
         run: |
+          export SCCACHE_DIR=/home/runner/.cache/sccache
+          export RUSTC_WRAPPER=sccache
           make build-perf-tool
+          sccache --show-stats
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
