@@ -134,6 +134,8 @@ def create_tr(name, before_score, after_score, state, query, type, before_result
     elif type == 'COS':
         before = '<a href="{}">{:.3f}</a>'.format(before_result_url, before_score)
         after  = '<a href="{}">{:.3f}</a>'.format(after_result_url, after_score)
+    if before_score == 0:
+        return tmp.format(name, before, after, '?', 0, 0, name, state, query)
     return tmp.format(name, before, after,  '+' if after_score > before_score else '-',  after_score/before_score, (after_score - before_score) / before_score, name, state, query)
 
 def get_suit_by_name(name):
@@ -212,6 +214,10 @@ def compare_suit(releaser, pull, suit_file, suit_name, type, releaser_suit_url, 
         stats[suit_name]["before_url"] = releaser_suit_url
         stats[suit_name]["after_url"] = pull_suit_url
 
+    if stats[suit_name]["before_score"] == 0:
+        stable += 1
+        stats[suit_name]['state'] = 'zero divide'
+        return
     if abs(diff) / stats[suit_name]["before_score"] >= 0.05:
         if diff > 0:
             faster += 1
