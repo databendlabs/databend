@@ -178,17 +178,7 @@ impl SledTree {
                 format!("batch remove: {}", range_mes,)
             })?;
 
-        if flush && self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-range-remove");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                    format!("flush range remove: {}", range_mes,)
-                })?;
-        }
+        self.flush_async(flush).await?;
 
         Ok(())
     }
@@ -283,15 +273,7 @@ impl SledTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append")?;
 
-        if self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-append");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
-        }
+        self.flush_async(true).await?;
 
         Ok(())
     }
@@ -319,15 +301,7 @@ impl SledTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append_values")?;
 
-        if self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-append-values");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
-        }
+        self.flush_async(true).await?;
 
         Ok(())
     }
@@ -358,17 +332,7 @@ impl SledTree {
             Some(x) => Some(KV::deserialize_value(x)?),
         };
 
-        if self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-insert");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                    format!("flush insert_value {}", key)
-                })?;
-        }
+        self.flush_async(true).await?;
 
         Ok(prev)
     }
