@@ -21,7 +21,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::Table;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 use crate::sessions::ProcessInfo;
 
 pub struct ProcessesTable {
@@ -76,7 +76,7 @@ impl Table for ProcessesTable {
 
     fn read_plan(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -99,7 +99,7 @@ impl Table for ProcessesTable {
 
     async fn read(
         &self,
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let sessions_manager = ctx.get_sessions_manager();

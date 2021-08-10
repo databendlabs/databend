@@ -11,14 +11,14 @@ use common_runtime::tokio::runtime::Runtime;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 use crate::sessions::SessionManager;
 
-pub fn try_create_context() -> Result<FuseQueryContextRef> {
+pub fn try_create_context() -> Result<DatafuseQueryContextRef> {
     let config = Config::default();
     try_create_context_with_conf(config)
 }
-pub fn try_create_context_with_conf(mut config: Config) -> Result<FuseQueryContextRef> {
+pub fn try_create_context_with_conf(mut config: Config) -> Result<DatafuseQueryContextRef> {
     let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
@@ -51,7 +51,7 @@ impl ClusterNode {
     }
 }
 
-pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<FuseQueryContextRef> {
+pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<DatafuseQueryContextRef> {
     let config = Config::default();
     let cluster = Cluster::empty();
 

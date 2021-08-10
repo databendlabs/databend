@@ -7,13 +7,13 @@ setup:
 	bash ./scripts/setup/dev_setup.sh
 
 run: build
-	bash ./scripts/deploy/fusequery-standalone.sh release
+	bash ./scripts/deploy/datafuse-query-standalone.sh release
 
 run-debug: build-debug
-	bash ./scripts/deploy/fusequery-standalone.sh
+	bash ./scripts/deploy/datafuse-query-standalone.sh
 
 run-release:
-	bash ./scripts/deploy/fusequery-standalone-from-release.sh
+	bash ./scripts/deploy/datafuse-query-standalone-from-release.sh
 
 build:
 	bash ./scripts/build/build-native.sh

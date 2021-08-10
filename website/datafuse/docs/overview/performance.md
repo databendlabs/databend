@@ -10,7 +10,7 @@ title: Performance
     * Rust: rustc 1.55.0-nightly (868c702d0 2021-06-30)
     * Build with Link-time Optimization and Using CPU Specific Instructions
 
-| Query                                                        | FuseQuery (v0.4.48-nightly)                         |
+| Query                                                        | DatafuseQuery (v0.4.48-nightly)                         |
 | ------------------------------------------------------------ | --------------------------------------------------- |
 | SELECT avg(number) FROM numbers_mt(100000000000)             | 4.35 s.<br /> (22.97 billion rows/s., 183.91 GB/s.) |
 | SELECT sum(number) FROM numbers_mt(100000000000)             | 4.20 s.<br />(23.79 billion rows/s., 190.50 GB/s.)  |
@@ -25,7 +25,7 @@ title: Performance
 
 !!! note "Notes"
  
-    FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
+    DatafuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
 <figure>
   <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-avg-100b.gif"/>

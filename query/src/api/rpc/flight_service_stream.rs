@@ -45,7 +45,7 @@ impl Stream for FlightDataStream {
                     match dicts.is_empty() {
                         true => Some(Ok(values)),
                         false => Some(Err(Status::unimplemented(
-                            "FuseQuery does not implement dicts.",
+                            "DatafuseQuery does not implement dicts.",
                         ))),
                     }
                 }

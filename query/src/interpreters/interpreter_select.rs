@@ -27,15 +27,15 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct SelectInterpreter {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     select: SelectPlan,
 }
 
 impl SelectInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, select: SelectPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: DatafuseQueryContextRef, select: SelectPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 }
@@ -89,7 +89,7 @@ impl SelectInterpreter {
         in_local_pipeline.execute().await
     }
 
-    async fn error_handler(scheduled: Scheduled, context: &FuseQueryContextRef, timeout: u64) {
+    async fn error_handler(scheduled: Scheduled, context: &DatafuseQueryContextRef, timeout: u64) {
         let query_id = context.get_id();
         for (_stream_name, scheduled_node) in scheduled {
             match scheduled_node
@@ -126,7 +126,7 @@ impl SelectInterpreter {
 struct ScheduledStream {
     scheduled: Scheduled,
     is_success: AtomicBool,
-    context: FuseQueryContextRef,
+    context: DatafuseQueryContextRef,
     inner: SendableDataBlockStream,
 }
 
@@ -134,7 +134,7 @@ impl ScheduledStream {
     pub fn create(
         scheduled: Scheduled,
         inner: SendableDataBlockStream,
-        context: FuseQueryContextRef,
+        context: DatafuseQueryContextRef,
     ) -> SendableDataBlockStream {
         Box::pin(ScheduledStream {
             inner,

@@ -16,7 +16,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::datasources::Table;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct SettingsTable {
     schema: DataSchemaRef,
@@ -59,7 +59,7 @@ impl Table for SettingsTable {
 
     fn read_plan(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -82,7 +82,7 @@ impl Table for SettingsTable {
 
     async fn read(
         &self,
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let settings = ctx.get_settings();

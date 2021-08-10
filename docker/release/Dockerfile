@@ -14,5 +14,5 @@ FROM debian:bullseye
 COPY --from=installer /root/.datafuse/bin/datafuse-query  /datafuse-query
 COPY --from=installer /root/.datafuse/bin/datafuse-store /datafuse-store
 COPY ./docker/bootstrap.sh /bootstrap.sh
-COPY ./docker/fusequery-docker.toml  /datafuse-query.toml
+COPY ./docker/datafuse-query-docker.toml  /datafuse-query.toml
 ENTRYPOINT ["/bootstrap.sh"]

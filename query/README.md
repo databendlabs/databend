@@ -1,3 +1,3 @@
-# FuseQuery
+# DatafuseQuery
 
-FuseQuery is a Distributed Query Engine at scale.
+DatafuseQuery is a Distributed Query Engine at scale.

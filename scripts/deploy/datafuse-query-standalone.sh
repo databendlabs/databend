@@ -11,13 +11,13 @@ sleep 1
 
 BIN=${1:-debug}
 
-echo 'Start FuseStore...'
+echo 'Start DatafuseStore...'
 nohup target/${BIN}/datafuse-store --single true &
 echo "Waiting on datafuse-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 
-echo 'Start FuseQuery...'
-nohup target/${BIN}/datafuse-query -c scripts/deploy/config/fusequery-node-1.toml &
+echo 'Start DatafuseQuery...'
+nohup target/${BIN}/datafuse-query -c scripts/deploy/config/datafuse-query-node-1.toml &
 echo "Waiting on datafuse-query 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 3307

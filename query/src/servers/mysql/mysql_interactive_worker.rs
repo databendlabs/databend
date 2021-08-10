@@ -21,7 +21,7 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
@@ -130,7 +130,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         &mut self,
         _: &str,
         writer: StatementMetaWriter<'_, W>,
-        _: FuseQueryContextRef,
+        _: DatafuseQueryContextRef,
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
@@ -144,7 +144,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: u32,
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
-        _: FuseQueryContextRef,
+        _: DatafuseQueryContextRef,
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
@@ -153,9 +153,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         Ok(())
     }
 
-    fn do_close(&mut self, _: u32, _: FuseQueryContextRef) {}
+    fn do_close(&mut self, _: u32, _: DatafuseQueryContextRef) {}
 
-    fn do_query(&mut self, query: &str, context: FuseQueryContextRef) -> Result<Vec<DataBlock>> {
+    fn do_query(
+        &mut self,
+        query: &str,
+        context: DatafuseQueryContextRef,
+    ) -> Result<Vec<DataBlock>> {
         log::debug!("{}", query);
 
         let runtime = Self::build_runtime()?;
@@ -193,7 +197,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    fn do_init(&mut self, database_name: &str, context: FuseQueryContextRef) -> Result<()> {
+    fn do_init(&mut self, database_name: &str, context: DatafuseQueryContextRef) -> Result<()> {
         self.do_query(&format!("USE {};", database_name), context)?;
         Ok(())
     }

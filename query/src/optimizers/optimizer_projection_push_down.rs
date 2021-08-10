@@ -24,7 +24,7 @@ use common_planners::RewriteHelper;
 use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct ProjectionPushDownOptimizer {}
 
@@ -196,7 +196,7 @@ impl Optimizer for ProjectionPushDownOptimizer {
 }
 
 impl ProjectionPushDownOptimizer {
-    pub fn create(_ctx: FuseQueryContextRef) -> ProjectionPushDownOptimizer {
+    pub fn create(_ctx: DatafuseQueryContextRef) -> ProjectionPushDownOptimizer {
         ProjectionPushDownOptimizer {}
     }
 }

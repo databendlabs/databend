@@ -31,15 +31,15 @@ lazy_static! {
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
-    #[structopt(long, env = "DATAFUSE_STORE_LOG_LEVEL", default_value = "INFO")]
+    #[structopt(long, env = "STORE_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
-    #[structopt(long, env = "DATAFUSE_STORE_LOG_DIR", default_value = "./_logs")]
+    #[structopt(long, env = "STORE_LOG_DIR", default_value = "./_logs")]
     pub log_dir: String,
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_METRIC_API_ADDRESS",
+        env = "STORE_METRIC_API_ADDRESS",
         default_value = "127.0.0.1:7171"
     )]
     pub metric_api_address: String,
@@ -55,14 +55,14 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_FLIGHT_API_ADDRESS",
+        env = "STORE_FLIGHT_API_ADDRESS",
         default_value = "127.0.0.1:9191"
     )]
     pub flight_api_address: String,
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_META_API_HOST",
+        env = "STORE_META_API_HOST",
         default_value = "127.0.0.1",
         help = "The listening host for metadata communication"
     )]
@@ -70,7 +70,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_META_API_PORT",
+        env = "STORE_META_API_PORT",
         default_value = "9291",
         help = "The listening port for metadata communication"
     )]
@@ -78,7 +78,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_META_DIR",
+        env = "STORE_META_DIR",
         default_value = "./_meta",
         help = "The dir to store persisted meta state, including raft logs, state machine etc."
     )]
@@ -86,7 +86,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_META_NO_SYNC",
+        env = "STORE_META_NO_SYNC",
         help = concat!("Whether to fsync meta to disk for every meta write(raft log, state machine etc).",
                       " No-sync brings risks of data loss during a crash.",
                       " You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING."
@@ -97,7 +97,7 @@ pub struct Config {
     // raft config
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_SNAPSHOT_LOGS_SINCE_LAST",
+        env = "STORE_SNAPSHOT_LOGS_SINCE_LAST",
         default_value = "1024",
         help = "The number of logs since the last snapshot to trigger next snapshot."
     )]
@@ -105,7 +105,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_HEARTBEAT_INTERVAL",
+        env = "STORE_HEARTBEAT_INTERVAL",
         default_value = "500",
         help = concat!("The interval in milli seconds at which a leader send heartbeat message to followers.",
                       " Different value of this setting on leader and followers may cause unexpected behavior.")
@@ -114,7 +114,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_BOOT",
+        env = "STORE_BOOT",
         help = "Whether to boot up a new cluster. If already booted, it is ignored"
     )]
     pub boot: bool,
@@ -132,7 +132,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_SINGLE",
+        env = "STORE_SINGLE",
         help = concat!("Single node store. It creates a single node cluster if meta data is not initialized.",
                       " Otherwise it opens the previous one.",
                       " This is mainly for testing purpose.")
@@ -141,7 +141,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_ID",
+        env = "STORE_ID",
         default_value = "0",
         help = concat!("The node id. Only used when this server is not initialized,",
                       " e.g. --boot or --single for the first time.",
@@ -151,7 +151,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "DATAFUSE_STORE_LOCAL_FS_DIR",
+        env = "STORE_LOCAL_FS_DIR",
         help = "Dir for local fs storage",
         default_value = "./_local_fs"
     )]

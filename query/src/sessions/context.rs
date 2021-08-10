@@ -29,34 +29,34 @@ use crate::catalogs::utils::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
-use crate::sessions::context_shared::FuseQueryContextShared;
+use crate::sessions::context_shared::DatafuseQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
-pub struct FuseQueryContext {
+pub struct DatafuseQueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
     version: String,
-    shared: Arc<FuseQueryContextShared>,
+    shared: Arc<DatafuseQueryContextShared>,
 }
 
-pub type FuseQueryContextRef = Arc<FuseQueryContext>;
+pub type DatafuseQueryContextRef = Arc<DatafuseQueryContext>;
 
-impl FuseQueryContext {
-    pub fn new(other: FuseQueryContextRef) -> FuseQueryContextRef {
-        FuseQueryContext::from_shared(other.shared.clone())
+impl DatafuseQueryContext {
+    pub fn new(other: DatafuseQueryContextRef) -> DatafuseQueryContextRef {
+        DatafuseQueryContext::from_shared(other.shared.clone())
     }
 
-    pub fn from_shared(shared: Arc<FuseQueryContextShared>) -> FuseQueryContextRef {
+    pub fn from_shared(shared: Arc<DatafuseQueryContextShared>) -> DatafuseQueryContextRef {
         shared.increment_ref_count();
 
-        log::info!("Create FuseQueryContext");
+        log::info!("Create DatafuseQueryContext");
 
-        Arc::new(FuseQueryContext {
+        Arc::new(DatafuseQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!(
-                "FuseQuery v-{}",
+                "DatafuseQuery v-{}",
                 *crate::configs::config::FUSE_COMMIT_VERSION
             ),
             shared,
@@ -215,23 +215,23 @@ impl FuseQueryContext {
     }
 }
 
-impl std::fmt::Debug for FuseQueryContext {
+impl std::fmt::Debug for DatafuseQueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_settings())
     }
 }
 
-impl Drop for FuseQueryContext {
+impl Drop for DatafuseQueryContext {
     fn drop(&mut self) {
         self.shared.destroy_context_ref()
     }
 }
 
-impl FuseQueryContextShared {
+impl DatafuseQueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            log::info!("Destroy FuseQueryContext");
+            log::info!("Destroy DatafuseQueryContext");
             self.session.destroy_context_shared();
         }
     }

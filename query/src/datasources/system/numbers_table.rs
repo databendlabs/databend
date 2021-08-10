@@ -22,7 +22,7 @@ use crate::datasources::system::NumbersStream;
 use crate::datasources::Common;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct NumbersTable {
     table: &'static str,
@@ -72,7 +72,7 @@ impl Table for NumbersTable {
 
     fn read_plan(
         &self,
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -113,7 +113,7 @@ impl Table for NumbersTable {
 
     async fn read(
         &self,
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(NumbersStream::try_create(

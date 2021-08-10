@@ -11,10 +11,10 @@ killall datafuse-store
 killall datafuse-query
 sleep 1
 
-wget --quiet -O target/fusequery-${tag}-linux-x86_64 "https://github.com/datafuselabs/datafuse/releases/download/${tag}/fusequery-${tag}-linux-x86_64"
-chmod +x target/fusequery-${tag}-linux-x86_64
+wget --quiet -O target/datafuse-query-${tag}-linux-x86_64 "https://github.com/datafuselabs/datafuse/releases/download/${tag}/datafuse-query-${tag}-linux-x86_64"
+chmod +x target/datafuse-query-${tag}-linux-x86_64
 
-echo 'Start FuseQuery...'
-nohup ./target/fusequery-${tag}-linux-x86_64 -c scripts/deploy/config/fusequery-node-1.toml &
+echo 'Start DatafuseQuery...'
+nohup ./target/datafuse-query-${tag}-linux-x86_64 -c scripts/deploy/config/datafuse-query-node-1.toml &
 echo "Waiting on datafuse-query 10 seconds..."
 timeout 10 sh -c 'until nc -z $0 $1; do sleep 1; done' 0.0.0.0 3307

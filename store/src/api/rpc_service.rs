@@ -57,7 +57,7 @@ impl StoreServer {
         Ok((stop_tx, fin_rx))
     }
 
-    /// Start serving FuseStore. It does not return until StoreServer is stopped.
+    /// Start serving DatafuseStore. It does not return until StoreServer is stopped.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn serve(
         self,
@@ -134,7 +134,7 @@ impl StoreServer {
 
         tracing::info!("StoreServer returning");
 
-        res.map_err_to_code(ErrorCode::FuseStoreError, || "StoreServer error")
+        res.map_err_to_code(ErrorCode::DatafuseStoreError, || "StoreServer error")
     }
 
     async fn tls_config(conf: &Config) -> anyhow::Result<Option<ServerTlsConfig>> {

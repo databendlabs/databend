@@ -11,15 +11,18 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct TruncateTableInterpreter {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     plan: TruncateTablePlan,
 }
 
 impl TruncateTableInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, plan: TruncateTablePlan) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: DatafuseQueryContextRef,
+        plan: TruncateTablePlan,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(TruncateTableInterpreter { ctx, plan }))
     }
 }

@@ -17,24 +17,24 @@ use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
-use crate::api::rpc::FuseQueryFlightDispatcher;
-use crate::api::rpc::FuseQueryFlightService;
+use crate::api::rpc::DatafuseQueryFlightDispatcher;
+use crate::api::rpc::DatafuseQueryFlightService;
 use crate::configs::Config;
-use crate::servers::Server as FuseQueryServer;
+use crate::servers::Server as DatafuseQueryServer;
 use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
     pub(crate) sessions: SessionManagerRef,
     pub(crate) abort_notify: Arc<Notify>,
-    pub(crate) dispatcher: Arc<FuseQueryFlightDispatcher>,
+    pub(crate) dispatcher: Arc<DatafuseQueryFlightDispatcher>,
 }
 
 impl RpcService {
-    pub fn create(sessions: SessionManagerRef) -> Box<dyn FuseQueryServer> {
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn DatafuseQueryServer> {
         Box::new(Self {
             sessions,
             abort_notify: Arc::new(Notify::new()),
-            dispatcher: Arc::new(FuseQueryFlightDispatcher::create()),
+            dispatcher: Arc::new(DatafuseQueryFlightDispatcher::create()),
         })
     }
 
@@ -62,7 +62,7 @@ impl RpcService {
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
         let sessions = self.sessions.clone();
         let flight_dispatcher = self.dispatcher.clone();
-        let flight_api_service = FuseQueryFlightService::create(flight_dispatcher, sessions);
+        let flight_api_service = DatafuseQueryFlightService::create(flight_dispatcher, sessions);
         let conf = self.sessions.get_conf();
         let builder = Server::builder();
         let mut builder = if conf.tls_rpc_server_enabled() {
@@ -94,7 +94,7 @@ impl RpcService {
 }
 
 #[async_trait::async_trait]
-impl FuseQueryServer for RpcService {
+impl DatafuseQueryServer for RpcService {
     async fn shutdown(&mut self) {
         self.dispatcher.abort();
         // We can't turn off listening on the connection

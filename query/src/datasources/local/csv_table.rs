@@ -18,7 +18,7 @@ use common_streams::SendableDataBlockStream;
 use crate::datasources::local::CsvTableStream;
 use crate::datasources::Common;
 use crate::datasources::Table;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct CsvTable {
     db: String,
@@ -79,7 +79,7 @@ impl Table for CsvTable {
 
     fn read_plan(
         &self,
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -107,7 +107,7 @@ impl Table for CsvTable {
 
     async fn read(
         &self,
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(CsvTableStream::try_create(

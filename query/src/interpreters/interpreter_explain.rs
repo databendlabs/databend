@@ -16,10 +16,10 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct ExplainInterpreter {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     explain: ExplainPlan,
 }
 
@@ -47,7 +47,10 @@ impl Interpreter for ExplainInterpreter {
 }
 
 impl ExplainInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, explain: ExplainPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: DatafuseQueryContextRef,
+        explain: ExplainPlan,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(ExplainInterpreter { ctx, explain }))
     }
 

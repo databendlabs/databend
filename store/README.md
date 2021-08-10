@@ -1,3 +1,3 @@
-# FuseStore
+# DatafuseStore
 
-FuseStore is a Distributed Table Storage Engine at scale.
+DatafuseStore is a Distributed Table Storage Engine at scale.

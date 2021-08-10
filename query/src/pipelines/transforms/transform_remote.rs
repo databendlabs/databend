@@ -15,19 +15,19 @@ use crate::api::FlightClient;
 use crate::api::FlightTicket;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct RemoteTransform {
     ticket: FlightTicket,
     fetch_node_name: String,
     schema: DataSchemaRef,
-    pub ctx: FuseQueryContextRef,
+    pub ctx: DatafuseQueryContextRef,
 }
 
 impl RemoteTransform {
     pub fn try_create(
         ticket: FlightTicket,
-        context: FuseQueryContextRef,
+        context: DatafuseQueryContextRef,
         fetch_node_name: String,
         schema: DataSchemaRef,
     ) -> Result<RemoteTransform> {

@@ -15,16 +15,16 @@ use common_planners::ScanPlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct NumberTestData {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     db: &'static str,
     table: &'static str,
 }
 
 impl NumberTestData {
-    pub fn create(ctx: FuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
         NumberTestData {
             ctx,
             db: "system",

@@ -9,7 +9,7 @@ function run_tests()
 {
   cd tests
   mkdir -p test_output
-  ./fuse-test --print-time  --jobs 4   
+  ./datafuse-test --print-time  --jobs 4   
 }
 
 export -f run_tests

@@ -23,7 +23,7 @@ use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::FlightAction;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::FuseQueryContext;
+use crate::sessions::DatafuseQueryContext;
 use crate::sessions::SessionRef;
 
 struct StreamInfo {
@@ -33,15 +33,15 @@ struct StreamInfo {
     rx: mpsc::Receiver<Result<DataBlock>>,
 }
 
-pub struct FuseQueryFlightDispatcher {
+pub struct DatafuseQueryFlightDispatcher {
     streams: Arc<RwLock<HashMap<String, StreamInfo>>>,
     stages_notify: Arc<RwLock<HashMap<String, Arc<Notify>>>>,
     abort: Arc<AtomicBool>,
 }
 
-impl FuseQueryFlightDispatcher {
-    pub fn create() -> FuseQueryFlightDispatcher {
-        FuseQueryFlightDispatcher {
+impl DatafuseQueryFlightDispatcher {
+    pub fn create() -> DatafuseQueryFlightDispatcher {
+        DatafuseQueryFlightDispatcher {
             streams: Arc::new(RwLock::new(HashMap::new())),
             stages_notify: Arc::new(RwLock::new(HashMap::new())),
             abort: Arc::new(AtomicBool::new(false)),
@@ -100,7 +100,7 @@ impl FuseQueryFlightDispatcher {
 
     fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
         let query_context = session.create_context();
-        let action_context = FuseQueryContext::new(query_context.clone());
+        let action_context = DatafuseQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context);
         let mut pipeline = pipeline_builder.build(&action.get_plan())?;
 
@@ -143,7 +143,7 @@ impl FuseQueryFlightDispatcher {
     fn action_with_scatter<T>(&self, session: SessionRef, action: &FlightAction) -> Result<()>
     where T: FlightScatter + Send + 'static {
         let query_context = session.create_context();
-        let action_context = FuseQueryContext::new(query_context.clone());
+        let action_context = DatafuseQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context);
         let mut pipeline = pipeline_builder.build(&action.get_plan())?;
 

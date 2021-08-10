@@ -3,7 +3,7 @@ id: version
 title: VERSION
 ---
 
-Return the current version information of FuseQuery.
+Return the current version information of DatafuseQuery.
 
 ## Syntax
 
@@ -18,6 +18,6 @@ mysql> SELECT VERSION();
 +-------------------------------------------------------------------------------+
 | VERSION()                                                                     |
 +-------------------------------------------------------------------------------+
-| FuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00) |
+| DatafuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00) |
 +-------------------------------------------------------------------------------+
 ```

@@ -60,7 +60,7 @@ Built to make the Data Cloud easy!
 * ClickHouse server version 21.4.6 revision 54447
 
 
-| Query                                                        | FuseQuery (v0.4.48-nightly)                                  | ClickHouse (v21.4.6)                                         |
+| Query                                                        | DatafuseQuery (v0.4.48-nightly)                                  | ClickHouse (v21.4.6)                                         |
 | ------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
 | SELECT avg(number) FROM numbers_mt(100000000000)             | 4.35 s.<br /> (22.97 billion rows/s., 183.91 GB/s.) | **×1.4 slow, (6.04 s.)** <br /> (16.57 billion rows/s., 132.52 GB/s.) |
 | SELECT sum(number) FROM numbers_mt(100000000000)             | 4.20 s.<br />(23.79 billion rows/s., 190.50 GB/s.)  | **×1.4 slow, (5.90 s.)** <br />(16.95 billion rows/s., 135.62 GB/s.) |
@@ -76,7 +76,7 @@ Built to make the Data Cloud easy!
 Note:
 
 * ClickHouse system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/bba7ec2c23da8017eced7118b59fc7d5)
-* FuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
+* DatafuseQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/8c37f5390e129cfc9d648ff930d9ef03)
 
 
 ## Getting Started

@@ -18,16 +18,20 @@ use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 
 use crate::servers::clickhouse::interactive_worker_base::BlockItem;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct QueryWriter<'a> {
     client_version: u64,
     conn: &'a mut Connection,
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
 }
 
 impl<'a> QueryWriter<'a> {
-    pub fn create(version: u64, conn: &'a mut Connection, ctx: FuseQueryContextRef) -> QueryWriter {
+    pub fn create(
+        version: u64,
+        conn: &'a mut Connection,
+        ctx: DatafuseQueryContextRef,
+    ) -> QueryWriter {
         QueryWriter {
             client_version: version,
             conn,

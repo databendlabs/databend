@@ -321,8 +321,8 @@ def main(args):
     base_dir = os.path.abspath(args.suites)
     tmp_dir = os.path.abspath(args.tmp)
 
-    os.environ.setdefault("FUSE_QUERY_BINARY", args.binary)
-    os.environ.setdefault("FUSE_QUERY_DATABASE", args.database)
+    os.environ.setdefault("QUERY_BINARY", args.binary)
+    os.environ.setdefault("QUERY_DATABASE", args.database)
 
     datafuse_query_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE)
     datafuse_query_proc_create.communicate(b"SELECT 1")
@@ -455,7 +455,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip-dir', nargs='+', help="Skip all these tests in the dir")
     parser.add_argument('--run-dir', nargs='+', help="Only run these tests in the dir")
     parser.add_argument('--stop', action='store_true', default=None, dest='stop', help='Stop on network errors')
-    parser.add_argument('--mode', default='standalone', help='FuseQuery running mode, the value can be \'standalone\' or \'cluster\'')
+    parser.add_argument('--mode', default='standalone', help='DatafuseQuery running mode, the value can be \'standalone\' or \'cluster\'')
 
     args = parser.parse_args()
 

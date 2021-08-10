@@ -9,25 +9,25 @@ killall datafuse-query
 killall datafuse-store
 sleep 1
 
-echo 'Start one FuseStore...'
+echo 'Start one DatafuseStore...'
 nohup target/debug/datafuse-store --single true &
 echo "Waiting on datafuse-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
-echo 'Start FuseQuery node-1'
-nohup target/debug/datafuse-query -c scripts/deploy/config/fusequery-node-1.toml &
+echo 'Start DatafuseQuery node-1'
+nohup target/debug/datafuse-query -c scripts/deploy/config/datafuse-query-node-1.toml &
 
 echo "Waiting on node-1..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9091
 
-echo 'Start FuseQuery node-2'
-nohup target/debug/datafuse-query -c scripts/deploy/config/fusequery-node-2.toml &
+echo 'Start DatafuseQuery node-2'
+nohup target/debug/datafuse-query -c scripts/deploy/config/datafuse-query-node-2.toml &
 
 echo "Waiting on node-2..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9092
 
-echo 'Start FuseQuery node-3'
-nohup target/debug/datafuse-query -c scripts/deploy/config/fusequery-node-3.toml &
+echo 'Start DatafuseQuery node-3'
+nohup target/debug/datafuse-query -c scripts/deploy/config/datafuse-query-node-3.toml &
 
 echo "Waiting on node-3..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9093

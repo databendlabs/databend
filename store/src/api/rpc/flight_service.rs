@@ -50,7 +50,7 @@ use crate::meta_service::MetaNode;
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-/// StoreFlightImpl provides data access API-s for FuseQuery, in arrow-flight protocol.
+/// StoreFlightImpl provides data access API-s for DatafuseQuery, in arrow-flight protocol.
 pub struct StoreFlightImpl {
     token: FlightToken,
     action_handler: ActionHandler,

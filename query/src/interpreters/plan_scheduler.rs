@@ -38,8 +38,8 @@ use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::clusters::Node;
 use crate::datasources::TablePtr;
-use crate::sessions::FuseQueryContext;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContext;
+use crate::sessions::DatafuseQueryContextRef;
 
 enum RunningMode {
     Cluster,
@@ -48,7 +48,7 @@ enum RunningMode {
 
 pub struct Tasks {
     plan: PlanNode,
-    context: FuseQueryContextRef,
+    context: DatafuseQueryContextRef,
     actions: HashMap<String, VecDeque<FlightAction>>,
 }
 
@@ -59,12 +59,12 @@ pub struct PlanScheduler {
     local_pos: usize,
     nodes_plan: Vec<PlanNode>,
     running_mode: RunningMode,
-    query_context: FuseQueryContextRef,
+    query_context: DatafuseQueryContextRef,
     subqueries_expressions: Vec<Expressions>,
 }
 
 impl PlanScheduler {
-    pub fn try_create(context: FuseQueryContextRef) -> Result<PlanScheduler> {
+    pub fn try_create(context: DatafuseQueryContextRef) -> Result<PlanScheduler> {
         let cluster = context.try_get_cluster()?;
         let cluster_nodes = cluster.get_nodes()?;
 
@@ -109,7 +109,7 @@ impl PlanScheduler {
 }
 
 impl Tasks {
-    pub fn create(context: FuseQueryContextRef) -> Tasks {
+    pub fn create(context: DatafuseQueryContextRef) -> Tasks {
         Tasks {
             context,
             actions: HashMap::new(),
@@ -629,7 +629,7 @@ impl PlanScheduler {
     }
 
     fn visit_subquery(&mut self, plan: &PlanNode, tasks: &mut Tasks) -> Result<Vec<PlanNode>> {
-        let subquery_context = FuseQueryContext::new(self.query_context.clone());
+        let subquery_context = DatafuseQueryContext::new(self.query_context.clone());
         let mut subquery_scheduler = PlanScheduler::try_create(subquery_context)?;
         subquery_scheduler.visit_plan_node(plan, tasks)?;
         Ok(subquery_scheduler.nodes_plan)

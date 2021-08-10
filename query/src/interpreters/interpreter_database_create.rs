@@ -13,17 +13,17 @@ use common_tracing::tracing;
 use crate::catalogs::catalog::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 #[derive(Debug)]
 pub struct CreateDatabaseInterpreter {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     plan: CreateDatabasePlan,
 }
 
 impl CreateDatabaseInterpreter {
     pub fn try_create(
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         plan: CreateDatabasePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(CreateDatabaseInterpreter { ctx, plan }))

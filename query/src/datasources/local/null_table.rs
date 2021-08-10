@@ -21,7 +21,7 @@ use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
 use crate::datasources::Table;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct NullTable {
     db: String,
@@ -65,7 +65,7 @@ impl Table for NullTable {
 
     fn read_plan(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -88,7 +88,7 @@ impl Table for NullTable {
 
     async fn read(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.schema.clone());
@@ -102,7 +102,7 @@ impl Table for NullTable {
 
     async fn append_data(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         insert_plan: common_planners::InsertIntoPlan,
     ) -> Result<()> {
         let mut s = {
@@ -119,7 +119,7 @@ impl Table for NullTable {
 
     async fn truncate(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())

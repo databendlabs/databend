@@ -21,7 +21,7 @@ use walkdir::WalkDir;
 
 use crate::datasources::system::TracingTableStream;
 use crate::datasources::Table;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct TracingTable {
     schema: DataSchemaRef,
@@ -68,7 +68,7 @@ impl Table for TracingTable {
 
     fn read_plan(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -91,7 +91,7 @@ impl Table for TracingTable {
 
     async fn read(
         &self,
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];

@@ -18,8 +18,8 @@ use tonic::Request;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_tickets::StreamTicket;
-use crate::api::rpc::FuseQueryFlightDispatcher;
-use crate::api::rpc::FuseQueryFlightService;
+use crate::api::rpc::DatafuseQueryFlightDispatcher;
+use crate::api::rpc::DatafuseQueryFlightService;
 use crate::api::FlightTicket;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
@@ -28,8 +28,8 @@ use crate::tests::try_create_sessions;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_shared_session() -> Result<()> {
     let sessions = try_create_sessions()?;
-    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
-    let service = FuseQueryFlightService::create(dispatcher, sessions);
+    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
+    let service = DatafuseQueryFlightService::create(dispatcher, sessions);
 
     for index in 0..2 {
         let query_id = "query_id";
@@ -51,8 +51,8 @@ async fn test_do_flight_action_with_shared_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_different_session() -> Result<()> {
     let sessions = try_create_sessions()?;
-    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
-    let service = FuseQueryFlightService::create(dispatcher, sessions);
+    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
+    let service = DatafuseQueryFlightService::create(dispatcher, sessions);
 
     for index in 0..2 {
         let query_id = format!("query_id_{}", index);
@@ -74,8 +74,8 @@ async fn test_do_flight_action_with_different_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_session() -> Result<()> {
     let sessions = try_create_sessions()?;
-    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
-    let service = FuseQueryFlightService::create(dispatcher.clone(), sessions);
+    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
+    let service = DatafuseQueryFlightService::create(dispatcher.clone(), sessions);
 
     for index in 0..2 {
         let query_id = "query_id_1";
@@ -106,8 +106,8 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     let sessions = try_create_sessions()?;
-    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
-    let service = FuseQueryFlightService::create(dispatcher.clone(), sessions);
+    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
+    let service = DatafuseQueryFlightService::create(dispatcher.clone(), sessions);
 
     for index in 0..2 {
         let query_id = "query_id_1";

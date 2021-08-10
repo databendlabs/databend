@@ -19,16 +19,16 @@ use log::debug;
 use crate::catalogs::catalog::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct ShowCreateTableInterpreter {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     plan: ShowCreateTablePlan,
 }
 
 impl ShowCreateTableInterpreter {
     pub fn try_create(
-        ctx: FuseQueryContextRef,
+        ctx: DatafuseQueryContextRef,
         plan: ShowCreateTablePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(ShowCreateTableInterpreter { ctx, plan }))

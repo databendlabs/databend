@@ -3,7 +3,7 @@ id: building-and-running
 title: Deploy
 ---
 
-This document describes how to build and run [FuseQuery](https://github.com/datafuselabs/datafuse/tree/master/query) as a distributed query engine.
+This document describes how to build and run [DatafuseQuery](https://github.com/datafuselabs/datafuse/tree/master/query) as a distributed query engine.
 
 
 ## 1. Deploy

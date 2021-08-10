@@ -1,2 +1,2 @@
 
-FuseQuery API(including Flight&HTTP) for the interaction.
+DatafuseQuery API(including Flight&HTTP) for the interaction.

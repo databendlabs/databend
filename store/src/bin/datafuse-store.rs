@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("{:?}", conf.clone());
     info!(
-        "FuseStore v-{}",
+        "DatafuseStore v-{}",
         *datafuse_store::configs::config::FUSE_COMMIT_VERSION
     );
 
@@ -56,10 +56,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = StoreServer::create(conf.clone());
         info!(
-            "FuseStore API server listening on {}",
+            "DatafuseStore API server listening on {}",
             conf.flight_api_address
         );
-        let (_stop_tx, fin_rx) = srv.start().await.expect("FuseStore service error");
+        let (_stop_tx, fin_rx) = srv.start().await.expect("DatafuseStore service error");
         fin_rx.await?;
     }
 

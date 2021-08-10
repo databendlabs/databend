@@ -16,14 +16,14 @@ use common_planners::PlanRewriter;
 use common_planners::TableScanInfo;
 
 use crate::optimizers::Optimizer;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 struct StatisticsExactImpl<'a> {
-    ctx: &'a FuseQueryContextRef,
+    ctx: &'a DatafuseQueryContextRef,
 }
 
 pub struct StatisticsExactOptimizer {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
 }
 
 impl PlanRewriter for StatisticsExactImpl<'_> {
@@ -132,7 +132,7 @@ impl Optimizer for StatisticsExactOptimizer {
 }
 
 impl StatisticsExactOptimizer {
-    pub fn create(ctx: FuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
         StatisticsExactOptimizer { ctx }
     }
 }

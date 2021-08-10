@@ -13,9 +13,9 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v22, v23), .
 
 
 !!! note
-    Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the FuseQuery memory/disk locally.
+    Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatafuseQuery memory/disk locally.
 
-    Remote engine is `remote`, will be stored in the remote FuseStore cluster.
+    Remote engine is `remote`, will be stored in the remote DatafuseStore cluster.
 
 ## Examples
 

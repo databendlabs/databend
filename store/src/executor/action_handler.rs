@@ -58,7 +58,7 @@ impl ActionHandler {
     }
 
     /// Handle pull-file request, which is used internally for replicating data copies.
-    /// In FuseStore impl there is no internal file id etc, thus replication use the same `key` in communication with FuseQuery as in internal replication.
+    /// In DatafuseStore impl there is no internal file id etc, thus replication use the same `key` in communication with DatafuseQuery as in internal replication.
     pub async fn do_pull_file(
         &self,
         key: String,

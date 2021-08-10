@@ -11,7 +11,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_tickets::StreamTicket;
-use crate::api::rpc::FuseQueryFlightDispatcher;
+use crate::api::rpc::DatafuseQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
@@ -19,7 +19,7 @@ use crate::tests::try_create_sessions;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
-    let dispatcher = FuseQueryFlightDispatcher::create();
+    let dispatcher = DatafuseQueryFlightDispatcher::create();
 
     let stream = stream_ticket("query_id", "stage_id", "stream_id");
     let get_stream = dispatcher.get_stream(&stream);
@@ -41,7 +41,7 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
-        let flight_dispatcher = FuseQueryFlightDispatcher::create();
+        let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
 
         let sessions = try_create_sessions()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
@@ -83,7 +83,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
-        let flight_dispatcher = FuseQueryFlightDispatcher::create();
+        let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
 
         let sessions = try_create_sessions()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;

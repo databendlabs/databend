@@ -14,15 +14,18 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct DescribeTableInterpreter {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     plan: DescribeTablePlan,
 }
 
 impl DescribeTableInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, plan: DescribeTablePlan) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: DatafuseQueryContextRef,
+        plan: DescribeTablePlan,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(DescribeTableInterpreter { ctx, plan }))
     }
 }

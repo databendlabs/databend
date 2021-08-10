@@ -52,7 +52,7 @@ use sqlparser::ast::TableFactor;
 
 use crate::catalogs::catalog::Catalog;
 use crate::functions::ContextFunction;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -69,11 +69,11 @@ use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
 
 pub struct PlanParser {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
 }
 
 impl PlanParser {
-    pub fn create(ctx: FuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
         Self { ctx }
     }
 

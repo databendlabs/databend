@@ -14,9 +14,9 @@ use futures::channel::*;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
-use crate::sessions::context_shared::FuseQueryContextShared;
-use crate::sessions::FuseQueryContext;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::context_shared::DatafuseQueryContextShared;
+use crate::sessions::DatafuseQueryContext;
+use crate::sessions::DatafuseQueryContextRef;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
@@ -27,7 +27,7 @@ pub(in crate::sessions) struct MutableStatus {
     #[allow(unused)]
     pub(in crate::sessions) client_host: Option<SocketAddr>,
     pub(in crate::sessions) io_shutdown_tx: Option<Sender<Sender<()>>>,
-    pub(in crate::sessions) context_shared: Option<Arc<FuseQueryContextShared>>,
+    pub(in crate::sessions) context_shared: Option<Arc<DatafuseQueryContextShared>>,
 }
 
 #[derive(Clone)]
@@ -104,17 +104,17 @@ impl Session {
         }
     }
 
-    pub fn create_context(self: &Arc<Self>) -> FuseQueryContextRef {
+    pub fn create_context(self: &Arc<Self>) -> DatafuseQueryContextRef {
         let mut state_guard = self.mutable_state.lock();
 
         if state_guard.context_shared.is_none() {
             let config = self.config.clone();
-            let shared = FuseQueryContextShared::try_create(config, self.clone());
+            let shared = DatafuseQueryContextShared::try_create(config, self.clone());
             state_guard.context_shared = Some(shared);
         }
 
         match &state_guard.context_shared {
-            Some(shared) => FuseQueryContext::from_shared(shared.clone()),
+            Some(shared) => DatafuseQueryContext::from_shared(shared.clone()),
             None => unreachable!(),
         }
     }

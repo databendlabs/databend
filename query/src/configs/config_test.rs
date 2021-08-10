@@ -50,15 +50,15 @@ fn test_default_config() -> Result<()> {
 // From env, defaulting.
 #[test]
 fn test_env_config() -> Result<()> {
-    std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
-    std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
-    std::env::set_var("FUSE_QUERY_MYSQL_HANDLER_PORT", "3306");
-    std::env::set_var("FUSE_QUERY_MAX_ACTIVE_SESSIONS", "255");
-    std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
-    std::env::set_var("FUSE_QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
-    std::env::set_var("FUSE_QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
-    std::env::set_var("FUSE_QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
-    std::env::set_var("FUSE_QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
+    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
+    std::env::set_var("QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
+    std::env::set_var("QUERY_MYSQL_HANDLER_PORT", "3306");
+    std::env::set_var("QUERY_MAX_ACTIVE_SESSIONS", "255");
+    std::env::set_var("QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
+    std::env::set_var("QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
+    std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
+    std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
+    std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
     std::env::set_var("STORE_API_ADDRESS", "1.2.3.4:1234");
     std::env::set_var("STORE_API_USERNAME", "admin");
     std::env::set_var("STORE_API_PASSWORD", "password!");
@@ -83,16 +83,16 @@ fn test_env_config() -> Result<()> {
     assert_eq!(false, configured.disable_remote_catalog);
 
     // clean up
-    std::env::remove_var("FUSE_QUERY_LOG_LEVEL");
-    std::env::remove_var("FUSE_QUERY_MYSQL_HANDLER_HOST");
-    std::env::remove_var("FUSE_QUERY_MYSQL_HANDLER_PORT");
-    std::env::remove_var("FUSE_QUERY_MYSQL_HANDLER_THREAD_NUM");
-    std::env::remove_var("FUSE_QUERY_CLICKHOUSE_HANDLER_HOST");
-    std::env::remove_var("FUSE_QUERY_CLICKHOUSE_HANDLER_PORT");
-    std::env::remove_var("FUSE_QUERY_CLICKHOUSE_HANDLER_THREAD_NUM");
-    std::env::remove_var("FUSE_QUERY_FLIGHT_API_ADDRESS");
-    std::env::remove_var("FUSE_QUERY_HTTP_API_ADDRESS");
-    std::env::remove_var("FUSE_QUERY_METRIC_API_ADDRESS");
+    std::env::remove_var("QUERY_LOG_LEVEL");
+    std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
+    std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
+    std::env::remove_var("QUERY_MYSQL_HANDLER_THREAD_NUM");
+    std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_HOST");
+    std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_PORT");
+    std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_THREAD_NUM");
+    std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
+    std::env::remove_var("QUERY_HTTP_API_ADDRESS");
+    std::env::remove_var("QUERY_METRIC_API_ADDRESS");
     std::env::remove_var("STORE_API_ADDRESS");
     std::env::remove_var("STORE_API_USERNAME");
     std::env::remove_var("STORE_API_PASSWORD");
@@ -123,10 +123,10 @@ fn test_config_file_not_found() -> Result<()> {
 #[test]
 #[ignore]
 fn test_file_config() -> Result<()> {
-    std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
+    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
     let path = std::env::current_dir()
         .unwrap()
-        .join("conf/fusequery_config_spec.toml")
+        .join("conf/datafuse_query_config_spec.toml")
         .display()
         .to_string();
 
@@ -134,7 +134,7 @@ fn test_file_config() -> Result<()> {
     assert_eq!("INFO", actual.log_level);
     let env = Config::load_from_env(&actual)?;
     assert_eq!("INFO", env.log_level);
-    std::env::remove_var("FUSE_QUERY_LOG_LEVEL");
+    std::env::remove_var("QUERY_LOG_LEVEL");
     Ok(())
 }
 
@@ -142,16 +142,16 @@ fn test_file_config() -> Result<()> {
 #[test]
 #[ignore]
 fn test_env_file_config() -> Result<()> {
-    std::env::set_var("FUSE_QUERY_LOG_LEVEL", "DEBUG");
+    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
     let config_path = std::env::current_dir()
         .unwrap()
-        .join("conf/fusequery_config_spec.toml")
+        .join("conf/datafuse_query_config_spec.toml")
         .display()
         .to_string();
     std::env::set_var("CONFIG_FILE", config_path);
     let config = Config::load_from_env(&Config::default())?;
     assert_eq!(config.log_level, "INFO");
-    std::env::remove_var("FUSE_QUERY_LOG_LEVEL");
+    std::env::remove_var("QUERY_LOG_LEVEL");
     std::env::remove_var("CONFIG_FILE");
     Ok(())
 }

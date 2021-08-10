@@ -12,15 +12,18 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::catalog::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct InsertIntoInterpreter {
-    ctx: FuseQueryContextRef,
+    ctx: DatafuseQueryContextRef,
     plan: InsertIntoPlan,
 }
 
 impl InsertIntoInterpreter {
-    pub fn try_create(ctx: FuseQueryContextRef, plan: InsertIntoPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: DatafuseQueryContextRef,
+        plan: InsertIntoPlan,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
     }
 }

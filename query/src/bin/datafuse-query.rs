@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("{:?}", conf);
     info!(
-        "FuseQuery v-{}, Allocator: {}",
+        "DatafuseQuery v-{}, Allocator: {}",
         *datafuse_query::configs::config::FUSE_COMMIT_VERSION,
         malloc
     );

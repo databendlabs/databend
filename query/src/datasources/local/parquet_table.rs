@@ -25,7 +25,7 @@ use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
 use crate::datasources::Table;
-use crate::sessions::FuseQueryContextRef;
+use crate::sessions::DatafuseQueryContextRef;
 
 pub struct ParquetTable {
     db: String,
@@ -118,7 +118,7 @@ impl Table for ParquetTable {
 
     fn read_plan(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -144,7 +144,7 @@ impl Table for ParquetTable {
 
     async fn read(
         &self,
-        _ctx: FuseQueryContextRef,
+        _ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;
