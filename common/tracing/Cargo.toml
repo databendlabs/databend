@@ -13,7 +13,7 @@ common-runtime = {path = "../runtime"}
 
 opentelemetry = { version = "0.15", default-features = false, features = ["trace", "rt-tokio"] }
 opentelemetry-jaeger = "0.14"
-tonic = "0.4.3"
+tonic = "0.5.2"
 tracing = "0.1.26"
 tracing-appender = "0.1.2"
 tracing-bunyan-formatter = "0.2"

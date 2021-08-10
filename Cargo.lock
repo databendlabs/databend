@@ -119,7 +119,7 @@ dependencies = [
  "prost 0.7.0",
  "prost-derive 0.7.0",
  "tokio",
- "tonic",
+ "tonic 0.4.3",
 ]
 
 [[package]]
@@ -744,7 +744,7 @@ dependencies = [
  "serde_json",
  "sqlparser",
  "thiserror",
- "tonic",
+ "tonic 0.5.2",
 ]
 
 [[package]]
@@ -772,7 +772,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio-stream",
- "tonic",
+ "tonic 0.5.2",
  "tonic-build",
  "trust-dns-resolver",
 ]
@@ -931,7 +931,7 @@ dependencies = [
  "common-runtime",
  "opentelemetry",
  "opentelemetry-jaeger",
- "tonic",
+ "tonic 0.5.2",
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
@@ -1859,7 +1859,7 @@ dependencies = [
  "threadpool",
  "tokio-stream",
  "toml",
- "tonic",
+ "tonic 0.5.2",
  "uuid",
  "walkdir",
  "warp",
@@ -1911,7 +1911,7 @@ dependencies = [
  "thiserror",
  "threadpool",
  "tokio-stream",
- "tonic",
+ "tonic 0.5.2",
  "tonic-build",
  "uuid",
  "warp",
@@ -2310,6 +2310,18 @@ dependencies = [
  "tower-service",
  "tracing",
  "want",
+]
+
+[[package]]
+name = "hyper-timeout"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb958482e8c7be4bc3cf272a766a2b0bf1a6755e7a6ae777f017a31d11b13b1"
+dependencies = [
+ "hyper",
+ "pin-project-lite",
+ "tokio",
+ "tokio-io-timeout",
 ]
 
 [[package]]
@@ -5253,6 +5265,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-io-timeout"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c49f106be240de154571dd31fbe48acb10ba6c6dd6f6517ad603abffa42de9"
+dependencies = [
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-macros"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5353,12 +5375,43 @@ dependencies = [
  "pin-project",
  "prost 0.7.0",
  "prost-derive 0.7.0",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "tower-service",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "tonic"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "796c5e1cd49905e65dd8e700d4cb1dffcbfdb4fc9d017de08c1a537afd83627c"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "base64",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body",
+ "hyper",
+ "hyper-timeout",
+ "percent-encoding",
+ "pin-project",
+ "prost 0.8.0",
+ "prost-derive 0.8.0",
  "rustls-native-certs",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
  "tower",
+ "tower-layer",
  "tower-service",
  "tracing",
  "tracing-futures",

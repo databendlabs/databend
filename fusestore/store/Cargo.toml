@@ -61,7 +61,7 @@ tempfile = "3.2.0"
 thiserror = "1.0.26"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
-tonic = { version = "0.4.3", features = ["tls"]}
+tonic = { version = "0.5.2", features = ["tls"]}
 
 sha2 = "0.9.5"
 uuid = { version = "0.8", features = ["serde", "v4"] }

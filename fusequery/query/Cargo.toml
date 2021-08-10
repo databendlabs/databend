@@ -78,7 +78,7 @@ structopt-toml = "0.5.0"
 threadpool = "1.8.1"
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
-tonic = "0.4.3"
+tonic = "0.5.2"
 walkdir = "2.3.2"
 warp = { version = "0.3.1", features = ["tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
