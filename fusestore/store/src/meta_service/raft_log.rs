@@ -72,9 +72,9 @@ impl RaftLog {
     ///    In this case, atomic delete is quite enough(to not leave a hole).
     ///    If the system allows logs hole, non-atomic delete is quite enough(depends on the upper layer).
     ///
-    pub async fn range_delete<R>(&self, range: R) -> common_exception::Result<()>
+    pub async fn range_remove<R>(&self, range: R) -> common_exception::Result<()>
     where R: RangeBounds<LogIndex> {
-        self.logs().range_delete(range, true).await
+        self.logs().range_remove(range, true).await
     }
 
     pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<LogIndex>>
@@ -82,9 +82,9 @@ impl RaftLog {
         self.logs().range_keys(range)
     }
 
-    pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<Entry<LogEntry>>>
+    pub fn range_values<R>(&self, range: R) -> common_exception::Result<Vec<Entry<LogEntry>>>
     where R: RangeBounds<LogIndex> {
-        self.logs().range_get(range)
+        self.logs().range_values(range)
     }
 
     /// Append logs into RaftLog.

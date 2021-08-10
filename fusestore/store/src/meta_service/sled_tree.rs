@@ -153,7 +153,7 @@ impl SledTree {
 
     /// Delete kvs that are in `range`.
     #[tracing::instrument(level = "debug", skip(self, range))]
-    pub async fn range_delete<KV, R>(&self, range: R, flush: bool) -> common_exception::Result<()>
+    pub async fn range_remove<KV, R>(&self, range: R, flush: bool) -> common_exception::Result<()>
     where
         KV: SledKeySpace,
         R: RangeBounds<KV::K>,
@@ -167,7 +167,7 @@ impl SledTree {
 
         for item in self.tree.range(sled_range) {
             let (k, _) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("range_delete: {}", range_mes,)
+                format!("range_remove: {}", range_mes,)
             })?;
             batch.remove(k);
         }
@@ -175,20 +175,10 @@ impl SledTree {
         self.tree
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("batch delete: {}", range_mes,)
+                format!("batch remove: {}", range_mes,)
             })?;
 
-        if flush && self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-range-delete");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                    format!("flush range delete: {}", range_mes,)
-                })?;
-        }
+        self.flush_async(flush).await?;
 
         Ok(())
     }
@@ -243,7 +233,7 @@ impl SledTree {
     }
 
     /// Get values of key in `range`
-    pub fn range_get<KV, R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
+    pub fn range_values<KV, R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
     where
         KV: SledKeySpace,
         R: RangeBounds<KV::K>,
@@ -283,15 +273,7 @@ impl SledTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append")?;
 
-        if self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-append");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append")?;
-        }
+        self.flush_async(true).await?;
 
         Ok(())
     }
@@ -319,15 +301,7 @@ impl SledTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append_values")?;
 
-        if self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-append-values");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush append_values")?;
-        }
+        self.flush_async(true).await?;
 
         Ok(())
     }
@@ -358,17 +332,7 @@ impl SledTree {
             Some(x) => Some(KV::deserialize_value(x)?),
         };
 
-        if self.sync {
-            let span = tracing::span!(tracing::Level::DEBUG, "flush-insert");
-            let _ent = span.enter();
-
-            self.tree
-                .flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                    format!("flush insert_value {}", key)
-                })?;
-        }
+        self.flush_async(true).await?;
 
         Ok(prev)
     }
@@ -438,9 +402,9 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.remove::<KV>(key, flush).await
     }
 
-    pub async fn range_delete<R>(&self, range: R, flush: bool) -> common_exception::Result<()>
+    pub async fn range_remove<R>(&self, range: R, flush: bool) -> common_exception::Result<()>
     where R: RangeBounds<KV::K> {
-        self.inner.range_delete::<KV, R>(range, flush).await
+        self.inner.range_remove::<KV, R>(range, flush).await
     }
 
     pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<KV::K>>
@@ -453,9 +417,9 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.range::<KV, R>(range)
     }
 
-    pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
+    pub fn range_values<R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
     where R: RangeBounds<KV::K> {
-        self.inner.range_get::<KV, R>(range)
+        self.inner.range_values::<KV, R>(range)
     }
 
     pub async fn append(&self, kvs: &[(KV::K, KV::V)]) -> common_exception::Result<()> {
