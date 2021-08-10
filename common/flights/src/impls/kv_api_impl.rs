@@ -4,7 +4,6 @@
 
 use common_exception::Result;
 use common_metatypes::MatchSeq;
-use common_metatypes::SeqValue;
 pub use common_store_api::kv_api::MGetKVActionResult;
 pub use common_store_api::kv_api::PrefixListReply;
 pub use common_store_api::kv_api::UpsertKVActionResult;
@@ -24,7 +23,7 @@ impl KVApi for StoreClient {
         &mut self,
         key: &str,
         seq: MatchSeq,
-        value: Vec<u8>,
+        value: Option<Vec<u8>>,
     ) -> Result<UpsertKVActionResult> {
         self.do_action(UpsertKVAction {
             key: key.to_string(),
@@ -32,27 +31,6 @@ impl KVApi for StoreClient {
             value,
         })
         .await
-    }
-
-    /// Delete a kv record that matches key and seq.
-    /// Returns the (seq, value) that is deleted.
-    /// I.e., if key not found or seq does not match, it returns None.
-    #[tracing::instrument(level = "debug", skip(self))]
-    async fn delete_kv(&mut self, key: &str, seq: Option<u64>) -> Result<Option<SeqValue>> {
-        let res = self
-            .do_action(DeleteKVReq {
-                key: key.to_string(),
-                seq,
-            })
-            .await?;
-
-        // result is the state after.
-        // If the deletion is applied, result is None, otherwise result is same as the previous value.
-        if res.result.is_none() {
-            return Ok(res.prev);
-        } else {
-            return Ok(None);
-        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -124,28 +102,12 @@ action_declare!(MGetKVAction, MGetKVActionResult, StoreDoAction::MGetKV);
 pub struct PrefixListReq(pub String);
 action_declare!(PrefixListReq, PrefixListReply, StoreDoAction::PrefixListKV);
 
-// - delete by key
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DeleteKVReq {
-    pub key: String,
-    pub seq: Option<u64>,
-}
-
-// we can choose another reply type (other than KVApi method's)
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DeleteKVReply {
-    pub prev: Option<SeqValue>,
-    pub result: Option<SeqValue>,
-}
-
-action_declare!(DeleteKVReq, DeleteKVReply, StoreDoAction::DeleteKV);
-
 // === general-kv: upsert ===
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct UpsertKVAction {
     pub key: String,
     pub seq: MatchSeq,
-    pub value: Vec<u8>,
+    pub value: Option<Vec<u8>>,
 }
 
 action_declare!(

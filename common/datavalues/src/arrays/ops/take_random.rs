@@ -59,11 +59,11 @@ where
     IterNulls(INulls),
 }
 
-pub type Dummy<T> = std::iter::Once<T>;
-pub type TakeIdxIter<'a, I> = TakeIdx<'a, I, Dummy<Option<usize>>>;
-pub type TakeIdxIterNull<'a, INull> = TakeIdx<'a, Dummy<usize>, INull>;
+pub type DummyIter<T> = std::iter::Once<T>;
+pub type TakeIdxIter<'a, I> = TakeIdx<'a, I, DummyIter<Option<usize>>>;
+pub type TakeIdxIterNull<'a, INull> = TakeIdx<'a, DummyIter<usize>, INull>;
 
-impl<'a, I> From<I> for TakeIdx<'a, I, Dummy<Option<usize>>>
+impl<'a, I> From<I> for TakeIdx<'a, I, DummyIter<Option<usize>>>
 where I: Iterator<Item = usize>
 {
     fn from(iter: I) -> Self {
@@ -71,7 +71,7 @@ where I: Iterator<Item = usize>
     }
 }
 
-impl<'a, INulls> From<SeriesWrap<INulls>> for TakeIdx<'a, Dummy<usize>, INulls>
+impl<'a, INulls> From<SeriesWrap<INulls>> for TakeIdx<'a, DummyIter<usize>, INulls>
 where INulls: Iterator<Item = Option<usize>>
 {
     fn from(iter: SeriesWrap<INulls>) -> Self {
