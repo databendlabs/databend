@@ -16,11 +16,14 @@ use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute::arithmetics::basic;
 use common_arrow::arrow::compute::arithmetics::negate;
+use common_arrow::arrow::compute::arity::unary;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 use num::ToPrimitive;
+use strength_reduce::StrengthReducedU64;
 
 use crate::arrays::ops::*;
 use crate::arrays::DataArray;
@@ -197,11 +200,39 @@ where
                 let opt_rhs = rhs.get(0);
                 match opt_rhs {
                     None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
-                    Some(rhs) => {
-                        let array: DFUInt8Array = self
-                            .apply_cast_numeric(|a| AsPrimitive::<u8>::as_(a - (a / rhs) * rhs));
-                        Ok(array.into_series())
-                    }
+                    Some(rhs) => match self.data_type() {
+                        DataType::UInt64 => {
+                            let arr = &*self.array;
+                            let arr = unsafe {
+                                &*(arr as *const dyn Array as *const PrimitiveArray<u64>)
+                            };
+                            let rhs: u8 = rhs.as_();
+                            let rhs = rhs as u64;
+
+                            if rhs & (rhs - 1) > 0 {
+                                let reduced_modulo = StrengthReducedU64::new(rhs);
+                                let res = unary(
+                                    arr,
+                                    |a| (a % reduced_modulo) as u8,
+                                    ArrowDataType::UInt8,
+                                );
+                                let array = DFUInt8Array::from_arrow_array(res);
+                                Ok(array.into_series())
+                            } else {
+                                let mask = rhs - 1;
+                                let res = unary(arr, |a| (a & mask) as u8, ArrowDataType::UInt8);
+                                let array = DFUInt8Array::from_arrow_array(res);
+                                Ok(array.into_series())
+                            }
+                        }
+
+                        _ => {
+                            let array: DFUInt8Array = self.apply_cast_numeric(|a| {
+                                AsPrimitive::<u8>::as_(a - (a / rhs) * rhs)
+                            });
+                            Ok(array.into_series())
+                        }
+                    },
                 }
             }
 

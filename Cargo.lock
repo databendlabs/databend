@@ -729,6 +729,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "strength_reduce",
  "unsafe_unwrap",
 ]
 
@@ -4857,6 +4858,12 @@ name = "streaming-iterator"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "303235c177994a476226b80d076bd333b7b560fb05bd242a10609d11b07f81f5"
+
+[[package]]
+name = "strength_reduce"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ff2f71c82567c565ba4b3009a9350a96a7269eaa4001ebedae926230bc2254"
 
 [[package]]
 name = "strsim"
