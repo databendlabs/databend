@@ -22,7 +22,7 @@ async def execute(argument):
     # Wait for the subprocess exit.
     await proc.wait()
     return out, err
-class FuseCliTest(parameterized.TestCase, asynctest.TestCase):
+class DatafuseCliTest(parameterized.TestCase, asynctest.TestCase):
     @parameterized.parameters(
         {'command': "10"},
         {'command': "--balala"},
