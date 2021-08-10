@@ -15,7 +15,6 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
-use common_store_api::MetaApi;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
@@ -43,28 +42,30 @@ pub struct DatabaseCatalog {
     databases: RwLock<HashMap<String, Arc<dyn Database>>>,
     table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
     meta_store_cli: Arc<dyn DBMetaStoreClient>,
-    remote_factory: RemoteFactory,
     disable_remote: bool,
 }
 
 impl DatabaseCatalog {
     pub fn try_create() -> Result<Self> {
         let conf = Config::default();
-        Self::try_create_with_config(&conf)
+
+        let remote_factory = RemoteFactory::new(&conf);
+        let store_client_provider = remote_factory.store_client_provider();
+        let cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
+            store_client_provider,
+        )));
+        Self::try_create_with_config(conf.disable_remote_catalog, cli)
     }
 
-    pub fn try_create_with_config(conf: &Config) -> Result<Self> {
-        let remote_factory = RemoteFactory::new(conf);
-        let store_client_provider = remote_factory.store_client_provider();
-
+    pub fn try_create_with_config(
+        disable_remote_catalog: bool,
+        meta_store_cli: Arc<dyn DBMetaStoreClient>,
+    ) -> Result<Self> {
         let mut datasource = DatabaseCatalog {
             databases: Default::default(),
             table_functions: Default::default(),
-            remote_factory,
-            meta_store_cli: Arc::new(RemoteMetaStoreClient::create(Arc::new(
-                store_client_provider,
-            ))),
-            disable_remote: conf.disable_remote_catalog,
+            meta_store_cli,
+            disable_remote: disable_remote_catalog,
         };
 
         datasource.register_system_database()?;
@@ -218,12 +219,7 @@ impl Catalog for DatabaseCatalog {
                 self.databases.write().insert(plan.db, Arc::new(database));
             }
             DatabaseEngineType::Remote => {
-                let mut client = self
-                    .remote_factory
-                    .store_client_provider()
-                    .try_get_client()
-                    .await?;
-                client.create_database(plan.clone()).await?;
+                self.meta_store_cli.create_database(plan).await?;
             }
         }
         Ok(())
@@ -249,14 +245,7 @@ impl Catalog for DatabaseCatalog {
         if database.is_local() {
             self.databases.write().remove(db_name);
         } else {
-            let mut client = self
-                .remote_factory
-                .store_client_provider()
-                .try_get_client()
-                .await?;
-            client.drop_database(plan.clone()).await.map(|_| {
-                self.databases.write().remove(plan.db.as_str());
-            })?;
+            self.meta_store_cli.drop_database(plan).await?;
         };
 
         Ok(())

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_planners::PlanNode;
 use common_progress::Progress;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
@@ -38,6 +39,7 @@ pub struct FuseQueryContextShared {
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
+    pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
 }
 
 impl FuseQueryContextShared {
@@ -53,6 +55,7 @@ impl FuseQueryContextShared {
             ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
+            running_plan: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -112,9 +115,14 @@ impl FuseQueryContextShared {
         }
     }
 
-    pub fn attach_query_info(&self, query: &str) {
+    pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
         *running_query = Some(query.to_string());
+    }
+
+    pub fn attach_query_plan(&self, plan: &PlanNode) {
+        let mut running_plan = self.running_plan.write();
+        *running_plan = Some(plan.clone());
     }
 
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {

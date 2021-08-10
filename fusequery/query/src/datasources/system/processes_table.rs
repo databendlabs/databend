@@ -33,6 +33,7 @@ impl ProcessesTable {
         ProcessesTable {
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("id", DataType::Utf8, false),
+                DataField::new("type", DataType::Utf8, false),
                 DataField::new("host", DataType::Utf8, true),
                 DataField::new("state", DataType::Utf8, false),
                 DataField::new("database", DataType::Utf8, false),
@@ -42,9 +43,8 @@ impl ProcessesTable {
     }
 
     fn process_host(process_info: &ProcessInfo) -> Option<String> {
-        process_info
-            .client_address
-            .map(|socket_address| socket_address.to_string())
+        let client_address = process_info.client_address;
+        client_address.as_ref().map(ToString::to_string)
     }
 
     fn process_extra_info(process_info: &ProcessInfo) -> Option<String> {
@@ -106,6 +106,7 @@ impl Table for ProcessesTable {
         let processes_info = sessions_manager.processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
+        let mut processes_type = Vec::with_capacity(processes_info.len());
         let mut processes_host = Vec::with_capacity(processes_info.len());
         let mut processes_state = Vec::with_capacity(processes_info.len());
         let mut processes_database = Vec::with_capacity(processes_info.len());
@@ -113,6 +114,7 @@ impl Table for ProcessesTable {
 
         for process_info in &processes_info {
             processes_id.push(process_info.id.clone());
+            processes_type.push(process_info.typ.clone());
             processes_state.push(process_info.state.clone());
             processes_database.push(process_info.database.clone());
             processes_host.push(ProcessesTable::process_host(process_info));
@@ -122,6 +124,7 @@ impl Table for ProcessesTable {
         let schema = self.schema.clone();
         let block = DataBlock::create_by_array(schema.clone(), vec![
             Series::new(processes_id),
+            Series::new(processes_type),
             Series::new(processes_host),
             Series::new(processes_state),
             Series::new(processes_database),
