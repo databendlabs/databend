@@ -12,7 +12,6 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::*;
-use common_datavalues::DFBooleanArray;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;

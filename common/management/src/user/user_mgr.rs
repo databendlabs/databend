@@ -56,7 +56,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         // Only when there are no record, i.e. seq=0
         let match_seq = MatchSeq::Exact(0);
 
-        let res = self.kv_api.upsert_kv(&key, match_seq, value).await?;
+        let res = self.kv_api.upsert_kv(&key, match_seq, Some(value)).await?;
 
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
@@ -167,7 +167,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
             None => MatchSeq::GE(1),
             Some(s) => MatchSeq::Exact(s),
         };
-        let res = self.kv_api.upsert_kv(&key, match_seq, value).await?;
+        let res = self.kv_api.upsert_kv(&key, match_seq, Some(value)).await?;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -183,8 +183,8 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         seq: Option<u64>,
     ) -> Result<()> {
         let key = utils::prepend(username.as_ref());
-        let r = self.kv_api.delete_kv(&key, seq).await?;
-        if r.is_some() {
+        let r = self.kv_api.upsert_kv(&key, seq.into(), None).await?;
+        if r.prev.is_some() && r.result.is_none() {
             Ok(())
         } else {
             Err(ErrorCode::UnknownUser(format!(

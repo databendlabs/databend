@@ -9,8 +9,6 @@ use common_io::prelude::*;
 use super::ArrayDeserializer;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
-use crate::BooleanType;
-use crate::DFBooleanArray;
 
 pub struct BooleanArrayBuilder {
     builder: MutableBooleanArray,

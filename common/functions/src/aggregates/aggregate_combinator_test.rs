@@ -4,8 +4,6 @@
 
 use bumpalo::Bump;
 use common_datavalues::prelude::*;
-use common_datavalues::DFBooleanArray;
-use common_datavalues::DFInt64Array;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 

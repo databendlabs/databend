@@ -11,12 +11,6 @@ use common_arrow::arrow::bitmap::utils::ZipValidity;
 use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::series::Series;
-use crate::DFBinaryArray;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFPrimitiveType;
-use crate::DFStructArray;
-use crate::DFUtf8Array;
 
 impl<T> AsRef<PrimitiveArray<T::Native>> for DataArray<T>
 where T: DFPrimitiveType

@@ -19,11 +19,9 @@ use crate::arrays::ListBooleanArrayBuilder;
 use crate::arrays::ListBuilderTrait;
 use crate::arrays::ListPrimitiveArrayBuilder;
 use crate::arrays::ListUtf8ArrayBuilder;
-use crate::data_type::*;
 use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
-use crate::DFInt8Array;
 use crate::DataField;
 
 /// A specific value of a data type.

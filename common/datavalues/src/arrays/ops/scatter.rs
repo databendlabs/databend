@@ -15,7 +15,6 @@ use crate::arrays::PrimitiveArrayBuilder;
 use crate::arrays::Utf8ArrayBuilder;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
-use crate::*;
 
 pub trait ArrayScatter: Debug {
     /// # Safety

@@ -7,9 +7,9 @@ use common_exception::ErrorCode;
 use common_tracing::tracing;
 
 use crate::configs;
+use crate::meta_service::sled_key_space::RaftStateKV;
 use crate::meta_service::AsKeySpace;
 use crate::meta_service::NodeId;
-use crate::meta_service::RaftStateKV;
 use crate::meta_service::RaftStateKey;
 use crate::meta_service::RaftStateValue;
 use crate::meta_service::SledSerde;
