@@ -10,12 +10,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::meta_service::sled_key_space::SledKeySpace;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
-
-/// Key-Value Types for storing meta data of a raft state machine in sled::Tree, e.g. the last applied log id.
-pub struct StateMachineMeta {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StateMachineMetaKey {
@@ -84,11 +80,4 @@ impl From<StateMachineMetaValue> for bool {
             _ => panic!("expect LogId"),
         }
     }
-}
-
-impl SledKeySpace for StateMachineMeta {
-    const PREFIX: u8 = 0;
-    const NAME: &'static str = "meta";
-    type K = StateMachineMetaKey;
-    type V = StateMachineMetaValue;
 }

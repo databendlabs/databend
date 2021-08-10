@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-//! sledkv defines several key-value types to be used in sled::Tree, as an raft storage impl.
+//! sled_key_space defines several key-value types to be used in sled::Tree, as an raft storage impl.
 
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -17,8 +17,12 @@ use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
 use crate::meta_service::Node;
 use crate::meta_service::NodeId;
+use crate::meta_service::RaftStateKey;
+use crate::meta_service::RaftStateValue;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
+use crate::meta_service::StateMachineMetaKey;
+use crate::meta_service::StateMachineMetaValue;
 
 /// Defines a key space in sled::Tree that has its own key value type.
 /// And a prefix that is used to distinguish keys from different spaces in a SledTree.
@@ -110,4 +114,35 @@ impl SledKeySpace for Nodes {
     const NAME: &'static str = "node";
     type K = NodeId;
     type V = Node;
+}
+
+/// Key-Value Types for storing meta data of a raft state machine in sled::Tree, e.g. the last applied log id.
+pub struct StateMachineMeta {}
+impl SledKeySpace for StateMachineMeta {
+    const PREFIX: u8 = 3;
+    const NAME: &'static str = "sm-meta";
+    type K = StateMachineMetaKey;
+    type V = StateMachineMetaValue;
+}
+
+/// Key-Value Types for storing meta data of a raft in sled::Tree:
+/// id: NodeId,
+/// hard_state:
+///      current_term,
+///      voted_for,
+pub struct RaftStateKV {}
+impl SledKeySpace for RaftStateKV {
+    const PREFIX: u8 = 4;
+    const NAME: &'static str = "raft-state";
+    type K = RaftStateKey;
+    type V = RaftStateValue;
+}
+
+/// Key-Value Types for storing DFS files in sled::Tree:
+pub struct Files {}
+impl SledKeySpace for Files {
+    const PREFIX: u8 = 5;
+    const NAME: &'static str = "files";
+    type K = String;
+    type V = String;
 }
