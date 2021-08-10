@@ -108,10 +108,7 @@ impl SledTree {
     /// Retrieve the last key value pair.
     pub fn last<KV>(&self) -> common_exception::Result<Option<(KV::K, KV::V)>>
     where KV: SledKeySpace {
-        let range = (
-            Bound::Unbounded,
-            KV::serialize_bound(Bound::Unbounded, "right")?,
-        );
+        let range = KV::serialize_range(&(Bound::Unbounded::<KV::K>, Bound::Unbounded::<KV::K>))?;
 
         let mut it = self.tree.range(range).rev();
         let last = it.next();
@@ -128,6 +125,30 @@ impl SledTree {
         let key = KV::deserialize_key(k)?;
         let value = KV::deserialize_value(v)?;
         Ok(Some((key, value)))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove<KV>(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        KV: SledKeySpace,
+    {
+        let removed = self
+            .tree
+            .remove(KV::serialize_key(key)?)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || format!("removed: {}", key,))?;
+
+        self.flush_async(flush).await?;
+
+        let removed = match removed {
+            Some(x) => Some(KV::deserialize_value(x)?),
+            None => None,
+        };
+
+        Ok(removed)
     }
 
     /// Delete kvs that are in `range`.
@@ -352,6 +373,17 @@ impl SledTree {
             range.end_bound()
         )
     }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn flush_async(&self, flush: bool) -> common_exception::Result<()> {
+        if flush && self.sync {
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush sled-tree")?;
+        }
+        Ok(())
+    }
 }
 
 /// It borrows the internal SledTree with access limited to a specified namespace `KV`.
@@ -371,6 +403,14 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
 
     pub fn last(&self) -> common_exception::Result<Option<(KV::K, KV::V)>> {
         self.inner.last::<KV>()
+    }
+
+    pub async fn remove(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> common_exception::Result<Option<KV::V>> {
+        self.inner.remove::<KV>(key, flush).await
     }
 
     pub async fn range_delete<R>(&self, range: R, flush: bool) -> common_exception::Result<()>
