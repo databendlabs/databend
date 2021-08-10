@@ -17,9 +17,11 @@ use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::future::Either;
 use metrics::counter;
 
+use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::datasources::remote::RemoteFactory;
 use crate::datasources::DatabaseCatalog;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -51,8 +53,14 @@ impl SessionManager {
 
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.max_active_sessions as usize;
+        let meta_store_cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
+            RemoteFactory::new(&conf).store_client_provider(),
+        )));
         Ok(Arc::new(SessionManager {
-            datasource: Arc::new(DatabaseCatalog::try_create_with_config(&conf)?),
+            datasource: Arc::new(DatabaseCatalog::try_create_with_config(
+                conf.disable_remote_catalog,
+                meta_store_cli,
+            )?),
             conf,
             cluster,
             max_sessions: max_active_sessions,

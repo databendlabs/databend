@@ -101,8 +101,11 @@ impl DatafuseQueryFlightDispatcher {
     fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
         let query_context = session.create_context();
         let action_context = DatafuseQueryContext::new(query_context.clone());
-        let pipeline_builder = PipelineBuilder::create(action_context);
-        let mut pipeline = pipeline_builder.build(&action.get_plan())?;
+        let pipeline_builder = PipelineBuilder::create(action_context.clone());
+
+        let query_plan = action.get_plan();
+        action_context.attach_query_plan(&query_plan);
+        let mut pipeline = pipeline_builder.build(&query_plan)?;
 
         let action_sinks = action.get_sinks();
         let action_query_id = action.get_query_id();
@@ -144,8 +147,11 @@ impl DatafuseQueryFlightDispatcher {
     where T: FlightScatter + Send + 'static {
         let query_context = session.create_context();
         let action_context = DatafuseQueryContext::new(query_context.clone());
-        let pipeline_builder = PipelineBuilder::create(action_context);
-        let mut pipeline = pipeline_builder.build(&action.get_plan())?;
+        let pipeline_builder = PipelineBuilder::create(action_context.clone());
+
+        let query_plan = action.get_plan();
+        action_context.attach_query_plan(&query_plan);
+        let mut pipeline = pipeline_builder.build(&query_plan)?;
 
         let action_query_id = action.get_query_id();
         let action_stage_id = action.get_stage_id();

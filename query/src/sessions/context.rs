@@ -206,8 +206,12 @@ impl DatafuseQueryContext {
         format!("_subquery_{}", index)
     }
 
-    pub fn attach_query_info(&self, query: &str) {
-        self.shared.attach_query_info(query);
+    pub fn attach_query_str(&self, query: &str) {
+        self.shared.attach_query_str(query);
+    }
+
+    pub fn attach_query_plan(&self, query_plan: &PlanNode) {
+        self.shared.attach_query_plan(query_plan);
     }
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {

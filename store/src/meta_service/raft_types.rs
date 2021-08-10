@@ -47,5 +47,16 @@ impl SledOrderedSerde for String {
     }
 }
 
+impl SledSerde for String {
+    fn ser(&self) -> Result<IVec, ErrorCode> {
+        Ok(IVec::from(self.as_str()))
+    }
+
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
+    where Self: Sized {
+        Ok(String::from_utf8(v.as_ref().to_vec())?)
+    }
+}
+
 /// For LogId to be able to stored in sled::Tree as a value.
 impl SledSerde for LogId {}

@@ -204,6 +204,7 @@ pub struct Config {
     )]
     pub rpc_tls_store_service_domain_name: String,
 
+    // this flag will be removed when embedded catalog is ready
     #[structopt(long, env =  DISABLE_REMOTE_CATALOG)]
     pub disable_remote_catalog: bool,
 }

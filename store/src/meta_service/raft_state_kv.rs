@@ -10,17 +10,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::meta_service::sled_key_space::SledKeySpace;
 use crate::meta_service::NodeId;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
-
-/// Key-Value Types for storing meta data of a raft in sled::Tree:
-/// id: NodeId,
-/// hard_state:
-///      current_term,
-///      voted_for,
-pub struct RaftStateKV {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RaftStateKey {
@@ -115,11 +107,4 @@ impl From<RaftStateValue> for (u64, u64) {
             _ => panic!("expect StateMachineId"),
         }
     }
-}
-
-impl SledKeySpace for RaftStateKV {
-    const PREFIX: u8 = 4;
-    const NAME: &'static str = "raft-state";
-    type K = RaftStateKey;
-    type V = RaftStateValue;
 }
