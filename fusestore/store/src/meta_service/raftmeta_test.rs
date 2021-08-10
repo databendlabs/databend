@@ -505,7 +505,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     tracing::info!("--- check logs");
     {
-        let logs = leader.sto.log.range_get(..)?;
+        let logs = leader.sto.log.range_values(..)?;
         tracing::info!("logs: {:?}", logs);
         assert_eq!(log_cnt as usize, logs.len());
     }
