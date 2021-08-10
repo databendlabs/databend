@@ -28,6 +28,7 @@ use common_exception::prelude::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
+use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_runtime::tokio;
@@ -976,7 +977,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_kv(&self, key: &str) -> Option<SeqValue> {
+    pub async fn get_kv(&self, key: &str) -> Option<SeqValue<KVValue>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -987,14 +988,14 @@ impl MetaNode {
     pub async fn mget_kv(
         &self,
         keys: &[impl AsRef<str> + std::fmt::Debug],
-    ) -> Vec<Option<SeqValue>> {
+    ) -> Vec<Option<SeqValue<KVValue>>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.mget_kv(keys)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
+    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue<KVValue>)> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.prefix_list_kv(prefix)
