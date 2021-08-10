@@ -11,9 +11,8 @@ use common_arrow::arrow::array::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrays::*;
+use crate::prelude::*;
 use crate::series::*;
-use crate::*;
 
 pub struct SeriesWrap<T>(pub T);
 

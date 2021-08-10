@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0.
 use std::fmt::Debug;
 
-use arrays::DataArray;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 
-use crate::*;
+use crate::prelude::*;
 
 // Read more:
 //  https://www.cockroachlabs.com/blog/vectorized-hash-joiner/

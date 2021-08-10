@@ -15,17 +15,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::DataArray;
-use crate::numerical_arithmetic_coercion;
-use crate::numerical_coercion;
-use crate::numerical_signed_coercion;
 use crate::prelude::*;
-use crate::DFBinaryArray;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFNullArray;
-use crate::DFNumericType;
-use crate::DFStructArray;
-use crate::DFUtf8Array;
 use crate::DataValueArithmeticOperator;
 
 impl Add for &Series {

@@ -9,8 +9,6 @@ use super::Series;
 use crate::arrays::ArrayCompare;
 use crate::numerical_coercion;
 use crate::prelude::*;
-use crate::DFBooleanArray;
-use crate::DataType;
 
 macro_rules! impl_compare {
     ($self:expr, $rhs:expr, $method:ident) => {{

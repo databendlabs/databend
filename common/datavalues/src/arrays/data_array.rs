@@ -15,9 +15,7 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::data_df_type::*;
 use crate::prelude::*;
-use crate::DataType;
 use crate::DataValue;
 
 /// DataArray is generic struct which implements DataArray
@@ -118,6 +116,36 @@ impl<T> DataArray<T> {
         }
     }
 }
+
+pub type DFNullArray = DataArray<NullType>;
+pub type DFInt8Array = DataArray<Int8Type>;
+pub type DFUInt8Array = DataArray<UInt8Type>;
+pub type DFInt16Array = DataArray<Int16Type>;
+pub type DFUInt16Array = DataArray<UInt16Type>;
+pub type DFInt32Array = DataArray<Int32Type>;
+pub type DFUInt32Array = DataArray<UInt32Type>;
+pub type DFInt64Array = DataArray<Int64Type>;
+pub type DFUInt64Array = DataArray<UInt64Type>;
+
+pub type DFBooleanArray = DataArray<BooleanType>;
+
+pub type DFFloat32Array = DataArray<Float32Type>;
+pub type DFFloat64Array = DataArray<Float64Type>;
+
+pub type DFUtf8Array = DataArray<Utf8Type>;
+pub type DFListArray = DataArray<ListType>;
+pub type DFStructArray = DataArray<StructType>;
+pub type DFBinaryArray = DataArray<BinaryType>;
+
+pub type DFDate32Array = DataArray<Date32Type>;
+pub type DFDate64Array = DataArray<Date64Type>;
+
+pub type DFTimestampSecondArray = DataArray<TimestampSecondType>;
+pub type DFTimestampMillisecondArray = DataArray<TimestampMillisecondType>;
+pub type DFTimestampMicrosecondArray = DataArray<TimestampMicrosecondType>;
+pub type DFTimestampNanosecondArray = DataArray<TimestampNanosecondType>;
+pub type DFIntervalYearMonthArray = DataArray<IntervalYearMonthType>;
+pub type DFIntervalDayTimeArray = DataArray<IntervalDayTimeType>;
 
 impl<T> DataArray<T>
 where T: DFDataType

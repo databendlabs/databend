@@ -19,7 +19,6 @@ use super::TakeIdx;
 use crate::arrays::kernels::*;
 use crate::arrays::DataArray;
 use crate::prelude::*;
-use crate::*;
 
 // TODO add unchecked take
 pub trait ArrayTake: Debug {

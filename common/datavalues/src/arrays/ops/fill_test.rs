@@ -6,9 +6,7 @@ use common_exception::Result;
 
 use crate::arrays::ops::fill::ArrayFull;
 use crate::arrays::ops::fill::ArrayFullNull;
-use crate::DFBooleanArray;
-use crate::DFUInt16Array;
-use crate::DFUtf8Array;
+use crate::prelude::*;
 
 #[test]
 fn test_array_fill() -> Result<()> {

@@ -5,9 +5,9 @@
 use common_arrow::arrow::array::ArrayRef;
 use common_exception::Result;
 
+use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
-use crate::DataType;
 use crate::DataValue;
 
 #[derive(Clone, Debug)]

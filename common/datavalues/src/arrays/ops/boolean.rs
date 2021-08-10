@@ -5,9 +5,7 @@
 use common_arrow::arrow::compute;
 use common_exception::Result;
 
-use crate::arrays::ArrayApply;
-use crate::arrays::TakeRandom;
-use crate::DFBooleanArray;
+use crate::prelude::*;
 
 impl DFBooleanArray {
     pub fn and_kleene(&self, rhs: &DFBooleanArray) -> Result<Self> {

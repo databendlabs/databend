@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::FlightData;
@@ -35,7 +34,6 @@ use common_runtime::tokio::sync::mpsc::Sender;
 use common_tracing::tracing;
 use maplit::hashmap;
 use pretty_assertions::assert_eq;
-use tempfile::tempdir;
 
 use crate::dfs::Dfs;
 use crate::executor::action_handler::RequestHandler;
@@ -54,10 +52,7 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
 
     init_store_unittest();
 
-    let dir = tempdir()?;
-    let root = dir.path();
-
-    let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {
+    let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {
         "foo" => "bar",
     })
     .await?;
@@ -124,9 +119,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     ];
 
     {
-        let dir = tempdir()?;
-        let root = dir.path();
-        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {}).await?;
 
         for (i, c) in cases.iter().enumerate() {
             let mes = format!("{}-th: db plan: {:?}, want: {:?}", i, c.plan, c.want);
@@ -179,9 +172,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
     let cases: Vec<T> = vec![case("foo", Ok(1)), case("bar", Err("bar"))];
 
     {
-        let dir = tempdir()?;
-        let root = dir.path();
-        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {}).await?;
 
         {
             // create db
@@ -258,9 +249,7 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
     ];
 
     {
-        let dir = tempdir()?;
-        let root = dir.path();
-        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {}).await?;
 
         {
             // create db
@@ -383,9 +372,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
     ];
 
     {
-        let dir = tempdir()?;
-        let root = dir.path();
-        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {}).await?;
 
         for (i, c) in db_cases.iter().enumerate() {
             let mes = format!("{}-th: db plan: {:?}, want: {:?}", i, c.plan, c.want);
@@ -472,9 +459,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
     ];
 
     {
-        let dir = tempdir()?;
-        let root = dir.path();
-        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {}).await?;
 
         {
             // create db
@@ -582,9 +567,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
     ];
 
     {
-        let dir = tempdir()?;
-        let root = dir.path();
-        let (_tc, hdlr) = bring_up_dfs_action_handler(root, hashmap! {}).await?;
+        let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {}).await?;
 
         {
             // create db
@@ -654,12 +637,10 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
 // Start an ActionHandler backed with a dfs.
 // And feed files into dfs.
 async fn bring_up_dfs_action_handler(
-    root: &Path,
     files: HashMap<&str, &str>,
 ) -> anyhow::Result<(StoreTestContext, ActionHandler)> {
-    let fs = LocalFS::try_create(root.to_str().unwrap().to_string())?;
-
     let mut tc = new_test_context();
+    let fs = LocalFS::try_create(tc.config.local_fs_dir.clone())?;
 
     let mn = MetaNode::boot(0, &tc.config).await?;
     tc.meta_nodes.push(mn.clone());

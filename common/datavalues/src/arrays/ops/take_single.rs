@@ -9,10 +9,7 @@ use common_arrow::arrow::array::ArrayRef;
 use super::take_random::TakeRandom;
 use super::take_random::TakeRandomUtf8;
 use crate::arrays::DataArray;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFNumericType;
-use crate::DFUtf8Array;
+use crate::prelude::*;
 
 macro_rules! impl_take_random_get {
     ($self:ident, $index:ident) => {{

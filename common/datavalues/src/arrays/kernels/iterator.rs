@@ -7,10 +7,6 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::prelude::*;
 use crate::series::Series;
-use crate::DFBooleanArray;
-use crate::DFListArray;
-use crate::DFNumericType;
-use crate::DFUtf8Array;
 
 /// A `DFIterator` is an iterator over a `DFArray` which contains DF types. A `DFIterator`
 /// must implement   `DoubleEndedIterator`.

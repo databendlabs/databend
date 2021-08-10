@@ -81,24 +81,14 @@ impl Processor for GroupByPartialTransform {
     ///
     /// grouping by [A%3]
     /// 1.1)
-    /// row_idx, group_key, A
-    /// 0, 1, 1
-    /// 1, 2, 2
-    /// 2, 0, 3
-    /// 3, 1, 4
-    /// 4, 2, 5
-    ///
-    /// 1.2) make indices group(for vector compute)
-    /// group_key, indices
-    /// 0, [2]
-    /// 1, [0, 3]
-    /// 2, [1, 4]
-    ///
-    /// 1.3) apply aggregate function(SUM(A)) to the take block
-    /// group_key, SUM(A)
-    /// <0, 3>
-    /// <1, 1+4>
-    /// <2, 2+5>
+    /// For each row, allocate the state if key not exists in the map, and apply accumulate_row row by row
+    ///  row_idx, A % 3 -> state place
+    ///  0, 1 -> state1
+    ///  1, 2 -> state2
+    ///  2, 3 -> state3
+    ///  3, 1 -> state1
+    ///  4, 2 -> state2
+    /// 1.2)  serialize the state to the output block
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 
@@ -151,7 +141,6 @@ impl Processor for GroupByPartialTransform {
 
                     let group_keys = $hash_method.build_keys(&group_columns, block.num_rows())?;
                     let mut groups = groups_locker.write();
-                    // 1.3 Apply take blocks to aggregate function by group_key.
                     {
                         for (row, group_key) in group_keys.iter().enumerate() {
                             match groups.get_mut(group_key) {

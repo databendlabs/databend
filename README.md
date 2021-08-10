@@ -48,7 +48,7 @@ Built to make the Data Cloud easy!
 
 ## Architecture
 
-![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-v1.svg)
+![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-v20210810.svg)
 
 ## Performance
 
