@@ -12,9 +12,6 @@ run: build
 run-debug: build-debug
 	bash ./scripts/deploy/datafuse-query-standalone.sh
 
-run-release:
-	bash ./scripts/deploy/datafuse-query-standalone-from-release.sh
-
 build:
 	bash ./scripts/build/build-native.sh
 
