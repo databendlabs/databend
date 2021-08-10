@@ -1,7 +1,7 @@
 cargo-features = ["edition2021"]
 
 [package]
-name = "fuse-query"
+name = "datafuse-query"
 version = "0.1.0"
 description = "A real-time Cloud Distributed Query Engine"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
@@ -10,12 +10,12 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "fuse-query"
-path = "src/bin/fuse-query.rs"
+name = "datafuse-query"
+path = "src/bin/datafuse-query.rs"
 
 [[bin]]
-name = "fuse-benchmark"
-path = "src/bin/fuse-benchmark.rs"
+name = "datafuse-benchmark"
+path = "src/bin/datafuse-benchmark.rs"
 
 [features]
 default = ["simd"]

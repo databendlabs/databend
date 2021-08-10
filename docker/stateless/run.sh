@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e -x -a
-sudo nohup /fuse-query &
+sudo nohup /datafuse-query &
 
 sleep 5
 

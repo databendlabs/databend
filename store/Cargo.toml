@@ -1,7 +1,7 @@
 cargo-features = ["edition2021"]
 
 [package]
-name = "fuse-store"
+name = "datafuse-store"
 version = "0.1.0"
 description = "A Cloud Distributed MergeTree Storage Engine"
 authors = ["FuseStore Authors <opensource@datafuselabs.com>"]
@@ -10,8 +10,8 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "fuse-store"
-path = "src/bin/fuse-store.rs"
+name = "datafuse-store"
+path = "src/bin/datafuse-store.rs"
 
 [features]
 default = ["simd"]

@@ -6,9 +6,9 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_runtime::tokio;
 use criterion::Criterion;
-use fuse_query::interpreters::SelectInterpreter;
-use fuse_query::sessions::SessionManager;
-use fuse_query::sql::PlanParser;
+use datafuse_query::interpreters::SelectInterpreter;
+use datafuse_query::sessions::SessionManager;
+use datafuse_query::sql::PlanParser;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;

@@ -469,7 +469,7 @@ download_datafuse() {
     fi
     echo "${HOME}/${BINDIR}"
     test ! -d "${HOME}/${BINDIR}" && install -d "${HOME}/${BINDIR}"
-    for binexe in fuse-query fuse-store; do
+    for binexe in datafuse-query datafuse-store; do
       #TODO(zhihanz) for windows we should add .exe suffix
       install "${srcdir}/${binexe}" "${HOME}/${BINDIR}/"
       ensure chmod +x "${HOME}/${BINDIR}/${binexe}"
@@ -563,7 +563,7 @@ path_hint() {
     # shellcheck disable=SC2016
     log_info '   For zsh : echo '\''export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'\'' >> ~/.zshrc'
     log_info ""
-    log_info "   To use fuse-query or fuse-store you'll need to restart your shell or run the following:"
+    log_info "   To use datafuse-query or datafuse-store you'll need to restart your shell or run the following:"
     # shellcheck disable=SC2016
     log_info '   export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'
 }

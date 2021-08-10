@@ -26,13 +26,13 @@ mkdir -p "${d_pull}"
 
 python3 -m pip install coscmd PyYAML
 ## run perf for current
-python perfs.py --output "${d_pull}" --bin "${BASE_DIR}/target/release/fuse-benchmark" --host 127.0.0.1 --port 9001
+python perfs.py --output "${d_pull}" --bin "${BASE_DIR}/target/release/datafuse-benchmark" --host 127.0.0.1 --port 9001
 
 ## run perf for latest release
 if [ ! -d "${d_release}" ]; then
   mkdir -p "${d_release}"
   ${BASE_DIR}/scripts/deploy/fusequery-standalone-from-release.sh "${tag}"
-  python perfs.py --output "${d_release}" --bin "${BASE_DIR}/target/release/fuse-benchmark" --host 127.0.0.1 --port 9001
+  python perfs.py --output "${d_release}" --bin "${BASE_DIR}/target/release/datafuse-benchmark" --host 127.0.0.1 --port 9001
 fi
 
 ## run comparation scripts

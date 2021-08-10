@@ -29,7 +29,7 @@ pub struct TracingTable {
 
 impl TracingTable {
     pub fn create() -> Self {
-        // {"v":0,"name":"fuse-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"datafuse","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
+        // {"v":0,"name":"datafuse-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"datafuse","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
         TracingTable {
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("v", DataType::Int64, false),

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use fuse_query::sql::DfParser;
+use datafuse_query::sql::DfParser;
 use honggfuzz::fuzz;
 
 fn main() {

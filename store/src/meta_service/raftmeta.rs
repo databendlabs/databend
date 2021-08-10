@@ -615,7 +615,7 @@ impl MetaNode {
                 config.snapshot_logs_since_last,
             ))
             .validate()
-            .expect("building raft Config from fuse-store config")
+            .expect("building raft Config from datafuse-store config")
     }
 
     /// Start the grpc service for raft communication and meta operation API.

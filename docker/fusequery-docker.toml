@@ -1,5 +1,5 @@
 # Usage:
-# fuse-query -c fusequery_config_spec.toml
+# datafuse-query -c fusequery_config_spec.toml
 
 # Log level.
 log_level = "DEBUG"

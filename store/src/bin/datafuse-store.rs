@@ -4,11 +4,11 @@
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
-use fuse_store::api::HttpService;
-use fuse_store::api::StoreServer;
-use fuse_store::configs::Config;
-use fuse_store::meta_service::raft_db::init_sled_db;
-use fuse_store::metrics::MetricService;
+use datafuse_store::api::HttpService;
+use datafuse_store::api::StoreServer;
+use datafuse_store::configs::Config;
+use datafuse_store::meta_service::raft_db::init_sled_db;
+use datafuse_store::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
 
@@ -20,13 +20,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .init();
 
-    let _guards =
-        init_tracing_with_file("fuse-store", conf.log_dir.as_str(), conf.log_level.as_str());
+    let _guards = init_tracing_with_file(
+        "datafuse-store",
+        conf.log_dir.as_str(),
+        conf.log_level.as_str(),
+    );
 
     info!("{:?}", conf.clone());
     info!(
         "FuseStore v-{}",
-        *fuse_store::configs::config::FUSE_COMMIT_VERSION
+        *datafuse_store::configs::config::FUSE_COMMIT_VERSION
     );
 
     init_sled_db(conf.meta_dir.clone());

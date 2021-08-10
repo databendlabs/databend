@@ -6,16 +6,16 @@ use std::net::SocketAddr;
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
-use fuse_query::api::HttpService;
-use fuse_query::api::RpcService;
-use fuse_query::clusters::Cluster;
-use fuse_query::configs::Config;
-use fuse_query::metrics::MetricService;
-use fuse_query::servers::ClickHouseHandler;
-use fuse_query::servers::MySQLHandler;
-use fuse_query::servers::Server;
-use fuse_query::servers::ShutdownHandle;
-use fuse_query::sessions::SessionManager;
+use datafuse_query::api::HttpService;
+use datafuse_query::api::RpcService;
+use datafuse_query::clusters::Cluster;
+use datafuse_query::configs::Config;
+use datafuse_query::metrics::MetricService;
+use datafuse_query::servers::ClickHouseHandler;
+use datafuse_query::servers::MySQLHandler;
+use datafuse_query::servers::Server;
+use datafuse_query::servers::ShutdownHandle;
+use datafuse_query::sessions::SessionManager;
 use log::info;
 
 #[tokio::main]
@@ -41,13 +41,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
     )
     .init();
-    let _guards =
-        init_tracing_with_file("fuse-query", conf.log_dir.as_str(), conf.log_level.as_str());
+    let _guards = init_tracing_with_file(
+        "datafuse-query",
+        conf.log_dir.as_str(),
+        conf.log_level.as_str(),
+    );
 
     info!("{:?}", conf);
     info!(
         "FuseQuery v-{}, Allocator: {}",
-        *fuse_query::configs::config::FUSE_COMMIT_VERSION,
+        *datafuse_query::configs::config::FUSE_COMMIT_VERSION,
         malloc
     );
 

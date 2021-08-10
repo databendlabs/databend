@@ -324,8 +324,8 @@ def main(args):
     os.environ.setdefault("FUSE_QUERY_BINARY", args.binary)
     os.environ.setdefault("FUSE_QUERY_DATABASE", args.database)
 
-    fuse_query_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    fuse_query_proc_create.communicate(b"SELECT 1")
+    datafuse_query_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    datafuse_query_proc_create.communicate(b"SELECT 1")
 
     def is_test_from_dir(suite_dir, case):
         case_file = os.path.join(suite_dir, case)
@@ -434,9 +434,9 @@ def get_additional_client_options_url(args):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(description='fuse-query functional tests')
+    parser = ArgumentParser(description='datafuse-query functional tests')
     parser.add_argument('-q', '--suites', help='Path to suites dir')
-    parser.add_argument('-b', '--binary', default='fuse-query', help='Path to fuse-query binary or name of binary in PATH')
+    parser.add_argument('-b', '--binary', default='datafuse-query', help='Path to datafuse-query binary or name of binary in PATH')
     parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
     parser.add_argument('-opt', '--options', default=' --comments --force ', help="Client program options")
     parser.add_argument('--tmp', help='Path to tmp dir')
