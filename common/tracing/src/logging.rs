@@ -41,7 +41,7 @@ pub fn init_default_tracing() {
 ///
 // TODO(xp): use FUSE_JAEGER to assign jaeger server address.
 fn init_tracing_stdout() {
-    let fmt_layer = fmt::Layer::default()
+    let fmt_layer = Layer::default()
         .with_thread_ids(true)
         .with_thread_names(true)
         .pretty()
