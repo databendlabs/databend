@@ -78,13 +78,13 @@ async fn test_sledtree_append() -> anyhow::Result<()> {
         },
     ];
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..)?;
     assert_eq!(want, got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..=5)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..=5)?;
     assert_eq!(want[0..1], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(6..9)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(6..9)?;
     assert_eq!(want[1..], got);
 
     Ok(())
@@ -133,34 +133,34 @@ async fn test_sledtree_append_values_and_range_get() -> anyhow::Result<()> {
 
     tree.append_values::<sled_key_space::Logs>(&logs).await?;
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..)?;
     assert_eq!(logs, got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..=2)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..=2)?;
     assert_eq!(logs[0..1], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..3)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..3)?;
     assert_eq!(logs[0..1], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..5)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..5)?;
     assert_eq!(logs[0..2], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..10)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..10)?;
     assert_eq!(logs[0..3], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(0..11)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(0..11)?;
     assert_eq!(logs[0..4], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(9..11)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(9..11)?;
     assert_eq!(logs[2..4], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(10..256)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(10..256)?;
     assert_eq!(logs[3..4], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(10..257)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(10..257)?;
     assert_eq!(logs[3..5], got);
 
-    let got = tree.range_get::<sled_key_space::Logs, _>(257..)?;
+    let got = tree.range_values::<sled_key_space::Logs, _>(257..)?;
     assert_eq!(logs[5..], got);
     Ok(())
 }
@@ -280,7 +280,7 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
         tree.insert_value::<sled_key_space::Logs>(log).await?;
     }
 
-    assert_eq!(logs, tree.range_get::<sled_key_space::Logs, _>(..)?);
+    assert_eq!(logs, tree.range_values::<sled_key_space::Logs, _>(..)?);
 
     // insert and override
 
@@ -448,7 +448,7 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_delete() -> anyhow::Result<()> {
+async fn test_sledtree_remove() -> anyhow::Result<()> {
     init_store_unittest();
 
     let tc = new_sled_test_context();
@@ -468,24 +468,27 @@ async fn test_sledtree_delete() -> anyhow::Result<()> {
 
     tree.append_values::<sled_key_space::Logs>(&logs).await?;
 
-    let deleted = tree.remove::<sled_key_space::Logs>(&0, false).await?;
-    assert_eq!(None, deleted);
-    assert_eq!(logs[..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+    let removed = tree.remove::<sled_key_space::Logs>(&0, false).await?;
+    assert_eq!(None, removed);
+    assert_eq!(logs[..], tree.range_values::<sled_key_space::Logs, _>(0..)?);
 
-    // delete other key space
-    let deleted = tree.remove::<sled_key_space::Nodes>(&0, false).await?;
-    assert_eq!(None, deleted);
-    assert_eq!(logs[..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+    // remove other key space
+    let removed = tree.remove::<sled_key_space::Nodes>(&0, false).await?;
+    assert_eq!(None, removed);
+    assert_eq!(logs[..], tree.range_values::<sled_key_space::Logs, _>(0..)?);
 
-    let deleted = tree.remove::<sled_key_space::Logs>(&2, false).await?;
-    assert_eq!(Some(logs[0].clone()), deleted);
-    assert_eq!(logs[1..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+    let removed = tree.remove::<sled_key_space::Logs>(&2, false).await?;
+    assert_eq!(Some(logs[0].clone()), removed);
+    assert_eq!(
+        logs[1..],
+        tree.range_values::<sled_key_space::Logs, _>(0..)?
+    );
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_range_delete() -> anyhow::Result<()> {
+async fn test_sledtree_range_remove() -> anyhow::Result<()> {
     init_store_unittest();
 
     let tc = new_sled_test_context();
@@ -526,25 +529,40 @@ async fn test_sledtree_range_delete() -> anyhow::Result<()> {
     ];
 
     tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_delete::<sled_key_space::Logs, _>(0.., false)
+    tree.range_remove::<sled_key_space::Logs, _>(0.., false)
         .await?;
-    assert_eq!(logs[5..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+    assert_eq!(
+        logs[5..],
+        tree.range_values::<sled_key_space::Logs, _>(0..)?
+    );
 
     tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_delete::<sled_key_space::Logs, _>(1.., false)
+    tree.range_remove::<sled_key_space::Logs, _>(1.., false)
         .await?;
-    assert_eq!(logs[5..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+    assert_eq!(
+        logs[5..],
+        tree.range_values::<sled_key_space::Logs, _>(0..)?
+    );
 
     tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_delete::<sled_key_space::Logs, _>(3.., true)
+    tree.range_remove::<sled_key_space::Logs, _>(3.., true)
         .await?;
-    assert_eq!(logs[0..1], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+    assert_eq!(
+        logs[0..1],
+        tree.range_values::<sled_key_space::Logs, _>(0..)?
+    );
 
     tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_delete::<sled_key_space::Logs, _>(3..10, true)
+    tree.range_remove::<sled_key_space::Logs, _>(3..10, true)
         .await?;
-    assert_eq!(logs[0..1], tree.range_get::<sled_key_space::Logs, _>(0..5)?);
-    assert_eq!(logs[3..], tree.range_get::<sled_key_space::Logs, _>(5..)?);
+    assert_eq!(
+        logs[0..1],
+        tree.range_values::<sled_key_space::Logs, _>(0..5)?
+    );
+    assert_eq!(
+        logs[3..],
+        tree.range_values::<sled_key_space::Logs, _>(5..)?
+    );
 
     Ok(())
 }
@@ -588,27 +606,27 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
 
     // range get/keys are limited to its own namespace.
     {
-        let got = tree.range_get::<sled_key_space::Logs, _>(..)?;
+        let got = tree.range_values::<sled_key_space::Logs, _>(..)?;
         assert_eq!(logs, got);
 
-        let got = tree.range_get::<StateMachineMeta, _>(..=LastApplied)?;
+        let got = tree.range_values::<StateMachineMeta, _>(..=LastApplied)?;
         assert_eq!(
             vec![StateMachineMetaValue::LogId(LogId { term: 1, index: 2 })],
             got
         );
 
-        let got = tree.range_get::<StateMachineMeta, _>(Initialized..)?;
+        let got = tree.range_values::<StateMachineMeta, _>(Initialized..)?;
         assert_eq!(vec![StateMachineMetaValue::Bool(true)], got);
 
         let got = tree.range_keys::<StateMachineMeta, _>(Initialized..)?;
         assert_eq!(vec![Initialized], got);
     }
 
-    // range delete are limited to its own namespace.
+    // range remove are limited to its own namespace.
     {
-        tree.range_delete::<StateMachineMeta, _>(.., false).await?;
+        tree.range_remove::<StateMachineMeta, _>(.., false).await?;
 
-        let got = tree.range_get::<sled_key_space::Logs, _>(..)?;
+        let got = tree.range_values::<sled_key_space::Logs, _>(..)?;
         assert_eq!(logs, got);
     }
 
@@ -664,13 +682,13 @@ async fn test_as_append() -> anyhow::Result<()> {
         },
     ];
 
-    let got = log_tree.range_get(0..)?;
+    let got = log_tree.range_values(0..)?;
     assert_eq!(want, got);
 
-    let got = log_tree.range_get(0..=5)?;
+    let got = log_tree.range_values(0..=5)?;
     assert_eq!(want[0..1], got);
 
-    let got = log_tree.range_get(6..9)?;
+    let got = log_tree.range_values(6..9)?;
     assert_eq!(want[1..], got);
 
     Ok(())
@@ -720,34 +738,34 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
 
     log_tree.append_values(&logs).await?;
 
-    let got = log_tree.range_get(0..)?;
+    let got = log_tree.range_values(0..)?;
     assert_eq!(logs, got);
 
-    let got = log_tree.range_get(0..=2)?;
+    let got = log_tree.range_values(0..=2)?;
     assert_eq!(logs[0..1], got);
 
-    let got = log_tree.range_get(0..3)?;
+    let got = log_tree.range_values(0..3)?;
     assert_eq!(logs[0..1], got);
 
-    let got = log_tree.range_get(0..5)?;
+    let got = log_tree.range_values(0..5)?;
     assert_eq!(logs[0..2], got);
 
-    let got = log_tree.range_get(0..10)?;
+    let got = log_tree.range_values(0..10)?;
     assert_eq!(logs[0..3], got);
 
-    let got = log_tree.range_get(0..11)?;
+    let got = log_tree.range_values(0..11)?;
     assert_eq!(logs[0..4], got);
 
-    let got = log_tree.range_get(9..11)?;
+    let got = log_tree.range_values(9..11)?;
     assert_eq!(logs[2..4], got);
 
-    let got = log_tree.range_get(10..256)?;
+    let got = log_tree.range_values(10..256)?;
     assert_eq!(logs[3..4], got);
 
-    let got = log_tree.range_get(10..257)?;
+    let got = log_tree.range_values(10..257)?;
     assert_eq!(logs[3..5], got);
 
-    let got = log_tree.range_get(257..)?;
+    let got = log_tree.range_values(257..)?;
     assert_eq!(logs[5..], got);
     Ok(())
 }
@@ -870,7 +888,7 @@ async fn test_as_insert() -> anyhow::Result<()> {
         log_tree.insert_value(log).await?;
     }
 
-    assert_eq!(logs, log_tree.range_get(..)?);
+    assert_eq!(logs, log_tree.range_values(..)?);
 
     // insert and override
 
@@ -1014,7 +1032,7 @@ async fn test_as_last() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_as_delete() -> anyhow::Result<()> {
+async fn test_as_remove() -> anyhow::Result<()> {
     init_store_unittest();
 
     let tc = new_sled_test_context();
@@ -1035,19 +1053,19 @@ async fn test_as_delete() -> anyhow::Result<()> {
 
     log_tree.append_values(&logs).await?;
 
-    let deleted = log_tree.remove(&0, false).await?;
-    assert_eq!(None, deleted);
-    assert_eq!(logs[..], log_tree.range_get(0..)?);
+    let removed = log_tree.remove(&0, false).await?;
+    assert_eq!(None, removed);
+    assert_eq!(logs[..], log_tree.range_values(0..)?);
 
-    let deleted = log_tree.remove(&2, false).await?;
-    assert_eq!(Some(logs[0].clone()), deleted);
-    assert_eq!(logs[1..], log_tree.range_get(0..)?);
+    let removed = log_tree.remove(&2, false).await?;
+    assert_eq!(Some(logs[0].clone()), removed);
+    assert_eq!(logs[1..], log_tree.range_values(0..)?);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_as_range_delete() -> anyhow::Result<()> {
+async fn test_as_range_remove() -> anyhow::Result<()> {
     init_store_unittest();
 
     let tc = new_sled_test_context();
@@ -1089,21 +1107,21 @@ async fn test_as_range_delete() -> anyhow::Result<()> {
     ];
 
     log_tree.append_values(&logs).await?;
-    log_tree.range_delete(0.., false).await?;
-    assert_eq!(logs[5..], log_tree.range_get(0..)?);
+    log_tree.range_remove(0.., false).await?;
+    assert_eq!(logs[5..], log_tree.range_values(0..)?);
 
     log_tree.append_values(&logs).await?;
-    log_tree.range_delete(1.., false).await?;
-    assert_eq!(logs[5..], log_tree.range_get(0..)?);
+    log_tree.range_remove(1.., false).await?;
+    assert_eq!(logs[5..], log_tree.range_values(0..)?);
 
     log_tree.append_values(&logs).await?;
-    log_tree.range_delete(3.., true).await?;
-    assert_eq!(logs[0..1], log_tree.range_get(0..)?);
+    log_tree.range_remove(3.., true).await?;
+    assert_eq!(logs[0..1], log_tree.range_values(0..)?);
 
     log_tree.append_values(&logs).await?;
-    log_tree.range_delete(3..10, true).await?;
-    assert_eq!(logs[0..1], log_tree.range_get(0..5)?);
-    assert_eq!(logs[3..], log_tree.range_get(5..)?);
+    log_tree.range_remove(3..10, true).await?;
+    assert_eq!(logs[0..1], log_tree.range_values(0..5)?);
+    assert_eq!(logs[3..], log_tree.range_values(5..)?);
 
     Ok(())
 }
@@ -1149,27 +1167,27 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
 
     // range get/keys are limited to its own namespace.
     {
-        let got = log_tree.range_get(..)?;
+        let got = log_tree.range_values(..)?;
         assert_eq!(logs, got);
 
-        let got = sm_meta.range_get(..=LastApplied)?;
+        let got = sm_meta.range_values(..=LastApplied)?;
         assert_eq!(
             vec![StateMachineMetaValue::LogId(LogId { term: 1, index: 2 })],
             got
         );
 
-        let got = sm_meta.range_get(Initialized..)?;
+        let got = sm_meta.range_values(Initialized..)?;
         assert_eq!(vec![StateMachineMetaValue::Bool(true)], got);
 
         let got = sm_meta.range_keys(Initialized..)?;
         assert_eq!(vec![Initialized], got);
     }
 
-    // range delete are limited to its own namespace.
+    // range remove are limited to its own namespace.
     {
-        sm_meta.range_delete(.., false).await?;
+        sm_meta.range_remove(.., false).await?;
 
-        let got = log_tree.range_get(..)?;
+        let got = log_tree.range_values(..)?;
         assert_eq!(logs, got);
     }
 

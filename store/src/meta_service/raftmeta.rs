@@ -271,7 +271,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             return Ok(vec![]);
         }
 
-        Ok(self.log.range_get(start..stop)?)
+        Ok(self.log.range_values(start..stop)?)
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
@@ -283,9 +283,9 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
         // If a stop point was specified, delete from start until the given stop point.
         if let Some(stop) = stop.as_ref() {
-            self.log.range_delete(start..*stop).await?;
+            self.log.range_remove(start..*stop).await?;
         } else {
-            self.log.range_delete(start..).await?;
+            self.log.range_remove(start..).await?;
         }
         Ok(())
     }
@@ -363,7 +363,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         let meta;
         {
             let mut current_snapshot = self.current_snapshot.write().await;
-            self.log.range_delete(0..last_applied_log.index).await?;
+            self.log.range_remove(0..last_applied_log.index).await?;
 
             let snapshot_id = format!(
                 "{}-{}-{}",
@@ -433,7 +433,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
             // Remove logs that are included in the snapshot,
             // except the last one that is replaced with a snapshot pointer.
-            self.log.range_delete(0..meta.last_log_id.index).await?;
+            self.log.range_remove(0..meta.last_log_id.index).await?;
         }
 
         // Update current snapshot.
