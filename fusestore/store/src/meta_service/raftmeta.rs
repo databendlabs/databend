@@ -42,7 +42,6 @@ use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
-use crate::meta_service::sled_key_space;
 use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
@@ -57,7 +56,6 @@ use crate::meta_service::ShutdownError;
 use crate::meta_service::SledSerde;
 use crate::meta_service::Snapshot;
 use crate::meta_service::StateMachine;
-use crate::meta_service::StateMachineMeta;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
@@ -234,7 +232,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
                     None => (0, 0).into(),
                 };
 
-                let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+                let sm_meta = sm.sm_meta();
 
                 let last_applied_log = sm_meta
                     .get(&LastApplied)?
@@ -338,7 +336,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             // Serialize the data of the state machine.
             let sm = self.state_machine.write().await;
 
-            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+            let sm_meta = sm.sm_meta();
 
             let last_applied = sm_meta
                 .get(&LastApplied)?
@@ -501,7 +499,7 @@ impl MetaStore {
             .await
             .expect("fail to get membership");
 
-        let sm_nodes = sm.sm_tree.key_space::<sled_key_space::Nodes>();
+        let sm_nodes = sm.nodes();
         let x = sm_nodes.range_keys(..).expect("fail to list nodes");
         for node_id in x {
             // it has been added into this cluster and is not a voter.
@@ -955,19 +953,19 @@ impl MetaNode {
         append_res: &AppendResult,
     ) {
         let mut sm = self.sto.state_machine.write().await;
-        sm.append_data_parts(db_name, table_name, append_res)
+        sm.append_data_parts(db_name, table_name, append_res).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn remove_table_data_parts(&self, db_name: &str, table_name: &str) {
         let mut sm = self.sto.state_machine.write().await;
-        sm.remove_table_data_parts(db_name, table_name)
+        sm.remove_table_data_parts(db_name, table_name).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn remove_db_data_parts(&self, db_name: &str) {
         let mut sm = self.sto.state_machine.write().await;
-        sm.remove_db_data_parts(db_name)
+        sm.remove_db_data_parts(db_name).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

@@ -19,7 +19,9 @@ use common_flights::StoreClient;
 use common_infallible::Mutex;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
+use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableOptions;
 use common_runtime::Runtime;
@@ -245,6 +247,18 @@ where T: 'static + StoreApis + Clone
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
         let mut cli = self.store_api_provider.try_get_store_apis().await?;
         cli.drop_table(plan.clone()).await?;
+        Ok(())
+    }
+
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+        let mut cli = self.store_api_provider.try_get_store_apis().await?;
+        cli.create_database(plan).await?;
+        Ok(())
+    }
+
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+        let mut cli = self.store_api_provider.try_get_store_apis().await?;
+        cli.drop_database(plan).await?;
         Ok(())
     }
 }

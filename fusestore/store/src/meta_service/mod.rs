@@ -31,7 +31,6 @@ pub use log_entry::LogEntry;
 pub use meta_service_impl::MetaServiceImpl;
 pub use network::Network;
 pub use placement::Placement;
-pub use raft_state_kv::RaftStateKV;
 pub use raft_state_kv::RaftStateKey;
 pub use raft_state_kv::RaftStateValue;
 pub use raft_txid::RaftTxId;
@@ -49,7 +48,6 @@ pub use snapshot::Snapshot;
 pub use state_machine::Node;
 pub use state_machine::Slot;
 pub use state_machine::StateMachine;
-pub use state_machine_meta::StateMachineMeta;
 pub use state_machine_meta::StateMachineMetaKey;
 pub use state_machine_meta::StateMachineMetaValue;
 

@@ -9,6 +9,7 @@ pub use async_raft::NodeId;
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
 use common_exception::ErrorCode;
+use common_metatypes::SeqValue;
 use sled::IVec;
 
 use crate::meta_service::sled_serde::SledOrderedSerde;
@@ -46,6 +47,19 @@ impl SledOrderedSerde for String {
         Ok(String::from_utf8(v.as_ref().to_vec())?)
     }
 }
+
+impl SledSerde for String {
+    fn ser(&self) -> Result<IVec, ErrorCode> {
+        Ok(IVec::from(self.as_str()))
+    }
+
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
+    where Self: Sized {
+        Ok(String::from_utf8(v.as_ref().to_vec())?)
+    }
+}
+
+impl SledSerde for SeqValue<Vec<u8>> {}
 
 /// For LogId to be able to stored in sled::Tree as a value.
 impl SledSerde for LogId {}

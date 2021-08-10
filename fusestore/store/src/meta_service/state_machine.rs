@@ -8,6 +8,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fs::remove_dir_all;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
@@ -29,14 +31,15 @@ use crate::configs;
 use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::sled_key_space;
+use crate::meta_service::sled_key_space::StateMachineMeta;
 use crate::meta_service::AppliedState;
+use crate::meta_service::AsKeySpace;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 use crate::meta_service::SledSerde;
 use crate::meta_service::SledTree;
-use crate::meta_service::StateMachineMeta;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 use crate::meta_service::StateMachineMetaValue;
@@ -99,7 +102,9 @@ pub struct StateMachine {
     pub keys: BTreeMap<String, String>,
 
     /// storage of auto-incremental number.
-    pub sequences: BTreeMap<String, u64>,
+    /// TODO(xp): temporarily make it a Arc<Mutex>, need to be modified while &StateMachine is immutably borrow.
+    ///           remove it after making it a sled store.
+    pub sequences: Arc<Mutex<BTreeMap<String, u64>>>,
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
@@ -108,11 +113,6 @@ pub struct StateMachine {
 
     /// table parts， table id -> data parts
     pub table_parts: HashMap<u64, Vec<DataPartInfo>>,
-
-    /// A kv store of all other general purpose information.
-    /// The value is tuple of a monotonic sequence number and userdata value in string.
-    /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
-    pub kv: BTreeMap<String, (u64, Vec<u8>)>,
 }
 
 /// Initialize state machine for the first time it is brought online.
@@ -202,16 +202,15 @@ impl StateMachine {
 
             client_last_resp: Default::default(),
             keys: BTreeMap::new(),
-            sequences: BTreeMap::new(),
+            sequences: Arc::new(Mutex::new(BTreeMap::new())),
             slots: Vec::new(),
 
             replication: Replication::Mirror(1),
             table_parts: HashMap::new(),
-            kv: BTreeMap::new(),
         };
 
         let inited = {
-            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+            let sm_meta = sm.sm_meta();
             sm_meta.get(&Initialized)?
         };
 
@@ -221,7 +220,7 @@ impl StateMachine {
             // Run the default init on a new state machine.
             // TODO(xp): initialization should be customizable.
             let sm = StateMachine::initializer().init(sm);
-            let sm_meta = sm.sm_tree.key_space::<StateMachineMeta>();
+            let sm_meta = sm.sm_meta();
             sm_meta
                 .insert(&Initialized, &StateMachineMetaValue::Bool(true))
                 .await?;
@@ -306,13 +305,14 @@ impl StateMachine {
     /// Internal func to get an auto-incr seq number.
     /// It is just what Cmd::IncrSeq does and is also used by Cmd that requires
     /// a unique id such as Cmd::AddDatabase which needs make a new database id.
-    fn incr_seq(&mut self, key: &str) -> u64 {
-        let prev = self.sequences.get(key);
+    fn incr_seq(&self, key: &str) -> u64 {
+        let mut sequences = self.sequences.lock().unwrap();
+        let prev = sequences.get(key);
         let curr = match prev {
             Some(v) => v + 1,
             None => 1,
         };
-        self.sequences.insert(key.to_string(), curr);
+        sequences.insert(key.to_string(), curr);
         tracing::debug!("applied IncrSeq: {}={}", key, curr);
 
         curr
@@ -327,7 +327,7 @@ impl StateMachine {
     pub async fn apply(&mut self, log_id: &LogId, data: &LogEntry) -> anyhow::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
 
-        let sm_meta = self.sm_tree.key_space::<StateMachineMeta>();
+        let sm_meta = self.sm_meta();
         sm_meta
             .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
             .await?;
@@ -382,7 +382,7 @@ impl StateMachine {
                 ref node_id,
                 ref node,
             } => {
-                let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
+                let sm_nodes = self.nodes();
 
                 let prev = sm_nodes.get(node_id)?;
 
@@ -412,7 +412,8 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID);
                     let db_vec = db.serialize_into_vec();
 
-                    let (prev, result) = self.upsert_kv(name, &MatchSeq::Any, &Some(db_vec));
+                    let (prev, result) =
+                        self.upsert_kv(name, &MatchSeq::Any, &Some(db_vec)).await?;
                     let de_database = |r: Option<SeqValue>| -> Option<Database> {
                         if let Some(r) = r {
                             Database::deserialize_from_vec(&r.1)
@@ -427,7 +428,8 @@ impl StateMachine {
 
             Cmd::DropDatabase { ref name } => {
                 let name: &String = &[DB_PREFIX, name].join("");
-                let (prev, result) = self.upsert_kv(name, &MatchSeq::Any, &None);
+                let (prev, result) = self.upsert_kv(name, &MatchSeq::Any, &None).await?;
+                self.remove_db_data_parts(name).await;
                 self.incr_seq(SEQ_DATABASE_META_ID);
                 let de_database = |r: Option<SeqValue>| -> Option<Database> {
                     if let Some(r) = r {
@@ -461,13 +463,12 @@ impl StateMachine {
                     };
                     self.incr_seq(SEQ_DATABASE_META_ID);
                     db.tables.insert(table_name.clone(), table.table_id);
-                    self.upsert_kv(db_name, &MatchSeq::Any, &Some(db.serialize_into_vec()));
+                    self.upsert_kv(db_name, &MatchSeq::Any, &Some(db.serialize_into_vec()))
+                        .await?;
                     let table_key: &String = &[TBL_PREFIX, &table.table_id.to_string()].join("");
-                    let (prev, result) = self.upsert_kv(
-                        table_key,
-                        &MatchSeq::Any,
-                        &Some(table.serialize_into_vec()),
-                    );
+                    let (prev, result) = self
+                        .upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()))
+                        .await?;
                     let de_table = |r: Option<SeqValue>| -> Option<Table> {
                         if let Some(r) = r {
                             Table::deserialize_from_vec(&r.1)
@@ -492,11 +493,12 @@ impl StateMachine {
                 if let Some(tbl_id) = tbl_id {
                     let tbl_id = tbl_id.to_owned();
                     db.tables.remove(table_name);
-                    self.upsert_kv(db_name, &MatchSeq::Any, &Some(db.serialize_into_vec()));
+                    self.upsert_kv(db_name, &MatchSeq::Any, &Some(db.serialize_into_vec()))
+                        .await?;
                     let table_key: &String = &[TBL_PREFIX, &tbl_id.to_string()].join("");
-                    let (prev, result) = self.upsert_kv(table_key, &MatchSeq::Any, &None);
+                    let (prev, result) = self.upsert_kv(table_key, &MatchSeq::Any, &None).await?;
 
-                    self.remove_table_data_parts(db_name, table_name);
+                    self.remove_table_data_parts(db_name, table_name).await;
 
                     let de_table = |r: Option<SeqValue>| -> Option<Table> {
                         if let Some(r) = r {
@@ -519,37 +521,41 @@ impl StateMachine {
                 ref seq,
                 ref value,
             } => {
-                let (prev, result) = self.upsert_kv(key, seq, value);
+                let (prev, result) = self.upsert_kv(key, seq, value).await?;
                 Ok((prev, result).into())
             }
         }
     }
 
-    pub fn upsert_kv(
+    pub async fn upsert_kv(
         &mut self,
         key: &str,
         seq: &MatchSeq,
         value: &Option<Vec<u8>>,
-    ) -> (Option<SeqValue>, Option<SeqValue>) {
-        let prev = self.kv.get(key).cloned();
+    ) -> common_exception::Result<(Option<SeqValue>, Option<SeqValue>)> {
+        let kvs = self.kvs();
+
+        let k = &key.to_string();
+        let prev = kvs.get(k)?;
         if seq.match_seq(&prev).is_err() {
-            return (prev.clone(), prev);
+            return Ok((prev.clone(), prev));
         }
 
         let record_value = if let Some(v) = value {
             let new_seq = self.incr_seq(SEQ_GENERIC_KV);
+
             let record_value = (new_seq, v.clone());
-            self.kv.insert(key.to_string(), record_value.clone());
+            kvs.insert(k, &record_value).await?;
 
             Some(record_value)
         } else {
-            self.kv.remove(key);
+            kvs.remove(k, true).await?;
 
             None
         };
 
         tracing::debug!("applied UpsertKV: {} {:?}", key, record_value);
-        (prev, record_value)
+        Ok((prev, record_value))
     }
 
     /// Initialize slots by assign nodes to everyone of them randomly, according to replicationn config.
@@ -585,7 +591,7 @@ impl StateMachine {
     }
 
     fn list_node_ids(&self) -> Vec<NodeId> {
-        let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
+        let sm_nodes = self.nodes();
         sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
@@ -600,7 +606,7 @@ impl StateMachine {
     pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // TODO(xp): handle error
 
-        let sm_nodes = self.sm_tree.key_space::<sled_key_space::Nodes>();
+        let sm_nodes = self.nodes();
         sm_nodes.get(node_id).expect("fail to get node")
     }
 
@@ -633,7 +639,11 @@ impl StateMachine {
     }
 
     pub fn get_database_meta_ver(&self) -> Option<u64> {
-        self.sequences.get(SEQ_DATABASE_META_ID).cloned()
+        self.sequences
+            .lock()
+            .unwrap()
+            .get(SEQ_DATABASE_META_ID)
+            .cloned()
     }
 
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
@@ -663,8 +673,9 @@ impl StateMachine {
     }
 
     pub fn get_kv(&self, key: &str) -> Option<SeqValue> {
-        let x = self.kv.get(key);
-        x.cloned()
+        // TODO(xp) refine get(): a &str is enough for key
+        // TODO(xp): handle error
+        self.kvs().get(&key.to_string()).unwrap()
     }
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
@@ -684,7 +695,7 @@ impl StateMachine {
         None
     }
 
-    pub fn append_data_parts(
+    pub async fn append_data_parts(
         &mut self,
         db_name: &str,
         table_name: &str,
@@ -714,7 +725,9 @@ impl StateMachine {
                     let mut table = self.get_table(table_id).unwrap();
                     table.parts.insert(part.part.name.clone());
                     let table_key: &String = &[TBL_PREFIX, &table_id.to_string()].join("");
-                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()));
+                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()))
+                        .await
+                        .unwrap();
                     // These comments are intentionally left here.
                     // As rustc not smart enough, it says:
                     // for part in part_infos {
@@ -747,7 +760,7 @@ impl StateMachine {
         }
     }
 
-    pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
+    pub async fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
         let db_name = if db_name.starts_with(DB_PREFIX) {
             db_name.to_string()
         } else {
@@ -762,14 +775,16 @@ impl StateMachine {
                 if let Some(mut table) = table {
                     table.parts.clear();
                     let table_key: &String = &[TBL_PREFIX, &table_id.to_string()].join("");
-                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()));
+                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()))
+                        .await
+                        .unwrap();
                     self.table_parts.remove(table_id);
                 }
             }
         }
     }
 
-    pub fn remove_db_data_parts(&mut self, db_name: &str) {
+    pub async fn remove_db_data_parts(&mut self, db_name: &str) {
         let db_name = if db_name.starts_with(DB_PREFIX) {
             db_name.to_string()
         } else {
@@ -783,7 +798,9 @@ impl StateMachine {
                 if let Some(mut table) = table {
                     table.parts.clear();
                     let table_key: &String = &[TBL_PREFIX, &table_id.to_string()].join("");
-                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()));
+                    self.upsert_kv(table_key, &MatchSeq::Any, &Some(table.serialize_into_vec()))
+                        .await
+                        .unwrap();
                     self.table_parts.remove(table_id);
                 }
             }
@@ -791,17 +808,43 @@ impl StateMachine {
     }
 
     pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {
+        // TODO(xp): handle error
+        let kvs = self.kvs();
         keys.iter()
-            .map(|key| self.kv.get(key.as_ref()).cloned())
+            .map(|key| kvs.get(&key.as_ref().to_string()).unwrap())
             .collect()
     }
 
     pub fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
-        self.kv
-            .range(prefix.to_string()..)
-            .take_while(|(k, _)| k.starts_with(prefix))
-            .map(|v| (v.0.clone(), v.1.clone()))
-            .collect()
+        let kvs = self.kvs();
+        // TODO(xp): handle error
+        let kv_pairs = kvs.range(prefix.to_string()..).unwrap();
+
+        let x = kv_pairs
+            .into_iter()
+            .take_while(|(k, _)| k.starts_with(prefix));
+
+        x.collect()
+    }
+}
+
+/// Key space support
+impl StateMachine {
+    pub fn sm_meta(&self) -> AsKeySpace<StateMachineMeta> {
+        self.sm_tree.key_space()
+    }
+    pub fn nodes(&self) -> AsKeySpace<sled_key_space::Nodes> {
+        self.sm_tree.key_space()
+    }
+    pub fn files(&self) -> AsKeySpace<sled_key_space::Files> {
+        self.sm_tree.key_space()
+    }
+
+    /// A kv store of all other general purpose information.
+    /// The value is tuple of a monotonic sequence number and userdata value in string.
+    /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
+    pub fn kvs(&self) -> AsKeySpace<sled_key_space::GenericKV> {
+        self.sm_tree.key_space()
     }
 }
 

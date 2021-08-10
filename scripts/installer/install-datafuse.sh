@@ -522,7 +522,7 @@ http_copy() {
 set_name_url() {
   local _arch=$1;
   local _version=$2; shift
-  NAME=datafuse--${_arch}.tar.gz
+  NAME=datafuse-${_version}-${_arch}.tar.gz
   TARBALL=${NAME}
   TARBALL_URL=${GITHUB_DOWNLOAD}/${_version}/${TARBALL}
   echo "$TARBALL_URL"
