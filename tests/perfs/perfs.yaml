@@ -17,7 +17,7 @@ perfs:
 
   - name: Aggregation sum
     query: SELECT sum(number) from numbers_mt(100000000)
-   
+
   - name: Aggregation sum modulo
     query: SELECT sum(number % 3) from numbers_mt(100000000)
 
@@ -31,15 +31,15 @@ perfs:
     query: SELECT max(number) as max,sum(number) as sum FROM numbers_mt(10000000) GROUP BY number % 3, number % 4, number % 5 ORDER BY max
 
   - name: Filter Eq
-    query: SELECT cout() FROM numbers_mt(100000000) where number = 10000
+    query: SELECT count() FROM numbers_mt(100000000) where number = 10000
 
   - name: Filter Neq
-    query: SELECT cout() FROM numbers_mt(100000000) where number != 10000
+    query: SELECT count() FROM numbers_mt(100000000) where number != 10000
 
   - name: Filter Gt
-    query: SELECT cout() FROM numbers_mt(100000000) where number > 10000
+    query: SELECT count() FROM numbers_mt(100000000) where number > 10000
 
   - name: Filter GtLt
-    query: SELECT cout() FROM numbers_mt(100000000) where number > 10000 and number <= 100000000
+    query: SELECT count() FROM numbers_mt(100000000) where number > 10000 and number <= 100000000
 
 

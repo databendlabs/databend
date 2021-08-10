@@ -143,7 +143,7 @@ impl Processor for GroupByPartialTransform {
                     let mut groups = groups_locker.write();
                     {
                         for (row, group_key) in group_keys.iter().enumerate() {
-                            match groups.get_mut(group_key) {
+                            match groups.get(group_key) {
                                 // New group.
                                 None => {
                                     let mut places = Vec::with_capacity(aggr_cols.len());
