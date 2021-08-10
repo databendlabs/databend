@@ -2,7 +2,11 @@ name: Push to Dockerhub
 on:
   push:
     branches: master
-
+    paths:
+      - '**.rs'
+      - '**.yaml'
+      - '**.py'
+      - '**Dockerfile'
 jobs:
   build:
     runs-on: ubuntu-latest
