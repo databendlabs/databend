@@ -17,7 +17,7 @@ async fn test_parquet_table() -> Result<()> {
     let options: TableOptions = [(
         "location".to_string(),
         env::current_dir()?
-            .join("../../tests/data/alltypes_plain.parquet")
+            .join("../tests/data/alltypes_plain.parquet")
             .display()
             .to_string(),
     )]

@@ -18,7 +18,7 @@ async fn test_csv_table() -> Result<()> {
     let options: TableOptions = [(
         "location".to_string(),
         env::current_dir()?
-            .join("../../tests/data/sample.csv")
+            .join("../tests/data/sample.csv")
             .display()
             .to_string(),
     )]
@@ -87,7 +87,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
     let options: TableOptions = [(
         "location".to_string(),
         env::current_dir()?
-            .join("../../tests/data/sample.csv")
+            .join("../tests/data/sample.csv")
             .display()
             .to_string(),
     )]

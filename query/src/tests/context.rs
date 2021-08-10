@@ -23,7 +23,7 @@ pub fn try_create_context_with_conf(mut config: Config) -> Result<FuseQueryConte
 
     // Setup log dir to the tests directory.
     config.log_dir = env::current_dir()?
-        .join("../../tests/data/logs")
+        .join("../tests/data/logs")
         .display()
         .to_string();
 

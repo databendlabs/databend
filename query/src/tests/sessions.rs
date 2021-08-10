@@ -17,7 +17,7 @@ pub fn try_create_sessions() -> Result<SessionManagerRef> {
 
     // Setup log dir to the tests directory.
     config.log_dir = env::current_dir()?
-        .join("../../tests/data/logs")
+        .join("../tests/data/logs")
         .display()
         .to_string();
 

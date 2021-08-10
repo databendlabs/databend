@@ -78,7 +78,7 @@ fn test_lines_count() -> Result<()> {
     use crate::datasources::Common;
 
     let file = env::current_dir()?
-        .join("../../tests/data/sample.csv")
+        .join("../tests/data/sample.csv")
         .display()
         .to_string();
 
