@@ -193,13 +193,13 @@ where
         match (rhs.len(), dtype) {
             // TODO(sundy): add more specific cases
             // TODO(sundy): fastmod https://lemire.me/blog/2019/02/08/faster-remainders-when-the-divisor-is-a-constant-beating-compilers-and-libdivide/
-            (1111, DataType::UInt8) => {
+            (1, DataType::UInt8) => {
                 let opt_rhs = rhs.get(0);
                 match opt_rhs {
                     None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
                     Some(rhs) => {
-                        let array: DFUInt8Array =
-                            self.apply_cast_numeric(|a| AsPrimitive::<u8>::as_(a % rhs));
+                        let array: DFUInt8Array = self
+                            .apply_cast_numeric(|a| AsPrimitive::<u8>::as_(a - (a / rhs) * rhs));
                         Ok(array.into_series())
                     }
                 }
