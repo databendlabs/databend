@@ -127,6 +127,30 @@ impl SledTree {
         Ok(Some((key, value)))
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove<KV>(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        KV: SledKeySpace,
+    {
+        let removed = self
+            .tree
+            .remove(KV::serialize_key(key)?)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || format!("removed: {}", key,))?;
+
+        self.flush_async(flush).await?;
+
+        let removed = match removed {
+            Some(x) => Some(KV::deserialize_value(x)?),
+            None => None,
+        };
+
+        Ok(removed)
+    }
+
     /// Delete kvs that are in `range`.
     #[tracing::instrument(level = "debug", skip(self, range))]
     pub async fn range_delete<KV, R>(&self, range: R, flush: bool) -> common_exception::Result<()>
@@ -188,6 +212,31 @@ impl SledTree {
 
             let key = KV::deserialize_key(k)?;
             res.push(key);
+        }
+
+        Ok(res)
+    }
+
+    /// Get key-valuess in `range`
+    pub fn range<KV, R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where
+        KV: SledKeySpace,
+        R: RangeBounds<KV::K>,
+    {
+        let mut res = vec![];
+
+        let range_mes = self.range_message::<KV, _>(&range);
+
+        // Convert K range into sled::IVec range
+        let range = KV::serialize_range(&range)?;
+        for item in self.tree.range(range) {
+            let (k, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("range_get: {}", range_mes,)
+            })?;
+
+            let key = KV::deserialize_key(k)?;
+            let value = KV::deserialize_value(v)?;
+            res.push((key, value));
         }
 
         Ok(res)
@@ -349,6 +398,17 @@ impl SledTree {
             range.end_bound()
         )
     }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn flush_async(&self, flush: bool) -> common_exception::Result<()> {
+        if flush && self.sync {
+            self.tree
+                .flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush sled-tree")?;
+        }
+        Ok(())
+    }
 }
 
 /// It borrows the internal SledTree with access limited to a specified namespace `KV`.
@@ -370,6 +430,14 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.last::<KV>()
     }
 
+    pub async fn remove(
+        &self,
+        key: &KV::K,
+        flush: bool,
+    ) -> common_exception::Result<Option<KV::V>> {
+        self.inner.remove::<KV>(key, flush).await
+    }
+
     pub async fn range_delete<R>(&self, range: R, flush: bool) -> common_exception::Result<()>
     where R: RangeBounds<KV::K> {
         self.inner.range_delete::<KV, R>(range, flush).await
@@ -378,6 +446,11 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<KV::K>>
     where R: RangeBounds<KV::K> {
         self.inner.range_keys::<KV, R>(range)
+    }
+
+    pub fn range<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where R: RangeBounds<KV::K> {
+        self.inner.range::<KV, R>(range)
     }
 
     pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>

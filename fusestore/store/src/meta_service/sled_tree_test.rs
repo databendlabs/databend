@@ -218,6 +218,37 @@ async fn test_sledtree_range_keys() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sledtree_range() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 9 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 10 },
+            payload: EntryPayload::Blank,
+        },
+    ];
+
+    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+
+    let got = tree.range::<sled_key_space::Logs, _>(9..11)?;
+    assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone())], got);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_insert() -> anyhow::Result<()> {
     init_store_unittest();
 
@@ -363,8 +394,8 @@ async fn test_sledtree_get() -> anyhow::Result<()> {
 async fn test_sledtree_last() -> anyhow::Result<()> {
     init_store_unittest();
 
-    /// This test assumes the following order.
-    /// To ensure a last() does not returns item from another key space with smaller prefix
+    // This test assumes the following order.
+    // To ensure a last() does not returns item from another key space with smaller prefix
     assert!(sled_key_space::Logs::PREFIX < StateMachineMeta::PREFIX);
 
     let tc = new_sled_test_context();
@@ -412,6 +443,43 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
         Some((Initialized, StateMachineMetaValue::Bool(true))),
         tree.last::<StateMachineMeta>()?
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sledtree_delete() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 9 },
+            payload: EntryPayload::Blank,
+        },
+    ];
+
+    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+
+    let deleted = tree.remove::<sled_key_space::Logs>(&0, false).await?;
+    assert_eq!(None, deleted);
+    assert_eq!(logs[..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+
+    // delete other key space
+    let deleted = tree.remove::<sled_key_space::Nodes>(&0, false).await?;
+    assert_eq!(None, deleted);
+    assert_eq!(logs[..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
+
+    let deleted = tree.remove::<sled_key_space::Logs>(&2, false).await?;
+    assert_eq!(Some(logs[0].clone()), deleted);
+    assert_eq!(logs[1..], tree.range_get::<sled_key_space::Logs, _>(0..)?);
 
     Ok(())
 }
@@ -738,6 +806,38 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_as_range() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sled_key_space::Logs>();
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 9 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 10 },
+            payload: EntryPayload::Blank,
+        },
+    ];
+
+    log_tree.append_values(&logs).await?;
+
+    let got = log_tree.range(9..)?;
+    assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone()),], got);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_insert() -> anyhow::Result<()> {
     init_store_unittest();
 
@@ -909,6 +1009,39 @@ async fn test_as_last() -> anyhow::Result<()> {
 
     log_tree.append_values(&logs).await?;
     assert_eq!(Some((4, logs[1].clone())), log_tree.last()?);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_as_delete() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sled_key_space::Logs>();
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 9 },
+            payload: EntryPayload::Blank,
+        },
+    ];
+
+    log_tree.append_values(&logs).await?;
+
+    let deleted = log_tree.remove(&0, false).await?;
+    assert_eq!(None, deleted);
+    assert_eq!(logs[..], log_tree.range_get(0..)?);
+
+    let deleted = log_tree.remove(&2, false).await?;
+    assert_eq!(Some(logs[0].clone()), deleted);
+    assert_eq!(logs[1..], log_tree.range_get(0..)?);
 
     Ok(())
 }
