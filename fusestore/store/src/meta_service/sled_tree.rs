@@ -217,6 +217,31 @@ impl SledTree {
         Ok(res)
     }
 
+    /// Get key-valuess in `range`
+    pub fn range<KV, R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where
+        KV: SledKeySpace,
+        R: RangeBounds<KV::K>,
+    {
+        let mut res = vec![];
+
+        let range_mes = self.range_message::<KV, _>(&range);
+
+        // Convert K range into sled::IVec range
+        let range = KV::serialize_range(&range)?;
+        for item in self.tree.range(range) {
+            let (k, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("range_get: {}", range_mes,)
+            })?;
+
+            let key = KV::deserialize_key(k)?;
+            let value = KV::deserialize_value(v)?;
+            res.push((key, value));
+        }
+
+        Ok(res)
+    }
+
     /// Get values of key in `range`
     pub fn range_get<KV, R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
     where
@@ -421,6 +446,11 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<KV::K>>
     where R: RangeBounds<KV::K> {
         self.inner.range_keys::<KV, R>(range)
+    }
+
+    pub fn range<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where R: RangeBounds<KV::K> {
+        self.inner.range::<KV, R>(range)
     }
 
     pub fn range_get<R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>

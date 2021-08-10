@@ -218,6 +218,37 @@ async fn test_sledtree_range_keys() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sledtree_range() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 9 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 10 },
+            payload: EntryPayload::Blank,
+        },
+    ];
+
+    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+
+    let got = tree.range::<sled_key_space::Logs, _>(9..11)?;
+    assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone())], got);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_insert() -> anyhow::Result<()> {
     init_store_unittest();
 
@@ -770,6 +801,38 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 
     let got = log_tree.range_keys(11..)?;
     assert_eq!(Vec::<LogIndex>::new(), got);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_as_range() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let log_tree = tree.key_space::<sled_key_space::Logs>();
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 9 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 1, index: 10 },
+            payload: EntryPayload::Blank,
+        },
+    ];
+
+    log_tree.append_values(&logs).await?;
+
+    let got = log_tree.range(9..)?;
+    assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone()),], got);
 
     Ok(())
 }
