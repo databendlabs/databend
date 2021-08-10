@@ -43,10 +43,8 @@ impl ProcessesTable {
     }
 
     fn process_host(process_info: &ProcessInfo) -> Option<String> {
-        match process_info.client_address {
-            None => None,
-            Some(socket_address) => Some(socket_address.to_string())
-        }
+        let client_address = process_info.client_address;
+        client_address.as_ref().map(ToString::to_string)
     }
 
     fn process_extra_info(process_info: &ProcessInfo) -> Option<String> {

@@ -54,18 +54,17 @@ impl Session {
     }
 
     fn rpc_extra_info(status: &MutableStatus) -> Option<String> {
-        match status.context_shared.as_ref() {
-            None => None,
-            Some(_) => Some(String::from("Partial cluster query stage")),
-        }
+        let context_shared = status.context_shared.as_ref();
+        context_shared.map(|_| String::from("Partial cluster query stage"))
     }
 
     fn query_extra_info(status: &MutableStatus) -> Option<String> {
-        status.context_shared.as_ref().and_then(|context_shared| context_shared
-            .running_query
-            .read()
-            .as_ref()
-            .map(Clone::clone)
-        )
+        status.context_shared.as_ref().and_then(|context_shared| {
+            context_shared
+                .running_query
+                .read()
+                .as_ref()
+                .map(Clone::clone)
+        })
     }
 }

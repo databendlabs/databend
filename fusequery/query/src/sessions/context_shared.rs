@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_planners::PlanNode;
 use common_progress::Progress;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
@@ -17,7 +18,6 @@ use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;
 use crate::sessions::Session;
 use crate::sessions::Settings;
-use common_planners::PlanNode;
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
