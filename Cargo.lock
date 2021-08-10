@@ -3738,7 +3738,7 @@ dependencies = [
  "nix 0.20.0",
  "parking_lot",
  "prost 0.8.0",
- "prost-build 0.8.0",
+ "prost-build",
  "prost-derive 0.8.0",
  "symbolic-demangle",
  "tempfile",
@@ -3859,24 +3859,6 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32d3ebd75ac2679c2af3a92246639f9fcc8a442ee420719cc4fe195b98dd5fa3"
-dependencies = [
- "bytes",
- "heck",
- "itertools 0.9.0",
- "log",
- "multimap",
- "petgraph",
- "prost 0.7.0",
- "prost-types 0.7.0",
- "tempfile",
- "which 4.2.2",
-]
-
-[[package]]
-name = "prost-build"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "355f634b43cdd80724ee7848f95770e7e70eefa6dcf14fea676216573b8fd603"
@@ -3888,7 +3870,7 @@ dependencies = [
  "multimap",
  "petgraph",
  "prost 0.8.0",
- "prost-types 0.8.0",
+ "prost-types",
  "tempfile",
  "which 4.2.2",
 ]
@@ -3917,16 +3899,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "prost-types"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b518d7cdd93dab1d1122cf07fa9a60771836c668dde9d9e2a139f957f0d9f1bb"
-dependencies = [
- "bytes",
- "prost 0.7.0",
 ]
 
 [[package]]
@@ -5366,12 +5338,12 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.4.2"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c695de27302f4697191dda1c7178131a8cb805463dda02864acb80fe1322fdcf"
+checksum = "12b52d07035516c2b74337d2ac7746075e7dcae7643816c1b12c5ff8a7484c08"
 dependencies = [
  "proc-macro2",
- "prost-build 0.7.0",
+ "prost-build",
  "quote",
  "syn",
 ]

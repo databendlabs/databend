@@ -75,4 +75,4 @@ maplit = "1.0.2"
 
 [build-dependencies]
 common-building = {path = "../../common/building"}
-tonic-build = "0.4"
+tonic-build = "0.5"

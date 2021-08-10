@@ -41,4 +41,4 @@ async-trait = "0.1"
 pretty_assertions = "0.7"
 
 [build-dependencies]
-tonic-build = "0.4"
+tonic-build = "0.5"
