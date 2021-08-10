@@ -53,15 +53,13 @@ impl SessionManager {
 
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.max_active_sessions as usize;
-        let remote_factory = RemoteFactory::new(&conf);
-        let store_client_provider = remote_factory.store_client_provider();
-        let cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
-            store_client_provider,
+        let meta_store_cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
+            RemoteFactory::new(&conf).store_client_provider(),
         )));
         Ok(Arc::new(SessionManager {
             datasource: Arc::new(DatabaseCatalog::try_create_with_config(
                 conf.disable_remote_catalog,
-                cli,
+                meta_store_cli,
             )?),
             conf,
             cluster,
