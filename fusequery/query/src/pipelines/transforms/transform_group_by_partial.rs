@@ -12,7 +12,6 @@ use std::time::Instant;
 use bumpalo::Bump;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
-use byteorder::ReadBytesExt;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
@@ -283,22 +282,22 @@ impl_hash_word!(u64);
 
 fn write(mut hash: u64, mut bytes: &[u8]) -> u64 {
     while bytes.len() >= 8 {
-        hash.hash_word(u64::from(LittleEndian::read_u64(bytes)));
+        hash.hash_word(LittleEndian::read_u64(bytes) as u64);
         bytes = &bytes[8..];
     }
 
     if bytes.len() >= 4 {
-        hash.hash_word(u64::from(LittleEndian::read_u32(bytes)));
+        hash.hash_word(LittleEndian::read_u32(bytes) as u64);
         bytes = &bytes[4..];
     }
 
     if bytes.len() >= 2 {
-        hash.hash_word(u64::from(LittleEndian::read_u16(bytes)));
+        hash.hash_word(LittleEndian::read_u16(bytes) as u64);
         bytes = &bytes[2..];
     }
 
     if let Some(&byte) = bytes.first() {
-        hash.hash_word(u64::from(byte));
+        hash.hash_word(byte as u64);
     }
 
     hash
