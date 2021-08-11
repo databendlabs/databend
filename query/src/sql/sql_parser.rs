@@ -359,11 +359,11 @@ impl<'a> DfParser<'a> {
 
     /// Drop database.
     fn parse_drop_database(&mut self) -> Result<DfStatement, ParserError> {
-        let if_not_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let db_name = self.parser.parse_object_name()?;
 
         let drop = DfDropDatabase {
-            if_exists: if_not_exists,
+            if_exists,
             name: db_name,
         };
 
@@ -372,11 +372,11 @@ impl<'a> DfParser<'a> {
 
     /// Drop table.
     fn parse_drop_table(&mut self) -> Result<DfStatement, ParserError> {
-        let if_not_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
         let drop = DfDropTable {
-            if_exists: if_not_exists,
+            if_exists,
             name: table_name,
         };
 
