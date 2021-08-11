@@ -2,6 +2,7 @@ HUB ?= datafuselabs
 TAG ?= latest
 PLATFORM ?= linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
 VERSION ?= latest
+
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -63,9 +64,11 @@ build-perf-tool:
 
 perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
+
 run-helm:
 	helm upgrade --install datafuse ./deploy/charts/datafuse \
 		--set image.repository=${HUB}/datafuse-query --set image.tag=${TAG} --set configs.mysqlPort=3308
+
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
 
@@ -79,4 +82,5 @@ cli-e2e:
 	cargo build --bin datafuse-cli --out-dir cli/e2e -Z unstable-options
 	pip install absl-py asynctest
 	(cd ./cli/e2e && python3 e2e.py)
+
 .PHONY: setup test run build fmt lint docker clean
