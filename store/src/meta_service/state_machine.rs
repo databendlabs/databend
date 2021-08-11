@@ -735,14 +735,15 @@ impl StateMachine {
     pub fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue<KVValue>)> {
         let kvs = self.kvs();
         // TODO(xp): handle error
-        let kv_pairs = kvs.range(prefix.to_string()..).unwrap();
+        let kv_pairs = kvs.scan_prefix(&prefix.to_string()).unwrap();
 
-        let x = kv_pairs
-            .into_iter()
-            .take_while(|(k, _)| k.starts_with(prefix));
+        let x = kv_pairs.into_iter();
 
+        // Convert expired to None
         let x = x.map(|(k, v)| (k, Self::unexpired(v)));
+        // Remove None
         let x = x.filter(|(_k, v)| v.is_some());
+        // Extract from an Option
         let x = x.map(|(k, v)| (k, v.unwrap()));
 
         x.collect()
@@ -792,9 +793,12 @@ impl StateMachine {
     pub fn sm_meta(&self) -> AsKeySpace<StateMachineMeta> {
         self.sm_tree.key_space()
     }
+
     pub fn nodes(&self) -> AsKeySpace<sled_key_space::Nodes> {
         self.sm_tree.key_space()
     }
+
+    /// The file names stored in this cluster
     pub fn files(&self) -> AsKeySpace<sled_key_space::Files> {
         self.sm_tree.key_space()
     }
