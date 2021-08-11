@@ -664,13 +664,14 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "4.0.1"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92e0356b571da8e3d6ff2fe5de9be56e379c6bf22d91ffc86c2fcab35e54701f"
+checksum = "e1e894abc9bc1e88122c9580c84cfaedcb7f34e83682f2c65a7c003da2b20f1a"
 dependencies = [
  "crossterm",
  "strum",
  "strum_macros",
+ "unicode-width",
 ]
 
 [[package]]
@@ -728,6 +729,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "strength_reduce",
  "unsafe_unwrap",
 ]
 
@@ -1276,11 +1278,11 @@ dependencies = [
 
 [[package]]
 name = "ctrlc"
-version = "3.1.9"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "232295399409a8b7ae41276757b5a1cc21032848d42bff2352261f958b3ca29a"
+checksum = "377c9b002a72a0b2c1a18c62e2f3864bdfea4a015e3683a96e24aa45dd6c02d1"
 dependencies = [
- "nix 0.20.0",
+ "nix 0.22.0",
  "winapi",
 ]
 
@@ -1327,6 +1329,125 @@ dependencies = [
 ]
 
 [[package]]
+name = "datafuse-query"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.7.4",
+ "async-trait",
+ "bumpalo",
+ "byteorder",
+ "clickhouse-rs",
+ "clickhouse-srv",
+ "common-allocators",
+ "common-arrow",
+ "common-building",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-flights",
+ "common-functions",
+ "common-infallible",
+ "common-io",
+ "common-management",
+ "common-metatypes",
+ "common-planners",
+ "common-profling",
+ "common-progress",
+ "common-runtime",
+ "common-store-api",
+ "common-streams",
+ "common-tracing",
+ "criterion",
+ "crossbeam 0.8.1",
+ "crossbeam-queue 0.3.2",
+ "ctrlc",
+ "env_logger 0.9.0",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "log",
+ "lru",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "msql-srv",
+ "mysql",
+ "nom 7.0.0-alpha2",
+ "num",
+ "num_cpus",
+ "paste",
+ "pnet",
+ "pretty_assertions",
+ "prost 0.7.0",
+ "quantiles",
+ "rand 0.8.4",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "structopt",
+ "structopt-toml",
+ "threadpool",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "uuid",
+ "walkdir",
+ "warp",
+]
+
+[[package]]
+name = "datafuse-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "byteorder",
+ "common-arrow",
+ "common-building",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-flights",
+ "common-functions",
+ "common-infallible",
+ "common-metatypes",
+ "common-planners",
+ "common-profling",
+ "common-runtime",
+ "common-tracing",
+ "env_logger 0.9.0",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "log",
+ "maplit",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "num",
+ "num_cpus",
+ "paste",
+ "pretty_assertions",
+ "prost 0.7.0",
+ "rand 0.8.4",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sled",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+ "test-env-log",
+ "thiserror",
+ "threadpool",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "warp",
+]
+
+[[package]]
 name = "debugid"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1337,9 +1458,9 @@ dependencies = [
 
 [[package]]
 name = "der"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49f215f706081a44cb702c71c39a52c05da637822e9c1645a50b7202689e982d"
+checksum = "31e21d2d0f22cde6e88694108429775c0219760a07779bf96503b434a03d7412"
 dependencies = [
  "const-oid",
  "crypto-bigint",
@@ -1616,9 +1737,9 @@ dependencies = [
 
 [[package]]
 name = "filetime"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d34cfa13a63ae058bfa601fe9e313bbdb3746427c1459185464ce0fcf62e1e8"
+checksum = "975ccf83d8d9d0d84682850a38c8169027be83368805971cc4f238c2b245bc98"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
@@ -1799,124 +1920,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1847abb9cb65d566acd5942e94aea9c8f547ad02c98e1649326fc0e8910b8b1e"
 
 [[package]]
-name = "fuse-query"
-version = "0.1.0"
-dependencies = [
- "ahash 0.7.4",
- "async-trait",
- "bumpalo",
- "clickhouse-rs",
- "clickhouse-srv",
- "common-allocators",
- "common-arrow",
- "common-building",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-flights",
- "common-functions",
- "common-infallible",
- "common-io",
- "common-management",
- "common-metatypes",
- "common-planners",
- "common-profling",
- "common-progress",
- "common-runtime",
- "common-store-api",
- "common-streams",
- "common-tracing",
- "criterion",
- "crossbeam 0.8.1",
- "crossbeam-queue 0.3.2",
- "ctrlc",
- "env_logger 0.9.0",
- "futures",
- "indexmap",
- "lazy_static",
- "log",
- "lru",
- "metrics",
- "metrics-exporter-prometheus",
- "msql-srv",
- "mysql",
- "nom 7.0.0-alpha2",
- "num",
- "num_cpus",
- "paste",
- "pnet",
- "pretty_assertions",
- "prost 0.7.0",
- "quantiles",
- "rand 0.8.4",
- "reqwest",
- "serde",
- "serde_json",
- "sqlparser",
- "structopt",
- "structopt-toml",
- "threadpool",
- "tokio-stream",
- "toml",
- "tonic",
- "uuid",
- "walkdir",
- "warp",
-]
-
-[[package]]
-name = "fuse-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-raft",
- "async-trait",
- "byteorder",
- "common-arrow",
- "common-building",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-flights",
- "common-functions",
- "common-infallible",
- "common-metatypes",
- "common-planners",
- "common-profling",
- "common-runtime",
- "common-tracing",
- "env_logger 0.9.0",
- "futures",
- "indexmap",
- "lazy_static",
- "log",
- "maplit",
- "metrics",
- "metrics-exporter-prometheus",
- "num",
- "num_cpus",
- "paste",
- "pretty_assertions",
- "prost 0.7.0",
- "rand 0.8.4",
- "serde",
- "serde_json",
- "sha2",
- "sled",
- "structopt",
- "structopt-toml",
- "tempfile",
- "test-env-log",
- "thiserror",
- "threadpool",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "uuid",
- "warp",
-]
-
-[[package]]
 name = "futures"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2014,7 +2017,7 @@ dependencies = [
 name = "fuzz"
 version = "0.1.0"
 dependencies = [
- "fuse-query",
+ "datafuse-query",
  "honggfuzz",
 ]
 
@@ -2260,9 +2263,9 @@ dependencies = [
 
 [[package]]
 name = "http-body"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60daa14be0e0786db0f03a9e57cb404c9d756eed2b6c62b9ea98ec5743ec75a9"
+checksum = "399c583b2979440c60be0821a6199eca73bc3c8dcd9d070d75ac726e2c6186e5"
 dependencies = [
  "bytes",
  "http",
@@ -2589,9 +2592,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.98"
+version = "0.2.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320cfe77175da3a483efed4bc0adc1968ca050b098ce4f2f1c13a56626128790"
+checksum = "a7f823d141fe0a24df1e23b4af4e3c7ba9e5966ec514ea068c93024aa7deb765"
 
 [[package]]
 name = "libgit2-sys"
@@ -3046,9 +3049,9 @@ dependencies = [
 
 [[package]]
 name = "native-tls"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8d96b2e1c8da3957d58100b09f102c6d9cfdfced01b7ec5a8974044bb09dbd4"
+checksum = "48ba9f7719b5a0f42f338907614285fb5fd70e53858141f69898a1fb7203b24d"
 dependencies = [
  "lazy_static",
  "libc",
@@ -3088,6 +3091,19 @@ name = "nix"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3728fec49d363a50a8828a190b379a446cc5cf085c06259bbbeb34447e4ec7"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 1.0.0",
+ "libc",
+ "memoffset 0.6.4",
+]
+
+[[package]]
+name = "nix"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf1e25ee6b412c2a1e3fcb6a4499a5c1bfe7f43e014bdce9a6b6666e5aa2d187"
 dependencies = [
  "bitflags",
  "cc",
@@ -4858,6 +4874,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "303235c177994a476226b80d076bd333b7b560fb05bd242a10609d11b07f81f5"
 
 [[package]]
+name = "strength_reduce"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ff2f71c82567c565ba4b3009a9350a96a7269eaa4001ebedae926230bc2254"
+
+[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5032,9 +5054,9 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "tar"
-version = "0.4.35"
+version = "0.4.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d779dc6aeff029314570f666ec83f19df7280bb36ef338442cfa8c604021b80"
+checksum = "8190d9cdacf6ee1b080605fd719b58d80a9fcbcea64db6744b26f743da02e447"
 dependencies = [
  "filetime",
  "libc",

@@ -6,7 +6,7 @@ jobs:
   build-current:
     name: Build current datafuse image
     if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
-    runs-on: perf-runner
+    runs-on: perf-test
     env:
       GITHUB_TOKEN: ${{ github.token }}
       GITHUB_ORG: datafuselabs
@@ -41,18 +41,18 @@ jobs:
           ref: ${{ env.SHA }}
       - name: build all binary
         if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
-        id: make_debug
+        id: make_release
         run: |
           # enable sccache
           sccache --start-server
           echo $HOME
           export SCCACHE_DIR=/home/runner/.cache/sccache
           export RUSTC_WRAPPER=sccache
-          cargo build --bin=fuse-query --bin=fuse-store --target x86_64-unknown-linux-gnu
+          cargo build --bin=datafuse-query --bin=datafuse-store --target x86_64-unknown-linux-gnu --release
           mkdir -p distro
           sccache --show-stats
-          mv target/x86_64-unknown-linux-gnu/debug/fuse-query ./distro/fuse-query
-          mv target/x86_64-unknown-linux-gnu/debug/fuse-store ./distro/fuse-store
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-query ./distro/datafuse-query
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-store ./distro/datafuse-store
           mv docker/bootstrap.sh ./distro/bootstrap.sh
       - name: Set up QEMU
         if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
@@ -104,7 +104,7 @@ jobs:
   build-release:
     name: Build reference datafuse image
     if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
-    runs-on: perf-runner
+    runs-on: perf-test
     env:
       GITHUB_TOKEN: ${{ github.token }}
       GITHUB_ORG: datafuselabs
@@ -145,11 +145,11 @@ jobs:
           echo $HOME
           export SCCACHE_DIR=/home/runner/.cache/sccache
           export RUSTC_WRAPPER=sccache
-          cargo build --bin=fuse-query --bin=fuse-store --target x86_64-unknown-linux-gnu
+          cargo build --bin=datafuse-query --bin=datafuse-store --target x86_64-unknown-linux-gnu --release
           mkdir -p distro
           sccache --show-stats
-          mv target/x86_64-unknown-linux-gnu/debug/fuse-query ./distro/fuse-query
-          mv target/x86_64-unknown-linux-gnu/debug/fuse-store ./distro/fuse-store
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-query ./distro/datafuse-query
+          mv target/x86_64-unknown-linux-gnu/release/datafuse-store ./distro/datafuse-store
           mv docker/bootstrap.sh ./distro/bootstrap.sh
       - name: Set up QEMU
         if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' }}
@@ -198,7 +198,7 @@ jobs:
   run_funcbench:
     name: Running datafuse single performance testing
     if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
-    runs-on: perf-runner
+    runs-on: perf-test
     needs: [build-current, build-release]
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -265,13 +265,13 @@ jobs:
         run: |
           kubectl label node k3d-${{ env.CLUSTER_NAME }}-agent-0 test-branch=${{env.CURRENT}}
           kubectl label node k3d-${{ env.CLUSTER_NAME }}-agent-1 test-branch=${{env.REFERENCE}}
-          kubectl wait -n kube-system --timeout=180s --for condition=Ready --all pods
+          kubectl wait -n kube-system --timeout=360s --for condition=Ready --all pods
           kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/namespace.yaml
           kubectl apply -f ./manifests/lb_configs.yaml
           kubectl delete ns runner-system --ignore-not-found
           kubectl create ns runner-system
           kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.10.2/manifests/metallb.yaml
-          kubectl wait -n metallb-system --timeout=180s --for condition=Ready --all pods
+          kubectl wait -n metallb-system --timeout=360s --for condition=Ready --all pods
 
       - name: Start performance testing
         run: >-
@@ -283,12 +283,12 @@ jobs:
           make run_perf -j 2;
           kubectl logs -n default -l tag=current -f >current.log &
           kubectl logs -n default -l tag=ref -f >ref.log &
-          kubectl wait --for=condition=complete jobs --all -n default --timeout=1800s 2>/dev/null;
+          kubectl wait --for=condition=complete jobs --all -n default --timeout=7200s 2>/dev/null;
           echo "Finished performance tests, upload reports";
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./current.log s3://$BUCKET/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/log/current.log;
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./ref.log s3://$BUCKET/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/log/ref.log;
           make run_compare;
-          kubectl wait --for=condition=complete jobs --all -n default --timeout=1800s 2>/dev/null
+          kubectl wait --for=condition=complete jobs --all -n default --timeout=7200s 2>/dev/null
       - name: Update status to failure
         if: failure()
         run: |

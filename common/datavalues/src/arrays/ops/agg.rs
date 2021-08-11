@@ -4,12 +4,15 @@
 
 use std::fmt::Debug;
 use std::ops::Add;
+use std::ops::AddAssign;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute::aggregate;
 use common_arrow::arrow::types::simd::Simd;
 use common_arrow::arrow::types::NativeType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num::cast::AsPrimitive;
 use num::Num;
 use num::NumCast;
 use num::Zero;
@@ -61,17 +64,57 @@ pub trait ArrayAgg: Debug {
 impl<T> ArrayAgg for DataArray<T>
 where
     T: DFNumericType,
-    T::Native: NativeType + Simd + PartialOrd + Num + NumCast + Zero + Into<DataValue>,
+    T::Native: NativeType
+        + Simd
+        + PartialOrd
+        + Num
+        + NumCast
+        + Zero
+        + Into<DataValue>
+        + AsPrimitive<<T::LargestType as DFPrimitiveType>::Native>,
+
+    <T::LargestType as DFPrimitiveType>::Native: Into<DataValue> + AddAssign + Default,
+
     <T::Native as Simd>::Simd: Add<Output = <T::Native as Simd>::Simd>
         + aggregate::Sum<T::Native>
         + aggregate::SimdOrd<T::Native>,
     Option<T::Native>: Into<DataValue>,
 {
     fn sum(&self) -> Result<DataValue> {
-        Ok(match aggregate::sum(self.downcast_ref()) {
-            Some(x) => x.into(),
-            None => DataValue::from(self.data_type()),
-        })
+        let array = self.downcast_ref();
+        // if largest type is self and there is nullable, we just use simd
+        // sum is faster in auto vectorized than manual simd
+        let null_count = self.null_count();
+        if null_count > 0 && (T::SIZE == <T::LargestType as DFNumericType>::SIZE) {
+            return Ok(match aggregate::sum(array) {
+                Some(x) => x.into(),
+                None => DataValue::from(self.data_type()),
+            });
+        }
+
+        if self.is_empty() {
+            return Ok(DataValue::from(self.data_type()));
+        }
+
+        let mut sum = <T::LargestType as DFPrimitiveType>::Native::default();
+        if null_count == 0 {
+            //fast path
+            array.values().as_slice().iter().for_each(|f| {
+                sum += f.as_();
+            });
+        } else if let Some(c) = array.validity() {
+            array
+                .values()
+                .as_slice()
+                .iter()
+                .zip(c.into_iter())
+                .for_each(|(f, v)| {
+                    if v {
+                        sum += f.as_();
+                    }
+                });
+        }
+        Ok(sum.into())
     }
 
     fn min(&self) -> Result<DataValue> {
@@ -130,8 +173,8 @@ impl ArrayAgg for DFBooleanArray {
         if self.all_is_null() {
             return Ok(DataValue::Boolean(None));
         }
-        let sum = self.downcast_iter().fold(0, |acc: u32, x| match x {
-            Some(v) => acc + v as u32,
+        let sum = self.downcast_iter().fold(0, |acc: u64, x| match x {
+            Some(v) => acc + v as u64,
             None => acc,
         });
 

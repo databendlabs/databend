@@ -4,6 +4,7 @@
 
 //! This crate defines data types used in meta data storage service.
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -23,6 +24,43 @@ mod match_seq_test;
 
 /// Value with a corresponding sequence number
 pub type SeqValue<T = Vec<u8>> = (u64, T);
+
+/// The meta data of a record in meta-store kv
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+pub struct KVMeta {
+    /// expiration time in second since 1970
+    pub expire_at: Option<u64>,
+}
+
+/// Value of StateMachine generic-kv
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+pub struct KVValue<T = Vec<u8>> {
+    pub meta: Option<KVMeta>,
+    pub value: T,
+}
+
+/// Compare with a timestamp to check if it is expired.
+impl PartialEq<u64> for KVValue {
+    fn eq(&self, other: &u64) -> bool {
+        match self.meta {
+            None => false,
+            Some(ref m) => match m.expire_at {
+                None => false,
+                Some(ref exp) => exp == other,
+            },
+        }
+    }
+}
+
+/// Compare with a timestamp to check if it is expired.
+impl PartialOrd<u64> for KVValue {
+    fn partial_cmp(&self, other: &u64) -> Option<Ordering> {
+        match self.meta {
+            None => None,
+            Some(ref m) => m.expire_at.as_ref().map(|exp| exp.cmp(other)),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Database {

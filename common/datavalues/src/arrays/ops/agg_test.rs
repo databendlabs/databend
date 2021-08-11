@@ -19,7 +19,7 @@ fn test_array_agg() -> Result<()> {
     ];
 
     let expected = [
-        DataValue::UInt16(Some(6)),
+        DataValue::UInt64(Some(6)),
         DataValue::UInt16(Some(3)),
         DataValue::UInt16(Some(1)),
         DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::UInt16(Some(1))]),
@@ -46,7 +46,7 @@ fn test_boolean_array_agg() -> Result<()> {
     ];
 
     let expected = [
-        DataValue::UInt32(Some(2)),
+        DataValue::UInt64(Some(2)),
         DataValue::Boolean(Some(true)),
         DataValue::Boolean(Some(false)),
         DataValue::Struct(vec![

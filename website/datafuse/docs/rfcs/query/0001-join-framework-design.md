@@ -314,9 +314,9 @@ struct JoinPlan {
 }
 ```
 
-Here's a problem that fuse-query uses `arrow::datatypes::Schema` to represent data schema, while `arrow::datatypes::Schema` doesn't support identify columns with `ColumnID` natively.
+Here's a problem that datafuse-query uses `arrow::datatypes::Schema` to represent data schema, while `arrow::datatypes::Schema` doesn't support identify columns with `ColumnID` natively.
 
-I suggest to introduce an internal `DataSchema` struct to represent data schema in fuse-query, which can store more information and can be converted to `arrow::datatypes::Schema` naturally.
+I suggest to introduce an internal `DataSchema` struct to represent data schema in datafuse-query, which can store more information and can be converted to `arrow::datatypes::Schema` naturally.
 
 ```rust
 struct DataSchema {
@@ -427,4 +427,4 @@ for l <- leftChild:
 materialize(result)
 ```
 
-In fuse-query, we can add a `NestedLoopJoinTransform` to implement vectorized block nested-loop join.
+In datafuse-query, we can add a `NestedLoopJoinTransform` to implement vectorized block nested-loop join.
