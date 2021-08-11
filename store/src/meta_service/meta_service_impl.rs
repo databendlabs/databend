@@ -59,7 +59,7 @@ impl MetaService for MetaServiceImpl {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();
-        let resp = self.meta_node.get_file(&req.key).await;
+        let resp = self.meta_node.get_file(&req.key).await?;
         let rst = match resp {
             Some(v) => GetReply {
                 ok: true,

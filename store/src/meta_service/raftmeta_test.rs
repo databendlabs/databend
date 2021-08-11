@@ -719,7 +719,7 @@ async fn assert_get_file(
     value: &str,
 ) -> anyhow::Result<()> {
     for (i, mn) in meta_nodes.iter().enumerate() {
-        let got = mn.get_file(key).await;
+        let got = mn.get_file(key).await?;
         assert_eq!(value.to_string(), got.unwrap(), "n{} applied value", i);
     }
     Ok(())
