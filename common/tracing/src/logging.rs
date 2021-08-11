@@ -53,7 +53,7 @@ fn init_tracing_stdout() {
         global::set_text_map_propagator(TraceContextPropagator::new());
 
         let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("fuse-store")
+            .with_service_name("datafuse-store")
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 

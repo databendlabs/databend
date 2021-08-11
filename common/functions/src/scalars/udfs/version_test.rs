@@ -27,11 +27,11 @@ fn test_version_function() -> Result<()> {
         nullable: false,
         func: VersionFunction::try_create("version")?,
         columns: vec![Series::new(vec![
-            "FuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
+            "DatafuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
         ])
         .into()],
         expect: Series::new(vec![
-            "FuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
+            "DatafuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
         ])
         .into(),
         error: "",
