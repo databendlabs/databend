@@ -190,7 +190,7 @@ nav:
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - RFCs:
-        - DatafuseQuery Join: rfcs/query/0001-cli-design.md
+        - DatafuseQuery Join: rfcs/query/0001-join-framework-design.md
         - DatafuseQuery Expression: rfcs/query/0002-plan-expression.md
         - DatafuseQuery Shuffle: rfcs/query/0003-data-shuffle.md
         - DatafuseStore Design: rfcs/store/0001-store-design.md
