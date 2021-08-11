@@ -10,6 +10,8 @@ use std::fmt::Formatter;
 use std::fs::remove_dir_all;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
@@ -17,6 +19,7 @@ use common_exception::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
+use common_metatypes::KVValue;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
@@ -487,11 +490,31 @@ impl StateMachine {
                 ref key,
                 ref seq,
                 ref value,
+                ref value_meta,
             } => {
                 // TODO(xp): need to be done all in a tx
+                // TODO(xp): now must be a timestamp extracted from raft log.
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+
                 let kvs = self.kvs();
 
                 let prev = kvs.get(key)?;
+
+                // If prev is timed out, treat it as a None.
+                let prev = match prev {
+                    None => None,
+                    Some(ref p) => {
+                        if p.1 < now {
+                            None
+                        } else {
+                            prev
+                        }
+                    }
+                };
+
                 if seq.match_seq(&prev).is_err() {
                     return Ok((prev.clone(), prev).into());
                 }
@@ -499,7 +522,11 @@ impl StateMachine {
                 let record_value = if let Some(v) = value {
                     let new_seq = self.incr_seq(SEQ_GENERIC_KV);
 
-                    let record_value = (new_seq, v.clone());
+                    let gv = KVValue {
+                        meta: value_meta.clone(),
+                        value: v.clone(),
+                    };
+                    let record_value = (new_seq, gv);
                     kvs.insert(key, &record_value).await?;
 
                     Some(record_value)
@@ -589,10 +616,17 @@ impl StateMachine {
         x.cloned()
     }
 
-    pub fn get_kv(&self, key: &str) -> Option<SeqValue> {
+    pub fn get_kv(&self, key: &str) -> Option<SeqValue<KVValue>> {
         // TODO(xp) refine get(): a &str is enough for key
         // TODO(xp): handle error
-        self.kvs().get(&key.to_string()).unwrap()
+        let sv = self.kvs().get(&key.to_string()).unwrap();
+        tracing::debug!("get_kv sv:{:?}", sv);
+        let sv = match sv {
+            None => return None,
+            Some(sv) => sv,
+        };
+
+        Self::unexpired(sv)
     }
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
@@ -687,15 +721,18 @@ impl StateMachine {
         }
     }
 
-    pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {
+    pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue<KVValue>>> {
         // TODO(xp): handle error
         let kvs = self.kvs();
-        keys.iter()
-            .map(|key| kvs.get(&key.as_ref().to_string()).unwrap())
-            .collect()
+        let x = keys
+            .iter()
+            .map(|key| kvs.get(&key.as_ref().to_string()).unwrap());
+
+        let x = x.map(Self::unexpired_opt);
+        x.collect()
     }
 
-    pub fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
+    pub fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue<KVValue>)> {
         let kvs = self.kvs();
         // TODO(xp): handle error
         let kv_pairs = kvs.range(prefix.to_string()..).unwrap();
@@ -704,7 +741,49 @@ impl StateMachine {
             .into_iter()
             .take_while(|(k, _)| k.starts_with(prefix));
 
+        let x = x.map(|(k, v)| (k, Self::unexpired(v)));
+        let x = x.filter(|(_k, v)| v.is_some());
+        let x = x.map(|(k, v)| (k, v.unwrap()));
+
         x.collect()
+    }
+
+    fn unexpired_opt(seq_value: Option<SeqValue<KVValue>>) -> Option<SeqValue<KVValue>> {
+        match seq_value {
+            None => None,
+            Some(sv) => Self::unexpired(sv),
+        }
+    }
+    fn unexpired(seq_value: SeqValue<KVValue>) -> Option<SeqValue<KVValue>> {
+        // TODO(xp): log must be assigned with a ts.
+
+        // TODO(xp): background task to clean expired
+
+        // TODO(xp): Caveat: The cleanup must be consistent across raft nodes:
+        //           A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
+        //           must be applied with the same timestamp on every raft node.
+        //           Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
+        //           while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
+        //           Thus:
+        //           1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
+        //              check against expire_at to decide whether to purge it.
+        //           2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
+        //           3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
+
+        // TODO(xp): maybe it needs a expiration queue for efficient cleaning up.
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        tracing::debug!("seq_value: {:?} now: {}", seq_value, now);
+
+        if seq_value.1 < now {
+            None
+        } else {
+            Some(seq_value)
+        }
     }
 }
 

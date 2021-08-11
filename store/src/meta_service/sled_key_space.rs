@@ -11,6 +11,7 @@ use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
 use common_exception::ErrorCode;
+use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use sled::IVec;
 
@@ -154,5 +155,5 @@ impl SledKeySpace for GenericKV {
     const PREFIX: u8 = 6;
     const NAME: &'static str = "generic-kv";
     type K = String;
-    type V = SeqValue;
+    type V = SeqValue<KVValue<Vec<u8>>>;
 }

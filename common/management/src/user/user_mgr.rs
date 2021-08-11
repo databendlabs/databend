@@ -56,7 +56,10 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         // Only when there are no record, i.e. seq=0
         let match_seq = MatchSeq::Exact(0);
 
-        let res = self.kv_api.upsert_kv(&key, match_seq, Some(value)).await?;
+        let res = self
+            .kv_api
+            .upsert_kv(&key, match_seq, Some(value), None)
+            .await?;
 
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
@@ -84,7 +87,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
             .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username.as_ref())))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
-            Ok(_) => Ok((seq_value.0, seq_value.1.try_into()?)),
+            Ok(_) => Ok((seq_value.0, seq_value.1.value.try_into()?)),
             Err(_) => Err(ErrorCode::UnknownUser(format!(
                 "username: {}",
                 username.as_ref()
@@ -97,7 +100,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         let mut r = vec![];
         for v in values {
             let (_key, (s, val)) = v;
-            let u = serde_json::from_slice::<UserInfo>(&val)
+            let u = serde_json::from_slice::<UserInfo>(&val.value)
                 .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
 
             r.push((s, u));
@@ -118,7 +121,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         for v in values.result {
             match v {
                 Some(v) => {
-                    let u = serde_json::from_slice::<UserInfo>(&v.1)
+                    let u = serde_json::from_slice::<UserInfo>(&v.1.value)
                         .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
                     r.push(Some((v.0, u)));
                 }
@@ -167,7 +170,10 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
             None => MatchSeq::GE(1),
             Some(s) => MatchSeq::Exact(s),
         };
-        let res = self.kv_api.upsert_kv(&key, match_seq, Some(value)).await?;
+        let res = self
+            .kv_api
+            .upsert_kv(&key, match_seq, Some(value), None)
+            .await?;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -183,7 +189,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
         seq: Option<u64>,
     ) -> Result<()> {
         let key = utils::prepend(username.as_ref());
-        let r = self.kv_api.upsert_kv(&key, seq.into(), None).await?;
+        let r = self.kv_api.upsert_kv(&key, seq.into(), None, None).await?;
         if r.prev.is_some() && r.result.is_none() {
             Ok(())
         } else {

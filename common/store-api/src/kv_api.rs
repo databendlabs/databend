@@ -4,28 +4,30 @@
 //
 
 use async_trait::async_trait;
+use common_metatypes::KVMeta;
+use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UpsertKVActionResult {
     /// prev is the value before upsert.
-    pub prev: Option<SeqValue>,
+    pub prev: Option<SeqValue<KVValue>>,
     /// result is the value after upsert.
-    pub result: Option<SeqValue>,
+    pub result: Option<SeqValue<KVValue>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetKVActionResult {
-    pub result: Option<SeqValue>,
+    pub result: Option<SeqValue<KVValue>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct MGetKVActionResult {
-    pub result: Vec<Option<SeqValue>>,
+    pub result: Vec<Option<SeqValue<KVValue>>>,
 }
 
-pub type PrefixListReply = Vec<(String, SeqValue)>;
+pub type PrefixListReply = Vec<(String, SeqValue<KVValue>)>;
 
 #[async_trait]
 pub trait KVApi {
@@ -34,6 +36,7 @@ pub trait KVApi {
         key: &str,
         seq: MatchSeq,
         value: Option<Vec<u8>>,
+        value_meta: Option<KVMeta>,
     ) -> common_exception::Result<UpsertKVActionResult>;
 
     async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;

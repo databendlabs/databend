@@ -2,8 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
 use async_raft::LogId;
 use common_metatypes::Database;
+use common_metatypes::KVMeta;
+use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;
@@ -278,47 +283,93 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         key: String,
         seq: MatchSeq,
         value: Vec<u8>,
+        value_meta: Option<KVMeta>,
         // want:
-        prev: Option<SeqValue>,
-        result: Option<SeqValue>,
+        prev: Option<SeqValue<KVValue>>,
+        result: Option<SeqValue<KVValue>>,
     }
 
     fn case(
         name: &'static str,
         seq: MatchSeq,
         value: &'static str,
+        meta: Option<u64>,
         prev: Option<(u64, &'static str)>,
         result: Option<(u64, &'static str)>,
     ) -> T {
+        let m = meta.map(|x| KVMeta { expire_at: Some(x) });
         T {
             key: name.to_string(),
             seq,
             value: value.to_string().into_bytes(),
-            prev: prev.map(|(a, b)| (a, b.as_bytes().to_vec())),
-            result: result.map(|(a, b)| (a, b.as_bytes().to_vec())),
+            value_meta: m.clone(),
+            prev: prev.map(|(a, b)| {
+                (a, KVValue {
+                    meta: None,
+                    value: b.as_bytes().to_vec(),
+                })
+            }),
+            result: result.map(|(a, b)| {
+                (a, KVValue {
+                    meta: m,
+                    value: b.as_bytes().to_vec(),
+                })
+            }),
         }
     }
 
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
     let cases: Vec<T> = vec![
-        case("foo", MatchSeq::Exact(5), "b", None, None),
-        case("foo", MatchSeq::Any, "a", None, Some((1, "a"))),
-        case("foo", MatchSeq::Any, "b", Some((1, "a")), Some((2, "b"))),
+        case("foo", MatchSeq::Exact(5), "b", None, None, None),
+        case("foo", MatchSeq::Any, "a", None, None, Some((1, "a"))),
+        case(
+            "foo",
+            MatchSeq::Any,
+            "b",
+            None,
+            Some((1, "a")),
+            Some((2, "b")),
+        ),
         case(
             "foo",
             MatchSeq::Exact(5),
             "b",
+            None,
             Some((2, "b")),
             Some((2, "b")),
         ),
-        case("bar", MatchSeq::Exact(0), "x", None, Some((3, "x"))),
+        case("bar", MatchSeq::Exact(0), "x", None, None, Some((3, "x"))),
         case(
             "bar",
             MatchSeq::Exact(0),
             "y",
+            None,
             Some((3, "x")),
             Some((3, "x")),
         ),
-        case("bar", MatchSeq::GE(1), "y", Some((3, "x")), Some((4, "y"))),
+        case(
+            "bar",
+            MatchSeq::GE(1),
+            "y",
+            None,
+            Some((3, "x")),
+            Some((4, "y")),
+        ),
+        // expired at once
+        case("wow", MatchSeq::Any, "y", Some(0), None, Some((5, "y"))),
+        // expired value does not exist
+        case(
+            "wow",
+            MatchSeq::Any,
+            "y",
+            Some(now + 1000),
+            None,
+            Some((6, "y")),
+        ),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -333,6 +384,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                     key: c.key.clone(),
                     seq: c.seq.clone(),
                     value: Some(c.value.clone()),
+                    value_meta: c.value_meta.clone(),
                 },
             })
             .await?;
@@ -353,6 +405,17 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             (Some(ref a), _) => Some(a.clone()),
             _ => None,
         };
+        let want = match want {
+            None => None,
+            Some(ref w) => {
+                // trick: in this test all expired timestamps are all 0
+                if w.1 < now {
+                    None
+                } else {
+                    want
+                }
+            }
+        };
 
         let got = sm.get_kv(&c.key);
         assert_eq!(want, got, "get: {}", mes,);
@@ -370,8 +433,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         key: String,
         seq: MatchSeq,
         // want:
-        prev: Option<SeqValue>,
-        result: Option<SeqValue>,
+        prev: Option<SeqValue<KVValue>>,
+        result: Option<SeqValue<KVValue>>,
     }
 
     fn case(
@@ -383,8 +446,18 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         T {
             key: name.to_string(),
             seq,
-            prev: prev.map(|(a, b)| (a, b.as_bytes().to_vec())),
-            result: result.map(|(a, b)| (a, b.as_bytes().to_vec())),
+            prev: prev.map(|(a, b)| {
+                (a, KVValue {
+                    meta: None,
+                    value: b.as_bytes().to_vec(),
+                })
+            }),
+            result: result.map(|(a, b)| {
+                (a, KVValue {
+                    meta: None,
+                    value: b.as_bytes().to_vec(),
+                })
+            }),
         }
     }
 
@@ -411,6 +484,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                 key: "foo".to_string(),
                 seq: MatchSeq::Any,
                 value: Some(b"x".to_vec()),
+                value_meta: None,
             },
         })
         .await?;
@@ -423,6 +497,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                     key: c.key.clone(),
                     seq: c.seq.clone(),
                     value: None,
+                    value_meta: None,
                 },
             })
             .await?;

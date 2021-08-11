@@ -28,6 +28,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
                 key: act.key,
                 seq: act.seq,
                 value: act.value,
+                value_meta: act.value_meta,
             },
         };
         let rst = self
