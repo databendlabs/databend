@@ -475,7 +475,7 @@ pub struct MetaNode {
 }
 
 impl MetaStore {
-    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
+    pub async fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         let sm = self.state_machine.read().await;
 
         sm.get_node(node_id)
@@ -484,7 +484,7 @@ impl MetaStore {
     pub async fn get_node_addr(&self, node_id: &NodeId) -> common_exception::Result<String> {
         let addr = self
             .get_node(node_id)
-            .await
+            .await?
             .map(|n| n.address)
             .ok_or_else(|| ErrorCode::UnknownNode(format!("node id: {}", node_id)))?;
 
@@ -876,7 +876,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
+    pub async fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -985,7 +985,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_kv(&self, key: &str) -> Option<SeqValue<KVValue>> {
+    pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -996,14 +996,17 @@ impl MetaNode {
     pub async fn mget_kv(
         &self,
         keys: &[impl AsRef<str> + std::fmt::Debug],
-    ) -> Vec<Option<SeqValue<KVValue>>> {
+    ) -> common_exception::Result<Vec<Option<SeqValue<KVValue>>>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.mget_kv(keys)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue<KVValue>)> {
+    pub async fn prefix_list_kv(
+        &self,
+        prefix: &str,
+    ) -> common_exception::Result<Vec<(String, SeqValue<KVValue>)>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.prefix_list_kv(prefix)

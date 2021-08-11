@@ -327,7 +327,11 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn apply(&mut self, log_id: &LogId, data: &LogEntry) -> anyhow::Result<AppliedState> {
+    pub async fn apply(
+        &mut self,
+        log_id: &LogId,
+        data: &LogEntry,
+    ) -> common_exception::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
 
         let sm_meta = self.sm_meta();
@@ -599,11 +603,9 @@ impl StateMachine {
         Ok(fns.into_iter().map(|(k, _v)| k).collect())
     }
 
-    pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        // TODO(xp): handle error
-
+    pub fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         let sm_nodes = self.nodes();
-        sm_nodes.get(node_id).expect("fail to get node")
+        sm_nodes.get(node_id)
     }
 
     pub fn get_database(&self, name: &str) -> Option<Database> {
@@ -628,17 +630,16 @@ impl StateMachine {
         x.cloned()
     }
 
-    pub fn get_kv(&self, key: &str) -> Option<SeqValue<KVValue>> {
+    pub fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {
         // TODO(xp) refine get(): a &str is enough for key
-        // TODO(xp): handle error
-        let sv = self.kvs().get(&key.to_string()).unwrap();
+        let sv = self.kvs().get(&key.to_string())?;
         tracing::debug!("get_kv sv:{:?}", sv);
         let sv = match sv {
-            None => return None,
+            None => return Ok(None),
             Some(sv) => sv,
         };
 
-        Self::unexpired(sv)
+        Ok(Self::unexpired(sv))
     }
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
@@ -733,21 +734,27 @@ impl StateMachine {
         }
     }
 
-    pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue<KVValue>>> {
-        // TODO(xp): handle error
+    pub fn mget_kv(
+        &self,
+        keys: &[impl AsRef<str>],
+    ) -> common_exception::Result<Vec<Option<SeqValue<KVValue>>>> {
         let kvs = self.kvs();
-        let x = keys
-            .iter()
-            .map(|key| kvs.get(&key.as_ref().to_string()).unwrap());
+        let mut res = vec![];
+        for x in keys.iter() {
+            let v = kvs.get(&x.as_ref().to_string())?;
+            let v = Self::unexpired_opt(v);
+            res.push(v)
+        }
 
-        let x = x.map(Self::unexpired_opt);
-        x.collect()
+        Ok(res)
     }
 
-    pub fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue<KVValue>)> {
+    pub fn prefix_list_kv(
+        &self,
+        prefix: &str,
+    ) -> common_exception::Result<Vec<(String, SeqValue<KVValue>)>> {
         let kvs = self.kvs();
-        // TODO(xp): handle error
-        let kv_pairs = kvs.scan_prefix(&prefix.to_string()).unwrap();
+        let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
 
         let x = kv_pairs.into_iter();
 
@@ -758,7 +765,7 @@ impl StateMachine {
         // Extract from an Option
         let x = x.map(|(k, v)| (k, v.unwrap()));
 
-        x.collect()
+        Ok(x.collect())
     }
 
     fn unexpired_opt(seq_value: Option<SeqValue<KVValue>>) -> Option<SeqValue<KVValue>> {
@@ -851,7 +858,7 @@ impl Placement for StateMachine {
         &self.slots
     }
 
-    fn get_placement_node(&self, node_id: &NodeId) -> Option<Node> {
+    fn get_placement_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         self.get_node(node_id)
     }
 }

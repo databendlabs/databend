@@ -161,7 +161,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 
     let mn = MetaNode::boot(0, &tc.config).await?;
 
-    let got = mn.get_node(&0).await;
+    let got = mn.get_node(&0).await?;
     assert_eq!(addr, got.unwrap().address);
     mn.stop().await?;
     Ok(())
@@ -512,7 +512,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     tracing::info!("--- check state machine: nodes");
     {
-        let node = leader.sto.get_node(&0).await.expect("must not be none");
+        let node = leader.sto.get_node(&0).await?.unwrap();
         assert_eq!(tc.config.meta_api_addr(), node.address);
     }
 
@@ -605,7 +605,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, StoreTestContext)> {
         assert_meta_connection(&addr).await?;
 
         // assert that boot() adds the node to meta.
-        let got = mn.get_node(&nid).await;
+        let got = mn.get_node(&nid).await?;
         assert_eq!(addr, got.unwrap().address, "nid0 is added");
 
         wait_for_state(&mn, State::Leader).await?;

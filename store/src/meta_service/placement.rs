@@ -26,12 +26,13 @@ use crate::meta_service::Slot;
 pub trait Placement {
     /// Returns the Node-s that are responsible to store a copy of a file.
     fn nodes_to_store_key(&self, key: &str) -> Vec<Node> {
+        // TODO(xp): handle error instead of using unwrap
         let slot_idx = self.slot_index_for_key(key);
         let slot = self.get_slot(slot_idx);
 
         slot.node_ids
             .iter()
-            .map(|nid| self.get_placement_node(nid).unwrap())
+            .map(|nid| self.get_placement_node(nid).unwrap().unwrap())
             .collect()
     }
 
@@ -51,7 +52,7 @@ pub trait Placement {
     fn get_slots(&self) -> &[Slot];
 
     /// Returns a node.
-    fn get_placement_node(&self, node_id: &NodeId) -> Option<Node>;
+    fn get_placement_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>>;
 }
 
 /// Evenly chooses `n` elements from `m` elements

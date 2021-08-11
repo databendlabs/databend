@@ -32,10 +32,11 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
     {
         // add foo.txt twice, fail
         let got = f.add("foo.txt", "123".as_bytes()).await;
-        assert_eq!(
-            "LocalFS: fail to open foo.txt",
-            got.err().unwrap().to_string()
-        );
+        assert!(got
+            .err()
+            .unwrap()
+            .to_string()
+            .starts_with("Code: 1002, displayText"));
     }
     {
         // add long/bar.txt and read

@@ -417,7 +417,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             }
         };
 
-        let got = sm.get_kv(&c.key);
+        let got = sm.get_kv(&c.key)?;
         assert_eq!(want, got, "get: {}", mes,);
     }
 
@@ -513,7 +513,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
 
         // read it to ensure the modified state.
         let want = &c.result;
-        let got = sm.get_kv(&c.key);
+        let got = sm.get_kv(&c.key)?;
         assert_eq!(want, &got, "get: {}", mes,);
     }
 
