@@ -50,7 +50,6 @@ Built to make the Data Cloud easy!
 
 ![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-v20210810.svg)
 
-
 ## Getting Started
 
 * [Quick Start](https://datafuse.rs/overview/architecture/)

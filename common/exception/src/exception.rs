@@ -196,9 +196,9 @@ build_exceptions! {
     MetaStoreAlreadyExists(2402),
     MetaStoreNotFound(2403),
 
-    // FuseStore server error
+    // DatafuseStore server error
 
-    FuseStoreError(2501),
+    DatafuseStoreError(2501),
 
 
     // TODO

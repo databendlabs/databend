@@ -41,7 +41,7 @@ jobs:
 
       - name: Pack binaries
         run: |
-          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz fuse-query fuse-store
+          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-query datafuse-store
           tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-cli
 
       - name: Release datafuse

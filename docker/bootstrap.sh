@@ -1,13 +1,13 @@
 #!/bin/bash
 
-/fuse-store &> /tmp/fuse-store.log  &
+/datafuse-store &> /tmp/datafuse-store.log  &
 P1=$!
-/fuse-query -c fuse-query.toml &> /tmp/fuse-query.log  &
+/datafuse-query -c datafuse-query.toml &> /tmp/datafuse-query.log  &
 P2=$!
 
-tail -f /tmp/fuse-query.log &
+tail -f /tmp/datafuse-query.log &
 P3=$!
 
-tail -f /tmp/fuse-store.log & 
+tail -f /tmp/datafuse-store.log & 
 P4=$!
 wait $P1 $P2 $P3 $P4

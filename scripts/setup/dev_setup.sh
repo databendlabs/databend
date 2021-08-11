@@ -130,10 +130,10 @@ EOF
 
 function welcome_message {
 cat <<EOF
-Welcome to FuseQuery!
+Welcome to DatafuseQuery!
 
 This script will download and install the necessary dependencies needed to
-build, test and inspect FuseQuery.
+build, test and inspect DatafuseQuery.
 
 Based on your selection, these tools will be included:
 EOF

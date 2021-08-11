@@ -11,7 +11,7 @@ git clone https://github.com/datafuselabs/datafuse.git
 
 ### Build Image
 
-`make docker` to build image `datafuselabs/fuse-query`
+`make docker` to build image `datafuselabs/datafuse-query`
 
 ###  Run Helm 
 
@@ -21,7 +21,7 @@ when successful install you will get a note like this,
 
 ```
 NOTES:
-1. connect to fuse-query mysql port:
+1. connect to datafuse-query mysql port:
 export FUSE_MYSQL_PORT=$(kubectl get --namespace default -o jsonpath="{.spec.ports[0].nodePort}" services datafuse)
 mysql -h127.0.0.1 -P$FUSE_MYSQL_PORT
 

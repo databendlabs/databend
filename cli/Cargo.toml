@@ -1,0 +1,45 @@
+cargo-features = ["edition2021"]
+
+[package]
+name = "datafuse-cli"
+version = "0.1.0"
+description = "All-in-one tool for setting up, managing with Datafuse"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "datafuse-cli"
+path = "src/bin/datafuse-cli.rs"
+
+[features]
+
+[dependencies]
+# Workspace dependencies
+
+# Crates.io dependencies
+clap = "2.33.3"
+colored = "2.0.0"
+comfy-table = "4.1.0"
+dirs = "3.0.2"
+dyn-clone = "1.0.4"
+flate2 = "1.0.20"
+indicatif = "0.16.2"
+run_script = "^0.8.0"
+rustyline = "8.2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.9.5"
+structopt = "0.3"
+sysinfo = "0.20.0"
+tar = "0.4.36"
+thiserror = "1.0.20"
+ureq = { version = "2.1.1", features = ["json"] }
+
+[dev-dependencies]
+pretty_assertions = "0.7"
+tempfile = "3.2.0"
+
+[build-dependencies]
+common-building = {path = "../common/building"}

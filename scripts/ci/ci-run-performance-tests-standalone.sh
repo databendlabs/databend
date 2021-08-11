@@ -11,8 +11,8 @@ get_latest_tag() {
 tag=$(get_latest_tag "datafuselabs/datafuse")
 
 BASE_DIR=$(pwd)
-echo "Starting standalone FuseQuery(release)"
-${BASE_DIR}/scripts/deploy/fusequery-standalone.sh release
+echo "Starting standalone DatafuseQuery(release)"
+${BASE_DIR}/scripts/deploy/datafuse-query-standalone.sh release
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests/perfs" || exit
@@ -26,13 +26,13 @@ mkdir -p "${d_pull}"
 
 python3 -m pip install coscmd PyYAML
 ## run perf for current
-python perfs.py --output "${d_pull}" --bin "${BASE_DIR}/target/release/fuse-benchmark" --host 127.0.0.1 --port 9001
+python perfs.py --output "${d_pull}" --bin "${BASE_DIR}/target/release/datafuse-benchmark" --host 127.0.0.1 --port 9001
 
 ## run perf for latest release
 if [ ! -d "${d_release}" ]; then
   mkdir -p "${d_release}"
-  ${BASE_DIR}/scripts/deploy/fusequery-standalone-from-release.sh "${tag}"
-  python perfs.py --output "${d_release}" --bin "${BASE_DIR}/target/release/fuse-benchmark" --host 127.0.0.1 --port 9001
+  ${BASE_DIR}/scripts/deploy/datafuse-query-standalone-from-release.sh "${tag}"
+  python perfs.py --output "${d_release}" --bin "${BASE_DIR}/target/release/datafuse-benchmark" --host 127.0.0.1 --port 9001
 fi
 
 ## run comparation scripts

@@ -6,5 +6,5 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 echo "Build(DEBUG) start..."
-cargo build --bin=fuse-query --bin=fuse-benchmark --bin=fuse-store
+cargo build --bin=datafuse-query --bin=datafuse-benchmark --bin=datafuse-store
 echo "All done..."
