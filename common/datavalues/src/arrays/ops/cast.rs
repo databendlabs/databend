@@ -109,7 +109,7 @@ where
     }
 }
 
-impl ArrayCast for DataArray<Utf8Type> {
+impl ArrayCast for DFUtf8Array {
     fn cast<N>(&self) -> Result<DataArray<N>>
     where N: DFDataType {
         cast_ca(self)

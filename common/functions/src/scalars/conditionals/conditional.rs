@@ -12,15 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetic;
-mod common;
-mod comparison;
-mod conditional;
-mod data_column;
-mod logic;
+use common_exception::Result;
 
-pub use common::*;
-pub use comparison::*;
-pub use conditional::*;
-pub use data_column::*;
-pub use logic::*;
+use crate::scalars::FactoryFuncRef;
+use crate::scalars::IfFunction;
+
+#[derive(Clone)]
+pub struct ConditionalFunction;
+
+impl ConditionalFunction {
+    pub fn register(map: FactoryFuncRef) -> Result<()> {
+        let mut map = map.write();
+
+        map.insert("if".into(), IfFunction::try_create);
+
+        Ok(())
+    }
+}
