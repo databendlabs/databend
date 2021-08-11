@@ -13,8 +13,4 @@
 // limitations under the License.
 //
 
-mod cache;
-mod file_cache;
-mod memory_cache;
-mod overlay_cache;
-//mod distributed_cache;
+pub trait Cache {}

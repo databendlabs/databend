@@ -1,28 +1,35 @@
-// Copyright 2020-2021 The Datafuse Authors.
+//  Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
 //
 
 use common_exception::Result;
-use tokio::io::AsyncRead;
-use tokio::io::AsyncSeek;
+use futures::AsyncRead;
+use futures::AsyncSeek;
 
 pub type Bytes = Vec<u8>;
 
-// TODO Add Send, Sync, or maybe 'static here and there
-
 #[async_trait::async_trait]
-pub trait BlobAccessor {
+pub trait DataAccessor {
     type InputStream: AsyncRead + AsyncSeek;
+
+    async fn get_input_stream(
+        &self,
+        path: &str,
+        stream_len: Option<u64>,
+    ) -> Result<Self::InputStream>;
 
     async fn get(&self, path: &str) -> Result<Bytes>;
 
-    async fn get_stream(&self, path: &str) -> Result<Self::InputStream>;
-
-    async fn put(&self, path: &str, content: &[u8]) -> Result<()>;
-    async fn put_stream<R: AsyncRead + Sync + Send + Unpin>(
-        &self,
-        path: &str,
-        content_stream: &mut R,
-    ) -> Result<()>;
+    async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()>;
 }

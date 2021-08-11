@@ -13,10 +13,10 @@
 //  limitations under the License.
 //
 
-mod aws_s3;
-mod azure_blob;
-mod fuse_dfs;
-mod local;
+#[cfg(test)]
+mod s3_input_stream_test;
 
-pub use aws_s3::S3;
-pub use local::Local;
+mod s3;
+mod s3_input_stream;
+
+pub use s3::S3;
