@@ -124,7 +124,7 @@ impl Processor for GroupByFinalTransform {
 
                     for row in 0..block.num_rows() {
                         let group_key = $hash_method.get_key(&key_array, row);
-                        match groups.get_mut(&group_key) {
+                        match groups.get(&group_key) {
                             None => {
                                 let mut places = Vec::with_capacity(aggr_funcs_len);
                                 for (i, func) in aggr_funcs.iter().enumerate() {
