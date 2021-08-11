@@ -802,6 +802,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-indexing"
+version = "0.1.0"
+
+[[package]]
 name = "common-infallible"
 version = "0.1.0"
 dependencies = [
