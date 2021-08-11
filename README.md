@@ -55,7 +55,7 @@ Built to make the Data Cloud easy!
 * [Quick Start](https://datafuse.rs/overview/architecture/)
 * [Architecture](https://datafuse.rs/overview/architecture/)
 * [Performance](https://datafuse.rs/overview/performance/)
-
+* [Datafuse Weekly](https://datafuselabs.github.io/weekly/)
 ## Roadmap
 
 Datafuse is currently in **Alpha** and is not ready to be used in production, [Roadmap 2021](https://github.com/datafuselabs/datafuse/issues/746)
