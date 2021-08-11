@@ -1,0 +1,24 @@
+cargo-features = ["edition2021"]
+
+[package]
+name = "common-dal"
+version = "0.1.0"
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+
+common-cache = {path = "../cache"}
+common-exception = {path = "../exception"}
+
+# Github dependencies
+
+# Crates.io dependencies
+
+async-trait = "0.1"
+bytes = "1"
+futures = "0.3"
+tokio = { version = "1.8.2", features = ["macros", "rt","rt-multi-thread", "sync", "fs"] }

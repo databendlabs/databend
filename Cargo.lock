@@ -707,6 +707,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-cache"
+version = "0.1.0"
+
+[[package]]
+name = "common-dal"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "common-cache",
+ "common-exception",
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
