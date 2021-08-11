@@ -4,10 +4,15 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
+use byteorder::ByteOrder;
+use byteorder::LittleEndian;
+use byteorder::ReadBytesExt;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
@@ -139,6 +144,9 @@ impl Processor for GroupByPartialTransform {
                         aggr_arg_columns.push(arg_columns);
                     }
 
+                    // this can benificial for the case of dereferencing
+                    let aggr_arg_columns_slice = &aggr_arg_columns;
+
                     let group_keys = $hash_method.build_keys(&group_columns, block.num_rows())?;
                     let mut groups = groups_locker.write();
                     {
@@ -147,7 +155,9 @@ impl Processor for GroupByPartialTransform {
                                 // New group.
                                 None => {
                                     let mut places = Vec::with_capacity(aggr_cols.len());
-                                    for (idx, arg_columns) in aggr_arg_columns.iter().enumerate() {
+                                    for (idx, arg_columns) in
+                                        aggr_arg_columns_slice.iter().enumerate()
+                                    {
                                         let place = funcs[idx].allocate_state(&arena);
                                         funcs[idx].accumulate_row(place, row, arg_columns)?;
                                         places.push(place);
@@ -156,7 +166,9 @@ impl Processor for GroupByPartialTransform {
                                 }
                                 // Accumulate result against the take block by indices.
                                 Some(places) => {
-                                    for (idx, arg_columns) in aggr_arg_columns.iter().enumerate() {
+                                    for (idx, arg_columns) in
+                                        aggr_arg_columns_slice.iter().enumerate()
+                                    {
                                         funcs[idx].accumulate_row(places[idx], row, arg_columns)?;
                                     }
                                 }
@@ -219,21 +231,134 @@ impl Processor for GroupByPartialTransform {
                         apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, Vec<usize>, ahash::RandomState>>}
                     }
                     HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, Vec<usize>, FxBuildHasher>> }
                     }
                     HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, Vec<usize>, FxBuildHasher>> }
                     }
                     HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, Vec<usize>, FxBuildHasher>> }
                     }
                     HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, Vec<usize>, FxBuildHasher>> }
                     }
                 }
             }};
         }
 
         match_hash_method_and_apply! {method, apply}
+    }
+}
+
+trait HashWord {
+    fn hash_word(&mut self, rhs: Self);
+}
+
+macro_rules! impl_hash_word {
+    ($ty: ty) => {
+        impl HashWord for $ty {
+            #[inline]
+            fn hash_word(&mut self, hash_value: Self) {
+                let mut hash_value = hash_value as u64;
+                hash_value ^= hash_value >> 33;
+                hash_value = hash_value.wrapping_mul(0xff51afd7ed558ccd_u64);
+                hash_value ^= hash_value >> 33;
+                hash_value = hash_value.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
+                hash_value ^= hash_value >> 33;
+
+                *self = hash_value as $ty;
+            }
+        }
+    };
+}
+
+impl_hash_word!(i8);
+impl_hash_word!(i16);
+impl_hash_word!(i32);
+impl_hash_word!(i64);
+impl_hash_word!(u8);
+impl_hash_word!(u16);
+impl_hash_word!(u32);
+impl_hash_word!(u64);
+
+fn write(mut hash: u64, mut bytes: &[u8]) -> u64 {
+    while bytes.len() >= 8 {
+        hash.hash_word(u64::from(LittleEndian::read_u64(bytes)));
+        bytes = &bytes[8..];
+    }
+
+    if bytes.len() >= 4 {
+        hash.hash_word(u64::from(LittleEndian::read_u32(bytes)));
+        bytes = &bytes[4..];
+    }
+
+    if bytes.len() >= 2 {
+        hash.hash_word(u64::from(LittleEndian::read_u16(bytes)));
+        bytes = &bytes[2..];
+    }
+
+    if let Some(&byte) = bytes.first() {
+        hash.hash_word(u64::from(byte));
+    }
+
+    hash
+}
+
+pub type FxBuildHasher = BuildHasherDefault<DefaultHasher>;
+
+pub struct DefaultHasher {
+    /// Generics hold
+    hash: u64,
+}
+
+impl Default for DefaultHasher {
+    #[inline]
+    fn default() -> DefaultHasher {
+        DefaultHasher { hash: 0 }
+    }
+}
+
+impl Hasher for DefaultHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        self.hash = write(self.hash, bytes);
+    }
+
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.hash.hash_word(i as u64);
+    }
+
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.hash.hash_word(i as u64);
+    }
+
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.hash.hash_word(i as u64);
+    }
+
+    #[inline]
+    #[cfg(target_pointer_width = "32")]
+    fn write_u64(&mut self, i: u64) {
+        self.hash.hash_word(i as u64);
+        self.hash.hash_word((i >> 32) as u64);
+    }
+
+    #[inline]
+    #[cfg(target_pointer_width = "64")]
+    fn write_u64(&mut self, i: u64) {
+        self.hash.hash_word(i as u64);
+    }
+
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.hash.hash_word(i as u64);
+    }
+
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.hash
     }
 }

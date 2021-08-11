@@ -1807,6 +1807,7 @@ dependencies = [
  "ahash 0.7.4",
  "async-trait",
  "bumpalo",
+ "byteorder",
  "clickhouse-rs",
  "clickhouse-srv",
  "common-allocators",
