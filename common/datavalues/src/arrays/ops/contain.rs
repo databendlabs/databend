@@ -2,27 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-//use std::collections::HashSet;
 use std::fmt::Debug;
-//use std::hash::Hash;
-//use std::hash::Hasher;
 
 use common_arrow::arrow::array::ArrayRef;
-//use common_arrow::arrow::compute::arity::unary;
 use common_arrow::arrow::compute::contains::contains;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::get_list_builder;
-//use crate::arrays::BinaryArrayBuilder;
-//use crate::arrays::BooleanArrayBuilder;
 use crate::arrays::DataArray;
-//use crate::arrays::PrimitiveArrayBuilder;
-//use crate::arrays::Utf8ArrayBuilder;
 use crate::prelude::*;
 use crate::series::IntoSeries;
-//use crate::series::Series;
-//use crate::utils::get_iter_capacity;
 
 pub trait ArrayContain: Debug {
     /// # Safety

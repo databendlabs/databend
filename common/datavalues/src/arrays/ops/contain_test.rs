@@ -2,19 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-//use std::borrow::Cow;
-
-//use common_arrow::arrow::array::Array;
-//use common_arrow::arrow::array::ArrayRef;
-//use common_arrow::arrow::compute::arithmetics::basic::add;
-//use common_arrow::arrow::compute::boolean::and;
-//use common_arrow::arrow::compute::boolean::or;
 use common_exception::Result;
 
 use crate::arrays::ops::contain::ArrayContain;
-//use crate::arrays::DataArray;
 use crate::prelude::*;
-//use crate::series::IntoSeries;
 use crate::series::Series;
 
 #[test]
