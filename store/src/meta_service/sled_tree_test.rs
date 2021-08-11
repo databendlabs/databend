@@ -377,6 +377,31 @@ async fn test_sledtree_contains_key() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sledtree_update_and_fetch() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+
+    let v = tree
+        .update_and_fetch::<sled_key_space::Files, _>(&"foo".to_string(), |v| {
+            Some(v.unwrap_or_default() + "1")
+        })
+        .await?;
+    assert_eq!(Some("1".to_string()), v);
+
+    let v = tree
+        .update_and_fetch::<sled_key_space::Files, _>(&"foo".to_string(), |v| {
+            Some(v.unwrap_or_default() + "1")
+        })
+        .await?;
+    assert_eq!(Some("11".to_string()), v);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_get() -> anyhow::Result<()> {
     init_store_unittest();
 
@@ -922,6 +947,7 @@ async fn test_as_scan_prefix() -> anyhow::Result<()> {
 
     Ok(())
 }
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_insert() -> anyhow::Result<()> {
     init_store_unittest();
@@ -1019,6 +1045,28 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
     assert!(!log_tree.contains_key(&3)?);
     assert!(log_tree.contains_key(&4)?);
     assert!(!log_tree.contains_key(&5)?);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_as_update_and_fetch() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let file_tree = tree.key_space::<sled_key_space::Files>();
+
+    let v = file_tree
+        .update_and_fetch(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
+        .await?;
+    assert_eq!(Some("1".to_string()), v);
+
+    let v = file_tree
+        .update_and_fetch(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
+        .await?;
+    assert_eq!(Some("11".to_string()), v);
 
     Ok(())
 }
