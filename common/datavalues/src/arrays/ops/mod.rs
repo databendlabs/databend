@@ -6,6 +6,7 @@ mod agg;
 mod apply;
 mod boolean;
 mod cast;
+mod contain;
 mod downcast;
 mod fill;
 mod group_hash;
@@ -15,7 +16,6 @@ mod take_random;
 mod take_single;
 mod to_values;
 mod vec_hash;
-mod contain;
 
 #[cfg(test)]
 mod agg_test;
@@ -23,6 +23,8 @@ mod agg_test;
 mod apply_test;
 #[cfg(test)]
 mod cast_test;
+#[cfg(test)]
+mod contain_test;
 #[cfg(test)]
 mod downcast_test;
 #[cfg(test)]
@@ -35,14 +37,12 @@ mod scatter_test;
 mod take_random_test;
 #[cfg(test)]
 mod take_test;
-#[cfg(test)]
-mod contain_test;
-
 
 pub use agg::*;
 pub use apply::*;
 pub use boolean::*;
 pub use cast::*;
+pub use contain::*;
 pub use downcast::*;
 pub use fill::*;
 pub use group_hash::GroupHash;
@@ -52,4 +52,3 @@ pub use take_random::*;
 pub use take_single::*;
 pub use to_values::*;
 pub use vec_hash::*;
-pub use contain::*;
