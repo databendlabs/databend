@@ -97,9 +97,6 @@ pub struct StateMachine {
     /// This is used to de-dup client request, to impl idempotent operations.
     pub client_last_resp: HashMap<String, (u64, AppliedState)>,
 
-    /// The file names stored in this cluster
-    pub keys: BTreeMap<String, String>,
-
     /// storage of auto-incremental number.
     /// TODO(xp): temporarily make it a Arc<Mutex>, need to be modified while &StateMachine is immutably borrow.
     ///           remove it after making it a sled store.
@@ -206,7 +203,6 @@ impl StateMachine {
             sm_tree,
 
             client_last_resp: Default::default(),
-            keys: BTreeMap::new(),
             sequences: Arc::new(Mutex::new(BTreeMap::new())),
             slots: Vec::new(),
 
@@ -367,18 +363,24 @@ impl StateMachine {
     ) -> common_exception::Result<AppliedState> {
         match data.cmd {
             Cmd::AddFile { ref key, ref value } => {
-                if self.keys.contains_key(key) {
-                    let prev = self.keys.get(key);
-                    Ok((prev.cloned(), None).into())
-                } else {
-                    let prev = self.keys.insert(key.clone(), value.clone());
+                // TODO(xp): put it in a transaction
+                let files = self.files();
+
+                let prev = files.get(key)?;
+                if prev.is_none() {
+                    files.insert(key, value).await?;
                     tracing::info!("applied AddFile: {}={}", key, value);
                     Ok((prev, Some(value.clone())).into())
+                } else {
+                    // TODO(xp): failure to add should returns `prev` as `result`
+                    Ok((prev, None).into())
                 }
             }
 
             Cmd::SetFile { ref key, ref value } => {
-                let prev = self.keys.insert(key.clone(), value.clone());
+                let files = self.files();
+
+                let prev = files.insert(key, value).await?;
                 tracing::info!("applied SetFile: {}={}", key, value);
                 Ok((prev, Some(value.clone())).into())
             }
@@ -579,12 +581,22 @@ impl StateMachine {
         sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
-    pub fn get_file(&self, key: &str) -> Option<String> {
-        tracing::info!("meta::get_file: {}", key);
-        let x = self.keys.get(key);
-        tracing::info!("meta::get_file: {}={:?}", key, x);
-        x.cloned()
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub fn get_file(&self, key: &str) -> common_exception::Result<Option<String>> {
+        tracing::debug!("SM::get_file: {}", key);
+
+        let files = self.files();
+        let x = files.get(&key.to_string())?;
+
+        tracing::debug!("SM::get_file: {}={:?}", key, x);
+        Ok(x)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub fn list_files(&self, prefix: &str) -> common_exception::Result<Vec<String>> {
+        let files = self.files();
+        let fns = files.scan_prefix(&prefix.to_string())?;
+        Ok(fns.into_iter().map(|(k, _v)| k).collect())
     }
 
     pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
