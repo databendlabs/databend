@@ -87,6 +87,38 @@ impl SledTree {
         Ok(got)
     }
 
+    pub async fn update_and_fetch<KV: SledKeySpace, F>(
+        &self,
+        key: &KV::K,
+        mut f: F,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        let mes = || format!("update_and_fetch: {}", key);
+
+        let k = KV::serialize_key(key)?;
+
+        let res = self
+            .tree
+            .update_and_fetch(k, move |old| {
+                let old = old.map(|o| KV::deserialize_value(o).unwrap());
+
+                let new_val = f(old);
+                new_val.map(|new_val| KV::serialize_value(&new_val).unwrap())
+            })
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, mes)?;
+
+        self.flush_async(true).await?;
+
+        let value = match res {
+            None => None,
+            Some(v) => Some(KV::deserialize_value(v)?),
+        };
+
+        Ok(value)
+    }
+
     /// Retrieve the value of key.
     pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>>
     where KV: SledKeySpace {
@@ -403,6 +435,17 @@ pub struct AsKeySpace<'a, KV: SledKeySpace> {
 impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn contains_key(&self, key: &KV::K) -> common_exception::Result<bool> {
         self.inner.contains_key::<KV>(key)
+    }
+
+    pub async fn update_and_fetch<F>(
+        &self,
+        key: &KV::K,
+        f: F,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        self.inner.update_and_fetch::<KV, _>(key, f).await
     }
 
     pub fn get(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
