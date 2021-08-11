@@ -232,6 +232,25 @@ impl SledTree {
         Ok(res)
     }
 
+    /// Get key-valuess in with the same prefix
+    pub fn scan_prefix<KV>(&self, prefix: &KV::K) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where KV: SledKeySpace {
+        let mut res = vec![];
+
+        let mes = || format!("scan_prefix: {}", prefix);
+
+        let pref = KV::serialize_key(prefix)?;
+        for item in self.tree.scan_prefix(pref) {
+            let (k, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, mes)?;
+
+            let key = KV::deserialize_key(k)?;
+            let value = KV::deserialize_value(v)?;
+            res.push((key, value));
+        }
+
+        Ok(res)
+    }
+
     /// Get values of key in `range`
     pub fn range_values<KV, R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>
     where
@@ -415,6 +434,10 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn range<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
     where R: RangeBounds<KV::K> {
         self.inner.range::<KV, R>(range)
+    }
+
+    pub fn scan_prefix(&self, prefix: &KV::K) -> common_exception::Result<Vec<(KV::K, KV::V)>> {
+        self.inner.scan_prefix::<KV>(prefix)
     }
 
     pub fn range_values<R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>

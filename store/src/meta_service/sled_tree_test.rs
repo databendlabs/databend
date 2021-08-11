@@ -6,6 +6,7 @@ use async_raft::raft::Entry;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use async_raft::LogId;
+use common_metatypes::KVValue;
 use common_runtime::tokio;
 
 use crate::meta_service::sled_key_space;
@@ -244,6 +245,30 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
     let got = tree.range::<sled_key_space::Logs, _>(9..11)?;
     assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone())], got);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sledtree_scan_prefix() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+
+    let files: Vec<(String, String)> = vec![
+        ("a".to_string(), "x".to_string()),
+        ("ab".to_string(), "xy".to_string()),
+        ("abc".to_string(), "xyz".to_string()),
+        ("abd".to_string(), "xyZ".to_string()),
+        ("b".to_string(), "y".to_string()),
+    ];
+
+    tree.append::<sled_key_space::Files>(&files).await?;
+
+    let got = tree.scan_prefix::<sled_key_space::Files>(&"ab".to_string())?;
+    assert_eq!(files[1..4], got);
 
     Ok(())
 }
@@ -633,7 +658,7 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
     Ok(())
 }
 
-// --- AsType test ---
+// --- key space test ---
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_append() -> anyhow::Result<()> {
@@ -855,6 +880,48 @@ async fn test_as_range() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_as_scan_prefix() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let file_tree = tree.key_space::<sled_key_space::Files>();
+    let kv_tree = tree.key_space::<sled_key_space::GenericKV>();
+
+    let files: Vec<(String, String)> = vec![
+        ("a".to_string(), "x".to_string()),
+        ("ab".to_string(), "xy".to_string()),
+        ("abc".to_string(), "xyz".to_string()),
+        ("abd".to_string(), "xyZ".to_string()),
+        ("b".to_string(), "y".to_string()),
+    ];
+
+    file_tree.append(&files).await?;
+
+    let kvs = vec![
+        ("a".to_string(), (1, KVValue::default())),
+        ("ab".to_string(), (2, KVValue::default())),
+        ("b".to_string(), (3, KVValue::default())),
+    ];
+
+    kv_tree.append(&kvs).await?;
+
+    let got = file_tree.scan_prefix(&"".to_string())?;
+    assert_eq!(files, got);
+
+    let got = file_tree.scan_prefix(&"ab".to_string())?;
+    assert_eq!(files[1..4], got);
+
+    let got = kv_tree.scan_prefix(&"".to_string())?;
+    assert_eq!(kvs, got);
+
+    let got = kv_tree.scan_prefix(&"ab".to_string())?;
+    assert_eq!(kvs[1..2], got);
+
+    Ok(())
+}
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_insert() -> anyhow::Result<()> {
     init_store_unittest();
