@@ -43,7 +43,7 @@ impl Dfs {}
 #[async_trait]
 impl FileSystem for Dfs {
     #[tracing::instrument(level = "debug", skip(self, data))]
-    async fn add(&self, path: &str, data: &[u8]) -> anyhow::Result<()> {
+    async fn add(&self, path: &str, data: &[u8]) -> common_exception::Result<()> {
         // add the file to local fs
 
         self.local_fs.add(path, data).await?;
@@ -75,8 +75,7 @@ impl FileSystem for Dfs {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn list(&self, prefix: &str) -> anyhow::Result<ListResult> {
-        // TODO(xp): use common_exception to replace anyhow
+    async fn list(&self, prefix: &str) -> common_exception::Result<ListResult> {
         let fns = self.meta_node.list_files(prefix).await?;
 
         Ok(ListResult {
