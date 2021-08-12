@@ -21,6 +21,18 @@ jobs:
           reaction: rocket
         env:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+
+      - name: Slack Notification Start
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_CHANNEL: datafuse
+          SLACK_MESSAGE: 'start!'
+          SLACK_TITLE: performance test
+          SLACK_USERNAME: datafuse messager
+
       - name: dependency hack on self hosted machine
         if: steps.check.outputs.triggered == 'true'
         run: |
@@ -42,14 +54,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends python3-pip
           sudo apt-get install -y --no-install-recommends git
 
-
       - name: Install latest nightly
         if: steps.check.outputs.triggered == 'true'
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly
-            override: true
-            components: rustfmt, clippy
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
 
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
@@ -68,4 +79,27 @@ jobs:
         if: steps.check.outputs.triggered == 'true'
         run: |
           bash ./scripts/ci/ci-run-performance-tests-standalone.sh
-          
+
+      - name: Slack Notification Failed
+        if: steps.check.outputs.triggered == 'true' && ${{ failure() }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_CHANNEL: datafuse
+          SLACK_MESSAGE: 'failed!'
+          SLACK_TITLE: performance test
+          SLACK_USERNAME: datafuse messager
+
+      - name: Slack Notification Start
+        if: steps.check.outputs.triggered == 'true' && ${{ success() }}
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_CHANNEL: datafuse
+          SLACK_MESSAGE: 'start!'
+          SLACK_TITLE: performance test
+          SLACK_USERNAME: datafuse messager
