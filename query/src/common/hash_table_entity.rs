@@ -6,13 +6,13 @@ pub trait HashTableEntity<Key>: Sized
     unsafe fn key_equals(self: *mut Self, key: &Key, hash: u64) -> bool;
     unsafe fn set_key_and_hash(self: *mut Self, key: &Key, hash: u64);
 
-    unsafe fn get_key<'a>(self: *mut Self) -> &'a Key;
+    fn get_key<'a>(self: *mut Self) -> &'a Key;
     unsafe fn get_hash(self: *mut Self) -> u64;
 
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool;
 }
 
-#[repr(C, packed)]
+// #[repr(C, packed)]
 pub struct DefaultHashTableEntity<Key: Sized, Value: Sized> {
     key: Key,
     value: Value,
@@ -53,8 +53,8 @@ macro_rules! primitive_key_entity_impl {
                 (*self).hash = hash;
             }
 
-            unsafe fn get_key<'a>(self: *mut Self) -> &'a $typ {
-                &(*self).key
+            fn get_key<'a>(self: *mut Self) -> &'a $typ {
+                unsafe { &(*self).key }
             }
 
             unsafe fn get_hash(self: *mut Self) -> u64 {

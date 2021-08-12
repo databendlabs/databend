@@ -4,20 +4,23 @@ use crate::common::hash_table_entity::HashTableEntity;
 pub struct HashTableIter<Key, Entity: HashTableEntity<Key>> {
     idx: isize,
     size: isize,
+    capacity: isize,
     entities: *mut Entity,
     zero_entity: Option<*mut Entity>,
-    ss: PhantomData<Key>,
+
+    phantom: PhantomData<Key>,
 
 }
 
 impl<Key, Entity: HashTableEntity<Key>> HashTableIter<Key, Entity> {
-    pub fn new(size: isize, entities: *mut Entity, zero_entity: Option<*mut Entity>) -> Self {
+    pub fn new(size: isize, capacity: isize, entities: *mut Entity, zero_entity: Option<*mut Entity>) -> impl Iterator<Item=*mut Entity> {
         Self {
-            idx: 0,
+            idx: -2,
             size,
+            capacity,
             entities,
             zero_entity,
-            ss: PhantomData::default(),
+            phantom: PhantomData::default(),
         }
     }
 }
@@ -26,19 +29,23 @@ impl<Key, Entity: HashTableEntity<Key>> Iterator for HashTableIter<Key, Entity> 
     type Item = *mut Entity;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO:
-        if let Some(entity) = self.zero_entity.take() {
-            return Some(entity);
-        }
+        unsafe {
+            if self.idx == -2 {
+                self.idx = -1;
+                if self.zero_entity.is_some() {
+                    return self.zero_entity;
+                }
+            }
 
-        if self.idx < self.size {
-            return unsafe {
-                let res = Some(self.entities.offset(self.idx));
+            self.idx += 1;
+            while self.idx < self.capacity && self.entities.offset(self.idx).is_zero() {
                 self.idx += 1;
-                res
-            };
-        }
+            }
 
-        None
+            match self.idx == self.capacity {
+                true => None,
+                false => Some(self.entities.offset(self.idx))
+            }
+        }
     }
 }

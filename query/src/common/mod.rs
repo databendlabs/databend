@@ -8,3 +8,8 @@ mod hash_table_entity;
 mod hash_table_grower;
 mod hash_table_hasher;
 
+pub use hash_table::HashTable;
+pub use hash_table_hasher::DefaultHasher;
+pub use hash_table_entity::HashTableEntity;
+pub use hash_table_entity::DefaultHashTableEntity;
+

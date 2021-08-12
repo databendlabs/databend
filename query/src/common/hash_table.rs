@@ -60,14 +60,18 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
 
     #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item=*mut Entity> {
-        HashTableIter::new(self.size as isize, self.entities.clone(), self.zero_entity.clone())
+        HashTableIter::new(self.size as isize, self.grower.max_size(), self.entities, self.zero_entity)
     }
 
+    // pub fn for_each<F: Fn(*mut Entity)>(&self, each_action: F) {
+    //
+    // }
+
     #[inline(always)]
-    pub fn insert_key(&mut self, key: Key, inserted: bool) -> *mut Entity {
-        let hash = Hasher::hash(&key);
-        match self.insert_if_zero_key(&key, hash, inserted) {
-            None => self.insert_non_zero_key(&key, hash, inserted),
+    pub fn insert_key(&mut self, key: &Key, inserted: &mut bool) -> *mut Entity {
+        let hash = Hasher::hash(key);
+        match self.insert_if_zero_key(key, hash, inserted) {
+            None => self.insert_non_zero_key(key, hash, inserted),
             Some(zero_hash_table_entity) => zero_hash_table_entity
         }
     }
@@ -105,18 +109,18 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
     }
 
     #[inline(always)]
-    fn insert_non_zero_key(&mut self, key: &Key, hash_value: u64, inserted: bool) -> *mut Entity {
+    fn insert_non_zero_key(&mut self, key: &Key, hash_value: u64, inserted: &mut bool) -> *mut Entity {
         let place_value = self.find_entity(key, hash_value);
         self.insert_non_zero_key_impl(place_value, key, hash_value, inserted)
     }
 
     #[inline(always)]
-    fn insert_non_zero_key_impl(&mut self, place_value: isize, key: &Key, hash_value: u64, _inserted: bool) -> *mut Entity {
+    fn insert_non_zero_key_impl(&mut self, place_value: isize, key: &Key, hash_value: u64, inserted: &mut bool) -> *mut Entity {
         unsafe {
             let entity = self.entities.offset(place_value);
 
             if !entity.is_zero() {
-                // inserted = false;
+                *inserted = false;
                 return self.entities.offset(place_value);
             }
 
@@ -135,20 +139,23 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
     }
 
     #[inline(always)]
-    fn insert_if_zero_key(&mut self, key: &Key, hash_value: u64, _inserted: bool) -> Option<*mut Entity> {
+    fn insert_if_zero_key(&mut self, key: &Key, hash_value: u64, inserted: &mut bool) -> Option<*mut Entity> {
         if Entity::is_zero_key(key) {
-            if self.zero_entity.is_none() {
-                unsafe {
+            return match self.zero_entity {
+                Some(zero_entity) => {
+                    *inserted = false;
+                    Some(zero_entity)
+                },
+                None => unsafe {
                     let layout = Layout::from_size_align_unchecked(mem::size_of::<Entity>(), mem::align_of::<Entity>());
 
                     self.size += 1;
                     self.zero_entity_raw = Some(std::alloc::alloc_zeroed(layout));
                     self.zero_entity = Some(self.zero_entity_raw.unwrap() as *mut Entity);
                     self.zero_entity.unwrap().set_key_and_hash(key, hash_value);
+                    self.zero_entity
                 }
             };
-
-            return self.zero_entity;
         }
 
         Option::None
