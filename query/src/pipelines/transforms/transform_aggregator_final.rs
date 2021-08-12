@@ -10,7 +10,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::DFBinaryArray;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -70,24 +72,39 @@ impl Processor for AggregatorFinalTransform {
         let mut stream = self.input.execute().await?;
 
         let start = Instant::now();
-
         let arena = bumpalo::Bump::new();
-        let places = funcs
-            .iter()
-            .map(|func| func.allocate_state(&arena))
-            .collect::<Vec<_>>();
+
+        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
+        let places: Vec<usize> = {
+            let place: StateAddr = arena.alloc_layout(layout).into();
+            funcs
+                .iter()
+                .enumerate()
+                .map(|(idx, func)| {
+                    let arg_place = place.next(offsets_aggregate_states[idx]);
+                    func.init_state(arg_place);
+                    arg_place.addr()
+                })
+                .collect()
+        };
 
         while let Some(block) = stream.next().await {
             let block = block?;
-            for (i, func) in funcs.iter().enumerate() {
-                let binary_array = block.column(i).to_array()?;
+            for (idx, func) in funcs.iter().enumerate() {
+                let place = places[idx].into();
+
+                let binary_array = block.column(idx).to_array()?;
                 let binary_array: &DFBinaryArray = binary_array.binary()?;
                 let array = binary_array.downcast_ref();
 
-                let place = func.allocate_state(&arena);
                 let mut data = array.value(0);
-                func.deserialize(place, &mut data)?;
-                func.merge(places[i], place)?;
+                let s = funcs[idx].state_layout();
+                let temp = arena.alloc_layout(s);
+                let temp_addr = temp.into();
+                funcs[idx].init_state(temp_addr);
+
+                func.deserialize(temp_addr, &mut data)?;
+                func.merge(place, temp_addr)?;
             }
         }
         let delta = start.elapsed();
@@ -95,7 +112,8 @@ impl Processor for AggregatorFinalTransform {
 
         let mut final_result = Vec::with_capacity(funcs.len());
         for (idx, func) in funcs.iter().enumerate() {
-            let merge_result = func.merge_result(places[idx])?;
+            let place = places[idx].into();
+            let merge_result = func.merge_result(place)?;
             final_result.push(merge_result.to_series_with_size(1)?);
         }
 

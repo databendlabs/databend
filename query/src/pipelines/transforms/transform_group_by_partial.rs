@@ -18,6 +18,8 @@ use common_datablocks::HashMethodKind;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::StateAddr;
 use common_infallible::RwLock;
 use common_io::prelude::*;
 use common_planners::Expression;
@@ -102,6 +104,7 @@ impl Processor for GroupByPartialTransform {
         let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
         let mut arg_names = Vec::with_capacity(self.aggr_exprs.len());
         let mut aggr_cols = Vec::with_capacity(self.aggr_exprs.len());
+        let aggr_funcs_len = self.aggr_exprs.len();
 
         for expr in self.aggr_exprs.iter() {
             funcs.push(expr.to_aggregate_function(&schema_before_group_by)?);
@@ -118,6 +121,8 @@ impl Processor for GroupByPartialTransform {
         let arena = Bump::new();
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
+
+        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
 
         macro_rules! apply {
             ($hash_method: ident, $key_array_builder: ty, $group_func_table: ty) => {{
@@ -146,32 +151,44 @@ impl Processor for GroupByPartialTransform {
                     // this can benificial for the case of dereferencing
                     let aggr_arg_columns_slice = &aggr_arg_columns;
 
+                    let mut places = Vec::with_capacity(block.num_rows());
                     let group_keys = $hash_method.build_keys(&group_columns, block.num_rows())?;
                     let mut groups = groups_locker.write();
                     {
-                        for (row, group_key) in group_keys.iter().enumerate() {
+                        for group_key in group_keys.iter() {
                             match groups.get(group_key) {
                                 // New group.
                                 None => {
-                                    let mut places = Vec::with_capacity(aggr_cols.len());
-                                    for (idx, arg_columns) in
-                                        aggr_arg_columns_slice.iter().enumerate()
-                                    {
-                                        let place = funcs[idx].allocate_state(&arena);
-                                        funcs[idx].accumulate_row(place, row, arg_columns)?;
+                                    if aggr_funcs_len == 0 {
+                                        groups.insert(group_key.clone(), 0);
+                                    } else {
+                                        let place: StateAddr = arena.alloc_layout(layout).into();
+                                        for idx in 0..aggr_len {
+                                            let arg_place =
+                                                place.next(offsets_aggregate_states[idx]);
+                                            funcs[idx].init_state(arg_place);
+                                        }
                                         places.push(place);
+                                        groups.insert(group_key.clone(), place.addr());
                                     }
-                                    groups.insert(group_key.clone(), places);
                                 }
                                 // Accumulate result against the take block by indices.
-                                Some(places) => {
-                                    for (idx, arg_columns) in
-                                        aggr_arg_columns_slice.iter().enumerate()
-                                    {
-                                        funcs[idx].accumulate_row(places[idx], row, arg_columns)?;
-                                    }
+                                Some(place) => {
+                                    let place: StateAddr = (*place).into();
+                                    places.push(place);
                                 }
                             }
+                        }
+
+                        for ((idx, func), args) in
+                            funcs.iter().enumerate().zip(aggr_arg_columns_slice.iter())
+                        {
+                            func.accumulate_keys(
+                                &places,
+                                offsets_aggregate_states[idx],
+                                args,
+                                block.num_rows(),
+                            )?;
                         }
                     }
                 }
@@ -197,9 +214,12 @@ impl Processor for GroupByPartialTransform {
                 let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
 
                 let mut bytes = BytesMut::new();
-                for (key, places) in groups.iter() {
+                for (key, place) in groups.iter() {
+                    let place: StateAddr = (*place).into();
+
                     for (idx, func) in funcs.iter().enumerate() {
-                        func.serialize(places[idx], &mut bytes)?;
+                        let arg_place = place.next(offsets_aggregate_states[idx]);
+                        func.serialize(arg_place, &mut bytes)?;
                         state_builders[idx].append_value(&bytes[..]);
                         bytes.clear();
                     }
@@ -227,19 +247,19 @@ impl Processor for GroupByPartialTransform {
             ($method: ident, $apply: ident) => {{
                 match $method {
                     HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, Vec<usize>, ahash::RandomState>>}
+                        apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
                     }
                     HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, Vec<usize>, FxBuildHasher>> }
+                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, usize, FxBuildHasher>> }
                     }
                     HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, Vec<usize>, FxBuildHasher>> }
+                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, usize, FxBuildHasher>> }
                     }
                     HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, Vec<usize>, FxBuildHasher>> }
+                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, usize, FxBuildHasher>> }
                     }
                     HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, Vec<usize>, FxBuildHasher>> }
+                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, usize, FxBuildHasher>> }
                     }
                 }
             }};

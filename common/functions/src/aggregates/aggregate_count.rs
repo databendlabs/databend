@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::fmt;
 
 use bytes::BytesMut;
@@ -10,15 +11,12 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use super::StateAddr;
-use crate::aggregates::aggregate_function_state::GetState;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
 
 pub struct AggregateCountState {
     count: u64,
 }
-
-impl<'a> GetState<'a, AggregateCountState> for AggregateCountState {}
 
 #[derive(Clone)]
 pub struct AggregateCountFunction {
@@ -52,13 +50,16 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(false)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(AggregateCountState { count: 0 });
-        (state as *mut AggregateCountState) as StateAddr
+    fn init_state(&self, place: StateAddr) {
+        place.write(|| AggregateCountState { count: 0 });
+    }
+
+    fn state_layout(&self) -> Layout {
+        Layout::new::<AggregateCountState>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
-        let state = AggregateCountState::get(place);
+        let state = place.get::<AggregateCountState>();
         if self.arguments.is_empty() {
             state.count += input_rows as u64;
         } else {
@@ -67,36 +68,54 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let state = AggregateCountState::get(place);
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        arrays: &[Series],
+        _input_rows: usize,
+    ) -> Result<()> {
         if self.arguments.is_empty() {
-            state.count += 1;
-        } else {
-            state.count += arrays[0].is_null(row) as u64;
+            for place in places.iter() {
+                let place = place.next(offset);
+                let state = place.get::<AggregateCountState>();
+                state.count += 1;
+            }
+            return Ok(());
+        }
+
+        let array = arrays[0].get_array_ref();
+        let validity = array.validity();
+        for (row, place) in places.iter().enumerate() {
+            let place = place.next(offset);
+            let state = place.get::<AggregateCountState>();
+            if let Some(v) = validity {
+                state.count += v.get_bit(row) as u64;
+            }
         }
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = AggregateCountState::get(place);
+        let state = place.get::<AggregateCountState>();
         writer.write_uvarint(state.count)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = AggregateCountState::get(place);
+        let state = place.get::<AggregateCountState>();
         reader.read_to_uvarint(&mut state.count)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = AggregateCountState::get(place);
-        let rhs = AggregateCountState::get(rhs);
+        let state = place.get::<AggregateCountState>();
+        let rhs = rhs.get::<AggregateCountState>();
         state.count += rhs.count;
 
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = AggregateCountState::get(place);
+        let state = place.get::<AggregateCountState>();
         Ok(state.count.into())
     }
 }
