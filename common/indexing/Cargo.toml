@@ -10,5 +10,9 @@ edition = "2021"
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-arrow = {path = "../arrow"}
+common-exception = {path = "../exception"}
+common-runtime = { path = "../runtime" }
+common-planners = {path = "../planners"}
 
 # Crates.io dependencies
