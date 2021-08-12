@@ -211,7 +211,7 @@ impl Config {
     /// Create a unique sled::Tree name by prepending a unique prefix.
     /// So that multiple instance that depends on a sled::Tree can be used in one process.
     /// sled does not allow to open multiple `sled::Db` in one process.
-    pub fn tree_name(&self, name: &str) -> String {
+    pub fn tree_name(&self, name: impl std::fmt::Display) -> String {
         format!("{}{}", self.sled_tree_prefix, name)
     }
 }

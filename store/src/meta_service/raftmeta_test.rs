@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_metatypes::MatchSeq;
 use common_runtime::tokio;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
@@ -372,6 +373,107 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     "n{} applied AddDatabase",
                     i
                 );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
+    // - Bring up a cluster of 3.
+    // - Write just enough logs to trigger a snapshot.
+    // - Add a non-voter, test the snapshot is sync-ed
+    // - Write logs to trigger another snapshot.
+    // - Add
+
+    init_store_unittest();
+
+    // Create a snapshot every 10 logs
+    let snap_logs = 10;
+
+    let mut tc = new_test_context();
+    tc.config.snapshot_logs_since_last = snap_logs;
+    let addr = tc.config.meta_api_addr();
+
+    let mn = MetaNode::boot(0, &tc.config).await?;
+
+    assert_meta_connection(&addr).await?;
+
+    wait_for_state(&mn, State::Leader).await?;
+    wait_for_current_leader(&mn, 0).await?;
+
+    let mut n_logs = 2;
+
+    mn.raft
+        .wait(timeout())
+        .log(n_logs, "leader init logs")
+        .await?;
+
+    let n_req = 12;
+
+    for i in 0..n_req {
+        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
+        mn.write(LogEntry {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: key.clone(),
+                seq: MatchSeq::Any,
+                value: Some(b"v".to_vec()),
+                value_meta: None,
+            },
+        })
+        .await?;
+    }
+    n_logs += n_req;
+
+    tracing::info!("--- check the log is locally applied");
+
+    mn.raft
+        .wait(timeout())
+        .log(n_logs, "applied on leader")
+        .await?;
+
+    tracing::info!("--- check the snapshot is created");
+
+    mn.raft
+        .wait(timeout())
+        .metrics(
+            |x| x.snapshot.term == 1 && x.snapshot.index >= 10,
+            "snapshot is created by leader",
+        )
+        .await?;
+
+    tracing::info!("--- start a non_voter to receive snapshot replication");
+
+    let (_, tc1) = setup_non_voter(mn.clone(), 1).await?;
+    n_logs += 1;
+
+    let mn1 = tc1.meta_nodes[0].clone();
+
+    mn1.raft
+        .wait(timeout())
+        .log(n_logs, "non-voter replicated all logs")
+        .await?;
+
+    mn1.raft
+        .wait(timeout())
+        .metrics(
+            |x| x.snapshot.term == 1 && x.snapshot.index >= 10,
+            "snapshot is received by non-voter",
+        )
+        .await?;
+
+    for i in 0..n_req {
+        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
+        let got = mn1.get_kv(&key).await?;
+        match got {
+            None => {
+                panic!("expect get some value for {}", key)
+            }
+            Some((ref _seq, ref v)) => {
+                assert_eq!(v.value, b"v".to_vec());
             }
         }
     }
