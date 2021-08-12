@@ -2,17 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_arrow::arrow::array::Array;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 
-use super::GetState;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -21,8 +20,13 @@ use crate::dispatch_numeric_types;
 
 pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn default() -> Self;
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self;
-    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()>;
+    fn add_keys(
+        places: &[StateAddr],
+        offset: usize,
+        series: &Series,
+        rows: usize,
+        is_min: bool,
+    ) -> Result<()>;
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()>;
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
@@ -37,9 +41,6 @@ struct NumericState<T: DFNumericType> {
 struct Utf8State {
     pub value: Option<String>,
 }
-
-impl<'a, T> GetState<'a, NumericState<T>> for NumericState<T> where T: DFNumericType {}
-impl<'a> GetState<'a, Utf8State> for Utf8State {}
 
 impl<T> NumericState<T>
 where
@@ -74,23 +75,22 @@ where
         Self { value: None }
     }
 
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
-        Self::get(place)
-    }
-
-    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
+    fn add_keys(
+        places: &[StateAddr],
+        offset: usize,
+        series: &Series,
+        _rows: usize,
+        is_min: bool,
+    ) -> Result<()> {
         let array: &DataArray<T> = series.static_cast();
         let array = array.downcast_ref();
-
-        if array
-            .validity()
-            .as_ref()
-            .map(|c| c.get_bit(row))
-            .unwrap_or(true)
-        {
-            let other = array.value(row);
-            self.merge_value(other, is_min);
-        }
+        array.into_iter().zip(places.iter()).for_each(|(x, place)| {
+            if let Some(x) = x {
+                let place = place.next(offset);
+                let state = place.get::<Self>();
+                state.merge_value(*x, is_min);
+            }
+        });
         Ok(())
     }
 
@@ -144,23 +144,22 @@ impl AggregateMinMaxState for Utf8State {
         Self { value: None }
     }
 
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
-        Self::get(place)
-    }
-
-    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
+    fn add_keys(
+        places: &[StateAddr],
+        offset: usize,
+        series: &Series,
+        _rows: usize,
+        is_min: bool,
+    ) -> Result<()> {
         let array: &DataArray<Utf8Type> = series.static_cast();
         let array = array.downcast_ref();
-
-        if array
-            .validity()
-            .as_ref()
-            .map(|c| c.get_bit(row))
-            .unwrap_or(true)
-        {
-            let other = array.value(row);
-            self.merge_value(other, is_min);
-        }
+        array.into_iter().zip(places.iter()).for_each(|(x, place)| {
+            let place = place.next(offset);
+            if let Some(x) = x {
+                let state = place.get::<Self>();
+                state.merge_value(x, is_min);
+            }
+        });
         Ok(())
     }
 
@@ -217,39 +216,47 @@ where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + 
         Ok(false)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(T::default());
-        (state as *mut T) as StateAddr
+    fn init_state(&self, place: StateAddr) {
+        place.write(T::default);
+    }
+
+    fn state_layout(&self) -> Layout {
+        Layout::new::<T>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.add_batch(&arrays[0], self.is_min)
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let state = T::get_state(place);
-        state.add(&arrays[0], row, self.is_min)
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        arrays: &[Series],
+        input_rows: usize,
+    ) -> Result<()> {
+        T::add_keys(places, offset, &arrays[0], input_rows, self.is_min)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = T::get_state(rhs);
-        let state = T::get_state(place);
+        let rhs = rhs.get::<T>();
+        let state = place.get::<T>();
         state.merge(rhs, self.is_min)
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.merge_result()
     }
 }
