@@ -48,9 +48,10 @@ Datafuse is an **elastic** and **scalable** Cloud Warehouse, it offers Blazing F
 
 ## Getting Started
 
-* [Quick Start](https://datafuse.rs/overview/architecture/)
+* [Quick Start](https://datafuse.rs/overview/building-and-running/)
 * [Performance](https://datafuse.rs/overview/performance/)
 * [Development](https://datafuse.rs/development/contributing/)
+* [CLI Design](https://datafuse.rs/rfcs/cli/0001-cli-design/)
 * [Datafuse Weekly](https://datafuselabs.github.io/weekly/)
 
 ## Roadmap

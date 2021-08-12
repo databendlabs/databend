@@ -85,8 +85,8 @@ pub struct MetaStore {
 
     // Raft state includes:
     // id: NodeId,
-    // current_term,
-    // voted_for
+    //     current_term,
+    //     voted_for
     pub raft_state: RaftState,
 
     pub log: RaftLog,
@@ -921,12 +921,12 @@ impl MetaNode {
     pub async fn get_database_meta(
         &self,
         lower_bound: Option<u64>,
-    ) -> Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)> {
+    ) -> common_exception::Result<Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let ver = sm.get_database_meta_ver();
-        if ver <= lower_bound {
+        let ver = sm.get_database_meta_ver()?;
+        let res = if ver <= lower_bound {
             None
         } else {
             let dbs = sm
@@ -940,7 +940,9 @@ impl MetaNode {
                 .map(|(k, v)| (*k, v.clone()))
                 .collect::<Vec<_>>();
             Some((ver.unwrap_or(0), dbs, tbls))
-        }
+        };
+
+        Ok(res)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

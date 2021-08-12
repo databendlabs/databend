@@ -8,8 +8,6 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fs::remove_dir_all;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -96,11 +94,6 @@ pub struct StateMachine {
     /// (serial, RaftResponse)
     /// This is used to de-dup client request, to impl idempotent operations.
     pub client_last_resp: HashMap<String, (u64, AppliedState)>,
-
-    /// storage of auto-incremental number.
-    /// TODO(xp): temporarily make it a Arc<Mutex>, need to be modified while &StateMachine is immutably borrow.
-    ///           remove it after making it a sled store.
-    pub sequences: Arc<Mutex<BTreeMap<String, u64>>>,
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
@@ -203,7 +196,6 @@ impl StateMachine {
             sm_tree,
 
             client_last_resp: Default::default(),
-            sequences: Arc::new(Mutex::new(BTreeMap::new())),
             slots: Vec::new(),
 
             replication: Replication::Mirror(1),
@@ -308,17 +300,20 @@ impl StateMachine {
     /// Internal func to get an auto-incr seq number.
     /// It is just what Cmd::IncrSeq does and is also used by Cmd that requires
     /// a unique id such as Cmd::AddDatabase which needs make a new database id.
-    fn incr_seq(&self, key: &str) -> u64 {
-        let mut sequences = self.sequences.lock().unwrap();
-        let prev = sequences.get(key);
-        let curr = match prev {
-            Some(v) => v + 1,
-            None => 1,
-        };
-        sequences.insert(key.to_string(), curr);
+    ///
+    /// Note: this can only be called inside apply().
+    async fn incr_seq(&self, key: &str) -> common_exception::Result<u64> {
+        let sequences = self.sequences();
+
+        let curr = sequences
+            .update_and_fetch(&key.to_string(), |old| Some(old.unwrap_or_default() + 1))
+            .await?;
+
+        let curr = curr.unwrap();
+
         tracing::debug!("applied IncrSeq: {}={}", key, curr);
 
-        curr
+        Ok(curr.0)
     }
 
     /// Apply an log entry to state machine.
@@ -389,7 +384,7 @@ impl StateMachine {
                 Ok((prev, Some(value.clone())).into())
             }
 
-            Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).into()),
+            Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).await?.into()),
 
             Cmd::AddNode {
                 ref node_id,
@@ -416,10 +411,10 @@ impl StateMachine {
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let db = Database {
-                        database_id: self.incr_seq(SEQ_DATABASE_ID),
+                        database_id: self.incr_seq(SEQ_DATABASE_ID).await?,
                         tables: Default::default(),
                     };
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     self.databases.insert(name.clone(), db.clone());
                     tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
@@ -433,7 +428,7 @@ impl StateMachine {
                 if prev.is_some() {
                     self.remove_db_data_parts(name);
                     self.databases.remove(name);
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
                     tracing::debug!("applied DropDatabase: {}", name);
                     Ok((prev, None).into())
                 } else {
@@ -456,11 +451,11 @@ impl StateMachine {
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let table = Table {
-                        table_id: self.incr_seq(SEQ_TABLE_ID),
+                        table_id: self.incr_seq(SEQ_TABLE_ID).await?,
                         schema: table.schema.clone(),
                         parts: table.parts.clone(),
                     };
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
                     db.tables.insert(table_name.clone(), table.table_id);
                     self.databases.insert(db_name.clone(), db);
                     self.tables.insert(table.table_id, table.clone());
@@ -484,7 +479,7 @@ impl StateMachine {
 
                     self.remove_table_data_parts(db_name, table_name);
 
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     Ok((prev, None).into())
                 } else {
@@ -526,7 +521,7 @@ impl StateMachine {
                 }
 
                 let record_value = if let Some(v) = value {
-                    let new_seq = self.incr_seq(SEQ_GENERIC_KV);
+                    let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
 
                     let gv = KVValue {
                         meta: value_meta.clone(),
@@ -617,12 +612,10 @@ impl StateMachine {
         &self.databases
     }
 
-    pub fn get_database_meta_ver(&self) -> Option<u64> {
-        self.sequences
-            .lock()
-            .unwrap()
-            .get(SEQ_DATABASE_META_ID)
-            .cloned()
+    pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
+        let sequences = self.sequences();
+        let res = sequences.get(&SEQ_DATABASE_META_ID.to_string())?;
+        Ok(res.map(|x| x.0))
     }
 
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
@@ -826,6 +819,11 @@ impl StateMachine {
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
     pub fn kvs(&self) -> AsKeySpace<sled_key_space::GenericKV> {
+        self.sm_tree.key_space()
+    }
+
+    /// storage of auto-incremental number.
+    pub fn sequences(&self) -> AsKeySpace<sled_key_space::Sequences> {
         self.sm_tree.key_space()
     }
 }
