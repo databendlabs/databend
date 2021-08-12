@@ -78,9 +78,4 @@ clean:
 docker_release:
 	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/datafuse:${TAG} --build-arg version=$VERSION --push
 
-cli-e2e:
-	cargo build --bin datafuse-cli --out-dir cli/e2e -Z unstable-options
-	pip install absl-py asynctest
-	(cd ./cli/e2e && python3 e2e.py)
-
 .PHONY: setup test run build fmt lint docker clean
