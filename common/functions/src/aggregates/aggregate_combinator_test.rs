@@ -104,15 +104,17 @@ fn test_aggregate_combinator_function() -> Result<()> {
         let func = || -> Result<()> {
             // First.
             let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            let place1 = func.allocate_state(&arena);
-            func.accumulate(place1, &t.arrays, rows)?;
+            let addr = arena.alloc_layout(func.state_layout());
+            func.init_state(addr.into());
+            func.accumulate(addr.into(), &t.arrays, rows)?;
 
             // Second.
-            let place2 = func.allocate_state(&arena);
-            func.accumulate(place2, &t.arrays, rows)?;
+            let addr2 = arena.alloc_layout(func.state_layout());
+            func.init_state(addr2.into());
+            func.accumulate(addr2.into(), &t.arrays, rows)?;
 
-            func.merge(place1, place2)?;
-            let result = func.merge_result(place1)?;
+            func.merge(addr.into(), addr2.into())?;
+            let result = func.merge_result(addr.into())?;
             assert_eq!(
                 format!("{:?}", t.expect),
                 format!("{:?}", result),
@@ -225,15 +227,18 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         let func = || -> Result<()> {
             // First.
             let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
-            let place1 = func.allocate_state(&arena);
-            func.accumulate(place1, &t.arrays, rows)?;
+            let addr1 = arena.alloc_layout(func.state_layout());
+            func.init_state(addr1.into());
+
+            func.accumulate(addr1.into(), &t.arrays, rows)?;
 
             // Second.
-            let place2 = func.allocate_state(&arena);
-            func.accumulate(place2, &t.arrays, rows)?;
-            func.merge(place1, place2)?;
+            let addr2 = arena.alloc_layout(func.state_layout());
+            func.init_state(addr2.into());
+            func.accumulate(addr2.into(), &t.arrays, rows)?;
+            func.merge(addr1.into(), addr2.into())?;
 
-            let result = func.merge_result(place1)?;
+            let result = func.merge_result(addr1.into())?;
             assert_eq!(
                 format!("{:?}", t.expect),
                 format!("{:?}", result),

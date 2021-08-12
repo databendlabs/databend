@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::fmt;
 
 use bytes::BytesMut;
@@ -75,8 +76,12 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.nullable(input_schema)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        self.nested.allocate_state(arena)
+    fn init_state(&self, place: StateAddr) {
+        self.nested.init_state(place);
+    }
+
+    fn state_layout(&self) -> Layout {
+        self.nested.state_layout()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
@@ -134,8 +139,15 @@ impl AggregateFunction for AggregateIfCombinator {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        self.nested.accumulate_row(place, row, arrays)
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        arrays: &[Series],
+        input_rows: usize,
+    ) -> Result<()> {
+        self.nested
+            .accumulate_keys(places, offset, arrays, input_rows)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

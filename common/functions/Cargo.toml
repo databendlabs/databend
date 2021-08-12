@@ -19,10 +19,10 @@ common-io = {path = "../io"}
 # Github dependencies
 
 # Crates.io dependencies
+bumpalo = "3.7.0"
 dyn-clone = "1.0.4"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
-bumpalo = "3.7.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bytes = "1.0.1"
