@@ -1362,6 +1362,7 @@ dependencies = [
  "crossbeam-queue 0.3.2",
  "ctrlc",
  "env_logger 0.9.0",
+ "flaky_test",
  "futures",
  "indexmap",
  "lazy_static",
@@ -1417,6 +1418,7 @@ dependencies = [
  "common-runtime",
  "common-tracing",
  "env_logger 0.9.0",
+ "flaky_test",
  "futures",
  "indexmap",
  "lazy_static",
@@ -1752,6 +1754,17 @@ name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
+
+[[package]]
+name = "flaky_test"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479cde5eb168cf5a056dd98f311cbfab7494c216394e4fb9eba0336827a8db93"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "flatbuffers"

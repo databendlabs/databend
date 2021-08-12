@@ -72,6 +72,7 @@ env_logger = "*"
 pretty_assertions = "0.7"
 test-env-log = "0.2.7"
 maplit = "1.0.2"
+flaky_test = "0.1"
 
 [build-dependencies]
 common-building = {path = "../common/building"}
