@@ -26,7 +26,7 @@ impl<Key: Sized, Value: Sized> DefaultHashTableEntity<Key, Value> {
         }
     }
 
-    pub fn get_value(self: *mut Self) -> &Value {
+    pub fn get_value<'a>(self: *mut Self) -> &'a Value {
         unsafe {
             &(*self).value
         }
