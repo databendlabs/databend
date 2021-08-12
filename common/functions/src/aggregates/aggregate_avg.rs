@@ -11,6 +11,7 @@ use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
+use num::cast::AsPrimitive;
 use num::NumCast;
 
 use super::StateAddr;
@@ -56,8 +57,15 @@ impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
 where
     T: DFNumericType,
     SumT: DFNumericType,
-    T::Native:
-        NumCast + DFTryFrom<DataValue> + Clone + Copy + Into<DataValue> + Send + Sync + 'static,
+    T::Native: AsPrimitive<SumT::Native>
+        + NumCast
+        + DFTryFrom<DataValue>
+        + Clone
+        + Copy
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
     SumT::Native: NumCast
         + DFTryFrom<DataValue>
         + Into<DataValue>
@@ -112,12 +120,12 @@ where
         arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()> {
-        let array: &DataArray<SumT> = arrays[0].static_cast();
+        let array: &DataArray<T> = arrays[0].static_cast();
 
         array.into_iter().zip(places.iter()).for_each(|(v, place)| {
             let place = place.next(offset);
             let state = place.get::<AggregateAvgState<SumT::Native>>();
-            state.add(&v, 1);
+            state.add(&v.map(|v| v.as_()), 1);
         });
 
         Ok(())
@@ -164,8 +172,15 @@ impl<T, SumT> AggregateAvgFunction<T, SumT>
 where
     T: DFNumericType,
     SumT: DFNumericType,
-    T::Native:
-        NumCast + DFTryFrom<DataValue> + Clone + Copy + Into<DataValue> + Send + Sync + 'static,
+    T::Native: AsPrimitive<SumT::Native>
+        + NumCast
+        + DFTryFrom<DataValue>
+        + Clone
+        + Copy
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
     SumT::Native: NumCast
         + DFTryFrom<DataValue>
         + Into<DataValue>

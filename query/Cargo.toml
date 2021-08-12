@@ -90,6 +90,7 @@ pretty_assertions = "0.7"
 criterion = "0.3"
 mysql = "21.0.1"
 reqwest = { version = "0.11", features = ["json"] }
+flaky_test = "0.1"
 
 [build-dependencies]
 common-building = {path = "../common/building"}
