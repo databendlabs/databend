@@ -7,7 +7,6 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_arrow::arrow::array::Array;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;

@@ -109,7 +109,7 @@ where
         &self,
         places: &[StateAddr],
         arrays: &[Series],
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<()> {
         let array: &DataArray<SumT> = arrays[0].static_cast();
 

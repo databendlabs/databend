@@ -135,25 +135,49 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Layout::from_size_align(layout.size() + netesed.size(), layout.align()).unwrap()
     }
 
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
+        for row in 0..input_rows {
+            let values = arrays
+                .iter()
+                .map(|s| s.try_get(row))
+                .collect::<Result<Vec<_>>>()?;
+
+            if !values.iter().any(|c| c.is_null()) {
+                let state = place.get::<AggregateDistinctState>();
+                state.set.insert(DataGroupValues(
+                    values
+                        .iter()
+                        .map(DataGroupValue::try_from)
+                        .collect::<Result<Vec<_>>>()?,
+                ));
+            }
+        }
+        todo!()
+    }
+
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
         arrays: &[Series],
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<()> {
-        let values = arrays
-            .iter()
-            .enumerate()
-            .map(|(row, s)| s.try_get(row))
-            .collect::<Result<Vec<_>>>()?;
-        if !values.iter().any(|c| c.is_null()) {
-            state.set.insert(DataGroupValues(
-                values
-                    .iter()
-                    .map(DataGroupValue::try_from)
-                    .collect::<Result<Vec<_>>>()?,
-            ));
+        for (row, place) in places.iter().enumerate() {
+            let values = arrays
+                .iter()
+                .map(|s| s.try_get(row))
+                .collect::<Result<Vec<_>>>()?;
+
+            if !values.iter().any(|c| c.is_null()) {
+                let state = place.get::<AggregateDistinctState>();
+                state.set.insert(DataGroupValues(
+                    values
+                        .iter()
+                        .map(DataGroupValue::try_from)
+                        .collect::<Result<Vec<_>>>()?,
+                ));
+            }
         }
+
         Ok(())
     }
 

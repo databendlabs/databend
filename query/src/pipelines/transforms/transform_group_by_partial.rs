@@ -150,37 +150,34 @@ impl Processor for GroupByPartialTransform {
                     // this can benificial for the case of dereferencing
                     let aggr_arg_columns_slice = &aggr_arg_columns;
 
+                    let mut places = Vec::with_capacity(block.num_rows());
                     let group_keys = $hash_method.build_keys(&group_columns, block.num_rows())?;
                     let mut groups = groups_locker.write();
                     {
-                        for (row, group_key) in group_keys.iter().enumerate() {
+                        for group_key in group_keys.iter() {
                             match groups.get(group_key) {
                                 // New group.
                                 None => {
                                     let place: StateAddr =
                                         arena.alloc_layout(layout.clone()).into();
 
-                                    for (idx, arg_columns) in
-                                        aggr_arg_columns_slice.iter().enumerate()
-                                    {
+                                    for idx in 0..aggr_len {
                                         let arg_place = place.prev(offsets_aggregate_states[idx]);
                                         funcs[idx].allocate_state(arg_place, &arena);
-                                        funcs[idx].accumulate_row(arg_place, row, arg_columns)?;
                                     }
+                                    places.push(place);
                                     groups.insert(group_key.clone(), place.addr());
                                 }
                                 // Accumulate result against the take block by indices.
                                 Some(place) => {
                                     let place: StateAddr = (*place).into();
-
-                                    for (idx, arg_columns) in
-                                        aggr_arg_columns_slice.iter().enumerate()
-                                    {
-                                        let arg_place = place.prev(offsets_aggregate_states[idx]);
-                                        funcs[idx].accumulate_row(arg_place, row, arg_columns)?;
-                                    }
+                                    places.push(place);
                                 }
                             }
+                        }
+
+                        for (func, args) in funcs.iter().zip(aggr_arg_columns_slice.iter()) {
+                            func.accumulate_keys(&places, args, block.num_rows())?;
                         }
                     }
                 }

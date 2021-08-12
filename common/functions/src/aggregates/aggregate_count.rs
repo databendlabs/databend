@@ -72,7 +72,7 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         places: &[StateAddr],
         arrays: &[Series],
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<()> {
         if self.arguments.is_empty() {
             for place in places.iter() {
@@ -82,10 +82,13 @@ impl AggregateFunction for AggregateCountFunction {
             return Ok(());
         }
 
-        let validity = arrays[0].get_array_ref().validity();
+        let array = arrays[0].get_array_ref();
+        let validity = array.validity();
         for (row, place) in places.iter().enumerate() {
             let state = place.get::<AggregateCountState>();
-            state.count += validity.map(|f| f.get_bit(row) as u64).unwrap_or(1u64);
+            if let Some(v) = validity {
+                state.count += v.get_bit(row) as u64;
+            }
         }
         Ok(())
     }

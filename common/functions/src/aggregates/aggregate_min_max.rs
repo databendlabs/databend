@@ -7,7 +7,6 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_arrow::arrow::array::Array;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -21,7 +20,7 @@ use crate::dispatch_numeric_types;
 
 pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn default() -> Self;
-    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()>;
+    fn add_keys(places: &[StateAddr], series: &Series, rows: usize, is_min: bool) -> Result<()>;
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()>;
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
@@ -70,19 +69,15 @@ where
         Self { value: None }
     }
 
-    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
+    fn add_keys(places: &[StateAddr], series: &Series, _rows: usize, is_min: bool) -> Result<()> {
         let array: &DataArray<T> = series.static_cast();
         let array = array.downcast_ref();
-
-        if array
-            .validity()
-            .as_ref()
-            .map(|c| c.get_bit(row))
-            .unwrap_or(true)
-        {
-            let other = array.value(row);
-            self.merge_value(other, is_min);
-        }
+        array.into_iter().zip(places.iter()).for_each(|(x, place)| {
+            if let Some(x) = x {
+                let state = place.get::<Self>();
+                state.merge_value(*x, is_min);
+            }
+        });
         Ok(())
     }
 
@@ -136,19 +131,15 @@ impl AggregateMinMaxState for Utf8State {
         Self { value: None }
     }
 
-    fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
+    fn add_keys(places: &[StateAddr], series: &Series, _rows: usize, is_min: bool) -> Result<()> {
         let array: &DataArray<Utf8Type> = series.static_cast();
         let array = array.downcast_ref();
-
-        if array
-            .validity()
-            .as_ref()
-            .map(|c| c.get_bit(row))
-            .unwrap_or(true)
-        {
-            let other = array.value(row);
-            self.merge_value(other, is_min);
-        }
+        array.into_iter().zip(places.iter()).for_each(|(x, place)| {
+            if let Some(x) = x {
+                let state = place.get::<Self>();
+                state.merge_value(x, is_min);
+            }
+        });
         Ok(())
     }
 
@@ -218,9 +209,13 @@ where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + 
         state.add_batch(&arrays[0], self.is_min)
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let state = place.get::<T>();
-        state.add(&arrays[0], row, self.is_min)
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        arrays: &[Series],
+        input_rows: usize,
+    ) -> Result<()> {
+        T::add_keys(places, &arrays[0], input_rows, self.is_min)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

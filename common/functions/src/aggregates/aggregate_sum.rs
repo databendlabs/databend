@@ -7,7 +7,6 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use bytes::BytesMut;
-use common_arrow::arrow::array::Array;
 use common_datavalues::prelude::*;
 use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
