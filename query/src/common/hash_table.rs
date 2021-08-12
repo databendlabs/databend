@@ -210,19 +210,3 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
         place_value
     }
 }
-
-// #[test]
-// fn test_hash_table() {
-//     let inserted = true;
-//     let numbers: Vec<i32> = (0..1024).map(|_| rand::random::<i32>()).collect();
-//     let mut hash_table = HashTable::<i32, DefaultHashTableEntity, DefaultHasher<i32>, DefaultHashTableGrower>::new();
-//     for number in numbers.clone() {
-//         hash_table.insert_key(number, inserted);
-//     }
-//
-//     unsafe {
-//         for number in numbers.clone() {
-//             assert_eq!(hash_table.find_key(&number).unwrap().as_ref().unwrap().key, number);
-//         }
-//     }
-// }
