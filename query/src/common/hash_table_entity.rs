@@ -20,12 +20,14 @@ pub struct DefaultHashTableEntity<Key: Sized, Value: Sized> {
 }
 
 impl<Key: Sized, Value: Sized> DefaultHashTableEntity<Key, Value> {
+    #[inline]
     pub fn set_value(self: *mut Self, value: Value) {
         unsafe {
             (*self).value = value;
         }
     }
 
+    #[inline]
     pub fn get_value<'a>(self: *mut Self) -> &'a Value {
         unsafe {
             &(*self).value

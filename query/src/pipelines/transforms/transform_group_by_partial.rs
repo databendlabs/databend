@@ -299,17 +299,6 @@ impl Processor for GroupByPartialTransform {
                                     places.push(place);
                                 }
                             }
-                            // match groups.get(group_key) {
-                            //     // New group.
-                            //     None => {
-                            //
-                            //     }
-                            //     // Accumulate result against the take block by indices.
-                            //     Some(place) => {
-                            //         let place: StateAddr = (*place).into();
-                            //         places.push(place);
-                            //     }
-                            // }
                         }
 
                         for ((idx, func), args) in
