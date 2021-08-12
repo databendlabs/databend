@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use assert_cmd::cargo::CommandCargoExt;
 use std::process::Command;
+
+use assert_cmd::cargo::CommandCargoExt;
 
 fn init_fusectl() -> Command {
     let mut cmd = Command::cargo_bin("datafuse-cli").unwrap();
@@ -26,6 +27,6 @@ fn basic() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicates::str::contains("Prints help information" ))
+        .stdout(predicates::str::contains("Prints help information"))
         .stderr("");
 }
