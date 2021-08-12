@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 use common_exception::Result;
+use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 pub use common_store_api::kv_api::MGetKVActionResult;
 pub use common_store_api::kv_api::PrefixListReply;
@@ -24,11 +25,13 @@ impl KVApi for StoreClient {
         key: &str,
         seq: MatchSeq,
         value: Option<Vec<u8>>,
+        value_meta: Option<KVMeta>,
     ) -> Result<UpsertKVActionResult> {
         self.do_action(UpsertKVAction {
             key: key.to_string(),
             seq,
             value,
+            value_meta,
         })
         .await
     }
@@ -108,6 +111,7 @@ pub struct UpsertKVAction {
     pub key: String,
     pub seq: MatchSeq,
     pub value: Option<Vec<u8>>,
+    pub value_meta: Option<KVMeta>,
 }
 
 action_declare!(

@@ -22,7 +22,7 @@ pub struct LocalFS {
 
 /// IFS implementation on local file-system.
 impl LocalFS {
-    pub fn try_create(root: String) -> anyhow::Result<LocalFS> {
+    pub fn try_create(root: String) -> common_exception::Result<LocalFS> {
         let f = LocalFS {
             root: PathBuf::from(root),
         };
@@ -33,7 +33,7 @@ impl LocalFS {
 #[async_trait]
 impl FileSystem for LocalFS {
     #[tracing::instrument(level = "debug", skip(self, data))]
-    async fn add(&self, path: &str, data: &[u8]) -> anyhow::Result<()> {
+    async fn add(&self, path: &str, data: &[u8]) -> common_exception::Result<()> {
         // TODO: test atomicity: write temp file and rename it
         let p = Path::new(self.root.as_path()).join(path);
         let mut an = p.ancestors();
@@ -71,7 +71,7 @@ impl FileSystem for LocalFS {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn list(&self, path: &str) -> anyhow::Result<ListResult> {
+    async fn list(&self, path: &str) -> common_exception::Result<ListResult> {
         let p = Path::new(self.root.as_path()).join(path);
         let entries = std::fs::read_dir(p.as_path())
             .with_context(|| format!("LocalFS: fail to list {}", path))?;
@@ -81,10 +81,12 @@ impl FileSystem for LocalFS {
         for ent in entries {
             match ent {
                 Ok(x) => {
-                    let f = x
-                        .file_name()
-                        .into_string()
-                        .map_err(|e| anyhow::anyhow!("LocalFS: invalid fn: {:?}", e))?;
+                    let f = x.file_name().into_string().map_err(|x| {
+                        ErrorCode::IllegalFileName(format!(
+                            "{:?} when list local files",
+                            x.to_str()
+                        ))
+                    })?;
 
                     let typ = x.file_type()?;
 
@@ -94,7 +96,7 @@ impl FileSystem for LocalFS {
                         files.push(f);
                     }
                 }
-                Err(e) => return Err(e).context("LocalFS: fail to read entry"),
+                Err(e) => return Err(e.into()),
             }
         }
 

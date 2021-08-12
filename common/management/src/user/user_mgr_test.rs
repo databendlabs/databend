@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
+use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_store_api::kv_api::MGetKVActionResult;
@@ -32,6 +33,7 @@ mock! {
             key: &str,
             seq: MatchSeq,
             value: Option<Vec<u8>>,
+            value_meta: Option<KVMeta>
         ) -> common_exception::Result<UpsertKVActionResult>;
 
     async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
@@ -59,6 +61,8 @@ fn test_user_info_converter() {
 }
 
 mod add {
+    use common_metatypes::KVValue;
+
     use super::*;
 
     #[tokio::test]
@@ -82,9 +86,10 @@ mod add {
                     predicate::function(move |v| v == test_key.as_str()),
                     predicate::eq(test_seq),
                     predicate::eq(value.clone()),
+                    predicate::eq(None),
                 )
                 .times(1)
-                .return_once(|_u, _s, _salt| {
+                .return_once(|_u, _s, _salt, _meta| {
                     Ok(UpsertKVActionResult {
                         prev: None,
                         result: None,
@@ -110,11 +115,15 @@ mod add {
                     predicate::function(move |v| v == test_key.as_str()),
                     predicate::eq(test_seq),
                     predicate::eq(value.clone()),
+                    predicate::eq(None),
                 )
                 .times(1)
-                .returning(|_u, _s, _salt| {
+                .returning(|_u, _s, _salt, _meta| {
                     Ok(UpsertKVActionResult {
-                        prev: Some((1, vec![])),
+                        prev: Some((1, KVValue {
+                            meta: None,
+                            value: vec![],
+                        })),
                         result: None,
                     })
                 });
@@ -137,9 +146,10 @@ mod add {
                     predicate::function(move |v| v == test_key.as_str()),
                     predicate::eq(test_seq),
                     predicate::eq(value.clone()),
+                    predicate::eq(None),
                 )
                 .times(1)
-                .returning(|_u, _s, _salt| {
+                .returning(|_u, _s, _salt, _meta| {
                     Ok(UpsertKVActionResult {
                         prev: None,
                         result: None,
@@ -160,6 +170,8 @@ mod add {
 }
 
 mod get {
+    use common_metatypes::KVValue;
+
     use super::*;
 
     #[tokio::test]
@@ -177,7 +189,7 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionResult {
-                    result: Some((1, value)),
+                    result: Some((1, KVValue { meta: None, value })),
                 })
             });
         let mut user_mgr = UserMgr::new(kv);
@@ -202,7 +214,7 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionResult {
-                    result: Some((100, value)),
+                    result: Some((100, KVValue { meta: None, value })),
                 })
             });
         let mut user_mgr = UserMgr::new(kv);
@@ -239,7 +251,10 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionResult {
-                    result: Some((1, vec![])),
+                    result: Some((1, KVValue {
+                        meta: None,
+                        value: vec![],
+                    })),
                 })
             });
         let mut user_mgr = UserMgr::new(kv);
@@ -260,7 +275,10 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionResult {
-                    result: Some((1, vec![1])),
+                    result: Some((1, KVValue {
+                        meta: None,
+                        value: vec![1],
+                    })),
                 })
             });
         let mut user_mgr = UserMgr::new(kv);
@@ -276,12 +294,14 @@ mod get {
 
 mod get_users {
 
+    use common_metatypes::KVValue;
+
     use super::*;
     use crate::user::utils::prepend;
 
     type Strings = Vec<String>;
     type UserInfos = Vec<Option<(u64, UserInfo)>>;
-    type Values = Vec<Option<SeqValue>>;
+    type Values = Vec<Option<SeqValue<KVValue>>>;
 
     fn prepare(len: u64) -> common_exception::Result<(Strings, Strings, Values, UserInfos)> {
         let mut names = vec![];
@@ -295,7 +315,10 @@ mod get_users {
             let new_user = NewUser::new(&name, "pass", "salt");
             let user_info = UserInfo::from(new_user);
             if i % 2 == 0 {
-                res.push(Some((i, serde_json::to_vec(&user_info)?)));
+                res.push(Some((i, KVValue {
+                    meta: None,
+                    value: serde_json::to_vec(&user_info)?,
+                })));
                 user_infos.push(Some((i, user_info)));
             } else {
                 res.push(None);
@@ -324,7 +347,13 @@ mod get_users {
     #[tokio::test]
     async fn test_get_users_invalid_user_info_encoding() -> common_exception::Result<()> {
         let (names, keys, mut res, _user_infos) = prepare(9)?;
-        res.insert(8, Some((0, "some arbitrary str".as_bytes().to_vec())));
+        res.insert(
+            8,
+            Some((0, KVValue {
+                meta: None,
+                value: b"some arbitrary str".to_vec(),
+            })),
+        );
         let mut kv = MockKV::new();
         {
             kv.expect_mget_kv()
@@ -344,13 +373,14 @@ mod get_users {
 
 mod get_all_users {
 
+    use common_metatypes::KVValue;
     use common_metatypes::SeqValue;
 
     use super::*;
     use crate::user::utils::prepend;
 
     type UserInfos = Vec<(u64, UserInfo)>;
-    fn prepare() -> common_exception::Result<(Vec<(String, SeqValue)>, UserInfos)> {
+    fn prepare() -> common_exception::Result<(Vec<(String, SeqValue<KVValue>)>, UserInfos)> {
         let mut names = vec![];
         let mut keys = vec![];
         let mut res = vec![];
@@ -361,7 +391,13 @@ mod get_all_users {
             keys.push(prepend(&name));
             let new_user = NewUser::new(&name, "pass", "salt");
             let user_info = UserInfo::from(new_user);
-            res.push(("fake_key".to_string(), (i, serde_json::to_vec(&user_info)?)));
+            res.push((
+                "fake_key".to_string(),
+                (i, KVValue {
+                    meta: None,
+                    value: serde_json::to_vec(&user_info)?,
+                }),
+            ));
             user_infos.push((i, user_info));
         }
         Ok((res, user_infos))
@@ -391,7 +427,10 @@ mod get_all_users {
             8,
             (
                 "fake_key".to_string(),
-                (0, "some arbitrary str".as_bytes().to_vec()),
+                (0, KVValue {
+                    meta: None,
+                    value: b"some arbitrary str".to_vec(),
+                }),
             ),
         );
 
@@ -414,6 +453,8 @@ mod get_all_users {
 }
 
 mod drop {
+    use common_metatypes::KVValue;
+
     use super::*;
 
     #[tokio::test]
@@ -425,11 +466,15 @@ mod drop {
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::Any),
                 predicate::eq(None),
+                predicate::eq(None),
             )
             .times(1)
-            .returning(|_k, _seq, _none| {
+            .returning(|_k, _seq, _none, _meta| {
                 Ok(UpsertKVActionResult {
-                    prev: Some((1, vec![])),
+                    prev: Some((1, KVValue {
+                        meta: None,
+                        value: vec![],
+                    })),
                     result: None,
                 })
             });
@@ -449,9 +494,10 @@ mod drop {
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::Any),
                 predicate::eq(None),
+                predicate::eq(None),
             )
             .times(1)
-            .returning(|_k, _seq, _none| {
+            .returning(|_k, _seq, _none, _meta| {
                 Ok(UpsertKVActionResult {
                     prev: None,
                     result: None,
@@ -465,6 +511,8 @@ mod drop {
 }
 
 mod update {
+    use common_metatypes::KVValue;
+
     use super::*;
 
     #[tokio::test]
@@ -489,7 +537,10 @@ mod update {
                 .times(1)
                 .return_once(move |_k| {
                     Ok(GetKVActionResult {
-                        result: Some((0, prev_value)),
+                        result: Some((0, KVValue {
+                            meta: None,
+                            value: prev_value,
+                        })),
                     })
                 });
         }
@@ -508,12 +559,16 @@ mod update {
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::GE(1)),
                 predicate::eq(Some(new_value_with_old_salt)),
+                predicate::eq(None),
             )
             .times(1)
-            .return_once(|_, _, _| {
+            .return_once(|_, _, _, _meta| {
                 Ok(UpsertKVActionResult {
                     prev: None,
-                    result: Some((0, vec![])),
+                    result: Some((0, KVValue {
+                        meta: None,
+                        value: vec![],
+                    })),
                 })
             });
 
@@ -548,12 +603,16 @@ mod update {
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::GE(1)),
                 predicate::eq(Some(new_value)),
+                predicate::eq(None),
             )
             .times(1)
-            .return_once(|_, _, _| {
+            .return_once(|_, _, _, _meta| {
                 Ok(UpsertKVActionResult {
                     prev: None,
-                    result: Some((0, vec![])),
+                    result: Some((0, KVValue {
+                        meta: None,
+                        value: vec![],
+                    })),
                 })
             });
 
@@ -622,9 +681,10 @@ mod update {
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::GE(1)),
                 predicate::always(), // a little bit relax here, as we've covered it before
+                predicate::eq(None),
             )
             .times(1)
-            .returning(|_u, _s, _salt| {
+            .returning(|_u, _s, _salt, _meta| {
                 Ok(UpsertKVActionResult {
                     prev: None,
                     result: None,

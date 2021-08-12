@@ -11,6 +11,7 @@ use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
 use common_exception::ErrorCode;
+use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use sled::IVec;
 
@@ -20,6 +21,7 @@ use crate::meta_service::Node;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftStateKey;
 use crate::meta_service::RaftStateValue;
+use crate::meta_service::SeqNum;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
 use crate::meta_service::StateMachineMetaKey;
@@ -154,5 +156,14 @@ impl SledKeySpace for GenericKV {
     const PREFIX: u8 = 6;
     const NAME: &'static str = "generic-kv";
     type K = String;
-    type V = SeqValue;
+    type V = SeqValue<KVValue<Vec<u8>>>;
+}
+
+/// Key-Value Types for sequence number generator in sled::Tree:
+pub struct Sequences {}
+impl SledKeySpace for Sequences {
+    const PREFIX: u8 = 7;
+    const NAME: &'static str = "sequences";
+    type K = String;
+    type V = SeqNum;
 }

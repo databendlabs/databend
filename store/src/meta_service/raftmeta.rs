@@ -28,6 +28,7 @@ use common_exception::prelude::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
+use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_runtime::tokio;
@@ -84,8 +85,8 @@ pub struct MetaStore {
 
     // Raft state includes:
     // id: NodeId,
-    // current_term,
-    // voted_for
+    //     current_term,
+    //     voted_for
     pub raft_state: RaftState,
 
     pub log: RaftLog,
@@ -474,7 +475,7 @@ pub struct MetaNode {
 }
 
 impl MetaStore {
-    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
+    pub async fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         let sm = self.state_machine.read().await;
 
         sm.get_node(node_id)
@@ -483,7 +484,7 @@ impl MetaStore {
     pub async fn get_node_addr(&self, node_id: &NodeId) -> common_exception::Result<String> {
         let addr = self
             .get_node(node_id)
-            .await
+            .await?
             .map(|n| n.address)
             .ok_or_else(|| ErrorCode::UnknownNode(format!("node id: {}", node_id)))?;
 
@@ -859,7 +860,7 @@ impl MetaNode {
 
     // get a file from local meta state, most business logic without strong consistency requirement should use this to access meta.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_file(&self, key: &str) -> Option<String> {
+    pub async fn get_file(&self, key: &str) -> common_exception::Result<Option<String>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -867,7 +868,15 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
+    pub async fn list_files(&self, prefix: &str) -> common_exception::Result<Vec<String>> {
+        // inconsistent get: from local state machine
+
+        let sm = self.sto.state_machine.read().await;
+        sm.list_files(prefix)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -912,12 +921,12 @@ impl MetaNode {
     pub async fn get_database_meta(
         &self,
         lower_bound: Option<u64>,
-    ) -> Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)> {
+    ) -> common_exception::Result<Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let ver = sm.get_database_meta_ver();
-        if ver <= lower_bound {
+        let ver = sm.get_database_meta_ver()?;
+        let res = if ver <= lower_bound {
             None
         } else {
             let dbs = sm
@@ -931,7 +940,9 @@ impl MetaNode {
                 .map(|(k, v)| (*k, v.clone()))
                 .collect::<Vec<_>>();
             Some((ver.unwrap_or(0), dbs, tbls))
-        }
+        };
+
+        Ok(res)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -976,7 +987,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_kv(&self, key: &str) -> Option<SeqValue> {
+    pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -987,14 +998,17 @@ impl MetaNode {
     pub async fn mget_kv(
         &self,
         keys: &[impl AsRef<str> + std::fmt::Debug],
-    ) -> Vec<Option<SeqValue>> {
+    ) -> common_exception::Result<Vec<Option<SeqValue<KVValue>>>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.mget_kv(keys)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
+    pub async fn prefix_list_kv(
+        &self,
+        prefix: &str,
+    ) -> common_exception::Result<Vec<(String, SeqValue<KVValue>)>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.prefix_list_kv(prefix)

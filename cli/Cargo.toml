@@ -21,7 +21,7 @@ path = "src/bin/datafuse-cli.rs"
 # Crates.io dependencies
 clap = "2.33.3"
 colored = "2.0.0"
-comfy-table = "4.1.0"
+comfy-table = "4.1.1"
 dirs = "3.0.2"
 dyn-clone = "1.0.4"
 flate2 = "1.0.20"

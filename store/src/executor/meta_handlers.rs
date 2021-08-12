@@ -335,7 +335,11 @@ impl RequestHandler<GetDatabaseMetaAction> for ActionHandler {
         &self,
         req: GetDatabaseMetaAction,
     ) -> common_exception::Result<DatabaseMetaReply> {
-        let res = self.meta_node.get_database_meta(req.ver_lower_bound).await;
+        let res = self
+            .meta_node
+            .get_database_meta(req.ver_lower_bound)
+            .await?;
+
         Ok(res.map(|(v, dbs, tbls)| DatabaseMetaSnapshot {
             meta_ver: v,
             db_metas: dbs,

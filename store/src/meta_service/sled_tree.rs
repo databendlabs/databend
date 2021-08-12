@@ -87,6 +87,38 @@ impl SledTree {
         Ok(got)
     }
 
+    pub async fn update_and_fetch<KV: SledKeySpace, F>(
+        &self,
+        key: &KV::K,
+        mut f: F,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        let mes = || format!("update_and_fetch: {}", key);
+
+        let k = KV::serialize_key(key)?;
+
+        let res = self
+            .tree
+            .update_and_fetch(k, move |old| {
+                let old = old.map(|o| KV::deserialize_value(o).unwrap());
+
+                let new_val = f(old);
+                new_val.map(|new_val| KV::serialize_value(&new_val).unwrap())
+            })
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, mes)?;
+
+        self.flush_async(true).await?;
+
+        let value = match res {
+            None => None,
+            Some(v) => Some(KV::deserialize_value(v)?),
+        };
+
+        Ok(value)
+    }
+
     /// Retrieve the value of key.
     pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>>
     where KV: SledKeySpace {
@@ -223,6 +255,25 @@ impl SledTree {
             let (k, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || {
                 format!("range_get: {}", range_mes,)
             })?;
+
+            let key = KV::deserialize_key(k)?;
+            let value = KV::deserialize_value(v)?;
+            res.push((key, value));
+        }
+
+        Ok(res)
+    }
+
+    /// Get key-valuess in with the same prefix
+    pub fn scan_prefix<KV>(&self, prefix: &KV::K) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where KV: SledKeySpace {
+        let mut res = vec![];
+
+        let mes = || format!("scan_prefix: {}", prefix);
+
+        let pref = KV::serialize_key(prefix)?;
+        for item in self.tree.scan_prefix(pref) {
+            let (k, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, mes)?;
 
             let key = KV::deserialize_key(k)?;
             let value = KV::deserialize_value(v)?;
@@ -386,6 +437,17 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.contains_key::<KV>(key)
     }
 
+    pub async fn update_and_fetch<F>(
+        &self,
+        key: &KV::K,
+        f: F,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        self.inner.update_and_fetch::<KV, _>(key, f).await
+    }
+
     pub fn get(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
         self.inner.get::<KV>(key)
     }
@@ -415,6 +477,10 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
     pub fn range<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
     where R: RangeBounds<KV::K> {
         self.inner.range::<KV, R>(range)
+    }
+
+    pub fn scan_prefix(&self, prefix: &KV::K) -> common_exception::Result<Vec<(KV::K, KV::V)>> {
+        self.inner.scan_prefix::<KV>(prefix)
     }
 
     pub fn range_values<R>(&self, range: R) -> common_exception::Result<Vec<KV::V>>

@@ -10,6 +10,7 @@ use async_raft::State;
 use common_runtime::tokio;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
+use flaky_test::flaky_test;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
 
@@ -161,7 +162,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 
     let mn = MetaNode::boot(0, &tc.config).await?;
 
-    let got = mn.get_node(&0).await;
+    let got = mn.get_node(&0).await?;
     assert_eq!(addr, got.unwrap().address);
     mn.stop().await?;
     Ok(())
@@ -219,6 +220,7 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[flaky_test]
 async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.
@@ -269,6 +271,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[flaky_test]
 async fn test_meta_node_set_file() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and 2 non-voter;
     // - Write to the raft node on every node, expect Ok.
@@ -512,7 +515,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     tracing::info!("--- check state machine: nodes");
     {
-        let node = leader.sto.get_node(&0).await.expect("must not be none");
+        let node = leader.sto.get_node(&0).await?.unwrap();
         assert_eq!(tc.config.meta_api_addr(), node.address);
     }
 
@@ -605,7 +608,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, StoreTestContext)> {
         assert_meta_connection(&addr).await?;
 
         // assert that boot() adds the node to meta.
-        let got = mn.get_node(&nid).await;
+        let got = mn.get_node(&nid).await?;
         assert_eq!(addr, got.unwrap().address, "nid0 is added");
 
         wait_for_state(&mn, State::Leader).await?;
@@ -719,7 +722,7 @@ async fn assert_get_file(
     value: &str,
 ) -> anyhow::Result<()> {
     for (i, mn) in meta_nodes.iter().enumerate() {
-        let got = mn.get_file(key).await;
+        let got = mn.get_file(key).await?;
         assert_eq!(value.to_string(), got.unwrap(), "n{} applied value", i);
     }
     Ok(())
