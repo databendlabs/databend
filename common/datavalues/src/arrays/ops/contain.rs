@@ -8,7 +8,6 @@ use common_arrow::arrow::compute::contains::contains;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrays::get_list_builder;
 use crate::arrays::DataArray;
 use crate::prelude::*;
 
