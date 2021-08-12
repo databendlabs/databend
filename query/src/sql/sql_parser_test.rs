@@ -20,6 +20,7 @@ mod tests {
     use sqlparser::ast::*;
 
     use crate::sql::sql_statement::DfDropDatabase;
+    use crate::sql::sql_statement::DfShowDatabases;
     use crate::sql::sql_statement::DfUseDatabase;
     use crate::sql::*;
 
@@ -354,6 +355,30 @@ mod tests {
             let expected = DfHint::create_from_comment(comment, "--");
             assert_eq!(expected.error_code, None);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn show_databases_test() -> Result<()> {
+        expect_parse_ok(
+            "SHOW DATABASES",
+            DfStatement::ShowDatabases(DfShowDatabases { where_opt: None }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES WHERE DATABASE = 'ss'",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: { Some(ShowDatabaseWhereOption::Eq("'ss'".to_string())) },
+            }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES WHERE DATABASE LIKE 'ss%'",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: { Some(ShowDatabaseWhereOption::Like("'ss%'".to_string())) },
+            }),
+        )?;
 
         Ok(())
     }

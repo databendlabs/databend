@@ -53,6 +53,7 @@ use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::DfUseDatabase;
+use crate::sql::ShowDatabaseWhereOption;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -188,7 +189,7 @@ impl<'a> DfParser<'a> {
                                 _ => self.expected("like or where", tok),
                             }
                         } else if self.consume_token("DATABASES") {
-                            Ok(DfStatement::ShowDatabases(DfShowDatabases))
+                            self.parse_show_databases()
                         } else if self.consume_token("SETTINGS") {
                             Ok(DfStatement::ShowSettings(DfShowSettings))
                         } else if self.consume_token("CREATE") {
@@ -244,6 +245,34 @@ impl<'a> DfParser<'a> {
         let statement = Box::new(self.parser.parse_statement()?);
         let explain_plan = DfExplain { typ, statement };
         Ok(DfStatement::Explain(explain_plan))
+    }
+
+    // parse show databases where database = xxx or where database
+    fn parse_show_databases(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.parse_keyword(Keyword::WHERE) {
+            true => {
+                if !self.consume_token("DATABASE") {
+                    return self.expected("database", self.parser.peek_token());
+                }
+
+                if self.consume_token("=") {
+                    let eq_right = self.parser.peek_token().to_string();
+                    self.parser.next_token();
+                    let where_opt = Some(ShowDatabaseWhereOption::Eq(eq_right));
+                    Ok(DfStatement::ShowDatabases(DfShowDatabases { where_opt }))
+                } else if self.consume_token("LIKE") {
+                    let like_right = self.parser.peek_token().to_string();
+                    self.parser.next_token();
+                    let where_opt = Some(ShowDatabaseWhereOption::Like(like_right));
+                    Ok(DfStatement::ShowDatabases(DfShowDatabases { where_opt }))
+                } else {
+                    self.expected(" = or like", self.parser.peek_token())
+                }
+            }
+            false => Ok(DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: None,
+            })),
+        }
     }
 
     // This is a copy of the equivalent implementation in sqlparser.
