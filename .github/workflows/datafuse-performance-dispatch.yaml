@@ -1,11 +1,24 @@
 on:
   repository_dispatch:
-    types: [run_perf, rerun_perf, rerun_perf_all]
+    types: [ run_perf, rerun_perf, rerun_perf_all ]
 name: Build Docker Image on official docker hub (primary for benchmarking and CI tests)
 jobs:
+  slack-notification-start:
+    name: Slack Notification Start
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://avatars.githubusercontent.com/u/80994548?s=200&v=4
+          SLACK_COLOR: good
+          SLACK_CHANNEL: datafuse
+          SLACK_MESSAGE: 'start datafuse performance test!'
+          SLACK_TITLE: datafuse performance test
+          SLACK_USERNAME: datafuse messager
   build-current:
     name: Build current datafuse image
-    if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
     runs-on: perf-test
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -103,7 +116,6 @@ jobs:
           "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
   build-release:
     name: Build reference datafuse image
-    if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
     runs-on: perf-test
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -197,9 +209,8 @@ jobs:
           "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
   run_funcbench:
     name: Running datafuse single performance testing
-    if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
     runs-on: perf-test
-    needs: [build-current, build-release]
+    needs: [ build-current, build-release ]
     env:
       GITHUB_TOKEN: ${{ github.token }}
       GITHUB_ORG: datafuselabs
