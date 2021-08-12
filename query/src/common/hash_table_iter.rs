@@ -1,17 +1,17 @@
 use std::marker::PhantomData;
-use crate::common::hash_table_entity::IHashTableEntity;
+use crate::common::hash_table_entity::HashTableEntity;
 
-pub struct HashTableIter<Key, HashTableEntity: IHashTableEntity<Key>> {
+pub struct HashTableIter<Key, Entity: HashTableEntity<Key>> {
     idx: isize,
     size: isize,
-    entities: *mut HashTableEntity,
-    zero_entity: Option<*mut HashTableEntity>,
+    entities: *mut Entity,
+    zero_entity: Option<*mut Entity>,
     ss: PhantomData<Key>,
 
 }
 
-impl<Key, HashTableEntity: IHashTableEntity<Key>> HashTableIter<Key, HashTableEntity> {
-    pub fn new(size: isize, entities: *mut HashTableEntity, zero_entity: Option<*mut HashTableEntity>) -> Self {
+impl<Key, Entity: HashTableEntity<Key>> HashTableIter<Key, Entity> {
+    pub fn new(size: isize, entities: *mut Entity, zero_entity: Option<*mut Entity>) -> Self {
         Self {
             idx: 0,
             size,
@@ -22,10 +22,11 @@ impl<Key, HashTableEntity: IHashTableEntity<Key>> HashTableIter<Key, HashTableEn
     }
 }
 
-impl<Key, HashTableEntity: IHashTableEntity<Key>> Iterator for HashTableIter<Key, HashTableEntity> {
-    type Item = *mut HashTableEntity;
+impl<Key, Entity: HashTableEntity<Key>> Iterator for HashTableIter<Key, Entity> {
+    type Item = *mut Entity;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // TODO:
         if let Some(entity) = self.zero_entity.take() {
             return Some(entity);
         }

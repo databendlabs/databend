@@ -1,4 +1,4 @@
-pub trait IHashTableEntity<Key>
+pub trait HashTableEntity<Key>: Sized
 {
     fn is_zero_key(key: &Key) -> bool;
 
@@ -18,7 +18,7 @@ pub struct DefaultHashTableEntity {
     pub(crate) hash: u64,
 }
 
-impl IHashTableEntity<i32> for DefaultHashTableEntity
+impl HashTableEntity<i32> for DefaultHashTableEntity
 {
     fn is_zero_key(key: &i32) -> bool {
         *key == 0
