@@ -104,6 +104,7 @@ impl Processor for GroupByPartialTransform {
         let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
         let mut arg_names = Vec::with_capacity(self.aggr_exprs.len());
         let mut aggr_cols = Vec::with_capacity(self.aggr_exprs.len());
+        let aggr_funcs_len = self.aggr_exprs.len();
 
         for expr in self.aggr_exprs.iter() {
             funcs.push(expr.to_aggregate_function(&schema_before_group_by)?);
@@ -158,14 +159,18 @@ impl Processor for GroupByPartialTransform {
                             match groups.get(group_key) {
                                 // New group.
                                 None => {
-                                    let place: StateAddr = arena.alloc_layout(layout).into();
-
-                                    for idx in 0..aggr_len {
-                                        let arg_place = place.prev(offsets_aggregate_states[idx]);
-                                        funcs[idx].init_state(arg_place);
+                                    if aggr_funcs_len == 0 {
+                                        groups.insert(group_key.clone(), 0);
+                                    } else {
+                                        let place: StateAddr = arena.alloc_layout(layout).into();
+                                        for idx in 0..aggr_len {
+                                            let arg_place =
+                                                place.prev(offsets_aggregate_states[idx]);
+                                            funcs[idx].init_state(arg_place);
+                                        }
+                                        places.push(place);
+                                        groups.insert(group_key.clone(), place.addr());
                                     }
-                                    places.push(place);
-                                    groups.insert(group_key.clone(), place.addr());
                                 }
                                 // Accumulate result against the take block by indices.
                                 Some(place) => {
