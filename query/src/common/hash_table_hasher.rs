@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 pub trait IHasher<Key>
 {
     fn hash(key: &Key) -> u64;

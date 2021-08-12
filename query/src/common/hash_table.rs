@@ -15,8 +15,7 @@ pub struct HashTable<Key, HashTableEntity: IHashTableEntity<Key> + Sized + Parti
     zero_entity_raw: Option<*mut u8>,
 
     /// Generics hold
-    key_hold: PhantomData<Key>,
-    hasher_hold: PhantomData<Hasher>,
+    generics_hold: PhantomData<(Key, Hasher)>,
 }
 
 impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IHasher<Key>, Grower: IHashTableGrower + Default + Clone> Drop for HashTable<Key, HashTableEntity, Hasher, Grower> {
@@ -26,9 +25,9 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
             let layout = Layout::from_size_align_unchecked(size, std::mem::align_of::<HashTableEntity>());
             std::alloc::dealloc(self.entities_raw, layout);
 
-            if self.zero_entity.is_some() {
+            if let Some(zero_entity) = self.zero_entity_raw {
                 let zero_layout = Layout::from_size_align_unchecked(mem::size_of::<HashTableEntity>(), std::mem::align_of::<HashTableEntity>());
-                std::alloc::dealloc(self.zero_entity_raw.unwrap(), zero_layout);
+                std::alloc::dealloc(zero_entity, zero_layout);
             }
         }
     }
@@ -49,8 +48,7 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
                 entities_raw: raw_ptr,
                 zero_entity: None,
                 zero_entity_raw: None,
-                key_hold: PhantomData,
-                hasher_hold: PhantomData,
+                generics_hold: PhantomData::default(),
             }
         }
     }
