@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -10,9 +11,9 @@ use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
+use num::cast::AsPrimitive;
 use num::NumCast;
 
-use super::GetState;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -25,9 +26,6 @@ struct AggregateAvgState<T: BinarySer + BinaryDe> {
     pub value: T,
     pub count: u64,
 }
-
-impl<'a, T> GetState<'a, AggregateAvgState<T>> for AggregateAvgState<T> where T: BinarySer + BinaryDe
-{}
 
 impl<T> AggregateAvgState<T>
 where T: std::ops::Add<Output = T> + Clone + Copy + BinarySer + BinaryDe
@@ -59,8 +57,15 @@ impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
 where
     T: DFNumericType,
     SumT: DFNumericType,
-    T::Native:
-        NumCast + DFTryFrom<DataValue> + Clone + Copy + Into<DataValue> + Send + Sync + 'static,
+    T::Native: AsPrimitive<SumT::Native>
+        + NumCast
+        + DFTryFrom<DataValue>
+        + Clone
+        + Copy
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
     SumT::Native: NumCast
         + DFTryFrom<DataValue>
         + Into<DataValue>
@@ -87,16 +92,19 @@ where
         Ok(false)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(AggregateAvgState::<SumT::Native> {
+    fn init_state(&self, place: StateAddr) {
+        place.write(|| AggregateAvgState::<SumT::Native> {
             value: SumT::Native::default(),
             count: 0,
         });
-        (state as *mut AggregateAvgState<SumT::Native>) as StateAddr
+    }
+
+    fn state_layout(&self) -> Layout {
+        Layout::new::<AggregateAvgState<SumT::Native>>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        let state = AggregateAvgState::<SumT::Native>::get(place);
+        let state = place.get::<AggregateAvgState<SumT::Native>>();
         let value = arrays[0].sum()?;
         let count = arrays[0].len() - arrays[0].null_count();
         let opt_sum: Option<SumT::Native> = DFTryFrom::try_from(value).ok();
@@ -105,42 +113,46 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let state = AggregateAvgState::<SumT::Native>::get(place);
-        let value = arrays[0].try_get(row)?;
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        arrays: &[Series],
+        _input_rows: usize,
+    ) -> Result<()> {
+        let array: &DataArray<T> = arrays[0].static_cast();
 
-        let opt_sum: Option<T::Native> = DFTryFrom::try_from(value).ok();
-        let opt_sum: Option<SumT::Native> = match opt_sum {
-            Some(v) => NumCast::from(v),
-            None => None,
-        };
+        array.into_iter().zip(places.iter()).for_each(|(v, place)| {
+            let place = place.next(offset);
+            let state = place.get::<AggregateAvgState<SumT::Native>>();
+            state.add(&v.map(|v| v.as_()), 1);
+        });
 
-        state.add(&opt_sum, 1);
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = AggregateAvgState::<SumT::Native>::get(place);
+        let state = place.get::<AggregateAvgState<SumT::Native>>();
         state.value.serialize_to_buf(writer)?;
         state.count.serialize_to_buf(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = AggregateAvgState::<SumT::Native>::get(place);
+        let state = place.get::<AggregateAvgState<SumT::Native>>();
         state.value = SumT::Native::deserialize(reader)?;
         state.count = u64::deserialize(reader)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = AggregateAvgState::<SumT::Native>::get(place);
-        let rhs = AggregateAvgState::<SumT::Native>::get(rhs);
+        let state = place.get::<AggregateAvgState<SumT::Native>>();
+        let rhs = rhs.get::<AggregateAvgState<SumT::Native>>();
         state.merge(rhs);
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = AggregateAvgState::<SumT::Native>::get(place);
+        let state = place.get::<AggregateAvgState<SumT::Native>>();
 
         if state.count == 0 {
             return Ok(DataValue::Float64(None));
@@ -160,8 +172,15 @@ impl<T, SumT> AggregateAvgFunction<T, SumT>
 where
     T: DFNumericType,
     SumT: DFNumericType,
-    T::Native:
-        NumCast + DFTryFrom<DataValue> + Clone + Copy + Into<DataValue> + Send + Sync + 'static,
+    T::Native: AsPrimitive<SumT::Native>
+        + NumCast
+        + DFTryFrom<DataValue>
+        + Clone
+        + Copy
+        + Into<DataValue>
+        + Send
+        + Sync
+        + 'static,
     SumT::Native: NumCast
         + DFTryFrom<DataValue>
         + Into<DataValue>
