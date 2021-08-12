@@ -40,6 +40,8 @@ ureq = { version = "2.1.1", features = ["json"] }
 [dev-dependencies]
 pretty_assertions = "0.7"
 tempfile = "3.2.0"
+assert_cmd = "2.0.0"
+predicates = "2.0.1"
 
 [build-dependencies]
 common-building = {path = "../common/building"}
