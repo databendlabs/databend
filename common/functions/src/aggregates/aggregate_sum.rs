@@ -120,17 +120,29 @@ where
         &self,
         places: &[StateAddr],
         arrays: &[Series],
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<()> {
-        let array: &DataArray<T> = arrays[0].static_cast::<T>();
-        let array = array.downcast_ref();
+        let darray: &DataArray<T> = arrays[0].static_cast::<T>();
+        let array = darray.downcast_ref();
 
-        array.into_iter().zip(places.iter()).for_each(|(c, place)| {
-            if let Some(v) = c {
-                let state = place.get::<AggregateSumState<SumT::Native>>();
-                state.add(v.as_());
-            }
-        });
+        if darray.null_count() == 0 {
+            array
+                .values()
+                .as_slice()
+                .iter()
+                .zip(places.iter())
+                .for_each(|(v, place)| {
+                    let state = place.get::<AggregateSumState<SumT::Native>>();
+                    state.add(v.as_());
+                });
+        } else {
+            array.into_iter().zip(places.iter()).for_each(|(c, place)| {
+                if let Some(v) = c {
+                    let state = place.get::<AggregateSumState<SumT::Native>>();
+                    state.add(v.as_());
+                }
+            });
+        }
 
         Ok(())
     }
