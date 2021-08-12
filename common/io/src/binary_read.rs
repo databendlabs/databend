@@ -54,7 +54,7 @@ where T: io::Read
     fn read_opt_scalar<V>(&mut self) -> Result<Option<V>>
     where V: Unmarshal<V> + StatBuffer {
         let is_some: u8 = self.read_scalar()?;
-        if is_some == 1 {
+        if is_some == 0 {
             return Ok(None);
         }
         let mut buffer = V::buffer();
