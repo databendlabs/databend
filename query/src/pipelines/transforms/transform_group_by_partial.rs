@@ -165,7 +165,7 @@ impl Processor for GroupByPartialTransform {
                                         let place: StateAddr = arena.alloc_layout(layout).into();
                                         for idx in 0..aggr_len {
                                             let arg_place =
-                                                place.prev(offsets_aggregate_states[idx]);
+                                                place.next(offsets_aggregate_states[idx]);
                                             funcs[idx].init_state(arg_place);
                                         }
                                         places.push(place);
@@ -180,8 +180,15 @@ impl Processor for GroupByPartialTransform {
                             }
                         }
 
-                        for (func, args) in funcs.iter().zip(aggr_arg_columns_slice.iter()) {
-                            func.accumulate_keys(&places, args, block.num_rows())?;
+                        for ((idx, func), args) in
+                            funcs.iter().enumerate().zip(aggr_arg_columns_slice.iter())
+                        {
+                            func.accumulate_keys(
+                                &places,
+                                offsets_aggregate_states[idx],
+                                args,
+                                block.num_rows(),
+                            )?;
                         }
                     }
                 }
@@ -211,7 +218,7 @@ impl Processor for GroupByPartialTransform {
                     let place: StateAddr = (*place).into();
 
                     for (idx, func) in funcs.iter().enumerate() {
-                        let arg_place = place.prev(offsets_aggregate_states[idx]);
+                        let arg_place = place.next(offsets_aggregate_states[idx]);
                         func.serialize(arg_place, &mut bytes)?;
                         state_builders[idx].append_value(&bytes[..]);
                         bytes.clear();

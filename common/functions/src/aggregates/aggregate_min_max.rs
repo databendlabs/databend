@@ -20,7 +20,13 @@ use crate::dispatch_numeric_types;
 
 pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn default() -> Self;
-    fn add_keys(places: &[StateAddr], series: &Series, rows: usize, is_min: bool) -> Result<()>;
+    fn add_keys(
+        places: &[StateAddr],
+        offset: usize,
+        series: &Series,
+        rows: usize,
+        is_min: bool,
+    ) -> Result<()>;
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()>;
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
@@ -69,11 +75,18 @@ where
         Self { value: None }
     }
 
-    fn add_keys(places: &[StateAddr], series: &Series, _rows: usize, is_min: bool) -> Result<()> {
+    fn add_keys(
+        places: &[StateAddr],
+        offset: usize,
+        series: &Series,
+        _rows: usize,
+        is_min: bool,
+    ) -> Result<()> {
         let array: &DataArray<T> = series.static_cast();
         let array = array.downcast_ref();
         array.into_iter().zip(places.iter()).for_each(|(x, place)| {
             if let Some(x) = x {
+                let place = place.next(offset);
                 let state = place.get::<Self>();
                 state.merge_value(*x, is_min);
             }
@@ -131,10 +144,17 @@ impl AggregateMinMaxState for Utf8State {
         Self { value: None }
     }
 
-    fn add_keys(places: &[StateAddr], series: &Series, _rows: usize, is_min: bool) -> Result<()> {
+    fn add_keys(
+        places: &[StateAddr],
+        offset: usize,
+        series: &Series,
+        _rows: usize,
+        is_min: bool,
+    ) -> Result<()> {
         let array: &DataArray<Utf8Type> = series.static_cast();
         let array = array.downcast_ref();
         array.into_iter().zip(places.iter()).for_each(|(x, place)| {
+            let place = place.next(offset);
             if let Some(x) = x {
                 let state = place.get::<Self>();
                 state.merge_value(x, is_min);
@@ -212,10 +232,11 @@ where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + 
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
+        offset: usize,
         arrays: &[Series],
         input_rows: usize,
     ) -> Result<()> {
-        T::add_keys(places, &arrays[0], input_rows, self.is_min)
+        T::add_keys(places, offset, &arrays[0], input_rows, self.is_min)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

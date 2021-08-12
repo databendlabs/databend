@@ -135,7 +135,7 @@ impl Processor for GroupByFinalTransform {
                                 } else {
                                     let place: StateAddr = arena.alloc_layout(layout).into();
                                     for (idx, func) in funcs.iter().enumerate() {
-                                        let arg_place = place.prev(offsets_aggregate_states[idx]);
+                                        let arg_place = place.next(offsets_aggregate_states[idx]);
 
                                         let mut data = states_binary_arrays[idx].value(row);
                                         func.init_state(arg_place);
@@ -148,7 +148,7 @@ impl Processor for GroupByFinalTransform {
                                 let place: StateAddr = (*place).into();
 
                                 for (idx, func) in funcs.iter().enumerate() {
-                                    let arg_place = place.prev(offsets_aggregate_states[idx]);
+                                    let arg_place = place.next(offsets_aggregate_states[idx]);
 
                                     let mut data = states_binary_arrays[idx].value(row);
                                     let temp = arena.alloc_layout(funcs[idx].state_layout());
@@ -180,7 +180,7 @@ impl Processor for GroupByFinalTransform {
 
                     let place: StateAddr = (*place).into();
                     for (idx, func) in funcs.iter().enumerate() {
-                        let arg_place = place.prev(offsets_aggregate_states[idx]);
+                        let arg_place = place.next(offsets_aggregate_states[idx]);
                         let merge = func.merge_result(arg_place)?;
                         aggr_values[idx].push(merge);
                     }

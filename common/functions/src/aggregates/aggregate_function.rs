@@ -35,6 +35,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate_keys(
         &self,
         _places: &[StateAddr],
+        _offset: usize,
         _arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()>;

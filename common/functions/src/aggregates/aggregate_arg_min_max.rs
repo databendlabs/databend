@@ -22,6 +22,7 @@ pub trait AggregateArgMinMaxState: Send + Sync + 'static {
     fn new(data_type: &DataType) -> Self;
     fn add_keys(
         places: &[StateAddr],
+        offset: usize,
         data_series: &Series,
         series: &Series,
         rows: usize,
@@ -86,6 +87,7 @@ where
 
     fn add_keys(
         places: &[StateAddr],
+        offset: usize,
         data_series: &Series,
         series: &Series,
         _rows: usize,
@@ -99,8 +101,8 @@ where
             .zip(places.iter().enumerate())
             .try_for_each(|(key, (idx, addr))| -> Result<()> {
                 let data = data_series.try_get(idx)?;
-
-                let state = addr.get::<Self>();
+                let place = addr.next(offset);
+                let state = place.get::<Self>();
                 if let Some(v) = key {
                     state.merge_value(data, *v, is_min);
                 }
@@ -182,6 +184,7 @@ impl AggregateArgMinMaxState for Utf8State {
 
     fn add_keys(
         places: &[StateAddr],
+        offset: usize,
         data_series: &Series,
         series: &Series,
         _rows: usize,
@@ -196,7 +199,8 @@ impl AggregateArgMinMaxState for Utf8State {
             .try_for_each(|(key, (idx, addr))| -> Result<()> {
                 let data = data_series.try_get(idx)?;
 
-                let state = addr.get::<Self>();
+                let place = addr.next(offset);
+                let state = place.get::<Self>();
                 if let Some(v) = key {
                     state.merge_value(data, v, is_min);
                 }
@@ -288,10 +292,18 @@ where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue>
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
+        offset: usize,
         arrays: &[Series],
         input_rows: usize,
     ) -> Result<()> {
-        T::add_keys(places, &arrays[0], &arrays[1], input_rows, self.is_min)
+        T::add_keys(
+            places,
+            offset,
+            &arrays[0],
+            &arrays[1],
+            input_rows,
+            self.is_min,
+        )
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

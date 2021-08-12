@@ -71,11 +71,13 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
+        offset: usize,
         arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()> {
         if self.arguments.is_empty() {
             for place in places.iter() {
+                let place = place.next(offset);
                 let state = place.get::<AggregateCountState>();
                 state.count += 1;
             }
@@ -85,6 +87,7 @@ impl AggregateFunction for AggregateCountFunction {
         let array = arrays[0].get_array_ref();
         let validity = array.validity();
         for (row, place) in places.iter().enumerate() {
+            let place = place.next(offset);
             let state = place.get::<AggregateCountState>();
             if let Some(v) = validity {
                 state.count += v.get_bit(row) as u64;

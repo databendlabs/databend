@@ -122,8 +122,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
             set: HashSet::new(),
         });
 
-        let layout = self.nested.state_layout();
-        let netest_place = place.prev(layout.size());
+        let layout = Layout::new::<AggregateDistinctState>();
+        let netest_place = place.next(layout.size());
         self.nested.init_state(netest_place);
     }
 
@@ -156,6 +156,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
+        offset: usize,
         arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()> {
@@ -166,6 +167,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
                 .collect::<Result<Vec<_>>>()?;
 
             if !values.iter().any(|c| c.is_null()) {
+                let place = place.next(offset);
                 let state = place.get::<AggregateDistinctState>();
                 state.set.insert(DataGroupValues(
                     values
@@ -200,8 +202,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
         let state = place.get::<AggregateDistinctState>();
 
-        let layout = self.nested.state_layout();
-        let netest_place = place.prev(layout.size());
+        let layout = Layout::new::<AggregateDistinctState>();
+        let netest_place = place.next(layout.size());
 
         // faster path for count
         if self.nested.name() == "AggregateFunctionCount" {

@@ -142,10 +142,12 @@ impl AggregateFunction for AggregateIfCombinator {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
+        offset: usize,
         arrays: &[Series],
         input_rows: usize,
     ) -> Result<()> {
-        self.nested.accumulate_keys(places, arrays, input_rows)
+        self.nested
+            .accumulate_keys(places, offset, arrays, input_rows)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

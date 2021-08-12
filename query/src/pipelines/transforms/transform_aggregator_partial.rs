@@ -94,7 +94,7 @@ impl Processor for AggregatorPartialTransform {
                 .iter()
                 .enumerate()
                 .map(|(idx, func)| {
-                    let arg_place = place.prev(offsets_aggregate_states[idx]);
+                    let arg_place = place.next(offsets_aggregate_states[idx]);
                     func.init_state(arg_place);
                     arg_place.addr()
                 })

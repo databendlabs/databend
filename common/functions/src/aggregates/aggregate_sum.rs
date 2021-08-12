@@ -117,6 +117,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
+        offset: usize,
         arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()> {
@@ -130,12 +131,14 @@ where
                 .iter()
                 .zip(places.iter())
                 .for_each(|(v, place)| {
+                    let place = place.next(offset);
                     let state = place.get::<AggregateSumState<SumT::Native>>();
                     state.add(v.as_());
                 });
         } else {
             array.into_iter().zip(places.iter()).for_each(|(c, place)| {
                 if let Some(v) = c {
+                    let place = place.next(offset);
                     let state = place.get::<AggregateSumState<SumT::Native>>();
                     state.add(v.as_());
                 }
