@@ -405,6 +405,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c59e7af012c713f529e7a3ee57ce9b31ddd858d4b512923602f74608b009631"
 
 [[package]]
+name = "bumpalo"
+version = "3.7.0"
+source = "git+https://github.com/datafuse-extras/bumpalo?branch=inplace#d9d4e8081632f6293063d487ec4f4080123b6884"
+
+[[package]]
 name = "bytecount"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -782,7 +787,7 @@ dependencies = [
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
- "bumpalo",
+ "bumpalo 3.7.0 (git+https://github.com/datafuse-extras/bumpalo?branch=inplace)",
  "bytes",
  "common-arrow",
  "common-datablocks",
@@ -1334,7 +1339,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
  "async-trait",
- "bumpalo",
+ "bumpalo 3.7.0 (git+https://github.com/datafuse-extras/bumpalo?branch=inplace)",
  "byteorder",
  "clickhouse-rs",
  "clickhouse-srv",
@@ -5900,7 +5905,7 @@ version = "0.2.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "580aa3a91a63d23aac5b6b267e2d13cb4f363e31dce6c352fca4752ae12e479f"
 dependencies = [
- "bumpalo",
+ "bumpalo 3.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "log",
  "proc-macro2",

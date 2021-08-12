@@ -11,7 +11,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
 use common_io::prelude::*;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
@@ -83,10 +85,21 @@ impl Processor for AggregatorPartialTransform {
         let arg_names = self.arg_names.clone();
 
         let arena = Bump::new();
-        let places: Vec<usize> = funcs
-            .iter()
-            .map(|func| func.allocate_state(&arena))
-            .collect();
+
+        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
+
+        let places: Vec<usize> = {
+            let place: StateAddr = arena.alloc_layout(layout.clone()).into();
+            funcs
+                .iter()
+                .enumerate()
+                .map(|(idx, func)| {
+                    let arg_place = place.prev(offsets_aggregate_states[idx]);
+                    func.allocate_state(arg_place, &arena);
+                    arg_place.addr()
+                })
+                .collect()
+        };
 
         while let Some(block) = stream.next().await {
             let block = block?;
@@ -97,7 +110,8 @@ impl Processor for AggregatorPartialTransform {
                 for name in arg_names[idx].iter() {
                     arg_columns.push(block.try_column_by_name(name)?.to_array()?);
                 }
-                func.accumulate(places[idx], &arg_columns, rows)?;
+                let place = places[idx].into();
+                func.accumulate(place, &arg_columns, rows)?;
             }
         }
         let delta = start.elapsed();
@@ -107,7 +121,8 @@ impl Processor for AggregatorPartialTransform {
 
         let mut bytes = BytesMut::new();
         for (idx, func) in funcs.iter().enumerate() {
-            func.serialize(places[idx], &mut bytes)?;
+            let place = places[idx].into();
+            func.serialize(place, &mut bytes)?;
             let mut array_builder = BinaryArrayBuilder::with_capacity(4);
             array_builder.append_value(&bytes[..]);
             bytes.clear();

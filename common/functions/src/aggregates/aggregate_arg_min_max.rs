@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
@@ -12,7 +13,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 
-use super::GetState;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -21,8 +21,13 @@ use crate::dispatch_numeric_types;
 
 pub trait AggregateArgMinMaxState: Send + Sync + 'static {
     fn new(data_type: &DataType) -> Self;
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self;
-    fn add(&mut self, value: DataValue, series: &Series, row: usize, is_min: bool) -> Result<()>;
+    fn add_keys(
+        places: &[StateAddr],
+        data_series: &Series,
+        series: &Series,
+        rows: usize,
+        is_min: bool,
+    ) -> Result<()>;
     fn add_batch(&mut self, data_series: &Series, series: &Series, is_min: bool) -> Result<()>;
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
@@ -39,9 +44,6 @@ struct Utf8State {
     pub value: Option<String>,
     pub data: DataValue,
 }
-
-impl<'a, T> GetState<'a, NumericState<T>> for NumericState<T> where T: DFNumericType {}
-impl<'a> GetState<'a, Utf8State> for Utf8State {}
 
 impl<T> NumericState<T>
 where
@@ -83,23 +85,29 @@ where
         }
     }
 
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
-        Self::get(place)
-    }
-
-    fn add(&mut self, data: DataValue, series: &Series, row: usize, is_min: bool) -> Result<()> {
+    fn add_keys(
+        places: &[StateAddr],
+        data_series: &Series,
+        series: &Series,
+        rows: usize,
+        is_min: bool,
+    ) -> Result<()> {
         let array: &DataArray<T> = series.static_cast();
         let array = array.downcast_ref();
 
-        if array
-            .validity()
-            .as_ref()
-            .map(|c| c.get_bit(row))
-            .unwrap_or(true)
-        {
-            let other = array.value(row);
-            self.merge_value(data, other, is_min);
-        }
+        let v = array
+            .into_iter()
+            .zip(places.iter().enumerate())
+            .try_for_each(|(key, (idx, addr))| -> Result<()> {
+                let data = data_series.try_get(idx)?;
+
+                let state = addr.get::<Self>();
+                if let Some(v) = key {
+                    state.merge_value(data, *v, is_min);
+                }
+                Ok(())
+            })?;
+
         Ok(())
     }
 
@@ -175,23 +183,29 @@ impl AggregateArgMinMaxState for Utf8State {
         }
     }
 
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
-        Self::get(place)
-    }
-
-    fn add(&mut self, data: DataValue, series: &Series, row: usize, is_min: bool) -> Result<()> {
+    fn add_keys(
+        places: &[StateAddr],
+        data_series: &Series,
+        series: &Series,
+        rows: usize,
+        is_min: bool,
+    ) -> Result<()> {
         let array: &DataArray<Utf8Type> = series.static_cast();
         let array = array.downcast_ref();
 
-        if array
-            .validity()
-            .as_ref()
-            .map(|c| c.get_bit(row))
-            .unwrap_or(true)
-        {
-            let other = array.value(row);
-            self.merge_value(data, other, is_min);
-        }
+        let v = array
+            .into_iter()
+            .zip(places.iter().enumerate())
+            .try_for_each(|(key, (idx, addr))| -> Result<()> {
+                let data = data_series.try_get(idx)?;
+
+                let state = addr.get::<Self>();
+                if let Some(v) = key {
+                    state.merge_value(data, v, is_min);
+                }
+                Ok(())
+            })?;
+
         Ok(())
     }
 
@@ -263,40 +277,52 @@ where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue>
         Ok(false)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(T::new(self.arguments[0].data_type()));
-        (state as *mut T) as StateAddr
+    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
+        arena.alloc_with_inplace(place.into(), || T::new(self.arguments[0].data_type()));
+    }
+
+    fn state_layout(&self) -> Layout {
+        Layout::new::<T>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        let state = T::get_state(place);
+        let state: &mut T = place.get();
         state.add_batch(&arrays[0], &arrays[1], self.is_min)
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let state = T::get_state(place);
-        let data = arrays[0].try_get(row)?;
-        state.add(data, &arrays[0], row, self.is_min)
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        arrays: &[Series],
+        input_rows: usize,
+    ) -> Result<()> {
+        Ok(())
     }
 
+    // fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
+    //     let state = place.get::<T>();
+    //     let data = arrays[0].try_get(row)?;
+    //     state.add(data, &arrays[0], row, self.is_min)
+    // }
+
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = T::get_state(rhs);
-        let state = T::get_state(place);
+        let rhs = rhs.get::<T>();
+        let state = place.get::<T>();
         state.merge(rhs, self.is_min)
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.merge_result()
     }
 }

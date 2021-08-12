@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
@@ -12,7 +13,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 
-use super::GetState;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -21,7 +21,6 @@ use crate::dispatch_numeric_types;
 
 pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn default() -> Self;
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self;
     fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()>;
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()>;
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
@@ -37,9 +36,6 @@ struct NumericState<T: DFNumericType> {
 struct Utf8State {
     pub value: Option<String>,
 }
-
-impl<'a, T> GetState<'a, NumericState<T>> for NumericState<T> where T: DFNumericType {}
-impl<'a> GetState<'a, Utf8State> for Utf8State {}
 
 impl<T> NumericState<T>
 where
@@ -72,10 +68,6 @@ where
 {
     fn default() -> Self {
         Self { value: None }
-    }
-
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
-        Self::get(place)
     }
 
     fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
@@ -142,10 +134,6 @@ impl Utf8State {
 impl AggregateMinMaxState for Utf8State {
     fn default() -> Self {
         Self { value: None }
-    }
-
-    fn get_state<'a>(place: StateAddr) -> &'a mut Self {
-        Self::get(place)
     }
 
     fn add(&mut self, series: &Series, row: usize, is_min: bool) -> Result<()> {
@@ -217,39 +205,42 @@ where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + 
         Ok(false)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(T::default());
-        (state as *mut T) as StateAddr
+    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
+        arena.alloc_with_inplace(place.into(), || T::default());
+    }
+
+    fn state_layout(&self) -> Layout {
+        Layout::new::<T>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.add_batch(&arrays[0], self.is_min)
     }
 
     fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.add(&arrays[0], row, self.is_min)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = T::get_state(rhs);
-        let state = T::get_state(place);
+        let rhs = rhs.get::<T>();
+        let state = place.get::<T>();
         state.merge(rhs, self.is_min)
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = T::get_state(place);
+        let state = place.get::<T>();
         state.merge_result()
     }
 }

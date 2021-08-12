@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
@@ -23,18 +24,20 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr;
+    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump);
+    fn state_layout(&self) -> Layout;
 
     // accumulate is to accumulate the arrays in batch mode
     // common used when there is no group by for aggregate function
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
-        (0..input_rows).try_for_each(|row| self.accumulate_row(place, row, arrays))
-    }
+    fn accumulate(&self, _place: StateAddr, _arrays: &[Series], _input_rows: usize) -> Result<()>;
 
-    // used when we need to caclulate row by row
-    fn accumulate_row(&self, _place: StateAddr, _row: usize, _arrays: &[Series]) -> Result<()> {
-        Ok(())
-    }
+    // used when we need to caclulate with group keys
+    fn accumulate_keys(
+        &self,
+        _places: &[StateAddr],
+        _arrays: &[Series],
+        _input_rows: usize,
+    ) -> Result<()>;
 
     // serialize  the state into binary array
     fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()>;

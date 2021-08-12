@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
+use std::alloc::Layout;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -15,7 +16,6 @@ use common_io::prelude::*;
 use num::traits::AsPrimitive;
 
 use super::AggregateFunctionRef;
-use super::GetState;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -24,8 +24,6 @@ use crate::dispatch_numeric_types;
 struct AggregateSumState<T> {
     pub value: Option<T>,
 }
-
-impl<'a, T> GetState<'a, AggregateSumState<T>> for AggregateSumState<T> {}
 
 impl<T> AggregateSumState<T>
 where
@@ -97,9 +95,14 @@ where
         Ok(false)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let state = arena.alloc(AggregateSumState::<SumT::Native> { value: None });
-        (state as *mut AggregateSumState<SumT::Native>) as StateAddr
+    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
+        arena.alloc_with_inplace(place.into(), || AggregateSumState::<SumT::Native> {
+            value: None,
+        });
+    }
+
+    fn state_layout(&self) -> Layout {
+        Layout::new::<AggregateSumState<SumT::Native>>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
@@ -107,50 +110,53 @@ where
         let opt_sum: Result<SumT::Native> = DFTryFrom::try_from(value);
 
         if let Ok(s) = opt_sum {
-            let state = AggregateSumState::<SumT::Native>::get(place);
+            let state = place.get::<AggregateSumState<SumT::Native>>();
             state.add(s);
         }
 
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        arrays: &[Series],
+        input_rows: usize,
+    ) -> Result<()> {
         let array: &DataArray<T> = arrays[0].static_cast::<T>();
         let array = array.downcast_ref();
 
-        if array
-            .validity()
-            .as_ref()
-            .map(|c| c.get_bit(row))
-            .unwrap_or(true)
-        {
-            let state = AggregateSumState::<SumT::Native>::get(place);
-            state.add(array.value(row).as_());
-        }
+        array.into_iter().zip(places.iter()).for_each(|(c, place)| {
+            if let Some(v) = c {
+                let state = place.get::<AggregateSumState<SumT::Native>>();
+                state.add(v.as_());
+            }
+        });
+
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = AggregateSumState::<SumT::Native>::get(place);
+        let state = place.get::<AggregateSumState<SumT::Native>>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = AggregateSumState::<SumT::Native>::get(place);
+        let state = place.get::<AggregateSumState<SumT::Native>>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = AggregateSumState::<SumT::Native>::get(rhs);
+        let rhs = rhs.get::<AggregateSumState<SumT::Native>>();
         if let Some(s) = &rhs.value {
-            let state = AggregateSumState::<SumT::Native>::get(place);
+            let state = place.get::<AggregateSumState<SumT::Native>>();
             state.add(*s);
         }
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = AggregateSumState::<SumT::Native>::get(place);
+        let state = place.get::<AggregateSumState<SumT::Native>>();
         Ok(state.value.into())
     }
 }

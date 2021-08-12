@@ -12,6 +12,8 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::StateAddr;
 use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
@@ -71,13 +73,13 @@ impl Processor for GroupByFinalTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
-        let aggr_funcs = self
+        let funcs = self
             .aggr_exprs
             .iter()
             .map(|x| x.to_aggregate_function(&self.schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
 
-        let aggr_funcs_len = aggr_funcs.len();
+        let aggr_funcs_len = funcs.len();
         let group_expr_len = self.group_exprs.len();
 
         let group_cols = self
@@ -98,6 +100,8 @@ impl Processor for GroupByFinalTransform {
         let mut stream = self.input.execute().await?;
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
+
+        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
 
         macro_rules! apply {
             ($hash_method: ident, $key_array_type: ty, $downcast_fn: ident, $group_func_table: ty) => {{
@@ -126,21 +130,29 @@ impl Processor for GroupByFinalTransform {
                         let group_key = $hash_method.get_key(&key_array, row);
                         match groups.get(&group_key) {
                             None => {
-                                let mut places = Vec::with_capacity(aggr_funcs_len);
-                                for (i, func) in aggr_funcs.iter().enumerate() {
-                                    let mut data = states_binary_arrays[i].value(row);
-                                    let place = func.allocate_state(&arena);
-                                    func.deserialize(place, &mut data)?;
-                                    places.push(place);
+                                let place: StateAddr = arena.alloc_layout(layout.clone()).into();
+
+                                for (idx, func) in funcs.iter().enumerate() {
+                                    let arg_place = place.prev(offsets_aggregate_states[idx]);
+
+                                    let mut data = states_binary_arrays[idx].value(row);
+                                    func.allocate_state(arg_place, &arena);
+                                    func.deserialize(arg_place, &mut data)?;
                                 }
-                                groups.insert(group_key, places);
+                                groups.insert(group_key, place.addr());
                             }
-                            Some(places) => {
-                                for (i, func) in aggr_funcs.iter().enumerate() {
-                                    let mut data = states_binary_arrays[i].value(row);
-                                    let place = func.allocate_state(&arena);
-                                    func.deserialize(place, &mut data)?;
-                                    func.merge(places[i], place)?;
+                            Some(place) => {
+                                let place: StateAddr = (*place).into();
+
+                                for (idx, func) in funcs.iter().enumerate() {
+                                    let arg_place = place.prev(offsets_aggregate_states[idx]);
+
+                                    let mut data = states_binary_arrays[idx].value(row);
+                                    let temp = arena.alloc_layout(funcs[idx].state_layout());
+                                    let temp_addr = temp.into();
+
+                                    func.deserialize(temp_addr, &mut data)?;
+                                    func.merge(arg_place, temp_addr)?;
                                 }
                             }
                         };
@@ -160,12 +172,14 @@ impl Processor for GroupByFinalTransform {
                     values
                 };
                 let mut keys = Vec::with_capacity(groups.len());
-                for (key, places) in groups.iter() {
+                for (key, place) in groups.iter() {
                     keys.push(key.clone());
 
-                    for (i, func) in aggr_funcs.iter().enumerate() {
-                        let merge = func.merge_result(places[i])?;
-                        aggr_values[i].push(merge);
+                    let place: StateAddr = (*place).into();
+                    for (idx, func) in funcs.iter().enumerate() {
+                        let arg_place = place.prev(offsets_aggregate_states[idx]);
+                        let merge = func.merge_result(arg_place)?;
+                        aggr_values[idx].push(merge);
                     }
                 }
 
@@ -202,19 +216,19 @@ impl Processor for GroupByFinalTransform {
             ($method: ident, $apply: ident) => {{
                 match $method {
                     HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method,  &DFBinaryArray, binary,   RwLock<HashMap<Vec<u8>, Vec<usize>, ahash::RandomState>>}
+                        apply! { hash_method,  &DFBinaryArray, binary,   RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
                     }
                     HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , &DFUInt8Array, u8,  RwLock<HashMap<u8, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt8Array, u8,  RwLock<HashMap<u8, usize, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , &DFUInt16Array, u16,  RwLock<HashMap<u16, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt16Array, u16,  RwLock<HashMap<u16, usize, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , &DFUInt32Array, u32,  RwLock<HashMap<u32, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt32Array, u32,  RwLock<HashMap<u32, usize, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , &DFUInt64Array, u64,  RwLock<HashMap<u64, Vec<usize>, ahash::RandomState>> }
+                        apply! { hash_method , &DFUInt64Array, u64,  RwLock<HashMap<u64, usize, ahash::RandomState>> }
                     }
                 }
             }};
