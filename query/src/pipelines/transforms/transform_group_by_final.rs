@@ -154,6 +154,7 @@ impl Processor for GroupByFinalTransform {
                                     let temp = arena.alloc_layout(funcs[idx].state_layout());
                                     let temp_addr = temp.into();
 
+                                    funcs[idx].init_state(temp_addr);
                                     func.deserialize(temp_addr, &mut data)?;
                                     func.merge(arg_place, temp_addr)?;
                                 }

@@ -101,6 +101,8 @@ impl Processor for AggregatorFinalTransform {
                 let s = funcs[idx].state_layout();
                 let temp = arena.alloc_layout(s);
                 let temp_addr = temp.into();
+                funcs[idx].init_state(temp_addr);
+
                 func.deserialize(temp_addr, &mut data)?;
                 func.merge(place, temp_addr)?;
             }
