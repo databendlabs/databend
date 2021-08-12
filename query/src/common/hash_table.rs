@@ -74,12 +74,12 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
 
     #[inline(always)]
     pub fn find_key(&self, key: &Key) -> Option<*mut HashTableEntity> {
-        if !HashTableEntity::is_zero_s(key) {
+        if !HashTableEntity::is_zero_key(key) {
             let hash_value = Hasher::hash(key);
             let place_value = self.find_entity(key, hash_value);
             unsafe {
                 let value = self.entities.offset(place_value);
-                return match value.as_ref().unwrap().is_zero() {
+                return match value.is_zero() {
                     true => None,
                     false => Some(value)
                 };
@@ -93,11 +93,14 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
     fn find_entity(&self, key: &Key, hash_value: u64) -> isize {
         let mut place_value = self.grower.place(hash_value);
         loop {
-            let entity = unsafe { self.entities.offset(place_value as isize).as_ref() }.unwrap();
-            if entity.is_zero() || entity.key_equals(key, hash_value) {
-                return place_value;
+            unsafe {
+                let entity = self.entities.offset(place_value as isize);
+
+                if entity.is_zero() || entity.key_equals(key, hash_value) {
+                    return place_value;
+                }
+                place_value = self.grower.next_place(place_value);
             }
-            place_value = self.grower.next_place(place_value);
         }
     }
 
@@ -110,7 +113,7 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
     #[inline(always)]
     fn insert_non_zero_key_impl(&mut self, place_value: isize, key: &Key, hash_value: u64, _inserted: bool) -> *mut HashTableEntity {
         unsafe {
-            let entity = self.entities.offset(place_value).as_mut().unwrap();
+            let entity = self.entities.offset(place_value);
 
             if !entity.is_zero() {
                 // inserted = false;
@@ -123,7 +126,7 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
             if self.grower.overflow(self.size) {
                 self.resize();
                 let new_place = self.find_entity(key, hash_value);
-                std::assert!(!self.entities.offset(new_place).as_ref().unwrap().is_zero());
+                std::assert!(!self.entities.offset(new_place).is_zero());
                 return self.entities.offset(place_value);
             }
 
@@ -133,7 +136,7 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
 
     #[inline(always)]
     fn insert_if_zero_key(&mut self, key: &Key, hash_value: u64, _inserted: bool) -> Option<*mut HashTableEntity> {
-        if HashTableEntity::is_zero_s(key) {
+        if HashTableEntity::is_zero_key(key) {
             if self.zero_entity.is_none() {
                 unsafe {
                     let layout = Layout::from_size_align_unchecked(mem::size_of::<HashTableEntity>(), mem::align_of::<HashTableEntity>());
@@ -141,7 +144,7 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
                     self.size += 1;
                     self.zero_entity_raw = Some(std::alloc::alloc_zeroed(layout));
                     self.zero_entity = Some(self.zero_entity_raw.unwrap() as *mut HashTableEntity);
-                    self.zero_entity.unwrap().as_mut().unwrap().set_key_and_hash(key, hash_value);
+                    self.zero_entity.unwrap().set_key_and_hash(key, hash_value);
                 }
             };
 
@@ -169,10 +172,9 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
 
             for index in 0..old_size {
                 let entity_ptr = self.entities.offset(index);
-                let entity = entity_ptr.as_mut().unwrap();
 
-                if !entity_ptr.as_mut().unwrap().is_zero() {
-                    self.reinsert(entity_ptr, entity.get_hash());
+                if !entity_ptr.is_zero() {
+                    self.reinsert(entity_ptr, entity_ptr.get_hash());
                 }
             }
 
@@ -184,7 +186,7 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
             //      after transferring all the elements from the old halves you need to     [         o   x    ]
             //      process tail from the collision resolution chain immediately after it   [        o    x    ]
             for index in old_size..self.grower.max_size() {
-                let entity = self.entities.offset(index).as_mut().unwrap();
+                let entity = self.entities.offset(index);
 
                 if !entity.is_zero() {
                     return;
@@ -198,10 +200,10 @@ impl<Key, HashTableEntity: IHashTableEntity<Key> + Sized + PartialEq, Hasher: IH
     unsafe fn reinsert(&self, entity: *mut HashTableEntity, hash_value: u64) -> isize {
         let mut place_value = self.grower.place(hash_value);
 
-        if entity.as_ref().unwrap() != self.entities.offset(place_value).as_ref().unwrap() {
-            place_value = self.find_entity(entity.as_ref().unwrap().get_key(), hash_value);
-            if self.entities.offset(place_value).as_ref().unwrap().is_zero() {
-                std::mem::swap(entity.as_mut().unwrap(), self.entities.offset(place_value).as_mut().unwrap());
+        if entity.not_equals_key(self.entities.offset(place_value)) {
+            place_value = self.find_entity(entity.get_key(), hash_value);
+            if self.entities.offset(place_value).is_zero() {
+                entity.swap(self.entities.offset(place_value));
             }
         }
 

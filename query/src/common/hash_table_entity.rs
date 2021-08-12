@@ -1,15 +1,15 @@
 pub trait IHashTableEntity<Key>
 {
-    fn new_zero() -> Self;
-    fn is_zero_s(key: &Key) -> bool;
+    fn is_zero_key(key: &Key) -> bool;
 
-    fn is_zero(&self) -> bool;
-    fn set_zero(&mut self);
-    fn key_equals(&self, key: &Key, hash: u64) -> bool;
-    fn set_key_and_hash(&mut self, key: &Key, hash: u64);
+    unsafe fn is_zero(self: *mut Self) -> bool;
+    unsafe fn key_equals(self: *mut Self, key: &Key, hash: u64) -> bool;
+    unsafe fn set_key_and_hash(self: *mut Self, key: &Key, hash: u64);
 
-    fn get_key(&self) -> &Key;
-    fn get_hash(&self) -> u64;
+    unsafe fn get_key<'a>(self: *mut Self) -> &'a Key;
+    unsafe fn get_hash(self: *mut Self) -> u64;
+
+    unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool;
 }
 
 #[repr(C, packed)]
@@ -18,49 +18,35 @@ pub struct DefaultHashTableEntity {
     pub(crate) hash: u64,
 }
 
-impl PartialEq for DefaultHashTableEntity {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
-    }
-}
-
 impl IHashTableEntity<i32> for DefaultHashTableEntity
 {
-    fn new_zero() -> Self {
-        DefaultHashTableEntity {
-            key: 0,
-            hash: 0,
-        }
-    }
-
-    fn is_zero_s(key: &i32) -> bool {
+    fn is_zero_key(key: &i32) -> bool {
         *key == 0
     }
 
-    fn is_zero(&self) -> bool {
-        self.key == 0
+    unsafe fn is_zero(self: *mut Self) -> bool {
+        (*self).key == 0
     }
 
-    fn set_zero(&mut self) {
-        self.key = 0;
-        self.hash = 0;
+    unsafe fn key_equals(self: *mut Self, key: &i32, _hash: u64) -> bool {
+        (*self).key == *key
     }
 
-    fn key_equals(&self, key: &i32, _hash: u64) -> bool {
-        self.key == *key
+    unsafe fn set_key_and_hash(self: *mut Self, key: &i32, hash: u64) {
+        (*self).key = *key;
+        (*self).hash = hash;
     }
 
-    fn set_key_and_hash(&mut self, key: &i32, hash: u64) {
-        self.key = *key;
-        self.hash = hash;
+    unsafe fn get_key<'a>(self: *mut Self) -> &'a i32 {
+        &(*self).key
     }
 
-    fn get_key(&self) -> &i32 {
-        unsafe { &self.key }
+    unsafe fn get_hash(self: *mut Self) -> u64 {
+        (*self).hash
     }
 
-    fn get_hash(&self) -> u64 {
-        self.hash
+    unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
+        (*self).key == (*other).key
     }
 }
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0.
 
 #![feature(hash_raw_entry)]
+#![feature(arbitrary_self_types)]
 
 #[cfg(test)]
 pub mod tests;
