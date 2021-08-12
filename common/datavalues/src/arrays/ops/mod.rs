@@ -6,6 +6,7 @@ mod agg;
 mod apply;
 mod boolean;
 mod cast;
+mod contain;
 mod downcast;
 mod fill;
 mod group_hash;
@@ -23,6 +24,8 @@ mod apply_test;
 #[cfg(test)]
 mod cast_test;
 #[cfg(test)]
+mod contain_test;
+#[cfg(test)]
 mod downcast_test;
 #[cfg(test)]
 mod fill_test;
@@ -39,6 +42,7 @@ pub use agg::*;
 pub use apply::*;
 pub use boolean::*;
 pub use cast::*;
+pub use contain::*;
 pub use downcast::*;
 pub use fill::*;
 pub use group_hash::GroupHash;

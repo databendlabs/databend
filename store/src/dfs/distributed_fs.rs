@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::ops::Bound::Included;
-use std::ops::Bound::Unbounded;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -45,7 +43,7 @@ impl Dfs {}
 #[async_trait]
 impl FileSystem for Dfs {
     #[tracing::instrument(level = "debug", skip(self, data))]
-    async fn add(&self, path: &str, data: &[u8]) -> anyhow::Result<()> {
+    async fn add(&self, path: &str, data: &[u8]) -> common_exception::Result<()> {
         // add the file to local fs
 
         self.local_fs.add(path, data).await?;
@@ -69,7 +67,7 @@ impl FileSystem for Dfs {
         // TODO(xp): week consistency, meta may not have been replicated to this node.
 
         // meanwhile, file meta is empty string
-        let _file_meta = self.meta_node.get_file(key).await.ok_or_else(|| {
+        let _file_meta = self.meta_node.get_file(key).await?.ok_or_else(|| {
             ErrorCode::FileMetaNotFound(format!("dfs/meta: key not found: {:?}", key))
         })?;
 
@@ -77,20 +75,12 @@ impl FileSystem for Dfs {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn list(&self, prefix: &str) -> anyhow::Result<ListResult> {
-        let sm = self.meta_node.sto.get_state_machine().await;
-
-        let mut files: Vec<String> = Vec::new();
-        for (k, _v) in sm.keys.range((Included(prefix.to_string()), Unbounded)) {
-            if !k.starts_with(prefix) {
-                break;
-            }
-            files.push(k.clone());
-        }
+    async fn list(&self, prefix: &str) -> common_exception::Result<ListResult> {
+        let fns = self.meta_node.list_files(prefix).await?;
 
         Ok(ListResult {
             dirs: vec![],
-            files,
+            files: fns,
         })
     }
 }

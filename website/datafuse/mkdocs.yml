@@ -195,6 +195,7 @@ nav:
         - DatafuseQuery Shuffle: rfcs/query/0003-data-shuffle.md
         - DatafuseStore Design: rfcs/store/0001-store-design.md
         - Performance Test: rfcs/query/0004-performance-test.md
+        - DatafuseCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
 
 # Google Analytics

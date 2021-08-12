@@ -200,6 +200,10 @@ build_exceptions! {
 
     DatafuseStoreError(2501),
 
+    // FS error
+
+    IllegalFileName(2601),
+
 
     // TODO
     // We may need to separate front-end errors from API errors (and system errors?)

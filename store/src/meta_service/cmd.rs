@@ -6,6 +6,7 @@ use std::fmt;
 
 use async_raft::NodeId;
 use common_metatypes::Database;
+use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::Table;
 use serde::Deserialize;
@@ -76,6 +77,9 @@ pub enum Cmd {
 
         /// The value to set. A `None` indicates to delete it.
         value: Option<Vec<u8>>,
+
+        /// Meta data of a value.
+        value_meta: Option<KVMeta>,
     },
 }
 
@@ -131,8 +135,17 @@ impl fmt::Display for Cmd {
                     db_name, table_name, if_exists
                 )
             }
-            Cmd::UpsertKV { key, seq, value } => {
-                write!(f, "upsert_kv: {}({:?}) = {:?}", key, seq, value)
+            Cmd::UpsertKV {
+                key,
+                seq,
+                value,
+                value_meta,
+            } => {
+                write!(
+                    f,
+                    "upsert_kv: {}({:?}) = {:?} ({:?})",
+                    key, seq, value, value_meta
+                )
             }
         }
     }

@@ -8,8 +8,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fs::remove_dir_all;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
@@ -17,6 +17,7 @@ use common_exception::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
+use common_metatypes::KVValue;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
@@ -93,14 +94,6 @@ pub struct StateMachine {
     /// (serial, RaftResponse)
     /// This is used to de-dup client request, to impl idempotent operations.
     pub client_last_resp: HashMap<String, (u64, AppliedState)>,
-
-    /// The file names stored in this cluster
-    pub keys: BTreeMap<String, String>,
-
-    /// storage of auto-incremental number.
-    /// TODO(xp): temporarily make it a Arc<Mutex>, need to be modified while &StateMachine is immutably borrow.
-    ///           remove it after making it a sled store.
-    pub sequences: Arc<Mutex<BTreeMap<String, u64>>>,
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
@@ -203,8 +196,6 @@ impl StateMachine {
             sm_tree,
 
             client_last_resp: Default::default(),
-            keys: BTreeMap::new(),
-            sequences: Arc::new(Mutex::new(BTreeMap::new())),
             slots: Vec::new(),
 
             replication: Replication::Mirror(1),
@@ -309,17 +300,20 @@ impl StateMachine {
     /// Internal func to get an auto-incr seq number.
     /// It is just what Cmd::IncrSeq does and is also used by Cmd that requires
     /// a unique id such as Cmd::AddDatabase which needs make a new database id.
-    fn incr_seq(&self, key: &str) -> u64 {
-        let mut sequences = self.sequences.lock().unwrap();
-        let prev = sequences.get(key);
-        let curr = match prev {
-            Some(v) => v + 1,
-            None => 1,
-        };
-        sequences.insert(key.to_string(), curr);
+    ///
+    /// Note: this can only be called inside apply().
+    async fn incr_seq(&self, key: &str) -> common_exception::Result<u64> {
+        let sequences = self.sequences();
+
+        let curr = sequences
+            .update_and_fetch(&key.to_string(), |old| Some(old.unwrap_or_default() + 1))
+            .await?;
+
+        let curr = curr.unwrap();
+
         tracing::debug!("applied IncrSeq: {}={}", key, curr);
 
-        curr
+        Ok(curr.0)
     }
 
     /// Apply an log entry to state machine.
@@ -328,7 +322,11 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn apply(&mut self, log_id: &LogId, data: &LogEntry) -> anyhow::Result<AppliedState> {
+    pub async fn apply(
+        &mut self,
+        log_id: &LogId,
+        data: &LogEntry,
+    ) -> common_exception::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
 
         let sm_meta = self.sm_meta();
@@ -364,23 +362,29 @@ impl StateMachine {
     ) -> common_exception::Result<AppliedState> {
         match data.cmd {
             Cmd::AddFile { ref key, ref value } => {
-                if self.keys.contains_key(key) {
-                    let prev = self.keys.get(key);
-                    Ok((prev.cloned(), None).into())
-                } else {
-                    let prev = self.keys.insert(key.clone(), value.clone());
+                // TODO(xp): put it in a transaction
+                let files = self.files();
+
+                let prev = files.get(key)?;
+                if prev.is_none() {
+                    files.insert(key, value).await?;
                     tracing::info!("applied AddFile: {}={}", key, value);
                     Ok((prev, Some(value.clone())).into())
+                } else {
+                    // TODO(xp): failure to add should returns `prev` as `result`
+                    Ok((prev, None).into())
                 }
             }
 
             Cmd::SetFile { ref key, ref value } => {
-                let prev = self.keys.insert(key.clone(), value.clone());
+                let files = self.files();
+
+                let prev = files.insert(key, value).await?;
                 tracing::info!("applied SetFile: {}={}", key, value);
                 Ok((prev, Some(value.clone())).into())
             }
 
-            Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).into()),
+            Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).await?.into()),
 
             Cmd::AddNode {
                 ref node_id,
@@ -407,10 +411,10 @@ impl StateMachine {
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let db = Database {
-                        database_id: self.incr_seq(SEQ_DATABASE_ID),
+                        database_id: self.incr_seq(SEQ_DATABASE_ID).await?,
                         tables: Default::default(),
                     };
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     self.databases.insert(name.clone(), db.clone());
                     tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
@@ -424,7 +428,7 @@ impl StateMachine {
                 if prev.is_some() {
                     self.remove_db_data_parts(name);
                     self.databases.remove(name);
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
                     tracing::debug!("applied DropDatabase: {}", name);
                     Ok((prev, None).into())
                 } else {
@@ -447,11 +451,11 @@ impl StateMachine {
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let table = Table {
-                        table_id: self.incr_seq(SEQ_TABLE_ID),
+                        table_id: self.incr_seq(SEQ_TABLE_ID).await?,
                         schema: table.schema.clone(),
                         parts: table.parts.clone(),
                     };
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
                     db.tables.insert(table_name.clone(), table.table_id);
                     self.databases.insert(db_name.clone(), db);
                     self.tables.insert(table.table_id, table.clone());
@@ -475,7 +479,7 @@ impl StateMachine {
 
                     self.remove_table_data_parts(db_name, table_name);
 
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     Ok((prev, None).into())
                 } else {
@@ -487,19 +491,43 @@ impl StateMachine {
                 ref key,
                 ref seq,
                 ref value,
+                ref value_meta,
             } => {
                 // TODO(xp): need to be done all in a tx
+                // TODO(xp): now must be a timestamp extracted from raft log.
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+
                 let kvs = self.kvs();
 
                 let prev = kvs.get(key)?;
+
+                // If prev is timed out, treat it as a None.
+                let prev = match prev {
+                    None => None,
+                    Some(ref p) => {
+                        if p.1 < now {
+                            None
+                        } else {
+                            prev
+                        }
+                    }
+                };
+
                 if seq.match_seq(&prev).is_err() {
                     return Ok((prev.clone(), prev).into());
                 }
 
                 let record_value = if let Some(v) = value {
-                    let new_seq = self.incr_seq(SEQ_GENERIC_KV);
+                    let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
 
-                    let record_value = (new_seq, v.clone());
+                    let gv = KVValue {
+                        meta: value_meta.clone(),
+                        value: v.clone(),
+                    };
+                    let record_value = (new_seq, gv);
                     kvs.insert(key, &record_value).await?;
 
                     Some(record_value)
@@ -552,19 +580,27 @@ impl StateMachine {
         sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
-    pub fn get_file(&self, key: &str) -> Option<String> {
-        tracing::info!("meta::get_file: {}", key);
-        let x = self.keys.get(key);
-        tracing::info!("meta::get_file: {}={:?}", key, x);
-        x.cloned()
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub fn get_file(&self, key: &str) -> common_exception::Result<Option<String>> {
+        tracing::debug!("SM::get_file: {}", key);
+
+        let files = self.files();
+        let x = files.get(&key.to_string())?;
+
+        tracing::debug!("SM::get_file: {}={:?}", key, x);
+        Ok(x)
     }
 
-    pub fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        // TODO(xp): handle error
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub fn list_files(&self, prefix: &str) -> common_exception::Result<Vec<String>> {
+        let files = self.files();
+        let fns = files.scan_prefix(&prefix.to_string())?;
+        Ok(fns.into_iter().map(|(k, _v)| k).collect())
+    }
 
+    pub fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         let sm_nodes = self.nodes();
-        sm_nodes.get(node_id).expect("fail to get node")
+        sm_nodes.get(node_id)
     }
 
     pub fn get_database(&self, name: &str) -> Option<Database> {
@@ -576,12 +612,10 @@ impl StateMachine {
         &self.databases
     }
 
-    pub fn get_database_meta_ver(&self) -> Option<u64> {
-        self.sequences
-            .lock()
-            .unwrap()
-            .get(SEQ_DATABASE_META_ID)
-            .cloned()
+    pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
+        let sequences = self.sequences();
+        let res = sequences.get(&SEQ_DATABASE_META_ID.to_string())?;
+        Ok(res.map(|x| x.0))
     }
 
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
@@ -589,10 +623,16 @@ impl StateMachine {
         x.cloned()
     }
 
-    pub fn get_kv(&self, key: &str) -> Option<SeqValue> {
+    pub fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {
         // TODO(xp) refine get(): a &str is enough for key
-        // TODO(xp): handle error
-        self.kvs().get(&key.to_string()).unwrap()
+        let sv = self.kvs().get(&key.to_string())?;
+        tracing::debug!("get_kv sv:{:?}", sv);
+        let sv = match sv {
+            None => return Ok(None),
+            Some(sv) => sv,
+        };
+
+        Ok(Self::unexpired(sv))
     }
 
     pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
@@ -687,24 +727,76 @@ impl StateMachine {
         }
     }
 
-    pub fn mget_kv(&self, keys: &[impl AsRef<str>]) -> Vec<Option<SeqValue>> {
-        // TODO(xp): handle error
+    pub fn mget_kv(
+        &self,
+        keys: &[impl AsRef<str>],
+    ) -> common_exception::Result<Vec<Option<SeqValue<KVValue>>>> {
         let kvs = self.kvs();
-        keys.iter()
-            .map(|key| kvs.get(&key.as_ref().to_string()).unwrap())
-            .collect()
+        let mut res = vec![];
+        for x in keys.iter() {
+            let v = kvs.get(&x.as_ref().to_string())?;
+            let v = Self::unexpired_opt(v);
+            res.push(v)
+        }
+
+        Ok(res)
     }
 
-    pub fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqValue)> {
+    pub fn prefix_list_kv(
+        &self,
+        prefix: &str,
+    ) -> common_exception::Result<Vec<(String, SeqValue<KVValue>)>> {
         let kvs = self.kvs();
-        // TODO(xp): handle error
-        let kv_pairs = kvs.range(prefix.to_string()..).unwrap();
+        let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
 
-        let x = kv_pairs
-            .into_iter()
-            .take_while(|(k, _)| k.starts_with(prefix));
+        let x = kv_pairs.into_iter();
 
-        x.collect()
+        // Convert expired to None
+        let x = x.map(|(k, v)| (k, Self::unexpired(v)));
+        // Remove None
+        let x = x.filter(|(_k, v)| v.is_some());
+        // Extract from an Option
+        let x = x.map(|(k, v)| (k, v.unwrap()));
+
+        Ok(x.collect())
+    }
+
+    fn unexpired_opt(seq_value: Option<SeqValue<KVValue>>) -> Option<SeqValue<KVValue>> {
+        match seq_value {
+            None => None,
+            Some(sv) => Self::unexpired(sv),
+        }
+    }
+    fn unexpired(seq_value: SeqValue<KVValue>) -> Option<SeqValue<KVValue>> {
+        // TODO(xp): log must be assigned with a ts.
+
+        // TODO(xp): background task to clean expired
+
+        // TODO(xp): Caveat: The cleanup must be consistent across raft nodes:
+        //           A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
+        //           must be applied with the same timestamp on every raft node.
+        //           Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
+        //           while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
+        //           Thus:
+        //           1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
+        //              check against expire_at to decide whether to purge it.
+        //           2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
+        //           3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
+
+        // TODO(xp): maybe it needs a expiration queue for efficient cleaning up.
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        tracing::debug!("seq_value: {:?} now: {}", seq_value, now);
+
+        if seq_value.1 < now {
+            None
+        } else {
+            Some(seq_value)
+        }
     }
 }
 
@@ -713,9 +805,12 @@ impl StateMachine {
     pub fn sm_meta(&self) -> AsKeySpace<StateMachineMeta> {
         self.sm_tree.key_space()
     }
+
     pub fn nodes(&self) -> AsKeySpace<sled_key_space::Nodes> {
         self.sm_tree.key_space()
     }
+
+    /// The file names stored in this cluster
     pub fn files(&self) -> AsKeySpace<sled_key_space::Files> {
         self.sm_tree.key_space()
     }
@@ -724,6 +819,11 @@ impl StateMachine {
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
     pub fn kvs(&self) -> AsKeySpace<sled_key_space::GenericKV> {
+        self.sm_tree.key_space()
+    }
+
+    /// storage of auto-incremental number.
+    pub fn sequences(&self) -> AsKeySpace<sled_key_space::Sequences> {
         self.sm_tree.key_space()
     }
 }
@@ -756,7 +856,7 @@ impl Placement for StateMachine {
         &self.slots
     }
 
-    fn get_placement_node(&self, node_id: &NodeId) -> Option<Node> {
+    fn get_placement_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         self.get_node(node_id)
     }
 }

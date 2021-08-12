@@ -5,6 +5,7 @@
 use async_raft::AppDataResponse;
 use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
+use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use serde::Deserialize;
@@ -50,8 +51,8 @@ pub enum AppliedState {
     },
 
     KV {
-        prev: Option<SeqValue>,
-        result: Option<SeqValue>,
+        prev: Option<SeqValue<KVValue>>,
+        result: Option<SeqValue<KVValue>>,
     },
 }
 
@@ -110,8 +111,8 @@ impl From<(Option<Vec<DataPartInfo>>, Option<Vec<DataPartInfo>>)> for AppliedSta
     }
 }
 
-impl From<(Option<SeqValue>, Option<SeqValue>)> for AppliedState {
-    fn from(v: (Option<SeqValue>, Option<SeqValue>)) -> Self {
+impl From<(Option<SeqValue<KVValue>>, Option<SeqValue<KVValue>>)> for AppliedState {
+    fn from(v: (Option<SeqValue<KVValue>>, Option<SeqValue<KVValue>>)) -> Self {
         AppliedState::KV {
             prev: v.0,
             result: v.1,

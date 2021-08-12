@@ -9,6 +9,7 @@ pub use async_raft::NodeId;
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
 use common_exception::ErrorCode;
+use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use sled::IVec;
 
@@ -59,7 +60,7 @@ impl SledSerde for String {
     }
 }
 
-impl SledSerde for SeqValue<Vec<u8>> {}
+impl SledSerde for SeqValue<KVValue> {}
 
 /// For LogId to be able to stored in sled::Tree as a value.
 impl SledSerde for LogId {}

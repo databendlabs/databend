@@ -28,6 +28,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
                 key: act.key,
                 seq: act.seq,
                 value: act.value,
+                value_meta: act.value_meta,
             },
         };
         let rst = self
@@ -46,7 +47,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<GetKVAction> for ActionHandler {
     async fn handle(&self, act: GetKVAction) -> common_exception::Result<GetKVActionResult> {
-        let result = self.meta_node.get_kv(&act.key).await;
+        let result = self.meta_node.get_kv(&act.key).await?;
         Ok(GetKVActionResult { result })
     }
 }
@@ -54,7 +55,7 @@ impl RequestHandler<GetKVAction> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<MGetKVAction> for ActionHandler {
     async fn handle(&self, act: MGetKVAction) -> common_exception::Result<MGetKVActionResult> {
-        let result = self.meta_node.mget_kv(&act.keys).await;
+        let result = self.meta_node.mget_kv(&act.keys).await?;
         Ok(MGetKVActionResult { result })
     }
 }
@@ -62,7 +63,7 @@ impl RequestHandler<MGetKVAction> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<PrefixListReq> for ActionHandler {
     async fn handle(&self, act: PrefixListReq) -> common_exception::Result<PrefixListReply> {
-        let result = self.meta_node.prefix_list_kv(&(act.0)).await;
+        let result = self.meta_node.prefix_list_kv(&(act.0)).await?;
         Ok(result)
     }
 }
