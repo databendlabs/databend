@@ -76,8 +76,8 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.nullable(input_schema)
     }
 
-    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
-        self.nested.allocate_state(place, arena);
+    fn init_state(&self, place: StateAddr) {
+        self.nested.init_state(place);
     }
 
     fn state_layout(&self) -> Layout {

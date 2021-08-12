@@ -196,8 +196,8 @@ where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + 
         Ok(false)
     }
 
-    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
-        arena.alloc_with_inplace(place.into(), || T::default());
+    fn init_state(&self, place: StateAddr) {
+        place.write(T::default);
     }
 
     fn state_layout(&self) -> Layout {

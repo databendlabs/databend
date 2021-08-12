@@ -28,6 +28,8 @@ impl StateAddr {
         self.addr
     }
 
+    /// # Safety
+    /// ptr must ensure point to valid memory
     #[inline]
     pub unsafe fn from_ptr(ptr: *mut u8) -> Self {
         Self { addr: ptr as usize }
@@ -44,6 +46,15 @@ impl StateAddr {
     pub fn prev(&self, offset: usize) -> Self {
         Self {
             addr: self.addr.wrapping_sub(offset),
+        }
+    }
+
+    #[inline]
+    pub fn write<T, F>(&self, f: F)
+    where F: FnOnce() -> T {
+        unsafe {
+            let ptr = self.addr as *mut T;
+            std::ptr::write(ptr, f());
         }
     }
 }
@@ -74,6 +85,8 @@ impl From<StateAddr> for usize {
     }
 }
 
+/// # Safety
+/// layout must ensure to be aligned
 pub unsafe fn get_layout_offsets(funcs: &[AggregateFunctionRef]) -> (Layout, Vec<usize>) {
     let mut align_aggregate_states = 0;
     let mut total_size_aggregate_states = 0;

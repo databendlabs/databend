@@ -47,10 +47,10 @@ common-metatypes = { path = "../common/metatypes" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "ed40333" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193" }
-bumpalo = { git = " https://github.com/datafuse-extras/bumpalo", branch = "inplace"}
 
 # Crates.io dependencies
 clickhouse-srv = "0.3.1"
+bumpalo = "3.7.0"
 ahash = "0.7.4"
 async-trait = "0.1"
 crossbeam = "0.8"

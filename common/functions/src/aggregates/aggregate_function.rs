@@ -24,7 +24,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
 
-    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump);
+    fn init_state(&self, place: StateAddr);
     fn state_layout(&self) -> Layout;
 
     // accumulate is to accumulate the arrays in batch mode

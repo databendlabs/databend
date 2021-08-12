@@ -94,10 +94,8 @@ where
         Ok(false)
     }
 
-    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
-        arena.alloc_with_inplace(place.into(), || AggregateSumState::<SumT::Native> {
-            value: None,
-        });
+    fn init_state(&self, place: StateAddr) {
+        place.write(|| AggregateSumState::<SumT::Native> { value: None });
     }
 
     fn state_layout(&self) -> Layout {

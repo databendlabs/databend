@@ -17,9 +17,9 @@ common-exception = {path = "../exception"}
 common-io = {path = "../io"}
 
 # Github dependencies
-bumpalo = { git = " https://github.com/datafuse-extras/bumpalo", branch = "inplace"}
 
 # Crates.io dependencies
+bumpalo = "3.7.0"
 dyn-clone = "1.0.4"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"

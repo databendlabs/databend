@@ -158,12 +158,11 @@ impl Processor for GroupByPartialTransform {
                             match groups.get(group_key) {
                                 // New group.
                                 None => {
-                                    let place: StateAddr =
-                                        arena.alloc_layout(layout.clone()).into();
+                                    let place: StateAddr = arena.alloc_layout(layout).into();
 
                                     for idx in 0..aggr_len {
                                         let arg_place = place.prev(offsets_aggregate_states[idx]);
-                                        funcs[idx].allocate_state(arg_place, &arena);
+                                        funcs[idx].init_state(arg_place);
                                     }
                                     places.push(place);
                                     groups.insert(group_key.clone(), place.addr());

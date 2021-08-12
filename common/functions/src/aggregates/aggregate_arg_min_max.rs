@@ -88,13 +88,13 @@ where
         places: &[StateAddr],
         data_series: &Series,
         series: &Series,
-        rows: usize,
+        _rows: usize,
         is_min: bool,
     ) -> Result<()> {
         let array: &DataArray<T> = series.static_cast();
         let array = array.downcast_ref();
 
-        let v = array
+        array
             .into_iter()
             .zip(places.iter().enumerate())
             .try_for_each(|(key, (idx, addr))| -> Result<()> {
@@ -105,9 +105,7 @@ where
                     state.merge_value(data, *v, is_min);
                 }
                 Ok(())
-            })?;
-
-        Ok(())
+            })
     }
 
     fn add_batch(&mut self, data_series: &Series, series: &Series, is_min: bool) -> Result<()> {
@@ -186,13 +184,13 @@ impl AggregateArgMinMaxState for Utf8State {
         places: &[StateAddr],
         data_series: &Series,
         series: &Series,
-        rows: usize,
+        _rows: usize,
         is_min: bool,
     ) -> Result<()> {
         let array: &DataArray<Utf8Type> = series.static_cast();
         let array = array.downcast_ref();
 
-        let v = array
+        array
             .into_iter()
             .zip(places.iter().enumerate())
             .try_for_each(|(key, (idx, addr))| -> Result<()> {
@@ -203,9 +201,7 @@ impl AggregateArgMinMaxState for Utf8State {
                     state.merge_value(data, v, is_min);
                 }
                 Ok(())
-            })?;
-
-        Ok(())
+            })
     }
 
     fn add_batch(&mut self, data_series: &Series, series: &Series, is_min: bool) -> Result<()> {
@@ -276,8 +272,8 @@ where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue>
         Ok(false)
     }
 
-    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
-        arena.alloc_with_inplace(place.into(), || T::new(self.arguments[0].data_type()));
+    fn init_state(&self, place: StateAddr) {
+        place.write(|| T::new(self.arguments[0].data_type()));
     }
 
     fn state_layout(&self) -> Layout {
@@ -295,14 +291,8 @@ where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue>
         arrays: &[Series],
         input_rows: usize,
     ) -> Result<()> {
-        Ok(())
+        T::add_keys(places, &arrays[0], &arrays[1], input_rows, self.is_min)
     }
-
-    // fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-    //     let state = place.get::<T>();
-    //     let data = arrays[0].try_get(row)?;
-    //     state.add(data, &arrays[0], row, self.is_min)
-    // }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<T>();

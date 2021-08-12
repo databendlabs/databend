@@ -130,13 +130,13 @@ impl Processor for GroupByFinalTransform {
                         let group_key = $hash_method.get_key(&key_array, row);
                         match groups.get(&group_key) {
                             None => {
-                                let place: StateAddr = arena.alloc_layout(layout.clone()).into();
+                                let place: StateAddr = arena.alloc_layout(layout).into();
 
                                 for (idx, func) in funcs.iter().enumerate() {
                                     let arg_place = place.prev(offsets_aggregate_states[idx]);
 
                                     let mut data = states_binary_arrays[idx].value(row);
-                                    func.allocate_state(arg_place, &arena);
+                                    func.init_state(arg_place);
                                     func.deserialize(arg_place, &mut data)?;
                                 }
                                 groups.insert(group_key, place.addr());

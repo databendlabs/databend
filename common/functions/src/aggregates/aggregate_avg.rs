@@ -84,8 +84,8 @@ where
         Ok(false)
     }
 
-    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
-        arena.alloc_with_inplace(place.into(), || AggregateAvgState::<SumT::Native> {
+    fn init_state(&self, place: StateAddr) {
+        place.write(|| AggregateAvgState::<SumT::Native> {
             value: SumT::Native::default(),
             count: 0,
         });

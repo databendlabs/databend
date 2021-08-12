@@ -89,13 +89,13 @@ impl Processor for AggregatorPartialTransform {
         let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
 
         let places: Vec<usize> = {
-            let place: StateAddr = arena.alloc_layout(layout.clone()).into();
+            let place: StateAddr = arena.alloc_layout(layout).into();
             funcs
                 .iter()
                 .enumerate()
                 .map(|(idx, func)| {
                     let arg_place = place.prev(offsets_aggregate_states[idx]);
-                    func.allocate_state(arg_place, &arena);
+                    func.init_state(arg_place);
                     arg_place.addr()
                 })
                 .collect()

@@ -50,8 +50,8 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(false)
     }
 
-    fn allocate_state(&self, place: StateAddr, arena: &bumpalo::Bump) {
-        arena.alloc_with_inplace(place.into(), || AggregateCountState { count: 0 });
+    fn init_state(&self, place: StateAddr) {
+        place.write(|| AggregateCountState { count: 0 });
     }
 
     fn state_layout(&self) -> Layout {
