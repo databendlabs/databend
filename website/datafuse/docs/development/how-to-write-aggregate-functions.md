@@ -5,7 +5,7 @@ title: How to write aggregate functions
 
 ## How to write aggregate functions
 
-Datafuse allows you to write custom aggregate functions through rust code.
+Datafuse allows us to write custom aggregate functions through rust code.
 It's not an easy way because you need to be a rustacean first. Datafuse has a plan to support writing UDAFs in other languages(like js, web assembly) in the future.
 
 In this section we will talk about how to write aggregate functions in datatfuse.
