@@ -219,7 +219,7 @@ async fn test_sledtree_range_keys() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_range() -> anyhow::Result<()> {
+async fn test_sledtree_range_kvs() -> anyhow::Result<()> {
     init_store_unittest();
 
     let tc = new_sled_test_context();
@@ -243,9 +243,104 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
     tree.append_values::<sled_key_space::Logs>(&logs).await?;
 
-    let got = tree.range::<sled_key_space::Logs, _>(9..11)?;
+    let got = tree.range_kvs::<sled_key_space::Logs, _>(9..11)?;
     assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone())], got);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sledtree_range() -> anyhow::Result<()> {
+    init_store_unittest();
+
+    // This test assumes the following order.
+    // to check the range boundary.
+    assert!(sled_key_space::Logs::PREFIX < StateMachineMeta::PREFIX);
+
+    let tc = new_sled_test_context();
+    let db = &tc.db;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+
+    let logs: Vec<Entry<LogEntry>> = vec![
+        Entry {
+            log_id: LogId { term: 1, index: 2 },
+            payload: EntryPayload::Blank,
+        },
+        Entry {
+            log_id: LogId { term: 3, index: 4 },
+            payload: EntryPayload::Normal(EntryNormal {
+                data: LogEntry {
+                    txid: None,
+                    cmd: Cmd::IncrSeq {
+                        key: "foo".to_string(),
+                    },
+                },
+            }),
+        },
+    ];
+
+    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+
+    let metas = vec![
+        (
+            LastApplied,
+            StateMachineMetaValue::LogId(LogId { term: 1, index: 2 }),
+        ),
+        (Initialized, StateMachineMetaValue::Bool(true)),
+    ];
+
+    tree.append::<StateMachineMeta>(metas.as_slice()).await?;
+
+    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let meta_tree = tree.key_space::<StateMachineMeta>();
+
+    // key sapce Logs
+
+    let mut it = tree.range::<sled_key_space::Logs, _>(..)?;
+    assert_eq!((2, logs[0].clone()), it.next().unwrap()?);
+    assert_eq!((4, logs[1].clone()), it.next().unwrap()?);
+    assert!(it.next().is_none());
+
+    let mut it = log_tree.range(..)?;
+    assert_eq!((2, logs[0].clone()), it.next().unwrap()?);
+    assert_eq!((4, logs[1].clone()), it.next().unwrap()?);
+    assert!(it.next().is_none());
+
+    // key sapce Logs reversed
+
+    let mut it = tree.range::<sled_key_space::Logs, _>(..)?.rev();
+    assert_eq!((4, logs[1].clone()), it.next().unwrap()?);
+    assert_eq!((2, logs[0].clone()), it.next().unwrap()?);
+    assert!(it.next().is_none());
+
+    let mut it = log_tree.range(..)?.rev();
+    assert_eq!((4, logs[1].clone()), it.next().unwrap()?);
+    assert_eq!((2, logs[0].clone()), it.next().unwrap()?);
+    assert!(it.next().is_none());
+
+    // key space StateMachineMeta
+
+    let mut it = tree.range::<StateMachineMeta, _>(..)?;
+    assert_eq!(metas[0], it.next().unwrap()?);
+    assert_eq!(metas[1], it.next().unwrap()?);
+    assert!(it.next().is_none());
+
+    let mut it = meta_tree.range(..)?;
+    assert_eq!(metas[0], it.next().unwrap()?);
+    assert_eq!(metas[1], it.next().unwrap()?);
+    assert!(it.next().is_none());
+
+    // key space StateMachineMeta reversed
+
+    let mut it = tree.range::<StateMachineMeta, _>(..)?.rev();
+    assert_eq!(metas[1], it.next().unwrap()?);
+    assert_eq!(metas[0], it.next().unwrap()?);
+    assert!(it.next().is_none());
+
+    let mut it = meta_tree.range(..)?.rev();
+    assert_eq!(metas[1], it.next().unwrap()?);
+    assert_eq!(metas[0], it.next().unwrap()?);
+    assert!(it.next().is_none());
     Ok(())
 }
 
@@ -874,7 +969,7 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_as_range() -> anyhow::Result<()> {
+async fn test_as_range_kvs() -> anyhow::Result<()> {
     init_store_unittest();
 
     let tc = new_sled_test_context();
@@ -899,7 +994,7 @@ async fn test_as_range() -> anyhow::Result<()> {
 
     log_tree.append_values(&logs).await?;
 
-    let got = log_tree.range(9..)?;
+    let got = log_tree.range_kvs(9..)?;
     assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone()),], got);
 
     Ok(())
