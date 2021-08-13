@@ -154,6 +154,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert_cmd"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54f002ce7d0c5e809ebb02be78fd503aeed4a511fd0fcaff6e6914cbdabbfa33"
+dependencies = [
+ "bstr",
+ "doc-comment",
+ "predicates 2.0.1",
+ "predicates-core",
+ "predicates-tree",
+ "wait-timeout",
+]
+
+[[package]]
 name = "async-raft"
 version = "0.6.1"
 source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.7#8e0cca5241fa423430920ab5c409494569bacb01"
@@ -1306,6 +1320,7 @@ checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 name = "datafuse-cli"
 version = "0.1.0"
 dependencies = [
+ "assert_cmd",
  "clap",
  "colored",
  "comfy-table",
@@ -1314,6 +1329,7 @@ dependencies = [
  "dyn-clone",
  "flate2",
  "indicatif",
+ "predicates 2.0.1",
  "pretty_assertions",
  "run_script",
  "rustyline",
@@ -1501,6 +1517,12 @@ name = "difference"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
+
+[[package]]
+name = "difflib"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
 
 [[package]]
 name = "digest"
@@ -1795,6 +1817,15 @@ name = "float-cmp"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "float-cmp"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 dependencies = [
  "num-traits",
 ]
@@ -2917,7 +2948,7 @@ dependencies = [
  "fragile",
  "lazy_static",
  "mockall_derive",
- "predicates",
+ "predicates 1.0.8",
  "predicates-tree",
 ]
 
@@ -3786,7 +3817,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f49cfaf7fdaa3bfacc6fa3e7054e65148878354a5cfddcf661df4c851f8021df"
 dependencies = [
  "difference",
- "float-cmp",
+ "float-cmp 0.8.0",
+ "normalize-line-endings",
+ "predicates-core",
+ "regex",
+]
+
+[[package]]
+name = "predicates"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc3d91237f5de3bcd9d927e24d03b495adb6135097b001cea7403e2d573d00a9"
+dependencies = [
+ "difflib",
+ "float-cmp 0.9.0",
+ "itertools 0.10.1",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -5831,6 +5876,15 @@ name = "version_check"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fecdca9a5291cc2b8dcf7dc02453fee791a280f3743cb0905f8822ae463b3fe"
+
+[[package]]
+name = "wait-timeout"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f200f5b12eb75f8c1ed65abd4b2db8a6e1b138a20de009dacee265a2498f3f6"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "walkdir"
