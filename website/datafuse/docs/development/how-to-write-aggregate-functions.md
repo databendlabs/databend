@@ -76,8 +76,8 @@ Noted that the argument `_arrays` is the function arguments, we can safely get t
 
 
 - The function `accumulate_keys` is similar to accumulate, but we must take into consideration of the keys and offsets, for which each key represents a unique memory address named place.
-- The function `serialize`, we used to serialize state into binary.
-- The function `deserialize`, we used to deserialize state from binary.
+- The function `serialize` serializes state into binary.
+- The function `deserialize` deserializes state from binary.
 - The function `merge`, can be used to merge other state into current state.
 - The function `merge_result`, can be used to represent the aggregate function state into one-row field.
 
