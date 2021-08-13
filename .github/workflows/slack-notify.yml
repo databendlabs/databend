@@ -1,7 +1,7 @@
 name: Slack Notify Result
 on:
   workflow_run:
-    workflows: [ "Build Docker Image on official docker hub (primary for benchmarking and CI tests)" ]
+    workflows: [ run_perf, rerun_perf ]
     types:
       - completed
 jobs:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Slack Notification Failed
-        if: !${{ github.event.workflow_run.conclusion == 'success' }}
+        if: ${{ github.event.workflow_run.conclusion == 'failure' }}
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
