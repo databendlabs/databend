@@ -1,8 +1,8 @@
-# Proposal: DatafuseCli Design Doc
+# Proposal: Datafuse CLI Design Doc
 
 ## Background
 
-`fusectl` is a command-line tool for creating, listing, logging,
+`fusecli` is a command-line tool for creating, listing, logging,
 deleting datafuse running instances on local or
 on cloud.
 It also supports to port forward webUI, monitoring dashboard on local

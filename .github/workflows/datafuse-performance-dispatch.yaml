@@ -29,7 +29,7 @@ jobs:
       PR_NUMBER: ${{ github.event.client_payload.PR_NUMBER }}
       LAST_COMMIT_SHA: ${{ github.event.client_payload.LAST_COMMIT_SHA }}
       UUID: ${{ github.event.client_payload.UUID }}
-      ITERATION: 10
+      ITERATION: 100
       REGION: ${{ github.event.client_payload.REGION }}
       BUCKET: ${{ github.event.client_payload.BUCKET }}
       ENDPOINT: ${{ github.event.client_payload.ENDPOINT }}
