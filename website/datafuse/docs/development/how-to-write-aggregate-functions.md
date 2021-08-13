@@ -72,7 +72,7 @@ struct AggregateAvgState<T: BinarySer + BinaryDe> {
 
 Noted that the argument `_arrays` is the function arguments, we can safely get the array by index without index bound check because we must validate the argument numbers and types in function constructor.
 
- The `_input_rows` is the rows of current block, it maybe useful when the `_arrays` is empty, eg: `count()` function.
+ The `_input_rows` is the rows of current block, it may be useful when the `_arrays` is empty, eg: `count()` function.
 
 
 - The function `accumulate_keys`, similar to `accumulate` but we must take into consideration of the `keys` and `offset`, each key reprsents an unique memory address named `place`.
