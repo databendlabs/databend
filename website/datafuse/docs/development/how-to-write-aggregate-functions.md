@@ -81,9 +81,37 @@ Noted that the argument `_arrays` is the function arguments, we can safely get t
 - The function `merge`, can be used to merge other state into current state.
 - The function `merge_result`, can be used to represent the aggregate function state into one-row field.
 
+
+## Example
+Let's take an example of aggregate function `sum`.
+
+It's declared as `AggregateSumFunction<T, SumT>`, because if can accept varying integer types like `UInt8Type`, `Int8Type`. `T` and `SumT` is logic types which implement `DFNumericType`. e.g., `T` is `UInt8Type` and `SumT` must be `UInt64Type`.
+
+We can dispatch it using macros by matching the types of the arguments. Take a look at the `dispatch_numeric_types` to understand the dispatch macros.
+
+The `AggregateSumState` will be
+```
+struct AggregateSumState<T> {
+    pub value: Option<T>,
+}
+```
+
+The generic `T` is from `SumT::Native`, the `Option<T>` can return `null` if nothing is passed into this function.
+
+Let's take into the function `accumulate_keys`, because this is the only function that a little hard to understand in this case.
+
+The `places` is the memory address of the first state in this row, so we can get the address of `AggregateSumState<T>` using `places[row] + offset`, then using `place.get::<AggregateSumState<SumT::Native>>()` to get the value of the corresponding state.
+
+Since we already know the array type of this function, we can safely cast it to arrow's `PrimitiveArray<T>`, here we make two branches to reduce the branch prediction of CPU, `null` and `no_null`. In `no_null` case, we just iterate the array and apply the `sum`, this is good for compiler to optimize the codes into vectorized codes.
+
+Ok, this example is pretty easy. If you already read this, you may have the ability to write a new function.
+
 ## Refer to other examples
 As you see, adding a new aggregate function in datafuse is not as hard as you think.
-Before you start to add one, please refer to other aggregate function examples, such as `min`, `count`, `sum`, `avg`.
+Before you start to add one, please refer to other aggregate function examples, such as `min`, `count`, `max`, `avg`.
+
+## Testing
+To be a good engineer, dont'forget to test your codes, please add unit tests and stateless tests after you finish the new aggregate functions.
 
 ## Summary
 We welcome all community users to contribute more powerful functions to datafuse. If you find any problems, feel free to open an issue in Github, we will use our best efforts to help you.
