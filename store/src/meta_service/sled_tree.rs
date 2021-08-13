@@ -240,7 +240,7 @@ impl SledTree {
     }
 
     /// Get key-valuess in `range`
-    pub fn range<KV, R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    pub fn range_kvs<KV, R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
     where
         KV: SledKeySpace,
         R: RangeBounds<KV::K>,
@@ -262,6 +262,37 @@ impl SledTree {
         }
 
         Ok(res)
+    }
+
+    /// Get key-valuess in `range`
+    pub fn range<KV, R>(
+        &self,
+        range: R,
+    ) -> common_exception::Result<
+        impl DoubleEndedIterator<Item = common_exception::Result<(KV::K, KV::V)>>,
+    >
+    where
+        KV: SledKeySpace,
+        R: RangeBounds<KV::K>,
+    {
+        let range_mes = self.range_message::<KV, _>(&range);
+
+        // Convert K range into sled::IVec range
+        let range = KV::serialize_range(&range)?;
+
+        let it = self.tree.range(range);
+        let it = it.map(move |item| {
+            let (k, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("range_get: {}", range_mes,)
+            })?;
+
+            let key = KV::deserialize_key(k)?;
+            let value = KV::deserialize_value(v)?;
+
+            Ok((key, value))
+        });
+
+        Ok(it)
     }
 
     /// Get key-valuess in with the same prefix
@@ -474,9 +505,21 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.range_keys::<KV, R>(range)
     }
 
-    pub fn range<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
-    where R: RangeBounds<KV::K> {
+    pub fn range<R>(
+        &self,
+        range: R,
+    ) -> common_exception::Result<
+        impl DoubleEndedIterator<Item = common_exception::Result<(KV::K, KV::V)>>,
+    >
+    where
+        R: RangeBounds<KV::K>,
+    {
         self.inner.range::<KV, R>(range)
+    }
+
+    pub fn range_kvs<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where R: RangeBounds<KV::K> {
+        self.inner.range_kvs::<KV, R>(range)
     }
 
     pub fn scan_prefix(&self, prefix: &KV::K) -> common_exception::Result<Vec<(KV::K, KV::V)>> {
