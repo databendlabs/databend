@@ -19,6 +19,7 @@ jobs:
           SLACK_USERNAME: datafuse messager
   build-current:
     name: Build current datafuse image
+    if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
     runs-on: perf-test
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -29,7 +30,7 @@ jobs:
       PR_NUMBER: ${{ github.event.client_payload.PR_NUMBER }}
       LAST_COMMIT_SHA: ${{ github.event.client_payload.LAST_COMMIT_SHA }}
       UUID: ${{ github.event.client_payload.UUID }}
-      ITERATION: 10
+      ITERATION: 100
       REGION: ${{ github.event.client_payload.REGION }}
       BUCKET: ${{ github.event.client_payload.BUCKET }}
       ENDPOINT: ${{ github.event.client_payload.ENDPOINT }}
@@ -116,6 +117,7 @@ jobs:
           "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
   build-release:
     name: Build reference datafuse image
+    if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
     runs-on: perf-test
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -209,6 +211,7 @@ jobs:
           "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
   run_funcbench:
     name: Running datafuse single performance testing
+    if: ${{ github.event.action == 'run_perf' || github.event.action == 'rerun_perf_all' || github.event.action == 'rerun_perf' }}
     runs-on: perf-test
     needs: [ build-current, build-release ]
     env:

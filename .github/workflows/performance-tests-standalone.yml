@@ -21,7 +21,6 @@ jobs:
           reaction: rocket
         env:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-
       - name: dependency hack on self hosted machine
         if: steps.check.outputs.triggered == 'true'
         run: |
@@ -42,6 +41,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends python3-setuptools
           sudo apt-get install -y --no-install-recommends python3-pip
           sudo apt-get install -y --no-install-recommends git
+
 
       - name: Install latest nightly
         if: steps.check.outputs.triggered == 'true'
@@ -68,3 +68,4 @@ jobs:
         if: steps.check.outputs.triggered == 'true'
         run: |
           bash ./scripts/ci/ci-run-performance-tests-standalone.sh
+

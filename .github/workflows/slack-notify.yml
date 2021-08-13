@@ -9,7 +9,6 @@ jobs:
     name: Slack Notification Result
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
       - name: Slack Notification Failed
         if: !${{ github.event.workflow_run.conclusion == 'success' }}
         uses: rtCamp/action-slack-notify@v2
