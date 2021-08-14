@@ -8,12 +8,15 @@ title: How to write aggregate functions
 Datafuse allows us to write custom aggregate functions through rust code.
 It's not an easy way because you need to be a rustacean first. Datafuse has a plan to support writing UDAFs in other languages(like js, web assembly) in the future.
 
-In this section we will talk about how to write aggregate functions in datatfuse.
+In this section we will talk about how to write aggregate functions in Datafuse.
 
 
 ## AggregateFunction trait introduction
 
-All aggregate functions implement `AggregateFunction` trait, and we register them into a global static factory named `FactoryFuncRef`, the factory is just an index map and the keys are names of aggregate functions, noted that a function's name in datafuse is case-insensitive.
+All aggregate functions implement `AggregateFunction` trait, and we register them into a global static factory named `FactoryFuncRef`, the factory is just an index map and the key is the name of the aggregate function.
+
+!!! note
+    Function name in Datafuse is case-insensitive.
 
 
 ``` rust
@@ -47,15 +50,15 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
 ### Understand the functions
 
-- The function `name` indicates the name of this function, such as `sum`, `min`
+- The function `name` indicates the name of this function, such as `sum`, `min`.
 - The function `return_type` indicates the return type of the function, it may vary with different arguments, such as `sum(int8)` -> `int64`, `sum(uint8)` -> `uint64`, `sum(float64)` -> `float64`.
-- The function `nullable` indicates whether the `return_type` is nullable.
+- The function `nullable` indicates whether the `return_type` is nullable or not.
 
-Before we start to introduce the function `init_state`, let's ask a question:
+Before we start to introduce the function `init_state`, let's ask a question first:
 
- >  what's aggregate function state?
+>  what's aggregate function state?
 
-It indicates the temporary results of an aggregate function. Because an aggregate function accumulates data in columns block by block and there will be results after the aggregation. Therefore, the state must be mergeable, serializable.
+It indicates the temporary results of an aggregate function. Because an aggregate function accumulates data in columns block by block and there will be some intermediate results after the aggregation. Therefore, the state must be mergeable, serializable.
 
 For example, in the `avg` aggregate function, we can represent the state like:
 
@@ -72,10 +75,10 @@ struct AggregateAvgState<T: BinarySer + BinaryDe> {
 
 Noted that the argument `_arrays` is the function arguments, we can safely get the array by index without index bound check because we must validate the argument numbers and types in function constructor.
 
- The `_input_rows` is the rows of the current block, and it may be useful when the `_arrays` is empty, e.g., `count()` function.
+The `_input_rows` is the rows of the current block, and it may be useful when the `_arrays` is empty, e.g., `count()` function.
 
 
-- The function `accumulate_keys` is similar to accumulate, but we must take into consideration of the keys and offsets, for which each key represents a unique memory address named place.
+- The function `accumulate_keys` is similar to accumulate, but we must take into consideration the keys and offsets, for which each key represents a unique memory address named place.
 - The function `serialize` serializes state into binary.
 - The function `deserialize` deserializes state from binary.
 - The function `merge`, can be used to merge other state into current state.
@@ -85,9 +88,9 @@ Noted that the argument `_arrays` is the function arguments, we can safely get t
 ## Example
 Let's take an example of aggregate function `sum`.
 
-It's declared as `AggregateSumFunction<T, SumT>`, because if can accept varying integer types like `UInt8Type`, `Int8Type`. `T` and `SumT` is logic types which implement `DFNumericType`. e.g., `T` is `UInt8Type` and `SumT` must be `UInt64Type`.
+It's declared as `AggregateSumFunction<T, SumT>`, we can accept varying integer types like `UInt8Type`, `Int8Type`. `T` and `SumT` is logic types which implement `DFNumericType`. e.g., `T` is `UInt8Type` and `SumT` must be `UInt64Type`.
 
-We can dispatch it using macros by matching the types of the arguments. Take a look at the `dispatch_numeric_types` to understand the dispatch macros.
+Also, we can dispatch it using macros by matching the types of the arguments. Take a look at the `dispatch_numeric_types` to understand the dispatch macros.
 
 The `AggregateSumState` will be
 ```
@@ -107,11 +110,11 @@ Since we already know the array type of this function, we can safely cast it to 
 Ok, this example is pretty easy. If you already read this, you may have the ability to write a new function.
 
 ## Refer to other examples
-As you see, adding a new aggregate function in datafuse is not as hard as you think.
+As you see, adding a new aggregate function in Datafuse is not as hard as you think.
 Before you start to add one, please refer to other aggregate function examples, such as `min`, `count`, `max`, `avg`.
 
 ## Testing
-To be a good engineer, dont'forget to test your codes, please add unit tests and stateless tests after you finish the new aggregate functions.
+To be a good engineer, don't forget to test your codes, please add unit tests and stateless tests after you finish the new aggregate functions.
 
 ## Summary
-We welcome all community users to contribute more powerful functions to datafuse. If you find any problems, feel free to open an issue in Github, we will use our best efforts to help you.
+We welcome all community users to contribute more powerful functions to Datafuse. If you find any problems, feel free to [open an issue](https://github.com/datafuselabs/datafuse/issues) in GitHub, we will use our best efforts to help you.
