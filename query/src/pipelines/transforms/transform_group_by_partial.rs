@@ -33,7 +33,7 @@ use common_tracing::tracing;
 use crate::common::{DefaultHashTableEntity, HashTable, HashTableEntity};
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::aggregator::{aggregate, aggregate_finalized};
+use crate::pipelines::transforms::aggregator::Aggregator;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
@@ -258,17 +258,16 @@ impl Processor for GroupByPartialTransform {
                 apply! { hash_method, DFUInt16ArrayBuilder, RwLock<HashMap<u16, usize, FxBuildHasher>> }
             }
             HashMethodKind::KeysU32(hash_method) => {
-                let groups_locker = aggregate(
-                    aggr_len, funcs.clone(), arg_names.clone(), aggr_cols,
-                    group_cols, stream, arena, layout, offsets_aggregate_states.clone(),
-                    hash_method,
-                ).await?;
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream, hash_method).await?;
 
                 let delta = start.elapsed();
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
-                let schema = self.schema.clone();
-                aggregate_finalized(aggr_len, funcs, offsets_aggregate_states, groups_locker, schema)
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized(groups_locker, finalized_schema)
             }
             HashMethodKind::KeysU64(hash_method) => {
                 apply! { hash_method, DFUInt64ArrayBuilder, RwLock<HashMap<u64, usize, FxBuildHasher>> }
