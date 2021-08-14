@@ -12,7 +12,6 @@ pub trait HashTableEntity<Key>: Sized
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool;
 }
 
-// #[repr(C, packed)]
 pub struct DefaultHashTableEntity<Key: Sized, Value: Sized> {
     key: Key,
     value: Value,
@@ -64,7 +63,7 @@ macro_rules! primitive_key_entity_impl {
             }
 
             unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
-                (*self).key == (*other).key
+                !((*self).key == (*other).key)
             }
         }
     };

@@ -1,3 +1,9 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+//
+// Reference the ClickHouse HashTable to implement the Datafuse HashTable
+
 use std::alloc::Layout;
 use std::marker::PhantomData;
 use std::mem;
@@ -63,10 +69,6 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
         HashTableIter::new(self.size as isize, self.grower.max_size(), self.entities, self.zero_entity)
     }
 
-    // pub fn for_each<F: Fn(*mut Entity)>(&self, each_action: F) {
-    //
-    // }
-
     #[inline(always)]
     pub fn insert_key(&mut self, key: &Key, inserted: &mut bool) -> *mut Entity {
         let hash = Hasher::hash(key);
@@ -96,15 +98,12 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
     #[inline(always)]
     fn find_entity(&self, key: &Key, hash_value: u64) -> isize {
         let mut place_value = self.grower.place(hash_value);
-        loop {
-            unsafe {
-                let entity = self.entities.offset(place_value as isize);
-
-                if entity.is_zero() || entity.key_equals(key, hash_value) {
-                    return place_value;
-                }
+        unsafe {
+            while !self.entities.offset(place_value).is_zero() && !self.entities.offset(place_value).key_equals(key, hash_value) {
                 place_value = self.grower.next_place(place_value);
             }
+
+            place_value
         }
     }
 
@@ -127,11 +126,10 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
             self.size += 1;
             entity.set_key_and_hash(key, hash_value);
 
-            if self.grower.overflow(self.size) {
+            if std::intrinsics::unlikely(self.grower.overflow(self.size)) {
                 self.resize();
                 let new_place = self.find_entity(key, hash_value);
-                std::assert!(!self.entities.offset(new_place).is_zero());
-                return self.entities.offset(place_value);
+                return self.entities.offset(new_place);
             }
 
             self.entities.offset(place_value)
@@ -145,7 +143,7 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
                 Some(zero_entity) => {
                     *inserted = false;
                     Some(zero_entity)
-                },
+                }
                 None => unsafe {
                     let layout = Layout::from_size_align_unchecked(mem::size_of::<Entity>(), mem::align_of::<Entity>());
 
@@ -195,25 +193,24 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
             for index in old_size..self.grower.max_size() {
                 let entity = self.entities.offset(index);
 
-                if !entity.is_zero() {
+                if entity.is_zero() {
                     return;
                 }
+
                 self.reinsert(self.entities.offset(index), entity.get_hash());
             }
         }
     }
 
     #[inline(always)]
-    unsafe fn reinsert(&self, entity: *mut Entity, hash_value: u64) -> isize {
-        let mut place_value = self.grower.place(hash_value);
+    unsafe fn reinsert(&self, entity: *mut Entity, hash_value: u64) {
+        if entity != self.entities.offset(self.grower.place(hash_value)) {
+            let place = self.find_entity(entity.get_key(), hash_value);
+            let new_entity = self.entities.offset(place);
 
-        if entity.not_equals_key(self.entities.offset(place_value)) {
-            place_value = self.find_entity(entity.get_key(), hash_value);
-            if self.entities.offset(place_value).is_zero() {
-                entity.swap(self.entities.offset(place_value));
+            if new_entity.is_zero() {
+                entity.swap(new_entity);
             }
         }
-
-        place_value
     }
 }
