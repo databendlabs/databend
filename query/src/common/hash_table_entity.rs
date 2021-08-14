@@ -1,3 +1,7 @@
+// Copyright 2020-2021 The Datafuse Authors.
+//
+// SPDX-License-Identifier: Apache-2.0.
+
 pub trait HashTableEntity<Key>: Sized
 {
     fn is_zero_key(key: &Key) -> bool;
