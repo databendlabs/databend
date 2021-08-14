@@ -186,6 +186,7 @@ nav:
   - Development:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md
+      - How to write aggregate functions: development/how-to-write-aggregate-functions.md
       - Tracing: development/tracing.md
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
