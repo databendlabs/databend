@@ -46,11 +46,11 @@ impl Aggregator {
 
         let arena = Bump::new();
         let aggr_len = self.funcs.len();
-        let aggr_cols = self.aggr_cols.clone();
-        let aggr_args_name = self.arg_names.clone();
+        let aggr_cols = &self.aggr_cols;
+        let aggr_args_name = &self.arg_names;
         let layout = self.layout;
-        let func = self.funcs.clone();
-        let offsets_aggregate_states = self.offsets_aggregate_states.clone();
+        let func = &self.funcs;
+        let offsets_aggregate_states = &self.offsets_aggregate_states;
 
         let groups_locker = RwLock::new(GroupFuncTable::new());
 
@@ -145,8 +145,8 @@ impl Aggregator {
         let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
 
         let mut bytes = BytesMut::new();
-        let funcs = self.funcs.clone();
-        let offsets_aggregate_states = self.offsets_aggregate_states.clone();
+        let funcs = &self.funcs;
+        let offsets_aggregate_states = &self.offsets_aggregate_states;
         for group_entity in groups.iter() {
             let place: StateAddr = (*group_entity.get_value()).into();
 
