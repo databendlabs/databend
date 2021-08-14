@@ -269,7 +269,7 @@ impl Processor for GroupByPartialTransform {
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
                 let schema = self.schema.clone();
-                GroupByPartialTransform::aggregate_finalized(aggr_len, funcs, offsets_aggregate_states, groups_locker, schema)
+                aggregate_finalized(aggr_len, funcs, offsets_aggregate_states, groups_locker, schema)
             }
             HashMethodKind::KeysU64(hash_method) => {
                 apply! { hash_method, DFUInt64ArrayBuilder, RwLock<HashMap<u64, usize, FxBuildHasher>> }
@@ -475,58 +475,56 @@ async fn aggregate(
     Ok(groups_locker)
 }
 
-impl GroupByPartialTransform {
-    fn aggregate_finalized(
-        aggr_len: usize,
-        funcs: Vec<AggregateFunctionRef>,
-        offsets_aggregate_states: Vec<usize>,
-        groups_locker: RwLock<HashTable<u32, DefaultHashTableEntity<u32, usize>, crate::common::DefaultHasher<u32>>>,
-        schema: Arc<DataSchema>
-    ) -> Result<SendableDataBlockStream> {
-        type KeyBuilder = DFUInt32ArrayBuilder;
-        let groups = groups_locker.read();
-        if groups.len() == 0 {
-            return Ok(Box::pin(DataBlockStream::create(
-                DataSchemaRefExt::create(vec![]),
-                None,
-                vec![],
-            )));
-        }
-
-        // Builders.
-        let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-            .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
-            .collect();
-
-
-        let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
-
-        let mut bytes = BytesMut::new();
-        for group_entity in groups.iter() {
-            let place: StateAddr = (*group_entity.get_value()).into();
-
-            for (idx, func) in funcs.iter().enumerate() {
-                let arg_place = place.next(offsets_aggregate_states[idx]);
-                func.serialize(arg_place, &mut bytes)?;
-                state_builders[idx].append_value(&bytes[..]);
-                bytes.clear();
-            }
-
-            group_key_builder.append_value((*(group_entity.get_key())).clone());
-        }
-
-        let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
-        for mut builder in state_builders {
-            columns.push(builder.finish().into_series());
-        }
-        let array = group_key_builder.finish();
-        columns.push(array.into_series());
-
-        let block = DataBlock::create_by_array(schema.clone(), columns);
-        Ok(Box::pin(DataBlockStream::create(
-            schema.clone(),
+fn aggregate_finalized(
+    aggr_len: usize,
+    funcs: Vec<AggregateFunctionRef>,
+    offsets_aggregate_states: Vec<usize>,
+    groups_locker: RwLock<HashTable<u32, DefaultHashTableEntity<u32, usize>, crate::common::DefaultHasher<u32>>>,
+    schema: Arc<DataSchema>,
+) -> Result<SendableDataBlockStream> {
+    type KeyBuilder = DFUInt32ArrayBuilder;
+    let groups = groups_locker.read();
+    if groups.len() == 0 {
+        return Ok(Box::pin(DataBlockStream::create(
+            DataSchemaRefExt::create(vec![]),
             None,
-            vec![block],
-        )))
+            vec![],
+        )));
     }
+
+    // Builders.
+    let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
+        .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
+        .collect();
+
+
+    let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
+
+    let mut bytes = BytesMut::new();
+    for group_entity in groups.iter() {
+        let place: StateAddr = (*group_entity.get_value()).into();
+
+        for (idx, func) in funcs.iter().enumerate() {
+            let arg_place = place.next(offsets_aggregate_states[idx]);
+            func.serialize(arg_place, &mut bytes)?;
+            state_builders[idx].append_value(&bytes[..]);
+            bytes.clear();
+        }
+
+        group_key_builder.append_value((*(group_entity.get_key())).clone());
+    }
+
+    let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
+    for mut builder in state_builders {
+        columns.push(builder.finish().into_series());
+    }
+    let array = group_key_builder.finish();
+    columns.push(array.into_series());
+
+    let block = DataBlock::create_by_array(schema.clone(), columns);
+    Ok(Box::pin(DataBlockStream::create(
+        schema.clone(),
+        None,
+        vec![block],
+    )))
 }
