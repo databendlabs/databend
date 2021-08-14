@@ -46,6 +46,11 @@ impl Aggregator {
 
         let arena = Bump::new();
         let aggr_len = self.funcs.len();
+        let aggr_cols = self.aggr_cols.clone();
+        let aggr_args_name = self.arg_names.clone();
+        let layout = self.layout;
+        let func = self.funcs.clone();
+        let offsets_aggregate_states = self.offsets_aggregate_states.clone();
 
         let groups_locker = RwLock::new(GroupFuncTable::new());
 
@@ -59,9 +64,9 @@ impl Aggregator {
                 }
             }
 
-            let mut aggr_arg_columns = Vec::with_capacity(self.aggr_cols.len());
-            for (idx, _aggr_col) in self.aggr_cols.iter().enumerate() {
-                let arg_columns = self.arg_names[idx]
+            let mut aggr_arg_columns = Vec::with_capacity(aggr_len);
+            for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
+                let arg_columns = aggr_args_name[idx]
                     .iter()
                     .map(|arg| block.try_column_by_name(arg).and_then(|c| c.to_array()))
                     .collect::<Result<Vec<Series>>>()?;
@@ -84,11 +89,11 @@ impl Aggregator {
                             if aggr_len == 0 {
                                 entity.set_value(0);
                             } else {
-                                let place: StateAddr = arena.alloc_layout(self.layout).into();
+                                let place: StateAddr = arena.alloc_layout(layout).into();
                                 for idx in 0..aggr_len {
-                                    let aggr_state = self.offsets_aggregate_states[idx];
+                                    let aggr_state = offsets_aggregate_states[idx];
                                     let aggr_state_place = place.next(aggr_state);
-                                    self.funcs[idx].init_state(aggr_state_place);
+                                    func[idx].init_state(aggr_state_place);
                                 }
                                 places.push(place);
                                 entity.set_value(place.addr());
@@ -101,10 +106,10 @@ impl Aggregator {
                     }
                 }
 
-                for ((idx, func), args) in self.funcs.iter().enumerate().zip(aggr_arg_columns_slice.iter()) {
+                for ((idx, func), args) in func.iter().enumerate().zip(aggr_arg_columns_slice.iter()) {
                     func.accumulate_keys(
                         &places,
-                        self.offsets_aggregate_states[idx],
+                        offsets_aggregate_states[idx],
                         args,
                         block.num_rows(),
                     )?;
@@ -140,11 +145,13 @@ impl Aggregator {
         let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
 
         let mut bytes = BytesMut::new();
+        let funcs = self.funcs.clone();
+        let offsets_aggregate_states = self.offsets_aggregate_states.clone();
         for group_entity in groups.iter() {
             let place: StateAddr = (*group_entity.get_value()).into();
 
-            for (idx, func) in self.funcs.iter().enumerate() {
-                let arg_place = place.next(self.offsets_aggregate_states[idx]);
+            for (idx, func) in funcs.iter().enumerate() {
+                let arg_place = place.next(offsets_aggregate_states[idx]);
                 func.serialize(arg_place, &mut bytes)?;
                 state_builders[idx].append_value(&bytes[..]);
                 bytes.clear();
