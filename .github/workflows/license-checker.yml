@@ -1,10 +1,22 @@
-name: Check License Lines
-on: [push, pull_request]
+name: License checker
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
-  check-license-lines:
+  check-license:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@master
-    - name: Check License Lines
-      uses: kt3k/license_checker@v1.0.6
+      - uses: actions/checkout@v2
+      - name: Check License Header
+        uses: apache/skywalking-eyes@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          log: info
