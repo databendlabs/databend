@@ -97,8 +97,8 @@ impl ExpressionChain {
                 }
 
                 for e in inlist_expr.list() {
-                    if let Expression::Literal(l) = e {
-                        let array = l.to_series_with_size(1)?;
+                    if let Expression::Literal { value, column_name } = e {
+                        let array = value.to_series_with_size(1)?;
                         let array = array.cast_with_type(&final_dtype)?;
                         let value = array.try_get(0)?;
                         val_list.push(value.clone());
@@ -117,12 +117,12 @@ impl ExpressionChain {
                 };
                 self.actions.push(ExpressionAction::InList(v));
             }
-            Expression::Exists(_p) => {
-                let value = ActionExists {
-                    name: format!("{:?}", expr),
-                };
-                self.actions.push(ExpressionAction::Exists(value));
-            }
+            //Expression::Exists(_p) => {
+            //    let value = ActionExists {
+            //        name: format!("{:?}", expr),
+            //    };
+            //    self.actions.push(ExpressionAction::Exists(value));
+            //}
             Expression::Subquery { name, query_plan } => {
                 // Subquery results are ready in the expression input
                 self.actions.push(ExpressionAction::Input(ActionInput {

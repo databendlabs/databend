@@ -107,9 +107,10 @@ impl Expression {
             Expression::Cast { expr, .. } => expr.accept(visitor),
             Expression::Sort { expr, .. } => expr.accept(visitor),
             Expression::Column(_)
-            | Expression::Literal(_)
-            | Expression::Exists(_)
+            | Expression::Literal{ .. }
             | Expression::InList { .. }
+            | Expression::Subquery { .. }
+            | Expression::ScalarSubquery { .. }
             | Expression::Wildcard => Ok(visitor),
         }?;
 

@@ -6,9 +6,9 @@ use crate::Expression;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct InListExpr {
-    expr: Box<Expression>,
-    list: Vec<Expression>,
-    negated: bool,
+    pub expr: Box<Expression>,
+    pub list: Vec<Expression>,
+    pub negated: bool,
 }
 
 impl InListExpr {

@@ -43,6 +43,7 @@ use crate::LimitByPlan;
 use crate::LimitPlan;
 use crate::PlanBuilder;
 use crate::PlanNode;
+use crate::InListExpr;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
@@ -120,6 +121,11 @@ pub trait PlanRewriter {
                 alias.clone(),
                 Box::new(self.rewrite_expr(schema, input.as_ref())?),
             )),
+            Expression::InList(InListExpr {expr, list, negated}) => Ok(Expression::InList(InListExpr {
+                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
+                list: list.clone(),
+                negated: negated.clone(),
+            })),
             Expression::UnaryExpression { op, expr } => Ok(Expression::UnaryExpression {
                 op: op.clone(),
                 expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
@@ -505,7 +511,6 @@ impl RewriteHelper {
                 })
             }
             Expression::Wildcard
-            | Expression::Exists(_)
             | Expression::InList { .. }
             | Expression::Literal { .. }
             | Expression::Subquery { .. }
@@ -560,7 +565,6 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => vec![expr.as_ref().clone()],
             Expression::Column(_) => vec![],
-            Expression::Exists(_) => vec![],
             Expression::InList { .. } => vec![],
             Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],
@@ -584,7 +588,6 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             Expression::Column(_) => vec![expr.clone()],
-            Expression::Exists(_) => vec![],
             Expression::InList { .. } => vec![],
             Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],

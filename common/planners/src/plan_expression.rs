@@ -61,8 +61,6 @@ pub enum Expression {
     Alias(String, Box<Expression>),
     /// Column name.
     Column(String),
-    /// Constant value.
-    Exists(Arc<PlanNode>),
     /// select number from t where number in (1, 3, 5)
     InList(InListExpr),
     /// Note: When literal represents a column, its column_name will not be None
@@ -228,7 +226,6 @@ impl Expression {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::InList(inlist_expr) => inlist_expr.expr().to_data_type(input_schema),
-            Expression::Exists(_p) => Ok(DataType::Boolean),
             Expression::Literal { value, .. } => Ok(value.data_type()),
             Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
