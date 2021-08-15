@@ -1,7 +1,6 @@
 [workspace]
 members = [
     # Common
-    "common/allocators",
     "common/arrow",
     "common/building",
     "common/datablocks",

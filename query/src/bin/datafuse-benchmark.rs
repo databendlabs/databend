@@ -125,9 +125,6 @@ impl Stats {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Use customize malloc.
-    let _ = common_allocators::init();
-
     // First load configs from args.
     let conf = Config::load_from_args();
     let address = format!("{}:{}", conf.host, conf.port)
