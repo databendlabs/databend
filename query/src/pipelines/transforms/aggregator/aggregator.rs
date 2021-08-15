@@ -12,11 +12,13 @@ use common_infallible::RwLock;
 use common_io::prelude::BytesMut;
 use common_streams::{DataBlockStream, SendableDataBlockStream};
 
-use crate::common::{DefaultHashTableEntity, HashTable, HashTableEntity, DefaultHasher};
+use crate::common::{DefaultHashTableEntity, HashTable, HashTableEntity, DefaultHasher, KeyHasher, HashMap};
 use common_planners::Expression;
 use common_exception::Result;
+use std::hash::Hash;
 
-pub struct Aggregator {
+pub struct Aggregator<Method: HashMethod> {
+    method: Method,
     funcs: Vec<AggregateFunctionRef>,
     arg_names: Vec<Vec<String>>,
     aggr_cols: Vec<String>,
@@ -24,8 +26,15 @@ pub struct Aggregator {
     offsets_aggregate_states: Vec<usize>,
 }
 
-impl Aggregator {
-    pub fn create(aggr_exprs: &[Expression], schema: DataSchemaRef) -> Result<Aggregator> {
+impl<Method: HashMethod> Aggregator<Method>
+    where DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
+          DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>
+{
+    pub fn create(
+        method: Method,
+        aggr_exprs: &[Expression],
+        schema: DataSchemaRef,
+    ) -> Result<Aggregator<Method>> {
         let mut funcs = Vec::with_capacity(aggr_exprs.len());
         let mut arg_names = Vec::with_capacity(aggr_exprs.len());
         let mut aggr_cols = Vec::with_capacity(aggr_exprs.len());
@@ -38,21 +47,20 @@ impl Aggregator {
 
         let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
 
-        Ok(Aggregator { funcs, arg_names, aggr_cols, layout, offsets_aggregate_states })
+        Ok(Aggregator { method, funcs, arg_names, aggr_cols, layout, offsets_aggregate_states })
     }
 
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream, hash_method: HashMethodFixedKeys<UInt32Type>) -> Result<RwLock<HashTable<u32, DefaultHashTableEntity<u32, usize>, DefaultHasher<u32>>>> {
-        type GroupFuncTable = HashTable<u32, DefaultHashTableEntity<u32, usize>, crate::common::DefaultHasher<u32>>;
-
+    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<HashMap<Method::HashKey, usize>>> {
         let arena = Bump::new();
         let aggr_len = self.funcs.len();
         let aggr_cols = &self.aggr_cols;
         let aggr_args_name = &self.arg_names;
         let layout = self.layout;
         let func = &self.funcs;
+        let hash_method = &self.method;
         let offsets_aggregate_states = &self.offsets_aggregate_states;
 
-        let groups_locker = RwLock::new(GroupFuncTable::new());
+        let groups_locker = RwLock::new(HashMap::<Method::HashKey, usize>::new());
 
         while let Some(block) = stream.next().await {
             let block = block?;

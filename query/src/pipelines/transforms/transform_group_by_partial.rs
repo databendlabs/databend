@@ -260,8 +260,8 @@ impl Processor for GroupByPartialTransform {
             HashMethodKind::KeysU32(hash_method) => {
                 let aggr_exprs = &self.aggr_exprs;
                 let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream, hash_method).await?;
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
 
                 let delta = start.elapsed();
                 tracing::debug!("Group by partial cost: {:?}", delta);
