@@ -30,9 +30,6 @@ use log::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Use customize malloc.
-    let malloc = common_allocators::init();
-
     // First load configs from args.
     let mut conf = Config::load_from_args();
 
@@ -59,9 +56,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("{:?}", conf);
     info!(
-        "DatafuseQuery v-{}, Allocator: {}",
+        "DatafuseQuery v-{}",
         *datafuse_query::configs::config::FUSE_COMMIT_VERSION,
-        malloc
     );
 
     let cluster = Cluster::create_global(conf.clone())?;

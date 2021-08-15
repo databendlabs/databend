@@ -20,12 +20,10 @@ path = "src/bin/datafuse-benchmark.rs"
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]
-allocator = ["common-allocators/snmalloc-alloc"]
 
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
-common-allocators = { path = "../common/allocators" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
