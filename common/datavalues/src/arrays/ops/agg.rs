@@ -118,6 +118,23 @@ where
     }
 
     fn min(&self) -> Result<DataValue> {
+        if self.is_empty() {
+            return Ok(DataValue::from(self.data_type()));
+        }
+
+        let null_count = self.null_count();
+        if null_count == 0 {
+            let c = self
+                .downcast_ref()
+                .values()
+                .as_slice()
+                .iter()
+                .reduce(|a, b| if a < b { a } else { b });
+            return Ok(match c {
+                Some(x) => (*x).into(),
+                None => DataValue::from(self.data_type()),
+            });
+        }
         Ok(match aggregate::min_primitive(self.downcast_ref()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
@@ -125,6 +142,24 @@ where
     }
 
     fn max(&self) -> Result<DataValue> {
+        if self.is_empty() {
+            return Ok(DataValue::from(self.data_type()));
+        }
+
+        let null_count = self.null_count();
+        if null_count == 0 {
+            let c = self
+                .downcast_ref()
+                .values()
+                .as_slice()
+                .iter()
+                .reduce(|a, b| if a > b { a } else { b });
+            return Ok(match c {
+                Some(x) => (*x).into(),
+                None => DataValue::from(self.data_type()),
+            });
+        }
+
         Ok(match aggregate::max_primitive(self.downcast_ref()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
