@@ -571,6 +571,23 @@ impl StateMachine {
                 tracing::debug!("applied UpsertKV: {} {:?}", key, record_value);
                 Ok((prev, record_value).into())
             }
+
+            Cmd::TruncateTable {
+                ref db_name,
+                ref table_name,
+            } => {
+                let db = self.databases.get_mut(db_name).unwrap();
+                let tbl_id = db.tables.get(table_name);
+                if let Some(tbl_id) = tbl_id {
+                    let _tbl_id = tbl_id.to_owned();
+                    let pre_data_parts_count = self.get_data_parts_count(db_name, table_name);
+                    self.remove_table_data_parts(db_name, table_name);
+                    tracing::debug!("applied TruncateTable: {}", table_name);
+                    Ok((Some(pre_data_parts_count), Some(0_usize)).into())
+                } else {
+                    Ok((None::<usize>, None::<usize>).into())
+                }
+            }
         }
     }
 
@@ -675,6 +692,22 @@ impl StateMachine {
             }
         }
         None
+    }
+
+    pub fn get_data_parts_count(&self, db_name: &str, table_name: &str) -> usize {
+        let db = self.databases.get(db_name);
+        if let Some(db) = db {
+            let table_id = db.tables.get(table_name);
+            if let Some(table_id) = table_id {
+                let parts_vec = self.table_parts.get(table_id);
+                if let Some(parts_vec) = parts_vec {
+                    return parts_vec.len();
+                } else {
+                    return 0;
+                }
+            }
+        }
+        0
     }
 
     pub fn append_data_parts(

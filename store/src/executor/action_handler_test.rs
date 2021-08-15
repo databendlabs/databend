@@ -32,6 +32,9 @@ use common_flights::meta_api_impl::GetDatabaseAction;
 use common_flights::meta_api_impl::GetDatabaseActionResult;
 use common_flights::meta_api_impl::GetTableAction;
 use common_flights::meta_api_impl::GetTableActionResult;
+use common_flights::storage_api_impl::AppendResult;
+use common_flights::storage_api_impl::TruncateTableAction;
+use common_flights::storage_api_impl::TruncateTableResult;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DatabaseEngineType;
@@ -639,6 +642,126 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
                 }
             }
         }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
+    // - Bring up an ActionHandler backed with a Dfs
+    // - Add a table.
+    // - Assert getting present and absent databases.
+
+    init_store_unittest();
+
+    struct T {
+        db_name: &'static str,
+        table_name: &'static str,
+        want: Result<TruncateTableResult, ErrorCode>,
+    }
+
+    /// helper to build a T
+    fn case(db_name: &'static str, table_name: &'static str, want: Result<(), &str>) -> T {
+        let want = match want {
+            Ok(..) => Ok(TruncateTableResult {
+                trancated_table_data_parts_count: 1,
+            }),
+            Err(err_str) => Err(ErrorCode::UnknownTable(err_str)),
+        };
+
+        T {
+            db_name,
+            table_name,
+            want,
+        }
+    }
+
+    let table_cases: Vec<T> = vec![
+        case("foo", "foo_t1", Ok(())),
+        case("foo", "foo_t2", Err("table not found: foo_t2")),
+    ];
+
+    {
+        let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {}).await?;
+
+        {
+            // create db
+            let plan = CreateDatabasePlan {
+                db: "foo".to_string(),
+                if_not_exists: false,
+                engine: DatabaseEngineType::Local,
+                options: Default::default(),
+            };
+            let cba = CreateDatabaseAction { plan };
+            hdlr.handle(cba).await?;
+        }
+
+        {
+            // create table
+            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                DataType::UInt64,
+                false,
+            )]));
+
+            let plan = CreateTablePlan {
+                if_not_exists: false,
+                db: "foo".to_string(),
+                table: "foo_t1".to_string(),
+                schema: schema.clone(),
+                engine: TableEngineType::JSONEachRow,
+                options: Default::default(),
+            };
+            let cta = CreateTableAction { plan };
+            hdlr.handle(cta).await?;
+        }
+
+        // append fake parts for test
+        let mut append_result = AppendResult::default();
+        let location = format!("{}/{}", "path", "part_uuid");
+        append_result.append_part(&location, 1, 1, 1, 1);
+        hdlr.meta_node
+            .append_data_parts("foo", "foo_t1", &append_result)
+            .await;
+        let mut before_parts_len: usize = 0;
+        let before_parts = hdlr.meta_node.get_data_parts("foo", "foo_t1").await;
+        if let Some(before_parts) = before_parts {
+            before_parts_len = before_parts.len();
+        }
+        assert_eq!(1, before_parts_len);
+
+        for (i, c) in table_cases.iter().enumerate() {
+            let mes = format!(
+                "{}-th: db-table: {:?}-{:?}, want: {:?}",
+                i, c.db_name, c.table_name, c.want
+            );
+
+            let rst = hdlr
+                .handle(TruncateTableAction {
+                    db: c.db_name.to_string(),
+                    table: c.table_name.to_string(),
+                })
+                .await;
+
+            match c.want {
+                Ok(ref act_rst) => {
+                    assert_eq!(act_rst, &rst.unwrap(), "{}", mes);
+                }
+                Err(ref err) => {
+                    let got = rst.unwrap_err();
+                    let got: ErrorCode = got.into();
+                    assert_eq!(err.code(), got.code(), "{}", mes);
+                    assert_eq!(err.message(), got.message(), "{}", mes);
+                }
+            }
+        }
+        let mut after_parts_len: usize = 0;
+        let after_parts = hdlr.meta_node.get_data_parts("foo", "foo_t1").await;
+        if let Some(after_parts) = after_parts {
+            after_parts_len = after_parts.len();
+        }
+        assert_eq!(0, after_parts_len);
     }
 
     Ok(())

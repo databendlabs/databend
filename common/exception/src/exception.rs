@@ -232,6 +232,7 @@ build_exceptions! {
     IllegalSchema(4005),
     IllegalMetaState(4005),
     MetaNodeInternalError(4006),
+    TrancateTableFailedError(4007),
 
     // storage-api error codes
     IllegalScanPlan(5000),
