@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use common_exception::Result;
 
@@ -19,7 +29,7 @@ fn test_array_agg() -> Result<()> {
     ];
 
     let expected = [
-        DataValue::UInt16(Some(6)),
+        DataValue::UInt64(Some(6)),
         DataValue::UInt16(Some(3)),
         DataValue::UInt16(Some(1)),
         DataValue::Struct(vec![DataValue::UInt64(Some(0)), DataValue::UInt16(Some(1))]),
@@ -46,7 +56,7 @@ fn test_boolean_array_agg() -> Result<()> {
     ];
 
     let expected = [
-        DataValue::UInt32(Some(2)),
+        DataValue::UInt64(Some(2)),
         DataValue::Boolean(Some(true)),
         DataValue::Boolean(Some(false)),
         DataValue::Struct(vec![

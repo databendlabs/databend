@@ -1,7 +1,18 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
+use std::alloc::Layout;
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -11,7 +22,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
 
-use super::GetState;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::FactoryFunc;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
@@ -23,7 +33,6 @@ struct DataGroupValues(Vec<DataGroupValue>);
 
 pub struct AggregateDistinctState {
     set: HashSet<DataGroupValues, RandomState>,
-    nested_addr: StateAddr,
 }
 
 impl AggregateDistinctState {
@@ -60,8 +69,6 @@ impl AggregateDistinctState {
         Ok(())
     }
 }
-
-impl<'a> GetState<'a, AggregateDistinctState> for AggregateDistinctState {}
 
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator {
@@ -120,61 +127,100 @@ impl AggregateFunction for AggregateDistinctCombinator {
         self.nested.nullable(input_schema)
     }
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr {
-        let addr = self.nested.allocate_state(arena);
-        let state = arena.alloc(AggregateDistinctState {
+    fn init_state(&self, place: StateAddr) {
+        place.write(|| AggregateDistinctState {
             set: HashSet::new(),
-            nested_addr: addr,
         });
 
-        (state as *mut AggregateDistinctState) as StateAddr
+        let layout = Layout::new::<AggregateDistinctState>();
+        let netest_place = place.next(layout.size());
+        self.nested.init_state(netest_place);
     }
 
-    fn accumulate_row(&self, place: StateAddr, row: usize, arrays: &[Series]) -> Result<()> {
-        let state = AggregateDistinctState::get(place);
+    fn state_layout(&self) -> Layout {
+        let layout = Layout::new::<AggregateDistinctState>();
+        let netesed = self.nested.state_layout();
+        Layout::from_size_align(layout.size() + netesed.size(), layout.align()).unwrap()
+    }
 
-        let values = arrays
-            .iter()
-            .map(|c| c.try_get(row))
-            .collect::<Result<Vec<_>>>()?;
-        if !values.iter().any(|c| c.is_null()) {
-            state.set.insert(DataGroupValues(
-                values
-                    .iter()
-                    .map(DataGroupValue::try_from)
-                    .collect::<Result<Vec<_>>>()?,
-            ));
+    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
+        for row in 0..input_rows {
+            let values = arrays
+                .iter()
+                .map(|s| s.try_get(row))
+                .collect::<Result<Vec<_>>>()?;
+
+            if !values.iter().any(|c| c.is_null()) {
+                let state = place.get::<AggregateDistinctState>();
+                state.set.insert(DataGroupValues(
+                    values
+                        .iter()
+                        .map(DataGroupValue::try_from)
+                        .collect::<Result<Vec<_>>>()?,
+                ));
+            }
         }
         Ok(())
     }
 
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        arrays: &[Series],
+        _input_rows: usize,
+    ) -> Result<()> {
+        for (row, place) in places.iter().enumerate() {
+            let values = arrays
+                .iter()
+                .map(|s| s.try_get(row))
+                .collect::<Result<Vec<_>>>()?;
+
+            if !values.iter().any(|c| c.is_null()) {
+                let place = place.next(offset);
+                let state = place.get::<AggregateDistinctState>();
+                state.set.insert(DataGroupValues(
+                    values
+                        .iter()
+                        .map(DataGroupValue::try_from)
+                        .collect::<Result<Vec<_>>>()?,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = AggregateDistinctState::get(place);
+        let state = place.get::<AggregateDistinctState>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = AggregateDistinctState::get(place);
+        let state = place.get::<AggregateDistinctState>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = AggregateDistinctState::get(place);
-        let rhs = AggregateDistinctState::get(rhs);
+        let state = place.get::<AggregateDistinctState>();
+        let rhs = rhs.get::<AggregateDistinctState>();
 
         state.set.extend(rhs.set.clone());
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = AggregateDistinctState::get(place);
+        let state = place.get::<AggregateDistinctState>();
+
+        let layout = Layout::new::<AggregateDistinctState>();
+        let netest_place = place.next(layout.size());
 
         // faster path for count
         if self.nested.name() == "AggregateFunctionCount" {
             Ok(DataValue::UInt64(Some(state.set.len() as u64)))
         } else {
             if state.set.is_empty() {
-                return self.nested.merge_result(state.nested_addr);
+                return self.nested.merge_result(netest_place);
             }
             let mut results = Vec::with_capacity(state.set.len());
 
@@ -203,9 +249,9 @@ impl AggregateFunction for AggregateDistinctCombinator {
                 .collect::<Result<Vec<_>>>()?;
 
             self.nested
-                .accumulate(state.nested_addr, &arrays, state.set.len())?;
+                .accumulate(netest_place, &arrays, state.set.len())?;
             // merge_result
-            self.nested.merge_result(state.nested_addr)
+            self.nested.merge_result(netest_place)
         }
     }
 }

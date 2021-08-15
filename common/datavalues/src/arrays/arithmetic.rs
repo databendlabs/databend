@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Implementations of arithmetic operations on DataArray's.
 use std::ops::Add;
@@ -16,11 +26,14 @@ use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::compute::arithmetics::basic;
 use common_arrow::arrow::compute::arithmetics::negate;
+use common_arrow::arrow::compute::arity::unary;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 use num::ToPrimitive;
+use strength_reduce::StrengthReducedU64;
 
 use crate::arrays::ops::*;
 use crate::arrays::DataArray;
@@ -193,15 +206,43 @@ where
         match (rhs.len(), dtype) {
             // TODO(sundy): add more specific cases
             // TODO(sundy): fastmod https://lemire.me/blog/2019/02/08/faster-remainders-when-the-divisor-is-a-constant-beating-compilers-and-libdivide/
-            (1111, DataType::UInt8) => {
+            (1, DataType::UInt8) => {
                 let opt_rhs = rhs.get(0);
                 match opt_rhs {
                     None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
-                    Some(rhs) => {
-                        let array: DFUInt8Array =
-                            self.apply_cast_numeric(|a| AsPrimitive::<u8>::as_(a % rhs));
-                        Ok(array.into_series())
-                    }
+                    Some(rhs) => match self.data_type() {
+                        DataType::UInt64 => {
+                            let arr = &*self.array;
+                            let arr = unsafe {
+                                &*(arr as *const dyn Array as *const PrimitiveArray<u64>)
+                            };
+                            let rhs: u8 = rhs.as_();
+                            let rhs = rhs as u64;
+
+                            if rhs & (rhs - 1) > 0 {
+                                let reduced_modulo = StrengthReducedU64::new(rhs);
+                                let res = unary(
+                                    arr,
+                                    |a| (a % reduced_modulo) as u8,
+                                    ArrowDataType::UInt8,
+                                );
+                                let array = DFUInt8Array::from_arrow_array(res);
+                                Ok(array.into_series())
+                            } else {
+                                let mask = rhs - 1;
+                                let res = unary(arr, |a| (a & mask) as u8, ArrowDataType::UInt8);
+                                let array = DFUInt8Array::from_arrow_array(res);
+                                Ok(array.into_series())
+                            }
+                        }
+
+                        _ => {
+                            let array: DFUInt8Array = self.apply_cast_numeric(|a| {
+                                AsPrimitive::<u8>::as_(a - (a / rhs) * rhs)
+                            });
+                            Ok(array.into_series())
+                        }
+                    },
                 }
             }
 

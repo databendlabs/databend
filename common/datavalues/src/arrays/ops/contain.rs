@@ -1,37 +1,31 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::fmt::Debug;
-use std::collections::HashSet;
-use std::hash::Hash;
-use std::hash::Hasher;
 
+use common_arrow::arrow::compute::contains::contains;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrays::get_list_builder;
-use crate::arrays::BinaryArrayBuilder;
-use crate::arrays::BooleanArrayBuilder;
 use crate::arrays::DataArray;
-use crate::arrays::PrimitiveArrayBuilder;
-use crate::arrays::Utf8ArrayBuilder;
 use crate::prelude::*;
-use crate::utils::get_iter_capacity;
-use common_arrow::arrow::compute::kernels::comparison::contains;
-use common_arrow::arrow::compute::kernels::comparison::contains_utf8;
 
 pub trait ArrayContain: Debug {
-    /// # Safety
-    /// Note this doesn't do any bound checking, for performance reason.
-    ///
-    unsafe fn contain_unchecked(
-        &self,
-        _list: &DFListArray,
-    ) -> Result<Self>
-    where
-        Self: std::marker::Sized,
-    {
+    /// Ex: array = [1,2,3] and list = [[1,3,5], [2,6], [1,2]],
+    /// then the result should be [true, true, false].
+    fn contain(&self, _list: &DFListArray) -> Result<DFBooleanArray>
+    where Self: std::marker::Sized {
         Err(ErrorCode::BadDataValueType(format!(
             "Unsupported apply contain operation for {:?}",
             self,
@@ -39,15 +33,28 @@ pub trait ArrayContain: Debug {
     }
 }
 
+macro_rules! contain_internal {
+    ($self:expr, $list_arr:expr) => {{
+        assert_eq!($self.len(), $list_arr.len());
+        let arrow_array = $self.downcast_ref();
+        let arrow_list = $list_arr.downcast_ref();
+        let arrow_res = contains(arrow_list, arrow_array)?;
+        Ok(DFBooleanArray::from_arrow_array(arrow_res))
+    }};
+}
+
 impl<T> ArrayContain for DataArray<T>
 where T: DFNumericType
 {
-    unsafe fn contain_unchecked(&self, list: &DFListArray) -> Result<DFBooleanArray>
-    where Self: std::marker::Sized,
-    {
-        let arrow_array = self.downcast_ref();
-        let arrow_list = list.downcast_ref();
-        let arrow_res = contain(arrow_array, arrow_list);
-        Ok(DFBooleanArray::from_arrow_array(arrow_res)) 
+    fn contain(&self, list: &DFListArray) -> Result<DFBooleanArray>
+    where Self: std::marker::Sized {
+        contain_internal!(self, list)
+    }
+}
+
+impl ArrayContain for DFUtf8Array {
+    fn contain(&self, list: &DFListArray) -> Result<DFBooleanArray>
+    where Self: std::marker::Sized {
+        contain_internal!(self, list)
     }
 }

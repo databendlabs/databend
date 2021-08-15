@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::env;
 use std::sync::Once;
@@ -41,7 +51,7 @@ pub fn init_default_tracing() {
 ///
 // TODO(xp): use FUSE_JAEGER to assign jaeger server address.
 fn init_tracing_stdout() {
-    let fmt_layer = fmt::Layer::default()
+    let fmt_layer = Layer::default()
         .with_thread_ids(true)
         .with_thread_names(true)
         .pretty()
@@ -53,7 +63,7 @@ fn init_tracing_stdout() {
         global::set_text_map_propagator(TraceContextPropagator::new());
 
         let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("fuse-store")
+            .with_service_name("datafuse-store")
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 

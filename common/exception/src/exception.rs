@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #![allow(non_snake_case)]
 
@@ -58,10 +68,10 @@ impl ErrorCode {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
-    pub fn add_message(self, msg: String) -> Self {
+    pub fn add_message(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
-            display_text: format!("{}\n{}", msg, self.display_text),
+            display_text: format!("{}\n{}", msg.as_ref(), self.display_text),
             cause: self.cause,
             backtrace: self.backtrace,
         }
@@ -196,9 +206,13 @@ build_exceptions! {
     MetaStoreAlreadyExists(2402),
     MetaStoreNotFound(2403),
 
-    // FuseStore server error
+    // DatafuseStore server error
 
-    FuseStoreError(2501),
+    DatafuseStoreError(2501),
+
+    // FS error
+
+    IllegalFileName(2601),
 
 
     // TODO

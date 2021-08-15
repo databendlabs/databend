@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use std::fmt::Debug;
 
 use common_exception::ErrorCode;
@@ -38,13 +48,15 @@ where
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
         let array = self.downcast_ref();
         let mut ptr = ptr;
+        // let mut buffer = T::Native::buffer();
+        // value.marshal(buffer.as_mut());
+        // &buffer.as_ref()[0] as *const u8,
 
-        let mut buffer = T::Native::buffer();
+        // TODO: (sundy) we use reinterpret_cast here, it gains much performance
         for value in array.values().iter() {
-            value.marshal(buffer.as_mut());
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    &buffer.as_ref()[0] as *const u8,
+                    value as *const T::Native as *const u8,
                     ptr,
                     std::mem::size_of::<T::Native>(),
                 );
@@ -68,11 +80,9 @@ impl GroupHash for DFBooleanArray {
         let array = self.downcast_ref();
         let mut ptr = ptr;
 
-        let mut buffer = bool::buffer();
         for value in array.values().iter() {
-            value.marshal(buffer.as_mut());
             unsafe {
-                std::ptr::copy_nonoverlapping(&buffer.as_ref()[0] as *const u8, ptr, 1);
+                std::ptr::copy_nonoverlapping(&(value as u8) as *const u8, ptr, 1);
                 ptr = ptr.add(step);
             }
         }

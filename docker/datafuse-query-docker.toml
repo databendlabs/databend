@@ -1,0 +1,24 @@
+# Usage:
+# datafuse-query -c datafuse_query_config_spec.toml
+
+# Log level.
+log_level = "DEBUG"
+
+# DatafuseQuery rpc address.
+# For flight rpc.
+flight_api_address = "0.0.0.0:9091"
+
+# DatafuseQuery http address.
+# For admin RESET API.
+http_api_address = "0.0.0.0:8081"
+
+# DatafuseQuery metrics RESET API.
+metric_api_address = "0.0.0.0:7071"
+
+# MySQL Handler.
+mysql_handler_host = "0.0.0.0"
+mysql_handler_port = 3307
+
+# ClickHouse Handler.
+clickhouse_handler_host = "0.0.0.0"
+clickhouse_handler_port = 9001

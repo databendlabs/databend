@@ -1,0 +1,85 @@
+// Copyright 2020 Datafuse Labs.
+// 
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// 
+//     http://www.apache.org/licenses/LICENSE-2.0
+// 
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+// meta data types for DatafuseStore
+package store_meta;
+
+// TODO(zbr): keep it or remove
+message Db {
+  int64 db_id = 1;
+  // Every modification has a corresponding unique ver.
+  int64 ver = 20;
+  map<string, int64> table_name_to_id = 2;
+  map<int64, Table> tables = 3;
+}
+
+// TODO(zbr): keep it or remove
+message Table {
+  int64 table_id = 1;
+  // Every modification has a corresponding unique ver.
+  int64 ver = 20;
+
+  bytes schema = 5;
+
+  map<string, string> options = 30;
+  // a func(string, Vec<ReplicationGroupId>) mapping PartitionBy expr to
+  // replication group. A DatafuseQuery process should consider this to determine
+  // where to send the read or write operations.
+  bytes placement_policy = 10;
+  // repeated ReplicationGroupId ReplicationGroupIds
+}
+
+// A Cmd serves as a raft log entry to commit an atomic operation into meta data
+// storage.
+
+// TODO(zbr): keep it or remove
+message CmdCreateDatabase {
+  string db_name = 20;
+  Db db = 50;
+}
+
+// TODO(zbr): keep it or remove
+message CmdCreateTable {
+  string db_name = 20;
+  string table_name = 30;
+  Table table = 40;
+}
+
+// meta service
+
+message GetReq { string key = 1; }
+message GetReply {
+  bool ok = 1;
+  string key = 2;
+  string value = 3;
+}
+
+message RaftMes {
+  string data = 1;
+  string error = 2;
+}
+
+service MetaService {
+
+  rpc Write(RaftMes) returns (RaftMes) {}
+  rpc Get(GetReq) returns (GetReply) {}
+
+  // raft RPC
+
+  rpc AppendEntries(RaftMes) returns (RaftMes);
+  rpc InstallSnapshot(RaftMes) returns (RaftMes);
+  rpc vote(RaftMes) returns (RaftMes);
+}
