@@ -267,7 +267,7 @@ impl Processor for GroupByPartialTransform {
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(groups_locker, finalized_schema)
+                aggregator.aggregate_finalized::<UInt32Type>(groups_locker, finalized_schema)
             }
             HashMethodKind::KeysU64(hash_method) => {
                 apply! { hash_method, DFUInt64ArrayBuilder, RwLock<HashMap<u64, usize, FxBuildHasher>> }

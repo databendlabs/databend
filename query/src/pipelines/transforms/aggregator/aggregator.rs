@@ -4,8 +4,8 @@ use bumpalo::Bump;
 use futures::StreamExt;
 
 use common_datablocks::{DataBlock, HashMethod, HashMethodFixedKeys};
-use common_datavalues::{DataSchema, DataSchemaRefExt, UInt32Type, DataSchemaRef};
-use common_datavalues::arrays::{ArrayBuilder, BinaryArrayBuilder, DFUInt32ArrayBuilder};
+use common_datavalues::{DataSchema, DataSchemaRefExt, UInt32Type, DataSchemaRef, DFNumericType};
+use common_datavalues::arrays::{ArrayBuilder, BinaryArrayBuilder, DFUInt32ArrayBuilder, PrimitiveArrayBuilder};
 use common_datavalues::prelude::{Arc, IntoSeries, Series};
 use common_functions::aggregates::{AggregateFunction, AggregateFunctionRef, StateAddr, get_layout_offsets};
 use common_infallible::RwLock;
@@ -16,6 +16,8 @@ use crate::common::{DefaultHashTableEntity, HashTable, HashTableEntity, DefaultH
 use common_planners::Expression;
 use common_exception::Result;
 use std::hash::Hash;
+use common_datavalues::series::SeriesWrap;
+use common_arrow::arrow::array::ArrayRef;
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
@@ -127,13 +129,13 @@ impl<Method: HashMethod> Aggregator<Method>
         Ok(groups_locker)
     }
 
-    pub fn aggregate_finalized(
+    pub fn aggregate_finalized<T: DFNumericType>(
         &self,
-        groups_locker: RwLock<HashTable<u32, DefaultHashTableEntity<u32, usize>, DefaultHasher<u32>>>,
-        schema: Arc<DataSchema>,
-    ) -> Result<SendableDataBlockStream> {
-        type KeyBuilder = DFUInt32ArrayBuilder;
-
+        groups_locker: RwLock<HashMap<T::Native, usize>>,
+        schema: DataSchemaRef,
+    ) -> Result<SendableDataBlockStream>
+        where DefaultHasher<T::Native>: KeyHasher<T::Native>,
+              DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native> {
         let aggr_len = self.funcs.len();
         let groups = groups_locker.read();
         if groups.len() == 0 {
@@ -150,7 +152,7 @@ impl<Method: HashMethod> Aggregator<Method>
             .collect();
 
 
-        let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
+        let mut group_key_builder = PrimitiveArrayBuilder::<T>::with_capacity(groups.len());
 
         let mut bytes = BytesMut::new();
         let funcs = &self.funcs;
@@ -173,7 +175,7 @@ impl<Method: HashMethod> Aggregator<Method>
             columns.push(builder.finish().into_series());
         }
         let array = group_key_builder.finish();
-        columns.push(array.into_series());
+        columns.push(array.array.into_series());
 
         let block = DataBlock::create_by_array(schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(
