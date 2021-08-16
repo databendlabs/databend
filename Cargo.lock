@@ -170,7 +170,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.7#8e0cca5241fa423430920ab5c409494569bacb01"
+source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.8#adc24f55d75d9c7c01fcd0f4f9e35dd5aae679aa"
 dependencies = [
  "anyhow",
  "async-trait",

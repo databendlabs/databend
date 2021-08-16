@@ -317,22 +317,18 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn apply_entry_to_state_machine(
         &self,
-        index: &LogId,
-        data: &LogEntry,
+        entry: &Entry<LogEntry>,
     ) -> anyhow::Result<AppliedState> {
         let mut sm = self.state_machine.write().await;
-        let resp = sm.apply(index, data).await?;
+        let resp = sm.apply(entry).await?;
         Ok(resp)
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
-    async fn replicate_to_state_machine(
-        &self,
-        entries: &[(&LogId, &LogEntry)],
-    ) -> anyhow::Result<()> {
+    async fn replicate_to_state_machine(&self, entries: &[&Entry<LogEntry>]) -> anyhow::Result<()> {
         let mut sm = self.state_machine.write().await;
-        for (index, data) in entries {
-            sm.apply(*index, data).await?;
+        for entry in entries {
+            sm.apply(*entry).await?;
         }
         Ok(())
     }
