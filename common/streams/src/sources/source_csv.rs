@@ -12,8 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod source;
-mod source_csv;
+use std::io;
+use std::sync::Arc;
 
-pub use source::Source;
-pub use source_csv::CsvSource;
+use common_arrow::arrow::io::csv::read::Reader;
+use common_datablocks::DataBlock;
+use common_exception::Result;
+use common_infallible::RwLock;
+
+use crate::Source;
+
+pub struct CsvSource<R> {
+    reader: Arc<RwLock<Reader<R>>>,
+}
+
+impl<R> Source for CsvSource<R>
+where R: io::Read
+{
+    fn read(&mut self) -> Result<Option<DataBlock>> {
+        todo!()
+    }
+}

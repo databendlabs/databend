@@ -15,6 +15,7 @@ common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
 common-progress = {path = "../progress"}
+common-infallible = {path = "../infallible"}
 
 # Github dependencies
 

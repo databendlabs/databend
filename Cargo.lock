@@ -921,6 +921,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-infallible",
  "common-progress",
  "common-runtime",
  "crossbeam 0.8.1",
