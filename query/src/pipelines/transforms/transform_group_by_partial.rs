@@ -262,8 +262,9 @@ impl Processor for GroupByPartialTransform {
                 let delta = start.elapsed();
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
+                let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt8Type>(groups_locker, finalized_schema)
+                aggregator.aggregate_finalized::<UInt8Type>(&groups.0, finalized_schema)
             }
             HashMethodKind::KeysU16(hash_method) => {
                 // TODO: use fixed array.
@@ -275,8 +276,9 @@ impl Processor for GroupByPartialTransform {
                 let delta = start.elapsed();
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
+                let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt16Type>(groups_locker, finalized_schema)
+                aggregator.aggregate_finalized::<UInt16Type>(&groups.0, finalized_schema)
             }
             HashMethodKind::KeysU32(hash_method) => {
                 let aggr_exprs = &self.aggr_exprs;
@@ -287,8 +289,9 @@ impl Processor for GroupByPartialTransform {
                 let delta = start.elapsed();
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
+                let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt32Type>(groups_locker, finalized_schema)
+                aggregator.aggregate_finalized::<UInt32Type>(&groups.0, finalized_schema)
             }
             HashMethodKind::KeysU64(hash_method) => {
                 let aggr_exprs = &self.aggr_exprs;
@@ -299,8 +302,9 @@ impl Processor for GroupByPartialTransform {
                 let delta = start.elapsed();
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
+                let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt64Type>(groups_locker, finalized_schema)
+                aggregator.aggregate_finalized::<UInt64Type>(&groups.0, finalized_schema)
             }
         }
     }

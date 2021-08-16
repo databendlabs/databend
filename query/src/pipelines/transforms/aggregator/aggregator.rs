@@ -52,8 +52,7 @@ impl<Method: HashMethod> Aggregator<Method>
         Ok(Aggregator { method, funcs, arg_names, aggr_cols, layout, offsets_aggregate_states })
     }
 
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<HashMap<Method::HashKey, usize>>> {
-        let arena = Bump::new();
+    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
         let aggr_len = self.funcs.len();
         let aggr_cols = &self.aggr_cols;
         let aggr_args_name = &self.arg_names;
@@ -62,7 +61,7 @@ impl<Method: HashMethod> Aggregator<Method>
         let hash_method = &self.method;
         let offsets_aggregate_states = &self.offsets_aggregate_states;
 
-        let groups_locker = RwLock::new(HashMap::<Method::HashKey, usize>::new());
+        let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::new(), Bump::new()));
 
         while let Some(block) = stream.next().await {
             let block = block?;
@@ -92,14 +91,14 @@ impl<Method: HashMethod> Aggregator<Method>
             {
                 for group_key in group_keys.iter() {
                     let mut inserted = true;
-                    let entity = groups.insert_key(group_key, &mut inserted);
+                    let entity = groups.0.insert_key(group_key, &mut inserted);
 
                     match inserted {
                         true => {
                             if aggr_len == 0 {
                                 entity.set_value(0);
                             } else {
-                                let place: StateAddr = arena.alloc_layout(layout).into();
+                                let place: StateAddr = groups.1.alloc_layout(layout).into();
                                 for idx in 0..aggr_len {
                                     let aggr_state = offsets_aggregate_states[idx];
                                     let aggr_state_place = place.next(aggr_state);
@@ -131,13 +130,12 @@ impl<Method: HashMethod> Aggregator<Method>
 
     pub fn aggregate_finalized<T: DFNumericType>(
         &self,
-        groups_locker: RwLock<HashMap<T::Native, usize>>,
+        groups: &HashMap<T::Native, usize>,
         schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream>
         where DefaultHasher<T::Native>: KeyHasher<T::Native>,
               DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native> {
         let aggr_len = self.funcs.len();
-        let groups = groups_locker.read();
         if groups.len() == 0 {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
