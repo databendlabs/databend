@@ -17,30 +17,40 @@ use std::sync::Arc;
 use std::task::Poll;
 
 use common_arrow::arrow::io::csv::read;
+use common_arrow::arrow::io::csv::read::Reader;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 
 use crate::sessions::DatafuseQueryContextRef;
 
-pub struct CsvTableStream {
+pub struct CsvTableStream<R> {
     ctx: DatafuseQueryContextRef,
-    file: String,
     schema: DataSchemaRef,
+    reader: Reader<R>,
 }
 
-impl CsvTableStream {
+impl<R> CsvTableStream<R>
+where R: std::io::Read
+{
     pub fn try_create(
         ctx: DatafuseQueryContextRef,
         schema: DataSchemaRef,
-        file: String,
+        reader: R,
     ) -> Result<Self> {
-        Ok(CsvTableStream { ctx, file, schema })
+        let reader = read::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader(reader);
+
+        Ok(CsvTableStream {
+            ctx,
+            reader,
+            schema,
+        })
     }
 
-    pub fn try_get_one_block(&self) -> Result<Option<DataBlock>> {
+    pub fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         let partitions = self.ctx.try_get_partitions(1)?;
         if partitions.is_empty() {
             return Ok(None);
@@ -53,13 +63,8 @@ impl CsvTableStream {
         let block_size = end - begin;
 
         let arrow_schema = Arc::new(self.schema.to_arrow());
-        let mut reader = read::ReaderBuilder::new()
-            .has_headers(false)
-            .from_path(&self.file)
-            .map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
-
         let mut rows = vec![read::ByteRecord::default(); block_size];
-        let rows_read = read::read_rows(&mut reader, begin, &mut rows)?;
+        let rows_read = read::read_rows(&mut self.reader, begin, &mut rows)?;
         let rows = &rows[..rows_read];
 
         let record = read::deserialize_batch(
@@ -75,11 +80,13 @@ impl CsvTableStream {
     }
 }
 
-impl Stream for CsvTableStream {
+impl<R> Stream for CsvTableStream<R>
+where R: std::io::Read
+{
     type Item = Result<DataBlock>;
 
     fn poll_next(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         _: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let block = self.try_get_one_block()?;

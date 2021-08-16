@@ -120,10 +120,12 @@ impl Table for CsvTable {
         ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        let reader =
+            File::open(self.file.clone()).map_err(|e| ErrorCode::CannotReadFile(e.to_string()))?;
         Ok(Box::pin(CsvTableStream::try_create(
             ctx,
             self.schema.clone(),
-            self.file.clone(),
+            reader,
         )?))
     }
 }
