@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
 use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
@@ -40,6 +39,7 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::transforms::aggregator::Aggregator;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
@@ -108,19 +108,7 @@ impl Processor for GroupByPartialTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 
-        let aggr_len = self.aggr_exprs.len();
         let start = Instant::now();
-        let schema_before_group_by = self.schema_before_group_by.clone();
-        let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
-        let mut arg_names = Vec::with_capacity(self.aggr_exprs.len());
-        let mut aggr_cols = Vec::with_capacity(self.aggr_exprs.len());
-        let aggr_funcs_len = self.aggr_exprs.len();
-
-        for expr in self.aggr_exprs.iter() {
-            funcs.push(expr.to_aggregate_function(&schema_before_group_by)?);
-            arg_names.push(expr.to_aggregate_function_names()?);
-            aggr_cols.push(expr.column_name());
-        }
         let group_cols = self
             .group_exprs
             .iter()
@@ -128,15 +116,28 @@ impl Processor for GroupByPartialTransform {
             .collect::<Vec<_>>();
 
         let mut stream = self.input.execute().await?;
-        let arena = Bump::new();
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
-
-        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
 
         macro_rules! apply {
             ($hash_method: ident, $key_array_builder: ty, $group_func_table: ty) => {{
                 // Table for <group_key, (place, keys) >
+                let aggr_len = self.aggr_exprs.len();
+                let schema_before_group_by = self.schema_before_group_by.clone();
+                let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
+                let mut arg_names = Vec::with_capacity(self.aggr_exprs.len());
+                let mut aggr_cols = Vec::with_capacity(self.aggr_exprs.len());
+                let aggr_funcs_len = self.aggr_exprs.len();
+
+                for expr in self.aggr_exprs.iter() {
+                    funcs.push(expr.to_aggregate_function(&schema_before_group_by)?);
+                    arg_names.push(expr.to_aggregate_function_names()?);
+                    aggr_cols.push(expr.column_name());
+                }
+
+                let arena = Bump::new();
+                let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
+
                 type GroupFuncTable = $group_func_table;
                 let groups_locker = GroupFuncTable::default();
                 while let Some(block) = stream.next().await {
@@ -253,29 +254,65 @@ impl Processor for GroupByPartialTransform {
             }};
         }
 
-        macro_rules! match_hash_method_and_apply {
-            ($method: ident, $apply: ident) => {{
-                match $method {
-                    HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
-                    }
-                    HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, usize, FxBuildHasher>> }
-                    }
-                    HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, usize, FxBuildHasher>> }
-                    }
-                    HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, usize, FxBuildHasher>> }
-                    }
-                    HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, usize, FxBuildHasher>> }
-                    }
-                }
-            }};
-        }
+        match method {
+            HashMethodKind::Serializer(hash_method) => {
+                apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
+            }
+            HashMethodKind::KeysU8(hash_method) => {
+                // TODO: use fixed array.
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
 
-        match_hash_method_and_apply! {method, apply}
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt8Type>(&groups.0, finalized_schema)
+            }
+            HashMethodKind::KeysU16(hash_method) => {
+                // TODO: use fixed array.
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt16Type>(&groups.0, finalized_schema)
+            }
+            HashMethodKind::KeysU32(hash_method) => {
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt32Type>(&groups.0, finalized_schema)
+            }
+            HashMethodKind::KeysU64(hash_method) => {
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt64Type>(&groups.0, finalized_schema)
+            }
+        }
     }
 }
 
@@ -332,8 +369,6 @@ fn write(mut hash: u64, mut bytes: &[u8]) -> u64 {
 
     hash
 }
-
-pub type FxBuildHasher = BuildHasherDefault<DefaultHasher>;
 
 pub struct DefaultHasher {
     /// Generics hold

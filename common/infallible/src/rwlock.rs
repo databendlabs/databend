@@ -21,6 +21,8 @@ use parking_lot::RwLockWriteGuard;
 #[derive(Debug, Default)]
 pub struct RwLock<T>(ParkingRwLock<T>);
 
+unsafe impl<T> Send for RwLock<T> {}
+
 impl<T> RwLock<T> {
     /// creates a read-write lock
     pub fn new(t: T) -> Self {
