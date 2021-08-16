@@ -12,24 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(core_intrinsics)]
-#![feature(arbitrary_self_types)]
-
 #[cfg(test)]
-pub mod tests;
+mod hash_table_grower_test;
 
-pub mod api;
-pub mod catalogs;
-pub mod clusters;
-pub mod common;
-pub mod configs;
-pub mod datasources;
-pub mod functions;
-pub mod interpreters;
-pub mod metrics;
-pub mod optimizers;
-pub mod pipelines;
-pub mod servers;
-pub mod sessions;
-pub mod sql;
+mod hash_table;
+#[allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
+mod hash_table_entity;
+mod hash_table_grower;
+mod hash_table_hasher;
+mod hash_table_iter;
+
+pub use hash_table::HashTable;
+pub use hash_table_entity::DefaultHashTableEntity;
+pub use hash_table_entity::HashTableEntity;
+pub use hash_table_hasher::DefaultHasher;
+pub use hash_table_hasher::KeyHasher;
+
+pub type HashMap<Key, Value> =
+    HashTable<Key, DefaultHashTableEntity<Key, Value>, DefaultHasher<Key>>;
