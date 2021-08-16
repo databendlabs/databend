@@ -2,10 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::alloc::Layout;
 use std::any::Any;
 use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
 use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
@@ -13,15 +11,13 @@ use std::time::Instant;
 use bumpalo::Bump;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
-use futures::stream::StreamExt;
-
-use common_datablocks::{DataBlock, HashMethodFixedKeys, HashMethodKeysU32};
+use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets};
+use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
 use common_infallible::RwLock;
 use common_io::prelude::*;
@@ -29,8 +25,8 @@ use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::stream::StreamExt;
 
-use crate::common::{DefaultHashTableEntity, HashTable, HashTableEntity};
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::aggregator::Aggregator;
@@ -310,7 +306,6 @@ impl Processor for GroupByPartialTransform {
     }
 }
 
-
 trait HashWord {
     fn hash_word(&mut self, rhs: Self);
 }
@@ -364,8 +359,6 @@ fn write(mut hash: u64, mut bytes: &[u8]) -> u64 {
 
     hash
 }
-
-pub type FxBuildHasher = BuildHasherDefault<DefaultHasher>;
 
 pub struct DefaultHasher {
     /// Generics hold

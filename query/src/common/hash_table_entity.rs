@@ -1,9 +1,18 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-pub trait HashTableEntity<Key>: Sized
-{
+pub trait HashTableEntity<Key>: Sized {
     fn is_zero_key(key: &Key) -> bool;
 
     unsafe fn is_zero(self: *mut Self) -> bool;
@@ -23,18 +32,16 @@ pub struct DefaultHashTableEntity<Key: Sized, Value: Sized> {
 }
 
 impl<Key: Sized, Value: Sized> DefaultHashTableEntity<Key, Value> {
-    #[inline]
+    #[inline(always)]
     pub fn set_value(self: *mut Self, value: Value) {
         unsafe {
             (*self).value = value;
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_value<'a>(self: *mut Self) -> &'a Value {
-        unsafe {
-            &(*self).value
-        }
+        unsafe { &(*self).value }
     }
 }
 
@@ -81,4 +88,3 @@ primitive_key_entity_impl!(u8);
 primitive_key_entity_impl!(u16);
 primitive_key_entity_impl!(u32);
 primitive_key_entity_impl!(u64);
-

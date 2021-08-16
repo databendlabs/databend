@@ -1,23 +1,46 @@
+// Copyright 2020 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::alloc::Layout;
 
 use bumpalo::Bump;
-use futures::StreamExt;
-
-use common_datablocks::{DataBlock, HashMethod, HashMethodFixedKeys};
-use common_datavalues::{DataSchema, DataSchemaRefExt, UInt32Type, DataSchemaRef, DFNumericType};
-use common_datavalues::arrays::{ArrayBuilder, BinaryArrayBuilder, DFUInt32ArrayBuilder, PrimitiveArrayBuilder};
-use common_datavalues::prelude::{Arc, IntoSeries, Series};
-use common_functions::aggregates::{AggregateFunction, AggregateFunctionRef, StateAddr, get_layout_offsets};
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethod;
+use common_datavalues::arrays::ArrayBuilder;
+use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::PrimitiveArrayBuilder;
+use common_datavalues::prelude::IntoSeries;
+use common_datavalues::prelude::Series;
+use common_datavalues::DFNumericType;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_exception::Result;
+use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
 use common_infallible::RwLock;
 use common_io::prelude::BytesMut;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
-
-use crate::common::{DefaultHashTableEntity, HashTable, HashTableEntity, DefaultHasher, KeyHasher, HashMap};
 use common_planners::Expression;
-use common_exception::Result;
-use std::hash::Hash;
-use common_datavalues::series::SeriesWrap;
-use common_arrow::arrow::array::ArrayRef;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
+use futures::StreamExt;
+
+use crate::common::DefaultHashTableEntity;
+use crate::common::DefaultHasher;
+use crate::common::HashMap;
+use crate::common::HashTableEntity;
+use crate::common::KeyHasher;
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
@@ -29,8 +52,9 @@ pub struct Aggregator<Method: HashMethod> {
 }
 
 impl<Method: HashMethod> Aggregator<Method>
-    where DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
-          DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>
+where
+    DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
+    DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>,
 {
     pub fn create(
         method: Method,
@@ -49,10 +73,21 @@ impl<Method: HashMethod> Aggregator<Method>
 
         let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
 
-        Ok(Aggregator { method, funcs, arg_names, aggr_cols, layout, offsets_aggregate_states })
+        Ok(Aggregator {
+            method,
+            funcs,
+            arg_names,
+            aggr_cols,
+            layout,
+            offsets_aggregate_states,
+        })
     }
 
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
+    pub async fn aggregate(
+        &self,
+        group_cols: Vec<String>,
+        mut stream: SendableDataBlockStream,
+    ) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
         let aggr_len = self.funcs.len();
         let aggr_cols = &self.aggr_cols;
         let aggr_args_name = &self.arg_names;
@@ -61,7 +96,7 @@ impl<Method: HashMethod> Aggregator<Method>
         let hash_method = &self.method;
         let offsets_aggregate_states = &self.offsets_aggregate_states;
 
-        let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::new(), Bump::new()));
+        let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::create(), Bump::new()));
 
         while let Some(block) = stream.next().await {
             let block = block?;
@@ -115,7 +150,9 @@ impl<Method: HashMethod> Aggregator<Method>
                     }
                 }
 
-                for ((idx, func), args) in func.iter().enumerate().zip(aggr_arg_columns_slice.iter()) {
+                for ((idx, func), args) in
+                    func.iter().enumerate().zip(aggr_arg_columns_slice.iter())
+                {
                     func.accumulate_keys(
                         &places,
                         offsets_aggregate_states[idx],
@@ -133,10 +170,12 @@ impl<Method: HashMethod> Aggregator<Method>
         groups: &HashMap<T::Native, usize>,
         schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream>
-        where DefaultHasher<T::Native>: KeyHasher<T::Native>,
-              DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native> {
+    where
+        DefaultHasher<T::Native>: KeyHasher<T::Native>,
+        DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native>,
+    {
         let aggr_len = self.funcs.len();
-        if groups.len() == 0 {
+        if groups.is_empty() {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
                 None,
@@ -148,7 +187,6 @@ impl<Method: HashMethod> Aggregator<Method>
         let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
             .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
-
 
         let mut group_key_builder = PrimitiveArrayBuilder::<T>::with_capacity(groups.len());
 
@@ -165,7 +203,7 @@ impl<Method: HashMethod> Aggregator<Method>
                 bytes.clear();
             }
 
-            group_key_builder.append_value((*(group_entity.get_key())).clone());
+            group_key_builder.append_value(*(group_entity.get_key()));
         }
 
         let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
@@ -176,10 +214,6 @@ impl<Method: HashMethod> Aggregator<Method>
         columns.push(array.array.into_series());
 
         let block = DataBlock::create_by_array(schema.clone(), columns);
-        Ok(Box::pin(DataBlockStream::create(
-            schema.clone(),
-            None,
-            vec![block],
-        )))
+        Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }
 }
