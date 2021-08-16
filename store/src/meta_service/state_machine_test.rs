@@ -15,6 +15,9 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use async_raft::raft::Entry;
+use async_raft::raft::EntryNormal;
+use async_raft::raft::EntryPayload;
 use async_raft::LogId;
 use common_metatypes::Database;
 use common_metatypes::KVMeta;
@@ -189,9 +192,14 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
 
     for (name, txid, k, want) in cases.iter() {
         let resp = sm
-            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
-                txid: txid.clone(),
-                cmd: Cmd::IncrSeq { key: k.to_string() },
+            .apply(&Entry {
+                log_id: LogId { term: 0, index: 5 },
+                payload: EntryPayload::Normal(EntryNormal {
+                    data: LogEntry {
+                        txid: txid.clone(),
+                        cmd: Cmd::IncrSeq { key: k.to_string() },
+                    },
+                }),
             })
             .await?;
         assert_eq!(AppliedState::Seq { seq: *want }, resp, "{}", name);
@@ -541,12 +549,17 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
-            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
-                txid: txid.clone(),
-                cmd: Cmd::AddFile {
-                    key: k.to_string(),
-                    value: v.to_string(),
-                },
+            .apply(&Entry {
+                log_id: LogId { term: 0, index: 5 },
+                payload: EntryPayload::Normal(EntryNormal {
+                    data: LogEntry {
+                        txid: txid.clone(),
+                        cmd: Cmd::AddFile {
+                            key: k.to_string(),
+                            value: v.to_string(),
+                        },
+                    },
+                }),
             })
             .await?;
         assert_eq!(
@@ -574,12 +587,17 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
-            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
-                txid: txid.clone(),
-                cmd: Cmd::SetFile {
-                    key: k.to_string(),
-                    value: v.to_string(),
-                },
+            .apply(&Entry {
+                log_id: LogId { term: 0, index: 5 },
+                payload: EntryPayload::Normal(EntryNormal {
+                    data: LogEntry {
+                        txid: txid.clone(),
+                        cmd: Cmd::SetFile {
+                            key: k.to_string(),
+                            value: v.to_string(),
+                        },
+                    },
+                }),
             })
             .await?;
         assert_eq!(
