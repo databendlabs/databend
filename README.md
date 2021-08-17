@@ -72,7 +72,7 @@ For efficient pruning, Datafuse also creates indexes for each Parquet file to sp
 ## Getting Started
 
 * [Quick Start](https://datafuse.rs/overview/building-and-running/)
-* [Architecture](https://datafuse.rs/overview/architecture/)
+* [Whitepapers](https://datafuse.rs/overview/architecture/)
 * [Performance](https://datafuse.rs/overview/performance/)
 * [CLI Design](https://datafuse.rs/rfcs/cli/0001-cli-design/)
 * [Contributing](https://datafuse.rs/development/contributing/)

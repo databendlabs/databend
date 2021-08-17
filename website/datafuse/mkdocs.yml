@@ -128,7 +128,6 @@ nav:
   - Home: index.md
   - Documentation:
     - Overview:
-      - Architecture: overview/architecture.md
       - Installation: overview/building-and-running.md
     - SQL Reference:
       - Data Types:
@@ -198,6 +197,7 @@ nav:
         - Performance Test: rfcs/query/0004-performance-test.md
         - DatafuseCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
+  - Whitepapers: overview/architecture.md
 
 # Google Analytics
 google_analytics:
