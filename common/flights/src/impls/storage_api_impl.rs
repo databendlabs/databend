@@ -26,6 +26,7 @@ use common_arrow::arrow_flight::Ticket;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
+use common_planners::PlanNode;
 use common_planners::ScanPlan;
 use common_runtime::tokio;
 pub use common_store_api::AppendResult;
@@ -88,7 +89,14 @@ impl StorageApi for StoreClient {
         let mut req = tonic::Request::<Ticket>::from(&cmd);
         req.set_timeout(self.timeout);
         let res = self.client.do_get(req).await?.into_inner();
-        let arrow_schema: ArrowSchemaRef = Arc::new(schema.to_arrow());
+        let mut arrow_schema: ArrowSchemaRef = Arc::new(schema.to_arrow());
+
+        // replace table schema with projected schema
+        // TODO tweak method signature, only ReadDataSourcePlan are supposed to be passed in
+        if let PlanNode::ReadSource(plan) = &read_action.push_down {
+            arrow_schema = Arc::new(plan.schema.to_arrow())
+        }
+
         let res_stream = res.map(move |item| {
             item.map_err(|status| ErrorCode::TokioError(status.to_string()))
                 .and_then(|item| {
