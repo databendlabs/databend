@@ -53,8 +53,34 @@ impl Processor {
             commands,
         }
     }
-
     pub fn process_run(&mut self) -> Result<()> {
+        let mut writer = Writer::create();
+        match self.env.conf.clone().clap.into_inner().subcommand_name() {
+            Some("package") => {
+                let cmd = PackageCommand::create(self.env.conf.clone());
+                return cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("package"),
+                );
+            }
+            Some("version") => {
+                let cmd = VersionCommand::create();
+                cmd.exec(&mut writer, "".parse().unwrap())
+            }
+            None => self.process_run_interactive(),
+            _ => {
+                println!("Some other subcommand was used");
+                Ok(())
+            }
+        }
+    }
+
+    pub fn process_run_interactive(&mut self) -> Result<()> {
         let hist_path = format!("{}/history.txt", self.env.conf.datafuse_dir.clone());
         let _ = self.readline.load_history(hist_path.as_str());
 

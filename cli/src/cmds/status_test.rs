@@ -20,7 +20,7 @@ use crate::error::Result;
 
 #[test]
 fn test_status() -> Result<()> {
-    let mut conf = Config::default();
+    let mut conf = Config::create();
 
     let t = tempdir()?;
     conf.datafuse_dir = t.path().to_str().unwrap().to_string();

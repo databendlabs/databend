@@ -14,6 +14,7 @@
 
 use std::fs;
 
+use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Color;
@@ -33,8 +34,7 @@ impl ListCommand {
     pub fn create(conf: Config) -> Self {
         ListCommand { conf }
     }
-
-    pub fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+    pub fn exec_match(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
         let bin_dir = format!("{}/bin", self.conf.datafuse_dir.clone());
         let paths = fs::read_dir(bin_dir)?;
 
