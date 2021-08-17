@@ -412,7 +412,7 @@ impl PlanParser {
 
         if let Some(source) = source {
             if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
-                println!("{:?}", format_sql);
+                tracing::debug!("{:?}", format_sql);
                 let index = format_sql.find_substring(" VALUES ").unwrap();
                 let values = &format_sql[index + " VALUES ".len()..];
 
