@@ -70,7 +70,7 @@ impl Processor {
             }
             Some("version") => {
                 let cmd = VersionCommand::create();
-                return cmd.exec(&mut writer, "".parse().unwrap());
+                cmd.exec(&mut writer, "".parse().unwrap())
             }
             None => self.process_run_interactive(),
             _ => {
