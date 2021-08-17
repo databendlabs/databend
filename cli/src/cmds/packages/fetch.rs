@@ -38,6 +38,7 @@ impl FetchCommand {
         FetchCommand { conf }
     }
 
+    //(TODO(zhihanz)) general get_architecture similar to install-datafuse.sh
     fn get_architecture(&self) -> Result<String> {
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
@@ -49,8 +50,14 @@ impl FetchCommand {
             clib = "musl";
         }
 
+        // Check rosetta
+        let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
+        if rosetta.contains("Darwin") && rosetta.contains("arm64") {
+            return Ok("aarch64-apple-darwin".to_string());
+        }
         let os = match os {
             "darwin" => "apple-darwin".to_string(),
+            "macos" => "apple-darwin".to_string(),
             "linux" => format!("unknown-linux-{}", clib),
             _ => os.to_string(),
         };
