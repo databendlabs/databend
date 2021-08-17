@@ -15,6 +15,7 @@
 use common_arrow::arrow::array::*;
 use common_exception::Result;
 use common_io::prelude::*;
+use lexical_core::FromLexical;
 
 use super::ArrayDeserializer;
 use crate::arrays::DataArray;
@@ -57,7 +58,7 @@ where
 impl<T> ArrayDeserializer for PrimitiveArrayBuilder<T>
 where
     T: DFNumericType,
-    T::Native: Unmarshal<T::Native> + StatBuffer,
+    T::Native: Unmarshal<T::Native> + StatBuffer + FromLexical,
     DataArray<T>: IntoSeries,
 {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
@@ -77,6 +78,17 @@ where
 
     fn finish_to_series(&mut self) -> Series {
         self.finish().into_series()
+    }
+
+    fn de_text(&mut self, reader: &[u8]) {
+        match lexical_core::parse::<T::Native>(reader) {
+            Ok(v) => self.append_value(v),
+            Err(_) => self.append_null(),
+        }
+    }
+
+    fn de_null(&mut self) {
+        self.append_null()
     }
 }
 

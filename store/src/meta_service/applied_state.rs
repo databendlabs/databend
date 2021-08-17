@@ -64,6 +64,8 @@ pub enum AppliedState {
         prev: Option<SeqValue<KVValue>>,
         result: Option<SeqValue<KVValue>>,
     },
+
+    None,
 }
 
 impl AppDataResponse for AppliedState {}

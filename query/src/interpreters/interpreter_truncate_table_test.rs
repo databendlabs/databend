@@ -28,7 +28,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     // Create table.
     {
         if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("create table default.a(a bigint, b int) Engine = Memory")?
+            .build_from_sql("create table default.a(a String, b String) Engine = Memory")?
         {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute().await?;
@@ -54,11 +54,11 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             let stream = executor.execute().await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
-                "+-------+-------+",
-                "| a     | b     |",
-                "+-------+-------+",
-                "| '1,1' | '2,2' |",
-                "+-------+-------+",
+                "+-----+-----+",
+                "| a   | b   |",
+                "+-----+-----+",
+                "| 1,1 | 2,2 |",
+                "+-----+-----+",
             ];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {

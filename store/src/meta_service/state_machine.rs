@@ -21,7 +21,8 @@ use std::fs::remove_dir_all;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use async_raft::LogId;
+use async_raft::raft::Entry;
+use async_raft::raft::EntryPayload;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
@@ -42,6 +43,7 @@ use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::sled_key_space;
 use crate::meta_service::sled_key_space::StateMachineMeta;
+use crate::meta_service::state_machine_meta::StateMachineMetaKey::LastMembership;
 use crate::meta_service::AppliedState;
 use crate::meta_service::AsKeySpace;
 use crate::meta_service::Cmd;
@@ -334,31 +336,50 @@ impl StateMachine {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn apply(
         &mut self,
-        log_id: &LogId,
-        data: &LogEntry,
+        entry: &Entry<LogEntry>,
     ) -> common_exception::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
+
+        let log_id = &entry.log_id;
 
         let sm_meta = self.sm_meta();
         sm_meta
             .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
             .await?;
 
-        if let Some(ref txid) = data.txid {
-            if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
-                if serial == &txid.serial {
-                    return Ok(resp.clone());
+        match entry.payload {
+            EntryPayload::Blank => {}
+            EntryPayload::Normal(ref norm) => {
+                let data = &norm.data;
+                if let Some(ref txid) = data.txid {
+                    if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
+                        if serial == &txid.serial {
+                            return Ok(resp.clone());
+                        }
+                    }
                 }
+
+                let resp = self.apply_non_dup(data).await?;
+
+                if let Some(ref txid) = data.txid {
+                    self.client_last_resp
+                        .insert(txid.client.clone(), (txid.serial, resp.clone()));
+                }
+                return Ok(resp);
             }
-        }
+            EntryPayload::ConfigChange(ref mem) => {
+                sm_meta
+                    .insert(
+                        &LastMembership,
+                        &StateMachineMetaValue::Membership(mem.membership.clone()),
+                    )
+                    .await?;
+                return Ok(AppliedState::None);
+            }
+            EntryPayload::SnapshotPointer(_) => {}
+        };
 
-        let resp = self.apply_non_dup(data).await?;
-
-        if let Some(ref txid) = data.txid {
-            self.client_last_resp
-                .insert(txid.client.clone(), (txid.serial, resp.clone()));
-        }
-        Ok(resp)
+        Ok(AppliedState::None)
     }
 
     /// Apply an op into state machine.

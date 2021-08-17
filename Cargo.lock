@@ -83,9 +83,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.42"
+version = "1.0.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "595d3cfa7a60d4555cb5067b99f07142a08ea778de5cf993f7b75c7d8fabc486"
+checksum = "28ae2b3dec75a406790005a200b1bd89785afc02517a00ca99ecfe093ee9e6cf"
 
 [[package]]
 name = "arbitrary"
@@ -161,7 +161,7 @@ checksum = "54f002ce7d0c5e809ebb02be78fd503aeed4a511fd0fcaff6e6914cbdabbfa33"
 dependencies = [
  "bstr",
  "doc-comment",
- "predicates 2.0.1",
+ "predicates 2.0.2",
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
@@ -170,7 +170,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.7#8e0cca5241fa423430920ab5c409494569bacb01"
+source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.8#adc24f55d75d9c7c01fcd0f4f9e35dd5aae679aa"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -727,6 +727,7 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-io",
+ "lexical-core",
  "num",
  "ordered-float 2.7.0",
  "paste",
@@ -921,6 +922,8 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-infallible",
+ "common-io",
  "common-progress",
  "common-runtime",
  "crossbeam 0.8.1",
@@ -1319,7 +1322,7 @@ dependencies = [
  "dyn-clone",
  "flate2",
  "indicatif",
- "predicates 2.0.1",
+ "predicates 2.0.2",
  "pretty_assertions",
  "run_script",
  "rustyline",
@@ -3787,9 +3790,9 @@ dependencies = [
 
 [[package]]
 name = "predicates"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc3d91237f5de3bcd9d927e24d03b495adb6135097b001cea7403e2d573d00a9"
+checksum = "c143348f141cc87aab5b950021bac6145d0e5ae754b0591de23244cee42c9308"
 dependencies = [
  "difflib",
  "float-cmp 0.9.0",

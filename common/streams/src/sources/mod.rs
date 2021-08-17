@@ -11,22 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-pub mod prelude;
 
-mod binary_de;
-mod binary_read;
-mod binary_ser;
-mod binary_write;
-mod buf_read;
-mod marshal;
-mod stat_buffer;
-mod unmarshal;
+mod source;
+mod source_csv;
+mod source_values;
 
 #[cfg(test)]
-mod binary_read_test;
-#[cfg(test)]
-mod binary_write_test;
-#[cfg(test)]
-mod buf_read_test;
-#[cfg(test)]
-mod marshal_test;
+mod source_test;
+
+pub use source::FormatSettings;
+pub use source::Source;
+pub use source_csv::CsvSource;
+pub use source_values::ValueSource;
