@@ -1,6 +1,6 @@
 ---
 id: architecture
-title: Architecture
+title: Whitepapers
 ---
 
 ## Design Overview
@@ -21,7 +21,7 @@ We design Datafuse with the following key functionalities in mind:
 
 The picture above shows the high-level architecture of Datafuse, it consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
 
-### Meta Service Layer
+## Meta Service Layer
 
 The meta service is a layer to service multiple tenants. This layer implements a persistent key-value store to store each tenant's state.
 In current implementation, the meta service has many components:
@@ -32,7 +32,7 @@ In current implementation, the meta service has many components:
 
 The code of `Meta Service Layer` mainly resides in the `store` directory of the repository.
 
-### Compute Layer
+## Compute Layer
 
 The compute layer is the layer to carry out computation for query processing. This layer may consist of many clusters,
 and each cluster may consist of many nodes. Each node is a compute unit, and is a collection of components:
@@ -88,7 +88,7 @@ Many clusters can attach the same database, so they can serve the query in paral
 
 The `Compute Layer` codes mainly in the `query` directory.
 
-### Storage Layer
+## Storage Layer
 
 Datafuse stores data in an efficient, columnar format as Parquet files.
 Each Parquet file is sorted by the primary key before being written to the underlying shared storage.
