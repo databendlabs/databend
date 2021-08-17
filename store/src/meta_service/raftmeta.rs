@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -808,7 +809,7 @@ impl MetaNode {
     pub async fn init_cluster(&self, addr: String) -> common_exception::Result<()> {
         let node_id = self.sto.id;
 
-        let mut cluster_node_ids = HashSet::new();
+        let mut cluster_node_ids = BTreeSet::new();
         cluster_node_ids.insert(node_id);
 
         let rst = self

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use async_raft::RaftMetrics;
@@ -21,7 +21,7 @@ use common_runtime::tokio;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
 use flaky_test::flaky_test;
-use maplit::hashset;
+use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 use crate::configs;
@@ -242,7 +242,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
         let _ent = span.enter();
 
-        let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+        let (mut _nlog, tcs) = setup_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
         let all = test_context_nodes(&tcs);
 
         let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
@@ -296,7 +296,7 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
 
         tracing::info!("start");
 
-        let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+        let (mut _nlog, tcs) = setup_cluster(btreeset![0, 1, 2], btreeset![3, 4]).await?;
 
         let all = test_context_nodes(&tcs);
 
@@ -323,7 +323,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_add_database");
         let _ent = span.enter();
 
-        let (_nlog, all_tc) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+        let (_nlog, all_tc) = setup_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
         let all = all_tc
             .iter()
             .map(|tc| tc.meta_nodes[0].clone())
@@ -389,7 +389,7 @@ async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::INFO, "test_meta_node_cluster_1_2_2");
     let _ent = span.enter();
 
-    let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+    let (mut _nlog, tcs) = setup_cluster(btreeset![0, 1, 2], btreeset![3, 4]).await?;
     let all = test_context_nodes(&tcs);
 
     _nlog += assert_set_file_synced(all.clone(), "foo-1").await?;
@@ -535,8 +535,8 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 /// Setup a cluster with several voter and several non_voter
 /// The node id 0 must be in `voters` and node 0 is elected as leader.
 async fn setup_cluster(
-    voters: HashSet<NodeId>,
-    non_voters: HashSet<NodeId>,
+    voters: BTreeSet<NodeId>,
+    non_voters: BTreeSet<NodeId>,
 ) -> anyhow::Result<(u64, Vec<StoreTestContext>)> {
     // TODO(xp): use setup_cluster if possible in tests. Get rid of boilerplate snippets.
     // leader is always node-0
