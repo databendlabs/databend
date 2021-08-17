@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
+use std::borrow::Borrow;
 
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
+use clap::ArgMatches;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -29,39 +30,66 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct PackageCommand {
     conf: Config,
-    clap: RefCell<App<'static, 'static>>,
+    clap: App<'static, 'static>,
 }
 
 impl PackageCommand {
     pub fn create(conf: Config) -> Self {
-        let clap = RefCell::new(
-            App::new("package")
-                .setting(AppSettings::ColoredHelp)
-                .setting(AppSettings::DisableVersion)
-                .setting(AppSettings::DisableHelpSubcommand)
-                .subcommand(
-                    App::new("fetch")
-                        .setting(AppSettings::DisableVersion)
-                        .setting(AppSettings::ColoredHelp)
-                        .about("Fetch the latest version package"),
-                )
-                .subcommand(
-                    App::new("list")
-                        .setting(AppSettings::DisableVersion)
-                        .setting(AppSettings::ColoredHelp)
-                        .about("List all the packages"),
-                )
-                .subcommand(
-                    App::new("switch")
-                        .setting(AppSettings::DisableVersion)
-                        .setting(AppSettings::ColoredHelp)
-                        .about("Switch the active datafuse to a specified version")
-                        .arg(Arg::with_name("version").required(true).help(
-                            "Version of datafuse package, e.g. v0.4.69-nightly. Check the versions: package list"
-                        ))
-                ),
-        );
+        let clap = PackageCommand::generate();
         PackageCommand { conf, clap }
+    }
+    pub fn generate() -> App<'static, 'static> {
+        return App::new("package")
+            .setting(AppSettings::ColoredHelp)
+            .setting(AppSettings::DisableVersion)
+            .about("Package manage datafuse binary releases")
+            .subcommand(
+                App::new("fetch")
+                    .setting(AppSettings::DisableVersion)
+                    .setting(AppSettings::ColoredHelp)
+                    .about("Fetch the given version binary package")
+                    .arg(Arg::with_name("version").help("Version of datafuse package to fetch").default_value("latest")),
+            )
+            .subcommand(
+                App::new("list")
+                    .setting(AppSettings::DisableVersion)
+                    .setting(AppSettings::ColoredHelp)
+                    .about("List all the packages"),
+            )
+            .subcommand(
+                App::new("switch")
+                    .setting(AppSettings::DisableVersion)
+                    .setting(AppSettings::ColoredHelp)
+                    .about("Switch the active datafuse to a specified version")
+                    .arg(Arg::with_name("version").required(true).help(
+                        "Version of datafuse package, e.g. v0.4.69-nightly. Check the versions: package list"
+                    ))
+            );
+    }
+
+    pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        match args {
+            Some(matches) => match matches.subcommand_name() {
+                Some("fetch") => {
+                    let fetch = FetchCommand::create(self.conf.clone());
+                    fetch.exec_match(writer, matches.subcommand_matches("fetch"))?;
+                }
+                Some("list") => {
+                    let list = ListCommand::create(self.conf.clone());
+                    list.exec_match(writer, matches.subcommand_matches("fetch"))?;
+                }
+                Some("switch") => {
+                    let switch = SwitchCommand::create(self.conf.clone());
+                    switch.exec_match(writer, matches.subcommand_matches("switch"))?;
+                }
+                _ => writer.write_err("unknown command, usage: package -h"),
+            },
+            None => {
+                println!("None")
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -79,30 +107,12 @@ impl Command for PackageCommand {
     }
 
     fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self
-            .clap
-            .borrow_mut()
-            .clone()
-            .get_matches_from_safe(args.split(' '))
-        {
-            Ok(matches) => match matches.subcommand_name() {
-                Some("fetch") => {
-                    let fetch = FetchCommand::create(self.conf.clone());
-                    fetch.exec(writer, args)?;
-                }
-                Some("list") => {
-                    let list = ListCommand::create(self.conf.clone());
-                    list.exec(writer, args)?;
-                }
-                Some("switch") => {
-                    let val = matches.subcommand().1.unwrap().value_of("version").unwrap();
-                    let switch = SwitchCommand::create(self.conf.clone());
-                    switch.exec(writer, val.to_string())?;
-                }
-                _ => writer.write_err("unknown command, usage: package -h"),
-            },
+        match self.clap.clone().get_matches_from_safe(args.split(' ')) {
+            Ok(matches) => {
+                return self.exec_match(writer, Some(matches.borrow()));
+            }
             Err(err) => {
-                println!("{}", err);
+                println!("Cannot get subcommand matches: {}", err);
             }
         }
 

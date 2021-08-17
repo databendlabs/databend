@@ -42,6 +42,7 @@ pretty_assertions = "0.7"
 tempfile = "3.2.0"
 assert_cmd = "2.0.0"
 predicates = "2.0.1"
+serial_test = "*"
 
 [build-dependencies]
 common-building = {path = "../common/building"}
