@@ -20,6 +20,7 @@ pub use crate::binary_read::BinaryRead;
 pub use crate::binary_ser::BinarySer;
 pub use crate::binary_write::BinaryWrite;
 pub use crate::binary_write::BinaryWriteBuf;
+pub use crate::buf_read::BufReadExt;
 pub use crate::marshal::Marshal;
 pub use crate::stat_buffer::StatBuffer;
 pub use crate::unmarshal::Unmarshal;
