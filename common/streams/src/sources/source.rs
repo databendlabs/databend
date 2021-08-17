@@ -17,3 +17,9 @@ use common_exception::Result;
 pub trait Source: Sync + Send {
     fn read(&mut self) -> Result<Option<DataBlock>>;
 }
+
+#[allow(dead_code)]
+pub struct FormatSettings {
+    delimter: u8,
+    quote: u8,
+}
