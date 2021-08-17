@@ -78,6 +78,7 @@ and each cluster may consist of many nodes. Each node is a compute unit, and is 
 * Cache
 
   The cache utilizes local SSDs for caching Data and Indexes based on the version within a node. The cache can be warmed up with different strategies:
+  
   * LOAD_ON_DEMAND - Load index or table data on demand(By Default).
   * LOAD_INDEXES - Load indexes only.
   * LOAD_ALL - Load full data and indexes.
@@ -92,6 +93,7 @@ The `Compute Layer` codes mainly in the `query` directory.
 Datafuse stores data in an efficient, columnar format as Parquet files.
 Each Parquet file is sorted by the primary key before being written to the underlying shared storage.
 For efficient pruning, Datafuse also creates indexes for each Parquet file:
+
 * `min_max.idx` The index file stores the *minimum* and *maximum* value of this Parquet file.
 * `sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records granularity.
 
