@@ -64,7 +64,7 @@ where R: io::Read
         let mut rows = 0;
         for _row in 0..self.block_size {
             let _ = reader.ignore_spaces()?;
-            if reader.buffer().len() == 0 {
+            if reader.buffer().is_empty() {
                 break;
             }
             // not the first row
@@ -74,7 +74,7 @@ where R: io::Read
             let _ = reader.ignore_spaces()?;
             let _ = reader.ignore_byte(b'(')?;
 
-            for col in 0..col_size {
+            for (col, deser) in desers.iter_mut().enumerate().take(col_size) {
                 buf.clear();
                 let _ = reader.ignore_spaces()?;
 
@@ -108,7 +108,7 @@ where R: io::Read
                     }
                 };
                 let bs = bs?;
-                desers[col].de_text(bs);
+                deser.de_text(bs);
             }
             rows += 1;
         }

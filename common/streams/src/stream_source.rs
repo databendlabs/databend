@@ -39,9 +39,6 @@ impl futures::Stream for SourceStream {
     fn poll_next(self: std::pin::Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.project();
         let block = this.source.read()?;
-        Poll::Ready(match block {
-            Some(v) => Some(Ok(v)),
-            None => None,
-        })
+        Poll::Ready(block.map(Ok))
     }
 }

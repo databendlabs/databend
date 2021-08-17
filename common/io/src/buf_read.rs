@@ -35,7 +35,7 @@ where R: std::io::Read
 
     fn ignore(&mut self, f: impl Fn(u8) -> bool) -> Result<bool> {
         let available = self.fill_buf()?;
-        if available.len() == 0 {
+        if available.is_empty() {
             return Ok(false);
         }
         if f(available[0]) {
@@ -52,7 +52,7 @@ where R: std::io::Read
     }
 
     fn ignore_bytes(&mut self, bs: &[u8]) -> Result<bool> {
-        if bs.len() == 0 {
+        if bs.is_empty() {
             return Ok(true);
         }
 
