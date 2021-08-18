@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregator_params;
 mod aggregator_primitive_keys;
 
 pub use aggregator_primitive_keys::Aggregator;

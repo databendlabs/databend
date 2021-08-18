@@ -41,12 +41,11 @@ use crate::common::DefaultHasher;
 use crate::common::HashMap;
 use crate::common::HashTableEntity;
 use crate::common::KeyHasher;
+use crate::pipelines::transforms::aggregator::aggregator_params::{AggregatorParamsRef, AggregatorParams};
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
-    funcs: Vec<AggregateFunctionRef>,
-    arg_names: Vec<Vec<String>>,
-    aggr_cols: Vec<String>,
+    params: AggregatorParamsRef,
     layout: Layout,
     offsets_aggregate_states: Vec<usize>,
 }
@@ -61,23 +60,13 @@ where
         aggr_exprs: &[Expression],
         schema: DataSchemaRef,
     ) -> Result<Aggregator<Method>> {
-        let mut funcs = Vec::with_capacity(aggr_exprs.len());
-        let mut arg_names = Vec::with_capacity(aggr_exprs.len());
-        let mut aggr_cols = Vec::with_capacity(aggr_exprs.len());
-
-        for aggr_expr in aggr_exprs.iter() {
-            funcs.push(aggr_expr.to_aggregate_function(&schema)?);
-            arg_names.push(aggr_expr.to_aggregate_function_names()?);
-            aggr_cols.push(aggr_expr.column_name());
-        }
-
-        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
+        let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
+        let funcs = &aggregator_params.aggregate_functions;
+        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(funcs) };
 
         Ok(Aggregator {
             method,
-            funcs,
-            arg_names,
-            aggr_cols,
+            params: aggregator_params,
             layout,
             offsets_aggregate_states,
         })
@@ -88,12 +77,15 @@ where
         group_cols: Vec<String>,
         mut stream: SendableDataBlockStream,
     ) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
-        let aggr_len = self.funcs.len();
-        let aggr_cols = &self.aggr_cols;
-        let aggr_args_name = &self.arg_names;
-        let layout = self.layout;
-        let func = &self.funcs;
         let hash_method = &self.method;
+        let aggregator_params = self.params.as_ref();
+
+        let aggr_len = aggregator_params.aggregate_functions.len();
+        let func = &aggregator_params.aggregate_functions;
+        let aggr_cols = &aggregator_params.aggregate_functions_column_name;
+        let aggr_args_name = &aggregator_params.aggregate_functions_arguments_name;
+
+        let layout = self.layout;
         let offsets_aggregate_states = &self.offsets_aggregate_states;
 
         let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::create(), Bump::new()));
@@ -174,7 +166,6 @@ where
         DefaultHasher<T::Native>: KeyHasher<T::Native>,
         DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native>,
     {
-        let aggr_len = self.funcs.len();
         if groups.is_empty() {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
@@ -182,6 +173,11 @@ where
                 vec![],
             )));
         }
+
+        let aggregator_params = self.params.as_ref();
+        let funcs = &aggregator_params.aggregate_functions;
+        let aggr_len = funcs.len();
+        let offsets_aggregate_states = &self.offsets_aggregate_states;
 
         // Builders.
         let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
@@ -191,8 +187,6 @@ where
         let mut group_key_builder = PrimitiveArrayBuilder::<T>::with_capacity(groups.len());
 
         let mut bytes = BytesMut::new();
-        let funcs = &self.funcs;
-        let offsets_aggregate_states = &self.offsets_aggregate_states;
         for group_entity in groups.iter() {
             let place: StateAddr = (*group_entity.get_value()).into();
 
