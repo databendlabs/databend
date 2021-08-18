@@ -163,7 +163,8 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
 
                         if self.consume_token("TABLES") {
-                            match self.parser.next_token() {
+                            let tok = self.parser.next_token();
+                            match &tok {
                                 Token::EOF => Ok(DfStatement::ShowTables(DfShowTables::All)),
                                 Token::Word(w) => match w.keyword {
                                     Keyword::LIKE => Ok(DfStatement::ShowTables(
@@ -172,7 +173,7 @@ impl<'a> DfParser<'a> {
                                     Keyword::WHERE => Ok(DfStatement::ShowTables(
                                         DfShowTables::Where(self.parser.parse_expr()?),
                                     )),
-                                    _ => self.expected("like or where", self.parser.peek_token()),
+                                    _ => self.expected("like or where", tok),
                                 },
                                 _ => self.expected("like or where", self.parser.peek_token()),
                             }
