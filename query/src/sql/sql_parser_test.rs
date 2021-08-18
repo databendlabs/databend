@@ -222,10 +222,28 @@ mod tests {
 
     #[test]
     fn show_queries() -> Result<()> {
-        // positive case
-        expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables))?;
-        expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
+        use sqlparser::dialect::GenericDialect;
+        use sqlparser::parser::Parser;
+        use sqlparser::tokenizer::Tokenizer;
 
+        // positive case
+        expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
+        expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
+        expect_parse_ok(
+            "SHOW TABLES LIKE 'aaa'",
+            DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
+        )?;
+
+        let dialect = GenericDialect {};
+        let query_expr = "t LIKE 'aaa'";
+        let mut tokenizer = Tokenizer::new(&dialect, &query_expr);
+        let tokens = tokenizer.tokenize().unwrap();
+        let mut parser = Parser::new(tokens, &dialect);
+        let expr = parser.parse_expr().unwrap();
+        expect_parse_ok(
+            "SHOW TABLES WHERE t LIKE 'aaa'",
+            DfStatement::ShowTables(DfShowTables::Where(expr)),
+        )?;
         Ok(())
     }
 
