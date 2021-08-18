@@ -163,7 +163,16 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
 
                         if self.consume_token("TABLES") {
-                            Ok(DfStatement::ShowTables(DfShowTables))
+                            match self.parser.next_token() {
+                                Token::EOF => Ok(DfStatement::ShowTables(DfShowTables::All)),
+                                Token::Word(Keyword::LIKE) => Ok(DfStatement::ShowTables(
+                                    DfShowTables::Like(self.parser.parse_identifier()?),
+                                )),
+                                Token::Word(Keyword::WHERE) => Ok(DfStatement::ShowTables(
+                                    DfShowTables::Where(self.parser.parse_expr()?),
+                                )),
+                                _ => self.expected("like or where", self.parser.peek_token()),
+                            }
                         } else if self.consume_token("DATABASES") {
                             Ok(DfStatement::ShowDatabases(DfShowDatabases))
                         } else if self.consume_token("SETTINGS") {
