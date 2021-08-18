@@ -65,6 +65,11 @@ pub enum AppliedState {
         result: Option<SeqValue<KVValue>>,
     },
 
+    DataPartsCount {
+        prev: Option<usize>,
+        result: Option<usize>,
+    },
+
     None,
 }
 
@@ -84,6 +89,15 @@ impl From<(Option<String>, Option<String>)> for AppliedState {
 impl From<u64> for AppliedState {
     fn from(seq: u64) -> Self {
         AppliedState::Seq { seq }
+    }
+}
+
+impl From<(Option<usize>, Option<usize>)> for AppliedState {
+    fn from(v: (Option<usize>, Option<usize>)) -> Self {
+        AppliedState::DataPartsCount {
+            prev: v.0,
+            result: v.1,
+        }
     }
 }
 
