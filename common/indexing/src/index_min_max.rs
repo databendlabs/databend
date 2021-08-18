@@ -13,19 +13,22 @@
 // limitations under the License.
 //
 
-#[cfg(test)]
-mod indexer_test;
+use common_datavalues::DataValue;
 
-mod index;
-mod index_min_max;
-mod index_sparse;
-mod indexer;
+/// Min and Max index.
+pub struct MinMaxIndex {
+    // The column name of the index.
+    pub col: String,
+    pub min: DataValue,
+    pub max: DataValue,
+}
 
-pub use index::Index;
-pub use index::IndexReader;
-pub use index::IndexSchema;
-pub use index::ReaderFormat;
-pub use index_min_max::MinMaxIndex;
-pub use index_sparse::SparseIndex;
-pub use index_sparse::SparseIndexValue;
-pub use indexer::Indexer;
+impl MinMaxIndex {
+    pub fn create(col: String, min: DataValue, max: DataValue) -> Self {
+        MinMaxIndex { col, min, max }
+    }
+
+    pub fn typ(&self) -> &str {
+        "min_max"
+    }
+}

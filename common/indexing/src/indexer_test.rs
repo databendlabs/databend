@@ -21,7 +21,7 @@ use common_exception::Result;
 use crate::Index;
 use crate::IndexReader;
 use crate::Indexer;
-use crate::ReaderType;
+use crate::ReaderFormat;
 
 #[test]
 fn test_indexer_reader() -> Result<()> {
@@ -34,7 +34,7 @@ fn test_indexer_reader() -> Result<()> {
     let indexer = Indexer::create();
     let mut reader = IndexReader {
         reader: file,
-        reader_type: ReaderType::Parquet,
+        format: ReaderFormat::Parquet,
     };
     indexer.create_index(&mut reader)?;
     Ok(())

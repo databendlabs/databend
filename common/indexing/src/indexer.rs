@@ -21,7 +21,8 @@ use common_planners::PlanNode;
 
 use crate::index::IndexReader;
 use crate::Index;
-use crate::ReaderType;
+use crate::IndexSchema;
+use crate::ReaderFormat;
 
 pub struct Indexer {}
 
@@ -35,15 +36,15 @@ impl Index for Indexer {
     fn create_index<R: Read + Seek>(
         &self,
         reader: &mut IndexReader<R>,
-    ) -> common_exception::Result<()> {
-        match reader.reader_type {
-            ReaderType::Parquet => {
+    ) -> common_exception::Result<IndexSchema> {
+        match reader.format {
+            ReaderFormat::Parquet => {
                 let meta = parquet::read::read_metadata(&mut reader.reader).unwrap();
                 println!("{:?}", meta);
             }
         }
 
-        Ok(())
+        todo!()
     }
 
     fn search_index(&self, _plan: &PlanNode) -> common_exception::Result<()> {

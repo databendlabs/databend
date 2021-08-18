@@ -19,20 +19,29 @@ use std::io::Seek;
 use common_exception::Result;
 use common_planners::PlanNode;
 
-pub enum ReaderType {
+use crate::MinMaxIndex;
+use crate::SparseIndex;
+
+pub struct IndexSchema {
+    pub min_max: MinMaxIndex,
+    pub sparse: SparseIndex,
+}
+
+/// The reader format, now only support Parquet file.
+pub enum ReaderFormat {
     // Parquet file.
     Parquet,
 }
 
 pub struct IndexReader<R: Read + Seek> {
     pub reader: R,
-    pub reader_type: ReaderType,
+    pub format: ReaderFormat,
 }
 
 pub trait Index {
-    // Create index from parquet reader.
-    fn create_index<R: Read + Seek>(&self, reader: &mut IndexReader<R>) -> Result<()>;
+    // Create index from data reader.
+    fn create_index<R: Read + Seek>(&self, reader: &mut IndexReader<R>) -> Result<IndexSchema>;
 
-    //Search parts by plan.
+    // Search parts by plan.
     fn search_index(&self, plan: &PlanNode) -> Result<()>;
 }

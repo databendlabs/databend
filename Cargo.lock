@@ -811,6 +811,7 @@ name = "common-indexing"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
+ "common-datavalues",
  "common-exception",
  "common-planners",
  "common-runtime",
