@@ -25,7 +25,7 @@ common-store-api= {path = "../store-api"}
 
 # Crates.io dependencies
 futures = "0.3"
-jwt-simple = "0.10.3"
+jwt-simple = "0.10.4"
 log = "0.4"
 prost = "0.7"
 serde = { version = "1.0", features = ["derive"] }
