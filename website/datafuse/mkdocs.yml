@@ -186,6 +186,7 @@ nav:
   - Development:
       - Contributing: development/contributing.md
       - Coding Guideline: development/coding-guidelines.md
+      - How to write aggregate functions: development/how-to-write-aggregate-functions.md
       - Tracing: development/tracing.md
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
@@ -195,6 +196,7 @@ nav:
         - DatafuseQuery Shuffle: rfcs/query/0003-data-shuffle.md
         - DatafuseStore Design: rfcs/store/0001-store-design.md
         - Performance Test: rfcs/query/0004-performance-test.md
+        - DatafuseCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
 
 # Google Analytics

@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #[cfg(test)]
 mod stream_datablock_test;
@@ -8,6 +18,7 @@ mod stream_datablock_test;
 #[cfg(test)]
 mod stream_progress_test;
 
+mod sources;
 mod stream;
 mod stream_abort;
 mod stream_correct_with_schema;
@@ -17,9 +28,11 @@ mod stream_parquet;
 mod stream_progress;
 mod stream_skip;
 mod stream_sort;
+mod stream_source;
 mod stream_sub_queries;
 mod stream_take;
 
+pub use sources::*;
 pub use stream::SendableDataBlockStream;
 pub use stream_abort::AbortStream;
 pub use stream_correct_with_schema::CorrectWithSchemaStream;
@@ -29,5 +42,6 @@ pub use stream_parquet::ParquetStream;
 pub use stream_progress::ProgressStream;
 pub use stream_skip::SkipStream;
 pub use stream_sort::SortStream;
+pub use stream_source::SourceStream;
 pub use stream_sub_queries::SubQueriesStream;
 pub use stream_take::TakeStream;

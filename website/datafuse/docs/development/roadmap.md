@@ -10,11 +10,15 @@ Datafuse roadmap 2021.
 
 # Main tasks
 
+This is Datafuse roadmap 2021.
+
 ###  1. Query/Store task
 
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
-| [ Query/Store API track #745](https://github.com/datafuselabs/datafuse/issues/745)| PROGRESS  |  v0.5 | @dantengsky @drmingdrmer  |
+| [ Query/Store API track #745](https://github.com/datafuselabs/datafuse/issues/745)| PROGRESS  |  v0.5 |   |
+| [ Store Service track #1154](https://github.com/datafuselabs/datafuse/issues/1154)| PLANNING  |   |   |
+| [ Cloud Re-architected track #1408](https://github.com/datafuselabs/datafuse/issues/1408)| PROGRESS  |   |   |
 
 ###  2. Distributed Query task
 
@@ -69,8 +73,9 @@ Datafuse roadmap 2021.
 | Sharding |  PLANNING |   | Store supports partition sharding |
 | Window functions | PLANNING  |   |  |
 | Limited support for transactions | PLANNING  |   |  |
-| [Hash method in ClickHouse way #754](https://github.com/datafuselabs/datafuse/issues/754) | PLANNING  |   |  |
+| [Hash method in ClickHouse way #754](https://github.com/datafuselabs/datafuse/issues/754) | DONE  |   |  |
 | Tuple functions | PLANNING  |   | Reference: https://clickhouse.tech/docs/en/sql-reference/functions/tuple-functions/  |
 | Array functions | PLANNING  |   |  Reference: https://clickhouse.tech/docs/en/sql-reference/functions/array-functions/ |
 | Lambda functions | PLANNING  |   | Reference: https://clickhouse.tech/docs/en/sql-reference/functions/#higher-order-functions  |
 | Compile aggregate functions(JIT) | PLANNING  |   | Reference: https://github.com/ClickHouse/ClickHouse/pull/24789  |
+

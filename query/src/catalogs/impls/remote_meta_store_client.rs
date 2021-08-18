@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //
 
 use std::collections::HashMap;
@@ -42,7 +52,7 @@ pub struct RemoteMetaStoreClient<T = StoreClient>
 where T: 'static + StoreApis + Clone
 {
     rt: Arc<Runtime>,
-    rpc_time_out: Duration,
+    rpc_time_out: Option<Duration>,
     table_meta_cache: Arc<Mutex<TableMetaCache>>,
     store_api_provider: StoreApisProvider<T>,
 }
@@ -51,11 +61,18 @@ impl<T> RemoteMetaStoreClient<T>
 where T: 'static + StoreApis + Clone
 {
     pub fn create(apis_provider: StoreApisProvider<T>) -> RemoteMetaStoreClient<T> {
+        Self::with_timeout_setting(apis_provider, Some(Duration::from_secs(5)))
+    }
+
+    pub fn with_timeout_setting(
+        apis_provider: StoreApisProvider<T>,
+        timeout: Option<Duration>,
+    ) -> RemoteMetaStoreClient<T> {
         let rt = Runtime::with_worker_threads(1).expect("remote catalogs initialization failure");
         RemoteMetaStoreClient {
             rt: Arc::new(rt),
             // TODO configuration
-            rpc_time_out: Duration::from_secs(5),
+            rpc_time_out: timeout,
             table_meta_cache: Arc::new(Mutex::new(LruCache::new(100))),
             store_api_provider: apis_provider,
         }
@@ -67,15 +84,17 @@ where T: 'static + StoreApis + Clone
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let time_out = self.rpc_time_out;
         let (tx, rx) = channel();
         let _jh = self.rt.spawn(async move {
             let r = f.await;
             let _ = tx.send(r);
         });
-        let reply = rx
-            .recv_timeout(time_out)
-            .map_err(|chan_err| ErrorCode::Timeout(chan_err.to_string()))?;
+        let reply = match self.rpc_time_out {
+            Some(to) => rx
+                .recv_timeout(to)
+                .map_err(|timeout_err| ErrorCode::Timeout(timeout_err.to_string()))?,
+            None => rx.recv().map_err(ErrorCode::from_std_error)?,
+        };
         Ok(reply)
     }
 
@@ -91,7 +110,6 @@ where T: 'static + StoreApis + Clone
             db_name,
             t_name,
             Arc::new(schema),
-            //self.store_client_provider.clone(),
             self.store_api_provider.clone(),
             TableOptions::new(),
         );

@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -8,12 +18,11 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fs::remove_dir_all;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use async_raft::LogId;
+use async_raft::raft::Entry;
+use async_raft::raft::EntryPayload;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
@@ -34,6 +43,7 @@ use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::sled_key_space;
 use crate::meta_service::sled_key_space::StateMachineMeta;
+use crate::meta_service::state_machine_meta::StateMachineMetaKey::LastMembership;
 use crate::meta_service::AppliedState;
 use crate::meta_service::AsKeySpace;
 use crate::meta_service::Cmd;
@@ -96,11 +106,6 @@ pub struct StateMachine {
     /// (serial, RaftResponse)
     /// This is used to de-dup client request, to impl idempotent operations.
     pub client_last_resp: HashMap<String, (u64, AppliedState)>,
-
-    /// storage of auto-incremental number.
-    /// TODO(xp): temporarily make it a Arc<Mutex>, need to be modified while &StateMachine is immutably borrow.
-    ///           remove it after making it a sled store.
-    pub sequences: Arc<Mutex<BTreeMap<String, u64>>>,
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
@@ -203,7 +208,6 @@ impl StateMachine {
             sm_tree,
 
             client_last_resp: Default::default(),
-            sequences: Arc::new(Mutex::new(BTreeMap::new())),
             slots: Vec::new(),
 
             replication: Replication::Mirror(1),
@@ -308,17 +312,20 @@ impl StateMachine {
     /// Internal func to get an auto-incr seq number.
     /// It is just what Cmd::IncrSeq does and is also used by Cmd that requires
     /// a unique id such as Cmd::AddDatabase which needs make a new database id.
-    fn incr_seq(&self, key: &str) -> u64 {
-        let mut sequences = self.sequences.lock().unwrap();
-        let prev = sequences.get(key);
-        let curr = match prev {
-            Some(v) => v + 1,
-            None => 1,
-        };
-        sequences.insert(key.to_string(), curr);
+    ///
+    /// Note: this can only be called inside apply().
+    async fn incr_seq(&self, key: &str) -> common_exception::Result<u64> {
+        let sequences = self.sequences();
+
+        let curr = sequences
+            .update_and_fetch(&key.to_string(), |old| Some(old.unwrap_or_default() + 1))
+            .await?;
+
+        let curr = curr.unwrap();
+
         tracing::debug!("applied IncrSeq: {}={}", key, curr);
 
-        curr
+        Ok(curr.0)
     }
 
     /// Apply an log entry to state machine.
@@ -329,31 +336,50 @@ impl StateMachine {
     #[tracing::instrument(level = "trace", skip(self))]
     pub async fn apply(
         &mut self,
-        log_id: &LogId,
-        data: &LogEntry,
+        entry: &Entry<LogEntry>,
     ) -> common_exception::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
+
+        let log_id = &entry.log_id;
 
         let sm_meta = self.sm_meta();
         sm_meta
             .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
             .await?;
 
-        if let Some(ref txid) = data.txid {
-            if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
-                if serial == &txid.serial {
-                    return Ok(resp.clone());
+        match entry.payload {
+            EntryPayload::Blank => {}
+            EntryPayload::Normal(ref norm) => {
+                let data = &norm.data;
+                if let Some(ref txid) = data.txid {
+                    if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
+                        if serial == &txid.serial {
+                            return Ok(resp.clone());
+                        }
+                    }
                 }
+
+                let resp = self.apply_non_dup(data).await?;
+
+                if let Some(ref txid) = data.txid {
+                    self.client_last_resp
+                        .insert(txid.client.clone(), (txid.serial, resp.clone()));
+                }
+                return Ok(resp);
             }
-        }
+            EntryPayload::ConfigChange(ref mem) => {
+                sm_meta
+                    .insert(
+                        &LastMembership,
+                        &StateMachineMetaValue::Membership(mem.membership.clone()),
+                    )
+                    .await?;
+                return Ok(AppliedState::None);
+            }
+            EntryPayload::SnapshotPointer(_) => {}
+        };
 
-        let resp = self.apply_non_dup(data).await?;
-
-        if let Some(ref txid) = data.txid {
-            self.client_last_resp
-                .insert(txid.client.clone(), (txid.serial, resp.clone()));
-        }
-        Ok(resp)
+        Ok(AppliedState::None)
     }
 
     /// Apply an op into state machine.
@@ -389,7 +415,7 @@ impl StateMachine {
                 Ok((prev, Some(value.clone())).into())
             }
 
-            Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).into()),
+            Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).await?.into()),
 
             Cmd::AddNode {
                 ref node_id,
@@ -416,10 +442,10 @@ impl StateMachine {
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let db = Database {
-                        database_id: self.incr_seq(SEQ_DATABASE_ID),
+                        database_id: self.incr_seq(SEQ_DATABASE_ID).await?,
                         tables: Default::default(),
                     };
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     self.databases.insert(name.clone(), db.clone());
                     tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
@@ -433,7 +459,7 @@ impl StateMachine {
                 if prev.is_some() {
                     self.remove_db_data_parts(name);
                     self.databases.remove(name);
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
                     tracing::debug!("applied DropDatabase: {}", name);
                     Ok((prev, None).into())
                 } else {
@@ -456,11 +482,11 @@ impl StateMachine {
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
                     let table = Table {
-                        table_id: self.incr_seq(SEQ_TABLE_ID),
+                        table_id: self.incr_seq(SEQ_TABLE_ID).await?,
                         schema: table.schema.clone(),
                         parts: table.parts.clone(),
                     };
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
                     db.tables.insert(table_name.clone(), table.table_id);
                     self.databases.insert(db_name.clone(), db);
                     self.tables.insert(table.table_id, table.clone());
@@ -484,7 +510,7 @@ impl StateMachine {
 
                     self.remove_table_data_parts(db_name, table_name);
 
-                    self.incr_seq(SEQ_DATABASE_META_ID);
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     Ok((prev, None).into())
                 } else {
@@ -526,7 +552,7 @@ impl StateMachine {
                 }
 
                 let record_value = if let Some(v) = value {
-                    let new_seq = self.incr_seq(SEQ_GENERIC_KV);
+                    let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
 
                     let gv = KVValue {
                         meta: value_meta.clone(),
@@ -617,12 +643,10 @@ impl StateMachine {
         &self.databases
     }
 
-    pub fn get_database_meta_ver(&self) -> Option<u64> {
-        self.sequences
-            .lock()
-            .unwrap()
-            .get(SEQ_DATABASE_META_ID)
-            .cloned()
+    pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
+        let sequences = self.sequences();
+        let res = sequences.get(&SEQ_DATABASE_META_ID.to_string())?;
+        Ok(res.map(|x| x.0))
     }
 
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
@@ -826,6 +850,11 @@ impl StateMachine {
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
     pub fn kvs(&self) -> AsKeySpace<sled_key_space::GenericKV> {
+        self.sm_tree.key_space()
+    }
+
+    /// storage of auto-incremental number.
+    pub fn sequences(&self) -> AsKeySpace<sled_key_space::Sequences> {
         self.sm_tree.key_space()
     }
 }

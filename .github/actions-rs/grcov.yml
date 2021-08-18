@@ -13,7 +13,6 @@ ignore:
   - "*/exception/*"
   - "*/tests/*"
   - "*/arrow/*"
-  - "*/allocators/*"
   - "*/building/*"
   - "*/profiling/*"
   - "*/tracing/*"

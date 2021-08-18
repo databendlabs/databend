@@ -1,7 +1,18 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
+use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
@@ -23,18 +34,21 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn return_type(&self) -> Result<DataType>;
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
 
-    fn allocate_state(&self, arena: &bumpalo::Bump) -> StateAddr;
+    fn init_state(&self, place: StateAddr);
+    fn state_layout(&self) -> Layout;
 
     // accumulate is to accumulate the arrays in batch mode
     // common used when there is no group by for aggregate function
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
-        (0..input_rows).try_for_each(|row| self.accumulate_row(place, row, arrays))
-    }
+    fn accumulate(&self, _place: StateAddr, _arrays: &[Series], _input_rows: usize) -> Result<()>;
 
-    // used when we need to caclulate row by row
-    fn accumulate_row(&self, _place: StateAddr, _row: usize, _arrays: &[Series]) -> Result<()> {
-        Ok(())
-    }
+    // used when we need to caclulate with group keys
+    fn accumulate_keys(
+        &self,
+        _places: &[StateAddr],
+        _offset: usize,
+        _arrays: &[Series],
+        _input_rows: usize,
+    ) -> Result<()>;
 
     // serialize  the state into binary array
     fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()>;

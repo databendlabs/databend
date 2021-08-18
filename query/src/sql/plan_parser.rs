@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,8 +50,10 @@ use common_planners::TableScanInfo;
 use common_planners::TruncateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
+use common_streams::Source;
+use common_streams::ValueSource;
 use common_tracing::tracing;
-use sqlparser::ast::Expr;
+use nom::FindSubstring;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
@@ -151,7 +163,10 @@ impl PlanParser {
                 columns,
                 source,
                 ..
-            } => self.insert_to_plan(table_name, columns, source),
+            } => {
+                let format_sql = format!("{}", statement);
+                self.insert_to_plan(table_name, columns, source, &format_sql)
+            }
 
             _ => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported statement {:?}",
@@ -371,6 +386,7 @@ impl PlanParser {
         table_name: &ObjectName,
         columns: &[Ident],
         source: &Option<Box<Query>>,
+        format_sql: &str,
     ) -> Result<PlanNode> {
         let mut db_name = self.ctx.get_current_database();
         let mut tbl_name = table_name.0[0].value.clone();
@@ -393,50 +409,23 @@ impl PlanParser {
         }
 
         let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
+
         if let Some(source) = source {
-            if let sqlparser::ast::SetExpr::Values(vs) = &source.body {
-                let values = &vs.0;
-                if values.is_empty() {
-                    return Err(ErrorCode::EmptyData(
-                        "empty values for insertion is not allowed",
-                    ));
+            if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
+                println!("{:?}", format_sql);
+                let index = format_sql.find_substring(" VALUES ").unwrap();
+                let values = &format_sql[index + " VALUES ".len()..];
+
+                let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+                let mut source = ValueSource::new(values.as_bytes(), schema.clone(), block_size);
+                let mut blocks = vec![];
+                loop {
+                    let block = source.read()?;
+                    match block {
+                        Some(b) => blocks.push(b),
+                        None => break,
+                    }
                 }
-
-                let all_value = values
-                    .iter()
-                    .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
-                if !all_value {
-                    return Err(ErrorCode::UnImplement(
-                        "not support value expressions other than literal value yet",
-                    ));
-                }
-                // Buffers some chunks if possible
-                let chunks = values.chunks(100);
-
-                let blocks: Vec<DataBlock> = chunks
-                    .map(|chunk| {
-                        let transposed: Vec<Vec<String>> = (0..chunk[0].len())
-                            .map(|i| {
-                                chunk
-                                    .iter()
-                                    .map(|inner| match &inner[i] {
-                                        Expr::Value(v) => v.to_string(),
-                                        _ => "N/A".to_string(),
-                                    })
-                                    .collect::<Vec<_>>()
-                            })
-                            .collect();
-
-                        let cols = transposed
-                            .iter()
-                            .map(|col| {
-                                Series::new(col.iter().map(|s| s as &str).collect::<Vec<&str>>())
-                            })
-                            .collect::<Vec<_>>();
-
-                        DataBlock::create_by_array(schema.clone(), cols)
-                    })
-                    .collect();
                 input_stream = futures::stream::iter(blocks);
             }
         }
@@ -445,7 +434,6 @@ impl PlanParser {
             db_name,
             tbl_name,
             schema,
-            // this is crazy, please do not keep it, I am just test driving apis
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
         Ok(PlanNode::InsertInto(plan_node))

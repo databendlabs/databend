@@ -1,10 +1,21 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use common_arrow::arrow::array::*;
 use common_exception::Result;
 use common_io::prelude::*;
+use lexical_core::FromLexical;
 
 use super::ArrayDeserializer;
 use crate::arrays::DataArray;
@@ -47,7 +58,7 @@ where
 impl<T> ArrayDeserializer for PrimitiveArrayBuilder<T>
 where
     T: DFNumericType,
-    T::Native: Unmarshal<T::Native> + StatBuffer,
+    T::Native: Unmarshal<T::Native> + StatBuffer + FromLexical,
     DataArray<T>: IntoSeries,
 {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
@@ -67,6 +78,17 @@ where
 
     fn finish_to_series(&mut self) -> Series {
         self.finish().into_series()
+    }
+
+    fn de_text(&mut self, reader: &[u8]) {
+        match lexical_core::parse::<T::Native>(reader) {
+            Ok(v) => self.append_value(v),
+            Err(_) => self.append_null(),
+        }
+    }
+
+    fn de_null(&mut self) {
+        self.append_null()
     }
 }
 

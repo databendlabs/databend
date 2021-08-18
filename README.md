@@ -1,11 +1,8 @@
 <div align="center">
 <h1>Datafuse</h1>
-<strong>
-Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture
-  
-Built to make the Data Cloud easy!
-</strong>
-
+<a href="https://datafuse.rs" target="_blank">
+ <strong>The Open Source Cloud Warehouse for Everyone</strong>
+ </a>
 <br>
 <br>
 
@@ -30,18 +27,17 @@ Built to make the Data Cloud easy!
 
 </div>
 </div>
+<br>
 
+Datafuse is an **elastic** and **scalable** Cloud Warehouse, it offers Blazing Fast Query and combines Elasticity, Simplicity, Low cost of the Cloud, built to make the Data Cloud easy.
 
 ## Principles
 
-* **Fearless**
-  - No data races, No unsafe, Minimize unhandled errors
-
 * **High Performance**
-  - Everything is Parallelism
+  - Everything is Parallelism and Distributed
 
-* **High Scalability**
-  - Everything is Distributed
+* **High Elasticity**
+  - Elasticity resources on demand 
 
 * **High Reliability**
   - Datafuse primary design goal is reliability
@@ -52,10 +48,12 @@ Built to make the Data Cloud easy!
 
 ## Getting Started
 
-* [Quick Start](https://datafuse.rs/overview/architecture/)
-* [Architecture](https://datafuse.rs/overview/architecture/)
+* [Quick Start](https://datafuse.rs/overview/building-and-running/)
 * [Performance](https://datafuse.rs/overview/performance/)
+* [Development](https://datafuse.rs/development/contributing/)
+* [CLI Design](https://datafuse.rs/rfcs/cli/0001-cli-design/)
 * [Datafuse Weekly](https://datafuselabs.github.io/weekly/)
+
 ## Roadmap
 
 Datafuse is currently in **Alpha** and is not ready to be used in production, [Roadmap 2021](https://github.com/datafuselabs/datafuse/issues/746)

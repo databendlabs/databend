@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -10,6 +20,7 @@ use async_raft::State;
 use common_runtime::tokio;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
+use flaky_test::flaky_test;
 use maplit::hashset;
 use pretty_assertions::assert_eq;
 
@@ -219,6 +230,7 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[flaky_test]
 async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.
@@ -269,6 +281,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[flaky_test]
 async fn test_meta_node_set_file() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and 2 non-voter;
     // - Write to the raft node on every node, expect Ok.

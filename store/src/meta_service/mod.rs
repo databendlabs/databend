@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 pub mod applied_state;
 pub mod cmd;
@@ -16,6 +26,7 @@ pub mod raft_state_kv;
 pub mod raft_txid;
 pub mod raft_types;
 pub mod raftmeta;
+pub mod seq_num;
 pub mod sled_key_space;
 pub mod sled_serde;
 pub mod sled_tree;
@@ -39,6 +50,7 @@ pub use raft_types::NodeId;
 pub use raft_types::Term;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaStore;
+pub use seq_num::SeqNum;
 pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledSerde;
 pub use sled_tree::AsKeySpace;

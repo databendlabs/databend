@@ -20,12 +20,10 @@ path = "src/bin/datafuse-benchmark.rs"
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]
-allocator = ["common-allocators/snmalloc-alloc"]
 
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
-common-allocators = { path = "../common/allocators" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
@@ -47,10 +45,10 @@ common-metatypes = { path = "../common/metatypes" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "ed40333" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193" }
-clickhouse-srv = "0.3.1"
-
 
 # Crates.io dependencies
+clickhouse-srv = "0.3.1"
+bumpalo = "3.7.0"
 ahash = "0.7.4"
 async-trait = "0.1"
 crossbeam = "0.8"
@@ -82,7 +80,6 @@ tonic = "0.4.3"
 walkdir = "2.3.2"
 warp = { version = "0.3.1", features = ["tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
-bumpalo = "3.7.0"
 lru = "0.6.6"
 byteorder = "1"
 
@@ -91,6 +88,7 @@ pretty_assertions = "0.7"
 criterion = "0.3"
 mysql = "21.0.1"
 reqwest = { version = "0.11", features = ["json"] }
+flaky_test = "0.1"
 
 [build-dependencies]
 common-building = {path = "../common/building"}

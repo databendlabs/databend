@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashSet;
 use std::io::Cursor;
@@ -85,8 +95,8 @@ pub struct MetaStore {
 
     // Raft state includes:
     // id: NodeId,
-    // current_term,
-    // voted_for
+    //     current_term,
+    //     voted_for
     pub raft_state: RaftState,
 
     pub log: RaftLog,
@@ -307,22 +317,18 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn apply_entry_to_state_machine(
         &self,
-        index: &LogId,
-        data: &LogEntry,
+        entry: &Entry<LogEntry>,
     ) -> anyhow::Result<AppliedState> {
         let mut sm = self.state_machine.write().await;
-        let resp = sm.apply(index, data).await?;
+        let resp = sm.apply(entry).await?;
         Ok(resp)
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
-    async fn replicate_to_state_machine(
-        &self,
-        entries: &[(&LogId, &LogEntry)],
-    ) -> anyhow::Result<()> {
+    async fn replicate_to_state_machine(&self, entries: &[&Entry<LogEntry>]) -> anyhow::Result<()> {
         let mut sm = self.state_machine.write().await;
-        for (index, data) in entries {
-            sm.apply(*index, data).await?;
+        for entry in entries {
+            sm.apply(*entry).await?;
         }
         Ok(())
     }
@@ -921,12 +927,12 @@ impl MetaNode {
     pub async fn get_database_meta(
         &self,
         lower_bound: Option<u64>,
-    ) -> Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)> {
+    ) -> common_exception::Result<Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let ver = sm.get_database_meta_ver();
-        if ver <= lower_bound {
+        let ver = sm.get_database_meta_ver()?;
+        let res = if ver <= lower_bound {
             None
         } else {
             let dbs = sm
@@ -940,7 +946,9 @@ impl MetaNode {
                 .map(|(k, v)| (*k, v.clone()))
                 .collect::<Vec<_>>();
             Some((ver.unwrap_or(0), dbs, tbls))
-        }
+        };
+
+        Ok(res)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

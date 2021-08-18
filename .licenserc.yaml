@@ -1,0 +1,30 @@
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: Datafuse Labs
+  paths-ignore:
+    - "target"
+    - "scripts"
+    - "docker"
+    - "deploy"
+    - "website"
+    - "tests"
+    - ".github"
+    - ".dockerignore"
+    - ".licenserc.yaml"
+    - ".gitignore"
+    - ".gitattributes"
+    - "Cargo.lock"
+    - "**/Cargo.toml"
+    - "codecov.yml"
+    - "CHANGELOG.md"
+    - "LICENSE"
+    - "Makefile"
+    - "README.md"
+    - "**/*.md"
+    - "**/*.json"
+    - "rust-toolchain"
+    - "rustfmt.toml"
+    - "**/*.proto"
+
+  comment: on-failure

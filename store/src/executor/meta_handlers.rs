@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //
 
 use std::collections::HashMap;
@@ -335,7 +345,11 @@ impl RequestHandler<GetDatabaseMetaAction> for ActionHandler {
         &self,
         req: GetDatabaseMetaAction,
     ) -> common_exception::Result<DatabaseMetaReply> {
-        let res = self.meta_node.get_database_meta(req.ver_lower_bound).await;
+        let res = self
+            .meta_node
+            .get_database_meta(req.ver_lower_bound)
+            .await?;
+
         Ok(res.map(|(v, dbs, tbls)| DatabaseMetaSnapshot {
             meta_ver: v,
             db_metas: dbs,

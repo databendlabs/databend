@@ -36,8 +36,8 @@ common-tracing = {path = "../common/tracing"}
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.42"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.7" }
+anyhow = "1.0.43"
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.8" }
 async-trait = "0.1"
 byteorder = "1.1.0"
 env_logger = "0.9"
@@ -45,6 +45,7 @@ futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
+maplit = "1.0.2"
 metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
@@ -71,7 +72,7 @@ warp = { version = "0.3.1", features = ["tls"] }
 env_logger = "*"
 pretty_assertions = "0.7"
 test-env-log = "0.2.7"
-maplit = "1.0.2"
+flaky_test = "0.1"
 
 [build-dependencies]
 common-building = {path = "../common/building"}

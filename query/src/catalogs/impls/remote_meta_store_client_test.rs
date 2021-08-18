@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //
 use std::collections::HashMap;
 use std::time::Duration;
@@ -36,6 +46,7 @@ use common_runtime::tokio;
 use common_store_api::DatabaseMetaSnapshot;
 use common_store_api::MetaApi;
 use common_streams::SendableDataBlockStream;
+use flaky_test::flaky_test;
 use TableEngineType::JSONEachRow;
 
 use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
@@ -165,8 +176,8 @@ impl MetaApi for FakeStoreApis {
 
     async fn get_database(&mut self, db_name: &str) -> Result<GetDatabaseActionResult> {
         // timeout fault only enabled for get_database operation
-        if let Some(duration) = self.inject_timeout {
-            std::thread::sleep(duration);
+        if let Some(_) = self.inject_timeout {
+            return Err(ErrorCode::Timeout(""));
         }
         self.dbs
             .get(db_name)
@@ -300,14 +311,14 @@ impl MetaApi for FakeStoreApis {
     }
 }
 
-#[test]
+#[flaky_test]
 fn test_get_database() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
     fake_apis.insert_db(0, "test");
 
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
-    let store_client = RemoteMetaStoreClient::create(provider);
+    let store_client = RemoteMetaStoreClient::with_timeout_setting(provider, None);
     let res = store_client.get_database("test_db");
 
     // db not exists
@@ -339,7 +350,7 @@ fn test_get_databases() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[test]
+#[flaky_test]
 fn test_get_table() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -352,7 +363,7 @@ fn test_get_table() -> common_exception::Result<()> {
     });
 
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
-    let store_client = RemoteMetaStoreClient::create(provider);
+    let store_client = RemoteMetaStoreClient::with_timeout_setting(provider, None);
 
     // table exist
     let res = store_client.get_table("test", "t1");
@@ -393,7 +404,7 @@ fn test_get_all_tables() -> common_exception::Result<()> {
     fake_apis.inject_inconsistent_meta_state = true;
 
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
-    let store_client = RemoteMetaStoreClient::create(provider);
+    let store_client = RemoteMetaStoreClient::with_timeout_setting(provider, None);
 
     // illegal meta state
     let res = store_client.get_all_tables();
@@ -474,6 +485,12 @@ async fn test_create_table() -> common_exception::Result<()> {
     });
 
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
+
+    // we do not need to disable timeout here to avoid flaky test, since `create` is NOT implemented
+    // by RemoteMetaStoreClient::do_block , which is flaky, partially due to that while constructing
+    // the ErrorCode, a new backtrace stack is populated, and the async call stack may be deep,
+    // takes seconds(flaky) to be built, thus if rpc timeout parameter is not properly tuned,  an
+    // ErrorCode::Timeout might be returned, instead of the ErrorCode we expects.
     let store_client = RemoteMetaStoreClient::create(provider);
 
     // db not exist
@@ -581,7 +598,7 @@ fn test_timeout() -> common_exception::Result<()> {
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
     let store_client = RemoteMetaStoreClient::create(provider);
 
-    // timeout fault only enabled for get_database operation
+    // timeout fault only injected for get_database operation
     let res = store_client.get_database("test_db");
     assert!(res.is_err());
     if let Err(e) = res {
@@ -604,7 +621,7 @@ fn test_invalid_schema() -> common_exception::Result<()> {
     });
 
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
-    let store_client = RemoteMetaStoreClient::create(provider);
+    let store_client = RemoteMetaStoreClient::with_timeout_setting(provider, None);
 
     let res = store_client.get_all_tables();
     assert!(res.is_err());

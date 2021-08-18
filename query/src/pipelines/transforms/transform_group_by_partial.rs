@@ -1,10 +1,19 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
 use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
@@ -18,6 +27,8 @@ use common_datablocks::HashMethodKind;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::StateAddr;
 use common_infallible::RwLock;
 use common_io::prelude::*;
 use common_planners::Expression;
@@ -28,6 +39,7 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::transforms::aggregator::Aggregator;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
@@ -96,18 +108,7 @@ impl Processor for GroupByPartialTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 
-        let aggr_len = self.aggr_exprs.len();
         let start = Instant::now();
-        let schema_before_group_by = self.schema_before_group_by.clone();
-        let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
-        let mut arg_names = Vec::with_capacity(self.aggr_exprs.len());
-        let mut aggr_cols = Vec::with_capacity(self.aggr_exprs.len());
-
-        for expr in self.aggr_exprs.iter() {
-            funcs.push(expr.to_aggregate_function(&schema_before_group_by)?);
-            arg_names.push(expr.to_aggregate_function_names()?);
-            aggr_cols.push(expr.column_name());
-        }
         let group_cols = self
             .group_exprs
             .iter()
@@ -115,13 +116,28 @@ impl Processor for GroupByPartialTransform {
             .collect::<Vec<_>>();
 
         let mut stream = self.input.execute().await?;
-        let arena = Bump::new();
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
         macro_rules! apply {
             ($hash_method: ident, $key_array_builder: ty, $group_func_table: ty) => {{
                 // Table for <group_key, (place, keys) >
+                let aggr_len = self.aggr_exprs.len();
+                let schema_before_group_by = self.schema_before_group_by.clone();
+                let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
+                let mut arg_names = Vec::with_capacity(self.aggr_exprs.len());
+                let mut aggr_cols = Vec::with_capacity(self.aggr_exprs.len());
+                let aggr_funcs_len = self.aggr_exprs.len();
+
+                for expr in self.aggr_exprs.iter() {
+                    funcs.push(expr.to_aggregate_function(&schema_before_group_by)?);
+                    arg_names.push(expr.to_aggregate_function_names()?);
+                    aggr_cols.push(expr.column_name());
+                }
+
+                let arena = Bump::new();
+                let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
+
                 type GroupFuncTable = $group_func_table;
                 let groups_locker = GroupFuncTable::default();
                 while let Some(block) = stream.next().await {
@@ -146,32 +162,44 @@ impl Processor for GroupByPartialTransform {
                     // this can benificial for the case of dereferencing
                     let aggr_arg_columns_slice = &aggr_arg_columns;
 
+                    let mut places = Vec::with_capacity(block.num_rows());
                     let group_keys = $hash_method.build_keys(&group_columns, block.num_rows())?;
                     let mut groups = groups_locker.write();
                     {
-                        for (row, group_key) in group_keys.iter().enumerate() {
+                        for group_key in group_keys.iter() {
                             match groups.get(group_key) {
                                 // New group.
                                 None => {
-                                    let mut places = Vec::with_capacity(aggr_cols.len());
-                                    for (idx, arg_columns) in
-                                        aggr_arg_columns_slice.iter().enumerate()
-                                    {
-                                        let place = funcs[idx].allocate_state(&arena);
-                                        funcs[idx].accumulate_row(place, row, arg_columns)?;
+                                    if aggr_funcs_len == 0 {
+                                        groups.insert(group_key.clone(), 0);
+                                    } else {
+                                        let place: StateAddr = arena.alloc_layout(layout).into();
+                                        for idx in 0..aggr_len {
+                                            let arg_place =
+                                                place.next(offsets_aggregate_states[idx]);
+                                            funcs[idx].init_state(arg_place);
+                                        }
                                         places.push(place);
+                                        groups.insert(group_key.clone(), place.addr());
                                     }
-                                    groups.insert(group_key.clone(), places);
                                 }
                                 // Accumulate result against the take block by indices.
-                                Some(places) => {
-                                    for (idx, arg_columns) in
-                                        aggr_arg_columns_slice.iter().enumerate()
-                                    {
-                                        funcs[idx].accumulate_row(places[idx], row, arg_columns)?;
-                                    }
+                                Some(place) => {
+                                    let place: StateAddr = (*place).into();
+                                    places.push(place);
                                 }
                             }
+                        }
+
+                        for ((idx, func), args) in
+                            funcs.iter().enumerate().zip(aggr_arg_columns_slice.iter())
+                        {
+                            func.accumulate_keys(
+                                &places,
+                                offsets_aggregate_states[idx],
+                                args,
+                                block.num_rows(),
+                            )?;
                         }
                     }
                 }
@@ -197,9 +225,12 @@ impl Processor for GroupByPartialTransform {
                 let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
 
                 let mut bytes = BytesMut::new();
-                for (key, places) in groups.iter() {
+                for (key, place) in groups.iter() {
+                    let place: StateAddr = (*place).into();
+
                     for (idx, func) in funcs.iter().enumerate() {
-                        func.serialize(places[idx], &mut bytes)?;
+                        let arg_place = place.next(offsets_aggregate_states[idx]);
+                        func.serialize(arg_place, &mut bytes)?;
                         state_builders[idx].append_value(&bytes[..]);
                         bytes.clear();
                     }
@@ -223,29 +254,65 @@ impl Processor for GroupByPartialTransform {
             }};
         }
 
-        macro_rules! match_hash_method_and_apply {
-            ($method: ident, $apply: ident) => {{
-                match $method {
-                    HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, Vec<usize>, ahash::RandomState>>}
-                    }
-                    HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , DFUInt8ArrayBuilder, RwLock<HashMap<u8, Vec<usize>, FxBuildHasher>> }
-                    }
-                    HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , DFUInt16ArrayBuilder, RwLock<HashMap<u16, Vec<usize>, FxBuildHasher>> }
-                    }
-                    HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , DFUInt32ArrayBuilder, RwLock<HashMap<u32, Vec<usize>, FxBuildHasher>> }
-                    }
-                    HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , DFUInt64ArrayBuilder, RwLock<HashMap<u64, Vec<usize>, FxBuildHasher>> }
-                    }
-                }
-            }};
-        }
+        match method {
+            HashMethodKind::Serializer(hash_method) => {
+                apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
+            }
+            HashMethodKind::KeysU8(hash_method) => {
+                // TODO: use fixed array.
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
 
-        match_hash_method_and_apply! {method, apply}
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt8Type>(&groups.0, finalized_schema)
+            }
+            HashMethodKind::KeysU16(hash_method) => {
+                // TODO: use fixed array.
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt16Type>(&groups.0, finalized_schema)
+            }
+            HashMethodKind::KeysU32(hash_method) => {
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt32Type>(&groups.0, finalized_schema)
+            }
+            HashMethodKind::KeysU64(hash_method) => {
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+                let delta = start.elapsed();
+                tracing::debug!("Group by partial cost: {:?}", delta);
+
+                let groups = groups_locker.read();
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized::<UInt64Type>(&groups.0, finalized_schema)
+            }
+        }
     }
 }
 
@@ -302,8 +369,6 @@ fn write(mut hash: u64, mut bytes: &[u8]) -> u64 {
 
     hash
 }
-
-pub type FxBuildHasher = BuildHasherDefault<DefaultHasher>;
 
 pub struct DefaultHasher {
     /// Generics hold

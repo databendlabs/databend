@@ -47,9 +47,9 @@ jobs:
         if: steps.check.outputs.triggered == 'true'
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly
-            override: true
-            components: rustfmt, clippy
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
 
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
@@ -68,4 +68,4 @@ jobs:
         if: steps.check.outputs.triggered == 'true'
         run: |
           bash ./scripts/ci/ci-run-performance-tests-standalone.sh
-          
+

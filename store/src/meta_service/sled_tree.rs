@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::fmt::Display;
 use std::marker::PhantomData;
@@ -85,6 +95,38 @@ impl SledTree {
             })?;
 
         Ok(got)
+    }
+
+    pub async fn update_and_fetch<KV: SledKeySpace, F>(
+        &self,
+        key: &KV::K,
+        mut f: F,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        let mes = || format!("update_and_fetch: {}", key);
+
+        let k = KV::serialize_key(key)?;
+
+        let res = self
+            .tree
+            .update_and_fetch(k, move |old| {
+                let old = old.map(|o| KV::deserialize_value(o).unwrap());
+
+                let new_val = f(old);
+                new_val.map(|new_val| KV::serialize_value(&new_val).unwrap())
+            })
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, mes)?;
+
+        self.flush_async(true).await?;
+
+        let value = match res {
+            None => None,
+            Some(v) => Some(KV::deserialize_value(v)?),
+        };
+
+        Ok(value)
     }
 
     /// Retrieve the value of key.
@@ -208,7 +250,7 @@ impl SledTree {
     }
 
     /// Get key-valuess in `range`
-    pub fn range<KV, R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    pub fn range_kvs<KV, R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
     where
         KV: SledKeySpace,
         R: RangeBounds<KV::K>,
@@ -230,6 +272,37 @@ impl SledTree {
         }
 
         Ok(res)
+    }
+
+    /// Get key-valuess in `range`
+    pub fn range<KV, R>(
+        &self,
+        range: R,
+    ) -> common_exception::Result<
+        impl DoubleEndedIterator<Item = common_exception::Result<(KV::K, KV::V)>>,
+    >
+    where
+        KV: SledKeySpace,
+        R: RangeBounds<KV::K>,
+    {
+        let range_mes = self.range_message::<KV, _>(&range);
+
+        // Convert K range into sled::IVec range
+        let range = KV::serialize_range(&range)?;
+
+        let it = self.tree.range(range);
+        let it = it.map(move |item| {
+            let (k, v) = item.map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("range_get: {}", range_mes,)
+            })?;
+
+            let key = KV::deserialize_key(k)?;
+            let value = KV::deserialize_value(v)?;
+
+            Ok((key, value))
+        });
+
+        Ok(it)
     }
 
     /// Get key-valuess in with the same prefix
@@ -405,6 +478,17 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.contains_key::<KV>(key)
     }
 
+    pub async fn update_and_fetch<F>(
+        &self,
+        key: &KV::K,
+        f: F,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        self.inner.update_and_fetch::<KV, _>(key, f).await
+    }
+
     pub fn get(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
         self.inner.get::<KV>(key)
     }
@@ -431,9 +515,21 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         self.inner.range_keys::<KV, R>(range)
     }
 
-    pub fn range<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
-    where R: RangeBounds<KV::K> {
+    pub fn range<R>(
+        &self,
+        range: R,
+    ) -> common_exception::Result<
+        impl DoubleEndedIterator<Item = common_exception::Result<(KV::K, KV::V)>>,
+    >
+    where
+        R: RangeBounds<KV::K>,
+    {
         self.inner.range::<KV, R>(range)
+    }
+
+    pub fn range_kvs<R>(&self, range: R) -> common_exception::Result<Vec<(KV::K, KV::V)>>
+    where R: RangeBounds<KV::K> {
+        self.inner.range_kvs::<KV, R>(range)
     }
 
     pub fn scan_prefix(&self, prefix: &KV::K) -> common_exception::Result<Vec<(KV::K, KV::V)>> {

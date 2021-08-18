@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! sled_key_space defines several key-value types to be used in sled::Tree, as an raft storage impl.
 
@@ -21,6 +31,7 @@ use crate::meta_service::Node;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftStateKey;
 use crate::meta_service::RaftStateValue;
+use crate::meta_service::SeqNum;
 use crate::meta_service::SledOrderedSerde;
 use crate::meta_service::SledSerde;
 use crate::meta_service::StateMachineMetaKey;
@@ -156,4 +167,13 @@ impl SledKeySpace for GenericKV {
     const NAME: &'static str = "generic-kv";
     type K = String;
     type V = SeqValue<KVValue<Vec<u8>>>;
+}
+
+/// Key-Value Types for sequence number generator in sled::Tree:
+pub struct Sequences {}
+impl SledKeySpace for Sequences {
+    const PREFIX: u8 = 7;
+    const NAME: &'static str = "sequences";
+    type K = String;
+    type V = SeqNum;
 }

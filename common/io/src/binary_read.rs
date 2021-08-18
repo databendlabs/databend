@@ -1,6 +1,16 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::io;
 use std::mem::MaybeUninit;
@@ -54,7 +64,7 @@ where T: io::Read
     fn read_opt_scalar<V>(&mut self) -> Result<Option<V>>
     where V: Unmarshal<V> + StatBuffer {
         let is_some: u8 = self.read_scalar()?;
-        if is_some == 1 {
+        if is_some == 0 {
             return Ok(None);
         }
         let mut buffer = V::buffer();

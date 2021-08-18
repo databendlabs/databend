@@ -1,10 +1,23 @@
-// Copyright 2020-2021 The Datafuse Authors.
+// Copyright 2020 Datafuse Labs.
 //
-// SPDX-License-Identifier: Apache-2.0.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use async_raft::raft::Entry;
+use async_raft::raft::EntryNormal;
+use async_raft::raft::EntryPayload;
 use async_raft::LogId;
 use common_metatypes::Database;
 use common_metatypes::KVMeta;
@@ -179,9 +192,14 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
 
     for (name, txid, k, want) in cases.iter() {
         let resp = sm
-            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
-                txid: txid.clone(),
-                cmd: Cmd::IncrSeq { key: k.to_string() },
+            .apply(&Entry {
+                log_id: LogId { term: 0, index: 5 },
+                payload: EntryPayload::Normal(EntryNormal {
+                    data: LogEntry {
+                        txid: txid.clone(),
+                        cmd: Cmd::IncrSeq { key: k.to_string() },
+                    },
+                }),
             })
             .await?;
         assert_eq!(AppliedState::Seq { seq: *want }, resp, "{}", name);
@@ -531,12 +549,17 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
-            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
-                txid: txid.clone(),
-                cmd: Cmd::AddFile {
-                    key: k.to_string(),
-                    value: v.to_string(),
-                },
+            .apply(&Entry {
+                log_id: LogId { term: 0, index: 5 },
+                payload: EntryPayload::Normal(EntryNormal {
+                    data: LogEntry {
+                        txid: txid.clone(),
+                        cmd: Cmd::AddFile {
+                            key: k.to_string(),
+                            value: v.to_string(),
+                        },
+                    },
+                }),
             })
             .await?;
         assert_eq!(
@@ -564,12 +587,17 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
-            .apply(&LogId { term: 0, index: 5 }, &LogEntry {
-                txid: txid.clone(),
-                cmd: Cmd::SetFile {
-                    key: k.to_string(),
-                    value: v.to_string(),
-                },
+            .apply(&Entry {
+                log_id: LogId { term: 0, index: 5 },
+                payload: EntryPayload::Normal(EntryNormal {
+                    data: LogEntry {
+                        txid: txid.clone(),
+                        cmd: Cmd::SetFile {
+                            key: k.to_string(),
+                            value: v.to_string(),
+                        },
+                    },
+                }),
             })
             .await?;
         assert_eq!(
