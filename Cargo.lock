@@ -1380,7 +1380,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "msql-srv",
  "mysql",
- "nom 7.0.0-alpha2",
+ "nom 7.0.0-alpha3",
  "num",
  "num_cpus",
  "paste",
@@ -2872,6 +2872,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimal-lexical"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6595bb28ed34f43c3fe088e48f6cfb2e033cab45f25a5384d5fdf564fbc8c4b2"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2938,7 +2944,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "mysql_common",
- "nom 7.0.0-alpha2",
+ "nom 7.0.0-alpha3",
 ]
 
 [[package]]
@@ -3140,12 +3146,12 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "7.0.0-alpha2"
+version = "7.0.0-alpha3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39881f3ef37da4bfa8ce3478d840baaed5fdfc6560c0b91006924ec191a756bf"
+checksum = "afb043391c8ebfbf60c4c92f6929b9cc830ed9e3bbf7d156e24ab731e3257d97"
 dependencies = [
- "lexical-core",
  "memchr",
+ "minimal-lexical",
  "version_check",
 ]
 
