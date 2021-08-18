@@ -173,6 +173,7 @@ mod test {
                         not: true,
                     },
                 ],
+                params: vec![Literal::Number("123".to_owned())],
             }),
             right: Box::new(Expr::Case {
                 operand: Some(Box::new(Expr::Wildcard)),
@@ -184,7 +185,7 @@ mod test {
 
         assert_eq!(
             format!("{}", expr),
-            r#"FUNC(DISTINCT CAST(* AS INTEGER), * NOT BETWEEN * AND *, * NOT IN (*, *)) AND CASE * WHEN * THEN * ELSE * END"#
+            r#"FUNC(123)(DISTINCT CAST(* AS INTEGER), * NOT BETWEEN * AND *, * NOT IN(*, *)) AND CASE * WHEN * THEN * ELSE * END"#
         );
     }
 }

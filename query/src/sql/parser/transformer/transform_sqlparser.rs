@@ -479,6 +479,8 @@ impl TransformerSqlparser {
                         ))),
                     })
                     .collect::<Result<_>>()?,
+                // TODO(leiysky): wait for bumping to https://github.com/datafuse-extras/sqlparser-rs/pull/5
+                params: vec![],
             }),
             SqlparserExpr::Case {
                 operand,
@@ -567,6 +569,8 @@ impl TransformerSqlparser {
             }
             SqlparserDataType::Float(length) => Ok(TypeName::Float(length.to_owned())),
             SqlparserDataType::Int => Ok(TypeName::Int),
+            SqlparserDataType::TinyInt => Ok(TypeName::TinyInt),
+            SqlparserDataType::SmallInt => Ok(TypeName::SmallInt),
             SqlparserDataType::BigInt => Ok(TypeName::BigInt),
             SqlparserDataType::Real => Ok(TypeName::Real),
             SqlparserDataType::Double => Ok(TypeName::Double),

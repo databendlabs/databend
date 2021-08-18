@@ -73,6 +73,7 @@ pub enum Expr {
         distinct: bool,
         name: String,
         args: Vec<Expr>,
+        params: Vec<Literal>,
     },
     // `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -94,6 +95,8 @@ pub enum TypeName {
     Decimal(Option<u64>, Option<u64>),
     Float(Option<u64>),
     Int,
+    TinyInt,
+    SmallInt,
     BigInt,
     Real,
     Double,
@@ -259,6 +262,12 @@ impl Display for TypeName {
             TypeName::Int => {
                 write!(f, "INTEGER")?;
             }
+            TypeName::TinyInt => {
+                write!(f, "TINYINT")?;
+            }
+            TypeName::SmallInt => {
+                write!(f, "SMALLINT")?;
+            }
             TypeName::BigInt => {
                 write!(f, "BIGINT")?;
             }
@@ -338,7 +347,7 @@ impl Display for Expr {
                 if *negated {
                     write!(f, "NOT ")?;
                 }
-                write!(f, "IN (")?;
+                write!(f, "IN(")?;
                 for i in 0..list.len() {
                     write!(f, "{}", list[i])?;
                     if i != list.len() - 1 {
@@ -356,7 +365,7 @@ impl Display for Expr {
                 if *negated {
                     write!(f, "NOT ")?;
                 }
-                write!(f, "IN ({})", subquery)?;
+                write!(f, "IN({})", subquery)?;
             }
             Expr::Between {
                 expr,
@@ -386,8 +395,20 @@ impl Display for Expr {
                 distinct,
                 name,
                 args,
+                params,
             } => {
-                write!(f, "{}(", name)?;
+                write!(f, "{}", name)?;
+                if !params.is_empty() {
+                    write!(f, "(")?;
+                    for i in 0..params.len() {
+                        write!(f, "{}", params[i])?;
+                        if i != params.len() - 1 {
+                            write!(f, ", ")?;
+                        }
+                    }
+                    write!(f, ")")?;
+                }
+                write!(f, "(")?;
                 if *distinct {
                     write!(f, "DISTINCT ")?;
                 }
