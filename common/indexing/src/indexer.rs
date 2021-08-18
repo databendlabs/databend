@@ -39,8 +39,12 @@ impl Index for Indexer {
     ) -> common_exception::Result<IndexSchema> {
         match reader.format {
             ReaderFormat::Parquet => {
-                let meta = parquet::read::read_metadata(&mut reader.reader).unwrap();
-                println!("{:?}", meta);
+                let file_meta = parquet::read::read_metadata(&mut reader.reader).unwrap();
+                let row_groups = file_meta.row_groups.len();
+                for i in 0..row_groups {
+                    let metadata = file_meta.row_groups[i].column(0);
+                    println!("{:?}", metadata);
+                }
             }
         }
 

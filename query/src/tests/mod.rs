@@ -14,6 +14,7 @@
 
 mod context;
 mod number;
+mod parquet;
 mod parse_query;
 mod sessions;
 pub(crate) mod tls_constants;

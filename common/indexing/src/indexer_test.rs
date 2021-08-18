@@ -26,7 +26,7 @@ use crate::ReaderFormat;
 #[test]
 fn test_indexer_reader() -> Result<()> {
     let path = env::current_dir()?
-        .join("../../tests/data/alltypes_plain.parquet")
+        .join("../../tests/data/name_age_two_rowgroups.parquet")
         .display()
         .to_string();
     let file = File::open(path).unwrap();
