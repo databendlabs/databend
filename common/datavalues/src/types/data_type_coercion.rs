@@ -295,7 +295,7 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
                     lhs_type, rhs_type
                 )));
             }
-            let typ = merge_types(&a.data_type(), &b.data_type())?;
+            let typ = merge_types(a.data_type(), b.data_type())?;
             Ok(DataType::List(Box::new(DataField::new(
                 a.name(),
                 typ,
@@ -319,7 +319,7 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
                             lhs_type, rhs_type
                         )));
                     }
-                    let typ = merge_types(&a.data_type(), &b.data_type())?;
+                    let typ = merge_types(a.data_type(), b.data_type())?;
                     Ok(DataField::new(a.name(), typ, a.is_nullable()))
                 })
                 .collect::<Result<Vec<_>>>()?;

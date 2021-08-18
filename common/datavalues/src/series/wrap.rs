@@ -108,6 +108,21 @@ macro_rules! impl_dyn_array {
                 ArrayCast::cast_with_type(&self.0, data_type)
             }
 
+            fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series> {
+                if self.data_type() == rhs.data_type() {
+                    Ok(self
+                        .0
+                        .if_then_else(rhs.as_ref().as_ref(), predicate.bool()?)?
+                        .into_series())
+                } else {
+                    Err(ErrorCode::BadArguments(format!(
+                        "If then else requires the arguments to have the same datatypes ({} != {})",
+                        self.data_type(),
+                        rhs.data_type()
+                    )))
+                }
+            }
+
             fn try_get(&self, index: usize) -> Result<DataValue> {
                 unsafe { self.0.try_get(index) }
             }

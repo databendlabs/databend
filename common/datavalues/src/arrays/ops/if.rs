@@ -22,7 +22,7 @@ use common_exception::Result;
 use crate::prelude::*;
 
 macro_rules! impl_if_common {
-    ($lhs:ident, $rhs:ident,$predicate:ident) => {{
+    ($predicate:ident, $lhs:ident, $rhs:ident) => {{
         match ($predicate.len(), $lhs.len(), $rhs.len()) {
             (1, b, c) if b == c || b == 1 || c == 1 => {
                 let pre = $predicate.get(0);
@@ -91,22 +91,23 @@ impl<T> ArrayIf for DataArray<T>
 where T: DFNumericType
 {
     fn if_then_else(&self, rhs: &Self, predicate: &DFBooleanArray) -> Result<Self> {
-        impl_if_common! {self, rhs,predicate}
+        impl_if_common! {predicate, self, rhs}
     }
 }
 
 impl ArrayIf for DFBooleanArray {
     fn if_then_else(&self, rhs: &Self, predicate: &DFBooleanArray) -> Result<Self> {
-        impl_if_common! {self, rhs,predicate}
+        impl_if_common! {predicate, self, rhs}
     }
 }
 
 impl ArrayIf for DFUtf8Array {
     fn if_then_else(&self, rhs: &Self, predicate: &DFBooleanArray) -> Result<Self> {
-        impl_if_common! {self, rhs,predicate}
+        impl_if_common! {predicate, self, rhs}
     }
 }
 
 impl ArrayIf for DFListArray {}
 impl ArrayIf for DFStructArray {}
 impl ArrayIf for DFBinaryArray {}
+impl ArrayIf for DFNullArray {}
