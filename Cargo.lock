@@ -170,7 +170,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.9#8b59966dd0a6bf804eb0ba978b5375010bfbc3f3"
+source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.10#6350514cc414dc9d7e9aa0e21ea7b546ed223235"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5638,8 +5638,8 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
 dependencies = [
- "cfg-if 1.0.0",
- "rand 0.8.4",
+ "cfg-if 0.1.10",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
