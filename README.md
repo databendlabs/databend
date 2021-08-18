@@ -33,7 +33,7 @@ Datafuse is an open source **elastic** and **scalable** cloud warehouse, it offe
 
 We design Datafuse with the following key functionalities in mind:
 1. **Elastic**  In Datafuse storage and compute resources can be scaled in/out on demand.
-2. **Secure** All data files and network traffic in Datafuse is encrypted end-to-end, and provider *Role Based Access Control*  in SQL level.
+2. **Secure** All data files and network traffic in Datafuse is encrypted end-to-end, and provide Role Based Access Control in SQL level.
 3. **User-friendly** Datafuse is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
 4. **Cost-efficient** Datafuse processes queries with high performance, and the user only pays for what is actually used.
 
