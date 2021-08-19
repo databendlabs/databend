@@ -652,7 +652,9 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCode::SyntaxException("Cannot support JOIN clause")),
+            // Such as SELECT * FROM t1, t2;
+            // It's not `JOIN` clause.
+            _ => Result::Err(ErrorCode::SyntaxException("Cannot SELECT multiple tables")),
         }
     }
 
