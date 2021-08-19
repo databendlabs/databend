@@ -13,9 +13,7 @@
 // limitations under the License.
 //
 
-use std::io::Read;
-use std::io::Seek;
-
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_planners::PlanNode;
 
@@ -27,20 +25,13 @@ pub struct IndexSchema {
     pub sparse: SparseIndex,
 }
 
-/// The reader format, now only support Parquet file.
-pub enum ReaderFormat {
-    // Parquet file.
-    Parquet,
-}
-
-pub struct IndexReader<R: Read + Seek> {
-    pub reader: R,
-    pub format: ReaderFormat,
-}
-
 pub trait Index {
-    // Create index from data reader.
-    fn create_index<R: Read + Seek>(&self, reader: &mut IndexReader<R>) -> Result<IndexSchema>;
+    /// Create index from blocks.
+    /// Each block is one row group of a parquet file and sorted by primary key.
+    /// For example:
+    /// parquet.file
+    /// | sorted-block | sorted-block | ... |
+    fn create_index(&self, blocks: &[DataBlock]) -> Result<IndexSchema>;
 
     // Search parts by plan.
     fn search_index(&self, plan: &PlanNode) -> Result<()>;

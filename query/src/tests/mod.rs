@@ -24,5 +24,6 @@ pub use context::try_create_context;
 pub use context::try_create_context_with_conf;
 pub use context::ClusterNode;
 pub use number::NumberTestData;
+pub use parquet::ParquetTestData;
 pub use parse_query::parse_query;
 pub use sessions::try_create_sessions;

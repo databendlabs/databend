@@ -13,29 +13,34 @@
 // limitations under the License.
 //
 
-use std::env;
-use std::fs::File;
-
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::*;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::Index;
-use crate::IndexReader;
 use crate::Indexer;
-use crate::ReaderFormat;
 
 #[test]
-fn test_indexer_reader() -> Result<()> {
-    let path = env::current_dir()?
-        .join("../../tests/data/name_age_two_rowgroups.parquet")
-        .display()
-        .to_string();
-    let file = File::open(path).unwrap();
+fn test_indexer() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("name", DataType::Utf8, true),
+        DataField::new("age", DataType::Int32, false),
+    ]);
+
+    let block1 = DataBlock::create_by_array(schema.clone(), vec![
+        Series::new(vec!["jack", "ace", "bohu"]),
+        Series::new(vec![11, 6, 24]),
+    ]);
+
+    let block2 = DataBlock::create_by_array(schema.clone(), vec![
+        Series::new(vec!["xjack", "xace", "xbohu"]),
+        Series::new(vec![11, 6, 24]),
+    ]);
 
     let indexer = Indexer::create();
-    let mut reader = IndexReader {
-        reader: file,
-        format: ReaderFormat::Parquet,
-    };
-    indexer.create_index(&mut reader)?;
+    indexer.create_index(&[block1, block2])?;
     Ok(())
 }

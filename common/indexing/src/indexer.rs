@@ -13,16 +13,11 @@
 // limitations under the License.
 //
 
-use std::io::Read;
-use std::io::Seek;
-
-use common_arrow::parquet;
+use common_datablocks::DataBlock;
 use common_planners::PlanNode;
 
-use crate::index::IndexReader;
 use crate::Index;
 use crate::IndexSchema;
-use crate::ReaderFormat;
 
 pub struct Indexer {}
 
@@ -33,21 +28,8 @@ impl Indexer {
 }
 
 impl Index for Indexer {
-    fn create_index<R: Read + Seek>(
-        &self,
-        reader: &mut IndexReader<R>,
-    ) -> common_exception::Result<IndexSchema> {
-        match reader.format {
-            ReaderFormat::Parquet => {
-                let file_meta = parquet::read::read_metadata(&mut reader.reader).unwrap();
-                let row_groups = file_meta.row_groups.len();
-                for i in 0..row_groups {
-                    let metadata = file_meta.row_groups[i].column(0);
-                    println!("{:?}", metadata);
-                }
-            }
-        }
-
+    fn create_index(&self, blocks: &[DataBlock]) -> common_exception::Result<IndexSchema> {
+        for _block in blocks {}
         todo!()
     }
 

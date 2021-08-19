@@ -22,9 +22,7 @@ mod index_sparse;
 mod indexer;
 
 pub use index::Index;
-pub use index::IndexReader;
 pub use index::IndexSchema;
-pub use index::ReaderFormat;
 pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;

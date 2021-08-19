@@ -50,12 +50,8 @@ impl FlightScatter for HashFlightScatter {
     fn execute(&self, data_block: &DataBlock) -> common_exception::Result<Vec<DataBlock>> {
         let expression_executor = self.scatter_expression_executor.clone();
         let evaluated_data_block = expression_executor.execute(data_block)?;
-        match evaluated_data_block.column_by_name(&self.scatter_expression_name) {
-            None => common_exception::Result::Err(ErrorCode::LogicalError(
-                "Logical error: expression executor error.",
-            )),
-            Some(indices) => DataBlock::scatter_block(data_block, indices, self.scattered_size),
-        }
+        let indices = evaluated_data_block.try_column_by_name(&self.scatter_expression_name)?;
+        DataBlock::scatter_block(data_block, indices, self.scattered_size)
     }
 }
 

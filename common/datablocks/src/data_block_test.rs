@@ -29,8 +29,8 @@ fn test_data_block() -> Result<()> {
     assert_eq!(3, block.try_column_by_name("a")?.len());
     assert_eq!(3, block.column(0).len());
 
-    assert_eq!(true, block.column_by_name("a").is_some());
-    assert_eq!(true, block.column_by_name("a_not_found").is_none());
+    assert_eq!(true, block.try_column_by_name("a").is_ok());
+    assert_eq!(true, block.try_column_by_name("a_not_found").is_err());
 
     Ok(())
 }

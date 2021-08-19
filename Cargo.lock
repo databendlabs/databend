@@ -810,12 +810,10 @@ dependencies = [
 name = "common-indexing"
 version = "0.1.0"
 dependencies = [
- "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-planners",
- "common-runtime",
 ]
 
 [[package]]

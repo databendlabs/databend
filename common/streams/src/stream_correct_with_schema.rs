@@ -16,7 +16,6 @@ use std::pin::Pin;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::task::Context;
 use futures::task::Poll;
@@ -46,17 +45,10 @@ impl CorrectWithSchemaStream {
         let schema_fields = self.schema.fields();
         let mut new_columns = Vec::with_capacity(schema_fields.len());
         for schema_field in schema_fields {
-            match data_block.column_by_name(schema_field.name()) {
-                Some(column) if &column.data_type() == schema_field.data_type() => {
-                    new_columns.push(column.clone())
-                }
-                other => {
-                    return Err(ErrorCode::IllegalSchema(format!(
-                        "Illegal schema. expect: {:?} found: {:?}",
-                        schema_field, other
-                    )))
-                }
-            };
+            let column = data_block.try_column_by_name(schema_field.name())?;
+            if &column.data_type() == schema_field.data_type() {
+                new_columns.push(column.clone())
+            }
         }
 
         Ok(DataBlock::create(self.schema.clone(), new_columns))

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fs::File;
-use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::write::write_file;
 use common_arrow::arrow::io::parquet::write::CompressionCodec;
@@ -21,21 +20,12 @@ use common_arrow::arrow::io::parquet::write::Encoding;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::Version;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
+use common_arrow::arrow::record_batch::RecordBatch;
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::*;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_exception::Result;
-use common_planners::Expression;
-use common_planners::Extras;
-use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
-
-use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::DatafuseQueryContextRef;
 
 // Used to create test parquet files from blocks.
 pub struct ParquetTestData {}
@@ -60,7 +50,7 @@ impl ParquetTestData {
             Series::new(vec!["xjack", "xace", "xbohu"]),
             Series::new(vec![11, 6, 24]),
         ]);
-        self.write_block_to_parquet(path, &*vec![block1, block2]);
+        self.write_to_parquet(path, &[block1, block2]);
     }
 
     pub fn write_to_parquet(&self, path: &str, blocks: &[DataBlock]) {
