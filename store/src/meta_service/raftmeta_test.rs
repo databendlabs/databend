@@ -881,7 +881,7 @@ where T: Fn(&RaftMetrics) -> bool + Send {
 
 /// Make a default timeout for wait() for test.
 fn timeout() -> Option<Duration> {
-    Some(Duration::from_millis(2000))
+    Some(Duration::from_millis(4000))
 }
 
 fn test_context_nodes(tcs: &Vec<StoreTestContext>) -> Vec<Arc<MetaNode>> {
