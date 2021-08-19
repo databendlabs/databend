@@ -24,6 +24,7 @@ mod optimizer_statistics_exact_test;
 mod optimizer_test;
 
 mod optimizer;
+mod metrics;
 mod optimizer_constant_folding;
 mod optimizer_projection_push_down;
 mod optimizer_scatters;
