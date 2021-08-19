@@ -175,7 +175,11 @@ impl<'a> DfParser<'a> {
                                     )),
                                     _ => self.expected("like or where", tok),
                                 },
-                                _ => self.expected("like or where", self.parser.peek_token()),
+                                Token::SemiColon => {
+                                    self.parser.prev_token();
+                                    Ok(DfStatement::ShowTables(DfShowTables::All))
+                                }
+                                _ => self.expected("like or where", tok),
                             }
                         } else if self.consume_token("DATABASES") {
                             Ok(DfStatement::ShowDatabases(DfShowDatabases))

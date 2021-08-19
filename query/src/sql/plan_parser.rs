@@ -150,7 +150,7 @@ impl PlanParser {
                     }
                     DfShowTables::Where(e) => {
                         format!(
-                            "SELECT name FROM system.tables where database = '{}' AND {} ORDER BY database, name",
+                            "SELECT name FROM system.tables where database = '{}' AND ( {} ) ORDER BY database, name",
                             self.ctx.get_current_database(), e,
                         )
                     }
