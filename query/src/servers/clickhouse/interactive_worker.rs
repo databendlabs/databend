@@ -21,6 +21,7 @@ use common_datavalues::prelude::Arc;
 use metrics::histogram;
 
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
+use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
 use crate::sessions::SessionRef;
 
@@ -48,7 +49,10 @@ impl ClickHouseSession for InteractiveWorker {
         let mut query_writer = QueryWriter::create(ctx.client_revision, conn, context.clone());
 
         let get_query_result = InteractiveWorkerBase::do_query(ctx, context);
-        query_writer.write(get_query_result.await).await?;
+        if let Err(cause) = query_writer.write(get_query_result.await).await {
+            let new_error = cause.add_message(&ctx.state.query);
+            return Err(to_clickhouse_err(new_error));
+        }
 
         histogram!(
             super::clickhouse_metrics::METRIC_CLICKHOUSE_PROCESSOR_REQUEST_DURATION,
