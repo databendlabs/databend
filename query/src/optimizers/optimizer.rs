@@ -60,10 +60,7 @@ impl Optimizers {
             plan = optimizer.optimize(&plan)?;
             tracing::debug!("After {} \n{:?}", optimizer.name(), plan);
         }
-        histogram!(
-            super::metrics::METRIC_OPTIMIZE_USEDTIME,
-            start.elapsed()
-        );
+        histogram!(super::metrics::METRIC_OPTIMIZE_USEDTIME, start.elapsed());
         Ok(plan)
     }
 }
