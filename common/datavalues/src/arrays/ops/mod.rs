@@ -43,6 +43,8 @@ mod fill_test;
 #[cfg(test)]
 mod group_hash_test;
 #[cfg(test)]
+mod if_test;
+#[cfg(test)]
 mod scatter_test;
 #[cfg(test)]
 mod take_random_test;

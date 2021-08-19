@@ -24,7 +24,7 @@ impl ConditionalFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
 
-        map.insert("if".into(), IfFunction::try_create);
+        map.insert("if".into(), IfFunction::try_create_func);
 
         Ok(())
     }

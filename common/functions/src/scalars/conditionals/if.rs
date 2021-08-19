@@ -27,7 +27,7 @@ pub struct IfFunction {
 }
 
 impl IfFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(IfFunction {
             display_name: display_name.to_string(),
         }))
@@ -58,6 +58,6 @@ impl Function for IfFunction {
 
 impl std::fmt::Display for IfFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
+        write!(f, "IF")
     }
 }

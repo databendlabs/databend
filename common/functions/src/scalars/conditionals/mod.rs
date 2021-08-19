@@ -14,6 +14,8 @@
 
 mod conditional;
 mod r#if;
+#[cfg(test)]
+mod if_test;
 
 pub use conditional::ConditionalFunction;
 pub use r#if::IfFunction;
