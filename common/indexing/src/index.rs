@@ -20,7 +20,10 @@ use common_planners::PlanNode;
 use crate::MinMaxIndex;
 use crate::SparseIndex;
 
+#[derive(Debug, PartialEq)]
 pub struct IndexSchema {
+    // The column name of the index.
+    pub col: String,
     pub min_max: MinMaxIndex,
     pub sparse: SparseIndex,
 }
@@ -31,7 +34,7 @@ pub trait Index {
     /// For example:
     /// parquet.file
     /// | sorted-block | sorted-block | ... |
-    fn create_index(&self, blocks: &[DataBlock]) -> Result<IndexSchema>;
+    fn create_index(&self, keys: &[String], blocks: &[DataBlock]) -> Result<Vec<IndexSchema>>;
 
     // Search parts by plan.
     fn search_index(&self, plan: &PlanNode) -> Result<()>;

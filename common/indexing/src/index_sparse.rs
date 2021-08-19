@@ -16,26 +16,27 @@
 use common_datavalues::DataValue;
 use common_exception::Result;
 
+#[derive(Debug, PartialEq)]
 pub struct SparseIndexValue {
-    // The sparse key.
-    pub key: DataValue,
+    // Min value of this granule.
+    pub min: DataValue,
+    // Max value of this granule.
+    pub max: DataValue,
     // The page number to read in the data file.
     // If the page is None, we will read the whole file.
-    pub page: Option<i64>,
+    pub page_no: Option<i64>,
 }
 
 /// Sparse index.
+#[derive(Debug, PartialEq)]
 pub struct SparseIndex {
-    pub file_name: String,
+    // Sparse index.
     pub values: Vec<SparseIndexValue>,
 }
 
 impl SparseIndex {
-    pub fn create(file_name: String) -> Self {
-        SparseIndex {
-            file_name,
-            values: vec![],
-        }
+    pub fn create() -> Self {
+        SparseIndex { values: vec![] }
     }
 
     pub fn typ(&self) -> &str {

@@ -18,6 +18,9 @@ use common_planners::PlanNode;
 
 use crate::Index;
 use crate::IndexSchema;
+use crate::MinMaxIndex;
+use crate::SparseIndex;
+use crate::SparseIndexValue;
 
 pub struct Indexer {}
 
@@ -28,9 +31,39 @@ impl Indexer {
 }
 
 impl Index for Indexer {
-    fn create_index(&self, blocks: &[DataBlock]) -> common_exception::Result<IndexSchema> {
-        for _block in blocks {}
-        todo!()
+    fn create_index(
+        &self,
+        keys: &[String],
+        pages: &[DataBlock],
+    ) -> common_exception::Result<Vec<IndexSchema>> {
+        let first = 0;
+        let last = pages.len() - 1;
+
+        let mut idxes = vec![];
+        for key in keys {
+            // Min and max index.
+            let min = pages[first].first(key)?;
+            let max = pages[last].last(key)?;
+            let min_max = MinMaxIndex::create(min, max);
+
+            // Sparse index by the page.
+            let mut sparse = SparseIndex::create();
+            for (page_no, page) in pages.iter().enumerate() {
+                let min = page.first(key)?;
+                let max = page.last(key)?;
+                sparse.push(SparseIndexValue {
+                    min,
+                    max,
+                    page_no: Some(page_no as i64),
+                })?;
+            }
+            idxes.push(IndexSchema {
+                col: key.to_string(),
+                min_max,
+                sparse,
+            });
+        }
+        Ok(idxes)
     }
 
     fn search_index(&self, _plan: &PlanNode) -> common_exception::Result<()> {

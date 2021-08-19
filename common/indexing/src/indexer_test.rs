@@ -21,7 +21,11 @@ use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::Index;
+use crate::IndexSchema;
 use crate::Indexer;
+use crate::MinMaxIndex;
+use crate::SparseIndex;
+use crate::SparseIndexValue;
 
 #[test]
 fn test_indexer() -> Result<()> {
@@ -41,6 +45,53 @@ fn test_indexer() -> Result<()> {
     ]);
 
     let indexer = Indexer::create();
-    indexer.create_index(&[block1, block2])?;
+    let actual =
+        indexer.create_index(&["name".to_string(), "age".to_string()], &[block1, block2])?;
+    //let expected = [IndexSchema { col: "name", min_max: MinMaxIndex { min: jack, max: xbohu }, sparse: SparseIndex { values: [SparseIndexValue { min: jack, max: bohu, page_no: Some(0) }, SparseIndexValue { min: xjack, max: xbohu, page_no: Some(1) }] } }, IndexSchema { col: "age", min_max: MinMaxIndex { min: 11, max: 24 }, sparse: SparseIndex { values: [SparseIndexValue { min: 11, max: 24, page_no: Some(0) }, SparseIndexValue { min: 11, max: 24, page_no: Some(1) }] } }]";
+    let expected = vec![
+        IndexSchema {
+            col: "name".to_string(),
+            min_max: MinMaxIndex {
+                min: DataValue::Utf8(Some("jack".to_string())),
+                max: DataValue::Utf8(Some("xbohu".to_string())),
+            },
+            sparse: SparseIndex {
+                values: vec![
+                    SparseIndexValue {
+                        min: DataValue::Utf8(Some("jack".to_string())),
+                        max: DataValue::Utf8(Some("bohu".to_string())),
+                        page_no: Some(0),
+                    },
+                    SparseIndexValue {
+                        min: DataValue::Utf8(Some("xjack".to_string())),
+                        max: DataValue::Utf8(Some("xbohu".to_string())),
+                        page_no: Some(1),
+                    },
+                ],
+            },
+        },
+        IndexSchema {
+            col: "age".to_string(),
+            min_max: MinMaxIndex {
+                min: DataValue::Int32(Some(11)),
+                max: DataValue::Int32(Some(24)),
+            },
+            sparse: SparseIndex {
+                values: vec![
+                    SparseIndexValue {
+                        min: DataValue::Int32(Some(11)),
+                        max: DataValue::Int32(Some(24)),
+                        page_no: Some(0),
+                    },
+                    SparseIndexValue {
+                        min: DataValue::Int32(Some(11)),
+                        max: DataValue::Int32(Some(24)),
+                        page_no: Some(1),
+                    },
+                ],
+            },
+        },
+    ];
+    assert_eq!(actual, expected);
     Ok(())
 }

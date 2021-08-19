@@ -16,16 +16,15 @@
 use common_datavalues::DataValue;
 
 /// Min and Max index.
+#[derive(Debug, PartialEq)]
 pub struct MinMaxIndex {
-    // The column name of the index.
-    pub col: String,
     pub min: DataValue,
     pub max: DataValue,
 }
 
 impl MinMaxIndex {
-    pub fn create(col: String, min: DataValue, max: DataValue) -> Self {
-        MinMaxIndex { col, min, max }
+    pub fn create(min: DataValue, max: DataValue) -> Self {
+        MinMaxIndex { min, max }
     }
 
     pub fn typ(&self) -> &str {
