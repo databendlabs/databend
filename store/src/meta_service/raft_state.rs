@@ -134,6 +134,7 @@ impl RaftState {
         Ok(hs)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> common_exception::Result<()> {
         let state = self.state();
         state
@@ -144,6 +145,8 @@ impl RaftState {
             .await?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub fn read_state_machine_id(&self) -> common_exception::Result<(u64, u64)> {
         let state = self.state();
         let smid = state.get(&RaftStateKey::StateMachineId)?;

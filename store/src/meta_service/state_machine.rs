@@ -17,12 +17,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fs::remove_dir_all;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
+use async_raft::raft::MembershipConfig;
+use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
@@ -37,6 +38,7 @@ use common_planners::Statistics;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
+use sled::IVec;
 
 use crate::configs;
 use crate::meta_service::placement::rand_n_from_m;
@@ -52,6 +54,7 @@ use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
 use crate::meta_service::SledSerde;
 use crate::meta_service::SledTree;
+use crate::meta_service::StateMachineMetaKey;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 use crate::meta_service::StateMachineMetaValue;
@@ -162,13 +165,13 @@ impl StateMachineInitializer {
 }
 
 /// A key-value pair in a snapshot is a vec of two `Vec<u8>`.
-type SnapshotKeyValue = Vec<Vec<u8>>;
+pub type SnapshotKeyValue = Vec<Vec<u8>>;
 
 /// Snapshot data for serialization and for transport.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
-struct SerializableSnapshot {
+pub struct SerializableSnapshot {
     /// A list of kv pairs.
-    kvs: Vec<SnapshotKeyValue>,
+    pub kvs: Vec<SnapshotKeyValue>,
 }
 
 impl SerializableSnapshot {
@@ -189,15 +192,32 @@ impl StateMachine {
         }
     }
 
-    /// Returns the temp dir for sled:Db for rebuilding state machine from snapshot.
-    fn tmp_state_machine_dir(config: &configs::Config) -> String {
-        config.meta_dir.clone() + "/sm-tmp"
+    #[tracing::instrument(level = "debug")]
+    pub fn tree_name(config: &configs::Config, sm_id: u64) -> String {
+        config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
     }
 
-    pub async fn open(config: &configs::Config) -> common_exception::Result<StateMachine> {
+    #[tracing::instrument(level = "debug")]
+    pub fn clean(config: &configs::Config, sm_id: u64) -> common_exception::Result<()> {
+        let tree_name = StateMachine::tree_name(config, sm_id);
+
         let db = get_sled_db();
 
-        let tree_name = config.tree_name(TREE_STATE_MACHINE);
+        // it blocks and slow
+        db.drop_tree(tree_name)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "drop prev state machine")?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug")]
+    pub async fn open(
+        config: &configs::Config,
+        sm_id: u64,
+    ) -> common_exception::Result<StateMachine> {
+        let db = get_sled_db();
+
+        let tree_name = StateMachine::tree_name(config, sm_id);
 
         let sm_tree = SledTree::open(&db, &tree_name, config.meta_sync()).await?;
 
@@ -236,77 +256,52 @@ impl StateMachine {
     }
 
     /// Create a snapshot.
-    /// TODO(xp): we only need iter one sled::Tree to take a snapshot.
-    pub fn snapshot(&self) -> impl Iterator<Item = Vec<Vec<u8>>> {
-        let its = self._db.export();
-        for (typ, name, it) in its {
-            if typ == b"tree" && name == TREE_STATE_MACHINE.as_bytes() {
-                return it;
-            }
-        }
-        panic!("no tree found: {}", TREE_STATE_MACHINE)
+    /// Returns:
+    /// - an consistent iterator of all kvs;
+    /// - the last applied log id
+    /// - the last applied membership config
+    /// - and a snapshot id
+    pub fn snapshot(
+        &self,
+    ) -> common_exception::Result<(
+        impl Iterator<Item = sled::Result<(IVec, IVec)>>,
+        LogId,
+        MembershipConfig,
+        String,
+    )> {
+        let last_applied = self.get_last_applied()?;
+        let mem = self.get_membership()?;
+
+        // NOTE: An initialize node/cluster always has the first log contains membership config.
+        let mem = mem.unwrap_or_default();
+
+        let snapshot_idx = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let snapshot_id = format!(
+            "{}-{}-{}",
+            last_applied.term, last_applied.index, snapshot_idx
+        );
+
+        Ok((self.sm_tree.tree.iter(), last_applied, mem, snapshot_id))
     }
 
     /// Serialize a snapshot for transport.
-    /// TODO(xp): This step does not require a lock, since sled::Tree::iter() creates a consistent view on a tree
-    ///           no matter if there are other writes applied to the tree.
+    /// This step does not require a lock, since sled::Tree::iter() creates a consistent view on a tree
+    /// no matter if there are other writes applied to the tree.
     pub fn serialize_snapshot(
-        view: impl Iterator<Item = Vec<Vec<u8>>>,
+        view: impl Iterator<Item = sled::Result<(IVec, IVec)>>,
     ) -> common_exception::Result<Vec<u8>> {
         let mut kvs = Vec::new();
-        for kv in view {
-            kvs.push(kv);
+        for rkv in view {
+            let (k, v) = rkv.map_err_to_code(ErrorCode::MetaStoreDamaged, || "taking snapshot")?;
+            kvs.push(vec![k.to_vec(), v.to_vec()]);
         }
-
         let snap = SerializableSnapshot { kvs };
-
         let snap = serde_json::to_vec(&snap)?;
         Ok(snap)
-    }
-
-    /// Install a snapshot to build a state machine from it and replace the state machine with the new one.
-    pub async fn install_snapshot(&mut self, data: &[u8]) -> common_exception::Result<()> {
-        // TODO(xp): test install snapshot:
-        //           The rename is not atomic: a correct way should be: create a temp tree, swap state machine.
-
-        let snap: SerializableSnapshot = serde_json::from_slice(data)?;
-
-        let tmp_path = StateMachine::tmp_state_machine_dir(&self.config);
-
-        remove_dir_all(&tmp_path).map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-            format!("remove tmp state machine dir: {}", tmp_path)
-        })?;
-
-        let db = get_sled_db();
-        // TODO(xp): with a shared db import is now allowed. It populate the entire db.
-        db.import(snap.sled_importable());
-
-        // sled::Db does not have a "flush" method, need to flush every tree one by one.
-        for name in db.tree_names() {
-            let n = String::from_utf8(name.to_vec())
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "invalid tree name")?;
-            let t = db
-                .open_tree(&name)
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                    format!("open sled tree: {}", n)
-                })?;
-            t.flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                    format!("flush sled tree: {}", n)
-                })?;
-        }
-
-        // close it, move its data dir, re-open it.
-        drop(db);
-
-        // TODO(xp): use checksum to check consistency?
-        // TODO(xp): use a pointer to state machine dir to atomically switch to the new sm dir.
-        // TODO(xp): reopen and replace
-
-        let new_sm = StateMachine::open(&self.config).await?;
-        *self = new_sm;
-        Ok(())
     }
 
     /// Internal func to get an auto-incr seq number.
@@ -589,6 +584,25 @@ impl StateMachine {
                 }
             }
         }
+    }
+
+    pub fn get_membership(&self) -> common_exception::Result<Option<MembershipConfig>> {
+        let sm_meta = self.sm_meta();
+        let mem = sm_meta
+            .get(&StateMachineMetaKey::LastMembership)?
+            .map(MembershipConfig::from);
+
+        Ok(mem)
+    }
+
+    pub fn get_last_applied(&self) -> common_exception::Result<LogId> {
+        let sm_meta = self.sm_meta();
+        let last_applied = sm_meta
+            .get(&LastApplied)?
+            .map(LogId::from)
+            .unwrap_or_default();
+
+        Ok(last_applied)
     }
 
     /// Initialize slots by assign nodes to everyone of them randomly, according to replicationn config.

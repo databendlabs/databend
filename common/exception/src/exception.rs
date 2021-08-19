@@ -206,6 +206,9 @@ build_exceptions! {
     MetaStoreAlreadyExists(2402),
     MetaStoreNotFound(2403),
 
+    ConcurrentSnapshotInstall(2404),
+    IllegalSnapshot(2405),
+
     // DatafuseStore server error
 
     DatafuseStoreError(2501),
