@@ -164,6 +164,8 @@ nav:
           - minIf: sqlstatement/aggregate-functions/aggregate-min-if.md
           - maxIf: sqlstatement/aggregate-functions/aggregate-max-if.md
           - sumIf: sqlstatement/aggregate-functions/aggregate-sum-if.md
+      - Conditional Functions:
+          - IF: sqlstatement/conditional-functions/if.md
       - Conversion Functions:
           - CAST: sqlstatement/conversion-functions/cast.md
           - Type Conversion: sqlstatement/conversion-functions/type-conversion.md
