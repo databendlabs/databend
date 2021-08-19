@@ -245,6 +245,8 @@ where
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
         let state = place.get::<AggregateWindowFunnelState<T::Native>>();
+        state.sort();
+
         todo!();
     }
 }
@@ -272,6 +274,40 @@ where
             window: 1024,
             t: PhantomData,
         }))
+    }
+
+    /// Loop through the entire events_list, update the event timestamp value
+    /// The level path must be 1---2---3---...---check_events_size, find the max event level that satisfied the path in the sliding window.
+    /// If found, returns the max event level, else return 0.
+    /// The Algorithm complexity is O(n).
+    fn get_event_level(&mut self, place: StateAddr) -> u8 {
+        let state = place.get::<AggregateWindowFunnelState<T::Native>>();
+        if state.events_list.is_empty() {
+            return 0;
+        }
+        if self.event_size == 1 {
+            return 1;
+        }
+
+        state.sort();
+
+        let mut events_timestamp: Vec<Option<u64>> = Vec::with_capacity(self.event_size);
+        for _i in 0..self.event_size {
+            events_timestamp.push(None);
+        }
+        let mut first_event = false;
+
+        for (timestamp, event) in state.events_list.iter() {
+            let event_idx = event - 1;
+
+            if event_idx == 0 {
+                events_timestamp.push(Some(timestamp));
+                first_event = true;
+            } else if events_timestamp[event_idx - 1].is_some() {
+            }
+        }
+
+        4
     }
 }
 
