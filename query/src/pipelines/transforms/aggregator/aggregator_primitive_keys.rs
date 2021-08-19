@@ -77,21 +77,22 @@ where
         group_cols: Vec<String>,
         mut stream: SendableDataBlockStream,
     ) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
-        let hash_method = &self.method;
-        let aggregator_params = self.params.as_ref();
-
-        let aggr_len = aggregator_params.aggregate_functions.len();
-        let func = &aggregator_params.aggregate_functions;
-        let aggr_cols = &aggregator_params.aggregate_functions_column_name;
-        let aggr_args_name = &aggregator_params.aggregate_functions_arguments_name;
-
-        let layout = self.layout;
-        let offsets_aggregate_states = &self.offsets_aggregate_states;
-
         let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::create(), Bump::new()));
 
         while let Some(block) = stream.next().await {
             let block = block?;
+
+            let hash_method = &self.method;
+            let aggregator_params = self.params.as_ref();
+
+            let aggr_len = aggregator_params.aggregate_functions.len();
+            let func = &aggregator_params.aggregate_functions;
+            let aggr_cols = &aggregator_params.aggregate_functions_column_name;
+            let aggr_args_name = &aggregator_params.aggregate_functions_arguments_name;
+
+            let layout = self.layout;
+            let offsets_aggregate_states = &self.offsets_aggregate_states;
+
             // 1.1 and 1.2.
             let mut group_columns = Vec::with_capacity(group_cols.len());
             {
