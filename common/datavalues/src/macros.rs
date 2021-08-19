@@ -107,6 +107,15 @@ macro_rules! format_data_value_with_option {
     }};
 }
 
+macro_rules! format_utf8_value_with_option {
+    ($F:expr, $EXPR:expr) => {{
+        match $EXPR {
+            Some(e) => write!($F, "'{}'", e),
+            None => write!($F, "NULL"),
+        }
+    }};
+}
+
 macro_rules! typed_cast_from_data_value_to_std {
     ($SCALAR:ident, $NATIVE:ident) => {
         impl DFTryFrom<DataValue> for $NATIVE {

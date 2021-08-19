@@ -24,6 +24,7 @@ fn test_aggregate_function() -> Result<()> {
     struct Test {
         name: &'static str,
         eval_nums: usize,
+        params: Vec<DataValue>,
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
@@ -46,6 +47,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "count-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "count",
             func_name: "count",
@@ -56,6 +58,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "max-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "max",
             func_name: "max",
@@ -66,6 +69,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "min-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "min",
             func_name: "min",
@@ -76,6 +80,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "avg-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "avg",
             func_name: "avg",
@@ -86,6 +91,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "sum-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sum",
@@ -96,6 +102,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "argMax-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmax",
             func_name: "argmax",
@@ -106,6 +113,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "argMin-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmin",
             func_name: "argmin",
@@ -116,6 +124,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "argMin-notpassed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "argmin",
             func_name: "argmin",
@@ -126,6 +135,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "uniq-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "uniq",
             func_name: "uniq",
@@ -140,7 +150,8 @@ fn test_aggregate_function() -> Result<()> {
         let rows = t.arrays[0].len();
 
         let func = || -> Result<()> {
-            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let func =
+                AggregateFunctionFactory::get(t.func_name, t.params.clone(), t.args.clone())?;
 
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
@@ -175,6 +186,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
     struct Test {
         name: &'static str,
         eval_nums: usize,
+        params: Vec<DataValue>,
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
@@ -197,6 +209,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "count-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "count",
             func_name: "count",
@@ -207,6 +220,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "max-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "max",
             func_name: "max",
@@ -217,6 +231,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "min-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "min",
             func_name: "min",
@@ -227,6 +242,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "avg-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "avg",
             func_name: "avg",
@@ -237,6 +253,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "sum-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sum",
@@ -247,6 +264,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "argMax-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmax",
             func_name: "argmax",
@@ -257,6 +275,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "argMin-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmin",
             func_name: "argmin",
@@ -267,6 +286,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "uniq-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "uniq",
             func_name: "uniq",
@@ -281,7 +301,8 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         let rows = t.arrays[0].len();
 
         let func = || -> Result<()> {
-            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let func =
+                AggregateFunctionFactory::get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
 

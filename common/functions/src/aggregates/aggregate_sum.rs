@@ -240,6 +240,7 @@ macro_rules! creator {
 
 pub fn try_create_aggregate_sum_function(
     display_name: &str,
+    _params: Vec<DataValue>,
     arguments: Vec<DataField>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;

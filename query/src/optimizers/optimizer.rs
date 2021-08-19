@@ -18,7 +18,6 @@ use common_tracing::tracing;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ConstantFoldingOptimizer;
-use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::sessions::DatafuseQueryContextRef;
 
@@ -44,7 +43,7 @@ impl Optimizers {
         Optimizers {
             inner: vec![
                 Box::new(ConstantFoldingOptimizer::create(ctx.clone())),
-                Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
+                // Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
                 Box::new(StatisticsExactOptimizer::create(ctx)),
             ],
         }

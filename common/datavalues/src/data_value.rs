@@ -394,7 +394,7 @@ impl fmt::Display for DataValue {
             DataValue::UInt16(v) => format_data_value_with_option!(f, v),
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
-            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
+            DataValue::Utf8(v) => format_utf8_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "NULL"),
             DataValue::Binary(Some(v)) => {
                 for c in v {
@@ -414,11 +414,11 @@ impl fmt::Display for DataValue {
             DataValue::List(Some(v), ..) => {
                 write!(
                     f,
-                    "{}",
+                    "[{}]",
                     v.iter()
                         .map(|v| format!("{}", v))
                         .collect::<Vec<_>>()
-                        .join(",")
+                        .join(", ")
                 )
             }
             DataValue::Struct(v) => write!(f, "{:?}", v),
@@ -444,7 +444,7 @@ impl fmt::Debug for DataValue {
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
-            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
+            DataValue::Utf8(v) => format_utf8_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "{}", self),
             DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
             DataValue::Date32(_) => write!(f, "Date32(\"{}\")", self),

@@ -49,6 +49,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     ref op,
                     distinct: false,
                     ref args,
+                    ..
                 }],
                 PlanNode::Expression(ExpressionPlan { input, .. }),
             ) if op == "count" && args.len() == 1 => match (&args[0], input.as_ref()) {

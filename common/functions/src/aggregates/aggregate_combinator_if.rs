@@ -38,6 +38,7 @@ pub struct AggregateIfCombinator {
 impl AggregateIfCombinator {
     pub fn try_create(
         nested_name: &str,
+        params: Vec<DataValue>,
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
     ) -> Result<AggregateFunctionRef> {
@@ -62,7 +63,7 @@ impl AggregateIfCombinator {
         }
 
         let nested_arguments = &arguments[0..argument_len - 1];
-        let nested = nested_creator(nested_name, nested_arguments.to_vec())?;
+        let nested = nested_creator(nested_name, params, nested_arguments.to_vec())?;
 
         Ok(Arc::new(AggregateIfCombinator {
             name,

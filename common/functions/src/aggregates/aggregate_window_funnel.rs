@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
+use std::ops::Sub;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
@@ -26,7 +27,8 @@ use num::traits::AsPrimitive;
 
 use super::AggregateFunctionRef;
 use super::StateAddr;
-use crate::aggregates::aggregator_common::assert_unary_arguments;
+use crate::aggregates::assert_unary_params;
+use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::dispatch_unsigned_numeric_types;
 
@@ -36,7 +38,15 @@ struct AggregateWindowFunnelState<T> {
 }
 
 impl<T> AggregateWindowFunnelState<T>
-where T: Ord + AsPrimitive<u64> + BinarySer + BinaryDe + Clone + Send + Sync + 'static
+where T: Ord
+        + Sub<Output = T>
+        + AsPrimitive<u64>
+        + BinarySer
+        + BinaryDe
+        + Clone
+        + Send
+        + Sync
+        + 'static
 {
     fn new() -> Self {
         Self {
@@ -62,7 +72,6 @@ where T: Ord + AsPrimitive<u64> + BinarySer + BinaryDe + Clone + Send + Sync + '
         if other.events_list.is_empty() {
             return;
         }
-
         let l1 = self.events_list.len();
         let l2 = other.events_list.len();
 
@@ -88,16 +97,21 @@ where T: Ord + AsPrimitive<u64> + BinarySer + BinaryDe + Clone + Send + Sync + '
                     k += 1;
                     i += 1;
                 } else {
-                    merged.push(other.events_list[i]);
+                    merged.push(other.events_list[j]);
                     k += 1;
                     j += 1;
                 }
             }
+
+            unsafe {
+                merged.set_len(self.events_list.len() + other.events_list.len());
+            }
+
             if i < l1 {
                 merged[k..].copy_from_slice(&self.events_list[i..]);
             }
             if j < l2 {
-                merged[k..].copy_from_slice(&other.events_list[i..]);
+                merged[k..].copy_from_slice(&other.events_list[j..]);
             }
         }
         self.events_list = merged;
@@ -156,7 +170,15 @@ pub struct AggregateWindowFunnelFunction<T> {
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
     T: DFNumericType,
-    T::Native: Ord + AsPrimitive<u64> + BinarySer + BinaryDe + Clone + Send + Sync + 'static,
+    T::Native: Ord
+        + Sub<Output = T::Native>
+        + AsPrimitive<u64>
+        + BinarySer
+        + BinaryDe
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 {
     fn name(&self) -> &str {
         "AggregateWindowFunnelFunction"
@@ -171,7 +193,7 @@ where
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateWindowFunnelState::<T::Native>::new());
+        place.write(AggregateWindowFunnelState::<T::Native>::new);
     }
 
     fn state_layout(&self) -> Layout {
@@ -189,8 +211,8 @@ where
         let state = place.get::<AggregateWindowFunnelState<T::Native>>();
         for (row, timestmap) in tarray.into_iter().enumerate() {
             if let Some(timestmap) = timestmap {
-                for i in 0..self.event_size {
-                    if darrays[i].value(row) {
+                for (i, arr) in darrays.iter().enumerate().take(self.event_size) {
+                    if arr.value(row) {
                         state.add(timestmap, (i + 1) as u8);
                     }
                 }
@@ -215,8 +237,8 @@ where
         for ((row, timestmap), place) in tarray.into_iter().enumerate().zip(places.iter()) {
             if let Some(timestmap) = timestmap {
                 let state = (place.next(offset)).get::<AggregateWindowFunnelState<T::Native>>();
-                for i in 0..self.event_size {
-                    if darrays[i].value(row) {
+                for (i, arr) in darrays.iter().enumerate().take(self.event_size) {
+                    if arr.value(row) {
                         state.add(timestmap, (i + 1) as u8);
                     }
                 }
@@ -244,10 +266,8 @@ where
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = place.get::<AggregateWindowFunnelState<T::Native>>();
-        state.sort();
-
-        todo!();
+        let result = self.get_event_level(place);
+        Ok(DataValue::UInt8(Some(result)))
     }
 }
 
@@ -260,18 +280,28 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 impl<T> AggregateWindowFunnelFunction<T>
 where
     T: DFNumericType,
-    T::Native: Ord + AsPrimitive<u64> + BinarySer + BinaryDe + Clone + Send + Sync + 'static,
+    T::Native: Ord
+        + Sub<Output = T::Native>
+        + AsPrimitive<u64>
+        + BinarySer
+        + BinaryDe
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 {
     pub fn try_create(
         display_name: &str,
+        params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
+        let window = params[0].as_u64()?;
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
             arguments,
             event_size,
-            window: 1024,
+            window,
             t: PhantomData,
         }))
     }
@@ -280,7 +310,7 @@ where
     /// The level path must be 1---2---3---...---check_events_size, find the max event level that satisfied the path in the sliding window.
     /// If found, returns the max event level, else return 0.
     /// The Algorithm complexity is O(n).
-    fn get_event_level(&mut self, place: StateAddr) -> u8 {
+    fn get_event_level(&self, place: StateAddr) -> u8 {
         let state = place.get::<AggregateWindowFunnelState<T::Native>>();
         if state.events_list.is_empty() {
             return 0;
@@ -291,42 +321,65 @@ where
 
         state.sort();
 
-        let mut events_timestamp: Vec<Option<u64>> = Vec::with_capacity(self.event_size);
+        let mut events_timestamp: Vec<Option<T::Native>> = Vec::with_capacity(self.event_size);
         for _i in 0..self.event_size {
             events_timestamp.push(None);
         }
-        let mut first_event = false;
-
         for (timestamp, event) in state.events_list.iter() {
-            let event_idx = event - 1;
+            let event_idx = (event - 1) as usize;
 
             if event_idx == 0 {
-                events_timestamp.push(Some(timestamp));
-                first_event = true;
-            } else if events_timestamp[event_idx - 1].is_some() {
+                events_timestamp[event_idx] = Some(*timestamp);
+            } else if let Some(v) = events_timestamp[event_idx - 1] {
+                // we already sort the events_list
+                let window: u64 = timestamp.sub(v).as_();
+                if window <= self.window {
+                    events_timestamp[event_idx] = events_timestamp[event_idx - 1];
+                }
             }
         }
 
-        4
+        for i in (0..self.event_size).rev() {
+            if events_timestamp[i].is_some() {
+                return i as u8 + 1;
+            }
+        }
+
+        0
     }
 }
 
 macro_rules! creator {
-    ($T: ident, $data_type: expr, $display_name: expr, $arguments: expr) => {
+    ($T: ident, $data_type: expr, $display_name: expr, $params: expr, $arguments: expr) => {
         if $T::data_type() == $data_type {
-            return AggregateWindowFunnelFunction::<$T>::try_create($display_name, $arguments);
+            return AggregateWindowFunnelFunction::<$T>::try_create(
+                $display_name,
+                $params,
+                $arguments,
+            );
         }
     };
 }
 
-pub fn try_create_aggregate_WindowFunnel_function(
+pub fn try_create_aggregate_window_funnel_function(
     display_name: &str,
+    params: Vec<DataValue>,
     arguments: Vec<DataField>,
 ) -> Result<AggregateFunctionRef> {
-    assert_unary_arguments(display_name, arguments.len())?;
+    assert_unary_params(display_name, params.len())?;
+    assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
+
+    for (idx, arg) in arguments[1..].iter().enumerate() {
+        if arg.data_type() != &DataType::Boolean {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Illegal type of the argument {} in AggregateWindowFunnelFunction, must be boolean, got: {}",
+                 idx + 1, arg.data_type()
+            )));
+        }
+    }
 
     let data_type = arguments[0].data_type();
-    dispatch_unsigned_numeric_types! {creator, data_type.clone(), display_name, arguments}
+    dispatch_unsigned_numeric_types! {creator, data_type.clone(), display_name, params, arguments}
 
     Err(ErrorCode::BadDataValueType(format!(
         "AggregateWindowFunnelFunction does not support type '{:?}'",
