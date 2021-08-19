@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::env;
+use std::fs::OpenOptions;
+use std::path::Path;
 use std::sync::Once;
 
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
+use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
@@ -27,6 +30,8 @@ use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::Registry;
 use tracing_subscriber::EnvFilter;
+
+use crate::tracing::subscriber::DefaultGuard;
 
 /// Write logs to stdout.
 pub fn init_default_tracing() {
@@ -54,12 +59,25 @@ fn init_tracing_stdout() {
     let fmt_layer = Layer::default()
         .with_thread_ids(true)
         .with_thread_names(true)
-        .pretty()
-        .with_ansi(true)
+        // .pretty()
+        .with_ansi(false)
         .with_span_events(fmt::format::FmtSpan::FULL);
 
+    let subscriber = Registry::default()
+        .with(EnvFilter::from_default_env())
+        .with(fmt_layer)
+        .with(jaeger_layer());
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("error setting global tracing subscriber");
+}
+
+fn jaeger_layer<
+    S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
+>() -> Option<impl tracing_subscriber::layer::Layer<S>> {
     let fuse_jaeger = env::var("FUSE_JAEGER").unwrap_or_else(|_| "".to_string());
-    let ot_layer = if !fuse_jaeger.is_empty() {
+
+    if !fuse_jaeger.is_empty() {
         global::set_text_map_propagator(TraceContextPropagator::new());
 
         let tracer = opentelemetry_jaeger::new_pipeline()
@@ -71,15 +89,7 @@ fn init_tracing_stdout() {
         Some(ot_layer)
     } else {
         None
-    };
-
-    let subscriber = Registry::default()
-        .with(EnvFilter::from_default_env())
-        .with(fmt_layer)
-        .with(ot_layer);
-
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("error setting global tracing subscriber");
+    }
 }
 
 /// Write logs to file and rotation by HOUR.
@@ -100,8 +110,68 @@ pub fn init_tracing_with_file(app_name: &str, dir: &str, level: &str) -> Vec<Wor
         .with(stdout_logging_layer)
         .with(JsonStorageLayer)
         .with(file_logging_layer);
+
     tracing::subscriber::set_global_default(subscriber)
         .expect("error setting global tracing subscriber");
 
     guards
+}
+
+/// Creates a tracing/logging subscriber that is valid until the guards are dropped.
+/// The format layer logging span/event in plain text, without color, one event per line.
+/// This is useful in a unit test.
+pub fn init_tracing(app_name: &str, dir: &str) -> (WorkerGuard, DefaultGuard) {
+    let (g, sub) = init_file_subscriber(app_name, dir);
+
+    let subs_guard = tracing::subscriber::set_default(sub);
+
+    tracing::info!("initialized tracing");
+    (g, subs_guard)
+}
+
+/// Creates a global tracing/logging subscriber which saves events in one log file.
+pub fn init_global_tracing(app_name: &str, dir: &str) -> WorkerGuard {
+    let (g, sub) = init_file_subscriber(app_name, dir);
+    tracing::subscriber::set_global_default(sub).expect("error setting global tracing subscriber");
+
+    tracing::info!("initialized global tracing");
+    g
+}
+
+/// Create a file based tracing/logging subscriber.
+/// A guard must be held during using the logging.
+/// The format layer logging span/event in plain text, without color, one event per line.
+/// Optionally it adds a layer to send to opentelemetry if env var `FUSE_JAEGER` is present.
+pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Subscriber) {
+    let path_str = dir.to_string() + "/" + app_name;
+    let path: &Path = path_str.as_ref();
+
+    let mut open_options = OpenOptions::new();
+    open_options.append(true).create(true);
+
+    let mut open_res = open_options.open(path);
+    if open_res.is_err() {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+            open_res = open_options.open(path);
+        }
+    }
+
+    let f = open_res.unwrap();
+
+    let (writer, writer_guard) = tracing_appender::non_blocking(f);
+
+    let f_layer = Layer::new()
+        .with_writer(writer)
+        .with_thread_ids(true)
+        .with_thread_names(true)
+        .with_ansi(false)
+        .with_span_events(fmt::format::FmtSpan::FULL);
+
+    let subscriber = Registry::default()
+        .with(EnvFilter::from_default_env())
+        .with(f_layer)
+        .with(jaeger_layer());
+
+    (writer_guard, subscriber)
 }

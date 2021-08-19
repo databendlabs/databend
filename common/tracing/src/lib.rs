@@ -16,7 +16,23 @@ mod logging;
 mod tracing_to_jaeger;
 
 pub use logging::init_default_tracing;
+pub use logging::init_global_tracing;
+pub use logging::init_tracing;
 pub use logging::init_tracing_with_file;
 pub use tracing;
 pub use tracing_to_jaeger::extract_remote_span_as_parent;
 pub use tracing_to_jaeger::inject_span_to_tonic_request;
+
+#[macro_export]
+macro_rules! func_name {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let name = type_name_of(f);
+        let n = &name[..name.len() - 3];
+        let nn = n.replace("::{{closure}}", "");
+        nn
+    }};
+}

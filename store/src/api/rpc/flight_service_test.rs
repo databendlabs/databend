@@ -47,7 +47,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
     // - restart
     // - Test read the db and read the table.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let (mut tc, addr) = crate::tests::start_store_server().await?;
 
@@ -165,7 +165,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_database() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     // 1. Service starts.
     let (_tc, addr) = crate::tests::start_store_server().await?;
@@ -231,7 +231,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_create_get_table() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     use std::sync::Arc;
 
     use common_datavalues::DataField;
@@ -358,7 +358,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_drop_table() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     use std::sync::Arc;
 
     use common_datavalues::DataField;
@@ -463,7 +463,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_append() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     use std::sync::Arc;
 
@@ -537,7 +537,7 @@ async fn test_do_append() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scan_partition() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     use std::sync::Arc;
 
     use common_datavalues::prelude::*;
@@ -631,7 +631,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     {
         let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
         let _ent = span.enter();
@@ -678,7 +678,7 @@ async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_generic_kv_list() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     {
         let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
         let _ent = span.enter();
@@ -725,7 +725,7 @@ async fn test_flight_generic_kv_list() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_generic_kv_delete() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     {
         let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
         let _ent = span.enter();
@@ -792,7 +792,7 @@ async fn test_flight_generic_kv_delete() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_generic_kv_update() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     {
         let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
         let _ent = span.enter();
@@ -900,7 +900,7 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
     // - Test list expired and non-expired.
     // - Test update with a new expire value.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     {
         let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_timeout");
         let _ent = span.enter();
@@ -1012,7 +1012,7 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_generic_kv() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     {
         let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv");
@@ -1087,7 +1087,7 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -1100,7 +1100,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -1161,7 +1161,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
     let (_tc, addr) = crate::tests::start_store_server().await?;
     let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 

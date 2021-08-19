@@ -1453,6 +1453,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
+ "tracing-appender",
  "uuid",
  "warp",
 ]
