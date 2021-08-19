@@ -367,16 +367,40 @@ mod tests {
         )?;
 
         expect_parse_ok(
-            "SHOW DATABASES WHERE DATABASE = 'ss'",
+            "SHOW DATABASES;",
+            DfStatement::ShowDatabases(DfShowDatabases { where_opt: None }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES WHERE Database = 'ss'",
             DfStatement::ShowDatabases(DfShowDatabases {
-                where_opt: { Some(ShowDatabaseWhereOption::Eq("'ss'".to_string())) },
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("ss".to_string()))),
+                }),
             }),
         )?;
 
         expect_parse_ok(
-            "SHOW DATABASES WHERE DATABASE LIKE 'ss%'",
+            "SHOW DATABASES WHERE Database Like 'ss%'",
             DfStatement::ShowDatabases(DfShowDatabases {
-                where_opt: { Some(ShowDatabaseWhereOption::Like("'ss%'".to_string())) },
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Like,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("ss%".to_string()))),
+                }),
+            }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES LIKE 'ss%'",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Like,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("ss%".to_string()))),
+                }),
             }),
         )?;
 

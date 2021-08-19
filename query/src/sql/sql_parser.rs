@@ -22,8 +22,10 @@ use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
 use common_planners::TableEngineType;
 use metrics::histogram;
+use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
+use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::TableConstraint;
@@ -53,7 +55,6 @@ use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::DfUseDatabase;
-use crate::sql::ShowDatabaseWhereOption;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -249,29 +250,45 @@ impl<'a> DfParser<'a> {
 
     // parse show databases where database = xxx or where database
     fn parse_show_databases(&mut self) -> Result<DfStatement, ParserError> {
-        match self.parser.parse_keyword(Keyword::WHERE) {
-            true => {
-                if !self.consume_token("DATABASE") {
-                    return self.expected("database", self.parser.peek_token());
-                }
-
-                if self.consume_token("=") {
-                    let eq_right = self.parser.peek_token().to_string();
-                    self.parser.next_token();
-                    let where_opt = Some(ShowDatabaseWhereOption::Eq(eq_right));
-                    Ok(DfStatement::ShowDatabases(DfShowDatabases { where_opt }))
-                } else if self.consume_token("LIKE") {
-                    let like_right = self.parser.peek_token().to_string();
-                    self.parser.next_token();
-                    let where_opt = Some(ShowDatabaseWhereOption::Like(like_right));
-                    Ok(DfStatement::ShowDatabases(DfShowDatabases { where_opt }))
+        if self.parser.parse_keyword(Keyword::WHERE) {
+            let mut expr = self.parser.parse_expr()?;
+            expr = if let Expr::BinaryOp{left, op, right} = expr {
+                let left_value = format!("{}", left);  
+                if left_value.to_uppercase() == "DATABASE" {
+                    Ok(Expr::BinaryOp {
+                        left: Box::new(Expr::Identifier(Ident::new("name"))),
+                        op,
+                        right,
+                    })   
                 } else {
-                    self.expected(" = or like", self.parser.peek_token())
+                    self.expected("database", Token::make_word(&left_value, None))
                 }
-            }
-            false => Ok(DfStatement::ShowDatabases(DfShowDatabases {
+            } else {
+                Ok(expr) 
+            }?;
+
+            Ok(DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(expr),
+            }))
+        } else if self.parser.parse_keyword(Keyword::LIKE) {
+            let pattern = self.parser.next_token().to_string().replace("'", "");
+            let like_expr = Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: BinaryOperator::Like,
+                right: Box::new(Expr::Value(Value::SingleQuotedString(pattern.to_string()))),
+            };
+
+            Ok(DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(like_expr),
+            }))
+        } else if self.parser.peek_token() == Token::EOF
+            || self.parser.peek_token() == Token::SemiColon
+        {
+            Ok(DfStatement::ShowDatabases(DfShowDatabases {
                 where_opt: None,
-            })),
+            }))
+        } else {
+            self.expected("where or like", self.parser.peek_token())
         }
     }
 

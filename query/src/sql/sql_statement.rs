@@ -38,7 +38,7 @@ pub enum DfShowTables {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowDatabases {
-    pub where_opt: Option<ShowDatabaseWhereOption>,
+    pub where_opt: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -138,12 +138,6 @@ pub enum DfStatement {
     // Kill
     KillQuery(DfKillStatement),
     KillConn(DfKillStatement),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ShowDatabaseWhereOption {
-    Eq(String),
-    Like(String),
 }
 
 /// Comment hints from SQL.

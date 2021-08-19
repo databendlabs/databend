@@ -81,7 +81,6 @@ use crate::sql::DfShowDatabases;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
-use crate::sql::ShowDatabaseWhereOption;
 
 pub struct PlanParser {
     ctx: DatafuseQueryContextRef,
@@ -230,21 +229,18 @@ impl PlanParser {
     /// DfShowDatabase to plan
     #[tracing::instrument(level = "info", skip(self, show), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_show_databases_to_plan(&self, show: &DfShowDatabases) -> Result<PlanNode> {
-        let where_condition = match &show.where_opt {
-            Some(expr) => match expr {
-                ShowDatabaseWhereOption::Eq(r_value) => format!("WHERE name = {}", r_value),
-                ShowDatabaseWhereOption::Like(r_value) => format!("WHERE name LIKE {}", r_value),
-            },
-            None => String::from(" "),
+        let where_clause = match &show.where_opt {
+            Some(expr) => format!("WHERE {}", expr),
+            None => String::from(""),
         };
 
-        let sql = format!(
-            "SELECT name FROM system.databases {} ORDER BY name",
-            where_condition
-        );
-
-        log::debug!("show database sql:{}", sql);
-        self.build_from_sql(sql.as_str())
+        self.build_from_sql(
+            format!(
+                "SELECT name FROM system.databases {} ORDER BY name",
+                where_clause
+            )
+            .as_str(),
+        )
     }
 
     /// DfDropDatabase to plan.
