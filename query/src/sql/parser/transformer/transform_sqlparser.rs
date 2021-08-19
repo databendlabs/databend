@@ -205,11 +205,9 @@ impl TransformerSqlparser {
             .iter()
             .map(|v| self.transform_table_with_joins(v))
             .collect::<Result<_>>()?;
-        if table_refs.len() == 1 {
-            Ok(table_refs.drain(..).next().unwrap())
-        } else {
-            let left_table = table_refs.drain(0..1).next().unwrap();
-            table_refs.into_iter().fold(Ok(left_table), |acc, r| {
+        if !table_refs.is_empty() {
+            let head = table_refs.drain(0..1).next().unwrap();
+            table_refs.into_iter().fold(Ok(head), |acc, r| {
                 Ok(TableReference::Join(Join {
                     op: JoinOperator::CrossJoin,
                     condition: JoinCondition::None,
@@ -217,6 +215,11 @@ impl TransformerSqlparser {
                     right: Box::new(r),
                 }))
             })
+        } else {
+            Err(ErrorCode::SyntaxException(format!(
+                "Invalid SQL statement: {}",
+                self.orig_stmt
+            )))
         }
     }
 
