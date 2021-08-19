@@ -254,7 +254,10 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                     let vs: Vec<u8> = column
                         .bool()?
                         .downcast_iter()
-                        .map(|c| c.unwrap() as u8)
+                        .map(|c| match c {
+                            Some(c) => c as u8,
+                            None => 0,
+                        })
                         .collect();
                     result.column(name, vs)
                 }

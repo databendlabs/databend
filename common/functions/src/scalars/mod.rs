@@ -17,6 +17,7 @@ mod function_column_test;
 
 mod arithmetics;
 mod comparisons;
+mod conditionals;
 mod expressions;
 mod function;
 mod function_alias;
@@ -30,6 +31,7 @@ mod udfs;
 
 pub use arithmetics::*;
 pub use comparisons::*;
+pub use conditionals::*;
 pub use expressions::*;
 pub use function::Function;
 pub use function_alias::AliasFunction;

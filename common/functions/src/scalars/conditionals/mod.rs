@@ -12,15 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetic;
-mod common;
-mod comparison;
 mod conditional;
-mod data_column;
-mod logic;
+mod r#if;
+#[cfg(test)]
+mod if_test;
 
-pub use common::*;
-pub use comparison::*;
-pub use conditional::*;
-pub use data_column::*;
-pub use logic::*;
+pub use conditional::ConditionalFunction;
+pub use r#if::IfFunction;
