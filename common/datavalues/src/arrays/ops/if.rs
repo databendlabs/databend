@@ -107,7 +107,12 @@ impl ArrayIf for DFUtf8Array {
     }
 }
 
+impl ArrayIf for DFNullArray {
+    fn if_then_else(&self, _rhs: &Self, _predicate: &DFBooleanArray) -> Result<Self> {
+        Ok(self.clone())
+    }
+}
+
 impl ArrayIf for DFListArray {}
 impl ArrayIf for DFStructArray {}
 impl ArrayIf for DFBinaryArray {}
-impl ArrayIf for DFNullArray {}
