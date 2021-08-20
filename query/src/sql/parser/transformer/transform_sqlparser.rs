@@ -200,11 +200,27 @@ impl TransformerSqlparser {
         })
     }
 
-    fn transform_from(&self, orig_ast: &[TableWithJoins]) -> Result<Vec<TableReference>> {
-        orig_ast
+    fn transform_from(&self, orig_ast: &[TableWithJoins]) -> Result<TableReference> {
+        let mut table_refs: Vec<TableReference> = orig_ast
             .iter()
             .map(|v| self.transform_table_with_joins(v))
-            .collect()
+            .collect::<Result<_>>()?;
+        if !table_refs.is_empty() {
+            let head = table_refs.drain(0..1).next().unwrap();
+            table_refs.into_iter().fold(Ok(head), |acc, r| {
+                Ok(TableReference::Join(Join {
+                    op: JoinOperator::CrossJoin,
+                    condition: JoinCondition::None,
+                    left: Box::new(acc?),
+                    right: Box::new(r),
+                }))
+            })
+        } else {
+            Err(ErrorCode::SyntaxException(format!(
+                "Invalid SQL statement: {}",
+                self.orig_stmt
+            )))
+        }
     }
 
     fn transform_table_with_joins(

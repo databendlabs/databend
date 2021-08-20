@@ -62,7 +62,7 @@ pub struct SelectStmt {
     // `FROM` clause, a list of table references.
     // The table references split by `,` will be joined with cross join,
     // and the result set is union of the joined tables by default.
-    pub from: Vec<TableReference>,
+    pub from: TableReference,
     // `WHERE` clause
     pub selection: Option<Expr>,
     // `GROUP BY` clause
@@ -307,13 +307,7 @@ impl Display for SelectStmt {
         }
 
         // FROM clause
-        write!(f, " FROM ")?;
-        for i in 0..self.from.len() {
-            write!(f, "{}", self.from[i])?;
-            if i != self.from.len() - 1 {
-                write!(f, ", ")?;
-            }
-        }
+        write!(f, " FROM {}", self.from)?;
 
         // WHERE clause
         if let Some(expr) = &self.selection {

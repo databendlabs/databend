@@ -63,7 +63,7 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
     // - Bring up an ActionHandler backed with a Dfs
     // - Assert pulling file works fine.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {
         "foo" => "bar",
@@ -95,7 +95,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert retrieving database.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct D {
         plan: CreateDatabasePlan,
@@ -162,7 +162,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct T {
         db_name: &'static str,
@@ -232,7 +232,7 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct T {
         db_name: &'static str,
@@ -311,7 +311,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert retrieving database.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct D {
         plan: CreateDatabasePlan,
@@ -433,7 +433,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct T {
         db_name: &'static str,
@@ -543,7 +543,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct T {
         db_name: &'static str,
@@ -653,7 +653,7 @@ async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
     // - Add a table.
     // - Assert getting present and absent databases.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct T {
         db_name: &'static str,

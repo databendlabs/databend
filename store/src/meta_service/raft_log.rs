@@ -87,6 +87,19 @@ impl RaftLog {
         self.logs().range_remove(range, true).await
     }
 
+    /// Returns an iterator of logs
+    pub fn range<R>(
+        &self,
+        range: R,
+    ) -> common_exception::Result<
+        impl DoubleEndedIterator<Item = common_exception::Result<(LogIndex, Entry<LogEntry>)>>,
+    >
+    where
+        R: RangeBounds<LogIndex>,
+    {
+        self.logs().range(range)
+    }
+
     pub fn range_keys<R>(&self, range: R) -> common_exception::Result<Vec<LogIndex>>
     where R: RangeBounds<LogIndex> {
         self.logs().range_keys(range)

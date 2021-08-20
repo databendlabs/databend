@@ -65,6 +65,9 @@ pub struct StoreTestContext {
     #[allow(dead_code)]
     local_fs_tmp_dir: TempDir,
 
+    // /// To hold a per-case logging guard
+    // #[allow(dead_code)]
+    // logging_guard: (WorkerGuard, DefaultGuard),
     pub config: configs::Config,
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
@@ -75,6 +78,8 @@ pub struct StoreTestContext {
 
 /// Create a new Config for test, with unique port assigned
 pub fn new_test_context() -> StoreTestContext {
+    let config_id = next_port();
+
     let mut config = configs::Config::empty();
 
     // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
@@ -83,15 +88,17 @@ pub fn new_test_context() -> StoreTestContext {
         config.meta_no_sync = true;
     }
 
-    // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
-    config.sled_tree_prefix = format!("test-{}-", next_port());
+    config.config_id = format!("{}", config_id);
 
     // By default, create a meta node instead of open an existent one.
     config.single = true;
 
-    config.meta_api_port = next_port();
+    config.meta_api_port = config_id;
 
     let host = "127.0.0.1";
+
+    // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
+    config.sled_tree_prefix = format!("test-{}-", config_id);
 
     {
         let flight_port = next_port();
@@ -157,10 +164,13 @@ pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {
 }
 
 /// 1. Open a temp sled::Db for all tests.
-/// 2. initialize tracing
-pub fn init_store_unittest() {
-    let t = tempdir().expect("create temp dir to store meta");
+/// 2. initialize a non global tracing.
+///
+/// A provided `name` is used to name the log file.
+pub fn init_store_unittest(_name: &str) -> () {
+    let t = tempdir().expect("create temp dir to sled db");
     init_temp_sled_db(t);
 
-    common_tracing::init_default_tracing();
+    // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
+    common_tracing::init_default_tracing()
 }

@@ -82,39 +82,24 @@ mod test {
                 ]),
                 SelectTarget::Indirections(vec![Indirection::Star]),
             ],
-            from: vec![
-                TableReference::Table {
+            from: TableReference::Join(Join {
+                op: JoinOperator::Inner,
+                condition: JoinCondition::Natural,
+                left: Box::new(TableReference::Table {
                     name: vec![Identifier {
-                        name: "table".to_owned(),
+                        name: "left_table".to_owned(),
                         quote: None,
                     }],
-                    alias: Some(TableAlias {
-                        name: Identifier {
-                            name: "table1".to_owned(),
-                            quote: None,
-                        },
-                        columns: vec![],
-                    }),
-                },
-                TableReference::Join(Join {
-                    op: JoinOperator::Inner,
-                    condition: JoinCondition::Natural,
-                    left: Box::new(TableReference::Table {
-                        name: vec![Identifier {
-                            name: "left_table".to_owned(),
-                            quote: None,
-                        }],
-                        alias: None,
-                    }),
-                    right: Box::new(TableReference::Table {
-                        name: vec![Identifier {
-                            name: "right_table".to_owned(),
-                            quote: None,
-                        }],
-                        alias: None,
-                    }),
+                    alias: None,
                 }),
-            ],
+                right: Box::new(TableReference::Table {
+                    name: vec![Identifier {
+                        name: "right_table".to_owned(),
+                        quote: None,
+                    }],
+                    alias: None,
+                }),
+            }),
             selection: Some(Expr::BinaryOp {
                 op: BinaryOperator::Eq,
                 left: Box::new(Expr::ColumnRef(vec![Identifier {
@@ -145,8 +130,26 @@ mod test {
 
         assert_eq!(
             format!("{}", stmt),
-            r#"SELECT DISTINCT table.column, * FROM table AS table1, left_table NATURAL INNER JOIN right_table WHERE a = b GROUP BY a HAVING a <> b"#
+            r#"SELECT DISTINCT table.column, * FROM left_table NATURAL INNER JOIN right_table WHERE a = b GROUP BY a HAVING a <> b"#
         );
+    }
+
+    #[test]
+    fn test_display_table_reference() {
+        let table_ref = TableReference::Table {
+            name: vec![Identifier {
+                name: "table".to_owned(),
+                quote: None,
+            }],
+            alias: Some(TableAlias {
+                name: Identifier {
+                    name: "table1".to_owned(),
+                    quote: None,
+                },
+                columns: vec![],
+            }),
+        };
+        assert_eq!(format!("{}", table_ref), "table AS table1");
     }
 
     #[test]
