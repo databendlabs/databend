@@ -10,3 +10,6 @@ SELECT toTypeName(toUInt32('64')) FROM numbers_mt(1);
 SELECT CAST(1 + 1, Float64);
 SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);
 
+SELECT CAST(Null as Int64);
+SELECT CAST(Null as Boolean);
+SELECT CAST(Null as Varchar);

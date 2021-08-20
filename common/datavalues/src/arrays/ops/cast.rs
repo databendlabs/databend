@@ -67,25 +67,23 @@ where
 
 macro_rules! cast_with_type {
     ($self:expr, $data_type:expr) => {{
-        use crate::types::DataType::*;
-
         match $data_type {
-            Boolean => ArrayCast::cast::<BooleanType>($self).map(|ca| ca.into_series()),
-            Utf8 => ArrayCast::cast::<Utf8Type>($self).map(|ca| ca.into_series()),
-            UInt8 => ArrayCast::cast::<UInt8Type>($self).map(|ca| ca.into_series()),
-            UInt16 => ArrayCast::cast::<UInt16Type>($self).map(|ca| ca.into_series()),
-            UInt32 => ArrayCast::cast::<UInt32Type>($self).map(|ca| ca.into_series()),
-            UInt64 => ArrayCast::cast::<UInt64Type>($self).map(|ca| ca.into_series()),
-            Int8 => ArrayCast::cast::<Int8Type>($self).map(|ca| ca.into_series()),
-            Int16 => ArrayCast::cast::<Int16Type>($self).map(|ca| ca.into_series()),
-            Int32 => ArrayCast::cast::<Int32Type>($self).map(|ca| ca.into_series()),
-            Int64 => ArrayCast::cast::<Int64Type>($self).map(|ca| ca.into_series()),
-            Float32 => ArrayCast::cast::<Float32Type>($self).map(|ca| ca.into_series()),
-            Float64 => ArrayCast::cast::<Float64Type>($self).map(|ca| ca.into_series()),
-            Date32 => ArrayCast::cast::<Date32Type>($self).map(|ca| ca.into_series()),
-            Date64 => ArrayCast::cast::<Date64Type>($self).map(|ca| ca.into_series()),
+            DataType::Boolean => ArrayCast::cast::<BooleanType>($self).map(|ca| ca.into_series()),
+            DataType::Utf8 => ArrayCast::cast::<Utf8Type>($self).map(|ca| ca.into_series()),
+            DataType::UInt8 => ArrayCast::cast::<UInt8Type>($self).map(|ca| ca.into_series()),
+            DataType::UInt16 => ArrayCast::cast::<UInt16Type>($self).map(|ca| ca.into_series()),
+            DataType::UInt32 => ArrayCast::cast::<UInt32Type>($self).map(|ca| ca.into_series()),
+            DataType::UInt64 => ArrayCast::cast::<UInt64Type>($self).map(|ca| ca.into_series()),
+            DataType::Int8 => ArrayCast::cast::<Int8Type>($self).map(|ca| ca.into_series()),
+            DataType::Int16 => ArrayCast::cast::<Int16Type>($self).map(|ca| ca.into_series()),
+            DataType::Int32 => ArrayCast::cast::<Int32Type>($self).map(|ca| ca.into_series()),
+            DataType::Int64 => ArrayCast::cast::<Int64Type>($self).map(|ca| ca.into_series()),
+            DataType::Float32 => ArrayCast::cast::<Float32Type>($self).map(|ca| ca.into_series()),
+            DataType::Float64 => ArrayCast::cast::<Float64Type>($self).map(|ca| ca.into_series()),
+            DataType::Date32 => ArrayCast::cast::<Date32Type>($self).map(|ca| ca.into_series()),
+            DataType::Date64 => ArrayCast::cast::<Date64Type>($self).map(|ca| ca.into_series()),
 
-            List(_) => ArrayCast::cast::<ListType>($self).map(|ca| ca.into_series()),
+            DataType::List(_) => ArrayCast::cast::<ListType>($self).map(|ca| ca.into_series()),
             dt => Err(ErrorCode::IllegalDataType(format!(
                 "Arrow datatype {:?} not supported by Datafuse",
                 dt
@@ -137,15 +135,29 @@ impl ArrayCast for DFNullArray {
     }
 
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        //special case for `and(null, true)`, null can cast into boolean array
-        // TODO: add other types match
-        if data_type == &DataType::Boolean {
-            Ok(DFBooleanArray::full_null(self.len()).into_series())
-        } else {
-            Err(ErrorCode::BadDataValueType(format!(
+        match data_type {
+            DataType::Null => Ok(self.clone().into_series()),
+            DataType::Boolean => Ok(DFBooleanArray::full_null(self.len()).into_series()),
+            DataType::Utf8 => Ok(DFUtf8Array::full_null(self.len()).into_series()),
+            DataType::UInt8 => Ok(DFUInt8Array::full_null(self.len()).into_series()),
+            DataType::UInt16 => Ok(DFUInt16Array::full_null(self.len()).into_series()),
+            DataType::UInt32 => Ok(DFUInt32Array::full_null(self.len()).into_series()),
+            DataType::UInt64 => Ok(DFUInt64Array::full_null(self.len()).into_series()),
+            DataType::Int8 => Ok(DFInt8Array::full_null(self.len()).into_series()),
+            DataType::Int16 => Ok(DFInt16Array::full_null(self.len()).into_series()),
+            DataType::Int32 => Ok(DFInt32Array::full_null(self.len()).into_series()),
+            DataType::Int64 => Ok(DFInt64Array::full_null(self.len()).into_series()),
+            DataType::Float32 => Ok(DFFloat32Array::full_null(self.len()).into_series()),
+            DataType::Float64 => Ok(DFFloat64Array::full_null(self.len()).into_series()),
+            DataType::Date32 => Ok(DFDate32Array::full_null(self.len()).into_series()),
+            DataType::Date64 => Ok(DFDate64Array::full_null(self.len()).into_series()),
+            DataType::Binary => Ok(DFBinaryArray::full_null(self.len()).into_series()),
+            DataType::List(_) => Ok(DFListArray::full_null(self.len()).into_series()),
+
+            _ => Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported cast_with_type operation for {:?}",
                 self,
-            )))
+            ))),
         }
     }
 }
