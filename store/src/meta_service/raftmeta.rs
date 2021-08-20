@@ -655,8 +655,8 @@ impl MetaNode {
         Config::build("foo_cluster".into())
             .heartbeat_interval(hb)
             // Choose a rational value for election timeout.
-            .election_timeout_min(hb * 4)
-            .election_timeout_max(hb * 8)
+            .election_timeout_min(hb * 8)
+            .election_timeout_max(hb * 12)
             .snapshot_policy(SnapshotPolicy::LogsSinceLast(
                 config.snapshot_logs_since_last,
             ))
