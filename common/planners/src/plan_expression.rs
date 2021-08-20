@@ -155,7 +155,10 @@ impl Expression {
                 args,
             } => {
                 let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
-                let params_name = params.iter().map(DataValue::to_string).collect::<Vec<_>>();
+                let params_name = params
+                    .iter()
+                    .map(|v| DataValue::custom_display(v, true))
+                    .collect::<Vec<_>>();
 
                 let prefix = if params.is_empty() {
                     op.to_string()
@@ -343,7 +346,10 @@ impl fmt::Debug for Expression {
                 args,
             } => {
                 let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
-                let params_name = params.iter().map(DataValue::to_string).collect::<Vec<_>>();
+                let params_name = params
+                    .iter()
+                    .map(|v| DataValue::custom_display(v, true))
+                    .collect::<Vec<_>>();
 
                 if params.is_empty() {
                     write!(f, "{}", op)?;

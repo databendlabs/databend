@@ -110,7 +110,7 @@ macro_rules! format_data_value_with_option {
 macro_rules! format_utf8_value_with_option {
     ($F:expr, $EXPR:expr) => {{
         match $EXPR {
-            Some(e) => write!($F, "'{}'", e),
+            Some(e) => write!($F, "{}", e),
             None => write!($F, "NULL"),
         }
     }};
