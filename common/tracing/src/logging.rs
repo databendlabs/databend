@@ -58,7 +58,7 @@ pub fn init_default_tracing() {
 fn init_tracing_stdout() {
     let fmt_layer = Layer::default()
         .with_thread_ids(true)
-        .with_thread_names(true)
+        .with_thread_names(false)
         // .pretty()
         .with_ansi(false)
         .with_span_events(fmt::format::FmtSpan::FULL);
@@ -82,7 +82,8 @@ fn jaeger_layer<
 
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_service_name("datafuse-store")
-            .install_batch(opentelemetry::runtime::Tokio)
+            .install_simple()
+            // .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
         let ot_layer = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -164,7 +165,7 @@ pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Sub
     let f_layer = Layer::new()
         .with_writer(writer)
         .with_thread_ids(true)
-        .with_thread_names(true)
+        .with_thread_names(false)
         .with_ansi(false)
         .with_span_events(fmt::format::FmtSpan::FULL);
 
