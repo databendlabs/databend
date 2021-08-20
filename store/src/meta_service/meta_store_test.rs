@@ -43,7 +43,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     // TODO check log
     // TODO check state machine
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let id = 3;
     let mut tc = new_test_context();
@@ -88,7 +88,7 @@ async fn test_meta_store_get_membership_from_log() -> anyhow::Result<()> {
     // - Append logs
     // - Get membership from log.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let id = 3;
     let mut tc = new_test_context();
@@ -187,7 +187,7 @@ async fn test_meta_store_do_log_compaction_empty() -> anyhow::Result<()> {
     // - Create a MetaStore
     // - Create a snapshot check snapshot state
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let id = 3;
     let mut tc = new_test_context();
@@ -235,7 +235,7 @@ async fn test_meta_store_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<
     // - Apply logs
     // - Create a snapshot check snapshot state
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let id = 3;
     let mut tc = new_test_context();
@@ -302,7 +302,7 @@ async fn test_meta_store_do_log_compaction_all_logs_with_memberchange() -> anyho
     // - Apply logs
     // - Create a snapshot check snapshot state
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let id = 3;
     let mut tc = new_test_context();
@@ -355,7 +355,7 @@ async fn test_meta_store_do_log_compaction_current_snapshot() -> anyhow::Result<
     // - Apply logs
     // - Create a snapshot check snapshot state
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let id = 3;
     let mut tc = new_test_context();
@@ -407,7 +407,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     // - Create a snapshot
     // - Create a new MetaStore and restore it by install the snapshot
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let (logs, want) = snapshot_logs();
 

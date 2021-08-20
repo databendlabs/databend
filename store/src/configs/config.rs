@@ -41,6 +41,10 @@ lazy_static! {
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
+    /// Identify a config. This is only meant to make debugging easier with more than one Config involved.
+    #[structopt(long, default_value = "")]
+    pub config_id: String,
+
     #[structopt(long, env = "STORE_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 

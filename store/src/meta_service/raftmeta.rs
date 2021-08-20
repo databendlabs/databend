@@ -49,6 +49,7 @@ use common_runtime::tokio::sync::RwLock;
 use common_runtime::tokio::sync::RwLockWriteGuard;
 use common_runtime::tokio::task::JoinHandle;
 use common_tracing::tracing;
+use common_tracing::tracing::Instrument;
 
 use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
@@ -150,7 +151,7 @@ impl MetaStore {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create(
         config: &configs::Config,
         open: Option<()>,
@@ -698,7 +699,7 @@ impl MetaNode {
     }
 
     /// Start a MetaStore node from initialized store.
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open(config: &configs::Config) -> common_exception::Result<Arc<MetaNode>> {
         let (mn, _is_open) = Self::open_create_boot(config, Some(()), None, None).await?;
         Ok(mn)
@@ -709,7 +710,7 @@ impl MetaNode {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
     /// 3. If `boot` is `Some` and it is just created, try to initialize a single-node cluster.
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
         config: &configs::Config,
         open: Option<()>,
@@ -786,47 +787,54 @@ impl MetaNode {
         // TODO: reduce dependency: it does not need all of the fields in MetaNode
         let mn = mn.clone();
 
-        let h = tokio::task::spawn(async move {
-            loop {
-                let changed = tokio::select! {
-                    _ = running_rx.changed() => {
-                       return Ok::<(), common_exception::ErrorCode>(());
-                    }
-                    changed = metrics_rx.changed() => {
-                        changed
-                    }
-                };
-                if changed.is_ok() {
-                    let mm = metrics_rx.borrow().clone();
-                    if let Some(cur) = mm.current_leader {
-                        if cur == mn.sto.id {
-                            // TODO: check result
-                            let _rst = mn.add_configured_non_voters().await;
+        let span = tracing::span!(tracing::Level::INFO, "watch-metrics");
 
-                            if _rst.is_err() {
-                                tracing::info!(
-                                    "fail to add non-voter: my id={}, rst:{:?}",
-                                    mn.sto.id,
-                                    _rst
-                                );
+        let h = tokio::task::spawn(
+            {
+                async move {
+                    loop {
+                        let changed = tokio::select! {
+                            _ = running_rx.changed() => {
+                               return Ok::<(), common_exception::ErrorCode>(());
                             }
+                            changed = metrics_rx.changed() => {
+                                changed
+                            }
+                        };
+                        if changed.is_ok() {
+                            let mm = metrics_rx.borrow().clone();
+                            if let Some(cur) = mm.current_leader {
+                                if cur == mn.sto.id {
+                                    // TODO: check result
+                                    let _rst = mn.add_configured_non_voters().await;
+
+                                    if _rst.is_err() {
+                                        tracing::info!(
+                                            "fail to add non-voter: my id={}, rst:{:?}",
+                                            mn.sto.id,
+                                            _rst
+                                        );
+                                    }
+                                }
+                            }
+                        } else {
+                            // shutting down
+                            break;
                         }
                     }
-                } else {
-                    // shutting down
-                    break;
+
+                    Ok::<(), common_exception::ErrorCode>(())
                 }
             }
-
-            Ok::<(), common_exception::ErrorCode>(())
-        });
+            .instrument(span),
+        );
         jh.push(h);
     }
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
     /// When a node is initialized with boot or boot_non_voter, start it with MetaStore::new().
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot(
         node_id: NodeId,
         config: &configs::Config,
@@ -867,7 +875,7 @@ impl MetaNode {
     /// Boot a node that is going to join an existent cluster.
     /// For every node this should be called exactly once.
     /// When successfully initialized(e.g. received logs from raft leader), a node should be started with MetaNode::open().
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot_non_voter(
         node_id: NodeId,
         config: &configs::Config,

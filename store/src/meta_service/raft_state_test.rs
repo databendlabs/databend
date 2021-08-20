@@ -23,7 +23,7 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     // - create a raft state
     // - creating another raft state in the same sled db should fail
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let mut tc = new_sled_test_context();
     let db = &tc.db;
@@ -57,7 +57,7 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
     // - create a raft state
     // - open it.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let mut tc = new_sled_test_context();
     let db = &tc.db;
@@ -78,7 +78,7 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let mut tc = new_sled_test_context();
     let db = &tc.db;
@@ -96,7 +96,7 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
 async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
     // - create a raft state
     // - write hard_state and the read it.
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let mut tc = new_sled_test_context();
     let db = &tc.db;
@@ -130,7 +130,7 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
 async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
     // - create a raft state
     // - write state machine id and the read it.
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let mut tc = new_sled_test_context();
     let db = &tc.db;

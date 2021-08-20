@@ -197,7 +197,7 @@ impl StateMachine {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
     pub fn clean(config: &configs::Config, sm_id: u64) -> common_exception::Result<()> {
         let tree_name = StateMachine::tree_name(config, sm_id);
 
@@ -210,7 +210,7 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug")]
+    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open(
         config: &configs::Config,
         sm_id: u64,

@@ -48,7 +48,7 @@ async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     // - Create a state machine with 3 node 1,3,5.
     // - Assert that expected number of nodes are assigned to a slot.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 1).await?;
@@ -88,7 +88,7 @@ async fn test_state_machine_init_slots() -> anyhow::Result<()> {
     // - Initialize all slots.
     // - Assert slot states.
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 1).await?;
@@ -119,7 +119,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
     // - Assert default state machine builder
     // - Assert customized state machine builder
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     {
         let tc = new_test_context();
@@ -153,7 +153,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 1).await?;
@@ -189,7 +189,7 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 1).await?;
@@ -216,7 +216,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut m = StateMachine::open(&tc.config, 1).await?;
@@ -297,7 +297,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 1).await?;
@@ -450,7 +450,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     struct T {
         // input:
@@ -546,7 +546,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 1).await?;
@@ -584,7 +584,7 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 1).await?;
@@ -625,7 +625,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     // - Feed logs into state machine.
     // - Take a snapshot and examine the data
 
-    init_store_unittest();
+    let _log_guards = init_store_unittest(&common_tracing::func_name!());
 
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config, 0).await?;

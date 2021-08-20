@@ -170,7 +170,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.9#8b59966dd0a6bf804eb0ba978b5375010bfbc3f3"
+source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.10#6350514cc414dc9d7e9aa0e21ea7b546ed223235"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1453,6 +1453,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
+ "tracing-appender",
  "uuid",
  "warp",
 ]
