@@ -21,12 +21,12 @@ use common_runtime::tokio;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
-use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_sled_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_open() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
     let tc = new_sled_test_context();
     let db = &tc.db;
     RaftLog::open(db, &tc.config).await?;
@@ -36,7 +36,8 @@ async fn test_raft_log_open() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
     let tc = new_sled_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.config).await?;
@@ -110,7 +111,8 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_insert() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
     let tc = new_sled_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.config).await?;
@@ -146,7 +148,8 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_get() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
     let tc = new_sled_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.config).await?;
@@ -184,7 +187,8 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_last() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
     let tc = new_sled_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.config).await?;
@@ -217,7 +221,8 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_range_remove() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
     let tc = new_sled_test_context();
     let db = &tc.db;
     let rl = RaftLog::open(db, &tc.config).await?;

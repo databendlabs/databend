@@ -29,12 +29,12 @@ use crate::meta_service::SledTree;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 use crate::meta_service::StateMachineMetaValue;
-use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_sled_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_open() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -45,7 +45,8 @@ async fn test_sledtree_open() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_append() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -103,7 +104,8 @@ async fn test_sledtree_append() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_append_values_and_range_get() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -178,7 +180,8 @@ async fn test_sledtree_append_values_and_range_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_range_keys() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -230,7 +233,8 @@ async fn test_sledtree_range_keys() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_range_kvs() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -261,7 +265,8 @@ async fn test_sledtree_range_kvs() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_range() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     // This test assumes the following order.
     // to check the range boundary.
@@ -356,7 +361,8 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_scan_prefix() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -380,7 +386,8 @@ async fn test_sledtree_scan_prefix() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_insert() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -444,7 +451,8 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_contains_key() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -483,7 +491,8 @@ async fn test_sledtree_contains_key() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_update_and_fetch() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -508,7 +517,8 @@ async fn test_sledtree_update_and_fetch() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_get() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -547,7 +557,8 @@ async fn test_sledtree_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_last() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     // This test assumes the following order.
     // To ensure a last() does not returns item from another key space with smaller prefix
@@ -604,7 +615,8 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_remove() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -644,7 +656,8 @@ async fn test_sledtree_remove() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_range_remove() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -724,7 +737,8 @@ async fn test_sledtree_range_remove() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sledtree_multi_types() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -792,7 +806,8 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_append() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -851,7 +866,8 @@ async fn test_as_append() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -927,7 +943,8 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_keys() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -980,7 +997,8 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_kvs() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1012,7 +1030,8 @@ async fn test_as_range_kvs() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_scan_prefix() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1055,7 +1074,8 @@ async fn test_as_scan_prefix() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_insert() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1116,7 +1136,8 @@ async fn test_as_insert() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_contains_key() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1156,7 +1177,8 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_update_and_fetch() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1178,7 +1200,8 @@ async fn test_as_update_and_fetch() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_get() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1218,7 +1241,8 @@ async fn test_as_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_last() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1253,7 +1277,8 @@ async fn test_as_last() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_remove() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1286,7 +1311,8 @@ async fn test_as_remove() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_remove() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -1348,7 +1374,8 @@ async fn test_as_range_remove() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_multi_types() -> anyhow::Result<()> {
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
