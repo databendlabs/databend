@@ -289,7 +289,7 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
         (DataType::Null, _) => Ok(rhs_type.clone()),
         (_, DataType::Null) => Ok(lhs_type.clone()),
         (DataType::List(a), DataType::List(b)) => {
-            if a.is_nullable() != b.is_nullable() || a.name() != b.name() {
+            if a.name() != b.name() {
                 return Result::Err(ErrorCode::BadDataValueType(format!(
                     "Can't merge types from {} and {}",
                     lhs_type, rhs_type
@@ -299,7 +299,7 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
             Ok(DataType::List(Box::new(DataField::new(
                 a.name(),
                 typ,
-                a.is_nullable(),
+                a.is_nullable() || b.is_nullable(),
             ))))
         }
         (DataType::Struct(a), DataType::Struct(b)) => {
@@ -313,14 +313,18 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
                 .iter()
                 .zip(b.iter())
                 .map(|(a, b)| {
-                    if a.is_nullable() != b.is_nullable() || a.name() != b.name() {
+                    if a.name() != b.name() {
                         return Result::Err(ErrorCode::BadDataValueType(format!(
                             "Can't merge types from {} and {}",
                             lhs_type, rhs_type
                         )));
                     }
                     let typ = merge_types(a.data_type(), b.data_type())?;
-                    Ok(DataField::new(a.name(), typ, a.is_nullable()))
+                    Ok(DataField::new(
+                        a.name(),
+                        typ,
+                        a.is_nullable() || b.is_nullable(),
+                    ))
                 })
                 .collect::<Result<Vec<_>>>()?;
             Ok(DataType::Struct(fields))
