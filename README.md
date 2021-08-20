@@ -29,6 +29,14 @@
 </div>
 <br>
 
+- [What is Datafuse?](#what-is-datafuse)
+- [Design Overview](#design-overview)
+   - [Meta Service Layer](#meta-service-layer)
+   - [Compute Layer](#compute-layer)
+   - [Storage Layer](#storage-layer)
+- [Getting Started](#getting-started)
+- [Roadmap](#roadmap)
+
 ## What is Datafuse
 
 Datafuse is an open source **elastic** and **scalable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
