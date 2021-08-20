@@ -303,7 +303,7 @@ jobs:
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./ref.log s3://$BUCKET/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/log/ref.log;
           make run_compare;
           kubectl wait --for=condition=complete jobs --all -n default --timeout=7200s 2>/dev/null;
-          export REPORT=https://${{ env.ENDPOINT }}/report/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/performance.txt;
+          export REPORT=${{ env.ENDPOINT }}/report/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/performance.html;
           export UPLOADED=$(for i in {1..10}; do if [[ $(curl -i -s  $REPORT | grep -c "<Code>NoSuchKey</Code>") == 0 ]]; then echo "Uploaded" && break; else kubectl delete jobs -n default --all && make run_compare && kubectl wait --for=condition=complete jobs --all -n default --timeout=7200s 2>/dev/null && echo "retry"; fi; done | grep -c "Uploaded");
           if [[ $UPLOADED == 0 ]]; then echo "cannot upload compare file to S3" && exit 1; else echo "upload success!"; fi;
           echo ::set-output name=report::"report url: $REPORT"
