@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use super::expression::Literal;
 use super::expression::TypeName;
 use super::Identifier;
+use crate::sql::parser::ast::display_identifier_vec;
 use crate::sql::parser::ast::query::Query;
-use crate::sql::parser::ast::write_identifier_vec;
 
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]
@@ -40,13 +40,15 @@ pub enum Statement {
     ShowSettings,
     ShowProcessList,
     ShowCreateTable {
-        name: Vec<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
     },
 
     // DDL statements
     CreateTable {
         if_not_exists: bool,
-        name: Vec<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
         columns: Vec<ColumnDefinition>,
         // TODO(leiysky): use enum to represent engine instead?
         // Thus we have to check validity of engine in parser.
@@ -56,25 +58,28 @@ pub enum Statement {
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
     Describe {
-        name: Vec<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
     },
     DropTable {
         if_exists: bool,
-        name: Vec<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
     },
     TruncateTable {
-        name: Vec<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
     },
     CreateDatabase {
         if_not_exists: bool,
-        name: Vec<Identifier>,
+        name: Identifier,
         // TODO(leiysky): use enum to represent engine instead?
         // Thus we have to check validity of engine in parser.
         engine: String,
         options: Vec<SQLProperty>,
     },
     UseDatabase {
-        name: Vec<Identifier>,
+        name: Identifier,
     },
     KillStmt {
         object_id: Identifier,
@@ -136,13 +141,19 @@ impl Display for Statement {
             Statement::ShowProcessList => {
                 write!(f, "SHOW PROCESSLIST")?;
             }
-            Statement::ShowCreateTable { name } => {
+            Statement::ShowCreateTable { database, table } => {
                 write!(f, "SHOW CREATE TABLE ")?;
-                write_identifier_vec(name, f)?;
+                let mut idents = vec![];
+                if let Some(ident) = database {
+                    idents.push(ident.to_owned());
+                }
+                idents.push(table.to_owned());
+                display_identifier_vec(f, &idents)?;
             }
             Statement::CreateTable {
                 if_not_exists,
-                name,
+                database,
+                table,
                 columns,
                 ..
             } => {
@@ -150,7 +161,12 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
-                write_identifier_vec(name, f)?;
+                let mut idents = vec![];
+                if let Some(ident) = database {
+                    idents.push(ident.to_owned());
+                }
+                idents.push(table.to_owned());
+                display_identifier_vec(f, &idents)?;
                 write!(f, " (")?;
                 for i in 0..columns.len() {
                     write!(f, "{}", columns[i])?;
@@ -161,20 +177,39 @@ impl Display for Statement {
                 write!(f, ")")?;
                 // TODO(leiysky): display rest information
             }
-            Statement::Describe { name } => {
+            Statement::Describe { database, table } => {
                 write!(f, "DESCRIBE ")?;
-                write_identifier_vec(name, f)?;
+                let mut idents = vec![];
+                if let Some(ident) = database {
+                    idents.push(ident.to_owned());
+                }
+                idents.push(table.to_owned());
+                display_identifier_vec(f, &idents)?;
             }
-            Statement::DropTable { if_exists, name } => {
+            Statement::DropTable {
+                if_exists,
+                database,
+                table,
+            } => {
                 write!(f, "DROP TABLE ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
-                write_identifier_vec(name, f)?;
+                let mut idents = vec![];
+                if let Some(ident) = database {
+                    idents.push(ident.to_owned());
+                }
+                idents.push(table.to_owned());
+                display_identifier_vec(f, &idents)?;
             }
-            Statement::TruncateTable { name } => {
+            Statement::TruncateTable { database, table } => {
                 write!(f, "TRUNCATE TABLE ")?;
-                write_identifier_vec(name, f)?;
+                let mut idents = vec![];
+                if let Some(ident) = database {
+                    idents.push(ident.to_owned());
+                }
+                idents.push(table.to_owned());
+                display_identifier_vec(f, &idents)?;
             }
             Statement::CreateDatabase {
                 if_not_exists,
@@ -185,12 +220,12 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
-                write_identifier_vec(name, f)?;
+                write!(f, "{}", name)?;
                 // TODO(leiysky): display rest information
             }
             Statement::UseDatabase { name } => {
                 write!(f, "USE ")?;
-                write_identifier_vec(name, f)?;
+                write!(f, "{}", name)?;
             }
             Statement::KillStmt { object_id } => {
                 write!(f, "KILL {}", object_id)?;

@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::sql::parser::ast::write_identifier_vec;
+use crate::sql::parser::ast::display_identifier_vec;
 use crate::sql::parser::ast::Expr;
 use crate::sql::parser::ast::Identifier;
 
@@ -108,7 +108,8 @@ pub enum TableReference {
     // Table name
     Table {
         // Could be `db.table` or `table`
-        name: Vec<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
         alias: Option<TableAlias>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
@@ -183,7 +184,7 @@ impl Display for TableAlias {
         write!(f, "AS {}", &self.name)?;
         if !self.columns.is_empty() {
             write!(f, " (")?;
-            write_identifier_vec(&self.columns, f)?;
+            display_identifier_vec(f, &self.columns)?;
             write!(f, ")")?;
         }
         Ok(())
@@ -193,8 +194,17 @@ impl Display for TableAlias {
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TableReference::Table { name, alias } => {
-                write_identifier_vec(name, f)?;
+            TableReference::Table {
+                database,
+                table,
+                alias,
+            } => {
+                let mut idents = vec![];
+                if let Some(ident) = database {
+                    idents.push(ident.to_owned());
+                }
+                idents.push(table.to_owned());
+                display_identifier_vec(f, &idents)?;
                 if let Some(alias) = alias {
                     write!(f, " {}", alias)?;
                 }
