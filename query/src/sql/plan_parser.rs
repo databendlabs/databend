@@ -150,7 +150,7 @@ impl PlanParser {
                     }
                     DfShowTables::Where(e) => {
                         format!(
-                            "SELECT name FROM system.tables where database = '{}' AND ( {} ) ORDER BY database, name",
+                            "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
                             self.ctx.get_current_database(), e,
                         )
                     }
@@ -262,7 +262,7 @@ impl PlanParser {
     }
 
     #[tracing::instrument(level = "info", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
+    pub fn sql_create_s_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
         let mut db = self.ctx.get_current_database();
         if create.name.0.is_empty() {
             return Result::Err(ErrorCode::SyntaxException("Create table name is empty"));
