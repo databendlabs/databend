@@ -27,8 +27,11 @@ perfs:
   - name: Substring
     query: SELECT substring(cast(number as text) from 3) from numbers_mt(100000) where number > 100 order by number desc limit 10
 
-  - name: Group By
-    query: SELECT max(number) as max,sum(number) as sum FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 ORDER BY max
+  - name: Group By Single Aggr
+    query: SELECT sum(number) as sum FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5
+
+  - name: Group By Multiple Aggr
+    query: SELECT max(number) as max,sum(number) as sum FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5
 
   - name: Filter Eq
     query: SELECT count() FROM numbers_mt(1000000000) where number = 10000
