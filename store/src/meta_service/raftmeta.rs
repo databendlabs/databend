@@ -340,7 +340,11 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     async fn get_log_entries(&self, start: u64, stop: u64) -> anyhow::Result<Vec<Entry<LogEntry>>> {
         // Invalid request, return empty vec.
         if start > stop {
-            tracing::error!("invalid request, start > stop");
+            tracing::error!(
+                "get_log_entries: invalid request, start({}) > stop({})",
+                start,
+                stop
+            );
             return Ok(vec![]);
         }
 
@@ -350,7 +354,11 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> anyhow::Result<()> {
         if stop.as_ref().map(|stop| &start > stop).unwrap_or(false) {
-            tracing::error!("invalid request, start > stop");
+            tracing::error!(
+                "delete_logs_from: invalid request, start({}) > stop({:?})",
+                start,
+                stop
+            );
             return Ok(());
         }
 
