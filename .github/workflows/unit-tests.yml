@@ -49,6 +49,113 @@ jobs:
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
 
+      - name: Run test 2
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Run test 3
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Run test 4
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Run test 5
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Run test 6
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Run test 7
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Run test 8
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+      - name: Run test 9
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          components: rustfmt
+          args: --all-features --no-fail-fast
+        env:
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+
+
+
+
       - name: Install grcov
         uses: actions-rs/install@v0.1
         with:
