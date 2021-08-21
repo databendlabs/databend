@@ -228,6 +228,7 @@ mod tests {
 
         // positive case
         expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
+        expect_parse_ok("SHOW TABLES;", DfStatement::ShowTables(DfShowTables::All))?;
         expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
         expect_parse_ok(
             "SHOW TABLES LIKE 'aaa'",

@@ -164,7 +164,7 @@ impl<'a> DfParser<'a> {
                         if self.consume_token("TABLES") {
                             let tok = self.parser.next_token();
                             match &tok {
-                                Token::EOF => Ok(DfStatement::ShowTables(DfShowTables::All)),
+                                Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::All)),
                                 Token::Word(w) => match w.keyword {
                                     Keyword::LIKE => Ok(DfStatement::ShowTables(
                                         DfShowTables::Like(self.parser.parse_identifier()?),
