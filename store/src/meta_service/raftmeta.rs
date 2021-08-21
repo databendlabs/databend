@@ -491,7 +491,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         tracing::debug!("SNAP META:{:?}", meta);
 
         // Replace state machine with the new one
-        self.install_snapshot(&new_snapshot.data).await?;
+        let res = self.install_snapshot(&new_snapshot.data).await;
+        match res {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("error: {} when install_snapshot", e);
+            }
+        };
 
         // NOTE: a replication may has been using these logs.
         //       It requires the replication to detect a missing log and restart a snapshot replication.
