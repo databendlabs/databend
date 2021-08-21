@@ -29,8 +29,7 @@ pub struct SparseIndexValue {
     // Max value of this granule.
     pub max: DataValue,
     // The page number to read in the data file.
-    // If the page is None, we will read the whole file.
-    pub page_no: Option<i64>,
+    pub page_no: i64,
 }
 
 /// Sparse index.
@@ -73,7 +72,7 @@ impl SparseIndex {
                 sparse.push(SparseIndexValue {
                     min,
                     max,
-                    page_no: Some(page_no as i64),
+                    page_no: page_no as i64,
                 })?;
             }
             keys_idx.push(sparse);
@@ -87,7 +86,7 @@ impl SparseIndex {
     pub fn apply_index(
         _idx_map: HashMap<String, SparseIndex>,
         _expr: &Expression,
-    ) -> Result<(bool, Vec<Option<i64>>)> {
+    ) -> Result<(bool, Vec<i64>)> {
         // TODO(bohu): expression check.
         Ok((true, vec![]))
     }

@@ -39,8 +39,10 @@ For the query, we first to apply the `PARTITION BY` expression for the constant 
 
 
 Note: filter will be more complex than this, and here is just a simple case.
+```rust
+pub fn apply_index(_partition_value: DataValue, _expr: &Expression) -> Result<bool>
+```
 
-`partition index` has not yet implemented.
 
 ## MinMax Index
 
@@ -80,3 +82,78 @@ If the result is `false` this file is pruned, otherwise we need it.
 Partition index is the third level to check.
 
 This determines which pages of the file need to be searched.
+```
+bo/
+    - file1.name.sparse
+        {
+            "col":"name",
+            "values":
+            [
+                {
+                    "min":"bob",
+                    "max":"bohu",
+                    "page_no":0
+                },
+                {
+                    "min":"jack",
+                    "max":"jack",
+                    "page_no":1
+                }
+            ]
+        }
+        
+    - file1.age.sparse
+       {
+            "col":"age",
+            "values":
+            [
+                {
+                    "min":18,
+                    "max":24,
+                    "page_no":0
+                },
+                {
+                    "min":24,
+                    "max":24,
+                    "page_no":1
+                }
+            ]
+        }
+```
+For the expression `WHERE name = 'bohu' AND age < 24`, we should only to read `page-0` of the `file1`.
+```rust
+    pub fn apply_index(
+        _idx_map: HashMap<String, SparseIndex>,
+        _expr: &Expression,
+    ) -> Result<(bool, Vec<i64>)>
+```
+
+## Usage
+
+Create index:
+```
+let minmax_idx = MinMaxIndex::create_index(&["name", "age"], blocks);
+let sparse_idx = SparseIndex::create_index(&["name", "age"], blocks);
+... write them to file ...
+```
+
+Apply index:
+```
+let mut parts = vec![];
+let in_part = PartitionIndex::apply_index("bo", expr);
+if in_part {
+    // read min max index file one by one.
+    for minmax in minmax_index_file_list {
+        let in_file = MinMaxIndex::apply_index(..., expr);
+        if in_file {
+            // read the sparse of this file.
+            let (all, pageno) = SparseIndex::apply_index(..., expr);
+            if all {
+               parts.push(file...);
+            } else {
+               parts.push(file with page no);
+            }
+        }
+    }
+}
+```

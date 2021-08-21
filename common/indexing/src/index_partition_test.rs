@@ -13,23 +13,24 @@
 // limitations under the License.
 //
 
-#[cfg(test)]
-mod index_min_max_test;
-#[cfg(test)]
-mod index_partition_test;
-#[cfg(test)]
-mod index_sparse_test;
+use common_datavalues::prelude::*;
+use common_exception::Result;
+use common_planners::col;
+use common_planners::lit;
+use pretty_assertions::assert_eq;
 
-mod index_min_max;
-mod index_partition;
-mod index_sparse;
+use crate::PartitionIndex;
 
-pub use index_min_max::MinMaxIndex;
-pub use index_partition::PartitionIndex;
-pub use index_sparse::SparseIndex;
-pub use index_sparse::SparseIndexValue;
+#[test]
+fn test_partition_index() -> Result<()> {
+    // Apply index.
+    {
+        let partition_value = DataValue::Utf8(Some("datafuse".to_string()));
+        let expr = col("name").eq(lit("bohu"));
+        let actual = PartitionIndex::apply_index(partition_value, &expr)?;
+        let expected = true;
+        assert_eq!(actual, expected);
+    }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum IndexSchemaVersion {
-    V1,
+    Ok(())
 }

@@ -13,23 +13,24 @@
 // limitations under the License.
 //
 
-#[cfg(test)]
-mod index_min_max_test;
-#[cfg(test)]
-mod index_partition_test;
-#[cfg(test)]
-mod index_sparse_test;
+use common_datavalues::DataValue;
+use common_exception::Result;
+use common_planners::Expression;
 
-mod index_min_max;
-mod index_partition;
-mod index_sparse;
-
-pub use index_min_max::MinMaxIndex;
-pub use index_partition::PartitionIndex;
-pub use index_sparse::SparseIndex;
-pub use index_sparse::SparseIndexValue;
-
+/// Min and Max index.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum IndexSchemaVersion {
-    V1,
+pub struct PartitionIndex {}
+
+impl PartitionIndex {
+    pub fn typ(&self) -> &str {
+        "partition"
+    }
+
+    /// Apply the expr against the partition value, and get the result:
+    /// true: need
+    /// false: skip
+    pub fn apply_index(_partition_value: DataValue, _expr: &Expression) -> Result<bool> {
+        // TODO(bohu): expression apply.
+        Ok(true)
+    }
 }

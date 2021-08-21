@@ -53,12 +53,12 @@ fn test_sparse_index() -> Result<()> {
                 SparseIndexValue {
                     min: DataValue::Utf8(Some("jack".to_string())),
                     max: DataValue::Utf8(Some("bohu".to_string())),
-                    page_no: Some(0),
+                    page_no: 0,
                 },
                 SparseIndexValue {
                     min: DataValue::Utf8(Some("xjack".to_string())),
                     max: DataValue::Utf8(Some("xbohu".to_string())),
-                    page_no: Some(1),
+                    page_no: 1,
                 },
             ],
             version: IndexSchemaVersion::V1,
@@ -69,12 +69,12 @@ fn test_sparse_index() -> Result<()> {
                 SparseIndexValue {
                     min: DataValue::Int32(Some(11)),
                     max: DataValue::Int32(Some(24)),
-                    page_no: Some(0),
+                    page_no: 0,
                 },
                 SparseIndexValue {
                     min: DataValue::Int32(Some(11)),
                     max: DataValue::Int32(Some(24)),
-                    page_no: Some(1),
+                    page_no: 1,
                 },
             ],
             version: IndexSchemaVersion::V1,

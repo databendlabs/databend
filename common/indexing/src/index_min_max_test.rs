@@ -68,8 +68,6 @@ fn test_min_max_index() -> Result<()> {
         assert_eq!(actual, expected);
     }
 
-    let s = serde_json::to_string(&idx_slice[0].clone())?;
-
     // Apply index.
     {
         let mut idx_map = HashMap::new();
