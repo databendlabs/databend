@@ -14,6 +14,10 @@
 //
 
 #[cfg(test)]
+mod index_min_max_test;
+#[cfg(test)]
+mod index_sparse_test;
+#[cfg(test)]
 mod indexer_test;
 
 mod index;

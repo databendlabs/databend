@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -56,5 +57,24 @@ impl SparseIndex {
     pub fn push(&mut self, val: SparseIndexValue) -> Result<()> {
         self.values.push(val);
         Ok(())
+    }
+
+    pub fn create_index(keys: &[String], blocks: &[DataBlock]) -> Result<Vec<SparseIndex>> {
+        let mut keys_idx = vec![];
+
+        for key in keys {
+            let mut sparse = SparseIndex::create(key.clone());
+            for (page_no, page) in blocks.iter().enumerate() {
+                let min = page.first(key.as_str())?;
+                let max = page.last(key.as_str())?;
+                sparse.push(SparseIndexValue {
+                    min,
+                    max,
+                    page_no: Some(page_no as i64),
+                })?;
+            }
+            keys_idx.push(sparse);
+        }
+        Ok(keys_idx)
     }
 }

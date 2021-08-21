@@ -13,7 +13,9 @@
 // limitations under the License.
 //
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
+use common_exception::Result;
 
 use crate::IndexSchemaVersion;
 
@@ -38,5 +40,19 @@ impl MinMaxIndex {
 
     pub fn typ(&self) -> &str {
         "min_max"
+    }
+
+    pub fn create_index(keys: &[String], blocks: &[DataBlock]) -> Result<Vec<MinMaxIndex>> {
+        let first = 0;
+        let last = blocks.len() - 1;
+        let mut keys_idx = vec![];
+
+        for key in keys {
+            let min = blocks[first].first(key)?;
+            let max = blocks[last].last(key)?;
+            let min_max = MinMaxIndex::create(key.clone(), min, max);
+            keys_idx.push(min_max);
+        }
+        Ok(keys_idx)
     }
 }
