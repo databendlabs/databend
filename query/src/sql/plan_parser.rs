@@ -62,6 +62,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
+use super::DfShowTables;
 use crate::catalogs::catalog::Catalog;
 use crate::functions::ContextFunction;
 use crate::sessions::DatafuseQueryContextRef;
@@ -133,13 +134,29 @@ impl PlanParser {
             DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
 
             // TODO: support like and other filters in show queries
-            DfStatement::ShowTables(_) => self.build_from_sql(
-                format!(
-                    "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
-                    self.ctx.get_current_database()
-                )
-                .as_str(),
-            ),
+            DfStatement::ShowTables(df) => {
+                let show_sql = match df {
+                    DfShowTables::All => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
+                            self.ctx.get_current_database()
+                        )
+                    }
+                    DfShowTables::Like(i) => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
+                            self.ctx.get_current_database(), i,
+                        )
+                    }
+                    DfShowTables::Where(e) => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
+                            self.ctx.get_current_database(), e,
+                        )
+                    }
+                };
+                self.build_from_sql(show_sql.as_str())
+            }
             DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
             DfStatement::ShowProcessList(_) => {
                 self.build_from_sql("SELECT * FROM system.processes")
@@ -412,7 +429,7 @@ impl PlanParser {
 
         if let Some(source) = source {
             if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
-                println!("{:?}", format_sql);
+                tracing::debug!("{:?}", format_sql);
                 let index = format_sql.find_substring(" VALUES ").unwrap();
                 let values = &format_sql[index + " VALUES ".len()..];
 
@@ -652,7 +669,9 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCode::SyntaxException("Cannot support JOIN clause")),
+            // Such as SELECT * FROM t1, t2;
+            // It's not `JOIN` clause.
+            _ => Result::Err(ErrorCode::SyntaxException("Cannot SELECT multiple tables")),
         }
     }
 

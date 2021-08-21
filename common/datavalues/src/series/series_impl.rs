@@ -64,6 +64,8 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
 
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series>;
 
+    fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series>;
+
     fn try_get(&self, index: usize) -> Result<DataValue>;
 
     fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array>;

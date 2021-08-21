@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::App;
+use clap::AppSettings;
 use sha2::Digest;
 use sha2::Sha256;
 use sysinfo::SystemExt;
@@ -28,6 +30,12 @@ impl VersionCommand {
         VersionCommand {}
     }
 
+    pub fn generate() -> App<'static, 'static> {
+        return App::new("version")
+            .setting(AppSettings::ColoredHelp)
+            .setting(AppSettings::DisableVersion)
+            .about("Version info for local cli and remote cluster");
+    }
     fn cli_sha_info(&self) -> Option<String> {
         let path = std::env::current_exe().ok()?;
         let cli_bin = std::fs::read(path).ok()?;

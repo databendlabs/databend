@@ -170,7 +170,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.8#adc24f55d75d9c7c01fcd0f4f9e35dd5aae679aa"
+source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.10#6350514cc414dc9d7e9aa0e21ea7b546ed223235"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1463,6 +1463,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
+ "tracing-appender",
  "uuid",
  "warp",
 ]
@@ -1743,10 +1744,11 @@ dependencies = [
 
 [[package]]
 name = "fd-lock"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0010f02effd88c702318c5dde0463206be67495d0b4d906ba7c0a8f166cc7f06"
+checksum = "b8806dd91a06a7a403a8e596f9bfbfb34e469efbc363fc9c9713e79e26472e36"
 dependencies = [
+ "cfg-if 1.0.0",
  "libc",
  "winapi",
 ]
@@ -2539,9 +2541,9 @@ dependencies = [
 
 [[package]]
 name = "jwt-simple"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e498b44446f50b48f1fb0d2f20154e4f17486bd3718ae244e04d97ce77c109fa"
+checksum = "30b75d31d9959a288196e4ea7f0cf35d0e8ea1b8901adca74112d44bddad8176"
 dependencies = [
  "anyhow",
  "coarsetime",
@@ -4409,9 +4411,9 @@ checksum = "61b3909d758bb75c79f23d4736fac9433868679d3ad2ea7a61e3c25cfda9a088"
 
 [[package]]
 name = "rustyline"
-version = "8.2.0"
+version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbd4eaf7a7738f76c98e4f0395253ae853be3eb018f7b0bb57fe1b6c17e31874"
+checksum = "790487c3881a63489ae77126f57048b42d62d3b2bafbf37453ea19eedb6340d6"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -4421,7 +4423,7 @@ dependencies = [
  "libc",
  "log",
  "memchr",
- "nix 0.20.0",
+ "nix 0.22.0",
  "radix_trie",
  "scopeguard",
  "smallvec",
@@ -5466,9 +5468,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-bunyan-formatter"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce1eae70720bd6bb3944f7cf501761aeae658bd1f9293aa373c71a195064910"
+checksum = "63053c8ba268268d59c06b919d6c94fd968b3bd9995c5f59a03dea42fc351e70"
 dependencies = [
  "chrono",
  "gethostname",
@@ -5536,9 +5538,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.19"
+version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab69019741fca4d98be3c62d2b75254528b5432233fd8a4d2739fec20278de48"
+checksum = "b9cbe87a2fa7e35900ce5de20220a582a9483a7063811defce79d7cbd59d4cfe"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",

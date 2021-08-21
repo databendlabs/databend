@@ -20,6 +20,6 @@ pub trait Source: Sync + Send {
 
 #[allow(dead_code)]
 pub struct FormatSettings {
-    delimter: u8,
+    delimiter: u8,
     quote: u8,
 }

@@ -90,3 +90,5 @@ mod sled_serde_test;
 mod sled_tree_test;
 #[cfg(test)]
 mod state_machine_test;
+#[cfg(test)]
+mod testing;

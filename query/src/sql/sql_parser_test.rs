@@ -222,9 +222,47 @@ mod tests {
 
     #[test]
     fn show_queries() -> Result<()> {
+        use sqlparser::dialect::GenericDialect;
+        use sqlparser::parser::Parser;
+        use sqlparser::tokenizer::Tokenizer;
+
         // positive case
-        expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables))?;
+        expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
         expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
+        expect_parse_ok(
+            "SHOW TABLES LIKE 'aaa'",
+            DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
+        )?;
+
+        expect_parse_ok(
+            "SHOW TABLES --comments should not in sql case1",
+            DfStatement::ShowTables(DfShowTables::All),
+        )?;
+
+        expect_parse_ok(
+            "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
+            DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
+        )?;
+
+        let parse_sql_to_expr = |query_expr: &str| -> Expr {
+            let dialect = GenericDialect {};
+            let mut tokenizer = Tokenizer::new(&dialect, &query_expr);
+            let tokens = tokenizer.tokenize().unwrap();
+            let mut parser = Parser::new(tokens, &dialect);
+            return parser.parse_expr().unwrap();
+        };
+
+        expect_parse_ok(
+            "SHOW TABLES WHERE t LIKE 'aaa'",
+            DfStatement::ShowTables(DfShowTables::Where(parse_sql_to_expr("t LIKE 'aaa'"))),
+        )?;
+
+        expect_parse_ok(
+            "SHOW TABLES WHERE t LIKE 'aaa' AND t LIKE 'a%'",
+            DfStatement::ShowTables(DfShowTables::Where(parse_sql_to_expr(
+                "t LIKE 'aaa' AND t LIKE 'a%'",
+            ))),
+        )?;
 
         Ok(())
     }

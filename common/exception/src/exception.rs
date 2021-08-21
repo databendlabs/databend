@@ -206,6 +206,9 @@ build_exceptions! {
     MetaStoreAlreadyExists(2402),
     MetaStoreNotFound(2403),
 
+    ConcurrentSnapshotInstall(2404),
+    IllegalSnapshot(2405),
+
     // DatafuseStore server error
 
     DatafuseStoreError(2501),
@@ -232,6 +235,7 @@ build_exceptions! {
     IllegalSchema(4005),
     IllegalMetaState(4005),
     MetaNodeInternalError(4006),
+    TrancateTableFailedError(4007),
 
     // storage-api error codes
     IllegalScanPlan(5000),

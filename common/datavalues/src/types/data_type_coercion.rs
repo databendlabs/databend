@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::DataType;
+use crate::DataField;
 use crate::DataValueArithmeticOperator;
 
 /// Determine if a DataType is signed numeric or not
@@ -267,4 +268,79 @@ pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataTy
     }
 
     numerical_coercion(lhs_type, rhs_type)
+}
+
+// aggregate_types aggregates data types for a multi-argument function.
+#[inline]
+pub fn aggregate_types(args: &[DataType]) -> Result<DataType> {
+    match args.len() {
+        0 => Result::Err(ErrorCode::BadArguments("Can't aggregate empty args")),
+        1 => Ok(args[0].clone()),
+        _ => {
+            let left = args[0].clone();
+            let right = aggregate_types(&args[1..args.len()])?;
+            merge_types(&left, &right)
+        }
+    }
+}
+
+pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
+    match (lhs_type, rhs_type) {
+        (DataType::Null, _) => Ok(rhs_type.clone()),
+        (_, DataType::Null) => Ok(lhs_type.clone()),
+        (DataType::List(a), DataType::List(b)) => {
+            if a.name() != b.name() {
+                return Result::Err(ErrorCode::BadDataValueType(format!(
+                    "Can't merge types from {} and {}",
+                    lhs_type, rhs_type
+                )));
+            }
+            let typ = merge_types(a.data_type(), b.data_type())?;
+            Ok(DataType::List(Box::new(DataField::new(
+                a.name(),
+                typ,
+                a.is_nullable() || b.is_nullable(),
+            ))))
+        }
+        (DataType::Struct(a), DataType::Struct(b)) => {
+            if a.len() != b.len() {
+                return Result::Err(ErrorCode::BadDataValueType(format!(
+                    "Can't merge types from {} and {}, because they have different sizes",
+                    lhs_type, rhs_type
+                )));
+            }
+            let fields = a
+                .iter()
+                .zip(b.iter())
+                .map(|(a, b)| {
+                    if a.name() != b.name() {
+                        return Result::Err(ErrorCode::BadDataValueType(format!(
+                            "Can't merge types from {} and {}",
+                            lhs_type, rhs_type
+                        )));
+                    }
+                    let typ = merge_types(a.data_type(), b.data_type())?;
+                    Ok(DataField::new(
+                        a.name(),
+                        typ,
+                        a.is_nullable() || b.is_nullable(),
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(DataType::Struct(fields))
+        }
+        _ => {
+            if lhs_type == rhs_type {
+                return Ok(lhs_type.clone());
+            }
+            if is_numeric(lhs_type) && is_numeric(rhs_type) {
+                numerical_coercion(lhs_type, rhs_type)
+            } else {
+                Result::Err(ErrorCode::BadDataValueType(format!(
+                    "Can't merge types from {} and {}",
+                    lhs_type, rhs_type
+                )))
+            }
+        }
+    }
 }

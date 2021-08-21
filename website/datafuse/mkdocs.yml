@@ -128,7 +128,6 @@ nav:
   - Home: index.md
   - Documentation:
     - Overview:
-      - Architecture: overview/architecture.md
       - Installation: overview/building-and-running.md
     - SQL Reference:
       - Data Types:
@@ -165,6 +164,8 @@ nav:
           - minIf: sqlstatement/aggregate-functions/aggregate-min-if.md
           - maxIf: sqlstatement/aggregate-functions/aggregate-max-if.md
           - sumIf: sqlstatement/aggregate-functions/aggregate-sum-if.md
+      - Conditional Functions:
+          - IF: sqlstatement/conditional-functions/if.md
       - Conversion Functions:
           - CAST: sqlstatement/conversion-functions/cast.md
           - Type Conversion: sqlstatement/conversion-functions/type-conversion.md
@@ -198,6 +199,7 @@ nav:
         - Performance Test: rfcs/query/0004-performance-test.md
         - DatafuseCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
+  - Whitepapers: overview/architecture.md
 
 # Google Analytics
 google_analytics:
