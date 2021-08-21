@@ -22,6 +22,7 @@ use common_exception::Result;
 
 use crate::Index;
 use crate::IndexSchema;
+use crate::IndexSchemaVersion;
 use crate::Indexer;
 use crate::MinMaxIndex;
 use crate::SparseIndex;
@@ -54,6 +55,7 @@ fn test_indexer() -> Result<()> {
             min_max: MinMaxIndex {
                 min: DataValue::Utf8(Some("jack".to_string())),
                 max: DataValue::Utf8(Some("xbohu".to_string())),
+                version: IndexSchemaVersion::V1,
             },
             sparse: SparseIndex {
                 values: vec![
@@ -68,6 +70,7 @@ fn test_indexer() -> Result<()> {
                         page_no: Some(1),
                     },
                 ],
+                version: IndexSchemaVersion::V1,
             },
         },
         IndexSchema {
@@ -75,6 +78,7 @@ fn test_indexer() -> Result<()> {
             min_max: MinMaxIndex {
                 min: DataValue::Int32(Some(11)),
                 max: DataValue::Int32(Some(24)),
+                version: IndexSchemaVersion::V1,
             },
             sparse: SparseIndex {
                 values: vec![
@@ -89,6 +93,7 @@ fn test_indexer() -> Result<()> {
                         page_no: Some(1),
                     },
                 ],
+                version: IndexSchemaVersion::V1,
             },
         },
     ];

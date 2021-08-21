@@ -18,7 +18,6 @@ use common_planners::PlanNode;
 
 use crate::Index;
 use crate::IndexSchema;
-use crate::IndexSchemaVersion;
 use crate::MinMaxIndex;
 use crate::SparseIndex;
 use crate::SparseIndexValue;
@@ -46,7 +45,8 @@ impl Index for Indexer {
         let first = 0;
         let last = pages.len() - 1;
 
-        let mut idxes = vec![];
+        // Each key has a IndexSchema.
+        let mut keys_idx = vec![];
         for key in keys {
             // Min and max index.
             let min = pages[first].first(key)?;
@@ -64,14 +64,13 @@ impl Index for Indexer {
                     page_no: Some(page_no as i64),
                 })?;
             }
-            idxes.push(IndexSchema {
+            keys_idx.push(IndexSchema {
                 col: key.to_string(),
                 min_max,
                 sparse,
-                version: IndexSchemaVersion::V1,
             });
         }
-        Ok(idxes)
+        Ok(keys_idx)
     }
 
     // Search parts by plan.

@@ -16,6 +16,8 @@
 use common_datavalues::DataValue;
 use common_exception::Result;
 
+use crate::IndexSchemaVersion;
+
 #[derive(Debug, PartialEq)]
 pub struct SparseIndexValue {
     // Min value of this granule.
@@ -32,11 +34,16 @@ pub struct SparseIndexValue {
 pub struct SparseIndex {
     // Sparse index.
     pub values: Vec<SparseIndexValue>,
+    // Version.
+    pub version: IndexSchemaVersion,
 }
 
 impl SparseIndex {
     pub fn create() -> Self {
-        SparseIndex { values: vec![] }
+        SparseIndex {
+            values: vec![],
+            version: IndexSchemaVersion::V1,
+        }
     }
 
     pub fn typ(&self) -> &str {

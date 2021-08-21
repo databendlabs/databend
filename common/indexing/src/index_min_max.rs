@@ -15,16 +15,23 @@
 
 use common_datavalues::DataValue;
 
+use crate::IndexSchemaVersion;
+
 /// Min and Max index.
 #[derive(Debug, PartialEq)]
 pub struct MinMaxIndex {
     pub min: DataValue,
     pub max: DataValue,
+    pub version: IndexSchemaVersion,
 }
 
 impl MinMaxIndex {
     pub fn create(min: DataValue, max: DataValue) -> Self {
-        MinMaxIndex { min, max }
+        MinMaxIndex {
+            min,
+            max,
+            version: IndexSchemaVersion::V1,
+        }
     }
 
     pub fn typ(&self) -> &str {
