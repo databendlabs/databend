@@ -815,6 +815,8 @@ dependencies = [
  "common-exception",
  "common-planners",
  "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

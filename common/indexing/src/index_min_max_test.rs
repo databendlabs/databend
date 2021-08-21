@@ -64,10 +64,11 @@ fn test_min_max_index() -> Result<()> {
     {
         let actual =
             MinMaxIndex::create_index(&["name".to_string(), "age".to_string()], &[block1, block2])?;
-        //let expected = [IndexSchema { col: "name", min_max: MinMaxIndex { min: jack, max: xbohu }, sparse: SparseIndex { values: [SparseIndexValue { min: jack, max: bohu, page_no: Some(0) }, SparseIndexValue { min: xjack, max: xbohu, page_no: Some(1) }] } }, IndexSchema { col: "age", min_max: MinMaxIndex { min: 11, max: 24 }, sparse: SparseIndex { values: [SparseIndexValue { min: 11, max: 24, page_no: Some(0) }, SparseIndexValue { min: 11, max: 24, page_no: Some(1) }] } }]";
         let expected = idx_slice.clone();
         assert_eq!(actual, expected);
     }
+
+    let s = serde_json::to_string(&idx_slice[0].clone())?;
 
     // Apply index.
     {
@@ -75,8 +76,8 @@ fn test_min_max_index() -> Result<()> {
         idx_map.insert("name".to_string(), idx_slice[0].clone());
         idx_map.insert("age".to_string(), idx_slice[1].clone());
         let expr = col("name").eq(lit(24));
-        let expected = true;
         let actual = MinMaxIndex::apply_index(idx_map, &expr)?;
+        let expected = true;
         assert_eq!(actual, expected);
     }
 

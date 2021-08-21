@@ -25,7 +25,7 @@ pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IndexSchemaVersion {
     V1,
 }

@@ -85,7 +85,6 @@ fn test_sparse_index() -> Result<()> {
     {
         let actual =
             SparseIndex::create_index(&["name".to_string(), "age".to_string()], &[block1, block2])?;
-        //let expected = [IndexSchema { col: "name", min_max: MinMaxIndex { min: jack, max: xbohu }, sparse: SparseIndex { values: [SparseIndexValue { min: jack, max: bohu, page_no: Some(0) }, SparseIndexValue { min: xjack, max: xbohu, page_no: Some(1) }] } }, IndexSchema { col: "age", min_max: MinMaxIndex { min: 11, max: 24 }, sparse: SparseIndex { values: [SparseIndexValue { min: 11, max: 24, page_no: Some(0) }, SparseIndexValue { min: 11, max: 24, page_no: Some(1) }] } }]";
         let expected = idx_slice.clone();
         assert_eq!(actual, expected);
     }
