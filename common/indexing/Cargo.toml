@@ -16,3 +16,6 @@ common-exception = {path = "../exception"}
 common-planners = {path = "../planners"}
 
 # Crates.io dependencies
+
+[dev-dependencies]
+pretty_assertions = "0.7"

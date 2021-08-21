@@ -14,10 +14,10 @@
 //
 
 use common_datablocks::DataBlock;
+use common_exception::Result;
 use common_planners::PlanNode;
 
 use crate::Index;
-use crate::IndexSchema;
 use crate::MinMaxIndex;
 use crate::SparseIndex;
 use crate::SparseIndexValue;
@@ -30,45 +30,50 @@ impl Indexer {
     }
 }
 
+/// Create index for one parquet file.
+/// All blocks are belong to a Parquet file and globally sorted.
+/// Each block is one row group of a parquet file and sorted by primary key.
+/// For example:
+/// parquet.file
+/// | sorted-block | sorted-block | ... |
 impl Index for Indexer {
-    /// Create index for one parquet file.
-    /// All blocks are belong to a Parquet file and globally sorted.
-    /// Each block is one row group of a parquet file and sorted by primary key.
-    /// For example:
-    /// parquet.file
-    /// | sorted-block | sorted-block | ... |
-    fn create_index(
+    fn create_min_max_idx(
         &self,
         keys: &[String],
-        pages: &[DataBlock],
-    ) -> common_exception::Result<Vec<IndexSchema>> {
+        blocks: &[DataBlock],
+    ) -> Result<Vec<MinMaxIndex>> {
         let first = 0;
-        let last = pages.len() - 1;
-
-        // Each key has a IndexSchema.
+        let last = blocks.len() - 1;
         let mut keys_idx = vec![];
-        for key in keys {
-            // Min and max index.
-            let min = pages[first].first(key)?;
-            let max = pages[last].last(key)?;
-            let min_max = MinMaxIndex::create(min, max);
 
-            // Sparse index by the page.
-            let mut sparse = SparseIndex::create();
-            for (page_no, page) in pages.iter().enumerate() {
-                let min = page.first(key)?;
-                let max = page.last(key)?;
+        for key in keys {
+            let min = blocks[first].first(key)?;
+            let max = blocks[last].last(key)?;
+            let min_max = MinMaxIndex::create(key.clone(), min, max);
+            keys_idx.push(min_max);
+        }
+        Ok(keys_idx)
+    }
+
+    fn create_sparse_idx(
+        &self,
+        keys: &[String],
+        blocks: &[DataBlock],
+    ) -> common_exception::Result<Vec<SparseIndex>> {
+        let mut keys_idx = vec![];
+
+        for key in keys {
+            let mut sparse = SparseIndex::create(key.clone());
+            for (page_no, page) in blocks.iter().enumerate() {
+                let min = page.first(key.as_str())?;
+                let max = page.last(key.as_str())?;
                 sparse.push(SparseIndexValue {
                     min,
                     max,
                     page_no: Some(page_no as i64),
                 })?;
             }
-            keys_idx.push(IndexSchema {
-                col: key.to_string(),
-                min_max,
-                sparse,
-            });
+            keys_idx.push(sparse);
         }
         Ok(keys_idx)
     }

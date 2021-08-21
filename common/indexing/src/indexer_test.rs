@@ -19,9 +19,9 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
 
 use crate::Index;
-use crate::IndexSchema;
 use crate::IndexSchemaVersion;
 use crate::Indexer;
 use crate::MinMaxIndex;
@@ -29,7 +29,7 @@ use crate::SparseIndex;
 use crate::SparseIndexValue;
 
 #[test]
-fn test_indexer() -> Result<()> {
+fn test_indexer_min_max_idx() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("name", DataType::Utf8, true),
         DataField::new("age", DataType::Int32, false),
@@ -47,54 +47,79 @@ fn test_indexer() -> Result<()> {
 
     let indexer = Indexer::create();
     let actual =
-        indexer.create_index(&["name".to_string(), "age".to_string()], &[block1, block2])?;
+        indexer.create_min_max_idx(&["name".to_string(), "age".to_string()], &[block1, block2])?;
     //let expected = [IndexSchema { col: "name", min_max: MinMaxIndex { min: jack, max: xbohu }, sparse: SparseIndex { values: [SparseIndexValue { min: jack, max: bohu, page_no: Some(0) }, SparseIndexValue { min: xjack, max: xbohu, page_no: Some(1) }] } }, IndexSchema { col: "age", min_max: MinMaxIndex { min: 11, max: 24 }, sparse: SparseIndex { values: [SparseIndexValue { min: 11, max: 24, page_no: Some(0) }, SparseIndexValue { min: 11, max: 24, page_no: Some(1) }] } }]";
     let expected = vec![
-        IndexSchema {
+        MinMaxIndex {
             col: "name".to_string(),
-            min_max: MinMaxIndex {
-                min: DataValue::Utf8(Some("jack".to_string())),
-                max: DataValue::Utf8(Some("xbohu".to_string())),
-                version: IndexSchemaVersion::V1,
-            },
-            sparse: SparseIndex {
-                values: vec![
-                    SparseIndexValue {
-                        min: DataValue::Utf8(Some("jack".to_string())),
-                        max: DataValue::Utf8(Some("bohu".to_string())),
-                        page_no: Some(0),
-                    },
-                    SparseIndexValue {
-                        min: DataValue::Utf8(Some("xjack".to_string())),
-                        max: DataValue::Utf8(Some("xbohu".to_string())),
-                        page_no: Some(1),
-                    },
-                ],
-                version: IndexSchemaVersion::V1,
-            },
+            min: DataValue::Utf8(Some("jack".to_string())),
+            max: DataValue::Utf8(Some("xbohu".to_string())),
+            version: IndexSchemaVersion::V1,
         },
-        IndexSchema {
+        MinMaxIndex {
             col: "age".to_string(),
-            min_max: MinMaxIndex {
-                min: DataValue::Int32(Some(11)),
-                max: DataValue::Int32(Some(24)),
-                version: IndexSchemaVersion::V1,
-            },
-            sparse: SparseIndex {
-                values: vec![
-                    SparseIndexValue {
-                        min: DataValue::Int32(Some(11)),
-                        max: DataValue::Int32(Some(24)),
-                        page_no: Some(0),
-                    },
-                    SparseIndexValue {
-                        min: DataValue::Int32(Some(11)),
-                        max: DataValue::Int32(Some(24)),
-                        page_no: Some(1),
-                    },
-                ],
-                version: IndexSchemaVersion::V1,
-            },
+            min: DataValue::Int32(Some(11)),
+            max: DataValue::Int32(Some(24)),
+            version: IndexSchemaVersion::V1,
+        },
+    ];
+    assert_eq!(actual, expected);
+    Ok(())
+}
+
+#[test]
+fn test_indexer_sparse_idx() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("name", DataType::Utf8, true),
+        DataField::new("age", DataType::Int32, false),
+    ]);
+
+    let block1 = DataBlock::create_by_array(schema.clone(), vec![
+        Series::new(vec!["jack", "ace", "bohu"]),
+        Series::new(vec![11, 6, 24]),
+    ]);
+
+    let block2 = DataBlock::create_by_array(schema.clone(), vec![
+        Series::new(vec!["xjack", "xace", "xbohu"]),
+        Series::new(vec![11, 6, 24]),
+    ]);
+
+    let indexer = Indexer::create();
+    let actual =
+        indexer.create_sparse_idx(&["name".to_string(), "age".to_string()], &[block1, block2])?;
+    //let expected = [IndexSchema { col: "name", min_max: MinMaxIndex { min: jack, max: xbohu }, sparse: SparseIndex { values: [SparseIndexValue { min: jack, max: bohu, page_no: Some(0) }, SparseIndexValue { min: xjack, max: xbohu, page_no: Some(1) }] } }, IndexSchema { col: "age", min_max: MinMaxIndex { min: 11, max: 24 }, sparse: SparseIndex { values: [SparseIndexValue { min: 11, max: 24, page_no: Some(0) }, SparseIndexValue { min: 11, max: 24, page_no: Some(1) }] } }]";
+    let expected = vec![
+        SparseIndex {
+            col: "name".to_string(),
+            values: vec![
+                SparseIndexValue {
+                    min: DataValue::Utf8(Some("jack".to_string())),
+                    max: DataValue::Utf8(Some("bohu".to_string())),
+                    page_no: Some(0),
+                },
+                SparseIndexValue {
+                    min: DataValue::Utf8(Some("xjack".to_string())),
+                    max: DataValue::Utf8(Some("xbohu".to_string())),
+                    page_no: Some(1),
+                },
+            ],
+            version: IndexSchemaVersion::V1,
+        },
+        SparseIndex {
+            col: "age".to_string(),
+            values: vec![
+                SparseIndexValue {
+                    min: DataValue::Int32(Some(11)),
+                    max: DataValue::Int32(Some(24)),
+                    page_no: Some(0),
+                },
+                SparseIndexValue {
+                    min: DataValue::Int32(Some(11)),
+                    max: DataValue::Int32(Some(24)),
+                    page_no: Some(1),
+                },
+            ],
+            version: IndexSchemaVersion::V1,
         },
     ];
     assert_eq!(actual, expected);

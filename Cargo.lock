@@ -814,6 +814,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-planners",
+ "pretty_assertions",
 ]
 
 [[package]]

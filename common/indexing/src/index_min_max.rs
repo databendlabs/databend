@@ -20,14 +20,16 @@ use crate::IndexSchemaVersion;
 /// Min and Max index.
 #[derive(Debug, PartialEq)]
 pub struct MinMaxIndex {
+    pub col: String,
     pub min: DataValue,
     pub max: DataValue,
     pub version: IndexSchemaVersion,
 }
 
 impl MinMaxIndex {
-    pub fn create(min: DataValue, max: DataValue) -> Self {
+    pub fn create(col: String, min: DataValue, max: DataValue) -> Self {
         MinMaxIndex {
+            col,
             min,
             max,
             version: IndexSchemaVersion::V1,

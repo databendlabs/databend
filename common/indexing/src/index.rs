@@ -25,15 +25,11 @@ pub enum IndexSchemaVersion {
 use crate::MinMaxIndex;
 use crate::SparseIndex;
 
-#[derive(Debug, PartialEq)]
-pub struct IndexSchema {
-    // The column name of the index.
-    pub col: String,
-    pub min_max: MinMaxIndex,
-    pub sparse: SparseIndex,
-}
-
 pub trait Index {
-    fn create_index(&self, keys: &[String], blocks: &[DataBlock]) -> Result<Vec<IndexSchema>>;
+    fn create_min_max_idx(&self, keys: &[String], blocks: &[DataBlock])
+        -> Result<Vec<MinMaxIndex>>;
+
+    fn create_sparse_idx(&self, keys: &[String], blocks: &[DataBlock]) -> Result<Vec<SparseIndex>>;
+
     fn search_index(&self, plan: &PlanNode) -> Result<()>;
 }

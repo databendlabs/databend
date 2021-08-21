@@ -32,6 +32,7 @@ pub struct SparseIndexValue {
 /// Sparse index.
 #[derive(Debug, PartialEq)]
 pub struct SparseIndex {
+    pub col: String,
     // Sparse index.
     pub values: Vec<SparseIndexValue>,
     // Version.
@@ -39,8 +40,9 @@ pub struct SparseIndex {
 }
 
 impl SparseIndex {
-    pub fn create() -> Self {
+    pub fn create(col: String) -> Self {
         SparseIndex {
+            col,
             values: vec![],
             version: IndexSchemaVersion::V1,
         }
