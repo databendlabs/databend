@@ -22,3 +22,6 @@ common-io = {path = "../io"}
 # Crates.io dependencies
 ahash = "0.7.4"
 comfy-table = "4.1.1"
+
+[dev-dependencies]
+pretty_assertions = "0.7"

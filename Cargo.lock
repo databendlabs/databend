@@ -716,6 +716,7 @@ dependencies = [
  "common-exception",
  "common-infallible",
  "common-io",
+ "pretty_assertions",
 ]
 
 [[package]]

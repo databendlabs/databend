@@ -14,6 +14,7 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
 
 use crate::DataBlock;
 
@@ -31,6 +32,10 @@ fn test_data_block() -> Result<()> {
 
     assert_eq!(true, block.try_column_by_name("a").is_ok());
     assert_eq!(true, block.try_column_by_name("a_not_found").is_err());
+
+    // first and last test.
+    assert_eq!(1, block.first("a")?.as_i64()?);
+    assert_eq!(3, block.last("a")?.as_i64()?);
 
     Ok(())
 }
