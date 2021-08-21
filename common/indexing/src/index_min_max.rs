@@ -13,14 +13,17 @@
 // limitations under the License.
 //
 
+use std::collections::HashMap;
+
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_planners::Expression;
 
 use crate::IndexSchemaVersion;
 
 /// Min and Max index.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MinMaxIndex {
     pub col: String,
     pub min: DataValue,
@@ -29,7 +32,7 @@ pub struct MinMaxIndex {
 }
 
 impl MinMaxIndex {
-    pub fn create(col: String, min: DataValue, max: DataValue) -> Self {
+    fn create(col: String, min: DataValue, max: DataValue) -> Self {
         MinMaxIndex {
             col,
             min,
@@ -42,6 +45,12 @@ impl MinMaxIndex {
         "min_max"
     }
 
+    /// Create index for one parquet file.
+    /// All blocks are belong to a Parquet file and globally sorted.
+    /// Each block is one row group of a parquet file and sorted by primary key.
+    /// For example:
+    /// parquet.file
+    /// | sorted-block | sorted-block | ... |
     pub fn create_index(keys: &[String], blocks: &[DataBlock]) -> Result<Vec<MinMaxIndex>> {
         let first = 0;
         let last = blocks.len() - 1;
@@ -54,5 +63,13 @@ impl MinMaxIndex {
             keys_idx.push(min_max);
         }
         Ok(keys_idx)
+    }
+
+    /// Apply the expr against the idx_map, and get the result:
+    /// true: need
+    /// false: skip
+    pub fn apply_index(_idx_map: HashMap<String, MinMaxIndex>, _expr: &Expression) -> Result<bool> {
+        // TODO(bohu): expression apply.
+        Ok(true)
     }
 }

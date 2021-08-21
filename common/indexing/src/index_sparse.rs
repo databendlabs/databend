@@ -13,13 +13,16 @@
 // limitations under the License.
 //
 
+use std::collections::HashMap;
+
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_planners::Expression;
 
 use crate::IndexSchemaVersion;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SparseIndexValue {
     // Min value of this granule.
     pub min: DataValue,
@@ -31,7 +34,7 @@ pub struct SparseIndexValue {
 }
 
 /// Sparse index.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SparseIndex {
     pub col: String,
     // Sparse index.
@@ -41,7 +44,7 @@ pub struct SparseIndex {
 }
 
 impl SparseIndex {
-    pub fn create(col: String) -> Self {
+    fn create(col: String) -> Self {
         SparseIndex {
             col,
             values: vec![],
@@ -76,5 +79,16 @@ impl SparseIndex {
             keys_idx.push(sparse);
         }
         Ok(keys_idx)
+    }
+
+    /// Apply the index and get the result:
+    /// (true, ...) : need read the whole file
+    /// (false, [0, 3]) : need to read the page-0 and page-3 only.
+    pub fn apply_index(
+        _idx_map: HashMap<String, SparseIndex>,
+        _expr: &Expression,
+    ) -> Result<(bool, Vec<Option<i64>>)> {
+        // TODO(bohu): expression check.
+        Ok((true, vec![]))
     }
 }

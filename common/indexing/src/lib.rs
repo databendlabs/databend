@@ -17,17 +17,15 @@
 mod index_min_max_test;
 #[cfg(test)]
 mod index_sparse_test;
-#[cfg(test)]
-mod indexer_test;
 
-mod index;
 mod index_min_max;
 mod index_sparse;
-mod indexer;
 
-pub use index::Index;
-pub use index::IndexSchemaVersion;
 pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;
-pub use indexer::Indexer;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum IndexSchemaVersion {
+    V1,
+}

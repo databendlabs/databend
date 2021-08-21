@@ -13,12 +13,16 @@
 // limitations under the License.
 //
 
+use std::collections::HashMap;
+
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_planners::col;
+use common_planners::lit;
 use pretty_assertions::assert_eq;
 
 use crate::IndexSchemaVersion;
@@ -42,10 +46,7 @@ fn test_sparse_index() -> Result<()> {
         Series::new(vec![11, 6, 24]),
     ]);
 
-    let actual =
-        SparseIndex::create_index(&["name".to_string(), "age".to_string()], &[block1, block2])?;
-    //let expected = [IndexSchema { col: "name", min_max: MinMaxIndex { min: jack, max: xbohu }, sparse: SparseIndex { values: [SparseIndexValue { min: jack, max: bohu, page_no: Some(0) }, SparseIndexValue { min: xjack, max: xbohu, page_no: Some(1) }] } }, IndexSchema { col: "age", min_max: MinMaxIndex { min: 11, max: 24 }, sparse: SparseIndex { values: [SparseIndexValue { min: 11, max: 24, page_no: Some(0) }, SparseIndexValue { min: 11, max: 24, page_no: Some(1) }] } }]";
-    let expected = vec![
+    let idx_slice = vec![
         SparseIndex {
             col: "name".to_string(),
             values: vec![
@@ -80,6 +81,25 @@ fn test_sparse_index() -> Result<()> {
         },
     ];
 
-    assert_eq!(actual, expected);
+    // Create index.
+    {
+        let actual =
+            SparseIndex::create_index(&["name".to_string(), "age".to_string()], &[block1, block2])?;
+        //let expected = [IndexSchema { col: "name", min_max: MinMaxIndex { min: jack, max: xbohu }, sparse: SparseIndex { values: [SparseIndexValue { min: jack, max: bohu, page_no: Some(0) }, SparseIndexValue { min: xjack, max: xbohu, page_no: Some(1) }] } }, IndexSchema { col: "age", min_max: MinMaxIndex { min: 11, max: 24 }, sparse: SparseIndex { values: [SparseIndexValue { min: 11, max: 24, page_no: Some(0) }, SparseIndexValue { min: 11, max: 24, page_no: Some(1) }] } }]";
+        let expected = idx_slice.clone();
+        assert_eq!(actual, expected);
+    }
+
+    // Apply index.
+    {
+        let mut idx_map = HashMap::new();
+        idx_map.insert("name".to_string(), idx_slice[0].clone());
+        idx_map.insert("age".to_string(), idx_slice[1].clone());
+        let expr = col("name").eq(lit(24));
+        let (actual, _) = SparseIndex::apply_index(idx_map, &expr)?;
+        let expected = true;
+        assert_eq!(actual, expected);
+    }
+
     Ok(())
 }
