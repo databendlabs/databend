@@ -920,7 +920,7 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
                 MatchSeq::Any,
                 Some(b"v1".to_vec()),
                 Some(KVMeta {
-                    expire_at: Some(now),
+                    expire_at: Some(now + 1),
                 }),
             )
             .await?;
@@ -933,7 +933,7 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
 
         tracing::info!("---get expired");
         {
-            tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
             let res = client.get_kv(&"k1".to_string()).await?;
             tracing::debug!("got k1:{:?}", res);
             assert!(res.result.is_none(), "got expired");
