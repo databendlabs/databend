@@ -317,7 +317,7 @@ impl From<anyhow::Error> for ErrorCode {
     fn from(error: anyhow::Error) -> Self {
         ErrorCode {
             code: 1002,
-            display_text: String::from(""),
+            display_text: format!("{}", error),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
             backtrace: None,
         }

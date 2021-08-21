@@ -221,7 +221,14 @@ impl MetaStore {
             .await?;
 
         let new_sm = StateMachine::open(&self.config, new_sm_id).await?;
+
+        tracing::info!(
+            "insert all key-value into new state machine, n={}",
+            snap.kvs.len()
+        );
+
         let tree = &new_sm.sm_tree.tree;
+        let nkvs = snap.kvs.len();
         for x in snap.kvs.into_iter() {
             let k = &x[0];
             let v = &x[1];
@@ -229,9 +236,20 @@ impl MetaStore {
                 .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to insert snapshot")?;
         }
 
-        tree.flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to flush snapshot")?;
+        tracing::info!(
+            "installed state machine from snapshot, no_kvs: {} last_applied: {}",
+            nkvs,
+            new_sm.get_last_applied()?,
+        );
+
+        {
+            let span = tracing::debug_span!("flush-after-insert-kvs");
+            let _ent = span.enter();
+
+            tree.flush_async()
+                .await
+                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to flush snapshot")?;
+        }
 
         // Start to use the new tree, the old can be cleaned.
         self.raft_state

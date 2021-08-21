@@ -15,8 +15,11 @@
 use std::env;
 use std::fs::OpenOptions;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Once;
 
+use lazy_static::lazy_static;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use tracing::Subscriber;
@@ -40,6 +43,21 @@ pub fn init_default_tracing() {
     START.call_once(|| {
         init_tracing_stdout();
     });
+}
+
+/// Init tracing for unittest.
+/// Write logs to file `unittest`.
+pub fn init_default_ut_tracing() {
+    static START: Once = Once::new();
+
+    START.call_once(|| {
+        let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
+        *g = Some(init_global_tracing("unittest", "_logs"));
+    });
+}
+
+lazy_static! {
+    static ref GLOBAL_UT_LOG_GUARD: Arc<Mutex<Option<WorkerGuard>>> = Arc::new(Mutex::new(None));
 }
 
 /// Init logging and tracing.
@@ -147,6 +165,8 @@ pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Sub
     let path_str = dir.to_string() + "/" + app_name;
     let path: &Path = path_str.as_ref();
 
+    // open log file
+
     let mut open_options = OpenOptions::new();
     open_options.append(true).create(true);
 
@@ -159,6 +179,8 @@ pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Sub
     }
 
     let f = open_res.unwrap();
+
+    // build subscriber
 
     let (writer, writer_guard) = tracing_appender::non_blocking(f);
 
