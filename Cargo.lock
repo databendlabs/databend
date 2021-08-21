@@ -950,6 +950,7 @@ name = "common-tracing"
 version = "0.1.0"
 dependencies = [
  "common-runtime",
+ "lazy_static",
  "opentelemetry",
  "opentelemetry-jaeger",
  "tonic",

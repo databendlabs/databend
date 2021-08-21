@@ -29,7 +29,8 @@ const TEST_CN_NAME: &'static str = "localhost";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_tls() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let mut tc = new_test_context();
 
@@ -60,7 +61,8 @@ async fn test_flight_tls() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_tls_server_config_failure() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let mut tc = new_test_context();
 
@@ -74,7 +76,8 @@ async fn test_flight_tls_server_config_failure() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_tls_client_config_failure() -> anyhow::Result<()> {
-    common_tracing::init_default_tracing();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tls_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/not_exist.pem".to_string(),

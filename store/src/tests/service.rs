@@ -18,14 +18,14 @@ use anyhow::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot;
 use common_tracing::tracing;
-use common_tracing::tracing::Span;
+// use common_tracing::tracing::Span;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
+// use tracing_appender::non_blocking::WorkerGuard;
 use crate::api::StoreServer;
 use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
-use crate::meta_service::raft_db::init_temp_sled_db;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
@@ -158,7 +158,9 @@ pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-    let req = tonic::Request::new(GetReq { key: "foo".into() });
+    let req = tonic::Request::new(GetReq {
+        key: "ensure-connection".into(),
+    });
     let rst = client.get(req).await?.into_inner();
     assert_eq!("", rst.value, "connected");
     Ok(())
@@ -173,7 +175,7 @@ macro_rules! init_store_ut {
         crate::meta_service::raft_db::init_temp_sled_db(t);
 
         // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
-        common_tracing::init_default_tracing();
+        common_tracing::init_default_ut_tracing();
 
         let name = common_tracing::func_name!();
         let span =
