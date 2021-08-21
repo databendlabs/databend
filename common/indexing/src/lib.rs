@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,19 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod context;
-mod number;
-mod parquet;
-mod parse_query;
-mod sessions;
-pub(crate) mod tls_constants;
+#[cfg(test)]
+mod index_min_max_test;
+#[cfg(test)]
+mod index_partition_test;
+#[cfg(test)]
+mod index_sparse_test;
 
-pub use context::try_create_cluster_context;
-pub use context::try_create_context;
-pub use context::try_create_context_with_conf;
-pub use context::ClusterNode;
-pub use number::NumberTestData;
-pub use parquet::ParquetTestData;
-pub use parse_query::parse_query;
-pub use sessions::try_create_sessions;
+mod index_min_max;
+mod index_partition;
+mod index_sparse;
+
+pub use index_min_max::MinMaxIndex;
+pub use index_partition::PartitionIndex;
+pub use index_sparse::SparseIndex;
+pub use index_sparse::SparseIndexValue;
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum IndexSchemaVersion {
+    V1,
+}

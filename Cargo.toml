@@ -20,6 +20,7 @@ members = [
     "common/stoppable",
     "common/management",
     "common/io",
+    "common/indexing",
 
     # Datafuse Query
     "query",

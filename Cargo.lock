@@ -716,6 +716,7 @@ dependencies = [
  "common-exception",
  "common-infallible",
  "common-io",
+ "pretty_assertions",
 ]
 
 [[package]]
@@ -804,6 +805,18 @@ dependencies = [
  "serde",
  "serde_json",
  "unicase",
+]
+
+[[package]]
+name = "common-indexing"
+version = "0.1.0"
+dependencies = [
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-planners",
+ "pretty_assertions",
+ "serde",
 ]
 
 [[package]]

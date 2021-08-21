@@ -24,6 +24,7 @@ use common_datavalues::series::IntoSeries;
 use common_datavalues::series::Series;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -107,22 +108,6 @@ impl DataBlock {
         }
     }
 
-    pub fn column_by_name(&self, name: &str) -> Option<&DataColumn> {
-        if self.is_empty() {
-            return None;
-        }
-
-        if name == "*" {
-            return Some(&self.columns[0]);
-        };
-
-        if let Ok(idx) = self.schema.index_of(name) {
-            Some(&self.columns[idx])
-        } else {
-            None
-        }
-    }
-
     pub fn try_array_by_name(&self, name: &str) -> Result<Series> {
         if name == "*" {
             self.columns[0].to_array()
@@ -130,6 +115,20 @@ impl DataBlock {
             let idx = self.schema.index_of(name)?;
             self.columns[idx].to_array()
         }
+    }
+
+    /// Take the first data value of the column.
+    pub fn first(&self, col: &str) -> Result<DataValue> {
+        let series = self.try_array_by_name(col)?;
+        let values = series.to_values()?;
+        Ok(values[0].clone())
+    }
+
+    /// Take the last data value of the column.
+    pub fn last(&self, col: &str) -> Result<DataValue> {
+        let series = self.try_array_by_name(col)?;
+        let values = series.to_values()?;
+        Ok(values[values.len() - 1].clone())
     }
 
     pub fn slice(&self, offset: usize, length: usize) -> Self {
