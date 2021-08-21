@@ -132,16 +132,44 @@ impl SledTree {
     /// Retrieve the value of key.
     pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>>
     where KV: SledKeySpace {
-        let got = self
-            .tree
-            .get(KV::serialize_key(key)?)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("get: {}:{}", self.name, key)
-            })?;
+        let k_res = KV::serialize_key(key);
+        let k = match k_res {
+            Err(e) => {
+                tracing::error!("error: {} when serialize key", e);
+                return Err(e);
+            }
+            Ok(x) => x,
+        };
+
+        let got_res = self.tree.get(k);
+        let got = match got_res {
+            Err(e) => {
+                tracing::error!("error: {} when get key: {}", e, key);
+                return Err(ErrorCode::MetaStoreDamaged(format!(
+                    "get: {}:{}",
+                    self.name, key
+                )));
+            }
+            Ok(x) => x,
+        };
 
         let v = match got {
             None => None,
-            Some(v) => Some(KV::deserialize_value(v)?),
+            Some(v) => {
+                let value_res = KV::deserialize_value(v.clone());
+                match value_res {
+                    Err(e) => {
+                        tracing::error!(
+                            "error: {} when deserialize value: key:{}, value ivec:{:?}",
+                            e,
+                            key,
+                            v
+                        );
+                        return Err(e);
+                    }
+                    Ok(x) => Some(x),
+                }
+            }
         };
 
         Ok(v)
