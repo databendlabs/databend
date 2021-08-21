@@ -120,15 +120,13 @@ impl DataBlock {
     /// Take the first data value of the column.
     pub fn first(&self, col: &str) -> Result<DataValue> {
         let series = self.try_array_by_name(col)?;
-        let values = series.to_values()?;
-        Ok(values[0].clone())
+        series.try_get(0)
     }
 
     /// Take the last data value of the column.
     pub fn last(&self, col: &str) -> Result<DataValue> {
         let series = self.try_array_by_name(col)?;
-        let values = series.to_values()?;
-        Ok(values[values.len() - 1].clone())
+        series.try_get(series.len() - 1)
     }
 
     pub fn slice(&self, offset: usize, length: usize) -> Self {
