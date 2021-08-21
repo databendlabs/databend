@@ -33,6 +33,7 @@ pub enum DfShowTables {
     All,
     Like(Ident),
     Where(Expr),
+    FromOrIn(ObjectName),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -258,12 +258,36 @@ mod tests {
         )?;
 
         expect_parse_ok(
+            "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
+            DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
+        )?;
+
+        expect_parse_ok(
             "SHOW TABLES WHERE t LIKE 'aaa' AND t LIKE 'a%'",
             DfStatement::ShowTables(DfShowTables::Where(parse_sql_to_expr(
                 "t LIKE 'aaa' AND t LIKE 'a%'",
             ))),
         )?;
 
+        Ok(())
+    }
+
+    #[test]
+    fn show_tables_test() -> Result<()> {
+        let mut ident = Ident::new("ss");
+        ident.quote_style = Some('`');
+        let v = vec![ident];
+        let name = ObjectName(v);
+        let name_two = name.clone();
+
+        expect_parse_ok(
+            "SHOW TABLES FROM `ss`",
+            DfStatement::ShowTables(DfShowTables::FromOrIn(name)),
+        )?;
+        expect_parse_ok(
+            "SHOW TABLES IN `ss`",
+            DfStatement::ShowTables(DfShowTables::FromOrIn(name_two)),
+        )?;
         Ok(())
     }
 

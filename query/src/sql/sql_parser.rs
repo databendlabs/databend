@@ -161,7 +161,6 @@ impl<'a> DfParser<'a> {
                     }
                     Keyword::SHOW => {
                         self.parser.next_token();
-
                         if self.consume_token("TABLES") {
                             let tok = self.parser.next_token();
                             match &tok {
@@ -172,6 +171,9 @@ impl<'a> DfParser<'a> {
                                     )),
                                     Keyword::WHERE => Ok(DfStatement::ShowTables(
                                         DfShowTables::Where(self.parser.parse_expr()?),
+                                    )),
+                                    Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(
+                                        DfShowTables::FromOrIn(self.parser.parse_object_name()?),
                                     )),
                                     _ => self.expected("like or where", tok),
                                 },
