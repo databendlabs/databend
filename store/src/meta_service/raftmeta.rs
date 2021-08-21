@@ -242,14 +242,11 @@ impl MetaStore {
             new_sm.get_last_applied()?,
         );
 
-        {
-            let span = tracing::debug_span!("flush-after-insert-kvs");
-            let _ent = span.enter();
+        tree.flush_async()
+            .await
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to flush snapshot")?;
 
-            tree.flush_async()
-                .await
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to flush snapshot")?;
-        }
+        tracing::info!("flushed tree, no_kvs: {}", nkvs);
 
         // Start to use the new tree, the old can be cleaned.
         self.raft_state

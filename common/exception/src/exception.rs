@@ -317,9 +317,9 @@ impl From<anyhow::Error> for ErrorCode {
     fn from(error: anyhow::Error) -> Self {
         ErrorCode {
             code: 1002,
-            display_text: format!("{}", error),
+            display_text: format!("{}, source: {:?}", error, error.source()),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: None,
+            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 }
