@@ -404,6 +404,21 @@ mod tests {
             }),
         )?;
 
+        expect_parse_ok(
+            "SHOW DATABASES LIKE SUBSTRING('ss%' FROM 1 FOR 3)",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Like,
+                    right: Box::new(Expr::Substring {
+                        expr: Box::new(Expr::Value(Value::SingleQuotedString("ss%".to_string()))),
+                        substring_from: Some(Box::new(Expr::Value(Value::Number("1".to_string(), false)))), 
+                        substring_for: Some(Box::new(Expr::Value(Value::Number("3".to_string(), false)))), 
+                    }),
+                }),
+            }),
+        )?;
+
         Ok(())
     }
 }
