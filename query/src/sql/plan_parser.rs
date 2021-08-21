@@ -132,8 +132,6 @@ impl PlanParser {
             DfStatement::TruncateTable(v) => self.sql_truncate_table_to_plan(v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(v),
             DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
-
-            // TODO: support like and other filters in show queries
             DfStatement::ShowTables(df) => {
                 let show_sql = match df {
                     DfShowTables::All => {
