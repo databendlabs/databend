@@ -164,6 +164,7 @@ nav:
           - minIf: sqlstatement/aggregate-functions/aggregate-min-if.md
           - maxIf: sqlstatement/aggregate-functions/aggregate-max-if.md
           - sumIf: sqlstatement/aggregate-functions/aggregate-sum-if.md
+          - windowFunnel: sqlstatement/aggregate-functions/aggregate-windowfunnel.md
       - Conditional Functions:
           - IF: sqlstatement/conditional-functions/if.md
       - Conversion Functions:

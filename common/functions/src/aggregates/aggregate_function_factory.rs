@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataField;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -26,10 +27,15 @@ use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
 pub struct AggregateFunctionFactory;
-pub type FactoryFunc = fn(name: &str, arguments: Vec<DataField>) -> Result<AggregateFunctionRef>;
+pub type FactoryFunc = fn(
+    name: &str,
+    params: Vec<DataValue>,
+    arguments: Vec<DataField>,
+) -> Result<AggregateFunctionRef>;
 
 pub type FactoryCombinatorFunc = fn(
     name: &str,
+    params: Vec<DataValue>,
     arguments: Vec<DataField>,
     nested_func: FactoryFunc,
 ) -> Result<AggregateFunctionRef>;
@@ -53,7 +59,11 @@ lazy_static! {
 }
 
 impl AggregateFunctionFactory {
-    pub fn get(name: impl AsRef<str>, arguments: Vec<DataField>) -> Result<AggregateFunctionRef> {
+    pub fn get(
+        name: impl AsRef<str>,
+        params: Vec<DataValue>,
+        arguments: Vec<DataField>,
+    ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let not_found_error = || -> ErrorCode {
             ErrorCode::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
@@ -62,7 +72,7 @@ impl AggregateFunctionFactory {
         let key: Key = name.into();
         let map = FACTORY.read();
         match map.get(&key) {
-            Some(creator) => (creator)(name, arguments),
+            Some(creator) => (creator)(name, params, arguments),
             None => {
                 // find suffix
                 let lower_name = name.to_lowercase();
@@ -79,7 +89,7 @@ impl AggregateFunctionFactory {
                     return map
                         .get(&nested_key)
                         .map(|nested_creator| {
-                            combinator_creator(nested_name, arguments, *nested_creator)
+                            combinator_creator(nested_name, params, arguments, *nested_creator)
                         })
                         .unwrap_or_else(|| Err(not_found_error()));
                 }

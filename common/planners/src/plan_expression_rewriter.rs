@@ -89,7 +89,12 @@ impl Expression {
                 }
                 Expression::ScalarFunction { op, args: new_args }
             }
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let mut new_args = Vec::with_capacity(args.len());
                 for arg in args {
                     new_args.push(arg.rewrite(rewriter)?);
@@ -97,6 +102,7 @@ impl Expression {
                 Expression::AggregateFunction {
                     op,
                     distinct,
+                    params,
                     args: new_args,
                 }
             }

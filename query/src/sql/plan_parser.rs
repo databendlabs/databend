@@ -869,6 +869,38 @@ impl PlanParser {
         }
     }
 
+    fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
+        match value {
+            sqlparser::ast::Value::Number(ref n, _) => {
+                DataValue::try_from_literal(n).map(Expression::create_literal)
+            }
+            sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(Expression::create_literal(
+                DataValue::Utf8(Some(value.clone())),
+            )),
+            sqlparser::ast::Value::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            } => SQLCommon::make_sql_interval_to_literal(
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            ),
+            sqlparser::ast::Value::Boolean(b) => {
+                Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
+            }
+            sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
+            other => Result::Err(ErrorCode::SyntaxException(format!(
+                "Unsupported value expression: {}, type: {:?}",
+                value, other
+            ))),
+        }
+    }
+
     /// Generate a relational expression from a SQL expression
     pub fn sql_to_rex(
         &self,
@@ -876,40 +908,8 @@ impl PlanParser {
         schema: &DataSchema,
         select: Option<&sqlparser::ast::Select>,
     ) -> Result<Expression> {
-        fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
-            match value {
-                sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::try_from_literal(n).map(Expression::create_literal)
-                }
-                sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(
-                    Expression::create_literal(DataValue::Utf8(Some(value.clone()))),
-                ),
-                sqlparser::ast::Value::Interval {
-                    value,
-                    leading_field,
-                    leading_precision,
-                    last_field,
-                    fractional_seconds_precision,
-                } => SQLCommon::make_sql_interval_to_literal(
-                    value,
-                    leading_field,
-                    leading_precision,
-                    last_field,
-                    fractional_seconds_precision,
-                ),
-                sqlparser::ast::Value::Boolean(b) => {
-                    Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
-                }
-                sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
-                other => Result::Err(ErrorCode::SyntaxException(format!(
-                    "Unsupported value expression: {}, type: {:?}",
-                    value, other
-                ))),
-            }
-        }
-
         match expr {
-            sqlparser::ast::Expr::Value(value) => value_to_rex(value),
+            sqlparser::ast::Expr::Value(value) => Self::value_to_rex(value),
             sqlparser::ast::Expr::Identifier(ref v) => Ok(Expression::Column(v.clone().value)),
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
                 Ok(Expression::BinaryExpression {
@@ -968,9 +968,27 @@ impl PlanParser {
                             .collect(),
                         _ => args,
                     };
+
+                    let params = e
+                        .params
+                        .iter()
+                        .map(|v| {
+                            let expr = Self::value_to_rex(v);
+                            if let Ok(Expression::Literal { value, .. }) = expr {
+                                Ok(value)
+                            } else {
+                                Result::Err(ErrorCode::SyntaxException(format!(
+                                    "Unsupported value expression: {:?}, must be datavalue",
+                                    expr
+                                )))
+                            }
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
                     return Ok(Expression::AggregateFunction {
                         op,
                         distinct: e.distinct,
+                        params,
                         args,
                     });
                 }

@@ -58,6 +58,7 @@ mod tests {
         let aggr_expr = Expression::AggregateFunction {
             op: "count".to_string(),
             distinct: false,
+            params: vec![],
             args: vec![Expression::create_literal(DataValue::UInt64(Some(0)))],
         };
 
