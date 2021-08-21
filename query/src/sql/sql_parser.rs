@@ -252,20 +252,10 @@ impl<'a> DfParser<'a> {
     fn parse_show_databases(&mut self) -> Result<DfStatement, ParserError> {
         if self.parser.parse_keyword(Keyword::WHERE) {
             let mut expr = self.parser.parse_expr()?;
-            expr = if let Expr::BinaryOp{left, op, right} = expr {
-                let left_value = format!("{}", left);  
-                if left_value.to_uppercase() == "DATABASE" {
-                    Ok(Expr::BinaryOp {
-                        left: Box::new(Expr::Identifier(Ident::new("name"))),
-                        op,
-                        right,
-                    })   
-                } else {
-                    self.expected("database", Token::make_word(&left_value, None))
-                }
-            } else {
-                Ok(expr) 
-            }?;
+
+            log::debug!("expr before replace:{}", expr);
+            expr = self.replace_show_database(&expr, "Database", "name")?;
+            log::debug!("expr after replace:{}", expr);
 
             Ok(DfStatement::ShowDatabases(DfShowDatabases {
                 where_opt: Some(expr),
@@ -275,7 +265,7 @@ impl<'a> DfParser<'a> {
             let like_expr = Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("name"))),
                 op: BinaryOperator::Like,
-                right: Box::new(Expr::Value(Value::SingleQuotedString(pattern.to_string()))),
+                right: Box::new(Expr::Value(Value::SingleQuotedString(pattern))),
             };
 
             Ok(DfStatement::ShowDatabases(DfShowDatabases {
@@ -602,6 +592,37 @@ impl<'a> DfParser<'a> {
             true
         } else {
             false
+        }
+    }
+
+    fn replace_show_database(
+        &self,
+        expr: &Expr,
+        src: &str,
+        dst: &str,
+    ) -> Result<Expr, ParserError> {
+        if let Expr::BinaryOp { left, op, right } = expr {
+            let left_expr = match **left {
+                Expr::Identifier(ref v) if v.value.to_uppercase() == src.to_ascii_uppercase() => {
+                    Ok(Expr::Identifier(Ident::new(dst.to_string())))
+                }
+                _ => self.replace_show_database(left, src, dst),
+            }?;
+
+            let right_expr = match **right {
+                Expr::Identifier(ref v) if v.value.to_uppercase() == src.to_ascii_uppercase() => {
+                    Ok(Expr::Identifier(Ident::new(dst.to_string())))
+                }
+                _ => self.replace_show_database(right, src, dst),
+            }?;
+
+            Ok(Expr::BinaryOp {
+                left: Box::new(left_expr),
+                op: op.clone(),
+                right: Box::new(right_expr),
+            })
+        } else {
+            Ok(expr.clone())
         }
     }
 }
