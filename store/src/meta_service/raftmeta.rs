@@ -495,7 +495,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         match res {
             Ok(_) => {}
             Err(e) => {
-                tracing::error!("error: {} when install_snapshot", e);
+                tracing::error!("error: {:?} when install_snapshot", e);
             }
         };
 

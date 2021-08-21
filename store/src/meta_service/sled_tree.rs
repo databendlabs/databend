@@ -135,7 +135,7 @@ impl SledTree {
         let k_res = KV::serialize_key(key);
         let k = match k_res {
             Err(e) => {
-                tracing::error!("error: {} when serialize key", e);
+                tracing::error!("error: {:?} when serialize key", e);
                 return Err(e);
             }
             Ok(x) => x,
@@ -144,7 +144,7 @@ impl SledTree {
         let got_res = self.tree.get(k);
         let got = match got_res {
             Err(e) => {
-                tracing::error!("error: {} when get key: {}", e, key);
+                tracing::error!("error: {:?} when get key: {}", e, key);
                 return Err(ErrorCode::MetaStoreDamaged(format!(
                     "get: {}:{}",
                     self.name, key
@@ -160,7 +160,7 @@ impl SledTree {
                 match value_res {
                     Err(e) => {
                         tracing::error!(
-                            "error: {} when deserialize value: key:{}, value ivec:{:?}",
+                            "error: {:?} when deserialize value: key:{}, value ivec:{:?}",
                             e,
                             key,
                             v
