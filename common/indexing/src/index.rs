@@ -17,6 +17,11 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_planners::PlanNode;
 
+#[derive(Debug, PartialEq)]
+pub enum IndexSchemaVersion {
+    V1,
+}
+
 use crate::MinMaxIndex;
 use crate::SparseIndex;
 
@@ -26,16 +31,11 @@ pub struct IndexSchema {
     pub col: String,
     pub min_max: MinMaxIndex,
     pub sparse: SparseIndex,
+    pub version: IndexSchemaVersion,
 }
 
 pub trait Index {
-    /// Create index from blocks.
-    /// Each block is one row group of a parquet file and sorted by primary key.
-    /// For example:
-    /// parquet.file
-    /// | sorted-block | sorted-block | ... |
     fn create_index(&self, keys: &[String], blocks: &[DataBlock]) -> Result<Vec<IndexSchema>>;
 
-    // Search parts by plan.
     fn search_index(&self, plan: &PlanNode) -> Result<()>;
 }

@@ -18,6 +18,7 @@ use common_planners::PlanNode;
 
 use crate::Index;
 use crate::IndexSchema;
+use crate::IndexSchemaVersion;
 use crate::MinMaxIndex;
 use crate::SparseIndex;
 use crate::SparseIndexValue;
@@ -31,6 +32,12 @@ impl Indexer {
 }
 
 impl Index for Indexer {
+    /// Create index for one parquet file.
+    /// All blocks are belong to a Parquet file and globally sorted.
+    /// Each block is one row group of a parquet file and sorted by primary key.
+    /// For example:
+    /// parquet.file
+    /// | sorted-block | sorted-block | ... |
     fn create_index(
         &self,
         keys: &[String],
@@ -61,11 +68,13 @@ impl Index for Indexer {
                 col: key.to_string(),
                 min_max,
                 sparse,
+                version: IndexSchemaVersion::V1,
             });
         }
         Ok(idxes)
     }
 
+    // Search parts by plan.
     fn search_index(&self, _plan: &PlanNode) -> common_exception::Result<()> {
         todo!()
     }
