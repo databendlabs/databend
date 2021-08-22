@@ -253,7 +253,7 @@ impl<'a> DfParser<'a> {
         if self.parser.parse_keyword(Keyword::WHERE) {
             let mut expr = self.parser.parse_expr()?;
 
-            expr = self.replace_show_database(&expr);
+            expr = self.replace_show_database(expr);
 
             Ok(DfStatement::ShowDatabases(DfShowDatabases {
                 where_opt: Some(expr),
@@ -595,31 +595,31 @@ impl<'a> DfParser<'a> {
 
     fn replace_show_database(
         &self,
-        expr: &Expr
+        expr: Expr
     ) -> Expr {
         match expr {
             Expr::BinaryOp { left, op, right } => {
-                let left_expr = match **left {
+                let left_expr = match *left {
                     Expr::Identifier(ref v) if v.value.to_uppercase() == "DATABASE".to_string() => {
                         Expr::Identifier(Ident::new("name"))
                     }
-                    _ => self.replace_show_database(left),
+                    _ => self.replace_show_database(*left),
                 };
     
-                let right_expr = match **right {
+                let right_expr = match *right {
                     Expr::Identifier(ref v) if v.value.to_uppercase() == "DATABASE".to_string() => {
                         Expr::Identifier(Ident::new("name"))
                     }
-                    _ => self.replace_show_database(right),
+                    _ => self.replace_show_database(*right),
                 };
     
                 Expr::BinaryOp {
                     left: Box::new(left_expr),
-                    op: op.clone(),
+                    op: op,
                     right: Box::new(right_expr),
                 }
             },
-            _ => expr.clone()
+            _ => expr
         }    
 
     }
