@@ -287,18 +287,18 @@ impl MetaStore {
 
         for rkv in it {
             let (_log_index, ent) = rkv?;
-            if let EntryPayload::ConfigChange(cfg) = &ent.payload {
-                return Ok(cfg.membership.clone());
+            match &ent.payload {
+                EntryPayload::ConfigChange(cfg) => {
+                    return Ok(cfg.membership.clone());
+                }
+                EntryPayload::SnapshotPointer(snap_ptr) => {
+                    return Ok(snap_ptr.membership.clone());
+                }
+                _ => {}
             }
         }
 
-        // There is no membership config in logs.
-        // Try to read it from state machine.
-        let mem = self.state_machine.read().await.get_membership()?;
-
-        let mem = mem.unwrap_or_else(|| MembershipConfig::new_initial(self.id));
-
-        Ok(mem)
+        Ok(MembershipConfig::new_initial(self.id))
     }
 }
 
@@ -449,7 +449,12 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
 
         // 2. Remove logs that are included in snapshot.
 
-        self.log.range_remove(0..=last_applied_log.index).await?;
+        // When encountered a snapshot pointer, raft replication is switched to snapshot replication.
+        self.log
+            .insert(&Entry::new_snapshot_pointer(&snapshot.meta))
+            .await?;
+
+        self.log.range_remove(0..last_applied_log.index).await?;
 
         tracing::debug!("log range_remove complete");
 
@@ -501,9 +506,12 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             }
         };
 
-        // NOTE: a replication may has been using these logs.
-        //       It requires the replication to detect a missing log and restart a snapshot replication.
-        self.log.range_remove(0..=meta.last_log_id.index).await?;
+        // When encountered a snapshot pointer, raft replication is switched to snapshot replication.
+        self.log
+            .insert(&Entry::new_snapshot_pointer(&new_snapshot.meta))
+            .await?;
+
+        self.log.range_remove(0..meta.last_log_id.index).await?;
 
         // Update current snapshot.
         {
