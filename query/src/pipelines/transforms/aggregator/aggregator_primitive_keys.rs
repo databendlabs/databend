@@ -42,6 +42,8 @@ use crate::common::HashMap;
 use crate::common::HashTableEntity;
 use crate::common::KeyHasher;
 use crate::pipelines::transforms::aggregator::aggregator_params::{AggregatorParamsRef, AggregatorParams};
+use crate::pipelines::transforms::aggregator::aggregator_area::AggregatorArea;
+use common_datavalues::columns::DataColumn;
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
@@ -50,8 +52,7 @@ pub struct Aggregator<Method: HashMethod> {
     offsets_aggregate_states: Vec<usize>,
 }
 
-impl<Method: HashMethod> Aggregator<Method>
-where
+impl<Method: HashMethod> Aggregator<Method> where
     DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
     DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>,
 {
@@ -61,14 +62,16 @@ where
         schema: DataSchemaRef,
     ) -> Result<Aggregator<Method>> {
         let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
-        let funcs = &aggregator_params.aggregate_functions;
-        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(funcs) };
+        // let aggregator_area = AggregatorArea::try_create(&aggregator_params)?;
+
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let (states_layout, states_offsets) = unsafe { get_layout_offsets(aggregate_functions) };
 
         Ok(Aggregator {
             method,
             params: aggregator_params,
-            layout,
-            offsets_aggregate_states,
+            layout: states_layout,
+            offsets_aggregate_states: states_offsets,
         })
     }
 
@@ -79,39 +82,21 @@ where
     ) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
         let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::create(), Bump::new()));
 
+        let hash_method = &self.method;
+        let aggregator_params = self.params.as_ref();
+
+        let aggr_len = aggregator_params.aggregate_functions.len();
+        let func = &aggregator_params.aggregate_functions;
+
+        let layout = self.layout;
+        let offsets_aggregate_states = &self.offsets_aggregate_states;
+
         while let Some(block) = stream.next().await {
             let block = block?;
 
-            let hash_method = &self.method;
-            let aggregator_params = self.params.as_ref();
-
-            let aggr_len = aggregator_params.aggregate_functions.len();
-            let func = &aggregator_params.aggregate_functions;
-            let aggr_cols = &aggregator_params.aggregate_functions_column_name;
-            let aggr_args_name = &aggregator_params.aggregate_functions_arguments_name;
-
-            let layout = self.layout;
-            let offsets_aggregate_states = &self.offsets_aggregate_states;
-
             // 1.1 and 1.2.
-            let mut group_columns = Vec::with_capacity(group_cols.len());
-            {
-                for col in group_cols.iter() {
-                    group_columns.push(block.try_column_by_name(col)?);
-                }
-            }
-
-            let mut aggr_arg_columns = Vec::with_capacity(aggr_len);
-            for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
-                let arg_columns = aggr_args_name[idx]
-                    .iter()
-                    .map(|arg| block.try_column_by_name(arg).and_then(|c| c.to_array()))
-                    .collect::<Result<Vec<Series>>>()?;
-                aggr_arg_columns.push(arg_columns);
-            }
-
-            // this can benificial for the case of dereferencing
-            let aggr_arg_columns_slice = &aggr_arg_columns;
+            let group_columns = Self::group_columns(&group_cols, &block)?;
+            let aggregate_args_columns = self.aggregate_arguments_column(&block)?;
 
             let mut places = Vec::with_capacity(block.num_rows());
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
@@ -142,9 +127,14 @@ where
                         }
                     }
                 }
+            }
+
+            {
+                // this can benificial for the case of dereferencing
+                let aggr_arg_columns_slice = &aggregate_args_columns;
 
                 for ((idx, func), args) in
-                    func.iter().enumerate().zip(aggr_arg_columns_slice.iter())
+                func.iter().enumerate().zip(aggr_arg_columns_slice.iter())
                 {
                     func.accumulate_keys(
                         &places,
@@ -158,14 +148,46 @@ where
         Ok(groups_locker)
     }
 
+    #[inline(always)]
+    fn aggregate_arguments_column(&self, block: &DataBlock) -> Result<Vec<Vec<Series>>> {
+        let aggregator_params = self.params.as_ref();
+
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let aggregate_functions_arguments = &aggregator_params.aggregate_functions_arguments_name;
+
+        let mut aggregate_arguments_columns = Vec::with_capacity(aggregate_functions.len());
+        for index in 0..aggregate_functions.len() {
+            let function_arguments = &aggregate_functions_arguments[index];
+
+            let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
+            for argument_index in 0..function_arguments.len() {
+                let argument_name = &function_arguments[argument_index];
+                let argument_column = block.try_column_by_name(argument_name)?;
+                function_arguments_column.push(argument_column.to_array()?);
+            }
+
+            aggregate_arguments_columns.push(function_arguments_column);
+        }
+
+        Ok(aggregate_arguments_columns)
+    }
+
+    #[inline(always)]
+    fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a DataColumn>> {
+        names
+            .iter()
+            .map(|column_name| block.try_column_by_name(column_name))
+            .collect::<Result<Vec<&DataColumn>>>()
+    }
+
     pub fn aggregate_finalized<T: DFNumericType>(
         &self,
         groups: &HashMap<T::Native, usize>,
         schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream>
-    where
-        DefaultHasher<T::Native>: KeyHasher<T::Native>,
-        DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native>,
+        where
+            DefaultHasher<T::Native>: KeyHasher<T::Native>,
+            DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native>,
     {
         if groups.is_empty() {
             return Ok(Box::pin(DataBlockStream::create(
