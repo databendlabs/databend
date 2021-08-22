@@ -30,7 +30,6 @@ use crate::meta_service::testing::snapshot_logs;
 use crate::meta_service::LogIndex;
 use crate::meta_service::MetaStore;
 use crate::meta_service::StateMachineMetaValue;
-use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -43,7 +42,8 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     // TODO check log
     // TODO check state machine
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let id = 3;
     let mut tc = new_test_context();
@@ -88,7 +88,8 @@ async fn test_meta_store_get_membership_from_log() -> anyhow::Result<()> {
     // - Append logs
     // - Get membership from log.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let id = 3;
     let mut tc = new_test_context();
@@ -187,7 +188,8 @@ async fn test_meta_store_do_log_compaction_empty() -> anyhow::Result<()> {
     // - Create a MetaStore
     // - Create a snapshot check snapshot state
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let id = 3;
     let mut tc = new_test_context();
@@ -235,7 +237,8 @@ async fn test_meta_store_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<
     // - Apply logs
     // - Create a snapshot check snapshot state
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let id = 3;
     let mut tc = new_test_context();
@@ -302,7 +305,8 @@ async fn test_meta_store_do_log_compaction_all_logs_with_memberchange() -> anyho
     // - Apply logs
     // - Create a snapshot check snapshot state
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let id = 3;
     let mut tc = new_test_context();
@@ -355,7 +359,8 @@ async fn test_meta_store_do_log_compaction_current_snapshot() -> anyhow::Result<
     // - Apply logs
     // - Create a snapshot check snapshot state
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let id = 3;
     let mut tc = new_test_context();
@@ -407,7 +412,8 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     // - Create a snapshot
     // - Create a new MetaStore and restore it by install the snapshot
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let (logs, want) = snapshot_logs();
 

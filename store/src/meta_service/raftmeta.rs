@@ -151,7 +151,7 @@ impl MetaStore {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
+    #[tracing::instrument(level = "info", skip(config), fields(config_id=%config.config_id))]
     pub async fn open_create(
         config: &configs::Config,
         open: Option<()>,
@@ -213,6 +213,8 @@ impl MetaStore {
 
         let new_sm_id = sm_id + 1;
 
+        tracing::debug!("snapshot data len: {}", data.len());
+
         let snap: SerializableSnapshot = serde_json::from_slice(data)?;
 
         // If not finished, clean up the new tree.
@@ -221,7 +223,14 @@ impl MetaStore {
             .await?;
 
         let new_sm = StateMachine::open(&self.config, new_sm_id).await?;
+
+        tracing::info!(
+            "insert all key-value into new state machine, n={}",
+            snap.kvs.len()
+        );
+
         let tree = &new_sm.sm_tree.tree;
+        let nkvs = snap.kvs.len();
         for x in snap.kvs.into_iter() {
             let k = &x[0];
             let v = &x[1];
@@ -229,9 +238,17 @@ impl MetaStore {
                 .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to insert snapshot")?;
         }
 
+        tracing::info!(
+            "installed state machine from snapshot, no_kvs: {} last_applied: {}",
+            nkvs,
+            new_sm.get_last_applied()?,
+        );
+
         tree.flush_async()
             .await
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to flush snapshot")?;
+
+        tracing::info!("flushed tree, no_kvs: {}", nkvs);
 
         // Start to use the new tree, the old can be cleaned.
         self.raft_state
@@ -340,7 +357,11 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     async fn get_log_entries(&self, start: u64, stop: u64) -> anyhow::Result<Vec<Entry<LogEntry>>> {
         // Invalid request, return empty vec.
         if start > stop {
-            tracing::error!("invalid request, start > stop");
+            tracing::error!(
+                "get_log_entries: invalid request, start({}) > stop({})",
+                start,
+                stop
+            );
             return Ok(vec![]);
         }
 
@@ -350,7 +371,11 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
     async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> anyhow::Result<()> {
         if stop.as_ref().map(|stop| &start > stop).unwrap_or(false) {
-            tracing::error!("invalid request, start > stop");
+            tracing::error!(
+                "delete_logs_from: invalid request, start({}) > stop({:?})",
+                start,
+                stop
+            );
             return Ok(());
         }
 
@@ -455,7 +480,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
     ) -> anyhow::Result<()> {
         // TODO(xp): disallow installing a snapshot with smaller last_applied.
 
-        tracing::trace!(
+        tracing::debug!(
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
         );
@@ -468,7 +493,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
         tracing::debug!("SNAP META:{:?}", meta);
 
         // Replace state machine with the new one
-        self.install_snapshot(&new_snapshot.data).await?;
+        let res = self.install_snapshot(&new_snapshot.data).await;
+        match res {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("error: {:?} when install_snapshot", e);
+            }
+        };
 
         // NOTE: a replication may has been using these logs.
         //       It requires the replication to detect a missing log and restart a snapshot replication.
@@ -655,8 +686,8 @@ impl MetaNode {
         Config::build("foo_cluster".into())
             .heartbeat_interval(hb)
             // Choose a rational value for election timeout.
-            .election_timeout_min(hb * 4)
-            .election_timeout_max(hb * 8)
+            .election_timeout_min(hb * 8)
+            .election_timeout_max(hb * 12)
             .snapshot_policy(SnapshotPolicy::LogsSinceLast(
                 config.snapshot_logs_since_last,
             ))

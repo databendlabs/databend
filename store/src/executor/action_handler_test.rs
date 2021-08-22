@@ -54,7 +54,6 @@ use crate::executor::ActionHandler;
 use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
 use crate::meta_service::MetaNode;
-use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 use crate::tests::service::StoreTestContext;
 
@@ -63,7 +62,8 @@ async fn test_action_handler_do_pull_file() -> anyhow::Result<()> {
     // - Bring up an ActionHandler backed with a Dfs
     // - Assert pulling file works fine.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let (_tc, hdlr) = bring_up_dfs_action_handler(hashmap! {
         "foo" => "bar",
@@ -95,7 +95,8 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert retrieving database.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     struct D {
         plan: CreateDatabasePlan,
@@ -162,7 +163,8 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     struct T {
         db_name: &'static str,
@@ -232,7 +234,8 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     struct T {
         db_name: &'static str,
@@ -311,7 +314,8 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert retrieving database.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     struct D {
         plan: CreateDatabasePlan,
@@ -433,7 +437,8 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     struct T {
         db_name: &'static str,
@@ -543,7 +548,8 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
     // - Add a database.
     // - Assert getting present and absent databases.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     struct T {
         db_name: &'static str,
@@ -653,7 +659,8 @@ async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
     // - Add a table.
     // - Assert getting present and absent databases.
 
-    let _log_guards = init_store_unittest(&common_tracing::func_name!());
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     struct T {
         db_name: &'static str,

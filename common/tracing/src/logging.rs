@@ -15,8 +15,11 @@
 use std::env;
 use std::fs::OpenOptions;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Once;
 
+use lazy_static::lazy_static;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use tracing::Subscriber;
@@ -42,6 +45,21 @@ pub fn init_default_tracing() {
     });
 }
 
+/// Init tracing for unittest.
+/// Write logs to file `unittest`.
+pub fn init_default_ut_tracing() {
+    static START: Once = Once::new();
+
+    START.call_once(|| {
+        let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
+        *g = Some(init_global_tracing("unittest", "_logs"));
+    });
+}
+
+lazy_static! {
+    static ref GLOBAL_UT_LOG_GUARD: Arc<Mutex<Option<WorkerGuard>>> = Arc::new(Mutex::new(None));
+}
+
 /// Init logging and tracing.
 ///
 /// To enable reporting tracing data to jaeger, set env var `FUSE_JAEGER` to non-empty value.
@@ -58,7 +76,7 @@ pub fn init_default_tracing() {
 fn init_tracing_stdout() {
     let fmt_layer = Layer::default()
         .with_thread_ids(true)
-        .with_thread_names(true)
+        .with_thread_names(false)
         // .pretty()
         .with_ansi(false)
         .with_span_events(fmt::format::FmtSpan::FULL);
@@ -82,7 +100,8 @@ fn jaeger_layer<
 
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_service_name("datafuse-store")
-            .install_batch(opentelemetry::runtime::Tokio)
+            .install_simple()
+            // .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
         let ot_layer = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -146,6 +165,8 @@ pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Sub
     let path_str = dir.to_string() + "/" + app_name;
     let path: &Path = path_str.as_ref();
 
+    // open log file
+
     let mut open_options = OpenOptions::new();
     open_options.append(true).create(true);
 
@@ -159,12 +180,14 @@ pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Sub
 
     let f = open_res.unwrap();
 
+    // build subscriber
+
     let (writer, writer_guard) = tracing_appender::non_blocking(f);
 
     let f_layer = Layer::new()
         .with_writer(writer)
         .with_thread_ids(true)
-        .with_thread_names(true)
+        .with_thread_names(false)
         .with_ansi(false)
         .with_span_events(fmt::format::FmtSpan::FULL);
 

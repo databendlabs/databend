@@ -86,7 +86,7 @@ impl MetaService for MetaServiceImpl {
         Ok(tonic::Response::new(rst))
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self, request))]
     async fn append_entries(
         &self,
         request: tonic::Request<RaftMes>,
@@ -113,7 +113,7 @@ impl MetaService for MetaServiceImpl {
         Ok(tonic::Response::new(mes))
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self, request))]
     async fn install_snapshot(
         &self,
         request: tonic::Request<RaftMes>,
@@ -140,7 +140,7 @@ impl MetaService for MetaServiceImpl {
         Ok(tonic::Response::new(mes))
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self, request))]
     async fn vote(
         &self,
         request: tonic::Request<RaftMes>,

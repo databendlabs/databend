@@ -42,7 +42,7 @@ common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "ed40333" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "cc53408" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "41ba42b" }
 
