@@ -46,7 +46,6 @@ use common_runtime::tokio;
 use common_store_api::DatabaseMetaSnapshot;
 use common_store_api::MetaApi;
 use common_streams::SendableDataBlockStream;
-use flaky_test::flaky_test;
 use TableEngineType::JSONEachRow;
 
 use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
@@ -311,7 +310,7 @@ impl MetaApi for FakeStoreApis {
     }
 }
 
-#[flaky_test]
+#[test]
 fn test_get_database() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -350,7 +349,7 @@ fn test_get_databases() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[flaky_test]
+#[test]
 fn test_get_table() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
