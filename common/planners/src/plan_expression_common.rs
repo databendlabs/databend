@@ -176,7 +176,13 @@ pub fn rebase_expr(expr: &Expression, base_exprs: &[Expression]) -> Result<Expre
 // Skip Sort, Alias because we can go into the inner nest_exprs
 pub fn rebase_expr_from_input(expr: &Expression, schema: &DataSchemaRef) -> Result<Expression> {
     clone_with_replacement(expr, &|nest_exprs| match nest_exprs {
-        Expression::Sort { .. } | Expression::Column(_) | Expression::Alias(_, _) => Ok(None),
+        Expression::Sort { .. }
+        | Expression::Column(_)
+        | Expression::Literal {
+            value: _,
+            column_name: None,
+        }
+        | Expression::Alias(_, _) => Ok(None),
         _ => {
             if schema.field_with_name(&nest_exprs.column_name()).is_ok() {
                 Ok(Some(expr_as_column_expr(nest_exprs)?))
