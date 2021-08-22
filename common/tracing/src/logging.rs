@@ -100,8 +100,7 @@ fn jaeger_layer<
 
         let tracer = opentelemetry_jaeger::new_pipeline()
             .with_service_name("datafuse-store")
-            .install_simple()
-            // .install_batch(opentelemetry::runtime::Tokio)
+            .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
         let ot_layer = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -128,7 +127,8 @@ pub fn init_tracing_with_file(app_name: &str, dir: &str, level: &str) -> Vec<Wor
         .with(EnvFilter::new(level))
         .with(stdout_logging_layer)
         .with(JsonStorageLayer)
-        .with(file_logging_layer);
+        .with(file_logging_layer)
+        .with(jaeger_layer());
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("error setting global tracing subscriber");
