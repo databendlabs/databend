@@ -127,10 +127,16 @@ impl Expression {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
             Expression::Column(name) => name.clone(),
-            Expression::Literal {
-                column_name: Some(name),
-                ..
-            } => name.clone(),
+            Expression::Literal { value, column_name } => match column_name {
+                Some(name) => name.clone(),
+                None => {
+                    if let DataValue::Utf8(Some(_)) = value {
+                        format!("'{:?}'", value)
+                    } else {
+                        format!("{:?}", value)
+                    }
+                }
+            },
             Expression::UnaryExpression { op, expr } => {
                 format!("({} {})", op, expr.column_name())
             }
