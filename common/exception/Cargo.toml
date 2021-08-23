@@ -20,5 +20,4 @@ tonic = "0.4.3"
 prost = "0.7.0"
 
 # Github dependencies
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "41ba42b" }
-
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "2535347" }
