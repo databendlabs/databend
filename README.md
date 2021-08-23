@@ -37,12 +37,12 @@
 - [Getting Started](#getting-started)
 - [Roadmap](#roadmap)
 
-## What is Datafuse
+## What is Datafuse?
 
 Datafuse is an open source **elastic** and **scalable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
 
-We design Datafuse with the following key functionalities in mind:
-1. **Elastic**  In Datafuse storage and compute resources can dynamically scale up and down on demand.
+Datafuse design principles:
+1. **Elastic**  In Datafuse, storage and compute resources can dynamically scale up and down on demand.
 2. **Secure** All data files and network traffic in Datafuse is encrypted end-to-end, and provide Role Based Access Control in SQL level.
 3. **User-friendly** Datafuse is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
 4. **Cost-efficient** Datafuse processes queries with high performance, and the user only pays for what is actually used.
@@ -51,7 +51,7 @@ We design Datafuse with the following key functionalities in mind:
 
 ![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
 
-The picture above shows the high-level architecture of Datafuse, it consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
+Datafuse consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
 
 ### Meta Service Layer
 
@@ -70,13 +70,11 @@ and each cluster may consist of many nodes. Each node is a compute unit, and is 
 * Processors
 * Cache
 
-Node is the smallest unit of the compute layer, they can be registered as one cluster via namespace.
 Many clusters can attach the same database, so they can serve the query in parallel by different users.
 
 ### Storage Layer
 
 Datafuse stores data in an efficient, columnar format as Parquet files.
-Each Parquet file is sorted by the primary key before being written to the underlying shared storage.
 For efficient pruning, Datafuse also creates indexes for each Parquet file to speed up the queries.
 
 ## Getting Started
