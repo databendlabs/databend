@@ -582,7 +582,7 @@ impl TransformerSqlparser {
             SqlparserBinaryOperator::Minus => Ok(BinaryOperator::Minus),
             SqlparserBinaryOperator::Multiply => Ok(BinaryOperator::Multiply),
             SqlparserBinaryOperator::Divide => Ok(BinaryOperator::Divide),
-            SqlparserBinaryOperator::Modulus => Ok(BinaryOperator::Modulus),
+            SqlparserBinaryOperator::Modulo => Ok(BinaryOperator::Modulo),
             SqlparserBinaryOperator::StringConcat => Ok(BinaryOperator::StringConcat),
             SqlparserBinaryOperator::Gt => Ok(BinaryOperator::Gt),
             SqlparserBinaryOperator::Lt => Ok(BinaryOperator::Lt),
