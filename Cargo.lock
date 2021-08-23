@@ -714,7 +714,6 @@ dependencies = [
  "common-arrow",
  "common-datavalues",
  "common-exception",
- "common-infallible",
  "common-io",
  "pretty_assertions",
 ]
@@ -731,12 +730,10 @@ dependencies = [
  "lexical-core",
  "num",
  "ordered-float 2.7.0",
- "paste",
  "pretty_assertions",
  "serde",
  "serde_json",
  "strength_reduce",
- "unsafe_unwrap",
 ]
 
 [[package]]
@@ -949,7 +946,6 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "common-runtime",
  "lazy_static",
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -1343,7 +1339,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "structopt",
  "sysinfo 0.20.0",
  "tar",
  "tempfile",
@@ -1370,7 +1365,6 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
- "common-management",
  "common-metatypes",
  "common-planners",
  "common-profling",
@@ -1450,7 +1444,6 @@ dependencies = [
  "metrics-exporter-prometheus",
  "num",
  "num_cpus",
- "paste",
  "pretty_assertions",
  "prost 0.7.0",
  "rand 0.8.4",
@@ -5729,12 +5722,6 @@ name = "unicode-xid"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
-
-[[package]]
-name = "unsafe_unwrap"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1230ec65f13e0f9b28d789da20d2d419511893ea9dac2c1f4ef67b8b14e5da80"
 
 [[package]]
 name = "untrusted"

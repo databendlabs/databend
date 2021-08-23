@@ -37,7 +37,6 @@ common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-profling = { path = "../common/profiling" }
 common-store-api = { path = "../common/store-api" }
-common-management = { path = "../common/management" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 

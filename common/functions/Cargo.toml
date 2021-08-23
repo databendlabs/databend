@@ -19,7 +19,6 @@ common-io = {path = "../io"}
 # Github dependencies
 
 # Crates.io dependencies
-bumpalo = "3.7.0"
 dyn-clone = "1.0.4"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
@@ -30,8 +29,7 @@ unicase = "2.6.0"
 num = "^0.4"
 ordered-float = "2.7"
 
-
-
 [dev-dependencies]
+bumpalo = "3.7.0"
 common-datablocks = {path = "../datablocks"}
 pretty_assertions = "0.7"
