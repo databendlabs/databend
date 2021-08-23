@@ -111,7 +111,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=647fddb#647fddb7a6e35f185f8256bc99e8a24f9f78d026"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=824ad7e#824ad7ec8d714449f321683d963c9b737ff736ba"
 dependencies = [
  "arrow2",
  "bytes",
@@ -124,8 +124,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.2.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=647fddb#647fddb7a6e35f185f8256bc99e8a24f9f78d026"
+version = "0.3.0"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=824ad7e#824ad7ec8d714449f321683d963c9b737ff736ba"
 dependencies = [
  "ahash 0.7.4",
  "base64",
@@ -144,12 +144,13 @@ dependencies = [
  "multiversion",
  "num",
  "packed_simd_2",
- "parquet2 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parquet2 0.3.0",
  "rand 0.8.4",
  "regex",
  "serde",
  "serde_derive",
  "serde_json",
+ "strength_reduce",
  "zstd",
 ]
 
@@ -694,7 +695,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
- "parquet2 0.2.0 (git+https://github.com/datafuse-extras/parquet2?rev=05854c0)",
+ "parquet2 0.2.0",
 ]
 
 [[package]]
@@ -2456,6 +2457,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48dc51180a9b377fd75814d0cc02199c20f8e99433d6762f650d39cdbbd3b56f"
 
 [[package]]
+name = "integer-encoding"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c11140ffea82edce8dcd74137ce9324ec24b3cf0175fc9d7e29164da9915b8"
+dependencies = [
+ "async-trait",
+ "futures-util",
+]
+
+[[package]]
 name = "io-enum"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3497,21 +3508,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "parquet2"
-version = "0.2.0"
+name = "parquet-format-async-temp"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b50de05bf09185870980353a9734df91b617750439b2bded36fb975f39abfb50"
+checksum = "cde63e74461b2c6c31166c6bcd205096074c8972a9b46becfff0a4eb8c4fabd8"
 dependencies = [
- "bitpacking",
- "brotli",
- "flate2",
+ "async-trait",
+ "byteorder",
  "futures",
- "lz4",
- "parquet-format",
- "snap",
- "streaming-iterator",
- "thrift",
- "zstd",
+ "integer-encoding 3.0.2",
+ "ordered-float 1.1.1",
 ]
 
 [[package]]
@@ -3528,6 +3534,24 @@ dependencies = [
  "snap",
  "streaming-iterator",
  "thrift",
+ "zstd",
+]
+
+[[package]]
+name = "parquet2"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6b9cfd5adabbb93efd417dcee71a2ebbb0f4978b1d8e65ab7fce84b72b966bc"
+dependencies = [
+ "async-stream",
+ "bitpacking",
+ "brotli",
+ "flate2",
+ "futures",
+ "lz4",
+ "parquet-format-async-temp",
+ "snap",
+ "streaming-iterator",
  "zstd",
 ]
 
@@ -5193,7 +5217,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c6d965454947cc7266d22716ebfd07b18d84ebaf35eec558586bbb2a8cb6b5b"
 dependencies = [
  "byteorder",
- "integer-encoding",
+ "integer-encoding 1.1.7",
  "log",
  "ordered-float 1.1.1",
  "threadpool",
