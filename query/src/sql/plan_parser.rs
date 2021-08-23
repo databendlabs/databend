@@ -62,7 +62,6 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use super::DfShowTables;
 use crate::catalogs::catalog::Catalog;
 use crate::functions::ContextFunction;
 use crate::sessions::DatafuseQueryContextRef;
@@ -77,6 +76,7 @@ use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfParser;
 use crate::sql::DfShowCreateTable;
+use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
@@ -150,6 +150,12 @@ impl PlanParser {
                         format!(
                             "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
                             self.ctx.get_current_database(), e,
+                        )
+                    }
+                    DfShowTables::FromOrIn(name) => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
+                            name.0[0].value.clone()
                         )
                     }
                 };
