@@ -28,5 +28,4 @@ pub use hash_table_entity::HashTableEntity;
 pub use hash_table_hasher::DefaultHasher;
 pub use hash_table_hasher::KeyHasher;
 
-pub type HashMap<Key, Value> =
-    HashTable<Key, DefaultHashTableEntity<Key, Value>, DefaultHasher<Key>>;
+pub type HashMap<Key: Sized, Value: Sized> = HashTable<Key, DefaultHashTableEntity<Key, Value>, DefaultHasher<Key>>;

@@ -1,7 +1,7 @@
 use std::alloc::Layout;
 use bumpalo::Bump;
 use common_exception::Result;
-use crate::pipelines::transforms::aggregator::aggregator_params::{AggregatorParams, AggregatorParamsRef};
+use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParams, AggregatorParamsRef};
 use common_functions::aggregates::{get_layout_offsets, StateAddr};
 use std::sync::Arc;
 

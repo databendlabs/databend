@@ -68,4 +68,4 @@ mod transform_sort_merge;
 mod transform_sort_partial;
 mod transform_source;
 
-mod aggregator;
+mod group_by;

@@ -41,9 +41,22 @@ use crate::common::DefaultHasher;
 use crate::common::HashMap;
 use crate::common::HashTableEntity;
 use crate::common::KeyHasher;
-use crate::pipelines::transforms::aggregator::aggregator_params::{AggregatorParamsRef, AggregatorParams};
-use crate::pipelines::transforms::aggregator::aggregator_area::AggregatorArea;
+use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParamsRef, AggregatorParams};
+use crate::pipelines::transforms::group_by::aggregator_area::AggregatorArea;
 use common_datavalues::columns::DataColumn;
+use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::transforms::group_by::aggregator_polymorphic_keys::BinaryKeysArrayBuilder;
+
+#[async_trait::async_trait]
+pub trait IAggregator<Method: HashMethod> where
+    DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
+    DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>
+{
+    async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>>;
+
+    fn finish(&self, groups: &HashMap<Method::HashKey, usize>, schema: DataSchemaRef) -> Result<SendableDataBlockStream>;
+}
+
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
@@ -52,15 +65,11 @@ pub struct Aggregator<Method: HashMethod> {
     offsets_aggregate_states: Vec<usize>,
 }
 
-impl<Method: HashMethod> Aggregator<Method> where
+impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> where
     DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
     DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>,
 {
-    pub fn create(
-        method: Method,
-        aggr_exprs: &[Expression],
-        schema: DataSchemaRef,
-    ) -> Result<Aggregator<Method>> {
+    pub fn create(method: Method, aggr_exprs: &[Expression], schema: DataSchemaRef) -> Result<Aggregator<Method>> {
         let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
         // let aggregator_area = AggregatorArea::try_create(&aggregator_params)?;
 
@@ -86,7 +95,8 @@ impl<Method: HashMethod> Aggregator<Method> where
         let aggregator_params = self.params.as_ref();
 
         let aggr_len = aggregator_params.aggregate_functions.len();
-        let func = &aggregator_params.aggregate_functions;
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let aggregate_functions_arguments = &aggregator_params.aggregate_functions_arguments_name;
 
         let layout = self.layout;
         let offsets_aggregate_states = &self.offsets_aggregate_states;
@@ -96,7 +106,22 @@ impl<Method: HashMethod> Aggregator<Method> where
 
             // 1.1 and 1.2.
             let group_columns = Self::group_columns(&group_cols, &block)?;
-            let aggregate_args_columns = self.aggregate_arguments_column(&block)?;
+            let mut aggregate_arguments_columns = Vec::with_capacity(aggr_len);
+
+            {
+                for index in 0..aggregate_functions.len() {
+                    let function_arguments = &aggregate_functions_arguments[index];
+
+                    let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
+                    for argument_index in 0..function_arguments.len() {
+                        let argument_name = &function_arguments[argument_index];
+                        let argument_column = block.try_column_by_name(argument_name)?;
+                        function_arguments_column.push(argument_column.to_array()?);
+                    }
+
+                    aggregate_arguments_columns.push(function_arguments_column);
+                }
+            }
 
             let mut places = Vec::with_capacity(block.num_rows());
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
@@ -115,7 +140,7 @@ impl<Method: HashMethod> Aggregator<Method> where
                                 for idx in 0..aggr_len {
                                     let aggr_state = offsets_aggregate_states[idx];
                                     let aggr_state_place = place.next(aggr_state);
-                                    func[idx].init_state(aggr_state_place);
+                                    aggregate_functions[idx].init_state(aggr_state_place);
                                 }
                                 places.push(place);
                                 entity.set_value(place.addr());
@@ -131,10 +156,10 @@ impl<Method: HashMethod> Aggregator<Method> where
 
             {
                 // this can benificial for the case of dereferencing
-                let aggr_arg_columns_slice = &aggregate_args_columns;
+                let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
                 for ((idx, func), args) in
-                func.iter().enumerate().zip(aggr_arg_columns_slice.iter())
+                aggregate_functions.iter().enumerate().zip(aggr_arg_columns_slice.iter())
                 {
                     func.accumulate_keys(
                         &places,
@@ -149,30 +174,6 @@ impl<Method: HashMethod> Aggregator<Method> where
     }
 
     #[inline(always)]
-    fn aggregate_arguments_column(&self, block: &DataBlock) -> Result<Vec<Vec<Series>>> {
-        let aggregator_params = self.params.as_ref();
-
-        let aggregate_functions = &aggregator_params.aggregate_functions;
-        let aggregate_functions_arguments = &aggregator_params.aggregate_functions_arguments_name;
-
-        let mut aggregate_arguments_columns = Vec::with_capacity(aggregate_functions.len());
-        for index in 0..aggregate_functions.len() {
-            let function_arguments = &aggregate_functions_arguments[index];
-
-            let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
-            for argument_index in 0..function_arguments.len() {
-                let argument_name = &function_arguments[argument_index];
-                let argument_column = block.try_column_by_name(argument_name)?;
-                function_arguments_column.push(argument_column.to_array()?);
-            }
-
-            aggregate_arguments_columns.push(function_arguments_column);
-        }
-
-        Ok(aggregate_arguments_columns)
-    }
-
-    #[inline(always)]
     fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a DataColumn>> {
         names
             .iter()
@@ -180,15 +181,11 @@ impl<Method: HashMethod> Aggregator<Method> where
             .collect::<Result<Vec<&DataColumn>>>()
     }
 
-    pub fn aggregate_finalized<T: DFNumericType>(
+    pub fn aggregate_finalized(
         &self,
-        groups: &HashMap<T::Native, usize>,
+        groups: &HashMap<Method::HashKey, usize>,
         schema: DataSchemaRef,
-    ) -> Result<SendableDataBlockStream>
-        where
-            DefaultHasher<T::Native>: KeyHasher<T::Native>,
-            DefaultHashTableEntity<T::Native, usize>: HashTableEntity<T::Native>,
-    {
+    ) -> Result<SendableDataBlockStream> {
         if groups.is_empty() {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
@@ -207,7 +204,7 @@ impl<Method: HashMethod> Aggregator<Method> where
             .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
 
-        let mut group_key_builder = PrimitiveArrayBuilder::<T>::with_capacity(groups.len());
+        let mut group_key_builder = self.method.binary_keys_array_builder(groups.len());
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {
@@ -220,15 +217,15 @@ impl<Method: HashMethod> Aggregator<Method> where
                 bytes.clear();
             }
 
-            group_key_builder.append_value(*(group_entity.get_key()));
+            group_key_builder.append_value(group_entity.get_key().clone());
         }
 
         let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
         for mut builder in state_builders {
             columns.push(builder.finish().into_series());
         }
-        let array = group_key_builder.finish();
-        columns.push(array.array.into_series());
+
+        columns.push(group_key_builder.finish());
 
         let block = DataBlock::create_by_array(schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

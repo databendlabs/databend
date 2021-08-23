@@ -39,7 +39,7 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::aggregator::Aggregator;
+use crate::pipelines::transforms::group_by::Aggregator;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
@@ -270,7 +270,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt8Type>(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups.0, finalized_schema)
             }
             HashMethodKind::KeysU16(hash_method) => {
                 // TODO: use fixed array.
@@ -284,7 +284,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt16Type>(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups.0, finalized_schema)
             }
             HashMethodKind::KeysU32(hash_method) => {
                 let aggr_exprs = &self.aggr_exprs;
@@ -297,7 +297,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt32Type>(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups.0, finalized_schema)
             }
             HashMethodKind::KeysU64(hash_method) => {
                 let aggr_exprs = &self.aggr_exprs;
@@ -310,7 +310,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized::<UInt64Type>(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups.0, finalized_schema)
             }
         }
     }
