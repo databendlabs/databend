@@ -21,7 +21,7 @@ use std::time::Instant;
 use bumpalo::Bump;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
-use common_datablocks::DataBlock;
+use common_datablocks::{DataBlock, HashMethodKeysU8};
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
 use common_datavalues::arrays::BinaryArrayBuilder;
@@ -39,7 +39,8 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::group_by::Aggregator;
+use crate::pipelines::transforms::group_by::{Aggregator, PolymorphicKeysHelper};
+use crate::common::{KeyHasher, DefaultHashTableEntity, HashTableEntity};
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
@@ -107,21 +108,20 @@ impl Processor for GroupByPartialTransform {
     /// 1.2)  serialize the state to the output block
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
-
-        let start = Instant::now();
         let group_cols = self
             .group_exprs
             .iter()
             .map(|x| x.column_name())
             .collect::<Vec<_>>();
-
-        let mut stream = self.input.execute().await?;
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
         macro_rules! apply {
             ($hash_method: ident, $key_array_builder: ty, $group_func_table: ty) => {{
                 // Table for <group_key, (place, keys) >
+                let start = Instant::now();
+                let mut stream = self.input.execute().await?;
+
                 let aggr_len = self.aggr_exprs.len();
                 let schema_before_group_by = self.schema_before_group_by.clone();
                 let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
@@ -260,61 +260,22 @@ impl Processor for GroupByPartialTransform {
             }
             HashMethodKind::KeysU8(hash_method) => {
                 // TODO: use fixed array.
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
+                self.execute_impl(group_cols, hash_method).await
             }
             HashMethodKind::KeysU16(hash_method) => {
-                // TODO: use fixed array.
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+                self.execute_impl(group_cols, hash_method).await
 
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
             }
             HashMethodKind::KeysU32(hash_method) => {
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
+                self.execute_impl(group_cols, hash_method).await
             }
             HashMethodKind::KeysU64(hash_method) => {
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
+                self.execute_impl(group_cols, hash_method).await
             }
         }
     }
 }
+
 
 trait HashWord {
     fn hash_word(&mut self, rhs: Self);
@@ -424,5 +385,27 @@ impl Hasher for DefaultHasher {
     #[inline]
     fn finish(&self) -> u64 {
         self.hash
+    }
+}
+
+impl GroupByPartialTransform {
+    async fn execute_impl<Method: HashMethod + PolymorphicKeysHelper<Method>>(&self, group_cols: Vec<String>, hash_method: Method) -> common_exception::Result<SendableDataBlockStream>
+        where crate::common::DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
+              DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>,
+    {
+        let start = Instant::now();
+
+        let mut stream = self.input.execute().await?;
+        let aggr_exprs = &self.aggr_exprs;
+        let schema = self.schema_before_group_by.clone();
+        let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+        let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+        let delta = start.elapsed();
+        tracing::debug!("Group by partial cost: {:?}", delta);
+
+        let groups = groups_locker.read();
+        let finalized_schema = self.schema.clone();
+        aggregator.aggregate_finalized(&groups.0, finalized_schema)
     }
 }
