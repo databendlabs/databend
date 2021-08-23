@@ -8,7 +8,7 @@ Shows the list of tables in the currently selected database.
 ## Syntax
 
 ```
-SHOW TABLES  [LIKE 'pattern' | WHERE expr]
+SHOW TABLES  [LIKE 'pattern' | WHERE expr | FROM 'pattern' | IN 'pattern']
 ```
 
 ## Examples
@@ -58,6 +58,18 @@ mysql> SHOW TABLES LIKE 'numbers%';
 Showing the tables begin with `"numbers"` with `WHERE`:
 ```
 mysql> SHOW TABLES WHERE name LIKE 'numbers%';
++---------------+
+| name          |
++---------------+
+| numbers       |
+| numbers_local |
+| numbers_mt    |
++---------------+
+```
+
+Showing the tables are inside `"ss"`:
+```
+mysql> SHOW TABLES FROM 'ss';
 +---------------+
 | name          |
 +---------------+
