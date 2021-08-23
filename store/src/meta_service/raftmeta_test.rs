@@ -398,6 +398,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     let mut tc = new_test_context();
     tc.config.snapshot_logs_since_last = snap_logs;
+    tc.config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     let addr = tc.config.meta_api_addr();
 
     let mn = MetaNode::boot(0, &tc.config).await?;
@@ -887,7 +888,7 @@ where T: Fn(&RaftMetrics) -> bool + Send {
 
 /// Make a default timeout for wait() for test.
 fn timeout() -> Option<Duration> {
-    Some(Duration::from_millis(4000))
+    Some(Duration::from_millis(5000))
 }
 
 fn test_context_nodes(tcs: &Vec<StoreTestContext>) -> Vec<Arc<MetaNode>> {

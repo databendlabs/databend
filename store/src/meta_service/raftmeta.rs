@@ -600,7 +600,7 @@ impl MetaStore {
 
 pub struct MetaNodeBuilder {
     node_id: Option<NodeId>,
-    config: Option<Config>,
+    raft_config: Option<Config>,
     sto: Option<Arc<MetaStore>>,
     monitor_metrics: bool,
     addr: Option<String>,
@@ -613,7 +613,7 @@ impl MetaNodeBuilder {
             .ok_or_else(|| ErrorCode::InvalidConfig("node_id is not set"))?;
 
         let config = self
-            .config
+            .raft_config
             .take()
             .ok_or_else(|| ErrorCode::InvalidConfig("config is not set"))?;
 
@@ -679,7 +679,7 @@ impl MetaNode {
 
         MetaNodeBuilder {
             node_id: None,
-            config: Some(raft_config),
+            raft_config: Some(raft_config),
             sto: None,
             monitor_metrics: true,
             addr: None,
@@ -696,6 +696,7 @@ impl MetaNode {
             // Choose a rational value for election timeout.
             .election_timeout_min(hb * 8)
             .election_timeout_max(hb * 12)
+            .install_snapshot_timeout(config.install_snapshot_timeout)
             .snapshot_policy(SnapshotPolicy::LogsSinceLast(
                 config.snapshot_logs_since_last,
             ))

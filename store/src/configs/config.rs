@@ -128,6 +128,14 @@ pub struct Config {
 
     #[structopt(
         long,
+        env = "STORE_INSTALL_SNAPSHOT_TIMEOUT",
+        default_value = "4000",
+        help = concat!("The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.")
+    )]
+    pub install_snapshot_timeout: u64,
+
+    #[structopt(
+        long,
         env = "STORE_BOOT",
         help = "Whether to boot up a new cluster. If already booted, it is ignored"
     )]
