@@ -54,3 +54,9 @@ impl Display for Identifier {
         }
     }
 }
+
+impl Identifier {
+    pub fn get_name(&self) -> String {
+        self.name.clone()
+    }
+}

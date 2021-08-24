@@ -389,7 +389,13 @@ impl TransformerSqlparser {
                 subquery, alias, ..
             } => Ok(TableReference::Subquery {
                 subquery: Box::from(self.transform_query(subquery.as_ref())?),
-                alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
+                alias: alias
+                    .as_ref()
+                    .map(|v| Self::transform_table_alias(v))
+                    .ok_or(ErrorCode::SyntaxException(format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    )))?,
             }),
             TableFactor::TableFunction { expr, alias } => Ok(TableReference::TableFunction {
                 expr: self.transform_expr(expr)?,

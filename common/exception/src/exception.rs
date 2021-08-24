@@ -168,6 +168,9 @@ build_exceptions! {
     AuthenticateFailure(51),
     TLSConfigurationFailure(52),
     UnknownSession(53),
+    DuplicatedName(54),
+    InvalidColumnAlias(55),
+    UnsupportedJoinType(56),
 
     // uncategorized
     UnexpectedResponseType(600),

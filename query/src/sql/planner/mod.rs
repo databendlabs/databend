@@ -12,22 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod plan_parser_test;
-#[cfg(test)]
-mod sql_parser_test;
-
-mod metrics;
 mod binder;
-mod expression;
-mod parser;
-mod plan_parser;
-mod planner;
-mod sql_common;
-mod sql_parser;
-mod sql_statement;
+mod logical;
 
-pub use plan_parser::PlanParser;
-pub use sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
+pub use binder::Binder;
+pub use binder::ColumnBinding;
+pub use binder::TableBinding;
+pub use logical::EquiJoin;
+pub use logical::Logical;
