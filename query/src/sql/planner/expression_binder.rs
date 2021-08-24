@@ -12,14 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod binder;
-mod logical_plan;
-mod expression_binder;
+use common_exception::Result;
+use crate::sql::planner::binder::BindContext;
+use crate::sql::parser::ast::Expr;
+use crate::sql::expression::Expression;
 
-pub use binder::Binder;
-pub use binder::ColumnBinding;
-pub use binder::TableBinding;
-pub use logical_plan::EquiJoin;
-pub use logical_plan::Logical;
+// ExpressionBinder can bind a Expr to Expression with BindContext and do type check
+#[derive(Debug)]
+pub struct ExpressionBinder<'a> {
+    bind_context: &'a BindContext,
+}
 
-pub type IndexType = usize;
+impl<'a> ExpressionBinder<'a> {
+    pub fn new(bind_context: &'a BindContext) -> Self {
+        ExpressionBinder { bind_context }
+    }
+
+    pub fn bind(&mut self, expr: &Expr) -> Result<Expression> {
+        todo!()
+    }
+}

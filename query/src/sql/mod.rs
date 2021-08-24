@@ -18,7 +18,6 @@ mod plan_parser_test;
 mod sql_parser_test;
 
 mod metrics;
-mod binder;
 mod expression;
 mod parser;
 mod plan_parser;

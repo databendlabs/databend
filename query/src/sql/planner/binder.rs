@@ -19,6 +19,7 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sql::planner::expression_binder::ExpressionBinder;
 use crate::catalogs::catalog::Catalog;
 use crate::sessions::DatafuseQueryContextRef;
 use crate::sql::expression::Expression;
@@ -35,12 +36,13 @@ use crate::sql::parser::ast::SetExpr;
 use crate::sql::parser::ast::Statement;
 use crate::sql::parser::ast::TableAlias;
 use crate::sql::parser::ast::TableReference;
-use crate::sql::planner::logical::Aggregation;
-use crate::sql::planner::logical::EquiJoin;
-use crate::sql::planner::logical::Filter;
-use crate::sql::planner::logical::Get;
-use crate::sql::planner::logical::Logical;
-use crate::sql::planner::logical::Projection;
+use crate::sql::planner::logical_plan::Aggregation;
+use crate::sql::planner::logical_plan::EquiJoin;
+use crate::sql::planner::logical_plan::Filter;
+use crate::sql::planner::logical_plan::Get;
+use crate::sql::planner::logical_plan::Logical;
+use crate::sql::planner::logical_plan::Projection;
+use crate::sql::planner::IndexType;
 
 // Intermediate structures of binding TableReference
 #[derive(Debug)]
@@ -465,21 +467,6 @@ impl<'a> Binder<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct ExpressionBinder<'a> {
-    pub bind_context: &'a BindContext,
-}
-
-impl<'a> ExpressionBinder<'a> {
-    pub fn new(bind_context: &'a BindContext) -> Self {
-        ExpressionBinder { bind_context }
-    }
-
-    pub fn bind(&mut self, expr: &Expr) -> Result<Expression> {
-        todo!()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BindContext {
     // Table name -> Table binding index
@@ -497,6 +484,11 @@ impl BindContext {
             indexed_bindings: Vec::new(),
             table_index_count: index,
         }
+    }
+
+    pub fn get_table_binding_by_name(&self, table_name: &str) -> Result<TableBinding> {
+        self.name_binding_map.get(table_name).cloned().ok_or(
+            ErrorCode::LogicalError(format!("Cannot find table {} in BindContext", table_name)))
     }
 
     pub fn get_column_binding_by_column_name(&self, column_name: &str) -> Result<ColumnBinding> {
@@ -573,8 +565,6 @@ impl BindContext {
     }
 }
 
-pub type IndexType = usize;
-
 #[derive(Debug, Clone)]
 pub struct TableBinding {
     // Index of TableBinding, used in BindContext
@@ -585,8 +575,6 @@ pub struct TableBinding {
     pub columns: Vec<String>,
     // Data types of columns
     pub data_types: Vec<DataType>,
-    // Map: column name -> column index inside current TableBinding
-    // pub column_name_map: HashMap<String, IndexType>,
 }
 
 impl TableBinding {
@@ -601,7 +589,6 @@ impl TableBinding {
             table_name,
             columns,
             data_types,
-            // column_name_map:
         }
     }
 
@@ -614,6 +601,25 @@ impl TableBinding {
                 column_index: index,
             })
             .collect()
+    }
+
+    pub fn get_column_by_index(&self, column_index: IndexType) -> Result<(String, DataType)> {
+        assert_eq!(self.columns.len(), self.data_types.len());
+        if column_index > self.columns.len() {
+            Err(ErrorCode::LogicalError(format!("Invalid column index {} for table binding {:?}", column_index, &self)))
+        } else {
+            Ok((self.columns[column_index].clone(), self.data_types[column_index].clone()))
+        }
+    }
+
+    pub fn get_column_by_name(&self, column_name: &str) -> Result<(IndexType, DataType)> {
+        assert_eq!(self.columns.len(), self.data_types.len());
+        for (index, column) in self.columns.iter().enumerate() {
+            if column_name == column.as_str() {
+                Ok((index, self.data_types[index].clone()))
+            }
+        }
+        Err(ErrorCode::LogicalError(format!("Cannot find column name {} in table binding {:?}", column_name, &self)))
     }
 }
 

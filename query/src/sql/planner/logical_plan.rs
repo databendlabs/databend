@@ -177,6 +177,8 @@ impl Projection {
             child: Box::new(child),
         }
     }
+
+
 }
 
 #[derive(Debug, Clone)]
@@ -192,6 +194,10 @@ impl Filter {
             predicates,
             child: Box::new(child),
         }
+    }
+
+    pub fn get_column_bindings(&self) -> Vec<ColumnBinding> {
+        self.child.get_column_bindings()
     }
 }
 
@@ -225,6 +231,15 @@ impl Get {
             column_names,
             data_types,
         }
+    }
+
+    pub fn get_column_bindings(&self) -> Vec<ColumnBinding> {
+        self.column_indexes.iter().cloned().map(|index| {
+            ColumnBinding {
+                table_index: self.table_index,
+                column_index: index,
+            }
+        }).collect()
     }
 }
 
