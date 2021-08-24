@@ -29,17 +29,17 @@ impl<T> AggregatorDataContainer<HashMethodFixedKeys<T>> for NativeAggregatorData
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable
 {
-    #[inline(always)]
+    #[inline]
     fn size(&self) -> usize {
         self.data.len()
     }
 
-    #[inline(always)]
+    #[inline]
     fn iter(&self) -> HashMapIterator<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
         self.data.iter()
     }
 
-    #[inline(always)]
+    #[inline]
     fn insert_key(&mut self, key: &<HashMethodFixedKeys<T> as HashMethod>::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
         self.data.insert_key(key, inserted)
     }
