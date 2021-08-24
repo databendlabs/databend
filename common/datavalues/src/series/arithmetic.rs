@@ -219,7 +219,7 @@ fn coerce_lhs_rhs(
 }
 
 fn coerce_lhs_rhs_no_op(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
-    let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;
+    let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type(), true)?;
 
     let mut left = lhs.clone();
     if lhs.data_type() != dtype {

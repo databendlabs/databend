@@ -154,18 +154,24 @@ macro_rules! impl_dyn_arrays {
             }
 
             fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series> {
-                if self.data_type() == rhs.data_type() {
-                    Ok(self
-                        .0
-                        .if_then_else(rhs.as_ref().as_ref(), predicate.bool()?)?
-                        .into_series())
-                } else {
-                    Err(ErrorCode::BadArguments(format!(
+                if predicate.data_type() != DataType::Boolean {
+                    return Err(ErrorCode::BadDataValueType(
+                        "If function requires the first argument type must be Boolean",
+                    ));
+                }
+
+                if self.data_type() != rhs.data_type() {
+                    return Err(ErrorCode::BadArguments(format!(
                         "If then else requires the arguments to have the same datatypes ({} != {})",
                         self.data_type(),
                         rhs.data_type()
-                    )))
+                    )));
                 }
+
+                Ok(self
+                    .0
+                    .if_then_else(rhs.as_ref().as_ref(), predicate.bool()?)?
+                    .into_series())
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {
