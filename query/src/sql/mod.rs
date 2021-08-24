@@ -17,12 +17,12 @@ mod plan_parser_test;
 #[cfg(test)]
 mod sql_parser_test;
 
+mod metrics;
 mod parser;
 mod plan_parser;
 mod sql_common;
 mod sql_parser;
 mod sql_statement;
-mod metrics;
 
 pub use plan_parser::PlanParser;
 pub use sql_common::SQLCommon;

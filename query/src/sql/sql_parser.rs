@@ -16,12 +16,12 @@
 // See notice.md
 
 use std::time::Instant;
-use metrics::histogram;
 
 use common_exception::ErrorCode;
 use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
 use common_planners::TableEngineType;
+use metrics::histogram;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::Ident;
