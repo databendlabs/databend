@@ -18,6 +18,9 @@ mod stream_datablock_test;
 #[cfg(test)]
 mod stream_progress_test;
 
+#[cfg(test)]
+mod stream_skip_test;
+
 mod sources;
 mod stream;
 mod stream_abort;
