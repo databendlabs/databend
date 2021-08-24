@@ -88,23 +88,43 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
             let block = block?;
 
             // 1.1 and 1.2.
-            let group_columns = Self::group_columns(&group_cols, &block)?;
-            let mut aggregate_arguments_columns = Vec::with_capacity(aggr_len);
-
+            let mut group_columns = Vec::with_capacity(group_cols.len());
             {
-                for index in 0..aggregate_functions.len() {
-                    let function_arguments = &aggregate_functions_arguments[index];
-
-                    let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
-                    for argument_index in 0..function_arguments.len() {
-                        let argument_name = &function_arguments[argument_index];
-                        let argument_column = block.try_column_by_name(argument_name)?;
-                        function_arguments_column.push(argument_column.to_array()?);
-                    }
-
-                    aggregate_arguments_columns.push(function_arguments_column);
+                for col in group_cols.iter() {
+                    group_columns.push(block.try_column_by_name(col)?);
                 }
             }
+
+            let mut aggr_arg_columns = Vec::with_capacity(aggr_cols.len());
+            for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
+                let arg_columns = arg_names[idx]
+                    .iter()
+                    .map(|arg| block.try_column_by_name(arg).and_then(|c| c.to_array()))
+                    .collect::<Result<Vec<Series>>>()?;
+                aggr_arg_columns.push(arg_columns);
+            }
+
+            // this can benificial for the case of dereferencing
+            let aggr_arg_columns_slice = &aggr_arg_columns;
+
+            // // 1.1 and 1.2.
+            // let group_columns = Self::group_columns(&group_cols, &block)?;
+            // let mut aggregate_arguments_columns = Vec::with_capacity(aggr_len);
+            //
+            // {
+            //     for index in 0..aggregate_functions.len() {
+            //         let function_arguments = &aggregate_functions_arguments[index];
+            //
+            //         let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
+            //         for argument_index in 0..function_arguments.len() {
+            //             let argument_name = &function_arguments[argument_index];
+            //             let argument_column = block.try_column_by_name(argument_name)?;
+            //             function_arguments_column.push(argument_column.to_array()?);
+            //         }
+            //
+            //         aggregate_arguments_columns.push(function_arguments_column);
+            //     }
+            // }
 
             let mut places = Vec::with_capacity(block.num_rows());
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
@@ -139,7 +159,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
 
             {
                 // this can benificial for the case of dereferencing
-                let aggr_arg_columns_slice = &aggregate_arguments_columns;
+                // let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
                 for ((idx, func), args) in
                 aggregate_functions.iter().enumerate().zip(aggr_arg_columns_slice.iter())
@@ -156,13 +176,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
         Ok(groups_locker)
     }
 
-    #[inline(always)]
-    fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a DataColumn>> {
-        names
-            .iter()
-            .map(|column_name| block.try_column_by_name(column_name))
-            .collect::<Result<Vec<&DataColumn>>>()
-    }
+    // #[inline(always)]
+    // fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a DataColumn>> {
+    //     names
+    //         .iter()
+    //         .map(|column_name| block.try_column_by_name(column_name))
+    //         .collect::<Result<Vec<&DataColumn>>>()
+    // }
 
     pub fn aggregate_finalized(
         &self,
