@@ -8,9 +8,9 @@ use crate::common::{HashMap, HashTableEntity, FastHash, KeyValueEntity, HashTabl
 pub trait AggregatorDataContainer<Method: HashMethod> where Method::HashKey: HashTableKeyable {
     fn size(&self) -> usize;
 
-    fn iter(&self) -> HashMapIterator<Method::HashKey, usize>;
+    fn iterator(&self) -> HashMapIterator<Method::HashKey, usize>;
 
-    fn insert_key(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<Method::HashKey, usize>;
+    fn get_mapper(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<Method::HashKey, usize>;
 }
 
 // TODO: Optimize the type with length below 2
@@ -35,12 +35,12 @@ impl<T> AggregatorDataContainer<HashMethodFixedKeys<T>> for NativeAggregatorData
     }
 
     #[inline]
-    fn iter(&self) -> HashMapIterator<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
+    fn iterator(&self) -> HashMapIterator<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
         self.data.iter()
     }
 
     #[inline]
-    fn insert_key(&mut self, key: &<HashMethodFixedKeys<T> as HashMethod>::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
+    fn get_mapper(&mut self, key: &<HashMethodFixedKeys<T> as HashMethod>::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
         self.data.insert_key(key, inserted)
     }
 }

@@ -38,7 +38,7 @@ use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::common::{HashMap, HashTableKeyable, HashTableEntity};
+use crate::common::{HashMap, HashTableKeyable, HashTableEntity, HashTable};
 use crate::pipelines::transforms::group_by::aggregator_area::AggregatorArea;
 use crate::pipelines::transforms::group_by::aggregator_container::AggregatorDataContainer;
 use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParams, AggregatorParamsRef};
@@ -70,10 +70,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
         })
     }
 
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(Method::DataContainer, Bump)>> {
+    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
         let hash_method = &self.method;
 
-        let groups_locker = RwLock::new((hash_method.aggregator_container(), Bump::new()));
+        let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::create(), Bump::new()));
 
         let aggregator_params = self.params.as_ref();
 
@@ -186,10 +186,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
 
     pub fn aggregate_finalized(
         &self,
-        groups: &Method::DataContainer,
+        groups: &HashMap<Method::HashKey, usize>,
         schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream> {
-        if groups.size() == 0 {
+        if groups.len() == 0 {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
                 None,
@@ -204,10 +204,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
 
         // Builders.
         let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-            .map(|_| BinaryArrayBuilder::with_capacity(groups.size() * 4))
+            .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
 
-        let mut group_key_builder = self.method.binary_keys_array_builder(groups.size());
+        let mut group_key_builder = self.method.binary_keys_array_builder(groups.len());
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {
