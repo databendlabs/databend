@@ -15,48 +15,35 @@
 use std::alloc::Layout;
 
 use bumpalo::Bump;
+use futures::StreamExt;
+
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datavalues::arrays::ArrayBuilder;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::prelude::Series;
-use common_datavalues::DFNumericType;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DFNumericType;
+use common_datavalues::prelude::IntoSeries;
+use common_datavalues::prelude::Series;
 use common_exception::Result;
-use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
 use common_infallible::RwLock;
 use common_io::prelude::BytesMut;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
 
-use crate::common::DefaultHashTableEntity;
-use crate::common::DefaultHasher;
-use crate::common::HashMap;
-use crate::common::HashTableEntity;
-use crate::common::KeyHasher;
-use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParamsRef, AggregatorParams};
+use crate::common::{HashMap, HashTableKeyable, HashTableEntity};
 use crate::pipelines::transforms::group_by::aggregator_area::AggregatorArea;
-use common_datavalues::columns::DataColumn;
-use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::transforms::group_by::aggregator_container::AggregatorDataContainer;
+use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParams, AggregatorParamsRef};
 use crate::pipelines::transforms::group_by::aggregator_polymorphic_keys::BinaryKeysArrayBuilder;
-
-#[async_trait::async_trait]
-pub trait IAggregator<Method: HashMethod> where
-    DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
-    DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>
-{
-    async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>>;
-
-    fn finish(&self, groups: &HashMap<Method::HashKey, usize>, schema: DataSchemaRef) -> Result<SendableDataBlockStream>;
-}
-
+use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
@@ -65,9 +52,8 @@ pub struct Aggregator<Method: HashMethod> {
     offsets_aggregate_states: Vec<usize>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> where
-    DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
-    DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>,
+impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
+    where Method::HashKey: HashTableKeyable
 {
     pub fn create(method: Method, aggr_exprs: &[Expression], schema: DataSchemaRef) -> Result<Aggregator<Method>> {
         let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
@@ -84,14 +70,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> wher
         })
     }
 
-    pub async fn aggregate(
-        &self,
-        group_cols: Vec<String>,
-        mut stream: SendableDataBlockStream,
-    ) -> Result<RwLock<(HashMap<Method::HashKey, usize>, Bump)>> {
-        let groups_locker = RwLock::new((HashMap::<Method::HashKey, usize>::create(), Bump::new()));
-
+    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(Method::DataContainer, Bump)>> {
         let hash_method = &self.method;
+
+        let groups_locker = RwLock::new((hash_method.aggregator_container(), Bump::new()));
+
         let aggregator_params = self.params.as_ref();
 
         let aggr_len = aggregator_params.aggregate_functions.len();
@@ -183,10 +166,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> wher
 
     pub fn aggregate_finalized(
         &self,
-        groups: &HashMap<Method::HashKey, usize>,
+        groups: &Method::DataContainer,
         schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream> {
-        if groups.is_empty() {
+        if groups.size() == 0 {
             return Ok(Box::pin(DataBlockStream::create(
                 DataSchemaRefExt::create(vec![]),
                 None,
@@ -201,10 +184,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> wher
 
         // Builders.
         let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-            .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
+            .map(|_| BinaryArrayBuilder::with_capacity(groups.size() * 4))
             .collect();
 
-        let mut group_key_builder = self.method.binary_keys_array_builder(groups.len());
+        let mut group_key_builder = self.method.binary_keys_array_builder(groups.size());
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {

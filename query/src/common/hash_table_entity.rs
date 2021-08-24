@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait HashTableEntity<Key>: Sized {
-    fn is_zero_key(key: &Key) -> bool;
+use std::cmp::Eq;
+use crate::common::hash_table_key::HashTableKeyable;
 
+pub trait HashTableEntity<Key>: Sized {
     unsafe fn is_zero(self: *mut Self) -> bool;
     unsafe fn key_equals(self: *mut Self, key: &Key, hash: u64) -> bool;
     unsafe fn set_key_and_hash(self: *mut Self, key: &Key, hash: u64);
@@ -25,13 +26,13 @@ pub trait HashTableEntity<Key>: Sized {
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool;
 }
 
-pub struct DefaultHashTableEntity<Key: Sized, Value: Sized> {
+pub struct KeyValueEntity<Key, Value> where Key: HashTableKeyable, Value: Sized + Copy {
     key: Key,
     value: Value,
     hash: u64,
 }
 
-impl<Key: Sized, Value: Sized> DefaultHashTableEntity<Key, Value> {
+impl<Key, Value> KeyValueEntity<Key, Value> where Key: HashTableKeyable, Value: Sized + Copy {
     #[inline(always)]
     pub fn set_value(self: *mut Self, value: Value) {
         unsafe {
@@ -45,46 +46,99 @@ impl<Key: Sized, Value: Sized> DefaultHashTableEntity<Key, Value> {
     }
 }
 
-macro_rules! primitive_key_entity_impl {
-    ($typ:ty) => {
-        impl<Value: Sized> HashTableEntity<$typ> for DefaultHashTableEntity<$typ, Value> {
-            fn is_zero_key(key: &$typ) -> bool {
-                *key == 0
-            }
+impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value> where Key: HashTableKeyable, Value: Sized + Copy {
+    #[inline(always)]
+    unsafe fn is_zero(self: *mut Self) -> bool {
+        (*self).key.is_zero()
+    }
 
-            unsafe fn is_zero(self: *mut Self) -> bool {
-                (*self).key == 0
-            }
+    #[inline(always)]
+    unsafe fn key_equals(self: *mut Self, key: &Key, hash: u64) -> bool {
+        (*self).key.eq_with_hash((*self).hash, key, hash)
+    }
 
-            unsafe fn key_equals(self: *mut Self, key: &$typ, _hash: u64) -> bool {
-                (*self).key == *key
-            }
+    #[inline(always)]
+    unsafe fn set_key_and_hash(self: *mut Self, key: &Key, hash: u64) {
+        (*self).key = *key;
+        (*self).hash = hash;
+    }
 
-            unsafe fn set_key_and_hash(self: *mut Self, key: &$typ, hash: u64) {
-                (*self).key = *key;
-                (*self).hash = hash;
-            }
+    #[inline(always)]
+    fn get_key<'a>(self: *mut Self) -> &'a Key {
+        unsafe { &(*self).key }
+    }
 
-            fn get_key<'a>(self: *mut Self) -> &'a $typ {
-                unsafe { &(*self).key }
-            }
+    #[inline(always)]
+    unsafe fn get_hash(self: *mut Self) -> u64 {
+        (*self).hash
+    }
 
-            unsafe fn get_hash(self: *mut Self) -> u64 {
-                (*self).hash
-            }
-
-            unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
-                !((*self).key == (*other).key)
-            }
-        }
-    };
+    #[inline(always)]
+    unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
+        !self.key_equals(&(*other).key, (*other).hash)
+    }
 }
 
-primitive_key_entity_impl!(i8);
-primitive_key_entity_impl!(i16);
-primitive_key_entity_impl!(i32);
-primitive_key_entity_impl!(i64);
-primitive_key_entity_impl!(u8);
-primitive_key_entity_impl!(u16);
-primitive_key_entity_impl!(u32);
-primitive_key_entity_impl!(u64);
+// pub struct DefaultHashTableEntity<Key, Value> {
+//     key: Key,
+//     value: Value,
+//     hash: u64,
+// }
+//
+// impl<Key: Sized, Value: Sized> DefaultHashTableEntity<Key, Value> {
+//     #[inline(always)]
+//     pub fn set_value(self: *mut Self, value: Value) {
+//         unsafe {
+//             (*self).value = value;
+//         }
+//     }
+//
+//     #[inline(always)]
+//     pub fn get_value<'a>(self: *mut Self) -> &'a Value {
+//         unsafe { &(*self).value }
+//     }
+// }
+//
+// macro_rules! primitive_key_entity_impl {
+//     ($typ:ty) => {
+//         impl<Value: Sized> HashTableEntity<$typ> for DefaultHashTableEntity<$typ, Value> {
+//             fn is_zero_key(key: &$typ) -> bool {
+//                 *key == 0
+//             }
+//
+//             unsafe fn is_zero(self: *mut Self) -> bool {
+//                 (*self).key == 0
+//             }
+//
+//             unsafe fn key_equals(self: *mut Self, key: &$typ, _hash: u64) -> bool {
+//                 (*self).key == *key
+//             }
+//
+//             unsafe fn set_key_and_hash(self: *mut Self, key: &$typ, hash: u64) {
+//                 (*self).key = *key;
+//                 (*self).hash = hash;
+//             }
+//
+//             fn get_key<'a>(self: *mut Self) -> &'a $typ {
+//                 unsafe { &(*self).key }
+//             }
+//
+//             unsafe fn get_hash(self: *mut Self) -> u64 {
+//                 (*self).hash
+//             }
+//
+//             unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
+//                 !((*self).key == (*other).key)
+//             }
+//         }
+//     };
+// }
+//
+// primitive_key_entity_impl!(i8);
+// primitive_key_entity_impl!(i16);
+// primitive_key_entity_impl!(i32);
+// primitive_key_entity_impl!(i64);
+// primitive_key_entity_impl!(u8);
+// primitive_key_entity_impl!(u16);
+// primitive_key_entity_impl!(u32);
+// primitive_key_entity_impl!(u64);

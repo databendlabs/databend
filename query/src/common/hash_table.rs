@@ -20,10 +20,11 @@ use std::mem;
 
 use crate::common::hash_table_entity::HashTableEntity;
 use crate::common::hash_table_grower::Grower;
-use crate::common::hash_table_hasher::KeyHasher;
+use crate::common::hash_table_hasher::FastHash;
 use crate::common::hash_table_iter::HashTableIter;
+use crate::common::hash_table_key::HashTableKeyable;
 
-pub struct HashTable<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> {
+pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>> {
     size: usize,
     grower: Grower,
     entities: *mut Entity,
@@ -32,11 +33,10 @@ pub struct HashTable<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> 
     zero_entity_raw: Option<*mut u8>,
 
     /// Generics hold
-    generics_hold: PhantomData<(Key, Hasher)>,
+    generics_hold: PhantomData<(Key)>,
 }
 
-impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> Drop
-    for HashTable<Key, Entity, Hasher>
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key, Entity>
 {
     fn drop(&mut self) {
         unsafe {
@@ -55,8 +55,8 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> Drop
     }
 }
 
-impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, Entity, Hasher> {
-    pub fn create() -> HashTable<Key, Entity, Hasher> {
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity> {
+    pub fn create() -> HashTable<Key, Entity> {
         let size = (1 << 8) * mem::size_of::<Entity>();
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, mem::align_of::<Entity>());
@@ -85,13 +85,13 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> impl Iterator<Item = *mut Entity> {
+    pub fn iter(&self) -> HashTableIter<Key, Entity> {
         HashTableIter::create(self.grower.max_size(), self.entities, self.zero_entity)
     }
 
     #[inline(always)]
     pub fn insert_key(&mut self, key: &Key, inserted: &mut bool) -> *mut Entity {
-        let hash = Hasher::hash(key);
+        let hash = key.fast_hash();
         match self.insert_if_zero_key(key, hash, inserted) {
             None => self.insert_non_zero_key(key, hash, inserted),
             Some(zero_hash_table_entity) => zero_hash_table_entity,
@@ -100,8 +100,8 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
 
     #[inline(always)]
     pub fn find_key(&self, key: &Key) -> Option<*mut Entity> {
-        if !Entity::is_zero_key(key) {
-            let hash_value = Hasher::hash(key);
+        if !key.is_zero() {
+            let hash_value = key.fast_hash();
             let place_value = self.find_entity(key, hash_value);
             unsafe {
                 let value = self.entities.offset(place_value);
@@ -181,7 +181,7 @@ impl<Key, Entity: HashTableEntity<Key>, Hasher: KeyHasher<Key>> HashTable<Key, E
         hash_value: u64,
         inserted: &mut bool,
     ) -> Option<*mut Entity> {
-        if Entity::is_zero_key(key) {
+        if key.is_zero() {
             return match self.zero_entity {
                 Some(zero_entity) => {
                     *inserted = false;

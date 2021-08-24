@@ -20,12 +20,15 @@ mod hash_table;
 mod hash_table_entity;
 mod hash_table_grower;
 mod hash_table_hasher;
+mod hash_table_key;
 mod hash_table_iter;
 
 pub use hash_table::HashTable;
-pub use hash_table_entity::DefaultHashTableEntity;
+pub use hash_table_hasher::FastHash;
+pub use hash_table_key::HashTableKeyable;
+pub use hash_table_entity::KeyValueEntity;
 pub use hash_table_entity::HashTableEntity;
-pub use hash_table_hasher::DefaultHasher;
-pub use hash_table_hasher::KeyHasher;
+pub use hash_table_iter::HashTableIter;
 
-pub type HashMap<Key: Sized, Value: Sized> = HashTable<Key, DefaultHashTableEntity<Key, Value>, DefaultHasher<Key>>;
+pub type HashMap<Key: HashTableKeyable, Value: Sized + Copy> = HashTable<Key, KeyValueEntity<Key, Value>>;
+pub type HashMapIterator<Key: HashTableKeyable, Value: Sized + Copy> = HashTableIter<Key, KeyValueEntity<Key, Value>>;

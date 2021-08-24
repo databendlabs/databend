@@ -40,7 +40,7 @@ use futures::stream::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::group_by::{Aggregator, PolymorphicKeysHelper};
-use crate::common::{KeyHasher, DefaultHashTableEntity, HashTableEntity};
+use crate::common::HashTableKeyable;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
@@ -276,122 +276,9 @@ impl Processor for GroupByPartialTransform {
     }
 }
 
-
-trait HashWord {
-    fn hash_word(&mut self, rhs: Self);
-}
-
-macro_rules! impl_hash_word {
-    ($ty: ty) => {
-        impl HashWord for $ty {
-            #[inline]
-            fn hash_word(&mut self, hash_value: Self) {
-                let mut hash_value = hash_value as u64;
-                hash_value ^= hash_value >> 33;
-                hash_value = hash_value.wrapping_mul(0xff51afd7ed558ccd_u64);
-                hash_value ^= hash_value >> 33;
-                hash_value = hash_value.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
-                hash_value ^= hash_value >> 33;
-
-                *self = hash_value as $ty;
-            }
-        }
-    };
-}
-
-impl_hash_word!(i8);
-impl_hash_word!(i16);
-impl_hash_word!(i32);
-impl_hash_word!(i64);
-impl_hash_word!(u8);
-impl_hash_word!(u16);
-impl_hash_word!(u32);
-impl_hash_word!(u64);
-
-fn write(mut hash: u64, mut bytes: &[u8]) -> u64 {
-    while bytes.len() >= 8 {
-        hash.hash_word(LittleEndian::read_u64(bytes) as u64);
-        bytes = &bytes[8..];
-    }
-
-    if bytes.len() >= 4 {
-        hash.hash_word(LittleEndian::read_u32(bytes) as u64);
-        bytes = &bytes[4..];
-    }
-
-    if bytes.len() >= 2 {
-        hash.hash_word(LittleEndian::read_u16(bytes) as u64);
-        bytes = &bytes[2..];
-    }
-
-    if let Some(&byte) = bytes.first() {
-        hash.hash_word(byte as u64);
-    }
-
-    hash
-}
-
-pub struct DefaultHasher {
-    /// Generics hold
-    hash: u64,
-}
-
-impl Default for DefaultHasher {
-    #[inline]
-    fn default() -> DefaultHasher {
-        DefaultHasher { hash: 0 }
-    }
-}
-
-impl Hasher for DefaultHasher {
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        self.hash = write(self.hash, bytes);
-    }
-
-    #[inline]
-    fn write_u8(&mut self, i: u8) {
-        self.hash.hash_word(i as u64);
-    }
-
-    #[inline]
-    fn write_u16(&mut self, i: u16) {
-        self.hash.hash_word(i as u64);
-    }
-
-    #[inline]
-    fn write_u32(&mut self, i: u32) {
-        self.hash.hash_word(i as u64);
-    }
-
-    #[inline]
-    #[cfg(target_pointer_width = "32")]
-    fn write_u64(&mut self, i: u64) {
-        self.hash.hash_word(i as u64);
-        self.hash.hash_word((i >> 32) as u64);
-    }
-
-    #[inline]
-    #[cfg(target_pointer_width = "64")]
-    fn write_u64(&mut self, i: u64) {
-        self.hash.hash_word(i as u64);
-    }
-
-    #[inline]
-    fn write_usize(&mut self, i: usize) {
-        self.hash.hash_word(i as u64);
-    }
-
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.hash
-    }
-}
-
 impl GroupByPartialTransform {
     async fn execute_impl<Method: HashMethod + PolymorphicKeysHelper<Method>>(&self, group_cols: Vec<String>, hash_method: Method) -> common_exception::Result<SendableDataBlockStream>
-        where crate::common::DefaultHasher<Method::HashKey>: KeyHasher<Method::HashKey>,
-              DefaultHashTableEntity<Method::HashKey, usize>: HashTableEntity<Method::HashKey>,
+        where Method::HashKey: HashTableKeyable
     {
         let start = Instant::now();
 

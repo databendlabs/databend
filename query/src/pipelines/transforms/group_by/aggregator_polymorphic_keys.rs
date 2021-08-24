@@ -1,32 +1,40 @@
-use common_datablocks::{HashMethod, HashMethodFixedKeys, HashMethodSerializer};
-use common_datavalues::arrays::{DataArray, PrimitiveArrayBuilder, ArrayBuilder};
-use common_datavalues::series::Series;
-use common_datavalues::{DFNumericType, DFPrimitiveType};
-use std::hash::Hash;
-use common_datavalues::prelude::IntoSeries;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::marker::PhantomData;
-use crate::common::HashMap;
 
-pub trait PolymorphicKeysHelper<Method: HashMethod> {
+use common_datablocks::{HashMethod, HashMethodFixedKeys, HashMethodSerializer};
+use common_datavalues::{DFNumericType, DFPrimitiveType};
+use common_datavalues::arrays::{ArrayBuilder, DataArray, PrimitiveArrayBuilder};
+use common_datavalues::prelude::IntoSeries;
+use common_datavalues::series::Series;
+
+use crate::common::{HashMap, HashTable, FastHash, HashTableKeyable};
+use crate::pipelines::transforms::group_by::AggregatorDataContainer;
+use crate::pipelines::transforms::group_by::aggregator_container::NativeAggregatorDataContainer;
+
+pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashTableKeyable {
+    type DataContainer: AggregatorDataContainer<Method>;
+    fn aggregator_container(&self) -> Self::DataContainer;
+
     type ArrayBuilder: BinaryKeysArrayBuilder<Method>;
-
-    // fn aggregator_container(&self) -> HashMap<Method::HashKey, usize>;
-
     fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
 }
 
 impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     T: DFNumericType,
-    T::Native: std::cmp::Eq + Hash + Clone + Debug,
+    T::Native: std::cmp::Eq + FastHash + Clone + Debug,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
+    NativeAggregatorDataContainer<T>: AggregatorDataContainer<HashMethodFixedKeys<T>>,
+    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable
 {
+    type DataContainer = NativeAggregatorDataContainer<T>;
+    fn aggregator_container(&self) -> Self::DataContainer {
+        NativeAggregatorDataContainer::<T> {
+            data: HashTable::create(),
+        }
+    }
+
     type ArrayBuilder = NativeBinaryKeysArrayBuilder<T>;
-
-    // fn aggregator_container(&self) -> HashMap<common_datablocks::kernels::data_block_group_by_hash::HashKey, usize> {
-    //     todo!()
-    // }
-
     fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
         NativeBinaryKeysArrayBuilder::<T> {
             inner_builder: PrimitiveArrayBuilder::<T>::with_capacity(capacity)
@@ -49,7 +57,7 @@ pub trait BinaryKeysArrayBuilder<Method: HashMethod> {
 
 pub struct NativeBinaryKeysArrayBuilder<T> where
     T: DFNumericType,
-    T::Native: std::cmp::Eq + Hash + Clone + Debug,
+    T::Native: HashTableKeyable,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
 {
     inner_builder: PrimitiveArrayBuilder<T>,
@@ -57,7 +65,7 @@ pub struct NativeBinaryKeysArrayBuilder<T> where
 
 impl<T> BinaryKeysArrayBuilder<HashMethodFixedKeys<T>> for NativeBinaryKeysArrayBuilder<T> where
     T: DFNumericType,
-    T::Native: std::cmp::Eq + Hash + Clone + Debug,
+    T::Native: HashTableKeyable,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
 {
     #[inline]

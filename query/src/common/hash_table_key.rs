@@ -12,24 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 
-pub trait FastHash {
-    fn fast_hash(&self) -> u64;
+use crate::common::FastHash;
+
+pub trait HashTableKeyable: FastHash + Eq + Sized + Copy {
+    fn is_zero(&self) -> bool;
+    fn eq_with_hash(&self, hash: u64, other_key: &Self, other_key_hash: u64) -> bool;
 }
 
 macro_rules! primitive_hasher_impl {
     ($primitive_type:ty) => {
-        impl FastHash for $primitive_type {
+        impl HashTableKeyable for $primitive_type {
+
             #[inline(always)]
-            fn fast_hash(&self) -> u64 {
-                let mut hash_value = *self as u64;
-                hash_value ^= hash_value >> 33;
-                hash_value = hash_value.wrapping_mul(0xff51afd7ed558ccd_u64);
-                hash_value ^= hash_value >> 33;
-                hash_value = hash_value.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
-                hash_value ^= hash_value >> 33;
-                hash_value
+            fn is_zero(&self) -> bool {
+                *self == 0
+            }
+
+            #[inline(always)]
+            fn eq_with_hash(&self, _hash: u64, other_key: &Self, _other_key_hash: u64) -> bool {
+                self == other_key
             }
         }
     };
