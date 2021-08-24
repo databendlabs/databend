@@ -15,6 +15,9 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use std::time::Instant;
+use metrics::histogram;
+
 use common_exception::ErrorCode;
 use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
@@ -82,8 +85,12 @@ impl<'a> DfParser<'a> {
 
     /// Parse a SQL statement and produce a set of statements with dialect
     pub fn parse_sql(sql: &str) -> Result<(Vec<DfStatement>, Vec<DfHint>), ErrorCode> {
+        // add parser metric here 
         let dialect = &GenericDialect {};
-        Ok(DfParser::parse_sql_with_dialect(sql, dialect)?)
+        let start = Instant::now();
+        let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
+        histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
+        Ok(result)
     }
 
     /// Parse a SQL statement and produce a set of statements
