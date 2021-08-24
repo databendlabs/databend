@@ -369,7 +369,7 @@ fn test_get_table() -> common_exception::Result<()> {
     assert!(res.is_ok());
     let res = res?;
     assert_eq!(res.meta_id(), 0);
-    // table version not implemented in persistent store yet, we fake this shortcoming as well
+    // table version not implemented in persistent store yet, we fake it as well
     assert_eq!(res.meta_ver(), None);
 
     // table does not exist
