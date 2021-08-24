@@ -61,7 +61,9 @@ impl TestFixture {
     }
 }
 
+// CI has no AWS_SECRET_ACCESS_KEY and AWS_ACCESS_KEY_ID yet
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn test_s3_input_stream_api() -> common_exception::Result<()> {
     let test_key = "test_s3_input_stream".to_string();
     let fixture = TestFixture::new(1024 * 10, test_key.clone());
@@ -76,6 +78,7 @@ async fn test_s3_input_stream_api() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn test_s3_input_stream_seek_api() -> common_exception::Result<()> {
     let test_key = "test_s3_seek_stream".to_string();
     let fixture = TestFixture::new(1024 * 10, test_key.clone());
