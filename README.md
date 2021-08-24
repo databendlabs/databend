@@ -1,8 +1,8 @@
 <div align="center">
 <h1>Datafuse</h1>
-<a href="https://datafuse.rs" target="_blank">
- <strong>The Open Source Cloud Warehouse for Everyone</strong>
- </a>
+<strong>The Open Source Cloud Warehouse for Everyone</strong>
+<br>
+ https://datafuse.rs
 <br>
 <br>
 
