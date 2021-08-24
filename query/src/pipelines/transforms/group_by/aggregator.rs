@@ -95,9 +95,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
                 }
             }
 
-            let mut aggr_arg_columns = Vec::with_capacity(aggr_cols.len());
+            let mut aggr_arg_columns = Vec::with_capacity(aggr_len);
             for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
-                let arg_columns = arg_names[idx]
+                let arg_columns = aggregate_functions_arguments[idx]
                     .iter()
                     .map(|arg| block.try_column_by_name(arg).and_then(|c| c.to_array()))
                     .collect::<Result<Vec<Series>>>()?;
