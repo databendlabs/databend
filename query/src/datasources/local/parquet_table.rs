@@ -80,6 +80,7 @@ fn read_file(
         Some(projection.to_vec()),
         None,
         Arc::new(|_, _| true),
+        None,
     )?;
 
     for maybe_batch in reader {

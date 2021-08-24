@@ -18,6 +18,7 @@ use std::ops::AddAssign;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute::aggregate;
+use common_arrow::arrow::compute::aggregate::sum_primitive;
 use common_arrow::arrow::types::simd::Simd;
 use common_arrow::arrow::types::NativeType;
 use common_exception::ErrorCode;
@@ -96,7 +97,7 @@ where
         // sum is faster in auto vectorized than manual simd
         let null_count = self.null_count();
         if null_count > 0 && (T::SIZE == <T::LargestType as DFNumericType>::SIZE) {
-            return Ok(match aggregate::sum(array) {
+            return Ok(match sum_primitive(array) {
                 Some(x) => x.into(),
                 None => DataValue::from(self.data_type()),
             });

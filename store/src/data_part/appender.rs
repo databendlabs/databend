@@ -78,7 +78,7 @@ pub(crate) fn write_in_memory(block: DataBlock) -> Result<Vec<u8>> {
     let arrow_schema = block.schema().to_arrow();
     let options = WriteOptions {
         write_statistics: true,
-        compression: CompressionCodec::Uncompressed,
+        compression: Compression::Uncompressed,
         version: Version::V2,
     };
     let encodings: Vec<_> = repeat(Encoding::Plain).take(block.num_columns()).collect();

@@ -121,7 +121,7 @@ impl<Ptr> FromIterator<Ptr> for DFUtf8Array
 where Ptr: DFAsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
-        let arr = LargeUtf8Array::from_iter_values(iter);
+        let arr = LargeUtf8Array::from_iter_values(iter.into_iter());
 
         let array = Arc::new(arr) as ArrayRef;
         array.into()
