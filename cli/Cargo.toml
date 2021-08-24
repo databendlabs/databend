@@ -34,7 +34,7 @@ sha2 = "0.9.5"
 sysinfo = "0.20.1"
 tar = "0.4.37"
 thiserror = "1.0.20"
-ureq = { version = "2.1.1", features = ["json"] }
+ureq = { version = "2.2.0", features = ["json"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
