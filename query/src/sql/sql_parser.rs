@@ -85,7 +85,6 @@ impl<'a> DfParser<'a> {
 
     /// Parse a SQL statement and produce a set of statements with dialect
     pub fn parse_sql(sql: &str) -> Result<(Vec<DfStatement>, Vec<DfHint>), ErrorCode> {
-        // add parser metric here 
         let dialect = &GenericDialect {};
         let start = Instant::now();
         let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
