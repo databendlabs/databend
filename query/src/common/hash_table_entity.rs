@@ -51,8 +51,8 @@ impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value> where Key: 
         (*self).key.is_zero()
     }
 
-    unsafe fn key_equals(self: *mut Self, key: &Key, hash: u64) -> bool {
-        (*self).key.eq_with_hash((*self).hash, key, hash)
+    unsafe fn key_equals(self: *mut Self, key: &Key, _hash: u64) -> bool {
+        (*self).key == *key
     }
 
     unsafe fn set_key_and_hash(self: *mut Self, key: &Key, hash: u64) {
@@ -69,6 +69,6 @@ impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value> where Key: 
     }
 
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
-        !self.key_equals(&(*other).key, (*other).hash)
+        !((*self).key == (*other).key)
     }
 }

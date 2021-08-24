@@ -17,7 +17,7 @@ use crate::common::FastHash;
 
 pub trait HashTableKeyable: FastHash + Eq + Sized + Copy {
     fn is_zero(&self) -> bool;
-    fn eq_with_hash(&self, hash: u64, other_key: &Self, other_key_hash: u64) -> bool;
+    fn eq_with_hash(&self, other_key: &Self) -> bool;
 }
 
 macro_rules! primitive_hasher_impl {
@@ -30,7 +30,7 @@ macro_rules! primitive_hasher_impl {
             }
 
             #[inline(always)]
-            fn eq_with_hash(&self, _hash: u64, other_key: &Self, _other_key_hash: u64) -> bool {
+            fn eq_with_hash(&self, other_key: &Self) -> bool {
                 self == other_key
             }
         }
