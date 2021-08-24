@@ -21,22 +21,52 @@ use crate::*;
 
 #[tokio::test]
 async fn test_skipstream() {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("num", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("id", DataType::Int32, false),
+        DataField::new("name", DataType::Utf8, false),
+    ]);
 
-    // create a data stream with data from 0 to 40
-    let v0 = (0..20).collect::<Vec<i32>>();
-    let v1 = (20..40).collect::<Vec<i32>>();
-    let block0 = DataBlock::create_by_array(schema.clone(), vec![Series::new(v0)]);
-    let block1 = DataBlock::create_by_array(schema.clone(), vec![Series::new(v1)]);
+    // create a data block with 'id' from 0 to 20
+    let ids = (0..20).collect::<Vec<i32>>();
+    let names = (0..20)
+        .map(|n| format!("Alice-{}", n))
+        .collect::<Vec<String>>();
+    let block0 =
+        DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
+
+    // create a data block with 'id' from 20 to 40
+    let ids = (20..40).collect::<Vec<i32>>();
+    let names = (20..40)
+        .map(|n| format!("Bob-{}", n))
+        .collect::<Vec<String>>();
+    let block1 =
+        DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
+
     let stream = DataBlockStream::create(schema, None, vec![block0, block1]);
 
-    // skip the number from 0 to 24 and the return block should be in range [25, 40]
+    // skip the number from 0 to 24 and the return block should be in range [25, 40)
     let mut skip_stream = SkipStream::new(Box::pin(stream), 25);
 
     let expected = vec![
-        "+-----+", "| num |", "+-----+", "| 25  |", "| 26  |", "| 27  |", "| 28  |", "| 29  |",
-        "| 30  |", "| 31  |", "| 32  |", "| 33  |", "| 34  |", "| 35  |", "| 36  |", "| 37  |",
-        "| 38  |", "| 39  |", "+-----+",
+        "+----+--------+",
+        "| id | name   |",
+        "+----+--------+",
+        "| 25 | Bob-25 |",
+        "| 26 | Bob-26 |",
+        "| 27 | Bob-27 |",
+        "| 28 | Bob-28 |",
+        "| 29 | Bob-29 |",
+        "| 30 | Bob-30 |",
+        "| 31 | Bob-31 |",
+        "| 32 | Bob-32 |",
+        "| 33 | Bob-33 |",
+        "| 34 | Bob-34 |",
+        "| 35 | Bob-35 |",
+        "| 36 | Bob-36 |",
+        "| 37 | Bob-37 |",
+        "| 38 | Bob-38 |",
+        "| 39 | Bob-39 |",
+        "+----+--------+",
     ];
 
     let mut index = 0;
