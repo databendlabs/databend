@@ -34,7 +34,7 @@ fn test_if_function() -> Result<()> {
     }
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
+        DataField::new("a", DataType::Int32, false),
         DataField::new("b", DataType::Int64, false),
     ]);
 
@@ -50,7 +50,7 @@ fn test_if_function() -> Result<()> {
         ],
         columns: vec![
             Series::new(vec![true, false, false, true]).into(),
-            Series::new(vec![1i64, 2, 3, 4]).into(),
+            Series::new(vec![1i32, 2, 3, 4]).into(),
             DataColumn::Constant(DataValue::Float64(Some(2.5)), 4),
         ],
         expect: Series::new(vec![1f64, 2.5, 2.5, 4f64]),

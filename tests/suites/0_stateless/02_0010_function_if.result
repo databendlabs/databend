@@ -4,9 +4,6 @@ true
 1
 1
 2
-0
-0.5
-2
 2
 1
 2
@@ -16,6 +13,5 @@ Z+
 true
 NULL
 NULL
-0
-1
-2
+Int64
+Float64

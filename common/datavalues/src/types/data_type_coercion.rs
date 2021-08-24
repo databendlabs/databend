@@ -121,11 +121,14 @@ pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataT
 /// Coercion rule for numerical types: The type that both lhs and rhs
 /// can be casted to for numerical calculation, while maintaining
 /// maximum precision
-pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
+pub fn numerical_coercion(
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+    allow_overflow: bool,
+) -> Result<DataType> {
     let has_float = is_floating(lhs_type) || is_floating(rhs_type);
     let has_integer = is_integer(lhs_type) || is_integer(rhs_type);
     let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
-    let has_unsigned = !is_signed_numeric(lhs_type) || !is_signed_numeric(rhs_type);
 
     let size_of_lhs = numeric_byte_size(lhs_type)?;
     let size_of_rhs = numeric_byte_size(rhs_type)?;
@@ -183,19 +186,26 @@ pub fn numerical_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Da
     );
 
     let should_double = (has_float && has_integer && max_size_of_integer >= max_size_of_float)
-        || (has_signed
-            && has_unsigned
-            && max_size_of_unsigned_integer >= max_size_of_signed_integer);
+        || (has_signed && max_size_of_unsigned_integer >= max_size_of_signed_integer);
 
-    construct_numeric_type(
-        has_signed,
-        has_float,
-        if should_double {
-            cmp::max(size_of_rhs, size_of_lhs) * 2
+    let mut max_size = if should_double {
+        cmp::max(size_of_rhs, size_of_lhs) * 2
+    } else {
+        cmp::max(size_of_rhs, size_of_lhs)
+    };
+
+    if max_size > 8 {
+        if allow_overflow {
+            max_size = 8
         } else {
-            cmp::max(size_of_rhs, size_of_lhs)
-        },
-    )
+            return Result::Err(ErrorCode::BadDataValueType(format!(
+                "Can't construct type from {} and {}",
+                lhs_type, rhs_type
+            )));
+        }
+    }
+
+    construct_numeric_type(has_signed, has_float, max_size)
 }
 
 #[inline]
@@ -267,7 +277,7 @@ pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataTy
         return Ok(lhs_type.clone());
     }
 
-    numerical_coercion(lhs_type, rhs_type)
+    numerical_coercion(lhs_type, rhs_type, true)
 }
 
 // aggregate_types aggregates data types for a multi-argument function.
@@ -334,7 +344,7 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
                 return Ok(lhs_type.clone());
             }
             if is_numeric(lhs_type) && is_numeric(rhs_type) {
-                numerical_coercion(lhs_type, rhs_type)
+                numerical_coercion(lhs_type, rhs_type, false)
             } else {
                 Result::Err(ErrorCode::BadDataValueType(format!(
                     "Can't merge types from {} and {}",
