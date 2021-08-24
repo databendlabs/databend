@@ -57,18 +57,17 @@ Datafuse consists of three components: `meta service` layer, and the  decoupled 
 
 The meta service is a layer to service multiple tenants.
 In current implementation, the meta service has components:
-* Metadata, which manages all metadata of databases, tables, clusters, the transaction, etc.
-* Administration, which stores user info, user management, access control information, usage statistics, etc.
-* Security, which performs authorization and authentication to protect the privacy of users' data.
+* **Metadata** - Which manages all metadata of databases, tables, clusters, the transaction, etc.
+* **Administration** Which stores user info, user management, access control information, usage statistics, etc.
+* **Security** Which performs authorization and authentication to protect the privacy of users' data.
 
 ### Compute Layer
 
-The compute layer is the layer to carry out computation for query processing. This layer may consist of many clusters,
-and each cluster may consist of many nodes. Each node is a compute unit, and is a collection of components:
-* Planner 
-* Optimizer
-* Processors
-* Cache
+The compute layer is the clusters that running computing workloads, each cluster have many nodes, each node has components:
+* **Planner** - Builds execution plan from the user's SQL statement.
+* **Optimizer** - Optimizer rules like predicate push down or pruning of unused columns.
+* **Processors** - Vector-based query execution pipeline, which is build by planner instructions.
+* **Cache** - Caching Data and Indexes based on the version.
 
 Many clusters can attach the same database, so they can serve the query in parallel by different users.
 
