@@ -142,7 +142,7 @@ pub trait PlanVisitor {
     // TODO: Move it to ExpressionsVisitor trait
     fn visit_exprs(&mut self, exprs: &[Expression]) -> Result<()> {
         for expr in exprs {
-            self.visit_expr(expr)?;
+            self.visit_expr(expr)?;   
         }
 
         Ok(())
