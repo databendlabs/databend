@@ -412,8 +412,14 @@ mod tests {
                     op: BinaryOperator::Like,
                     right: Box::new(Expr::Substring {
                         expr: Box::new(Expr::Value(Value::SingleQuotedString("ss%".to_string()))),
-                        substring_from: Some(Box::new(Expr::Value(Value::Number("1".to_string(), false)))), 
-                        substring_for: Some(Box::new(Expr::Value(Value::Number("3".to_string(), false)))), 
+                        substring_from: Some(Box::new(Expr::Value(Value::Number(
+                            "1".to_string(),
+                            false,
+                        )))),
+                        substring_for: Some(Box::new(Expr::Value(Value::Number(
+                            "3".to_string(),
+                            false,
+                        )))),
                     }),
                 }),
             }),

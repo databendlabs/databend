@@ -76,8 +76,8 @@ use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfParser;
 use crate::sql::DfShowCreateTable;
-use crate::sql::DfShowTables;
 use crate::sql::DfShowDatabases;
+use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
@@ -236,7 +236,7 @@ impl PlanParser {
 
         self.build_from_sql(
             format!(
-                "SELECT name FROM system.databases {} ORDER BY name",
+                "SELECT name AS Database FROM system.databases {} ORDER BY name",
                 where_clause
             )
             .as_str(),

@@ -25,8 +25,8 @@ use metrics::histogram;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
-use sqlparser::ast::Ident;
 use sqlparser::ast::Expr;
+use sqlparser::ast::Ident;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::TableConstraint;
 use sqlparser::ast::Value;
@@ -260,7 +260,7 @@ impl<'a> DfParser<'a> {
             }))
         } else if self.parser.parse_keyword(Keyword::LIKE) {
             let pattern = self.parser.parse_expr()?;
-            
+
             let like_expr = Expr::BinaryOp {
                 left: Box::new(Expr::Identifier(Ident::new("name"))),
                 op: BinaryOperator::Like,
@@ -593,34 +593,30 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn replace_show_database(
-        &self,
-        expr: Expr
-    ) -> Expr {
+    fn replace_show_database(&self, expr: Expr) -> Expr {
         match expr {
             Expr::BinaryOp { left, op, right } => {
                 let left_expr = match *left {
-                    Expr::Identifier(ref v) if v.value.to_uppercase() == "DATABASE".to_string() => {
+                    Expr::Identifier(ref v) if v.value.to_uppercase() == *"DATABASE" => {
                         Expr::Identifier(Ident::new("name"))
                     }
                     _ => self.replace_show_database(*left),
                 };
-    
+
                 let right_expr = match *right {
-                    Expr::Identifier(ref v) if v.value.to_uppercase() == "DATABASE".to_string() => {
+                    Expr::Identifier(ref v) if v.value.to_uppercase() == *"DATABASE" => {
                         Expr::Identifier(Ident::new("name"))
                     }
                     _ => self.replace_show_database(*right),
                 };
-    
+
                 Expr::BinaryOp {
                     left: Box::new(left_expr),
-                    op: op,
+                    op,
                     right: Box::new(right_expr),
                 }
-            },
-            _ => expr
-        }    
-
+            }
+            _ => expr,
+        }
     }
 }
