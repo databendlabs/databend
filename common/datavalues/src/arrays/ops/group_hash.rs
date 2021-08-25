@@ -109,6 +109,6 @@ impl GroupHash for DFUtf8Array {
 }
 
 impl GroupHash for DFListArray {}
-impl GroupHash for DFBinaryArray {}
+impl GroupHash for DFStringArray {}
 impl GroupHash for DFNullArray {}
 impl GroupHash for DFStructArray {}

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DFBinaryArray;
+use common_datavalues::prelude::DFStringArray;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
@@ -103,9 +103,9 @@ impl Processor for AggregatorFinalTransform {
             for (idx, func) in funcs.iter().enumerate() {
                 let place = places[idx].into();
 
-                let binary_array = block.column(idx).to_array()?;
-                let binary_array: &DFBinaryArray = binary_array.binary()?;
-                let array = binary_array.downcast_ref();
+                let string_array = block.column(idx).to_array()?;
+                let string_array: &DFStringArray = string_array.string()?;
+                let array = string_array.downcast_ref();
 
                 let mut data = array.value(0);
                 let s = funcs[idx].state_layout();

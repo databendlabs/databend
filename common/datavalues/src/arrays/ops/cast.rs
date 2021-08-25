@@ -151,7 +151,7 @@ impl ArrayCast for DFNullArray {
             DataType::Float64 => Ok(DFFloat64Array::full_null(self.len()).into_series()),
             DataType::Date32 => Ok(DFDate32Array::full_null(self.len()).into_series()),
             DataType::Date64 => Ok(DFDate64Array::full_null(self.len()).into_series()),
-            DataType::Binary => Ok(DFBinaryArray::full_null(self.len()).into_series()),
+            DataType::String => Ok(DFStringArray::full_null(self.len()).into_series()),
             DataType::List(_) => Ok(DFListArray::full_null(self.len()).into_series()),
 
             _ => Err(ErrorCode::BadDataValueType(format!(
@@ -163,5 +163,5 @@ impl ArrayCast for DFNullArray {
 }
 
 impl ArrayCast for DFListArray {}
-impl ArrayCast for DFBinaryArray {}
+impl ArrayCast for DFStringArray {}
 impl ArrayCast for DFStructArray {}

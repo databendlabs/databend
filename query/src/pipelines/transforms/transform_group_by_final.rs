@@ -131,7 +131,7 @@ impl Processor for GroupByFinalTransform {
                     let mut states_binary_arrays = Vec::with_capacity(states_series.len());
 
                     for agg in states_series.iter().take(aggr_funcs_len) {
-                        let aggr_array: &DFBinaryArray = agg.binary()?;
+                        let aggr_array: &DFStringArray = agg.string()?;
                         let aggr_array = aggr_array.downcast_ref();
                         states_binary_arrays.push(aggr_array);
                     }
@@ -230,7 +230,7 @@ impl Processor for GroupByFinalTransform {
             ($method: ident, $apply: ident) => {{
                 match $method {
                     HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method,  &DFBinaryArray, binary,   RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
+                        apply! { hash_method,  &DFStringArray, string,   RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
                     }
                     HashMethodKind::KeysU8(hash_method) => {
                         apply! { hash_method , &DFUInt8Array, u8,  RwLock<HashMap<u8, usize, ahash::RandomState>> }

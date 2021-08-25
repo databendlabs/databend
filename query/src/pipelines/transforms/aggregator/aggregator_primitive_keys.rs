@@ -18,7 +18,7 @@ use bumpalo::Bump;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datavalues::arrays::ArrayBuilder;
-use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::prelude::Series;
@@ -184,8 +184,8 @@ where
         }
 
         // Builders.
-        let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-            .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
+        let mut state_builders: Vec<StringArrayBuilder> = (0..aggr_len)
+            .map(|_| StringArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
 
         let mut group_key_builder = PrimitiveArrayBuilder::<T>::with_capacity(groups.len());

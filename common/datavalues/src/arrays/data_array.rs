@@ -145,7 +145,7 @@ pub type DFFloat64Array = DataArray<Float64Type>;
 pub type DFUtf8Array = DataArray<Utf8Type>;
 pub type DFListArray = DataArray<ListType>;
 pub type DFStructArray = DataArray<StructType>;
-pub type DFBinaryArray = DataArray<BinaryType>;
+pub type DFStringArray = DataArray<StringType>;
 
 pub type DFDate32Array = DataArray<Date32Type>;
 pub type DFDate64Array = DataArray<Date64Type>;
@@ -196,8 +196,8 @@ where T: DFDataType
             DataType::Float32 => downcast_and_pack!(Float32Array, Float32),
             DataType::Float64 => downcast_and_pack!(Float64Array, Float64),
 
-            DataType::Binary => {
-                downcast_and_pack!(LargeBinaryArray, Binary)
+            DataType::String => {
+                downcast_and_pack!(LargeBinaryArray, String)
             }
 
             DataType::List(fs) => {

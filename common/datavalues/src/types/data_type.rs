@@ -47,7 +47,7 @@ pub enum DataType {
     Interval(IntervalUnit),
     List(Box<DataField>),
     Struct(Vec<DataField>),
-    Binary,
+    String,
 }
 
 #[derive(
@@ -122,7 +122,7 @@ impl DataType {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
                 ArrowDataType::Struct(arrows_fields)
             }
-            Binary => ArrowDataType::LargeBinary,
+            String => ArrowDataType::LargeBinary,
         }
     }
 }
@@ -163,7 +163,7 @@ impl From<&ArrowDataType> for DataType {
             ArrowDataType::Interval(fu) => DataType::Interval(IntervalUnit::from_arrow(fu)),
 
             ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::Utf8,
-            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::Binary,
+            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::String,
 
             // this is safe, because we define the datatype firstly
             _ => {

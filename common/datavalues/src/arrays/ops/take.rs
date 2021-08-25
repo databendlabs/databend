@@ -254,7 +254,7 @@ impl ArrayTake for DFListArray {
 
 impl ArrayTake for DFNullArray {}
 impl ArrayTake for DFStructArray {}
-impl ArrayTake for DFBinaryArray {}
+impl ArrayTake for DFStringArray {}
 
 pub trait AsTakeIndex {
     fn as_take_iter<'a>(&'a self) -> Box<dyn Iterator<Item = usize> + 'a>;

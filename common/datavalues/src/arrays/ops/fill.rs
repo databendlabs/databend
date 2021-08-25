@@ -143,9 +143,9 @@ impl ArrayFullNull for DFListArray {
     }
 }
 
-impl ArrayFull<&[u8]> for DFBinaryArray {
-    fn full(value: &[u8], length: usize) -> DFBinaryArray {
-        let mut builder = BinaryArrayBuilder::with_capacity(length);
+impl ArrayFull<&[u8]> for DFStringArray {
+    fn full(value: &[u8], length: usize) -> DFStringArray {
+        let mut builder = StringArrayBuilder::with_capacity(length);
         for _ in 0..length {
             builder.append_value(value);
         }
@@ -153,9 +153,9 @@ impl ArrayFull<&[u8]> for DFBinaryArray {
     }
 }
 
-impl ArrayFullNull for DFBinaryArray {
-    fn full_null(length: usize) -> DFBinaryArray {
-        let mut builder = BinaryArrayBuilder::with_capacity(length);
+impl ArrayFullNull for DFStringArray {
+    fn full_null(length: usize) -> DFStringArray {
+        let mut builder = StringArrayBuilder::with_capacity(length);
         for _ in 0..length {
             builder.append_null();
         }

@@ -262,11 +262,11 @@ pub fn get_list_builder(
     )
 }
 
-pub struct BinaryArrayBuilder {
+pub struct StringArrayBuilder {
     builder: MutableBinaryArray<i64>,
 }
 
-impl BinaryArrayBuilder {
+impl StringArrayBuilder {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             builder: MutableBinaryArray::<i64>::with_capacity(capacity),
@@ -282,8 +282,8 @@ impl BinaryArrayBuilder {
         self.builder.push_null();
     }
 
-    pub fn finish(&mut self) -> DataArray<BinaryType> {
+    pub fn finish(&mut self) -> DataArray<StringType> {
         let array = self.builder.as_arc();
-        DFBinaryArray::from(array)
+        DFStringArray::from(array)
     }
 }

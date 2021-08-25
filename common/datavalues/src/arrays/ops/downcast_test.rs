@@ -56,11 +56,11 @@ fn test_array_as_ref() -> Result<()> {
     let vs: Vec<_> = first_array.into_no_null_iter().collect();
     assert_eq!(vs, vec![1u16, 2u16, 3u16]);
 
-    // Test DFBinaryArray
-    let mut binary_builder = BinaryArrayBuilder::with_capacity(8);
-    binary_builder.append_value(&"123");
-    let df_binary_array = binary_builder.finish();
-    let array_ref = df_binary_array.downcast_ref();
+    // Test DFStringArray
+    let mut string_builder = StringArrayBuilder::with_capacity(8);
+    string_builder.append_value(&"123");
+    let df_string_array = string_builder.finish();
+    let array_ref = df_string_array.downcast_ref();
     assert_eq!(b"123", array_ref.value(0));
 
     Ok(())

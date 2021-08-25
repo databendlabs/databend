@@ -310,7 +310,7 @@ impl ArrayCompare<&DFUtf8Array> for DFUtf8Array {
 
 impl ArrayCompare<&DFNullArray> for DFNullArray {}
 
-impl ArrayCompare<&DFBinaryArray> for DFBinaryArray {}
+impl ArrayCompare<&DFStringArray> for DFStringArray {}
 
 impl ArrayCompare<&DFStructArray> for DFStructArray {}
 
@@ -406,4 +406,4 @@ impl ArrayEqualElement for DFNullArray {}
 
 impl ArrayEqualElement for DFStructArray {}
 
-impl ArrayEqualElement for DFBinaryArray {}
+impl ArrayEqualElement for DFStringArray {}

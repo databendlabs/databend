@@ -50,7 +50,7 @@ pub enum DataValue {
     UInt64(Option<u64>),
     Float32(Option<f32>),
     Float64(Option<f64>),
-    Binary(Option<Vec<u8>>),
+    String(Option<Vec<u8>>),
     Utf8(Option<String>),
 
     /// Datetime.
@@ -93,7 +93,7 @@ impl DataValue {
                 | DataValue::UInt64(None)
                 | DataValue::Float32(None)
                 | DataValue::Float64(None)
-                | DataValue::Binary(None)
+                | DataValue::String(None)
                 | DataValue::Utf8(None)
                 | DataValue::Date32(None)
                 | DataValue::Date64(None)
@@ -142,7 +142,7 @@ impl DataValue {
                     .collect::<Vec<_>>();
                 DataType::Struct(fields)
             }
-            DataValue::Binary(_) => DataType::Binary,
+            DataValue::String(_) => DataType::String,
         }
     }
 
@@ -174,9 +174,9 @@ impl DataValue {
                 Some(v) => Ok(DFUtf8Array::full(v.deref(), size).into_series()),
             },
 
-            DataValue::Binary(values) => match values {
-                None => Ok(DFBinaryArray::full_null(size).into_series()),
-                Some(v) => Ok(DFBinaryArray::full(v.deref(), size).into_series()),
+            DataValue::String(values) => match values {
+                None => Ok(DFStringArray::full_null(size).into_series()),
+                Some(v) => Ok(DFStringArray::full(v.deref(), size).into_series()),
             },
 
             DataValue::List(values, data_type) => match data_type {
@@ -365,7 +365,7 @@ impl From<&DataType> for DataValue {
             DataType::Interval(IntervalUnit::DayTime) => DataValue::UInt64(None),
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
-            DataType::Binary => DataValue::Binary(None),
+            DataType::String => DataValue::String(None),
         }
     }
 }
@@ -395,8 +395,8 @@ impl fmt::Display for DataValue {
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::Utf8(v) => format_data_value_with_option!(f, v),
-            DataValue::Binary(None) => write!(f, "NULL"),
-            DataValue::Binary(Some(v)) => {
+            DataValue::String(None) => write!(f, "NULL"),
+            DataValue::String(Some(v)) => {
                 for c in v {
                     write!(f, "{:02x}", c)?;
                 }
@@ -445,8 +445,8 @@ impl fmt::Debug for DataValue {
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
             DataValue::Utf8(v) => format_data_value_with_option!(f, v),
-            DataValue::Binary(None) => write!(f, "{}", self),
-            DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
+            DataValue::String(None) => write!(f, "{}", self),
+            DataValue::String(Some(_)) => write!(f, "\"{}\"", self),
             DataValue::Date32(_) => write!(f, "Date32(\"{}\")", self),
             DataValue::Date64(_) => write!(f, "Date64(\"{}\")", self),
             DataValue::IntervalDayTime(_) => {

@@ -144,13 +144,13 @@ impl DFListArray {
     }
 }
 
-impl AsRef<LargeBinaryArray> for DFBinaryArray {
+impl AsRef<LargeBinaryArray> for DFStringArray {
     fn as_ref(&self) -> &LargeBinaryArray {
         self.downcast_ref()
     }
 }
 
-impl DFBinaryArray {
+impl DFStringArray {
     pub fn downcast_ref(&self) -> &LargeBinaryArray {
         let arr = &*self.array;
         unsafe { &*(arr as *const dyn Array as *const LargeBinaryArray) }

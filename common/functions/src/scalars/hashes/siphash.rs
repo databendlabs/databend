@@ -61,7 +61,7 @@ impl Function for SipHashFunction {
             | DataType::Date32
             | DataType::Date64
             | DataType::Utf8
-            | DataType::Binary => Ok(DataType::UInt64),
+            | DataType::String => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function Error: {} does not support {} type parameters",
                 self.display_name, args[0]

@@ -368,7 +368,7 @@ impl ArrayAgg for DFUtf8Array {
 
 impl ArrayAgg for DFListArray {}
 
-impl ArrayAgg for DFBinaryArray {}
+impl ArrayAgg for DFStringArray {}
 
 impl ArrayAgg for DFNullArray {}
 

@@ -50,7 +50,7 @@ impl_df_datatype!(Date64Type, Date64);
 
 impl_df_datatype!(Utf8Type, Utf8);
 impl_df_datatype!(NullType, Null);
-impl_df_datatype!(BinaryType, Binary);
+impl_df_datatype!(StringType, String);
 
 pub struct TimestampSecondType;
 impl DFDataType for TimestampSecondType {

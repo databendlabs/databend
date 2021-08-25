@@ -24,7 +24,7 @@ use byteorder::LittleEndian;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
-use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
@@ -217,8 +217,8 @@ impl Processor for GroupByPartialTransform {
                 }
 
                 // Builders.
-                let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-                    .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
+                let mut state_builders: Vec<StringArrayBuilder> = (0..aggr_len)
+                    .map(|_| StringArrayBuilder::with_capacity(groups.len() * 4))
                     .collect();
 
                 type KeyBuilder = $key_array_builder;
@@ -256,7 +256,7 @@ impl Processor for GroupByPartialTransform {
 
         match method {
             HashMethodKind::Serializer(hash_method) => {
-                apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
+                apply! { hash_method, StringArrayBuilder , RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
             }
             HashMethodKind::KeysU8(hash_method) => {
                 // TODO: use fixed array.

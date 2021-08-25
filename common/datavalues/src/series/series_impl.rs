@@ -196,10 +196,10 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
         )))
     }
 
-    /// Unpack to DFArray of data_type binary
-    fn binary(&self) -> Result<&DFBinaryArray> {
+    /// Unpack to DFArray of data_type string
+    fn string(&self) -> Result<&DFStringArray> {
         Err(ErrorCode::IllegalDataType(format!(
-            "{:?} != binary",
+            "{:?} != string",
             self.data_type()
         )))
     }
@@ -325,7 +325,7 @@ impl IntoSeries for ArrayRef {
 
             DataType::List(_) => DFListArray::new(self).into_series(),
             DataType::Struct(_) => DFStructArray::new(self).into_series(),
-            DataType::Binary => DFBinaryArray::new(self).into_series(),
+            DataType::String => DFStringArray::new(self).into_series(),
 
             _ => unreachable!(),
         }

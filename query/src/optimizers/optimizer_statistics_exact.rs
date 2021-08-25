@@ -95,7 +95,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                             })?;
                     let mut body: Vec<u8> = Vec::new();
                     body.write_uvarint(read_source_plan.statistics.read_rows as u64)?;
-                    let expr = Expression::create_literal(DataValue::Binary(Some(body)));
+                    let expr = Expression::create_literal(DataValue::String(Some(body)));
                     PlanBuilder::from(&dummy_read_plan)
                         .expression(&[expr.clone()], "Exact Statistics")?
                         .project(&[expr.alias("count(0)")])?

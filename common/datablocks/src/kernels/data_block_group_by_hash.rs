@@ -141,7 +141,7 @@ impl HashMethodKind {
     }
     pub fn data_type(&self) -> DataType {
         match self {
-            HashMethodKind::Serializer(_) => DataType::Binary,
+            HashMethodKind::Serializer(_) => DataType::String,
             HashMethodKind::KeysU8(_) => DataType::UInt8,
             HashMethodKind::KeysU16(_) => DataType::UInt16,
             HashMethodKind::KeysU32(_) => DataType::UInt32,
@@ -155,7 +155,7 @@ pub struct HashMethodSerializer {}
 
 impl HashMethodSerializer {
     #[inline]
-    pub fn get_key(&self, array: &DFBinaryArray, row: usize) -> Vec<u8> {
+    pub fn get_key(&self, array: &DFStringArray, row: usize) -> Vec<u8> {
         let v = array.as_ref().value(row);
         v.to_owned()
     }

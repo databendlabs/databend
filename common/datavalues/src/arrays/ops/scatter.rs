@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::get_list_builder;
-use crate::arrays::BinaryArrayBuilder;
+use crate::arrays::StringArrayBuilder;
 use crate::arrays::BooleanArrayBuilder;
 use crate::arrays::DataArray;
 use crate::arrays::PrimitiveArrayBuilder;
@@ -220,7 +220,7 @@ impl ArrayScatter for DFListArray {
     }
 }
 
-impl ArrayScatter for DFBinaryArray {
+impl ArrayScatter for DFStringArray {
     unsafe fn scatter_unchecked(
         &self,
         indices: &mut dyn Iterator<Item = u64>,
@@ -232,14 +232,14 @@ impl ArrayScatter for DFBinaryArray {
         let mut builders = Vec::with_capacity(scattered_size);
         let guess_scattered_len = ((self.len() as f64) * 1.1 / (scattered_size as f64)) as usize;
         for _i in 0..scattered_size {
-            let builder = BinaryArrayBuilder::with_capacity(guess_scattered_len);
+            let builder = StringArrayBuilder::with_capacity(guess_scattered_len);
             builders.push(builder);
         }
 
-        let binary_data = self.downcast_ref();
+        let string_data = self.downcast_ref();
         for (i, index) in indices.enumerate() {
             if !self.is_null(i as usize) {
-                builders[index as usize].append_value(binary_data.value(i as usize));
+                builders[index as usize].append_value(string_data.value(i as usize));
             } else {
                 builders[index as usize].append_null();
             }

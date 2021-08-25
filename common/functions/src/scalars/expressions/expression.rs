@@ -52,7 +52,7 @@ impl ToCastFunction {
                 Utf8,
                 Date32,
                 Date64,
-                Binary
+                String
             }
             // aliases
             map.insert("tostring".into(), |display_name| {

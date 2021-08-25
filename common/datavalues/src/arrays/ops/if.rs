@@ -115,4 +115,4 @@ impl ArrayIf for DFNullArray {
 
 impl ArrayIf for DFListArray {}
 impl ArrayIf for DFStructArray {}
-impl ArrayIf for DFBinaryArray {}
+impl ArrayIf for DFStringArray {}

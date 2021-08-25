@@ -194,7 +194,7 @@ impl NumOpsDispatch for DFUtf8Array {
 }
 impl NumOpsDispatch for DFBooleanArray {}
 impl NumOpsDispatch for DFListArray {}
-impl NumOpsDispatch for DFBinaryArray {}
+impl NumOpsDispatch for DFStringArray {}
 impl NumOpsDispatch for DFNullArray {}
 impl NumOpsDispatch for DFStructArray {}
 
