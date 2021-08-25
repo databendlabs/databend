@@ -15,56 +15,54 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::sync::Arc;
 
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::catalogs::utils::TableMeta;
 use crate::sql::expression::Expression;
 use crate::sql::parser::ast::BinaryOperator;
 use crate::sql::parser::ast::JoinOperator;
 use crate::sql::planner::binder::ColumnBinding;
-use crate::sql::planner::binder::IndexType;
+use crate::sql::planner::IndexType;
 
 #[derive(Debug, Clone)]
-pub enum Logical {
-    Union(Union),
-    EquiJoin(EquiJoin),
-    Aggregation(Aggregation),
-    Projection(Projection),
-    Filter(Filter),
-    Get(Get),
+pub enum LogicalPlan {
+    Union(LogicalUnion),
+    EquiJoin(LogicalEquiJoin),
+    Aggregation(LogicalAggregation),
+    Projection(LogicalProjection),
+    Filter(LogicalFilter),
+    Get(LogicalGet),
 }
 
-impl Logical {
+impl LogicalPlan {
     pub fn get_column_bindings(&self) -> Vec<ColumnBinding> {
         todo!()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Union {}
+pub struct LogicalUnion {}
 
 // EquiJoin represents join operator with equivalence comparison predicate(i.e. =)
 #[derive(Debug, Clone)]
-pub struct EquiJoin {
+pub struct LogicalEquiJoin {
     pub op: JoinOperator,
     // Equi-join conditions of left and right side
     // Assert `left_conditions.len() == right_conditions.len()`
     pub left_conditions: Vec<Expression>,
     pub right_conditions: Vec<Expression>,
-    pub left_child: Box<Logical>,
-    pub right_child: Box<Logical>,
+    pub left_child: Box<LogicalPlan>,
+    pub right_child: Box<LogicalPlan>,
 }
 
-impl EquiJoin {
+impl LogicalEquiJoin {
     pub fn new(
         op: JoinOperator,
         conditions: Vec<Expression>,
-        left_plan: Logical,
-        right_plan: Logical,
+        left_plan: LogicalPlan,
+        right_plan: LogicalPlan,
     ) -> Result<Self> {
         for cond in conditions.iter() {
             // Check equivalence(=) predicate
@@ -90,7 +88,7 @@ impl EquiJoin {
 
         let (left_conditions, right_conditions) = checked_conditions.into_iter().unzip();
 
-        Ok(EquiJoin {
+        Ok(LogicalEquiJoin {
             op,
             left_conditions,
             right_conditions,
@@ -125,16 +123,16 @@ impl EquiJoin {
 }
 
 #[derive(Debug, Clone)]
-pub struct Aggregation {
+pub struct LogicalAggregation {
     pub group_by: Vec<Expression>,
     pub agg_funcs: Vec<Expression>,
 
-    pub child: Box<Logical>,
+    pub child: Box<LogicalPlan>,
 }
 
-impl Aggregation {
-    pub fn new(group_by: Vec<Expression>, agg_funcs: Vec<Expression>, child: Logical) -> Self {
-        Aggregation {
+impl LogicalAggregation {
+    pub fn new(group_by: Vec<Expression>, agg_funcs: Vec<Expression>, child: LogicalPlan) -> Self {
+        LogicalAggregation {
             group_by,
             agg_funcs,
             child: Box::new(child),
@@ -165,32 +163,30 @@ impl Aggregation {
 }
 
 #[derive(Debug, Clone)]
-pub struct Projection {
+pub struct LogicalProjection {
     pub alias: Vec<(Expression, String)>,
-    pub child: Box<Logical>,
+    pub child: Box<LogicalPlan>,
 }
 
-impl Projection {
-    pub fn new(alias: Vec<(Expression, String)>, child: Logical) -> Self {
-        Projection {
+impl LogicalProjection {
+    pub fn new(alias: Vec<(Expression, String)>, child: LogicalPlan) -> Self {
+        LogicalProjection {
             alias,
             child: Box::new(child),
         }
     }
-
-
 }
 
 #[derive(Debug, Clone)]
-pub struct Filter {
+pub struct LogicalFilter {
     // Conjunctions
     pub predicates: Vec<Expression>,
-    pub child: Box<Logical>,
+    pub child: Box<LogicalPlan>,
 }
 
-impl Filter {
-    pub fn new(predicates: Vec<Expression>, child: Logical) -> Self {
-        Filter {
+impl LogicalFilter {
+    pub fn new(predicates: Vec<Expression>, child: LogicalPlan) -> Self {
+        LogicalFilter {
             predicates,
             child: Box::new(child),
         }
@@ -202,8 +198,9 @@ impl Filter {
 }
 
 #[derive(Clone)]
-pub struct Get {
-    pub table: Arc<TableMeta>,
+pub struct LogicalGet {
+    pub db_name: String,
+    pub table_name: String,
     pub table_index: IndexType,
     pub table_alias: String,
     pub column_names: Vec<String>,
@@ -211,16 +208,18 @@ pub struct Get {
     pub data_types: Vec<DataType>,
 }
 
-impl Get {
+impl LogicalGet {
     pub fn new(
-        table: Arc<TableMeta>,
+        db_name: String,
+        table_name: String,
         table_alias: String,
         table_index: IndexType,
         column_names: Vec<String>,
         data_types: Vec<DataType>,
     ) -> Self {
-        Get {
-            table,
+        LogicalGet {
+            db_name,
+            table_name,
             table_index,
             table_alias,
             column_indexes: column_names
@@ -234,16 +233,18 @@ impl Get {
     }
 
     pub fn get_column_bindings(&self) -> Vec<ColumnBinding> {
-        self.column_indexes.iter().cloned().map(|index| {
-            ColumnBinding {
+        self.column_indexes
+            .iter()
+            .cloned()
+            .map(|index| ColumnBinding {
                 table_index: self.table_index,
                 column_index: index,
-            }
-        }).collect()
+            })
+            .collect()
     }
 }
 
-impl Debug for Get {
+impl Debug for LogicalGet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

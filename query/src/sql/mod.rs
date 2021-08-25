@@ -17,11 +17,11 @@ mod plan_parser_test;
 #[cfg(test)]
 mod sql_parser_test;
 
-mod metrics;
 mod expression;
+mod metrics;
 mod parser;
 mod plan_parser;
-mod planner;
+pub mod planner;
 mod sql_common;
 mod sql_parser;
 mod sql_statement;
@@ -30,3 +30,4 @@ pub use plan_parser::PlanParser;
 pub use sql_common::SQLCommon;
 pub use sql_parser::DfParser;
 pub use sql_statement::*;
+pub use planner::physical_plan::*;

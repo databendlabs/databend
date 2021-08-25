@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
-use crate::sql::planner::binder::BindContext;
-use crate::sql::parser::ast::Expr;
+
 use crate::sql::expression::Expression;
+use crate::sql::parser::ast::Expr;
+use crate::sql::planner::binder::BindContext;
 
 // ExpressionBinder can bind a Expr to Expression with BindContext and do type check
 #[derive(Debug)]

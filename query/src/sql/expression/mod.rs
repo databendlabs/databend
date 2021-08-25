@@ -16,21 +16,47 @@ use std::collections::HashSet;
 
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_exception::Result;
 
 use crate::sql::parser::ast::BinaryOperator;
 use crate::sql::parser::ast::UnaryOperator;
 use crate::sql::planner::ColumnBinding;
-use crate::sql::planner::Logical;
+use crate::sql::planner::LogicalPlan;
+use crate::sql::planner::BindContext;
+
+#[derive(Debug, Clone)]
+pub struct TypedExpression {
+    expr: Expression,
+    data_type: DataType,
+}
+
+impl TypedExpression {
+    pub fn new(expr: Expression, data_type: DataType) -> Self {
+        TypedExpression {
+            expr,
+            data_type,
+        }
+    }
+
+    pub fn get_expr_ref(&self) -> &Expression {
+        &self.expr
+    }
+
+    pub fn get_data_type(&self) -> DataType {
+        self.data_type.clone()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Expression {
     // Column reference
     ColumnRef {
         name: String,
+        // Data type of the ColumnRef, should be filled by Expression::resolve_data_type
+        data_type: Option<DataType>,
         binding: ColumnBinding,
     },
     // Constant value.
-    // Note: When literal represents a column, its column_name will not be None
     Literal {
         value: DataValue,
     },
@@ -71,7 +97,7 @@ pub enum Expression {
     },
     Subquery {
         tp: SubqueryType,
-        subquery: Box<Logical>,
+        subquery: Box<LogicalPlan>,
     },
 }
 
@@ -90,6 +116,10 @@ impl Expression {
 
     // Get return type of Expression
     pub fn data_type(&self) -> DataType {
+        DataType::UInt64
+    }
+
+    pub fn resolve_type(self, _bind_context: &BindContext) -> Result<TypedExpression> {
         todo!()
     }
 

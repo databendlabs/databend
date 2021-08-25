@@ -36,6 +36,7 @@ mod processor;
 mod processor_empty;
 mod processor_merge;
 mod processor_mixed;
+mod pipeline_builder_physical;
 
 pub use pipe::Pipe;
 pub use pipeline::Pipeline;

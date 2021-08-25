@@ -19,11 +19,9 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::planner::expression_binder::ExpressionBinder;
 use crate::catalogs::catalog::Catalog;
 use crate::sessions::DatafuseQueryContextRef;
 use crate::sql::expression::Expression;
-use crate::sql::parser::ast::Expr;
 use crate::sql::parser::ast::Identifier;
 use crate::sql::parser::ast::Indirection;
 use crate::sql::parser::ast::Join;
@@ -36,18 +34,19 @@ use crate::sql::parser::ast::SetExpr;
 use crate::sql::parser::ast::Statement;
 use crate::sql::parser::ast::TableAlias;
 use crate::sql::parser::ast::TableReference;
-use crate::sql::planner::logical_plan::Aggregation;
-use crate::sql::planner::logical_plan::EquiJoin;
-use crate::sql::planner::logical_plan::Filter;
-use crate::sql::planner::logical_plan::Get;
-use crate::sql::planner::logical_plan::Logical;
-use crate::sql::planner::logical_plan::Projection;
+use crate::sql::planner::expression_binder::ExpressionBinder;
+use crate::sql::planner::logical_plan::LogicalAggregation;
+use crate::sql::planner::logical_plan::LogicalEquiJoin;
+use crate::sql::planner::logical_plan::LogicalFilter;
+use crate::sql::planner::logical_plan::LogicalGet;
+use crate::sql::planner::logical_plan::LogicalPlan;
+use crate::sql::planner::logical_plan::LogicalProjection;
 use crate::sql::planner::IndexType;
 
 // Intermediate structures of binding TableReference
 #[derive(Debug)]
 struct BoundTableReference {
-    pub plan: Logical,
+    pub plan: LogicalPlan,
 }
 
 // Intermediate structures of binding Statement
@@ -60,7 +59,7 @@ pub enum BoundStatementType {
 pub struct BoundStatement {
     pub tp: BoundStatementType,
 
-    pub plan: Logical,
+    pub plan: LogicalPlan,
 }
 
 // Intermediate structures of binding Query
@@ -70,7 +69,7 @@ struct BoundQuery {
     pub index: IndexType,
     pub columns: Vec<String>,
     pub data_types: Vec<DataType>,
-    pub plan: Logical,
+    pub plan: LogicalPlan,
 }
 
 pub struct Binder<'a> {
@@ -147,8 +146,8 @@ impl<'a> Binder<'a> {
             let mut binder = ExpressionBinder::new(bind_context);
             let result = binder.bind(expr)?;
             let predicates = Expression::split_predicates(result);
-            let filter = Filter::new(predicates, plan);
-            plan = Logical::Filter(filter);
+            let filter = LogicalFilter::new(predicates, plan);
+            plan = LogicalPlan::Filter(filter);
         }
 
         // Resolve select list first, since we may have GROUP BY clause that depends on this.
@@ -190,7 +189,7 @@ impl<'a> Binder<'a> {
                 })
                 .collect::<Result<_>>()?;
             // Do some validity check
-            Aggregation::check_group_by(&group_bys)?;
+            LogicalAggregation::check_group_by(&group_bys)?;
             for expr in group_bys.iter() {
                 group_keys = group_keys
                     .union(&expr.get_column_bindings())
@@ -208,8 +207,8 @@ impl<'a> Binder<'a> {
                 .flatten()
                 .collect();
 
-            let aggregation_plan = Aggregation::new(group_bys, agg_funcs, plan);
-            plan = Logical::Aggregation(aggregation_plan);
+            let aggregation_plan = LogicalAggregation::new(group_bys, agg_funcs, plan);
+            plan = LogicalPlan::Aggregation(aggregation_plan);
         }
 
         // HAVING clause
@@ -217,18 +216,18 @@ impl<'a> Binder<'a> {
             let mut binder = ExpressionBinder::new(bind_context);
             let expression = binder.bind(expr)?;
             let predicates = Expression::split_predicates(expression);
-            let having_plan = Filter::new(predicates, plan);
-            plan = Logical::Filter(having_plan);
+            let having_plan = LogicalFilter::new(predicates, plan);
+            plan = LogicalPlan::Filter(having_plan);
         }
 
-        let projection = Projection::new(positional_projections, plan);
+        let projection = LogicalProjection::new(positional_projections, plan);
         let query_index = self.bind_context.next_table_index();
         let (columns, data_types): (Vec<String>, Vec<DataType>) = projection
             .alias
             .iter()
             .map(|(expr, name)| (name.to_owned(), expr.data_type()))
             .unzip();
-        plan = Logical::Projection(projection);
+        plan = LogicalPlan::Projection(projection);
 
         Ok(BoundQuery {
             index: query_index,
@@ -268,6 +267,10 @@ impl<'a> Binder<'a> {
                 ident.get_name()
             });
         let mut table_name = table_ident.get_name();
+        let original_table_name = table_name.clone();
+
+        // Get table metadata from catalog
+        // TODO(leiysky): maybe use a more reasonable handle to maintain the information?
         let table_meta = self
             .catalog
             .get_table(db_name.as_str(), table_name.as_str())?;
@@ -302,8 +305,9 @@ impl<'a> Binder<'a> {
         self.bind_context.add_table_binding(table_binding);
 
         Ok(BoundTableReference {
-            plan: Logical::Get(Get::new(
-                table_meta.clone(),
+            plan: LogicalPlan::Get(LogicalGet::new(
+                db_name,
+                original_table_name,
                 table_name,
                 index,
                 columns,
@@ -354,14 +358,14 @@ impl<'a> Binder<'a> {
             join_condition = Expression::split_predicates(predicate);
         }
 
-        let join_plan = EquiJoin::new(
+        let join_plan = LogicalEquiJoin::new(
             join.op.to_owned(),
             join_condition,
             left_result.plan,
             right_result.plan,
         )?;
         Ok(BoundTableReference {
-            plan: Logical::EquiJoin(join_plan),
+            plan: LogicalPlan::EquiJoin(join_plan),
         })
     }
 
@@ -439,6 +443,7 @@ impl<'a> Binder<'a> {
                         let expression = Expression::ColumnRef {
                             name: name.clone(),
                             binding,
+                            data_type: None,
                         };
                         positional_projections.push((expression, name));
                     }
@@ -453,6 +458,7 @@ impl<'a> Binder<'a> {
                                         Expression::ColumnRef {
                                             name: name.clone(),
                                             binding,
+                                            data_type: None,
                                         },
                                         name,
                                     )
@@ -487,8 +493,13 @@ impl BindContext {
     }
 
     pub fn get_table_binding_by_name(&self, table_name: &str) -> Result<TableBinding> {
-        self.name_binding_map.get(table_name).cloned().ok_or(
-            ErrorCode::LogicalError(format!("Cannot find table {} in BindContext", table_name)))
+        self.name_binding_map
+            .get(table_name)
+            .cloned()
+            .ok_or(ErrorCode::LogicalError(format!(
+                "Cannot find table {} in BindContext",
+                table_name
+            )))
     }
 
     pub fn get_column_binding_by_column_name(&self, column_name: &str) -> Result<ColumnBinding> {
@@ -606,9 +617,15 @@ impl TableBinding {
     pub fn get_column_by_index(&self, column_index: IndexType) -> Result<(String, DataType)> {
         assert_eq!(self.columns.len(), self.data_types.len());
         if column_index > self.columns.len() {
-            Err(ErrorCode::LogicalError(format!("Invalid column index {} for table binding {:?}", column_index, &self)))
+            Err(ErrorCode::LogicalError(format!(
+                "Invalid column index {} for table binding {:?}",
+                column_index, &self
+            )))
         } else {
-            Ok((self.columns[column_index].clone(), self.data_types[column_index].clone()))
+            Ok((
+                self.columns[column_index].clone(),
+                self.data_types[column_index].clone(),
+            ))
         }
     }
 
@@ -616,10 +633,13 @@ impl TableBinding {
         assert_eq!(self.columns.len(), self.data_types.len());
         for (index, column) in self.columns.iter().enumerate() {
             if column_name == column.as_str() {
-                Ok((index, self.data_types[index].clone()))
+                return Ok((index, self.data_types[index].clone()));
             }
         }
-        Err(ErrorCode::LogicalError(format!("Cannot find column name {} in table binding {:?}", column_name, &self)))
+        Err(ErrorCode::LogicalError(format!(
+            "Cannot find column name {} in table binding {:?}",
+            column_name, &self
+        )))
     }
 }
 
