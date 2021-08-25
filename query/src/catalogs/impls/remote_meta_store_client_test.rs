@@ -83,6 +83,7 @@ struct DbInfo {
     id: u64,
     tables: HashMap<String, TableInfo>,
 }
+
 #[derive(Clone)]
 struct FakeStoreApis {
     dbs: HashMap<String, DbInfo>,
@@ -91,6 +92,7 @@ struct FakeStoreApis {
     inject_invalid_schema: bool,
     tbl_id_seq: u64,
 }
+
 impl FakeStoreApis {
     pub fn new() -> Self {
         FakeStoreApis {
@@ -123,6 +125,7 @@ impl FakeStoreApis {
         self.inject_timeout = Some(duration);
     }
 }
+
 impl StoreApis for FakeStoreApis {}
 
 #[async_trait::async_trait]
@@ -310,7 +313,7 @@ impl MetaApi for FakeStoreApis {
     }
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_get_database() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -327,13 +330,13 @@ fn test_get_database() -> common_exception::Result<()> {
     }
 
     // db does exists
-    let res = store_client.get_database("test")?;
+    let res = store_client.get_database("test").await?;
     assert_eq!(res.name(), "test");
 
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_get_databases() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -343,13 +346,13 @@ fn test_get_databases() -> common_exception::Result<()> {
     let store_client = RemoteMetaStoreClient::create(provider);
 
     // get databases
-    let res = store_client.get_databases()?;
+    let res = store_client.get_databases().await?;
     assert_eq!(res, vec!["test"]);
 
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_get_table() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -373,7 +376,7 @@ fn test_get_table() -> common_exception::Result<()> {
     assert_eq!(res.meta_ver(), None);
 
     // table does not exist
-    let res = store_client.get_table("test", "t2");
+    let res = store_client.get_table("test", "t2").await;
     assert!(res.is_err());
     if let Err(e) = res {
         assert_eq!(e.code(), ErrorCode::UnknownTable("").code());
@@ -389,7 +392,7 @@ fn test_get_table() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_get_all_tables() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -426,12 +429,12 @@ fn test_get_all_tables() -> common_exception::Result<()> {
     let store_client = RemoteMetaStoreClient::create(provider);
 
     // normal case
-    let res = store_client.get_all_tables()?;
+    let res = store_client.get_all_tables().await?;
     assert_eq!(res.len(), 1);
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_get_table_by_id() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -446,12 +449,12 @@ fn test_get_table_by_id() -> common_exception::Result<()> {
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
     let store_client = RemoteMetaStoreClient::create(provider);
 
-    let res = store_client.get_table_by_id("test", 0, None);
+    let res = store_client.get_table_by_id("test", 0, None).await;
     assert!(res.is_ok());
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_get_db_tables() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -466,7 +469,7 @@ fn test_get_db_tables() -> common_exception::Result<()> {
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
     let store_client = RemoteMetaStoreClient::create(provider);
 
-    let res = store_client.get_databases()?;
+    let res = store_client.get_databases().await?;
     assert_eq!(1, res.len());
     Ok(())
 }
@@ -588,7 +591,7 @@ async fn test_drop_table() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_timeout() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -598,7 +601,7 @@ fn test_timeout() -> common_exception::Result<()> {
     let store_client = RemoteMetaStoreClient::create(provider);
 
     // timeout fault only injected for get_database operation
-    let res = store_client.get_database("test_db");
+    let res = store_client.get_database("test_db").await;
     assert!(res.is_err());
     if let Err(e) = res {
         assert_eq!(e.code(), ErrorCode::Timeout("").code());
@@ -606,7 +609,7 @@ fn test_timeout() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 fn test_invalid_schema() -> common_exception::Result<()> {
     // prepare test data
     let mut fake_apis = FakeStoreApis::new();
@@ -622,7 +625,7 @@ fn test_invalid_schema() -> common_exception::Result<()> {
     let provider = Arc::new(FakeStoreApisProvider::new(fake_apis));
     let store_client = RemoteMetaStoreClient::with_timeout_setting(provider, None);
 
-    let res = store_client.get_all_tables();
+    let res = store_client.get_all_tables().await;
     assert!(res.is_err());
     if let Err(e) = res {
         assert_eq!("Code: 1002, displayText = IPC error: Unable to convert flight data to Arrow schema: IPC error: Unable to get root as message.",

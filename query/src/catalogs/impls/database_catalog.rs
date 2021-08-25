@@ -123,7 +123,7 @@ impl DatabaseCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for DatabaseCatalog {
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         self.databases.read().get(db_name).map_or_else(
             || {
                 if !self.disable_remote {
@@ -139,7 +139,7 @@ impl Catalog for DatabaseCatalog {
         )
     }
 
-    fn get_databases(&self) -> Result<Vec<String>> {
+    async fn get_databases(&self) -> Result<Vec<String>> {
         let locals = self.databases.read();
 
         if self.disable_remote {
@@ -159,13 +159,13 @@ impl Catalog for DatabaseCatalog {
         Ok(r.into_iter().cloned().collect())
     }
 
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
         let database = self.get_database(db_name)?;
         let table = database.get_table(table_name)?;
         Ok(table.clone())
     }
 
-    fn get_table_by_id(
+    async fn get_table_by_id(
         &self,
         db_name: &str,
         table_id: MetaId,
@@ -176,7 +176,7 @@ impl Catalog for DatabaseCatalog {
         Ok(table.clone())
     }
 
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
+    async fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
         let mut results = vec![];
         let mut db_names = HashSet::new();
         for (db_name, v) in self.databases.read().iter() {
@@ -201,7 +201,7 @@ impl Catalog for DatabaseCatalog {
         Ok(results)
     }
 
-    fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>> {
+    async fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>> {
         let table_func_lock = self.table_functions.read();
         let table = table_func_lock.get(name).ok_or_else(|| {
             ErrorCode::UnknownTableFunction(format!("Unknown table function: '{}'", name))

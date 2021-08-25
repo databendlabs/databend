@@ -122,7 +122,7 @@ where T: 'static + StoreApis + Clone
 impl<T> DBMetaStoreClient for RemoteMetaStoreClient<T>
 where T: 'static + StoreApis + Clone
 {
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         let cli_provider = self.store_api_provider.clone();
         let db = {
             let db_name = db_name.to_owned();
@@ -139,7 +139,7 @@ where T: 'static + StoreApis + Clone
         )))
     }
 
-    fn get_databases(&self) -> Result<Vec<String>> {
+    async fn get_databases(&self) -> Result<Vec<String>> {
         let cli_provider = self.store_api_provider.clone();
         let db = self.do_block(async move {
             let mut client = cli_provider.try_get_store_apis().await?;
@@ -158,7 +158,7 @@ where T: 'static + StoreApis + Clone
         )
     }
 
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
         let cli_provider = self.store_api_provider.clone();
         let reply = {
             let tbl_name = table_name.to_string();
@@ -180,7 +180,7 @@ where T: 'static + StoreApis + Clone
         Ok(Arc::new(tbl_meta))
     }
 
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
+    async fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
         let cli = self.store_api_provider.clone();
         let db = self.do_block(async move {
             let mut client = cli.try_get_store_apis().await?;
@@ -212,7 +212,7 @@ where T: 'static + StoreApis + Clone
         }
     }
 
-    fn get_table_by_id(
+    async fn get_table_by_id(
         &self,
         db_name: &str,
         table_id: MetaId,
@@ -247,7 +247,7 @@ where T: 'static + StoreApis + Clone
         Ok(res)
     }
 
-    fn get_db_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>> {
+    async fn get_db_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>> {
         let all_tables = self.get_all_tables()?;
         Ok(all_tables
             .into_iter()

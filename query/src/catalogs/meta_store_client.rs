@@ -32,18 +32,18 @@ use crate::datasources::Database;
 // It should be unified in coming refactorings.
 #[async_trait::async_trait]
 pub trait DBMetaStoreClient: Send + Sync {
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
-    fn get_databases(&self) -> Result<Vec<String>>;
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>>;
-    fn get_table_by_id(
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
+    async fn get_databases(&self) -> Result<Vec<String>>;
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
+    async fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>>;
+    async fn get_table_by_id(
         &self,
         db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
 
-    fn get_db_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>>;
+    async fn get_db_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>>;
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 
