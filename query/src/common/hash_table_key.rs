@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-use crate::common::FastHash;
-
-pub trait HashTableKeyable: FastHash + Eq + Sized + Copy {
+pub trait HashTableKeyable: Eq + Sized + Copy {
     fn is_zero(&self) -> bool;
+    fn fast_hash(&self) -> u64;
     fn eq_with_hash(&self, other_key: &Self) -> bool;
 }
 
@@ -32,6 +30,17 @@ macro_rules! primitive_hasher_impl {
             #[inline(always)]
             fn eq_with_hash(&self, other_key: &Self) -> bool {
                 self == other_key
+            }
+
+            #[inline(always)]
+            fn fast_hash(&self) -> u64 {
+                let mut hash_value = *self as u64;
+                hash_value ^= hash_value >> 33;
+                hash_value = hash_value.wrapping_mul(0xff51afd7ed558ccd_u64);
+                hash_value ^= hash_value >> 33;
+                hash_value = hash_value.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
+                hash_value ^= hash_value >> 33;
+                hash_value
             }
         }
     };

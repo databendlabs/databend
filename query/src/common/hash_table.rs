@@ -20,7 +20,6 @@ use std::mem;
 
 use crate::common::hash_table_entity::HashTableEntity;
 use crate::common::hash_table_grower::Grower;
-use crate::common::hash_table_hasher::FastHash;
 use crate::common::hash_table_iter::HashTableIter;
 use crate::common::hash_table_key::HashTableKeyable;
 

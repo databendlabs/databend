@@ -19,16 +19,14 @@ mod hash_table;
 #[allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
 mod hash_table_entity;
 mod hash_table_grower;
-mod hash_table_hasher;
 mod hash_table_key;
 mod hash_table_iter;
 
 pub use hash_table::HashTable;
-pub use hash_table_hasher::FastHash;
 pub use hash_table_key::HashTableKeyable;
 pub use hash_table_entity::KeyValueEntity;
 pub use hash_table_entity::HashTableEntity;
 pub use hash_table_iter::HashTableIter;
 
-pub type HashMap<Key: HashTableKeyable, Value: Sized + Copy> = HashTable<Key, KeyValueEntity<Key, Value>>;
-pub type HashMapIterator<Key: HashTableKeyable, Value: Sized + Copy> = HashTableIter<Key, KeyValueEntity<Key, Value>>;
+pub type HashMap<Key, Value> = HashTable<Key, KeyValueEntity<Key, Value>>;
+pub type HashMapIterator<Key, Value> = HashTableIter<Key, KeyValueEntity<Key, Value>>;

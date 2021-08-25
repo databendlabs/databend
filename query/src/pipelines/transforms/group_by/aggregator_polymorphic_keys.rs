@@ -8,13 +8,13 @@ use common_datavalues::arrays::{ArrayBuilder, DataArray, PrimitiveArrayBuilder};
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::series::Series;
 
-use crate::common::{HashMap, HashTable, FastHash, HashTableKeyable};
-use crate::pipelines::transforms::group_by::AggregatorDataContainer;
+use crate::common::{HashMap, HashTable, HashTableKeyable};
+use crate::pipelines::transforms::group_by::AggregatorDataState;
 use crate::pipelines::transforms::group_by::aggregator_container::NativeAggregatorDataContainer;
 
 pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashTableKeyable {
-    type DataContainer: AggregatorDataContainer<Method>;
-    fn aggregator_container(&self) -> Self::DataContainer;
+    type DataContainer: AggregatorDataState<Method>;
+    fn aggregate_state(&self) -> Self::DataContainer;
 
     type ArrayBuilder: BinaryKeysArrayBuilder<Method>;
     fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
@@ -22,13 +22,13 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashT
 
 impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     T: DFNumericType,
-    T::Native: std::cmp::Eq + FastHash + Clone + Debug,
+    T::Native: std::cmp::Eq + Clone + Debug,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
-    NativeAggregatorDataContainer<T>: AggregatorDataContainer<HashMethodFixedKeys<T>>,
+    NativeAggregatorDataContainer<T>: AggregatorDataState<HashMethodFixedKeys<T>>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable
 {
     type DataContainer = NativeAggregatorDataContainer<T>;
-    fn aggregator_container(&self) -> Self::DataContainer {
+    fn aggregate_state(&self) -> Self::DataContainer {
         NativeAggregatorDataContainer::<T> {
             data: HashTable::create(),
         }
@@ -78,4 +78,3 @@ impl<T> BinaryKeysArrayBuilder<HashMethodFixedKeys<T>> for NativeBinaryKeysArray
         self.inner_builder.append_value(v)
     }
 }
-

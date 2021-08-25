@@ -20,4 +20,4 @@ mod aggregator_polymorphic_keys;
 
 pub use aggregator::Aggregator;
 pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
-pub use aggregator_container::AggregatorDataContainer;
+pub use aggregator_container::AggregatorDataState;
