@@ -21,6 +21,8 @@ members = [
     "common/stoppable",
     "common/management",
     "common/io",
+    "common/cache",
+    "common/dal",
     "common/indexing",
 
     # Datafuse Query

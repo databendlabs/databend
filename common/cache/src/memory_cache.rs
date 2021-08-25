@@ -382,8 +382,7 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<K, V, S,
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        self.map.get_refresh(k)
-        .map(|v| v as &V)
+        self.map.get_refresh(k).map(|v| v as &V)
     }
 
     /// Inserts a key-value pair into the cache. If the key already existed, the old value is
