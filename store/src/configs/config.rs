@@ -54,7 +54,7 @@ pub struct Config {
     )]
     pub metric_api_address: String,
 
-    #[structopt(long, env = "HTTP_API_ADDRESS", default_value = "127.0.0.1:8181")]
+    #[structopt(long, env = "HTTP_API_ADDRESS", default_value = "127.0.0.1:8081")]
     pub http_api_address: String,
 
     #[structopt(long, env = "TLS_SERVER_CERT", default_value = "")]
