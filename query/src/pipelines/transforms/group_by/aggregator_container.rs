@@ -1,4 +1,4 @@
-use common_datablocks::{HashMethod, HashMethodFixedKeys};
+use common_datablocks::{HashMethod, HashMethodFixedKeys, HashMethodSerializer};
 use common_datavalues::DFNumericType;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -44,3 +44,20 @@ impl<T> AggregatorDataState<HashMethodFixedKeys<T>> for NativeAggregatorDataCont
         self.data.insert_key(key, inserted)
     }
 }
+
+pub struct SerializedAggregatorDataContainer {}
+
+impl AggregatorDataState<HashMethodSerializer> for SerializedAggregatorDataContainer {
+    fn len(&self) -> usize {
+        todo!()
+    }
+
+    fn iter(&self) -> HashMapIterator<Vec<u8>, usize> {
+        todo!()
+    }
+
+    fn insert_key(&mut self, key: &Vec<u8>, inserted: &mut bool) -> *mut KeyValueEntity<Vec<u8>, usize> {
+        todo!()
+    }
+}
+

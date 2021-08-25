@@ -56,8 +56,8 @@ impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value> where Key: 
     }
 
     unsafe fn set_key_and_hash(self: *mut Self, key: &Key, hash: u64) {
-        (*self).key = *key;
         (*self).hash = hash;
+        (*self).key.set_key(key);
     }
 
     fn get_key<'a>(self: *mut Self) -> &'a Key {

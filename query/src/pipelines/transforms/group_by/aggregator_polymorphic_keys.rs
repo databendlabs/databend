@@ -10,7 +10,7 @@ use common_datavalues::series::Series;
 
 use crate::common::{HashMap, HashTable, HashTableKeyable};
 use crate::pipelines::transforms::group_by::AggregatorDataState;
-use crate::pipelines::transforms::group_by::aggregator_container::NativeAggregatorDataContainer;
+use crate::pipelines::transforms::group_by::aggregator_container::{NativeAggregatorDataContainer, SerializedAggregatorDataContainer};
 
 pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashTableKeyable {
     type DataContainer: AggregatorDataState<Method>;
@@ -42,13 +42,17 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     }
 }
 
-// impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
-//     type Builder = ();
-//
-//     fn binary_keys_array_builder(&self, capacity: usize) -> Self::Builder {
-//         unimplemented!()
-//     }
-// }
+impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+    type DataContainer = SerializedAggregatorDataContainer;
+    fn aggregate_state(&self) -> Self::DataContainer {
+        unimplemented!()
+    }
+
+    type ArrayBuilder = SerializedBinaryKeysArrayBuilder;
+    fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+        unimplemented!()
+    }
+}
 
 pub trait BinaryKeysArrayBuilder<Method: HashMethod> {
     fn finish(self) -> Series;
@@ -58,8 +62,7 @@ pub trait BinaryKeysArrayBuilder<Method: HashMethod> {
 pub struct NativeBinaryKeysArrayBuilder<T> where
     T: DFNumericType,
     T::Native: HashTableKeyable,
-    HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
-{
+    HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native> {
     inner_builder: PrimitiveArrayBuilder<T>,
 }
 
@@ -76,5 +79,17 @@ impl<T> BinaryKeysArrayBuilder<HashMethodFixedKeys<T>> for NativeBinaryKeysArray
     #[inline]
     fn append_value(&mut self, v: <HashMethodFixedKeys<T> as HashMethod>::HashKey) {
         self.inner_builder.append_value(v)
+    }
+}
+
+pub struct SerializedBinaryKeysArrayBuilder {}
+
+impl BinaryKeysArrayBuilder<HashMethodSerializer> for SerializedBinaryKeysArrayBuilder {
+    fn finish(self) -> Series {
+        unimplemented!()
+    }
+
+    fn append_value(&mut self, v: <HashMethodSerializer as HashMethod>::HashKey) {
+        unimplemented!()
     }
 }
