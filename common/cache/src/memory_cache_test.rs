@@ -209,7 +209,7 @@ fn test_metered_cache_oversize() {
 #[cfg(feature = "heapsize")]
 #[test]
 fn test_heapsize_cache() {
-    use super::HeapSize;
+    use crate::memory_cache::HeapSize;
 
     let mut cache = LruCache::<&str, (u8, u8, u8), _, _>::with_meter(8, HeapSize);
     cache.insert("foo1", (1, 2, 3));

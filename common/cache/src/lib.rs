@@ -23,3 +23,7 @@ mod memory_cache_test;
 #[allow(dead_code)]
 mod disk_cache;
 mod memory_cache;
+
+pub use disk_cache::LruDiskCache;
+pub use memory_cache::LruCache;
+pub use memory_cache::Meter;
