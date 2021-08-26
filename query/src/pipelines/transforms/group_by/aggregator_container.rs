@@ -8,14 +8,16 @@ use std::ptr::NonNull;
 use std::alloc::Layout;
 use bumpalo::Bump;
 
-pub trait AggregatorDataState<Method: HashMethod> where Method::HashKey: HashTableKeyable {
+pub trait AggregatorDataState<Method: HashMethod> {
+    type HashKeyState: HashTableKeyable;
+
     fn len(&self) -> usize;
 
     fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
 
-    fn iter(&self) -> HashMapIterator<Method::HashKey, usize>;
+    fn iter(&self) -> HashMapIterator<Self::HashKeyState, usize>;
 
-    fn insert_key(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<Method::HashKey, usize>;
+    fn insert_key(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<Self::HashKeyState, usize>;
 }
 
 // TODO: Optimize the type with length below 2
@@ -35,6 +37,8 @@ impl<T> AggregatorDataState<HashMethodFixedKeys<T>> for NativeAggregatorDataCont
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable
 {
+    type HashKeyState = <HashMethodFixedKeys<T> as HashMethod>::HashKey;
+
     #[inline(always)]
     fn len(&self) -> usize {
         self.data.len()
@@ -59,6 +63,8 @@ impl<T> AggregatorDataState<HashMethodFixedKeys<T>> for NativeAggregatorDataCont
 pub struct SerializedAggregatorDataContainer {}
 
 impl AggregatorDataState<HashMethodSerializer> for SerializedAggregatorDataContainer {
+    type HashKeyState = Vec<u8>;
+
     fn len(&self) -> usize {
         todo!()
     }

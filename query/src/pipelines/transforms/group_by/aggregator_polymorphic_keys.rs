@@ -17,7 +17,7 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashT
     type DataContainer: AggregatorDataState<Method>;
     fn aggregate_state(&self) -> Self::DataContainer;
 
-    type ArrayBuilder: BinaryKeysArrayBuilder<Method>;
+    type ArrayBuilder: BinaryKeysArrayBuilder<<Self::DataContainer as AggregatorDataState<Method>>::HashKeyState>;
     fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
 }
 
@@ -25,8 +25,8 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     T: DFNumericType,
     T::Native: std::cmp::Eq + Clone + Debug,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
-    NativeAggregatorDataContainer<T>: AggregatorDataState<HashMethodFixedKeys<T>>,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable
+    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+    NativeAggregatorDataContainer<T>: AggregatorDataState<HashMethodFixedKeys<T>, HashKeyState=T::Native>,
 {
     type DataContainer = NativeAggregatorDataContainer<T>;
     fn aggregate_state(&self) -> Self::DataContainer {
@@ -56,21 +56,17 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     }
 }
 
-pub trait BinaryKeysArrayBuilder<Method: HashMethod> {
+pub trait BinaryKeysArrayBuilder<Value> {
     fn finish(self) -> Series;
-    fn append_value(&mut self, v: Method::HashKey);
+    fn append_value(&mut self, v: &Value);
 }
 
-pub struct NativeBinaryKeysArrayBuilder<T> where
-    T: DFNumericType,
-    T::Native: HashTableKeyable,
-    HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native> {
+pub struct NativeBinaryKeysArrayBuilder<T> where T: DFNumericType {
     inner_builder: PrimitiveArrayBuilder<T>,
 }
 
-impl<T> BinaryKeysArrayBuilder<HashMethodFixedKeys<T>> for NativeBinaryKeysArrayBuilder<T> where
+impl<T> BinaryKeysArrayBuilder<T::Native> for NativeBinaryKeysArrayBuilder<T> where
     T: DFNumericType,
-    T::Native: HashTableKeyable,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
 {
     #[inline]
@@ -79,19 +75,19 @@ impl<T> BinaryKeysArrayBuilder<HashMethodFixedKeys<T>> for NativeBinaryKeysArray
     }
 
     #[inline]
-    fn append_value(&mut self, v: <HashMethodFixedKeys<T> as HashMethod>::HashKey) {
-        self.inner_builder.append_value(v)
+    fn append_value(&mut self, v: &T::Native) {
+        self.inner_builder.append_value(*v)
     }
 }
 
 pub struct SerializedBinaryKeysArrayBuilder {}
 
-impl BinaryKeysArrayBuilder<HashMethodSerializer> for SerializedBinaryKeysArrayBuilder {
+impl BinaryKeysArrayBuilder<Vec<u8>> for SerializedBinaryKeysArrayBuilder {
     fn finish(self) -> Series {
         unimplemented!()
     }
 
-    fn append_value(&mut self, v: <HashMethodSerializer as HashMethod>::HashKey) {
+    fn append_value(&mut self, v: &Vec<u8>) {
         unimplemented!()
     }
 }

@@ -201,7 +201,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
                 bytes.clear();
             }
 
-            group_key_builder.append_value(group_entity.get_key().clone());
+            group_key_builder.append_value(group_entity.get_key());
         }
 
         let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
