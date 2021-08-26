@@ -51,19 +51,26 @@ impl LimitByStream {
     }
 
     pub fn limit_by(&mut self, block: &DataBlock) -> Result<Option<DataBlock>> {
-        let mut filter_vec = MutableBitmap::from_len_zeroed(block.num_rows());
+        let mut filter = MutableBitmap::from_len_zeroed(block.num_rows());
         let method = HashMethodSerializer::default();
         let group_indices = method.group_by_get_indices(block, &self.limit_by_columns_name)?;
 
         for (limit_by_key, (rows, _)) in group_indices {
-            for row in rows {
-                let count = self.keys_count.entry(limit_by_key.clone()).or_default();
+            let count = self.keys_count.entry(limit_by_key.clone()).or_default();
+            // limit reached, no need to check rows
+            if *count >= self.limit {
+                continue;
+            }
+
+            // limit not reached yet, still have room for rows, keep filling with row index
+            let remaining = self.limit - *count;
+            for row in rows.iter().take(std::cmp::min(remaining, rows.len())) {
+                filter.set(*row as usize, *count <= self.limit);
                 *count += 1;
-                filter_vec.set(row as usize, *count <= self.limit);
             }
         }
 
-        let array = BooleanArray::from_data(filter_vec.into(), None);
+        let array = BooleanArray::from_data(filter.into(), None);
         let batch = block.clone().try_into()?;
         let batch = arrow::compute::filter::filter_record_batch(&batch, &array)?;
         Some(batch.try_into()).transpose()
