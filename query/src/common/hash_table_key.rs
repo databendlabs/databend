@@ -13,25 +13,21 @@
 // limitations under the License.
 
 pub trait HashTableKeyable: Eq + Sized {
-    // const BEFORE_EQ_HASH: bool;
+    const BEFORE_EQ_HASH: bool;
 
     fn is_zero(&self) -> bool;
     fn fast_hash(&self) -> u64;
     fn set_key(&mut self, new_value: &Self);
-    fn eq_with_hash(&self, other_key: &Self) -> bool;
 }
 
 macro_rules! primitive_hasher_impl {
     ($primitive_type:ty) => {
         impl HashTableKeyable for $primitive_type {
+            const BEFORE_EQ_HASH: bool = false;
+
             #[inline(always)]
             fn is_zero(&self) -> bool {
                 *self == 0
-            }
-
-            #[inline(always)]
-            fn eq_with_hash(&self, other_key: &Self) -> bool {
-                self == other_key
             }
 
             #[inline(always)]
