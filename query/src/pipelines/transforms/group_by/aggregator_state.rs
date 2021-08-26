@@ -7,8 +7,9 @@ use crate::common::{HashMap, HashTableEntity, KeyValueEntity, HashTableKeyable, 
 use std::ptr::NonNull;
 use std::alloc::Layout;
 use bumpalo::Bump;
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
-pub trait AggregatorDataState<Method: HashMethod> {
+pub trait AggregatorState<Method: HashMethod> {
     type HashKeyState: HashTableKeyable;
 
     fn len(&self) -> usize;
@@ -21,7 +22,7 @@ pub trait AggregatorDataState<Method: HashMethod> {
 }
 
 // TODO: Optimize the type with length below 2
-pub struct NativeAggregatorDataContainer<T> where
+pub struct FixedKeysAggregatorState<T> where
     T: DFNumericType,
     T::Native: std::cmp::Eq + Clone + Debug,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
@@ -31,7 +32,7 @@ pub struct NativeAggregatorDataContainer<T> where
     pub data: HashMap<T::Native, usize>,
 }
 
-impl<T> AggregatorDataState<HashMethodFixedKeys<T>> for NativeAggregatorDataContainer<T> where
+impl<T> AggregatorState<HashMethodFixedKeys<T>> for FixedKeysAggregatorState<T> where
     T: DFNumericType,
     T::Native: std::cmp::Eq + Hash + Clone + Debug,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
@@ -60,25 +61,29 @@ impl<T> AggregatorDataState<HashMethodFixedKeys<T>> for NativeAggregatorDataCont
     }
 }
 
-pub struct SerializedAggregatorDataContainer {}
+pub struct SerializedKeysAggregatorState {
+    pub area: Bump,
+    pub data: HashMap<KeysRef, usize>,
+}
 
-impl AggregatorDataState<HashMethodSerializer> for SerializedAggregatorDataContainer {
-    type HashKeyState = Vec<u8>;
+impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
+    type HashKeyState = KeysRef;
 
     fn len(&self) -> usize {
-        todo!()
+        self.data.len()
     }
 
     fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        todo!()
+        self.area.alloc_layout(layout)
     }
 
-    fn iter(&self) -> HashMapIterator<Vec<u8>, usize> {
-        todo!()
+    fn iter(&self) -> HashMapIterator<KeysRef, usize> {
+        self.data.iter()
     }
 
-    fn insert_key(&mut self, key: &Vec<u8>, inserted: &mut bool) -> *mut KeyValueEntity<Vec<u8>, usize> {
-        todo!()
+    fn insert_key(&mut self, key: &Vec<u8>, inserted: &mut bool) -> *mut KeyValueEntity<KeysRef, usize> {
+        // TODO: move key to global area if inserted. Otherwise, do nothing
+        unimplemented!()
     }
 }
 

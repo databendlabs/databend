@@ -11,17 +11,16 @@ use common_datavalues::prelude::IntoSeries;
 use common_datavalues::series::Series;
 
 use crate::common::{HashMap, HashTable, HashTableKeyable};
-use crate::pipelines::transforms::group_by::aggregator_container::{NativeAggregatorDataContainer, SerializedAggregatorDataContainer};
-use crate::pipelines::transforms::group_by::aggregator_keys::{BinaryKeysArrayBuilder, NativeBinaryKeysArrayBuilder, SerializedBinaryKeysArrayBuilder};
-use crate::pipelines::transforms::group_by::AggregatorDataState;
+use crate::pipelines::transforms::group_by::aggregator_state::{FixedKeysAggregatorState, SerializedKeysAggregatorState};
+use crate::pipelines::transforms::group_by::aggregator_keys_builder::{KeysArrayBuilder, FixedKeysArrayBuilder, SerializedKeysArrayBuilder};
+use crate::pipelines::transforms::group_by::AggregatorState;
 
-pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashTableKeyable {
-    type State: AggregatorDataState<Method>;
+pub trait PolymorphicKeysHelper<Method: HashMethod> {
+    type State: AggregatorState<Method>;
     fn aggregate_state(&self) -> Self::State;
 
-    // TODO: need aggregate state
-    type ArrayBuilder: BinaryKeysArrayBuilder<<Self::State as AggregatorDataState<Method>>::HashKeyState>;
-    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
+    type ArrayBuilder: KeysArrayBuilder<<Self::State as AggregatorState<Method>>::HashKeyState>;
+    fn state_array_builder(&self, capacity: usize, state: &Self::State) -> Self::ArrayBuilder;
 }
 
 impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
@@ -29,32 +28,32 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     T::Native: std::cmp::Eq + Clone + Debug,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
-    NativeAggregatorDataContainer<T>: AggregatorDataState<HashMethodFixedKeys<T>, HashKeyState=T::Native>,
+    FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, HashKeyState=T::Native>,
 {
-    type State = NativeAggregatorDataContainer<T>;
+    type State = FixedKeysAggregatorState<T>;
     fn aggregate_state(&self) -> Self::State {
-        NativeAggregatorDataContainer::<T> {
+        FixedKeysAggregatorState::<T> {
             area: Bump::new(),
             data: HashTable::create(),
         }
     }
 
-    type ArrayBuilder = NativeBinaryKeysArrayBuilder<T>;
-    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
-        NativeBinaryKeysArrayBuilder::<T> {
+    type ArrayBuilder = FixedKeysArrayBuilder<T>;
+    fn state_array_builder(&self, capacity: usize, _: &Self::State) -> Self::ArrayBuilder {
+        FixedKeysArrayBuilder::<T> {
             inner_builder: PrimitiveArrayBuilder::<T>::with_capacity(capacity)
         }
     }
 }
 
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
-    type State = SerializedAggregatorDataContainer;
+    type State = SerializedKeysAggregatorState;
     fn aggregate_state(&self) -> Self::State {
         unimplemented!()
     }
 
-    type ArrayBuilder = SerializedBinaryKeysArrayBuilder;
-    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+    type ArrayBuilder = SerializedKeysArrayBuilder;
+    fn state_array_builder(&self, capacity: usize, state: &Self::State) -> Self::ArrayBuilder {
         unimplemented!()
     }
 }

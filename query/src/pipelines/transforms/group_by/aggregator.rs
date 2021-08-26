@@ -40,9 +40,9 @@ use common_streams::SendableDataBlockStream;
 
 use crate::common::{HashMap, HashTableKeyable, HashTableEntity, HashTable};
 use crate::pipelines::transforms::group_by::aggregator_area::AggregatorArea;
-use crate::pipelines::transforms::group_by::aggregator_container::AggregatorDataState;
+use crate::pipelines::transforms::group_by::aggregator_state::AggregatorState;
 use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParams, AggregatorParamsRef};
-use crate::pipelines::transforms::group_by::aggregator_keys::BinaryKeysArrayBuilder;
+use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct Aggregator<Method: HashMethod> {
@@ -188,7 +188,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
             .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
 
-        let mut group_key_builder = self.method.state_array_builder(groups.len());
+        let mut group_key_builder = self.method.state_array_builder(groups.len(), groups);
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {

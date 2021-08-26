@@ -2,17 +2,19 @@ use common_datablocks::{HashMethod, HashMethodFixedKeys};
 use common_datavalues::arrays::{ArrayBuilder, PrimitiveArrayBuilder};
 use common_datavalues::DFNumericType;
 use common_datavalues::prelude::{IntoSeries, Series};
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
+use toml::map::Keys;
 
-pub trait BinaryKeysArrayBuilder<Value> {
+pub trait KeysArrayBuilder<Value> {
     fn finish(self) -> Series;
     fn append_value(&mut self, v: &Value);
 }
 
-pub struct NativeBinaryKeysArrayBuilder<T> where T: DFNumericType {
+pub struct FixedKeysArrayBuilder<T> where T: DFNumericType {
     pub inner_builder: PrimitiveArrayBuilder<T>,
 }
 
-impl<T> BinaryKeysArrayBuilder<T::Native> for NativeBinaryKeysArrayBuilder<T> where
+impl<T> KeysArrayBuilder<T::Native> for FixedKeysArrayBuilder<T> where
     T: DFNumericType,
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
 {
@@ -29,14 +31,14 @@ impl<T> BinaryKeysArrayBuilder<T::Native> for NativeBinaryKeysArrayBuilder<T> wh
 
 // TODO:
 
-pub struct SerializedBinaryKeysArrayBuilder {}
+pub struct SerializedKeysArrayBuilder {}
 
-impl BinaryKeysArrayBuilder<Vec<u8>> for SerializedBinaryKeysArrayBuilder {
+impl KeysArrayBuilder<KeysRef> for SerializedKeysArrayBuilder {
     fn finish(self) -> Series {
         unimplemented!()
     }
 
-    fn append_value(&mut self, v: &Vec<u8>) {
+    fn append_value(&mut self, v: &KeysRef) {
         unimplemented!()
     }
 }
