@@ -41,17 +41,29 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 ///
 /// For example:
 ///
-/// impl PolymorphicKeysHelper<NewHashMethod> for NewHashMethod {
-///     type State: NewHashMethodDataState;
+/// ```
+/// use common_datablocks::HashMethodSerializer;
+/// use bumpalo::Bump;
+/// use datafuse_query::common::HashTable;
+/// use common_datavalues::arrays::BinaryArrayBuilder;
+/// impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+///     type State = SerializedKeysAggregatorState;
 ///     fn aggregate_state(&self) -> Self::State {
-///         NewHashMethodDataState::create()
+///         SerializedKeysAggregatorState {
+///             keys_area: Bump::new(),
+///             state_area: Bump::new(),
+///             data_state_map: HashTable::create(),
+///         }
 ///     }
 ///
-///     type ArrayBuilder: NewHashMethodArrayBuilder;
+///     type ArrayBuilder = SerializedKeysArrayBuilder;
 ///     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
-///         NewHashMethodArrayBuilder::create()
+///         SerializedKeysArrayBuilder {
+///             inner_builder: BinaryArrayBuilder::with_capacity(capacity),
+///         }
 ///     }
 /// }
+/// ```
 ///
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type State: AggregatorState<Method>;
