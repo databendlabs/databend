@@ -30,6 +30,12 @@ use crate::common::HashTableKeyable;
 use crate::common::KeyValueEntity;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
+/// Aggregate state of the SELECT query, destroy when group by is completed.
+///
+/// It helps manage the following states:
+///     - Aggregate data(HashMap or MergeSort set in future)
+///     - Aggregate function state data memory pool
+///     - Group by key data memory pool (if necessary)
 pub trait AggregatorState<Method: HashMethod> {
     type HashKeyState: HashTableKeyable;
 

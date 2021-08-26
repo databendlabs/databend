@@ -31,6 +31,28 @@ use crate::pipelines::transforms::group_by::aggregator_state::FixedKeysAggregato
 use crate::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::AggregatorState;
 
+/// Provide functions for all HashMethod to help implement polymorphic group by key
+///
+/// When we want to add new HashMethod, we need to add the following components
+///     - HashMethod, more information in [HashMethod] trait
+///     - AggregatorState, more information in [AggregatorState] trait
+///     - KeysArrayBuilder, more information in [KeysArrayBuilder] trait
+///     - PolymorphicKeysHelper, more information in following comments
+///
+/// For example:
+///
+/// impl PolymorphicKeysHelper<NewHashMethod> for NewHashMethod {
+///     type State: NewHashMethodDataState;
+///     fn aggregate_state(&self) -> Self::State {
+///         NewHashMethodDataState::create()
+///     }
+///
+///     type ArrayBuilder: NewHashMethodArrayBuilder;
+///     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+///         NewHashMethodArrayBuilder::create()
+///     }
+/// }
+///
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type State: AggregatorState<Method>;
     fn aggregate_state(&self) -> Self::State;
