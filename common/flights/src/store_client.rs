@@ -27,7 +27,9 @@ use futures::StreamExt;
 use log::info;
 use prost::Message;
 use serde::de::DeserializeOwned;
+use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
+use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
@@ -41,7 +43,7 @@ use crate::RpcClientTlsConfig;
 pub struct StoreClient {
     token: Vec<u8>,
     pub(crate) timeout: Duration,
-    pub(crate) client: FlightServiceClient<tonic::transport::channel::Channel>,
+    pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
 static AUTH_TOKEN_KEY: &str = "auth-token-bin";
@@ -73,11 +75,7 @@ impl StoreClient {
 
         let client = {
             let token = token.clone();
-            FlightServiceClient::with_interceptor(channel, move |mut req: Request<()>| {
-                let metadata = req.metadata_mut();
-                metadata.insert_bin(AUTH_TOKEN_KEY, MetadataValue::from_bytes(&token));
-                Ok(req)
-            })
+            FlightServiceClient::with_interceptor(channel, AuthInterceptor { token })
         };
 
         let rx = Self {
@@ -148,5 +146,21 @@ impl StoreClient {
                 Ok(v)
             }
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct AuthInterceptor {
+    pub token: Vec<u8>,
+}
+
+impl Interceptor for AuthInterceptor {
+    fn call(
+        &mut self,
+        mut req: tonic::Request<()>,
+    ) -> std::result::Result<tonic::Request<()>, tonic::Status> {
+        let metadata = req.metadata_mut();
+        metadata.insert_bin(AUTH_TOKEN_KEY, MetadataValue::from_bytes(&self.token));
+        Ok(req)
     }
 }
