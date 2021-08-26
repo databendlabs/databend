@@ -37,7 +37,9 @@ pub enum DfShowTables {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowDatabases;
+pub struct DfShowDatabases {
+    pub where_opt: Option<Expr>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowSettings;

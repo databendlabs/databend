@@ -76,6 +76,7 @@ use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfParser;
 use crate::sql::DfShowCreateTable;
+use crate::sql::DfShowDatabases;
 use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
@@ -121,9 +122,7 @@ impl PlanParser {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(v),
-            DfStatement::ShowDatabases(_) => {
-                self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
-            }
+            DfStatement::ShowDatabases(v) => self.sql_show_databases_to_plan(v),
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(v),
             DfStatement::DropDatabase(v) => self.sql_drop_database_to_plan(v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(v),
@@ -225,6 +224,23 @@ impl PlanParser {
             engine: create.engine,
             options,
         }))
+    }
+
+    /// DfShowDatabase to plan
+    #[tracing::instrument(level = "info", skip(self, show), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_show_databases_to_plan(&self, show: &DfShowDatabases) -> Result<PlanNode> {
+        let where_clause = match &show.where_opt {
+            Some(expr) => format!("WHERE {}", expr),
+            None => String::from(""),
+        };
+
+        self.build_from_sql(
+            format!(
+                "SELECT name AS Database FROM system.databases {} ORDER BY name",
+                where_clause
+            )
+            .as_str(),
+        )
     }
 
     /// DfDropDatabase to plan.
