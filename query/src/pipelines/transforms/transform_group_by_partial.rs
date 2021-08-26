@@ -272,7 +272,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups, finalized_schema)
             }
             HashMethodKind::KeysU16(hash_method) => {
                 let start = Instant::now();
@@ -288,7 +288,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups, finalized_schema)
 
             }
             HashMethodKind::KeysU32(hash_method) => {
@@ -305,7 +305,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups, finalized_schema)
             }
             HashMethodKind::KeysU64(hash_method) => {
                 let start = Instant::now();
@@ -321,7 +321,7 @@ impl Processor for GroupByPartialTransform {
 
                 let groups = groups_locker.read();
                 let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups.0, finalized_schema)
+                aggregator.aggregate_finalized(&groups, finalized_schema)
             }
         }
     }

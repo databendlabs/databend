@@ -71,10 +71,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
     }
 
     #[inline(never)]
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<(Method::DataContainer, Bump)>> {
+    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<Method::DataContainer>> {
         let hash_method = &self.method;
 
-        let groups_locker = RwLock::new((hash_method.aggregate_state(), Bump::new()));
+        let groups_locker = RwLock::new(hash_method.aggregate_state());
 
         let aggregator_params = self.params.as_ref();
 
@@ -113,14 +113,14 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
             {
                 for group_key in group_keys.iter() {
                     let mut inserted = true;
-                    let entity = groups.0.insert_key(group_key, &mut inserted);
+                    let entity = groups.insert_key(group_key, &mut inserted);
 
                     match inserted {
                         true => {
                             if aggr_len == 0 {
                                 entity.set_value(0);
                             } else {
-                                let place: StateAddr = groups.1.alloc_layout(layout).into();
+                                let place: StateAddr = groups.alloc_layout(layout).into();
                                 for idx in 0..aggr_len {
                                     let aggr_state = offsets_aggregate_states[idx];
                                     let aggr_state_place = place.next(aggr_state);

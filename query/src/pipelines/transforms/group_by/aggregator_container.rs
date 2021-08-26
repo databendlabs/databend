@@ -4,9 +4,14 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use crate::common::{HashMap, HashTableEntity, KeyValueEntity, HashTableKeyable, HashTableIter, HashMapIterator};
+use std::ptr::NonNull;
+use std::alloc::Layout;
+use bumpalo::Bump;
 
 pub trait AggregatorDataState<Method: HashMethod> where Method::HashKey: HashTableKeyable {
     fn len(&self) -> usize;
+
+    fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
 
     fn iter(&self) -> HashMapIterator<Method::HashKey, usize>;
 
@@ -20,6 +25,7 @@ pub struct NativeAggregatorDataContainer<T> where
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable
 {
+    pub area: Bump,
     pub data: HashMap<T::Native, usize>,
 }
 
@@ -29,17 +35,22 @@ impl<T> AggregatorDataState<HashMethodFixedKeys<T>> for NativeAggregatorDataCont
     HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable
 {
-    #[inline]
+    #[inline(always)]
     fn len(&self) -> usize {
         self.data.len()
     }
 
-    #[inline]
+    #[inline(always)]
+    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
+        self.area.alloc_layout(layout)
+    }
+
+    #[inline(always)]
     fn iter(&self) -> HashMapIterator<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
         self.data.iter()
     }
 
-    #[inline]
+    #[inline(always)]
     fn insert_key(&mut self, key: &<HashMethodFixedKeys<T> as HashMethod>::HashKey, inserted: &mut bool) -> *mut KeyValueEntity<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
         self.data.insert_key(key, inserted)
     }
@@ -49,6 +60,10 @@ pub struct SerializedAggregatorDataContainer {}
 
 impl AggregatorDataState<HashMethodSerializer> for SerializedAggregatorDataContainer {
     fn len(&self) -> usize {
+        todo!()
+    }
+
+    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
         todo!()
     }
 

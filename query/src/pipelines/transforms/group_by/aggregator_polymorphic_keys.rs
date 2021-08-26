@@ -11,6 +11,7 @@ use common_datavalues::series::Series;
 use crate::common::{HashMap, HashTable, HashTableKeyable};
 use crate::pipelines::transforms::group_by::AggregatorDataState;
 use crate::pipelines::transforms::group_by::aggregator_container::{NativeAggregatorDataContainer, SerializedAggregatorDataContainer};
+use bumpalo::Bump;
 
 pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashTableKeyable {
     type DataContainer: AggregatorDataState<Method>;
@@ -30,6 +31,7 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     type DataContainer = NativeAggregatorDataContainer<T>;
     fn aggregate_state(&self) -> Self::DataContainer {
         NativeAggregatorDataContainer::<T> {
+            area: Bump::new(),
             data: HashTable::create(),
         }
     }
