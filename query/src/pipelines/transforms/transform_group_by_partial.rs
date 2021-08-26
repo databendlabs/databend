@@ -66,6 +66,37 @@ impl GroupByPartialTransform {
             input: Arc::new(EmptyProcessor::create()),
         }
     }
+
+    fn extract_group_columns(&self) -> Vec<String> {
+        self
+            .group_exprs
+            .iter()
+            .map(|x| x.column_name())
+            .collect::<Vec<_>>()
+    }
+
+    #[inline]
+    async fn aggregate<Method: HashMethod + PolymorphicKeysHelper<Method>>(
+        &self,
+        method: Method,
+        group_cols: Vec<String>,
+    ) -> Result<SendableDataBlockStream>
+    {
+        let start = Instant::now();
+
+        let mut stream = self.input.execute().await?;
+        let aggr_exprs = &self.aggr_exprs;
+        let schema = self.schema_before_group_by.clone();
+        let aggregator = Aggregator::create(method, aggr_exprs, schema)?;
+        let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+
+        let delta = start.elapsed();
+        tracing::debug!("Group by partial cost: {:?}", delta);
+
+        let groups = groups_locker.read();
+        let finalized_schema = self.schema.clone();
+        aggregator.aggregate_finalized(&groups.0, finalized_schema)
+    }
 }
 
 #[async_trait::async_trait]
@@ -108,118 +139,16 @@ impl Processor for GroupByPartialTransform {
     /// 1.2)  serialize the state to the output block
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
-        let group_cols = self
-            .group_exprs
-            .iter()
-            .map(|x| x.column_name())
-            .collect::<Vec<_>>();
+        let group_cols = self.extract_group_columns();
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
-        let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
+        let hash_method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
-        match method {
-            HashMethodKind::Serializer(hash_method) => {
-                let start = Instant::now();
-
-                let mut stream = self.input.execute().await?;
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups, finalized_schema)
-            }
-            HashMethodKind::KeysU8(hash_method) => {
-                let start = Instant::now();
-
-                let mut stream = self.input.execute().await?;
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups, finalized_schema)
-            }
-            HashMethodKind::KeysU16(hash_method) => {
-                let start = Instant::now();
-
-                let mut stream = self.input.execute().await?;
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups, finalized_schema)
-
-            }
-            HashMethodKind::KeysU32(hash_method) => {
-                let start = Instant::now();
-
-                let mut stream = self.input.execute().await?;
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups, finalized_schema)
-            }
-            HashMethodKind::KeysU64(hash_method) => {
-                let start = Instant::now();
-
-                let mut stream = self.input.execute().await?;
-                let aggr_exprs = &self.aggr_exprs;
-                let schema = self.schema_before_group_by.clone();
-                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-
-                let delta = start.elapsed();
-                tracing::debug!("Group by partial cost: {:?}", delta);
-
-                let groups = groups_locker.read();
-                let finalized_schema = self.schema.clone();
-                aggregator.aggregate_finalized(&groups, finalized_schema)
-            }
+        match hash_method {
+            HashMethodKind::KeysU8(method) => self.aggregate(method, group_cols).await,
+            HashMethodKind::KeysU16(method) => self.aggregate(method, group_cols).await,
+            HashMethodKind::KeysU32(method) => self.aggregate(method, group_cols).await,
+            HashMethodKind::KeysU64(method) => self.aggregate(method, group_cols).await,
+            HashMethodKind::Serializer(method) => self.aggregate(method, group_cols).await,
         }
     }
 }
-
-// impl GroupByPartialTransform {
-//     #[inline]
-//     async fn execute_impl<M>(&self, group_cols: Vec<String>, hash_method: M) -> Result<SendableDataBlockStream>
-//         where M: HashMethod + PolymorphicKeysHelper<M>
-//     {
-//         let start = Instant::now();
-//
-//         let mut stream = self.input.execute().await?;
-//         let aggr_exprs = &self.aggr_exprs;
-//         let schema = self.schema_before_group_by.clone();
-//         let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
-//         let groups_locker = aggregator.aggregate(group_cols, stream).await?;
-//
-//         let delta = start.elapsed();
-//         tracing::debug!("Group by partial cost: {:?}", delta);
-//
-//         let groups = groups_locker.read();
-//         let finalized_schema = self.schema.clone();
-//         aggregator.aggregate_finalized(&groups.0, finalized_schema)
-//     }
-// }
