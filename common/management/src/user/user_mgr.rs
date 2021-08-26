@@ -108,8 +108,7 @@ impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
     async fn get_all_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>> {
         let values = self.kv_api.prefix_list_kv(USER_API_KEY_PREFIX).await?;
         let mut r = vec![];
-        for v in values {
-            let (_key, (s, val)) = v;
+        for (_key, (s, val)) in values {
             let u = serde_json::from_slice::<UserInfo>(&val.value)
                 .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
 

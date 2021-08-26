@@ -82,10 +82,12 @@ pub struct AggregateDistinctCombinator {
 impl AggregateDistinctCombinator {
     pub fn try_create_uniq(
         nested_name: &str,
+        params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
         AggregateDistinctCombinator::try_create(
             nested_name,
+            params,
             arguments,
             AggregateCountFunction::try_create,
         )
@@ -93,6 +95,7 @@ impl AggregateDistinctCombinator {
 
     pub fn try_create(
         nested_name: &str,
+        params: Vec<DataValue>,
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
     ) -> Result<Arc<dyn AggregateFunction>> {
@@ -104,7 +107,7 @@ impl AggregateDistinctCombinator {
             _ => arguments.clone(),
         };
 
-        let nested = nested_creator(nested_name, nested_arguments)?;
+        let nested = nested_creator(nested_name, params, nested_arguments)?;
         Ok(Arc::new(AggregateDistinctCombinator {
             nested_name: nested_name.to_owned(),
             arguments,

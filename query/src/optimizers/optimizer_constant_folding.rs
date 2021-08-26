@@ -171,7 +171,12 @@ impl PlanRewriter for ConstantFoldingImpl {
                 let new_expr = self.rewrite_expr(schema, expr)?;
                 Ok(ConstantFoldingImpl::create_sort(asc, nulls_first, new_expr))
             }
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let args = args
                     .iter()
                     .map(|expr| Self::rewrite_expr(self, schema, expr))
@@ -179,7 +184,13 @@ impl PlanRewriter for ConstantFoldingImpl {
 
                 let op = op.clone();
                 let distinct = *distinct;
-                Ok(Expression::AggregateFunction { op, distinct, args })
+                let params = params.clone();
+                Ok(Expression::AggregateFunction {
+                    op,
+                    distinct,
+                    params,
+                    args,
+                })
             }
             _ => Ok(origin.clone()),
         }

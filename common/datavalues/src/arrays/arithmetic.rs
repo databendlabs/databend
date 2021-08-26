@@ -32,6 +32,7 @@ use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
+use num::NumCast;
 use num::ToPrimitive;
 use strength_reduce::StrengthReducedU64;
 
@@ -97,6 +98,7 @@ where
         + Sub<Output = T::Native>
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
+        + NumCast
         + num::Zero,
 {
     type Output = Result<DataArray<T>>;
@@ -143,6 +145,7 @@ where
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
+        + NumCast
         + num::Zero,
 {
     type Output = Result<DataArray<T>>;
@@ -166,6 +169,7 @@ where
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
+        + NumCast
         + num::Zero
         + num::One,
 {
@@ -197,6 +201,7 @@ where
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
+        + NumCast
         + ToPrimitive
         + AsPrimitive<u8>
         + num::Zero
@@ -268,6 +273,7 @@ where
         + Mul<Output = T::Native>
         + Div<Output = T::Native>
         + Rem<Output = T::Native>
+        + NumCast
         + num::Zero
         + num::One,
 {

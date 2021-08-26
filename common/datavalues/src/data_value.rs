@@ -414,11 +414,11 @@ impl fmt::Display for DataValue {
             DataValue::List(Some(v), ..) => {
                 write!(
                     f,
-                    "{}",
+                    "[{}]",
                     v.iter()
                         .map(|v| format!("{}", v))
                         .collect::<Vec<_>>()
-                        .join(",")
+                        .join(", ")
                 )
             }
             DataValue::Struct(v) => write!(f, "{:?}", v),

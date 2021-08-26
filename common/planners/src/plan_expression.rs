@@ -81,6 +81,7 @@ pub enum Expression {
     AggregateFunction {
         op: String,
         distinct: bool,
+        params: Vec<DataValue>,
         args: Vec<Expression>,
     },
 
@@ -126,10 +127,16 @@ impl Expression {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
             Expression::Column(name) => name.clone(),
-            Expression::Literal {
-                column_name: Some(name),
-                ..
-            } => name.clone(),
+            Expression::Literal { value, column_name } => match column_name {
+                Some(name) => name.clone(),
+                None => {
+                    if let DataValue::Utf8(Some(_)) = value {
+                        format!("'{:?}'", value)
+                    } else {
+                        format!("{:?}", value)
+                    }
+                }
+            },
             Expression::UnaryExpression { op, expr } => {
                 format!("({} {})", op, expr.column_name())
             }
@@ -147,12 +154,27 @@ impl Expression {
                     }
                 }
             }
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                let params_name = params
+                    .iter()
+                    .map(|v| DataValue::custom_display(v, true))
+                    .collect::<Vec<_>>();
+
+                let prefix = if params.is_empty() {
+                    op.to_string()
+                } else {
+                    format!("{}({})", op, params_name.join(", "))
+                };
 
                 match distinct {
-                    true => format!("{}(distinct {})", op, args_column_name.join(", ")),
-                    false => format!("{}({})", op, args_column_name.join(", ")),
+                    true => format!("{}(distinct {})", prefix, args_column_name.join(", ")),
+                    false => format!("{}({})", prefix, args_column_name.join(", ")),
                 }
             }
             Expression::Sort { expr, .. } => expr.column_name(),
@@ -255,7 +277,12 @@ impl Expression {
 
     pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {
         match self {
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let mut func_name = op.clone();
                 if *distinct {
                     func_name += "Distinct";
@@ -265,7 +292,7 @@ impl Expression {
                 for arg in args.iter() {
                     fields.push(arg.to_data_field(schema)?);
                 }
-                AggregateFunctionFactory::get(&func_name, fields)
+                AggregateFunctionFactory::get(&func_name, params.clone(), fields)
             }
             _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",
@@ -318,18 +345,29 @@ impl fmt::Debug for Expression {
                 write!(f, ")")
             }
 
-            Expression::AggregateFunction { op, distinct, args } => {
-                write!(f, "{}(", op)?;
-                if *distinct {
-                    write!(f, "distinct ")?;
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
+                let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                let params_name = params
+                    .iter()
+                    .map(|v| DataValue::custom_display(v, true))
+                    .collect::<Vec<_>>();
+
+                if params.is_empty() {
+                    write!(f, "{}", op)?;
+                } else {
+                    write!(f, "{}({})", op, params_name.join(", "))?;
+                };
+
+                match distinct {
+                    true => write!(f, "(distinct {})", args_column_name.join(", "))?,
+                    false => write!(f, "({})", args_column_name.join(", "))?,
                 }
-                for (i, _) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{:?}", args[i],)?;
-                }
-                write!(f, ")")
+                Ok(())
             }
 
             Expression::Sort { expr, .. } => write!(f, "{:?}", expr),

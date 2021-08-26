@@ -18,6 +18,16 @@ use common_exception::Result;
 use crate::prelude::*;
 
 impl DataValue {
+    pub fn custom_display(&self, single_quote: bool) -> String {
+        let s = self.to_string();
+        if single_quote {
+            if let DataValue::Utf8(Some(_)) = self {
+                return format!("'{}'", s);
+            }
+        }
+        s
+    }
+
     pub fn try_from_literal(literal: &str) -> Result<DataValue> {
         match literal.parse::<i64>() {
             Ok(n) => {

@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_metatypes::MatchSeq;
 use common_runtime::tokio;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
-use flaky_test::flaky_test;
-use maplit::hashset;
+use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 use crate::configs;
@@ -33,7 +33,6 @@ use crate::meta_service::NodeId;
 use crate::meta_service::RaftTxId;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
-use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 use crate::tests::service::StoreTestContext;
 
@@ -165,7 +164,8 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -182,7 +182,8 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let (_nid0, tc) = setup_leader().await?;
     let mn0 = tc.meta_nodes[0].clone();
@@ -211,7 +212,8 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
@@ -230,19 +232,19 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[flaky_test]
 async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.
     // - Write to the raft node on the non-leader, expect ForwardToLeader error.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_leader_and_non_voter");
         let _ent = span.enter();
 
-        let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+        let (mut _nlog, tcs) = setup_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
         let all = test_context_nodes(&tcs);
 
         let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
@@ -281,14 +283,14 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[flaky_test]
 async fn test_meta_node_set_file() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and 2 non-voter;
     // - Write to the raft node on every node, expect Ok.
 
     // TODO: test MetaNode.write during leader changes.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_set_file");
@@ -296,7 +298,7 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
 
         tracing::info!("start");
 
-        let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+        let (mut _nlog, tcs) = setup_cluster(btreeset![0, 1, 2], btreeset![3, 4]).await?;
 
         let all = test_context_nodes(&tcs);
 
@@ -317,13 +319,14 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Assert that every node handles AddDatabase request correctly.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_add_database");
         let _ent = span.enter();
 
-        let (_nlog, all_tc) = setup_cluster(hashset![0, 1, 2], hashset![3]).await?;
+        let (_nlog, all_tc) = setup_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
         let all = all_tc
             .iter()
             .map(|tc| tc.meta_nodes[0].clone())
@@ -380,16 +383,120 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
+    // - Bring up a cluster of 3.
+    // - Write just enough logs to trigger a snapshot.
+    // - Add a non-voter, test the snapshot is sync-ed
+    // - Write logs to trigger another snapshot.
+    // - Add
+
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
+
+    // Create a snapshot every 10 logs
+    let snap_logs = 10;
+
+    let mut tc = new_test_context();
+    tc.config.snapshot_logs_since_last = snap_logs;
+    tc.config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
+    let addr = tc.config.meta_api_addr();
+
+    let mn = MetaNode::boot(0, &tc.config).await?;
+
+    assert_meta_connection(&addr).await?;
+
+    wait_for_state(&mn, State::Leader).await?;
+    wait_for_current_leader(&mn, 0).await?;
+
+    let mut n_logs = 2;
+
+    mn.raft
+        .wait(timeout())
+        .log(n_logs, "leader init logs")
+        .await?;
+
+    let n_req = 12;
+
+    for i in 0..n_req {
+        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
+        mn.write(LogEntry {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: key.clone(),
+                seq: MatchSeq::Any,
+                value: Some(b"v".to_vec()),
+                value_meta: None,
+            },
+        })
+        .await?;
+    }
+    n_logs += n_req;
+
+    tracing::info!("--- check the log is locally applied");
+
+    mn.raft
+        .wait(timeout())
+        .log(n_logs, "applied on leader")
+        .await?;
+
+    tracing::info!("--- check the snapshot is created");
+
+    mn.raft
+        .wait(timeout())
+        .metrics(
+            |x| x.snapshot.term == 1 && x.snapshot.index >= 10,
+            "snapshot is created by leader",
+        )
+        .await?;
+
+    tracing::info!("--- start a non_voter to receive snapshot replication");
+
+    let (_, tc1) = setup_non_voter(mn.clone(), 1).await?;
+    n_logs += 1;
+
+    let mn1 = tc1.meta_nodes[0].clone();
+
+    mn1.raft
+        .wait(timeout())
+        .log(n_logs, "non-voter replicated all logs")
+        .await?;
+
+    mn1.raft
+        .wait(timeout())
+        .metrics(
+            |x| x.snapshot.term == 1 && x.snapshot.index >= 10,
+            "snapshot is received by non-voter",
+        )
+        .await?;
+
+    for i in 0..n_req {
+        let key = format!("test_meta_node_snapshot_replication-key-{}", i);
+        let got = mn1.get_kv(&key).await?;
+        match got {
+            None => {
+                panic!("expect get some value for {}", key)
+            }
+            Some((ref _seq, ref v)) => {
+                assert_eq!(v.value, b"v".to_vec());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
     // - Bring up a cluster with 1 leader, 2 followers and 2 non-voters.
     // - Write to leader, check data is replicated.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let span = tracing::span!(tracing::Level::INFO, "test_meta_node_cluster_1_2_2");
     let _ent = span.enter();
 
-    let (mut _nlog, tcs) = setup_cluster(hashset![0, 1, 2], hashset![3, 4]).await?;
+    let (mut _nlog, tcs) = setup_cluster(btreeset![0, 1, 2], btreeset![3, 4]).await?;
     let all = test_context_nodes(&tcs);
 
     _nlog += assert_set_file_synced(all.clone(), "foo-1").await?;
@@ -405,7 +512,8 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Check old data an new written data.
 
     // TODO(xp): this only tests for in-memory storage.
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let (_nid0, tc0) = setup_leader().await?;
     let mn0 = tc0.meta_nodes[0].clone();
@@ -477,7 +585,8 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     //   - TODO(xp): New log will be successfully written and sync
     //   - TODO(xp): A new snapshot will be created and transferred  on demand.
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let mut log_cnt: u64 = 0;
     let (_id, mut tc) = setup_leader().await?;
@@ -535,8 +644,8 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 /// Setup a cluster with several voter and several non_voter
 /// The node id 0 must be in `voters` and node 0 is elected as leader.
 async fn setup_cluster(
-    voters: HashSet<NodeId>,
-    non_voters: HashSet<NodeId>,
+    voters: BTreeSet<NodeId>,
+    non_voters: BTreeSet<NodeId>,
 ) -> anyhow::Result<(u64, Vec<StoreTestContext>)> {
     // TODO(xp): use setup_cluster if possible in tests. Get rid of boilerplate snippets.
     // leader is always node-0
@@ -779,7 +888,7 @@ where T: Fn(&RaftMetrics) -> bool + Send {
 
 /// Make a default timeout for wait() for test.
 fn timeout() -> Option<Duration> {
-    Some(Duration::from_millis(2000))
+    Some(Duration::from_millis(5000))
 }
 
 fn test_context_nodes(tcs: &Vec<StoreTestContext>) -> Vec<Arc<MetaNode>> {

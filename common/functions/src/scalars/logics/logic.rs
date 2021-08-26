@@ -50,6 +50,10 @@ impl Function for LogicFunction {
         "LogicFunction"
     }
 
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        Some((1, 2))
+    }
+
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }

@@ -34,6 +34,9 @@ pub trait ArrayBuilder<N, T> {
 pub trait ArrayDeserializer {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
+    /// If error occurrs, append a null by default
+    fn de_text(&mut self, reader: &[u8]);
+    fn de_null(&mut self);
     fn finish_to_series(&mut self) -> Series;
 }
 

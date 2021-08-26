@@ -58,6 +58,7 @@ mod tests {
         let aggr_expr = Expression::AggregateFunction {
             op: "count".to_string(),
             distinct: false,
+            params: vec![],
             args: vec![Expression::create_literal(DataValue::UInt64(Some(0)))],
         };
 
@@ -77,8 +78,8 @@ mod tests {
         let expect = "\
         Projection: count(0):UInt64\
         \n  AggregatorFinal: groupBy=[[]], aggr=[[count(0)]]\
-        \n    Projection: {\"Struct\":[{\"UInt64\":10000}]} as count(0):Utf8\
-        \n      Expression: {\"Struct\":[{\"UInt64\":10000}]}:Utf8 (Exact Statistics)\
+        \n    Projection: 904e as count(0):Binary\
+        \n      Expression: 904e:Binary (Exact Statistics)\
         \n        ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]";
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);

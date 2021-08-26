@@ -327,6 +327,7 @@ macro_rules! creator {
 pub fn try_create_aggregate_minmax_function(
     is_min: bool,
     display_name: &str,
+    _params: Vec<DataValue>,
     arguments: Vec<DataField>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;

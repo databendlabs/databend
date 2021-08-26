@@ -49,12 +49,12 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    pub async fn write(&mut self, receiver: Result<Receiver<BlockItem>>) -> CHResult<()> {
+    pub async fn write(&mut self, receiver: Result<Receiver<BlockItem>>) -> Result<()> {
         match receiver {
-            Err(error) => self.write_error(error).await.map_err(to_clickhouse_err),
+            Err(error) => self.write_error(error).await,
             Ok(receiver) => {
                 let write_data = self.write_data(receiver);
-                write_data.await.map_err(to_clickhouse_err)
+                write_data.await
             }
         }
     }
@@ -78,6 +78,7 @@ impl<'a> QueryWriter<'a> {
     }
 
     async fn write_error(&mut self, error: ErrorCode) -> Result<()> {
+        log::error!("OnQuery Error: {:?}", error);
         let clickhouse_err = to_clickhouse_err(error);
         match self.conn.write_error(&clickhouse_err).await {
             Ok(_) => Ok(()),
@@ -254,7 +255,10 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                     let vs: Vec<u8> = column
                         .bool()?
                         .downcast_iter()
-                        .map(|c| c.unwrap() as u8)
+                        .map(|c| match c {
+                            Some(c) => c as u8,
+                            None => 0,
+                        })
                         .collect();
                     result.column(name, vs)
                 }

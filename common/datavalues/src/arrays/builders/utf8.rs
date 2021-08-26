@@ -82,6 +82,17 @@ impl ArrayDeserializer for Utf8ArrayBuilder {
     fn finish_to_series(&mut self) -> Series {
         self.finish().into_series()
     }
+
+    fn de_text(&mut self, reader: &[u8]) {
+        match std::str::from_utf8(reader) {
+            Ok(v) => self.append_value(v),
+            Err(_) => self.append_null(),
+        }
+    }
+
+    fn de_null(&mut self) {
+        self.append_null()
+    }
 }
 
 impl<S> NewDataArray<Utf8Type, S> for DFUtf8Array

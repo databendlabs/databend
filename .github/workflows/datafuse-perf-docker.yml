@@ -41,4 +41,4 @@ jobs:
           file: ./docker/perf-tool/Dockerfile
 
       - name: Image digest
-        run: echo ${{ steps.docker_build.outputs.digest }}
+        run: echo ${{ steps.docker_build.outputs.digest }} && cat ./tests/perfs/perfs.yaml

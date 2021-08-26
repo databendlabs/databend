@@ -60,6 +60,7 @@ pub struct ActionFunction {
     pub is_aggregated: bool,
 
     // for functions
+    pub params: Vec<DataValue>,
     pub arg_names: Vec<String>,
     pub arg_types: Vec<DataType>,
 
@@ -98,6 +99,10 @@ impl ActionFunction {
                 "Action must be aggregated function",
             ));
         }
-        AggregateFunctionFactory::get(&self.func_name, self.arg_fields.clone())
+        AggregateFunctionFactory::get(
+            &self.func_name,
+            self.params.clone(),
+            self.arg_fields.clone(),
+        )
     }
 }

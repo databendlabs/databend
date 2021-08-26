@@ -12,7 +12,7 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_ICON: https://avatars.githubusercontent.com/u/80994548?s=200&v=4
           SLACK_COLOR: good
-          SLACK_CHANNEL: datafuse
+          SLACK_CHANNEL: github-activity
           SLACK_MESSAGE: 'start datafuse performance test!'
           SLACK_TITLE: datafuse performance test
           SLACK_USERNAME: datafuse messager
@@ -287,6 +287,7 @@ jobs:
           kubectl wait -n metallb-system --timeout=360s --for condition=Ready --all pods
 
       - name: Start performance testing
+        id: perf
         run: >-
           echo ${{ env.UUID }};
           export ENDPOINT=$(echo $ENDPOINT | grep -oP '(http|https)://\K\S+');
@@ -301,7 +302,11 @@ jobs:
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./current.log s3://$BUCKET/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/log/current.log;
           aws s3 --endpoint-url ${{ env.ENDPOINT }} cp ./ref.log s3://$BUCKET/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/log/ref.log;
           make run_compare;
-          kubectl wait --for=condition=complete jobs --all -n default --timeout=7200s 2>/dev/null
+          kubectl wait --for=condition=complete jobs --all -n default --timeout=7200s 2>/dev/null;
+          export REPORT=${{ env.ENDPOINT }}/report/${{ env.PR_NUMBER}}/${{env.LAST_COMMIT_SHA}}/${{env.UUID}}/performance.html;
+          export UPLOADED=$(for i in {1..10}; do if [[ $(curl -i -s  $REPORT | grep -c "<Code>NoSuchKey</Code>") == 0 ]]; then echo "Uploaded" && break; else kubectl delete jobs -n default --all && make run_compare && kubectl wait --for=condition=complete jobs --all -n default --timeout=7200s 2>/dev/null && echo "retry"; fi; done | grep -c "Uploaded");
+          if [[ $UPLOADED == 0 ]]; then echo "cannot upload compare file to S3" && exit 1; else echo "upload success!"; fi;
+          echo ::set-output name=report::"report url: $REPORT"
       - name: Update status to failure
         if: failure()
         run: |
@@ -310,6 +315,17 @@ jobs:
           -H "Content-Type: application/json" \
           --data '{"state":"failure","context":"run-perf-status","target_url":"'$GITHUB_STATUS_TARGET_URL'"}' \
           "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+      - name: Slack Notification Fail
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://avatars.githubusercontent.com/u/80994548?s=200&v=4
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_CHANNEL: github-activity
+          SLACK_MESSAGE: ${{ env.GITHUB_STATUS_TARGET_URL }}
+          SLACK_TITLE: datafuse performance test
+          SLACK_USERNAME: datafuse messager
       - name: Update status to success
         if: success()
         run: |
@@ -319,6 +335,17 @@ jobs:
           -H "Content-Type: application/json" \
           --data '{"state":"success","context":"run-perf-status","target_url":"'$TARGET_URL'"}' \
           "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$LAST_COMMIT_SHA"
+      - name: Slack Notification Success
+        if: success()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_ICON: https://avatars.githubusercontent.com/u/80994548?s=200&v=4
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_CHANNEL: github-activity
+          SLACK_MESSAGE: ${{ steps.perf.outputs.report }}
+          SLACK_TITLE: datafuse performance test
+          SLACK_USERNAME: datafuse messager
       - name: Delete all resources
         if: always()
         run: |

@@ -75,7 +75,7 @@ fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
         return Ok((lhs.into_series(), rhs.into_series()));
     }
 
-    let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type())?;
+    let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type(), true)?;
 
     let mut left = lhs.clone();
     if lhs.data_type() != dtype {

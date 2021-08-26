@@ -23,6 +23,7 @@ mod optimizer_statistics_exact_test;
 #[cfg(test)]
 mod optimizer_test;
 
+mod metrics;
 mod optimizer;
 mod optimizer_constant_folding;
 mod optimizer_projection_push_down;

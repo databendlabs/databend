@@ -26,6 +26,7 @@ mod aggregate_function;
 mod aggregate_function_factory;
 mod aggregate_function_state;
 mod aggregate_min_max;
+mod aggregate_window_funnel;
 
 // mod aggregate_min_max;
 mod aggregate_sum;

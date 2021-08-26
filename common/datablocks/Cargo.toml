@@ -13,7 +13,6 @@ edition = "2021"
 common-arrow = {path = "../arrow"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
-common-infallible = {path = "../infallible"}
 common-io = {path = "../io"}
 
 
@@ -22,3 +21,6 @@ common-io = {path = "../io"}
 # Crates.io dependencies
 ahash = "0.7.4"
 comfy-table = "4.1.1"
+
+[dev-dependencies]
+pretty_assertions = "0.7"

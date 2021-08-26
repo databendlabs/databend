@@ -50,8 +50,10 @@ use common_planners::TableScanInfo;
 use common_planners::TruncateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
+use common_streams::Source;
+use common_streams::ValueSource;
 use common_tracing::tracing;
-use sqlparser::ast::Expr;
+use nom::FindSubstring;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
@@ -74,6 +76,8 @@ use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfParser;
 use crate::sql::DfShowCreateTable;
+use crate::sql::DfShowDatabases;
+use crate::sql::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
@@ -118,9 +122,7 @@ impl PlanParser {
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(v),
-            DfStatement::ShowDatabases(_) => {
-                self.build_from_sql("SELECT name FROM system.databases ORDER BY name")
-            }
+            DfStatement::ShowDatabases(v) => self.sql_show_databases_to_plan(v),
             DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(v),
             DfStatement::DropDatabase(v) => self.sql_drop_database_to_plan(v),
             DfStatement::CreateTable(v) => self.sql_create_table_to_plan(v),
@@ -129,15 +131,35 @@ impl PlanParser {
             DfStatement::TruncateTable(v) => self.sql_truncate_table_to_plan(v),
             DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(v),
             DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
-
-            // TODO: support like and other filters in show queries
-            DfStatement::ShowTables(_) => self.build_from_sql(
-                format!(
-                    "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
-                    self.ctx.get_current_database()
-                )
-                .as_str(),
-            ),
+            DfStatement::ShowTables(df) => {
+                let show_sql = match df {
+                    DfShowTables::All => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
+                            self.ctx.get_current_database()
+                        )
+                    }
+                    DfShowTables::Like(i) => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
+                            self.ctx.get_current_database(), i,
+                        )
+                    }
+                    DfShowTables::Where(e) => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
+                            self.ctx.get_current_database(), e,
+                        )
+                    }
+                    DfShowTables::FromOrIn(name) => {
+                        format!(
+                            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
+                            name.0[0].value.clone()
+                        )
+                    }
+                };
+                self.build_from_sql(show_sql.as_str())
+            }
             DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
             DfStatement::ShowProcessList(_) => {
                 self.build_from_sql("SELECT * FROM system.processes")
@@ -161,7 +183,10 @@ impl PlanParser {
                 columns,
                 source,
                 ..
-            } => self.insert_to_plan(table_name, columns, source),
+            } => {
+                let format_sql = format!("{}", statement);
+                self.insert_to_plan(table_name, columns, source, &format_sql)
+            }
 
             _ => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported statement {:?}",
@@ -199,6 +224,23 @@ impl PlanParser {
             engine: create.engine,
             options,
         }))
+    }
+
+    /// DfShowDatabase to plan
+    #[tracing::instrument(level = "info", skip(self, show), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_show_databases_to_plan(&self, show: &DfShowDatabases) -> Result<PlanNode> {
+        let where_clause = match &show.where_opt {
+            Some(expr) => format!("WHERE {}", expr),
+            None => String::from(""),
+        };
+
+        self.build_from_sql(
+            format!(
+                "SELECT name AS Database FROM system.databases {} ORDER BY name",
+                where_clause
+            )
+            .as_str(),
+        )
     }
 
     /// DfDropDatabase to plan.
@@ -381,6 +423,7 @@ impl PlanParser {
         table_name: &ObjectName,
         columns: &[Ident],
         source: &Option<Box<Query>>,
+        format_sql: &str,
     ) -> Result<PlanNode> {
         let mut db_name = self.ctx.get_current_database();
         let mut tbl_name = table_name.0[0].value.clone();
@@ -403,50 +446,23 @@ impl PlanParser {
         }
 
         let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
+
         if let Some(source) = source {
-            if let sqlparser::ast::SetExpr::Values(vs) = &source.body {
-                let values = &vs.0;
-                if values.is_empty() {
-                    return Err(ErrorCode::EmptyData(
-                        "empty values for insertion is not allowed",
-                    ));
+            if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
+                tracing::debug!("{:?}", format_sql);
+                let index = format_sql.find_substring(" VALUES ").unwrap();
+                let values = &format_sql[index + " VALUES ".len()..];
+
+                let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+                let mut source = ValueSource::new(values.as_bytes(), schema.clone(), block_size);
+                let mut blocks = vec![];
+                loop {
+                    let block = source.read()?;
+                    match block {
+                        Some(b) => blocks.push(b),
+                        None => break,
+                    }
                 }
-
-                let all_value = values
-                    .iter()
-                    .all(|row| row.iter().all(|item| matches!(item, Expr::Value(_))));
-                if !all_value {
-                    return Err(ErrorCode::UnImplement(
-                        "not support value expressions other than literal value yet",
-                    ));
-                }
-                // Buffers some chunks if possible
-                let chunks = values.chunks(100);
-
-                let blocks: Vec<DataBlock> = chunks
-                    .map(|chunk| {
-                        let transposed: Vec<Vec<String>> = (0..chunk[0].len())
-                            .map(|i| {
-                                chunk
-                                    .iter()
-                                    .map(|inner| match &inner[i] {
-                                        Expr::Value(v) => v.to_string(),
-                                        _ => "N/A".to_string(),
-                                    })
-                                    .collect::<Vec<_>>()
-                            })
-                            .collect();
-
-                        let cols = transposed
-                            .iter()
-                            .map(|col| {
-                                Series::new(col.iter().map(|s| s as &str).collect::<Vec<&str>>())
-                            })
-                            .collect::<Vec<_>>();
-
-                        DataBlock::create_by_array(schema.clone(), cols)
-                    })
-                    .collect();
                 input_stream = futures::stream::iter(blocks);
             }
         }
@@ -455,7 +471,6 @@ impl PlanParser {
             db_name,
             tbl_name,
             schema,
-            // this is crazy, please do not keep it, I am just test driving apis
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
         Ok(PlanNode::InsertInto(plan_node))
@@ -674,7 +689,9 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCode::SyntaxException("Cannot support JOIN clause")),
+            // Such as SELECT * FROM t1, t2;
+            // It's not `JOIN` clause.
+            _ => Result::Err(ErrorCode::SyntaxException("Cannot SELECT multiple tables")),
         }
     }
 
@@ -872,6 +889,38 @@ impl PlanParser {
         }
     }
 
+    fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
+        match value {
+            sqlparser::ast::Value::Number(ref n, _) => {
+                DataValue::try_from_literal(n).map(Expression::create_literal)
+            }
+            sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(Expression::create_literal(
+                DataValue::Utf8(Some(value.clone())),
+            )),
+            sqlparser::ast::Value::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            } => SQLCommon::make_sql_interval_to_literal(
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            ),
+            sqlparser::ast::Value::Boolean(b) => {
+                Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
+            }
+            sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
+            other => Result::Err(ErrorCode::SyntaxException(format!(
+                "Unsupported value expression: {}, type: {:?}",
+                value, other
+            ))),
+        }
+    }
+
     /// Generate a relational expression from a SQL expression
     pub fn sql_to_rex(
         &self,
@@ -879,40 +928,8 @@ impl PlanParser {
         schema: &DataSchema,
         select: Option<&sqlparser::ast::Select>,
     ) -> Result<Expression> {
-        fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
-            match value {
-                sqlparser::ast::Value::Number(ref n, _) => {
-                    DataValue::try_from_literal(n).map(Expression::create_literal)
-                }
-                sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(
-                    Expression::create_literal(DataValue::Utf8(Some(value.clone()))),
-                ),
-                sqlparser::ast::Value::Interval {
-                    value,
-                    leading_field,
-                    leading_precision,
-                    last_field,
-                    fractional_seconds_precision,
-                } => SQLCommon::make_sql_interval_to_literal(
-                    value,
-                    leading_field,
-                    leading_precision,
-                    last_field,
-                    fractional_seconds_precision,
-                ),
-                sqlparser::ast::Value::Boolean(b) => {
-                    Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
-                }
-                sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
-                other => Result::Err(ErrorCode::SyntaxException(format!(
-                    "Unsupported value expression: {}, type: {:?}",
-                    value, other
-                ))),
-            }
-        }
-
         match expr {
-            sqlparser::ast::Expr::Value(value) => value_to_rex(value),
+            sqlparser::ast::Expr::Value(value) => Self::value_to_rex(value),
             sqlparser::ast::Expr::Identifier(ref v) => Ok(Expression::Column(v.clone().value)),
             sqlparser::ast::Expr::BinaryOp { left, op, right } => {
                 Ok(Expression::BinaryExpression {
@@ -971,9 +988,27 @@ impl PlanParser {
                             .collect(),
                         _ => args,
                     };
+
+                    let params = e
+                        .params
+                        .iter()
+                        .map(|v| {
+                            let expr = Self::value_to_rex(v);
+                            if let Ok(Expression::Literal { value, .. }) = expr {
+                                Ok(value)
+                            } else {
+                                Result::Err(ErrorCode::SyntaxException(format!(
+                                    "Unsupported value expression: {:?}, must be datavalue",
+                                    expr
+                                )))
+                            }
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
                     return Ok(Expression::AggregateFunction {
                         op,
                         distinct: e.distinct,
+                        params,
                         args,
                     });
                 }
