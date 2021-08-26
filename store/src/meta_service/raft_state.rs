@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::raft::MembershipConfig;
 use async_raft::storage::HardState;
-use async_raft::LogId;
-use async_raft::SnapshotMeta;
 use common_exception::ErrorCode;
 use common_tracing::tracing;
-use maplit::hashset;
 
 use crate::configs;
 use crate::meta_service::sled_key_space::RaftStateKV;
@@ -138,6 +134,7 @@ impl RaftState {
         Ok(hs)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> common_exception::Result<()> {
         let state = self.state();
         state
@@ -148,6 +145,8 @@ impl RaftState {
             .await?;
         Ok(())
     }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub fn read_state_machine_id(&self) -> common_exception::Result<(u64, u64)> {
         let state = self.state();
         let smid = state.get(&RaftStateKey::StateMachineId)?;
@@ -156,37 +155,6 @@ impl RaftState {
             None => (0, 0),
         };
         Ok(smid)
-    }
-
-    pub async fn write_snapshot_meta(
-        &self,
-        snap_meta: &SnapshotMeta,
-    ) -> common_exception::Result<()> {
-        let state = self.state();
-        state
-            .insert(
-                &RaftStateKey::SnapshotMeta,
-                &RaftStateValue::SnapshotMeta(snap_meta.clone()),
-            )
-            .await?;
-        Ok(())
-    }
-
-    pub fn read_snapshot_meta(&self) -> common_exception::Result<SnapshotMeta> {
-        let state = self.state();
-        let snap_meta = state.get(&RaftStateKey::SnapshotMeta)?;
-        let snap_meta: SnapshotMeta = match snap_meta {
-            Some(v) => v.into(),
-            None => SnapshotMeta {
-                last_log_id: LogId { term: 0, index: 0 },
-                membership: MembershipConfig {
-                    members: hashset![self.id],
-                    members_after_consensus: None,
-                },
-                snapshot_id: "".to_string(),
-            },
-        };
-        Ok(snap_meta)
     }
 
     /// Returns a borrowed sled tree key space to store meta of raft log

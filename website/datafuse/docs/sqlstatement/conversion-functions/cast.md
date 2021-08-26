@@ -11,7 +11,6 @@ Convert a value from one data type to another data type.
 CAST(x AS t)
 ```
 
-
 ## Arguments
 
 | Arguments   | Description |
@@ -22,7 +21,6 @@ CAST(x AS t)
 ## Return Type
 
 Converted value.
-
 
 ## Examples
 

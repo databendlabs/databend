@@ -22,6 +22,9 @@ use log::debug;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
+use crate::meta_service::AppliedState;
+use crate::meta_service::Cmd;
+use crate::meta_service::LogEntry;
 
 #[async_trait::async_trait]
 impl RequestHandler<ReadPlanAction> for ActionHandler {
@@ -54,10 +57,49 @@ impl RequestHandler<TruncateTableAction> for ActionHandler {
             .get(tbl_name)
             .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", tbl_name)))?;
 
-        self.meta_node
-            .remove_table_data_parts(db_name, tbl_name)
-            .await;
+        let cr = LogEntry {
+            txid: None,
+            cmd: Cmd::TruncateTable {
+                db_name: db_name.clone(),
+                table_name: tbl_name.clone(),
+            },
+        };
 
-        Ok(TruncateTableResult {})
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
+
+        match rst {
+            AppliedState::DataPartsCount { prev, result } => {
+                if let Some(prev) = prev {
+                    // only success when prev >= 0 and result == 0
+                    if let Some(result) = result {
+                        if result == 0 {
+                            Ok(TruncateTableResult {
+                                trancated_table_data_parts_count: prev,
+                            })
+                        } else {
+                            Err(ErrorCode::TrancateTableFailedError(format!(
+                                "table trancate failed: {:}",
+                                tbl_name
+                            )))
+                        }
+                    } else {
+                        Err(ErrorCode::TrancateTableFailedError(format!(
+                            "table trancate failed: {:}",
+                            tbl_name
+                        )))
+                    }
+                } else {
+                    Err(ErrorCode::UnknownTable(format!(
+                        "table not found: {:}",
+                        tbl_name
+                    )))
+                }
+            }
+            _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
+        }
     }
 }

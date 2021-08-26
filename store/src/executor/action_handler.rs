@@ -174,6 +174,7 @@ impl ActionHandler {
             Some(projection.to_vec()),
             None,
             Arc::new(|_, _| true),
+            None,
         )?;
 
         // For simplicity, we do the conversion in-memory, to be optimized later

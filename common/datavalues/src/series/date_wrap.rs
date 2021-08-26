@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -150,6 +151,27 @@ macro_rules! impl_dyn_arrays {
 
             fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
                 ArrayCast::cast_with_type(&self.0, data_type)
+            }
+
+            fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series> {
+                if predicate.data_type() != DataType::Boolean {
+                    return Err(ErrorCode::BadDataValueType(
+                        "If function requires the first argument type must be Boolean",
+                    ));
+                }
+
+                if self.data_type() != rhs.data_type() {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "If then else requires the arguments to have the same datatypes ({} != {})",
+                        self.data_type(),
+                        rhs.data_type()
+                    )));
+                }
+
+                Ok(self
+                    .0
+                    .if_then_else(rhs.as_ref().as_ref(), predicate.bool()?)?
+                    .into_series())
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {

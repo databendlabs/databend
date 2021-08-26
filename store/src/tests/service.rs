@@ -18,13 +18,14 @@ use anyhow::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot;
 use common_tracing::tracing;
+// use common_tracing::tracing::Span;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
+// use tracing_appender::non_blocking::WorkerGuard;
 use crate::api::StoreServer;
 use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
-use crate::meta_service::raft_db::init_temp_sled_db;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
@@ -65,6 +66,9 @@ pub struct StoreTestContext {
     #[allow(dead_code)]
     local_fs_tmp_dir: TempDir,
 
+    // /// To hold a per-case logging guard
+    // #[allow(dead_code)]
+    // logging_guard: (WorkerGuard, DefaultGuard),
     pub config: configs::Config,
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
@@ -75,6 +79,8 @@ pub struct StoreTestContext {
 
 /// Create a new Config for test, with unique port assigned
 pub fn new_test_context() -> StoreTestContext {
+    let config_id = next_port();
+
     let mut config = configs::Config::empty();
 
     // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
@@ -83,15 +89,17 @@ pub fn new_test_context() -> StoreTestContext {
         config.meta_no_sync = true;
     }
 
-    // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
-    config.sled_tree_prefix = format!("test-{}-", next_port());
+    config.config_id = format!("{}", config_id);
 
     // By default, create a meta node instead of open an existent one.
     config.single = true;
 
-    config.meta_api_port = next_port();
+    config.meta_api_port = config_id;
 
     let host = "127.0.0.1";
+
+    // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
+    config.sled_tree_prefix = format!("test-{}-", config_id);
 
     {
         let flight_port = next_port();
@@ -150,17 +158,28 @@ pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-    let req = tonic::Request::new(GetReq { key: "foo".into() });
+    let req = tonic::Request::new(GetReq {
+        key: "ensure-connection".into(),
+    });
     let rst = client.get(req).await?.into_inner();
     assert_eq!("", rst.value, "connected");
     Ok(())
 }
 
 /// 1. Open a temp sled::Db for all tests.
-/// 2. initialize tracing
-pub fn init_store_unittest() {
-    let t = tempdir().expect("create temp dir to store meta");
-    init_temp_sled_db(t);
+/// 2. Initialize a global tracing.
+/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
+macro_rules! init_store_ut {
+    () => {{
+        let t = tempfile::tempdir().expect("create temp dir to sled db");
+        crate::meta_service::raft_db::init_temp_sled_db(t);
 
-    common_tracing::init_default_tracing();
+        // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
+        common_tracing::init_default_ut_tracing();
+
+        let name = common_tracing::func_name!();
+        let span =
+            common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
+        ((), span)
+    }};
 }

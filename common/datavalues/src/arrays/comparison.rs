@@ -21,6 +21,7 @@ use common_arrow::arrow::compute::comparison::compare;
 use common_arrow::arrow::compute::comparison::primitive_compare_scalar;
 use common_arrow::arrow::compute::comparison::utf8_compare_scalar;
 use common_arrow::arrow::compute::comparison::Operator;
+use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::like;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -111,7 +112,7 @@ pub trait ArrayCompare<Rhs>: Debug {
 impl<T> DataArray<T>
 where
     T: DFNumericType,
-    T::Native: NumComp,
+    T::Native: NumComp + Simd8,
 {
     /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
     /// the comparison operator.
@@ -122,8 +123,8 @@ where
     }
 
     fn comparison_scalar(&self, rhs: T::Native, op: Operator) -> Result<DFBooleanArray> {
-        let array = Arc::new(primitive_compare_scalar(self.as_ref(), rhs, op)?) as ArrayRef;
-        Ok(array.into())
+        let array = primitive_compare_scalar(self.as_ref(), rhs, op);
+        Ok(DFBooleanArray::from_arrow_array(array))
     }
 }
 
@@ -148,7 +149,7 @@ macro_rules! impl_cmp_common {
 impl<T> ArrayCompare<&DataArray<T>> for DataArray<T>
 where
     T: DFNumericType,
-    T::Native: NumComp,
+    T::Native: NumComp + Simd8,
 {
     fn eq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
         impl_cmp_common! {self, rhs, Eq, eq}
@@ -185,8 +186,8 @@ impl DFBooleanArray {
     }
 
     fn comparison_scalar(&self, rhs: bool, op: Operator) -> Result<DFBooleanArray> {
-        let array = Arc::new(boolean_compare_scalar(self.as_ref(), rhs, op)?) as ArrayRef;
-        Ok(array.into())
+        let array = boolean_compare_scalar(self.as_ref(), rhs, op);
+        Ok(DFBooleanArray::from_arrow_array(array))
     }
 }
 

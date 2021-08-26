@@ -206,6 +206,9 @@ build_exceptions! {
     MetaStoreAlreadyExists(2402),
     MetaStoreNotFound(2403),
 
+    ConcurrentSnapshotInstall(2404),
+    IllegalSnapshot(2405),
+
     // DatafuseStore server error
 
     DatafuseStoreError(2501),
@@ -232,6 +235,7 @@ build_exceptions! {
     IllegalSchema(4005),
     IllegalMetaState(4005),
     MetaNodeInternalError(4006),
+    TrancateTableFailedError(4007),
 
     // storage-api error codes
     IllegalScanPlan(5000),
@@ -240,6 +244,10 @@ build_exceptions! {
 
     // kv-api error codes
     UnknownKey(6000),
+
+
+    // DAL error
+    DALTransportError(7000)
 
 }
 // General errors
@@ -313,9 +321,9 @@ impl From<anyhow::Error> for ErrorCode {
     fn from(error: anyhow::Error) -> Self {
         ErrorCode {
             code: 1002,
-            display_text: String::from(""),
+            display_text: format!("{}, source: {:?}", error, error.source()),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: None,
+            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 }

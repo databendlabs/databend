@@ -14,6 +14,7 @@
 
 mod context;
 mod number;
+mod parquet;
 mod parse_query;
 mod sessions;
 pub(crate) mod tls_constants;
@@ -23,5 +24,6 @@ pub use context::try_create_context;
 pub use context::try_create_context_with_conf;
 pub use context::ClusterNode;
 pub use number::NumberTestData;
+pub use parquet::ParquetTestData;
 pub use parse_query::parse_query;
 pub use sessions::try_create_sessions;

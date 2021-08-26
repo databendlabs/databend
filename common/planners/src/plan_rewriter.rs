@@ -133,13 +133,17 @@ pub trait PlanRewriter {
                 op: op.clone(),
                 args: self.rewrite_exprs(schema, args)?,
             }),
-            Expression::AggregateFunction { op, distinct, args } => {
-                Ok(Expression::AggregateFunction {
-                    op: op.clone(),
-                    distinct: *distinct,
-                    args: self.rewrite_exprs(schema, args)?,
-                })
-            }
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => Ok(Expression::AggregateFunction {
+                op: op.clone(),
+                distinct: *distinct,
+                params: params.clone(),
+                args: self.rewrite_exprs(schema, args)?,
+            }),
             Expression::Sort {
                 expr,
                 asc,
@@ -464,7 +468,12 @@ impl RewriteHelper {
                 }
             }
 
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let new_args: Result<Vec<Expression>> = args
                     .iter()
                     .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
@@ -474,6 +483,7 @@ impl RewriteHelper {
                     Ok(v) => Ok(Expression::AggregateFunction {
                         op: op.clone(),
                         distinct: *distinct,
+                        params: params.clone(),
                         args: v,
                     }),
                     Err(v) => Err(v),
@@ -663,9 +673,15 @@ impl RewriteHelper {
                 op: op.clone(),
                 args: expressions.to_vec(),
             },
-            Expression::AggregateFunction { op, distinct, .. } => Expression::AggregateFunction {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                ..
+            } => Expression::AggregateFunction {
                 op: op.clone(),
                 distinct: *distinct,
+                params: params.clone(),
                 args: expressions.to_vec(),
             },
             other => other.clone(),

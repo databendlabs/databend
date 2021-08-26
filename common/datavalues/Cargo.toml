@@ -17,15 +17,14 @@ common-io = {path = "../io"}
 # Github dependencies
 
 # Crates.io dependencies
-paste = "^1.0"
 num = "^0.4"
-unsafe_unwrap = "^0.1.0"
 ordered-float = "2.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ahash = "0.7.4"
 comfy-table = "4.1.1"
 strength_reduce = "0.2.3"
+lexical-core = "0.7.6"
 
 
 [dev-dependencies]

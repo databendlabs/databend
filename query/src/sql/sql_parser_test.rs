@@ -20,6 +20,7 @@ mod tests {
     use sqlparser::ast::*;
 
     use crate::sql::sql_statement::DfDropDatabase;
+    use crate::sql::sql_statement::DfShowDatabases;
     use crate::sql::sql_statement::DfUseDatabase;
     use crate::sql::*;
 
@@ -222,10 +223,73 @@ mod tests {
 
     #[test]
     fn show_queries() -> Result<()> {
-        // positive case
-        expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables))?;
-        expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
+        use sqlparser::dialect::GenericDialect;
+        use sqlparser::parser::Parser;
+        use sqlparser::tokenizer::Tokenizer;
 
+        // positive case
+        expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
+        expect_parse_ok("SHOW TABLES;", DfStatement::ShowTables(DfShowTables::All))?;
+        expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
+        expect_parse_ok(
+            "SHOW TABLES LIKE 'aaa'",
+            DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
+        )?;
+
+        expect_parse_ok(
+            "SHOW TABLES --comments should not in sql case1",
+            DfStatement::ShowTables(DfShowTables::All),
+        )?;
+
+        expect_parse_ok(
+            "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
+            DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
+        )?;
+
+        let parse_sql_to_expr = |query_expr: &str| -> Expr {
+            let dialect = GenericDialect {};
+            let mut tokenizer = Tokenizer::new(&dialect, &query_expr);
+            let tokens = tokenizer.tokenize().unwrap();
+            let mut parser = Parser::new(tokens, &dialect);
+            return parser.parse_expr().unwrap();
+        };
+
+        expect_parse_ok(
+            "SHOW TABLES WHERE t LIKE 'aaa'",
+            DfStatement::ShowTables(DfShowTables::Where(parse_sql_to_expr("t LIKE 'aaa'"))),
+        )?;
+
+        expect_parse_ok(
+            "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
+            DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
+        )?;
+
+        expect_parse_ok(
+            "SHOW TABLES WHERE t LIKE 'aaa' AND t LIKE 'a%'",
+            DfStatement::ShowTables(DfShowTables::Where(parse_sql_to_expr(
+                "t LIKE 'aaa' AND t LIKE 'a%'",
+            ))),
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn show_tables_test() -> Result<()> {
+        let mut ident = Ident::new("ss");
+        ident.quote_style = Some('`');
+        let v = vec![ident];
+        let name = ObjectName(v);
+        let name_two = name.clone();
+
+        expect_parse_ok(
+            "SHOW TABLES FROM `ss`",
+            DfStatement::ShowTables(DfShowTables::FromOrIn(name)),
+        )?;
+        expect_parse_ok(
+            "SHOW TABLES IN `ss`",
+            DfStatement::ShowTables(DfShowTables::FromOrIn(name_two)),
+        )?;
         Ok(())
     }
 
@@ -291,6 +355,75 @@ mod tests {
             let expected = DfHint::create_from_comment(comment, "--");
             assert_eq!(expected.error_code, None);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn show_databases_test() -> Result<()> {
+        expect_parse_ok(
+            "SHOW DATABASES",
+            DfStatement::ShowDatabases(DfShowDatabases { where_opt: None }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES;",
+            DfStatement::ShowDatabases(DfShowDatabases { where_opt: None }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES WHERE Database = 'ss'",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Eq,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("ss".to_string()))),
+                }),
+            }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES WHERE Database Like 'ss%'",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Like,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("ss%".to_string()))),
+                }),
+            }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES LIKE 'ss%'",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Like,
+                    right: Box::new(Expr::Value(Value::SingleQuotedString("ss%".to_string()))),
+                }),
+            }),
+        )?;
+
+        expect_parse_ok(
+            "SHOW DATABASES LIKE SUBSTRING('ss%' FROM 1 FOR 3)",
+            DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(Expr::BinaryOp {
+                    left: Box::new(Expr::Identifier(Ident::new("name"))),
+                    op: BinaryOperator::Like,
+                    right: Box::new(Expr::Substring {
+                        expr: Box::new(Expr::Value(Value::SingleQuotedString("ss%".to_string()))),
+                        substring_from: Some(Box::new(Expr::Value(Value::Number(
+                            "1".to_string(),
+                            false,
+                        )))),
+                        substring_for: Some(Box::new(Expr::Value(Value::Number(
+                            "3".to_string(),
+                            false,
+                        )))),
+                    }),
+                }),
+            }),
+        )?;
 
         Ok(())
     }

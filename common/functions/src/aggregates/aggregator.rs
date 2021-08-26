@@ -18,6 +18,7 @@ use super::aggregate_arg_min_max::try_create_aggregate_arg_minmax_function;
 use super::aggregate_avg::try_create_aggregate_avg_function;
 use super::aggregate_min_max::try_create_aggregate_minmax_function;
 use super::aggregate_sum::try_create_aggregate_sum_function;
+use super::aggregate_window_funnel::try_create_aggregate_window_funnel_function;
 use crate::aggregates::aggregate_function_factory::FactoryCombinatorFuncRef;
 use crate::aggregates::aggregate_function_factory::FactoryFuncRef;
 use crate::aggregates::AggregateCountFunction;
@@ -34,18 +35,23 @@ impl Aggregators {
         map.insert("sum".into(), try_create_aggregate_sum_function);
         map.insert("avg".into(), try_create_aggregate_avg_function);
 
-        map.insert("min".into(), |display_name, arguments| {
-            try_create_aggregate_minmax_function(true, display_name, arguments)
+        map.insert("min".into(), |display_name, params, arguments| {
+            try_create_aggregate_minmax_function(true, display_name, params, arguments)
         });
-        map.insert("max".into(), |display_name, arguments| {
-            try_create_aggregate_minmax_function(false, display_name, arguments)
+        map.insert("max".into(), |display_name, params, arguments| {
+            try_create_aggregate_minmax_function(false, display_name, params, arguments)
         });
-        map.insert("argMin".into(), |display_name, arguments| {
-            try_create_aggregate_arg_minmax_function(true, display_name, arguments)
+        map.insert("argMin".into(), |display_name, params, arguments| {
+            try_create_aggregate_arg_minmax_function(true, display_name, params, arguments)
         });
-        map.insert("argMax".into(), |display_name, arguments| {
-            try_create_aggregate_arg_minmax_function(false, display_name, arguments)
+        map.insert("argMax".into(), |display_name, params, arguments| {
+            try_create_aggregate_arg_minmax_function(false, display_name, params, arguments)
         });
+
+        map.insert(
+            "windowFunnel".into(),
+            try_create_aggregate_window_funnel_function,
+        );
 
         map.insert("uniq".into(), AggregateDistinctCombinator::try_create_uniq);
         Ok(())

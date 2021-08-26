@@ -63,6 +63,21 @@ impl ArrayDeserializer for BooleanArrayBuilder {
     fn finish_to_series(&mut self) -> Series {
         self.finish().into_series()
     }
+
+    fn de_text(&mut self, reader: &[u8]) {
+        let v = if reader.eq_ignore_ascii_case(b"false") {
+            Some(false)
+        } else if reader.eq_ignore_ascii_case(b"true") {
+            Some(true)
+        } else {
+            None
+        };
+        self.append_option(v);
+    }
+
+    fn de_null(&mut self) {
+        self.append_null()
+    }
 }
 
 impl BooleanArrayBuilder {
