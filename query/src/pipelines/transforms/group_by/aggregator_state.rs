@@ -62,28 +62,42 @@ impl<T> AggregatorState<HashMethodFixedKeys<T>> for FixedKeysAggregatorState<T> 
 }
 
 pub struct SerializedKeysAggregatorState {
-    pub area: Bump,
-    pub data: HashMap<KeysRef, usize>,
+    pub keys_area: Bump,
+    pub state_area: Bump,
+    pub data_state_map: HashMap<KeysRef, usize>,
 }
 
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     type HashKeyState = KeysRef;
 
     fn len(&self) -> usize {
-        self.data.len()
+        self.data_state_map.len()
     }
 
     fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        self.area.alloc_layout(layout)
+        self.state_area.alloc_layout(layout)
     }
 
     fn iter(&self) -> HashMapIterator<KeysRef, usize> {
-        self.data.iter()
+        self.data_state_map.iter()
     }
 
-    fn insert_key(&mut self, key: &Vec<u8>, inserted: &mut bool) -> *mut KeyValueEntity<KeysRef, usize> {
-        // TODO: move key to global area if inserted. Otherwise, do nothing
-        unimplemented!()
+    fn insert_key(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut KeyValueEntity<KeysRef, usize> {
+        let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
+        let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
+
+        if *inserted {
+            unsafe {
+                // Keys will be destroyed after call we need copy the keys to the memory pool.
+                let global_keys = self.keys_area.alloc_slice_copy(keys);
+                let inserted_hash = state_entity.get_hash();
+                keys_ref.address = global_keys.as_ptr() as usize;
+                // TODO: maybe need set key method.
+                state_entity.set_key_and_hash(&keys_ref, inserted_hash)
+            }
+        }
+
+        state_entity
     }
 }
 

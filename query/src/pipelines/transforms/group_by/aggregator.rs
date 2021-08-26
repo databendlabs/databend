@@ -187,7 +187,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
             .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
 
-        let mut group_key_builder = self.method.state_array_builder(groups.len(), groups);
+        let mut group_key_builder = self.method.state_array_builder(groups.len());
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {

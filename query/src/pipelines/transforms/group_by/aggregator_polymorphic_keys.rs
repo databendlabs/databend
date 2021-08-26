@@ -6,7 +6,7 @@ use bumpalo::Bump;
 
 use common_datablocks::{HashMethod, HashMethodFixedKeys, HashMethodSerializer};
 use common_datavalues::{DFNumericType, DFPrimitiveType};
-use common_datavalues::arrays::{ArrayBuilder, DataArray, PrimitiveArrayBuilder};
+use common_datavalues::arrays::{ArrayBuilder, DataArray, PrimitiveArrayBuilder, BinaryArrayBuilder};
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::series::Series;
 
@@ -20,7 +20,7 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     fn aggregate_state(&self) -> Self::State;
 
     type ArrayBuilder: KeysArrayBuilder<<Self::State as AggregatorState<Method>>::HashKeyState>;
-    fn state_array_builder(&self, capacity: usize, state: &Self::State) -> Self::ArrayBuilder;
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
 }
 
 impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
@@ -39,7 +39,7 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     }
 
     type ArrayBuilder = FixedKeysArrayBuilder<T>;
-    fn state_array_builder(&self, capacity: usize, _: &Self::State) -> Self::ArrayBuilder {
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
         FixedKeysArrayBuilder::<T> {
             inner_builder: PrimitiveArrayBuilder::<T>::with_capacity(capacity)
         }
@@ -49,11 +49,17 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     type State = SerializedKeysAggregatorState;
     fn aggregate_state(&self) -> Self::State {
-        unimplemented!()
+        SerializedKeysAggregatorState {
+            keys_area: Bump::new(),
+            state_area: Bump::new(),
+            data_state_map: HashTable::create(),
+        }
     }
 
     type ArrayBuilder = SerializedKeysArrayBuilder;
-    fn state_array_builder(&self, capacity: usize, state: &Self::State) -> Self::ArrayBuilder {
-        unimplemented!()
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+        SerializedKeysArrayBuilder {
+            inner_builder: BinaryArrayBuilder::with_capacity(capacity)
+        }
     }
 }
