@@ -2,6 +2,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
+use bumpalo::Bump;
+
 use common_datablocks::{HashMethod, HashMethodFixedKeys, HashMethodSerializer};
 use common_datavalues::{DFNumericType, DFPrimitiveType};
 use common_datavalues::arrays::{ArrayBuilder, DataArray, PrimitiveArrayBuilder};
@@ -9,16 +11,17 @@ use common_datavalues::prelude::IntoSeries;
 use common_datavalues::series::Series;
 
 use crate::common::{HashMap, HashTable, HashTableKeyable};
-use crate::pipelines::transforms::group_by::AggregatorDataState;
 use crate::pipelines::transforms::group_by::aggregator_container::{NativeAggregatorDataContainer, SerializedAggregatorDataContainer};
-use bumpalo::Bump;
+use crate::pipelines::transforms::group_by::aggregator_keys::{BinaryKeysArrayBuilder, NativeBinaryKeysArrayBuilder, SerializedBinaryKeysArrayBuilder};
+use crate::pipelines::transforms::group_by::AggregatorDataState;
 
 pub trait PolymorphicKeysHelper<Method: HashMethod> where Method::HashKey: HashTableKeyable {
-    type DataContainer: AggregatorDataState<Method>;
-    fn aggregate_state(&self) -> Self::DataContainer;
+    type State: AggregatorDataState<Method>;
+    fn aggregate_state(&self) -> Self::State;
 
-    type ArrayBuilder: BinaryKeysArrayBuilder<<Self::DataContainer as AggregatorDataState<Method>>::HashKeyState>;
-    fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
+    // TODO: need aggregate state
+    type ArrayBuilder: BinaryKeysArrayBuilder<<Self::State as AggregatorDataState<Method>>::HashKeyState>;
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
 }
 
 impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
@@ -28,8 +31,8 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
     NativeAggregatorDataContainer<T>: AggregatorDataState<HashMethodFixedKeys<T>, HashKeyState=T::Native>,
 {
-    type DataContainer = NativeAggregatorDataContainer<T>;
-    fn aggregate_state(&self) -> Self::DataContainer {
+    type State = NativeAggregatorDataContainer<T>;
+    fn aggregate_state(&self) -> Self::State {
         NativeAggregatorDataContainer::<T> {
             area: Bump::new(),
             data: HashTable::create(),
@@ -37,7 +40,7 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     }
 
     type ArrayBuilder = NativeBinaryKeysArrayBuilder<T>;
-    fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
         NativeBinaryKeysArrayBuilder::<T> {
             inner_builder: PrimitiveArrayBuilder::<T>::with_capacity(capacity)
         }
@@ -45,49 +48,13 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
 }
 
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
-    type DataContainer = SerializedAggregatorDataContainer;
-    fn aggregate_state(&self) -> Self::DataContainer {
+    type State = SerializedAggregatorDataContainer;
+    fn aggregate_state(&self) -> Self::State {
         unimplemented!()
     }
 
     type ArrayBuilder = SerializedBinaryKeysArrayBuilder;
-    fn binary_keys_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
-        unimplemented!()
-    }
-}
-
-pub trait BinaryKeysArrayBuilder<Value> {
-    fn finish(self) -> Series;
-    fn append_value(&mut self, v: &Value);
-}
-
-pub struct NativeBinaryKeysArrayBuilder<T> where T: DFNumericType {
-    inner_builder: PrimitiveArrayBuilder<T>,
-}
-
-impl<T> BinaryKeysArrayBuilder<T::Native> for NativeBinaryKeysArrayBuilder<T> where
-    T: DFNumericType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
-{
-    #[inline]
-    fn finish(mut self) -> Series {
-        self.inner_builder.finish().array.into_series()
-    }
-
-    #[inline]
-    fn append_value(&mut self, v: &T::Native) {
-        self.inner_builder.append_value(*v)
-    }
-}
-
-pub struct SerializedBinaryKeysArrayBuilder {}
-
-impl BinaryKeysArrayBuilder<Vec<u8>> for SerializedBinaryKeysArrayBuilder {
-    fn finish(self) -> Series {
-        unimplemented!()
-    }
-
-    fn append_value(&mut self, v: &Vec<u8>) {
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
         unimplemented!()
     }
 }

@@ -17,6 +17,7 @@ mod aggregator_area;
 mod aggregator_params;
 mod aggregator_container;
 mod aggregator_polymorphic_keys;
+mod aggregator_keys;
 
 pub use aggregator::Aggregator;
 pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;

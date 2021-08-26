@@ -42,7 +42,7 @@ use crate::common::{HashMap, HashTableKeyable, HashTableEntity, HashTable};
 use crate::pipelines::transforms::group_by::aggregator_area::AggregatorArea;
 use crate::pipelines::transforms::group_by::aggregator_container::AggregatorDataState;
 use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParams, AggregatorParamsRef};
-use crate::pipelines::transforms::group_by::aggregator_polymorphic_keys::BinaryKeysArrayBuilder;
+use crate::pipelines::transforms::group_by::aggregator_keys::BinaryKeysArrayBuilder;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct Aggregator<Method: HashMethod> {
@@ -71,7 +71,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
     }
 
     #[inline(never)]
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<Method::DataContainer>> {
+    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<Method::State>> {
         let hash_method = &self.method;
 
         let groups_locker = RwLock::new(hash_method.aggregate_state());
@@ -167,7 +167,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
 
     pub fn aggregate_finalized(
         &self,
-        groups: &Method::DataContainer,
+        groups: &Method::State,
         schema: DataSchemaRef,
     ) -> Result<SendableDataBlockStream> {
         if groups.len() == 0 {
@@ -188,7 +188,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
             .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
 
-        let mut group_key_builder = self.method.binary_keys_array_builder(groups.len());
+        let mut group_key_builder = self.method.state_array_builder(groups.len());
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {
