@@ -32,11 +32,10 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>> {
     zero_entity_raw: Option<*mut u8>,
 
     /// Generics hold
-    generics_hold: PhantomData<(Key)>,
+    generics_hold: PhantomData<Key>,
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key, Entity>
-{
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key, Entity> {
     fn drop(&mut self) {
         unsafe {
             let size = (self.grower.max_size() as usize) * mem::size_of::<Entity>();

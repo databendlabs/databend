@@ -1,23 +1,43 @@
-use common_datablocks::{HashMethod, HashMethodFixedKeys};
-use common_datavalues::arrays::{ArrayBuilder, PrimitiveArrayBuilder, BinaryArrayBuilder};
+// Copyright 2020 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodFixedKeys;
+use common_datavalues::arrays::ArrayBuilder;
+use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::PrimitiveArrayBuilder;
+use common_datavalues::prelude::IntoSeries;
+use common_datavalues::prelude::Series;
 use common_datavalues::DFNumericType;
-use common_datavalues::prelude::{IntoSeries, Series};
+
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
-use toml::map::Keys;
-use crate::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 
 pub trait KeysArrayBuilder<Value> {
     fn finish(self) -> Series;
     fn append_value(&mut self, v: &Value);
 }
 
-pub struct FixedKeysArrayBuilder<T> where T: DFNumericType {
+pub struct FixedKeysArrayBuilder<T>
+where T: DFNumericType
+{
     pub inner_builder: PrimitiveArrayBuilder<T>,
 }
 
-impl<T> KeysArrayBuilder<T::Native> for FixedKeysArrayBuilder<T> where
+impl<T> KeysArrayBuilder<T::Native> for FixedKeysArrayBuilder<T>
+where
     T: DFNumericType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T::Native>,
 {
     #[inline]
     fn finish(mut self) -> Series {

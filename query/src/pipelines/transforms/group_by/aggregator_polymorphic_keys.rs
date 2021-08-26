@@ -1,18 +1,34 @@
+// Copyright 2020 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::fmt::Debug;
-use std::hash::Hash;
-use std::marker::PhantomData;
 
 use bumpalo::Bump;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodFixedKeys;
+use common_datablocks::HashMethodSerializer;
+use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::PrimitiveArrayBuilder;
+use common_datavalues::DFNumericType;
 
-use common_datablocks::{HashMethod, HashMethodFixedKeys, HashMethodSerializer};
-use common_datavalues::{DFNumericType, DFPrimitiveType};
-use common_datavalues::arrays::{ArrayBuilder, DataArray, PrimitiveArrayBuilder, BinaryArrayBuilder};
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::series::Series;
-
-use crate::common::{HashMap, HashTable, HashTableKeyable};
-use crate::pipelines::transforms::group_by::aggregator_state::{FixedKeysAggregatorState, SerializedKeysAggregatorState};
-use crate::pipelines::transforms::group_by::aggregator_keys_builder::{KeysArrayBuilder, FixedKeysArrayBuilder, SerializedKeysArrayBuilder};
+use crate::common::HashTable;
+use crate::common::HashTableKeyable;
+use crate::pipelines::transforms::group_by::aggregator_keys_builder::FixedKeysArrayBuilder;
+use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
+use crate::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
+use crate::pipelines::transforms::group_by::aggregator_state::FixedKeysAggregatorState;
+use crate::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::AggregatorState;
 
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
@@ -23,12 +39,13 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
 }
 
-impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
+impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T>
+where
     T: DFNumericType,
     T::Native: std::cmp::Eq + Clone + Debug,
-    HashMethodFixedKeys<T>: HashMethod<HashKey=T::Native>,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T::Native>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
-    FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, HashKeyState=T::Native>,
+    FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, HashKeyState = T::Native>,
 {
     type State = FixedKeysAggregatorState<T>;
     fn aggregate_state(&self) -> Self::State {
@@ -41,7 +58,7 @@ impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T> where
     type ArrayBuilder = FixedKeysArrayBuilder<T>;
     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
         FixedKeysArrayBuilder::<T> {
-            inner_builder: PrimitiveArrayBuilder::<T>::with_capacity(capacity)
+            inner_builder: PrimitiveArrayBuilder::<T>::with_capacity(capacity),
         }
     }
 }
@@ -59,7 +76,7 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     type ArrayBuilder = SerializedKeysArrayBuilder;
     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
         SerializedKeysArrayBuilder {
-            inner_builder: BinaryArrayBuilder::with_capacity(capacity)
+            inner_builder: BinaryArrayBuilder::with_capacity(capacity),
         }
     }
 }

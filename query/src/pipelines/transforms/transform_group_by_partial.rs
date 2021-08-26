@@ -13,34 +13,22 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
-use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
 
-use bumpalo::Bump;
-use byteorder::ByteOrder;
-use byteorder::LittleEndian;
-use common_datablocks::{DataBlock, HashMethodKeysU8};
+use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
-use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::aggregates::get_layout_offsets;
-use common_functions::aggregates::StateAddr;
-use common_infallible::RwLock;
-use common_io::prelude::*;
 use common_planners::Expression;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::group_by::{Aggregator, PolymorphicKeysHelper};
-use crate::common::HashTableKeyable;
+use crate::pipelines::transforms::group_by::Aggregator;
+use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,
@@ -68,8 +56,7 @@ impl GroupByPartialTransform {
     }
 
     fn extract_group_columns(&self) -> Vec<String> {
-        self
-            .group_exprs
+        self.group_exprs
             .iter()
             .map(|x| x.column_name())
             .collect::<Vec<_>>()
@@ -80,11 +67,10 @@ impl GroupByPartialTransform {
         &self,
         method: Method,
         group_cols: Vec<String>,
-    ) -> Result<SendableDataBlockStream>
-    {
+    ) -> Result<SendableDataBlockStream> {
         let start = Instant::now();
 
-        let mut stream = self.input.execute().await?;
+        let stream = self.input.execute().await?;
         let aggr_exprs = &self.aggr_exprs;
         let schema = self.schema_before_group_by.clone();
         let aggregator = Aggregator::create(method, aggr_exprs, schema)?;
@@ -93,9 +79,9 @@ impl GroupByPartialTransform {
         let delta = start.elapsed();
         tracing::debug!("Group by partial cost: {:?}", delta);
 
-        let groups = groups_locker.read();
+        let groups = groups_locker.lock();
         let finalized_schema = self.schema.clone();
-        aggregator.aggregate_finalized(&groups.0, finalized_schema)
+        aggregator.aggregate_finalized(&groups, finalized_schema)
     }
 }
 

@@ -14,35 +14,29 @@
 
 use std::alloc::Layout;
 
-use bumpalo::Bump;
-use futures::StreamExt;
-
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
-use common_datavalues::arrays::ArrayBuilder;
 use common_datavalues::arrays::BinaryArrayBuilder;
-use common_datavalues::arrays::PrimitiveArrayBuilder;
 use common_datavalues::columns::DataColumn;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DFNumericType;
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::prelude::Series;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
-use common_infallible::RwLock;
+use common_infallible::Mutex;
 use common_io::prelude::BytesMut;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use futures::StreamExt;
 
-use crate::common::{HashMap, HashTableKeyable, HashTableEntity, HashTable};
-use crate::pipelines::transforms::group_by::aggregator_area::AggregatorArea;
-use crate::pipelines::transforms::group_by::aggregator_state::AggregatorState;
-use crate::pipelines::transforms::group_by::aggregator_params::{AggregatorParams, AggregatorParamsRef};
+use crate::common::HashTableEntity;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
+use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParams;
+use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParamsRef;
+use crate::pipelines::transforms::group_by::aggregator_state::AggregatorState;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct Aggregator<Method: HashMethod> {
@@ -52,9 +46,12 @@ pub struct Aggregator<Method: HashMethod> {
     offsets_aggregate_states: Vec<usize>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
-{
-    pub fn create(method: Method, aggr_exprs: &[Expression], schema: DataSchemaRef) -> Result<Aggregator<Method>> {
+impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
+    pub fn create(
+        method: Method,
+        aggr_exprs: &[Expression],
+        schema: DataSchemaRef,
+    ) -> Result<Aggregator<Method>> {
         let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
         // let aggregator_area = AggregatorArea::try_create(&aggregator_params)?;
 
@@ -70,10 +67,14 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
     }
 
     #[inline(never)]
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<RwLock<Method::State>> {
+    pub async fn aggregate(
+        &self,
+        group_cols: Vec<String>,
+        mut stream: SendableDataBlockStream,
+    ) -> Result<Mutex<Method::State>> {
         let hash_method = &self.method;
 
-        let groups_locker = RwLock::new(hash_method.aggregate_state());
+        let groups_locker = Mutex::new(hash_method.aggregate_state());
 
         let aggregator_params = self.params.as_ref();
 
@@ -92,12 +93,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
             let mut aggregate_arguments_columns = Vec::with_capacity(aggr_len);
 
             {
-                for index in 0..aggregate_functions.len() {
-                    let function_arguments = &aggregate_functions_arguments[index];
+                for function_arguments in aggregate_functions_arguments {
+                    let mut function_arguments_column =
+                        Vec::with_capacity(function_arguments.len());
 
-                    let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
-                    for argument_index in 0..function_arguments.len() {
-                        let argument_name = &function_arguments[argument_index];
+                    for argument_name in function_arguments {
                         let argument_column = block.try_column_by_name(argument_name)?;
                         function_arguments_column.push(argument_column.to_array()?);
                     }
@@ -108,7 +108,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
 
             let mut places = Vec::with_capacity(block.num_rows());
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
-            let mut groups = groups_locker.write();
+            let mut groups = groups_locker.lock();
             {
                 for group_key in group_keys.iter() {
                     let mut inserted = true;
@@ -141,8 +141,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
                 // this can benificial for the case of dereferencing
                 let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
-                for ((idx, func), args) in
-                aggregate_functions.iter().enumerate().zip(aggr_arg_columns_slice.iter())
+                for ((idx, func), args) in aggregate_functions
+                    .iter()
+                    .enumerate()
+                    .zip(aggr_arg_columns_slice.iter())
                 {
                     func.accumulate_keys(
                         &places,

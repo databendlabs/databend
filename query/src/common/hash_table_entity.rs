@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Eq;
 use crate::common::hash_table_key::HashTableKeyable;
 
 pub trait HashTableEntity<Key>: Sized {
@@ -26,13 +25,21 @@ pub trait HashTableEntity<Key>: Sized {
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool;
 }
 
-pub struct KeyValueEntity<Key, Value> where Key: HashTableKeyable, Value: Sized + Copy {
+pub struct KeyValueEntity<Key, Value>
+where
+    Key: HashTableKeyable,
+    Value: Sized + Copy,
+{
     key: Key,
     value: Value,
     hash: u64,
 }
 
-impl<Key, Value> KeyValueEntity<Key, Value> where Key: HashTableKeyable, Value: Sized + Copy {
+impl<Key, Value> KeyValueEntity<Key, Value>
+where
+    Key: HashTableKeyable,
+    Value: Sized + Copy,
+{
     #[inline(always)]
     pub fn set_value(self: *mut Self, value: Value) {
         unsafe {
@@ -46,7 +53,11 @@ impl<Key, Value> KeyValueEntity<Key, Value> where Key: HashTableKeyable, Value: 
     }
 }
 
-impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value> where Key: HashTableKeyable, Value: Sized + Copy {
+impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value>
+where
+    Key: HashTableKeyable,
+    Value: Sized + Copy,
+{
     unsafe fn is_zero(self: *mut Self) -> bool {
         (*self).key.is_zero()
     }

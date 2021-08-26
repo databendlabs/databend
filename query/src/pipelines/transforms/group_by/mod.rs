@@ -13,11 +13,10 @@
 // limitations under the License.
 
 mod aggregator;
-mod aggregator_area;
-mod aggregator_params;
-mod aggregator_state;
-mod aggregator_polymorphic_keys;
 mod aggregator_keys_builder;
+mod aggregator_params;
+mod aggregator_polymorphic_keys;
+mod aggregator_state;
 mod keys_ref;
 
 pub use aggregator::Aggregator;
