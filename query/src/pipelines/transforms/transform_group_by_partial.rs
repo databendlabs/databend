@@ -116,147 +116,22 @@ impl Processor for GroupByPartialTransform {
         let sample_block = DataBlock::empty_with_schema(self.schema_before_group_by.clone());
         let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
 
-        macro_rules! apply {
-            ($hash_method: ident, $key_array_builder: ty, $group_func_table: ty) => {{
-                // Table for <group_key, (place, keys) >
+        match method {
+            HashMethodKind::Serializer(hash_method) => {
                 let start = Instant::now();
+
                 let mut stream = self.input.execute().await?;
-
-                let aggr_len = self.aggr_exprs.len();
-                let schema_before_group_by = self.schema_before_group_by.clone();
-                let mut funcs = Vec::with_capacity(self.aggr_exprs.len());
-                let mut arg_names = Vec::with_capacity(self.aggr_exprs.len());
-                let mut aggr_cols = Vec::with_capacity(self.aggr_exprs.len());
-                let aggr_funcs_len = self.aggr_exprs.len();
-
-                for expr in self.aggr_exprs.iter() {
-                    funcs.push(expr.to_aggregate_function(&schema_before_group_by)?);
-                    arg_names.push(expr.to_aggregate_function_names()?);
-                    aggr_cols.push(expr.column_name());
-                }
-
-                let arena = Bump::new();
-                let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
-
-                type GroupFuncTable = $group_func_table;
-                let groups_locker = GroupFuncTable::default();
-                while let Some(block) = stream.next().await {
-                    let block = block?;
-                    // 1.1 and 1.2.
-                    let mut group_columns = Vec::with_capacity(group_cols.len());
-                    {
-                        for col in group_cols.iter() {
-                            group_columns.push(block.try_column_by_name(col)?);
-                        }
-                    }
-
-                    let mut aggr_arg_columns = Vec::with_capacity(aggr_cols.len());
-                    for (idx, _aggr_col) in aggr_cols.iter().enumerate() {
-                        let arg_columns = arg_names[idx]
-                            .iter()
-                            .map(|arg| block.try_column_by_name(arg).and_then(|c| c.to_array()))
-                            .collect::<Result<Vec<Series>>>()?;
-                        aggr_arg_columns.push(arg_columns);
-                    }
-
-                    // this can benificial for the case of dereferencing
-                    let aggr_arg_columns_slice = &aggr_arg_columns;
-
-                    let mut places = Vec::with_capacity(block.num_rows());
-                    let group_keys = $hash_method.build_keys(&group_columns, block.num_rows())?;
-                    let mut groups = groups_locker.write();
-                    {
-                        for group_key in group_keys.iter() {
-                            match groups.get(group_key) {
-                                // New group.
-                                None => {
-                                    if aggr_funcs_len == 0 {
-                                        groups.insert(group_key.clone(), 0);
-                                    } else {
-                                        let place: StateAddr = arena.alloc_layout(layout).into();
-                                        for idx in 0..aggr_len {
-                                            let arg_place =
-                                                place.next(offsets_aggregate_states[idx]);
-                                            funcs[idx].init_state(arg_place);
-                                        }
-                                        places.push(place);
-                                        groups.insert(group_key.clone(), place.addr());
-                                    }
-                                }
-                                // Accumulate result against the take block by indices.
-                                Some(place) => {
-                                    let place: StateAddr = (*place).into();
-                                    places.push(place);
-                                }
-                            }
-                        }
-
-                        for ((idx, func), args) in
-                            funcs.iter().enumerate().zip(aggr_arg_columns_slice.iter())
-                        {
-                            func.accumulate_keys(
-                                &places,
-                                offsets_aggregate_states[idx],
-                                args,
-                                block.num_rows(),
-                            )?;
-                        }
-                    }
-                }
+                let aggr_exprs = &self.aggr_exprs;
+                let schema = self.schema_before_group_by.clone();
+                let aggregator = Aggregator::create(hash_method, aggr_exprs, schema)?;
+                let groups_locker = aggregator.aggregate(group_cols, stream).await?;
 
                 let delta = start.elapsed();
                 tracing::debug!("Group by partial cost: {:?}", delta);
 
                 let groups = groups_locker.read();
-                if groups.is_empty() {
-                    return Ok(Box::pin(DataBlockStream::create(
-                        DataSchemaRefExt::create(vec![]),
-                        None,
-                        vec![],
-                    )));
-                }
-
-                // Builders.
-                let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-                    .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
-                    .collect();
-
-                type KeyBuilder = $key_array_builder;
-                let mut group_key_builder = KeyBuilder::with_capacity(groups.len());
-
-                let mut bytes = BytesMut::new();
-                for (key, place) in groups.iter() {
-                    let place: StateAddr = (*place).into();
-
-                    for (idx, func) in funcs.iter().enumerate() {
-                        let arg_place = place.next(offsets_aggregate_states[idx]);
-                        func.serialize(arg_place, &mut bytes)?;
-                        state_builders[idx].append_value(&bytes[..]);
-                        bytes.clear();
-                    }
-
-                    group_key_builder.append_value((*key).clone());
-                }
-
-                let mut columns: Vec<Series> = Vec::with_capacity(self.schema.fields().len());
-                for mut builder in state_builders {
-                    columns.push(builder.finish().into_series());
-                }
-                let array = group_key_builder.finish();
-                columns.push(array.into_series());
-
-                let block = DataBlock::create_by_array(self.schema.clone(), columns);
-                Ok(Box::pin(DataBlockStream::create(
-                    self.schema.clone(),
-                    None,
-                    vec![block],
-                )))
-            }};
-        }
-
-        match method {
-            HashMethodKind::Serializer(hash_method) => {
-                apply! { hash_method, BinaryArrayBuilder , RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
+                let finalized_schema = self.schema.clone();
+                aggregator.aggregate_finalized(&groups, finalized_schema)
             }
             HashMethodKind::KeysU8(hash_method) => {
                 let start = Instant::now();
@@ -328,8 +203,9 @@ impl Processor for GroupByPartialTransform {
 }
 
 // impl GroupByPartialTransform {
-//     async fn execute_impl<Method: HashMethod + PolymorphicKeysHelper<Method>>(&self, group_cols: Vec<String>, hash_method: Method) -> common_exception::Result<SendableDataBlockStream>
-//         where Method::HashKey: HashTableKeyable
+//     #[inline]
+//     async fn execute_impl<M>(&self, group_cols: Vec<String>, hash_method: M) -> Result<SendableDataBlockStream>
+//         where M: HashMethod + PolymorphicKeysHelper<M>
 //     {
 //         let start = Instant::now();
 //

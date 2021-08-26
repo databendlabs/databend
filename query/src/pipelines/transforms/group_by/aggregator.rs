@@ -53,7 +53,6 @@ pub struct Aggregator<Method: HashMethod> {
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method>
-    where Method::HashKey: HashTableKeyable
 {
     pub fn create(method: Method, aggr_exprs: &[Expression], schema: DataSchemaRef) -> Result<Aggregator<Method>> {
         let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
