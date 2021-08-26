@@ -63,10 +63,8 @@ where
     }
 
     unsafe fn key_equals(self: *mut Self, key: &Key, hash: u64) -> bool {
-        if Key::BEFORE_EQ_HASH {
-            if (*self).hash != hash {
-                return false;
-            }
+        if Key::BEFORE_EQ_HASH && (*self).hash != hash {
+            return false;
         }
 
         (*self).key == *key
@@ -86,10 +84,8 @@ where
     }
 
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
-        if Key::BEFORE_EQ_HASH {
-            if (*self).hash != (*other).hash {
-                return false;
-            }
+        if Key::BEFORE_EQ_HASH && (*self).hash != (*other).hash {
+            return false;
         }
 
         !((*self).key == (*other).key)
