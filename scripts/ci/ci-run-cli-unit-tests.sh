@@ -5,5 +5,5 @@
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
-echo "Starting unit tests"
-cargo test --workspace --exclude datafuse-cli
+echo "Starting cli package unit tests"
+cargo test -p datafuse-cli
