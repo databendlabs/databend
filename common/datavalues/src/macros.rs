@@ -207,4 +207,3 @@ macro_rules! try_build_array {
         Ok(builder.finish().into_series())
     }};
 }
-
