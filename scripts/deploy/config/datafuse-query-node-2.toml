@@ -25,5 +25,3 @@ clickhouse_handler_port = 9002
 
 # Store.
 store_api_address = "0.0.0.0:9191"
-store_api_username = "root"
-store_api_password = "root"
