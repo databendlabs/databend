@@ -149,13 +149,13 @@ pub struct Config {
     )]
     pub metric_api_address: String,
 
-    #[structopt(long, env = STORE_API_ADDRESS, default_value = "127.0.0.1:9191")]
+    #[structopt(long, env = STORE_API_ADDRESS, default_value = "")]
     pub store_api_address: String,
 
-    #[structopt(long, env = STORE_API_USERNAME, default_value = "root")]
+    #[structopt(long, env = STORE_API_USERNAME, default_value = "")]
     pub store_api_username: User,
 
-    #[structopt(long, env = STORE_API_PASSWORD, default_value = "root")]
+    #[structopt(long, env = STORE_API_PASSWORD, default_value = "")]
     pub store_api_password: Password,
 
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
@@ -294,12 +294,12 @@ impl Config {
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
-            store_api_address: "127.0.0.1:9191".to_string(),
+            store_api_address: "".to_string(),
             store_api_username: User {
-                store_api_username: "root".to_string(),
+                store_api_username: "".to_string(),
             },
             store_api_password: Password {
-                store_api_password: "root".to_string(),
+                store_api_password: "".to_string(),
             },
             config_file: "".to_string(),
             api_tls_server_cert: "".to_string(),

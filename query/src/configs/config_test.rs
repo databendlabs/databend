@@ -34,12 +34,12 @@ fn test_default_config() -> Result<()> {
         flight_api_address: "127.0.0.1:9090".to_string(),
         http_api_address: "127.0.0.1:8080".to_string(),
         metric_api_address: "127.0.0.1:7070".to_string(),
-        store_api_address: "127.0.0.1:9191".to_string(),
+        store_api_address: "".to_string(),
         store_api_username: User {
-            store_api_username: "root".to_string(),
+            store_api_username: "".to_string(),
         },
         store_api_password: Password {
-            store_api_password: "root".to_string(),
+            store_api_password: "".to_string(),
         },
         config_file: "".to_string(),
         api_tls_server_cert: "".to_string(),
