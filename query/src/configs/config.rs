@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -85,10 +84,6 @@ const METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 const STORE_ADDRESS: &str = "STORE_ADDRESS";
 const STORE_USERNAME: &str = "STORE_USERNAME";
 const STORE_PASSWORD: &str = "STORE_PASSWORD";
-
-const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
-const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
-const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 
 const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
 const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
@@ -217,15 +212,6 @@ pub struct Config {
     )]
     pub metric_api_address: String,
 
-    #[structopt(long, env = STORE_API_ADDRESS, default_value = "")]
-    pub store_api_address: String,
-
-    #[structopt(long, env = STORE_API_USERNAME, default_value = "root")]
-    pub store_api_username: User,
-
-    #[structopt(long, env = STORE_API_PASSWORD, default_value = "")]
-    pub store_api_password: Password,
-
     #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
 
@@ -281,70 +267,6 @@ pub struct Config {
     pub rpc_tls_store_service_domain_name: String,
 }
 
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-pub struct Password {
-    pub store_api_password: String,
-}
-
-impl AsRef<String> for Password {
-    fn as_ref(&self) -> &String {
-        &self.store_api_password
-    }
-}
-
-impl FromStr for Password {
-    type Err = ErrorCode;
-    fn from_str(s: &str) -> common_exception::Result<Self> {
-        Ok(Self {
-            store_api_password: s.to_string(),
-        })
-    }
-}
-
-impl ToString for Password {
-    fn to_string(&self) -> String {
-        self.store_api_password.clone()
-    }
-}
-
-impl fmt::Debug for Password {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "******")
-    }
-}
-
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-pub struct User {
-    pub store_api_username: String,
-}
-
-impl ToString for User {
-    fn to_string(&self) -> String {
-        self.store_api_username.clone()
-    }
-}
-
-impl fmt::Debug for User {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "******")
-    }
-}
-
-impl AsRef<String> for User {
-    fn as_ref(&self) -> &String {
-        &self.store_api_username
-    }
-}
-
-impl FromStr for User {
-    type Err = ErrorCode;
-    fn from_str(s: &str) -> common_exception::Result<Self> {
-        Ok(Self {
-            store_api_username: s.to_string(),
-        })
-    }
-}
-
 impl Config {
     /// Default configs.
     pub fn default() -> Self {
@@ -360,13 +282,6 @@ impl Config {
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
-            store_api_address: "".to_string(),
-            store_api_username: User {
-                store_api_username: "root".to_string(),
-            },
-            store_api_password: Password {
-                store_api_password: "".to_string(),
-            },
             config_file: "".to_string(),
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
@@ -414,6 +329,10 @@ impl Config {
             );
         }
         env_struct_helper!(mut_config, log, log_level, String, LOG_LEVEL);
+        env_struct_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
+        env_struct_helper!(mut_config, store, store_username, String, STORE_USERNAME);
+        env_struct_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
+
         env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
         env_helper!(mut_config, mysql_handler_host, String, MYSQL_HANDLER_HOST);
         env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);
@@ -433,9 +352,6 @@ impl Config {
         env_helper!(mut_config, flight_api_address, String, FLIGHT_API_ADDRESS);
         env_helper!(mut_config, http_api_address, String, HTTP_API_ADDRESS);
         env_helper!(mut_config, metric_api_address, String, METRICS_API_ADDRESS);
-        env_helper!(mut_config, store_api_address, String, STORE_API_ADDRESS);
-        env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
-        env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
 
         // for api http service
         env_helper!(mut_config, api_tls_server_cert, String, API_TLS_SERVER_CERT);

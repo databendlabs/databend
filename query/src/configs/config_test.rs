@@ -15,8 +15,6 @@
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use crate::configs::config::Password;
-use crate::configs::config::User;
 use crate::configs::Config;
 use crate::configs::LogConfig;
 use crate::configs::StoreConfig;
@@ -36,13 +34,6 @@ fn test_default_config() -> Result<()> {
         flight_api_address: "127.0.0.1:9090".to_string(),
         http_api_address: "127.0.0.1:8080".to_string(),
         metric_api_address: "127.0.0.1:7070".to_string(),
-        store_api_address: "".to_string(),
-        store_api_username: User {
-            store_api_username: "root".to_string(),
-        },
-        store_api_password: Password {
-            store_api_password: "".to_string(),
-        },
         config_file: "".to_string(),
         api_tls_server_cert: "".to_string(),
         api_tls_server_key: "".to_string(),
@@ -70,9 +61,9 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
-    std::env::set_var("STORE_API_ADDRESS", "1.2.3.4:1234");
-    std::env::set_var("STORE_API_USERNAME", "admin");
-    std::env::set_var("STORE_API_PASSWORD", "password!");
+    std::env::set_var("STORE_ADDRESS", "1.2.3.4:1234");
+    std::env::set_var("STORE_USERNAME", "admin");
+    std::env::set_var("STORE_PASSWORD", "password!");
     std::env::set_var("DISABLE_REMOTE_CATALOG", "0");
     std::env::remove_var("CONFIG_FILE");
     let default = Config::default();
@@ -88,9 +79,9 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:8081", configured.http_api_address);
     assert_eq!("1.2.3.4:7071", configured.metric_api_address);
 
-    assert_eq!("1.2.3.4:1234", configured.store_api_address);
-    assert_eq!("admin", configured.store_api_username.to_string());
-    assert_eq!("password!", configured.store_api_password.to_string());
+    assert_eq!("1.2.3.4:1234", configured.store.store_address);
+    assert_eq!("admin", configured.store.store_username.to_string());
+    assert_eq!("password!", configured.store.store_password.to_string());
 
     // clean up
     std::env::remove_var("QUERY_LOG_LEVEL");
@@ -103,9 +94,9 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
-    std::env::remove_var("STORE_API_ADDRESS");
-    std::env::remove_var("STORE_API_USERNAME");
-    std::env::remove_var("STORE_API_PASSWORD");
+    std::env::remove_var("STORE_ADDRESS");
+    std::env::remove_var("STORE_USERNAME");
+    std::env::remove_var("STORE_PASSWORD");
     Ok(())
 }
 
