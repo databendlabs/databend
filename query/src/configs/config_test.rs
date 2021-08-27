@@ -17,6 +17,7 @@ use pretty_assertions::assert_eq;
 
 use crate::configs::Config;
 use crate::configs::LogConfig;
+use crate::configs::QueryConfig;
 use crate::configs::StoreConfig;
 
 // Default.
@@ -25,24 +26,8 @@ fn test_default_config() -> Result<()> {
     let expect = Config {
         log: LogConfig::default(),
         store: StoreConfig::default(),
-        num_cpus: 8,
-        mysql_handler_host: "127.0.0.1".to_string(),
-        mysql_handler_port: 3307,
-        max_active_sessions: 256,
-        clickhouse_handler_host: "127.0.0.1".to_string(),
-        clickhouse_handler_port: 9000,
-        flight_api_address: "127.0.0.1:9090".to_string(),
-        http_api_address: "127.0.0.1:8080".to_string(),
-        metric_api_address: "127.0.0.1:7070".to_string(),
+        query: QueryConfig::default(),
         config_file: "".to_string(),
-        api_tls_server_cert: "".to_string(),
-        api_tls_server_key: "".to_string(),
-        rpc_tls_server_cert: "".to_string(),
-        rpc_tls_server_key: "".to_string(),
-        rpc_tls_query_server_root_ca_cert: "".to_string(),
-        rpc_tls_query_service_domain_name: "localhost".to_string(),
-        rpc_tls_store_server_root_ca_cert: "".to_string(),
-        rpc_tls_store_service_domain_name: "localhost".to_string(),
     };
     let actual = Config::default();
     assert_eq!(actual, expect);
@@ -69,15 +54,16 @@ fn test_env_config() -> Result<()> {
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
     assert_eq!("DEBUG", configured.log.log_level);
-    assert_eq!("0.0.0.0", configured.mysql_handler_host);
-    assert_eq!(3306, configured.mysql_handler_port);
-    assert_eq!(255, configured.max_active_sessions);
-    assert_eq!("1.2.3.4", configured.clickhouse_handler_host);
-    assert_eq!(9000, configured.clickhouse_handler_port);
 
-    assert_eq!("1.2.3.4:9091", configured.flight_api_address);
-    assert_eq!("1.2.3.4:8081", configured.http_api_address);
-    assert_eq!("1.2.3.4:7071", configured.metric_api_address);
+    assert_eq!("0.0.0.0", configured.query.mysql_handler_host);
+    assert_eq!(3306, configured.query.mysql_handler_port);
+    assert_eq!(255, configured.query.max_active_sessions);
+    assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
+    assert_eq!(9000, configured.query.clickhouse_handler_port);
+
+    assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
+    assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
+    assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
     assert_eq!("1.2.3.4:1234", configured.store.store_address);
     assert_eq!("admin", configured.store.store_username.to_string());
@@ -87,7 +73,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_LOG_LEVEL");
     std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
     std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
-    std::env::remove_var("QUERY_MYSQL_HANDLER_THREAD_NUM");
+    std::env::remove_var("QUERY_MAX_ACTIVE_SESSIONS");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_HOST");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_PORT");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_THREAD_NUM");
