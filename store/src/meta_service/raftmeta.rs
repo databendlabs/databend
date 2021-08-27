@@ -454,18 +454,18 @@ impl RaftStorage<LogEntry, AppliedState> for MetaStore {
             .insert(&Entry::new_snapshot_pointer(&snapshot.meta))
             .await?;
 
-        let current_snapshot_last_log_index;
+        let last_snapshot_last_log_index;
 
         {
-            let current_snapshot = self.current_snapshot.read().await;
-            current_snapshot_last_log_index = match current_snapshot.as_ref() {
+            let last_snapshot = self.current_snapshot.read().await;
+            last_snapshot_last_log_index = match last_snapshot.as_ref() {
                 Some(snap) => snap.meta.last_log_id.index + 1,
                 None => 0,
             };
         }
 
         self.log
-            .range_remove(current_snapshot_last_log_index..last_applied_log.index)
+            .range_remove(last_snapshot_last_log_index..last_applied_log.index)
             .await?;
 
         tracing::debug!("log range_remove complete");
