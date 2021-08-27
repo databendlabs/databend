@@ -7,7 +7,7 @@ log_dir = "./_logs"
 
 # Store
 [store]
-store_address = ""
+store_address = "0.0.0.0:9191"
 store_username = "root"
 store_password = "root"
 
