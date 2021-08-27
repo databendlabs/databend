@@ -76,8 +76,6 @@ const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
 const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
 const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
 
-const DISABLE_REMOTE_CATALOG: &str = "DISABLE_REMOTE_CATALOG";
-
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
 const RPC_TLS_SERVER_CERT: &str = "RPC_TLS_SERVER_CERT";
@@ -213,10 +211,6 @@ pub struct Config {
         default_value = "localhost"
     )]
     pub rpc_tls_store_service_domain_name: String,
-
-    // this flag will be removed when embedded catalog is ready
-    #[structopt(long, env =  DISABLE_REMOTE_CATALOG)]
-    pub disable_remote_catalog: bool,
 }
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
@@ -316,7 +310,6 @@ impl Config {
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             rpc_tls_store_server_root_ca_cert: "".to_string(),
             rpc_tls_store_service_domain_name: "localhost".to_string(),
-            disable_remote_catalog: false,
         }
     }
 

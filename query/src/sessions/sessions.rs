@@ -68,7 +68,7 @@ impl SessionManager {
         )));
         Ok(Arc::new(SessionManager {
             datasource: Arc::new(DatabaseCatalog::try_create_with_config(
-                conf.disable_remote_catalog,
+                conf.clone(),
                 meta_store_cli,
             )?),
             conf,

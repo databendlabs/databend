@@ -24,7 +24,7 @@ use crate::datasources::*;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
     let config = Config {
-        disable_remote_catalog: true,
+        store_api_address: "".to_string(),
         ..Config::default()
     };
     let ctx = crate::tests::try_create_context_with_conf(config)?;
