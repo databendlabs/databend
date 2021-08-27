@@ -238,13 +238,13 @@ impl Catalog for DatabaseCatalog {
         let db = self.get_database(db_name);
         let database = match db {
             Err(_) => {
-                if plan.if_exists {
-                    return Ok(());
+                return if plan.if_exists {
+                    Ok(())
                 } else {
-                    return Err(ErrorCode::UnknownDatabase(format!(
+                    Err(ErrorCode::UnknownDatabase(format!(
                         "Unknown database: '{}'",
                         plan.db
-                    )));
+                    )))
                 }
             }
             Ok(v) => v,
