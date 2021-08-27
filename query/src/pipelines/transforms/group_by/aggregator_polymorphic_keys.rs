@@ -31,40 +31,42 @@ use crate::pipelines::transforms::group_by::aggregator_state::FixedKeysAggregato
 use crate::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::AggregatorState;
 
-/// Provide functions for all HashMethod to help implement polymorphic group by key
-///
-/// When we want to add new HashMethod, we need to add the following components
-///     - HashMethod, more information in [HashMethod] trait
-///     - AggregatorState, more information in [AggregatorState] trait
-///     - KeysArrayBuilder, more information in [KeysArrayBuilder] trait
-///     - PolymorphicKeysHelper, more information in following comments
-///
-/// For example:
-///
-/// ```
-/// use common_datablocks::HashMethodSerializer;
-/// use bumpalo::Bump;
-/// use datafuse_query::common::HashTable;
-/// use common_datavalues::arrays::BinaryArrayBuilder;
-/// impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
-///     type State = SerializedKeysAggregatorState;
-///     fn aggregate_state(&self) -> Self::State {
-///         SerializedKeysAggregatorState {
-///             keys_area: Bump::new(),
-///             state_area: Bump::new(),
-///             data_state_map: HashTable::create(),
-///         }
-///     }
-///
-///     type ArrayBuilder = SerializedKeysArrayBuilder;
-///     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
-///         SerializedKeysArrayBuilder {
-///             inner_builder: BinaryArrayBuilder::with_capacity(capacity),
-///         }
-///     }
-/// }
-/// ```
-///
+// Provide functions for all HashMethod to help implement polymorphic group by key
+//
+// When we want to add new HashMethod, we need to add the following components
+//     - HashMethod, more information in [HashMethod] trait
+//     - AggregatorState, more information in [AggregatorState] trait
+//     - KeysArrayBuilder, more information in [KeysArrayBuilder] trait
+//     - PolymorphicKeysHelper, more information in following comments
+//
+// For example:
+//
+// use bumpalo::Bump;
+// use datafuse_query::common::HashTable;
+// use common_datablocks::HashMethodSerializer;
+// use common_datavalues::arrays::BinaryArrayBuilder;
+// use datafuse_query::pipelines::transforms::group_by::PolymorphicKeysHelper;
+// use datafuse_query::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
+// use datafuse_query::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
+//
+// impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+//     type State = SerializedKeysAggregatorState;
+//     fn aggregate_state(&self) -> Self::State {
+//         SerializedKeysAggregatorState {
+//             keys_area: Bump::new(),
+//             state_area: Bump::new(),
+//             data_state_map: HashTable::create(),
+//         }
+//     }
+//
+//     type ArrayBuilder = SerializedKeysArrayBuilder;
+//     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+//         SerializedKeysArrayBuilder {
+//             inner_builder: BinaryArrayBuilder::with_capacity(capacity),
+//         }
+//     }
+// }
+//
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type State: AggregatorState<Method>;
     fn aggregate_state(&self) -> Self::State;
