@@ -101,9 +101,11 @@ const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NA
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct LogConfig {
     #[structopt(long, env = LOG_LEVEL, default_value = "INFO" , help = "Log level <DEBUG|INFO|ERROR>")]
+    #[serde(default)]
     pub log_level: String,
 
     #[structopt(required = false, long, env = LOG_DIR, default_value = "./_logs", help = "Log file dir")]
+    #[serde(default)]
     pub log_dir: String,
 }
 
@@ -120,12 +122,15 @@ impl LogConfig {
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct StoreConfig {
     #[structopt(long, env = STORE_ADDRESS, default_value = "", help = "Store backend address")]
+    #[serde(default)]
     pub store_address: String,
 
     #[structopt(long, env = STORE_USERNAME, default_value = "", help = "Store backend user name")]
+    #[serde(default)]
     pub store_username: String,
 
     #[structopt(long, env = STORE_PASSWORD, default_value = "", help = "Store backend user password")]
+    #[serde(default)]
     pub store_password: String,
 }
 
@@ -150,6 +155,7 @@ impl fmt::Debug for StoreConfig {
 }
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[serde(default)]
 pub struct Config {
     #[structopt(flatten)]
     pub log: LogConfig,

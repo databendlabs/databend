@@ -1,8 +1,15 @@
 # Usage:
 # datafuse-query -c datafuse_query_config_spec.toml
 
-# Log level.
+[log]
 log_level = "ERROR"
+log_dir = "./_logs"
+
+# Store
+[store]
+store_address = ""
+store_username = "root"
+store_password = "root"
 
 # DatafuseQuery rpc address.
 # For flight rpc.
@@ -22,6 +29,3 @@ mysql_handler_port = 3308
 # ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9002
-
-# Store.
-store_api_address = "0.0.0.0:9191"
