@@ -69,7 +69,7 @@ where R: io::Read
             }
             // not the first row
             if rows + self.rows != 0 {
-                reader.util(b',', &mut buf)?;
+                reader.until(b',', &mut buf)?;
             }
             let _ = reader.ignore_spaces()?;
             let _ = reader.ignore_byte(b'(')?;
@@ -80,30 +80,30 @@ where R: io::Read
 
                 let bs: Result<&[u8]> = {
                     if reader.ignore_byte(b'\'')? {
-                        reader.util(b'\'', &mut buf)?;
+                        reader.until(b'\'', &mut buf)?;
 
                         let res = &buf.as_slice()[0..buf.len() - 1];
                         if col != col_size - 1 {
-                            reader.util(b',', &mut temp)?;
+                            reader.until(b',', &mut temp)?;
                         } else {
-                            reader.util(b')', &mut temp)?;
+                            reader.until(b')', &mut temp)?;
                         }
                         Ok(res)
                     } else if reader.ignore_byte(b'"')? {
-                        reader.util(b'"', &mut buf)?;
+                        reader.until(b'"', &mut buf)?;
 
                         let res = &buf.as_slice()[0..buf.len() - 1];
                         if col != col_size - 1 {
-                            reader.util(b',', &mut temp)?;
+                            reader.until(b',', &mut temp)?;
                         } else {
-                            reader.util(b')', &mut temp)?;
+                            reader.until(b')', &mut temp)?;
                         }
                         Ok(res)
                     } else if col != col_size - 1 {
-                        reader.util(b',', &mut buf)?;
+                        reader.until(b',', &mut buf)?;
                         Ok(&buf.as_slice()[0..buf.len() - 1])
                     } else {
-                        reader.util(b')', &mut buf)?;
+                        reader.until(b')', &mut buf)?;
                         Ok(&buf.as_slice()[0..buf.len() - 1])
                     }
                 };

@@ -22,7 +22,7 @@ pub trait BufReadExt {
     fn ignore_byte(&mut self, b: u8) -> Result<bool>;
     fn ignore_bytes(&mut self, bs: &[u8]) -> Result<bool>;
     fn ignore_spaces(&mut self) -> Result<bool>;
-    fn util(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize>;
+    fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize>;
 }
 
 impl<R> BufReadExt for BufReader<R>
@@ -69,7 +69,7 @@ where R: std::io::Read
         Ok(cnt > 0)
     }
 
-    fn util(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize> {
+    fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize> {
         Ok(self.read_until(delim, buf)?)
     }
 }
