@@ -49,10 +49,10 @@ pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
 
 // Maintain all the databases of user.
 pub struct DatabaseCatalog {
+    conf: Config,
     databases: RwLock<HashMap<String, Arc<dyn Database>>>,
     table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
     meta_store_cli: Arc<dyn DBMetaStoreClient>,
-    disable_remote: bool,
 }
 
 impl DatabaseCatalog {
@@ -64,18 +64,18 @@ impl DatabaseCatalog {
         let cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
             store_client_provider,
         )));
-        Self::try_create_with_config(conf.disable_remote_catalog, cli)
+        Self::try_create_with_config(conf, cli)
     }
 
     pub fn try_create_with_config(
-        disable_remote_catalog: bool,
+        conf: Config,
         meta_store_cli: Arc<dyn DBMetaStoreClient>,
     ) -> Result<Self> {
         let mut datasource = DatabaseCatalog {
+            conf,
             databases: Default::default(),
             table_functions: Default::default(),
             meta_store_cli,
-            disable_remote: disable_remote_catalog,
         };
 
         datasource.register_system_database()?;
@@ -126,7 +126,7 @@ impl Catalog for DatabaseCatalog {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         self.databases.read().get(db_name).map_or_else(
             || {
-                if !self.disable_remote {
+                if !self.conf.store_api_address.is_empty() {
                     self.meta_store_cli.get_database(db_name)
                 } else {
                     Err(ErrorCode::UnknownDatabase(format!(
@@ -140,23 +140,21 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn get_databases(&self) -> Result<Vec<String>> {
-        let locals = self.databases.read();
+        let mut databases = vec![];
 
-        if self.disable_remote {
-            return Ok(locals
-                .iter()
-                .map(|(k, _v)| k.to_owned())
-                .collect::<Vec<_>>());
+        // Local databases.
+        let locals = self.databases.read();
+        databases.extend(locals.keys().into_iter().cloned());
+
+        // Remote databases.
+        if !self.conf.store_api_address.is_empty() {
+            let remotes = self.meta_store_cli.get_databases()?;
+            databases.extend(remotes.into_iter());
         }
 
-        // merge with remote meta data
-        let locals = locals.iter().map(|(k, _v)| k).collect::<HashSet<_>>();
-        let remotes = self.meta_store_cli.get_databases()?;
-        let remotes = remotes.iter().collect::<HashSet<_>>();
-        let db_names = remotes.union(&locals);
-        let mut r = db_names.into_iter().cloned().collect::<Vec<_>>();
-        r.sort();
-        Ok(r.into_iter().cloned().collect())
+        // Sort.
+        databases.sort();
+        Ok(databases)
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
@@ -187,7 +185,7 @@ impl Catalog for DatabaseCatalog {
             db_names.insert(db_name.clone());
         }
 
-        if !self.disable_remote {
+        if !self.conf.store_api_address.is_empty() {
             let mut remotes = self
                 .meta_store_cli
                 .get_all_tables()?

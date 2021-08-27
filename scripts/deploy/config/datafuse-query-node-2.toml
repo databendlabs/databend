@@ -22,3 +22,6 @@ mysql_handler_port = 3308
 # ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9002
+
+# Store.
+store_api_address = "0.0.0.0:9191"

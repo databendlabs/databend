@@ -34,12 +34,12 @@ fn test_default_config() -> Result<()> {
         flight_api_address: "127.0.0.1:9090".to_string(),
         http_api_address: "127.0.0.1:8080".to_string(),
         metric_api_address: "127.0.0.1:7070".to_string(),
-        store_api_address: "127.0.0.1:9191".to_string(),
+        store_api_address: "".to_string(),
         store_api_username: User {
             store_api_username: "root".to_string(),
         },
         store_api_password: Password {
-            store_api_password: "root".to_string(),
+            store_api_password: "".to_string(),
         },
         config_file: "".to_string(),
         api_tls_server_cert: "".to_string(),
@@ -50,7 +50,6 @@ fn test_default_config() -> Result<()> {
         rpc_tls_query_service_domain_name: "localhost".to_string(),
         rpc_tls_store_server_root_ca_cert: "".to_string(),
         rpc_tls_store_service_domain_name: "localhost".to_string(),
-        disable_remote_catalog: false,
     };
     let actual = Config::default();
     assert_eq!(actual, expect);
@@ -90,7 +89,6 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:1234", configured.store_api_address);
     assert_eq!("admin", configured.store_api_username.to_string());
     assert_eq!("password!", configured.store_api_password.to_string());
-    assert_eq!(false, configured.disable_remote_catalog);
 
     // clean up
     std::env::remove_var("QUERY_LOG_LEVEL");
