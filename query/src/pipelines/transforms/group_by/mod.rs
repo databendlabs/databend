@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregator_primitive_keys;
+mod aggregator;
+mod aggregator_keys_builder;
+mod aggregator_params;
+mod aggregator_polymorphic_keys;
+mod aggregator_state;
+mod keys_ref;
 
-pub use aggregator_primitive_keys::Aggregator;
+pub use aggregator::Aggregator;
+pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
+pub use aggregator_state::AggregatorState;

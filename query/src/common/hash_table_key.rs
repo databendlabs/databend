@@ -12,29 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
+pub trait HashTableKeyable: Eq + Sized {
+    const BEFORE_EQ_HASH: bool;
 
-pub trait KeyHasher<Key> {
-    fn hash(key: &Key) -> u64;
-}
-
-pub struct DefaultHasher<T> {
-    /// Generics hold
-    type_hold: PhantomData<T>,
+    fn is_zero(&self) -> bool;
+    fn fast_hash(&self) -> u64;
+    fn set_key(&mut self, new_value: &Self);
 }
 
 macro_rules! primitive_hasher_impl {
     ($primitive_type:ty) => {
-        impl KeyHasher<$primitive_type> for DefaultHasher<$primitive_type> {
+        impl HashTableKeyable for $primitive_type {
+            const BEFORE_EQ_HASH: bool = false;
+
             #[inline(always)]
-            fn hash(key: &$primitive_type) -> u64 {
-                let mut hash_value = *key as u64;
+            fn is_zero(&self) -> bool {
+                *self == 0
+            }
+
+            #[inline(always)]
+            fn fast_hash(&self) -> u64 {
+                let mut hash_value = *self as u64;
                 hash_value ^= hash_value >> 33;
                 hash_value = hash_value.wrapping_mul(0xff51afd7ed558ccd_u64);
                 hash_value ^= hash_value >> 33;
                 hash_value = hash_value.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
                 hash_value ^= hash_value >> 33;
                 hash_value
+            }
+
+            #[inline(always)]
+            fn set_key(&mut self, new_value: &$primitive_type) {
+                *self = *new_value;
             }
         }
     };
@@ -48,9 +57,3 @@ primitive_hasher_impl!(u8);
 primitive_hasher_impl!(u16);
 primitive_hasher_impl!(u32);
 primitive_hasher_impl!(u64);
-
-#[test]
-fn test_primitive_hasher() {
-    println!("{:?}", DefaultHasher::<i8>::hash(&1_i8));
-    println!("{:?}", DefaultHasher::<i8>::hash(&2_i8));
-}
