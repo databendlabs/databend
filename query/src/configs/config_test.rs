@@ -18,11 +18,15 @@ use pretty_assertions::assert_eq;
 use crate::configs::config::Password;
 use crate::configs::config::User;
 use crate::configs::Config;
+use crate::configs::LogConfig;
+use crate::configs::StoreConfig;
 
 // Default.
 #[test]
 fn test_default_config() -> Result<()> {
     let expect = Config {
+        log_config: LogConfig::default(),
+        store_config: StoreConfig::default(),
         log_level: "debug".to_string(),
         log_dir: "./_logs".to_string(),
         num_cpus: 8,
@@ -75,6 +79,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("CONFIG_FILE");
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
+    assert_eq!("DEBUG", configured.log_config.log_level);
     assert_eq!("DEBUG", configured.log_level);
     assert_eq!("0.0.0.0", configured.mysql_handler_host);
     assert_eq!(3306, configured.mysql_handler_port);

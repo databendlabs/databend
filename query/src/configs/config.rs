@@ -54,6 +54,18 @@ macro_rules! env_helper {
     };
 }
 
+macro_rules! env_struct_helper {
+    ($config:expr,$struct: tt, $field:tt, $field_type: ty, $env:expr) => {
+        let env_var = std::env::var_os($env)
+            .unwrap_or($config.$field.to_string().into())
+            .into_string()
+            .expect(format!("cannot convert {} to string", $env).as_str());
+        $config.$struct.$field = env_var
+            .parse::<$field_type>()
+            .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
+    };
+}
+
 const LOG_LEVEL: &str = "QUERY_LOG_LEVEL";
 const LOG_DIR: &str = "QUERY_LOG_DIR";
 const NUM_CPUS: &str = "QUERY_NUM_CPUS";
@@ -90,15 +102,35 @@ const RPC_TLS_QUERY_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_QUERY_SERVICE_DOMAIN_NA
 const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
 const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
 
+/// Log config group.
+#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+pub struct LogConfig {
+    #[structopt(long, env = LOG_LEVEL, help = "Log level <DEBUG|INFO|ERROR>, default 'INFO'")]
+    pub log_level: String,
+
+    #[structopt(long, env = LOG_DIR, help = "Log file dir, default './_logs'")]
+    pub log_dir: String,
+}
+
+impl LogConfig {
+    pub fn default() -> Self {
+        LogConfig {
+            log_level: "INFO".to_string(),
+            log_dir: "./_logs".to_string(),
+        }
+    }
+}
+
+/// Store config group.
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct StoreConfig {
-    #[structopt(long, env = STORE_ADDRESS, default_value = "")]
+    #[structopt(long, env = STORE_ADDRESS, help = "Store backend address, Default ''")]
     pub store_address: String,
 
-    #[structopt(long, env = STORE_USERNAME, default_value = "root")]
+    #[structopt(long, env = STORE_USERNAME, help = "Store backend user name, Default 'root'")]
     pub store_username: String,
 
-    #[structopt(long, env = STORE_PASSWORD, default_value = "")]
+    #[structopt(long, env = STORE_PASSWORD, help = "Store backend user password, Default ''")]
     pub store_password: String,
 }
 
@@ -106,7 +138,7 @@ impl StoreConfig {
     pub fn default() -> Self {
         StoreConfig {
             store_address: "".to_string(),
-            store_username: "".to_string(),
+            store_username: "root".to_string(),
             store_password: "".to_string(),
         }
     }
@@ -124,6 +156,9 @@ impl fmt::Debug for StoreConfig {
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
+    #[structopt(flatten)]
+    pub log_config: LogConfig,
+
     #[structopt(flatten)]
     pub store_config: StoreConfig,
 
@@ -320,6 +355,7 @@ impl Config {
     /// Default configs.
     pub fn default() -> Self {
         Config {
+            log_config: LogConfig::default(),
             store_config: StoreConfig::default(),
             log_level: "debug".to_string(),
             log_dir: "./_logs".to_string(),
@@ -380,6 +416,7 @@ impl Config {
                 std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap(),
             );
         }
+        env_struct_helper!(mut_config, log_config, log_level, String, LOG_LEVEL);
         env_helper!(mut_config, log_level, String, LOG_LEVEL);
         env_helper!(mut_config, log_dir, String, LOG_DIR);
         env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
