@@ -35,8 +35,8 @@ macro_rules! impl_compare {
             DataType::Int64 => $self.i64().unwrap().$method($rhs.i64().unwrap()),
             DataType::Float32 => $self.f32().unwrap().$method($rhs.f32().unwrap()),
             DataType::Float64 => $self.f64().unwrap().$method($rhs.f64().unwrap()),
-            DataType::Date32 => $self.date32().unwrap().$method($rhs.date32().unwrap()),
-            DataType::Date64 => $self.date64().unwrap().$method($rhs.date64().unwrap()),
+            DataType::Date16 => $self.u16().unwrap().$method($rhs.u16().unwrap()),
+            DataType::Date32 => $self.u32().unwrap().$method($rhs.u32().unwrap()),
             _ => unimplemented!(),
         }
     }};

@@ -22,10 +22,10 @@ use crate::prelude::*;
 /// # Safety
 /// Note this doesn't do any bound checking, for performance reason.
 /// Take kernel for single chunk without nulls and an iterator as index.
-pub unsafe fn take_primitive_iter_unchecked<T: DFNumericType, I: IntoIterator<Item = usize>>(
-    arr: &PrimitiveArray<T::Native>,
+pub unsafe fn take_primitive_iter_unchecked<T: DFPrimitiveType, I: IntoIterator<Item = usize>>(
+    arr: &PrimitiveArray<T>,
     indices: I,
-) -> Arc<PrimitiveArray<T::Native>> {
+) -> Arc<PrimitiveArray<T>> {
     match arr.null_count() {
         0 => {
             let array_values = arr.values().as_slice();
@@ -64,12 +64,12 @@ pub unsafe fn take_primitive_iter_unchecked<T: DFNumericType, I: IntoIterator<It
 /// Take kernel for a single chunk and an iterator that can produce None values.
 /// This is used in join operations.
 pub unsafe fn take_primitive_opt_iter_unchecked<
-    T: DFNumericType,
+    T: DFPrimitiveType,
     I: IntoIterator<Item = Option<usize>>,
 >(
-    arr: &PrimitiveArray<T::Native>,
+    arr: &PrimitiveArray<T>,
     indices: I,
-) -> Arc<PrimitiveArray<T::Native>> {
+) -> Arc<PrimitiveArray<T>> {
     match arr.null_count() {
         0 => {
             let array_values = arr.values();

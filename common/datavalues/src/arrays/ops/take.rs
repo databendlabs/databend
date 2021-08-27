@@ -27,7 +27,6 @@ use common_exception::Result;
 
 use super::TakeIdx;
 use crate::arrays::kernels::*;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
 // TODO add unchecked take
@@ -81,8 +80,8 @@ macro_rules! take_opt_iter_n_arrays {
 }
 
 /// Fast access by index.
-impl<T> ArrayTake for DataArray<T>
-where T: DFNumericType
+impl<T> ArrayTake for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
     unsafe fn take_unchecked<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
     where

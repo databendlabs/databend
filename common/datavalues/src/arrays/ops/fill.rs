@@ -71,20 +71,20 @@ pub trait ArrayFullNull {
     where Self: std::marker::Sized;
 }
 
-impl<T> ArrayFull<T::Native> for DataArray<T>
+impl<T> ArrayFull<T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn full(value: T::Native, length: usize) -> Self
-    where T::Native: Copy {
+    fn full(value: T, length: usize) -> Self
+    where T: Copy {
         (0..length)
             .map(|_| value)
             .trust_my_length(length)
-            .collect_trusted::<NoNull<DataArray<T>>>()
+            .collect_trusted::<NoNull<DFPrimitiveArray<T>>>()
             .into_inner()
     }
 }
 
-impl<T> ArrayFullNull for DataArray<T>
+impl<T> ArrayFullNull for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
     fn full_null(length: usize) -> Self {

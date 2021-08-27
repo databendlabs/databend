@@ -50,8 +50,9 @@ impl ToCastFunction {
                 Float32,
                 Float64,
                 Utf8,
+                Date16,
                 Date32,
-                Date64,
+                DateTime32,
                 Binary
             }
             // aliases

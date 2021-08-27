@@ -18,7 +18,6 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_exception::Result;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::*;
 
@@ -29,23 +28,20 @@ pub trait ToValues: Debug {
     fn to_values(&self) -> Result<Vec<DataValue>>;
 }
 
-fn primitive_type_to_values_impl<T, F>(array: &DataArray<T>, f: F) -> Result<Vec<DataValue>>
-where
-    T: DFPrimitiveType,
-    F: Fn(Option<T::Native>) -> DataValue,
-{
+fn primitive_type_to_values_impl<T, F>(array: &DFPrimitiveArray<T>) -> Result<Vec<DataValue>>
+where T: DFPrimitiveType + Into<DataValue> {
     let array = array.downcast_ref();
     let mut values = Vec::with_capacity(array.len());
 
     if array.null_count() == 0 {
         for index in 0..array.len() {
-            values.push(f(Some(array.value(index))))
+            values.push(array.value(index).into())
         }
     } else {
         for index in 0..array.len() {
             match array.is_null(index) {
-                true => values.push(f(None)),
-                false => values.push(f(Some(array.value(index)))),
+                true => values.push(None),
+                false => values.push(array.value(index).into()),
             }
         }
     }
@@ -53,111 +49,11 @@ where
     Ok(values)
 }
 
-impl ToValues for DataArray<Int8Type> {
+impl<T> ToValues for DFPrimitiveArray<T>
+where T: DFPrimitiveType + Into<DataValue>
+{
     fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Int8)
-    }
-}
-
-impl ToValues for DataArray<Int16Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Int16)
-    }
-}
-
-impl ToValues for DataArray<Int32Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Int32)
-    }
-}
-
-impl ToValues for DataArray<Int64Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Int64)
-    }
-}
-
-impl ToValues for DataArray<UInt8Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::UInt8)
-    }
-}
-
-impl ToValues for DataArray<UInt16Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::UInt16)
-    }
-}
-
-impl ToValues for DataArray<UInt32Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::UInt32)
-    }
-}
-
-impl ToValues for DataArray<UInt64Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::UInt64)
-    }
-}
-
-impl ToValues for DataArray<Float32Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Float32)
-    }
-}
-
-impl ToValues for DataArray<Float64Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Float64)
-    }
-}
-
-impl ToValues for DataArray<IntervalDayTimeType> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::IntervalDayTime)
-    }
-}
-
-impl ToValues for DataArray<IntervalYearMonthType> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::IntervalYearMonth)
-    }
-}
-
-impl ToValues for DataArray<TimestampSecondType> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::TimestampSecond)
-    }
-}
-
-impl ToValues for DataArray<TimestampNanosecondType> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::TimestampNanosecond)
-    }
-}
-
-impl ToValues for DataArray<TimestampMillisecondType> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::TimestampMillisecond)
-    }
-}
-
-impl ToValues for DataArray<TimestampMicrosecondType> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::TimestampMicrosecond)
-    }
-}
-
-impl ToValues for DataArray<Date32Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Date32)
-    }
-}
-
-impl ToValues for DataArray<Date64Type> {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        primitive_type_to_values_impl(self, DataValue::Date64)
+        primitive_type_to_values_impl(self)
     }
 }
 

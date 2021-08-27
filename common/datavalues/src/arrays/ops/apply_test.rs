@@ -22,12 +22,11 @@ use common_exception::Result;
 
 use crate::arrays::ops::apply::ArrayApply;
 use crate::arrays::ops::apply::ArrayApplyKernel;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::BooleanType;
 use crate::UInt16Type;
 
-fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Type> {
+fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DFPrimitiveArray<UInt16Type> {
     let mut builder = PrimitiveArrayBuilder::<UInt16Type>::with_capacity(cap);
 
     (begin..end).for_each(|index| {
@@ -40,7 +39,7 @@ fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Ty
     builder.finish()
 }
 
-fn new_test_boolean_array(cap: usize, begin: i32, end: i32) -> DataArray<BooleanType> {
+fn new_test_boolean_array(cap: usize, begin: i32, end: i32) -> DFPrimitiveArray<BooleanType> {
     let mut builder = BooleanArrayBuilder::with_capacity(cap);
 
     (begin..end).for_each(|index| {

@@ -87,8 +87,8 @@ pub trait ArrayIf: Debug {
     }
 }
 
-impl<T> ArrayIf for DataArray<T>
-where T: DFNumericType
+impl<T> ArrayIf for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
     fn if_then_else(&self, rhs: &Self, predicate: &DFBooleanArray) -> Result<Self> {
         impl_if_common! {predicate, self, rhs}

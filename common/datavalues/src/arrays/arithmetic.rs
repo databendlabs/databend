@@ -37,29 +37,24 @@ use num::ToPrimitive;
 use strength_reduce::StrengthReducedU64;
 
 use crate::arrays::ops::*;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
 fn arithmetic_helper<T, Kernel, SKernel, F>(
-    lhs: &DataArray<T>,
-    rhs: &DataArray<T>,
+    lhs: &DFPrimitiveArray<T>,
+    rhs: &DFPrimitiveArray<T>,
     kernel: Kernel,
     scalar_kernel: SKernel,
     operation: F,
-) -> Result<DataArray<T>>
+) -> Result<DFPrimitiveArray<T>>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + num::Zero,
+    T: DFPrimitiveType,
+    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + num::Zero,
     Kernel: Fn(
-        &PrimitiveArray<T::Native>,
-        &PrimitiveArray<T::Native>,
-    ) -> std::result::Result<PrimitiveArray<T::Native>, ArrowError>,
-    SKernel: Fn(&PrimitiveArray<T::Native>, &T::Native) -> PrimitiveArray<T::Native>,
-    F: Fn(T::Native, T::Native) -> T::Native,
+        &PrimitiveArray<T>,
+        &PrimitiveArray<T>,
+    ) -> std::result::Result<PrimitiveArray<T>, ArrowError>,
+    SKernel: Fn(&PrimitiveArray<T>, &T) -> PrimitiveArray<T>,
+    F: Fn(T, T) -> T,
 {
     let ca = match (lhs.len(), rhs.len()) {
         (a, b) if a == b => {
@@ -72,7 +67,7 @@ where
         (_, 1) => {
             let opt_rhs = rhs.get(0);
             match opt_rhs {
-                None => DataArray::full_null(lhs.len()),
+                None => DFPrimitiveArray::<T>::full_null(lhs.len()),
                 Some(rhs) => {
                     let array = Arc::new(scalar_kernel(lhs.downcast_ref(), &rhs)) as ArrayRef;
                     array.into()
@@ -82,7 +77,7 @@ where
         (1, _) => {
             let opt_lhs = lhs.get(0);
             match opt_lhs {
-                None => DataArray::full_null(rhs.len()),
+                None => DFPrimitiveArray::<T>::full_null(rhs.len()),
                 Some(lhs) => rhs.apply(|rhs| operation(lhs, rhs)),
             }
         }
@@ -91,17 +86,16 @@ where
     Ok(ca)
 }
 
-impl<T> Add for &DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
+impl<T> Add for &DFPrimitiveArray<T>
+where T: DFPrimitiveType
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
         + NumCast
-        + num::Zero,
+        + num::Zero
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn add(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -114,17 +108,17 @@ where
     }
 }
 
-impl<T> Sub for &DataArray<T>
+impl<T> Sub for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + num::Zero,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -137,18 +131,18 @@ where
     }
 }
 
-impl<T> Mul for &DataArray<T>
+impl<T> Mul for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + num::Zero,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -161,19 +155,19 @@ where
     }
 }
 
-impl<T> Div for &DataArray<T>
+impl<T> Div for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + num::Zero
         + num::One,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -192,15 +186,15 @@ where
 // 1. turn it into UInt64 % Const UInt64
 // 2. create UInt8Array to accept the result, this could save lots of allocation than UInt64Array
 
-impl<T> DataArray<T>
+impl<T> DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    DataArray<T>: IntoSeries,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    DFPrimitiveArray<T>: IntoSeries,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + ToPrimitive
         + AsPrimitive<u8>
@@ -265,19 +259,19 @@ where
     }
 }
 
-impl<T> Neg for &DataArray<T>
+impl<T> Neg for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + num::Zero
         + num::One,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn neg(self) -> Self::Output {
         let arr = &*self.array;
@@ -382,10 +376,10 @@ pub trait Pow {
     }
 }
 
-impl<T> Pow for DataArray<T>
+impl<T> Pow for DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    DataArray<T>: ArrayCast,
+    T: DFPrimitiveType,
+    DFPrimitiveArray<T>: ArrayCast,
 {
     fn pow_f32(&self, exp: f32) -> DFFloat32Array {
         self.cast::<Float32Type>()

@@ -24,7 +24,7 @@ pub struct BooleanArrayBuilder {
     builder: MutableBooleanArray,
 }
 
-impl ArrayBuilder<bool, BooleanType> for BooleanArrayBuilder {
+impl ArrayBuilder<bool> for BooleanArrayBuilder {
     /// Appends a value of type `T` into the builder
     #[inline]
     fn append_value(&mut self, v: bool) {
@@ -88,7 +88,7 @@ impl BooleanArrayBuilder {
     }
 }
 
-impl NewDataArray<BooleanType, bool> for DFBooleanArray {
+impl NewDataArray<bool> for DFBooleanArray {
     fn new_from_slice(v: &[bool]) -> Self {
         Self::new_from_iter(v.iter().copied())
     }

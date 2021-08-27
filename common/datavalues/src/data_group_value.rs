@@ -36,12 +36,8 @@ pub enum DataGroupValue {
     Int64(i64),
     Utf8(Box<String>),
     Boolean(bool),
-    TimestampSecond(i64),
-    TimeMillisecond(i64),
-    TimeMicrosecond(i64),
-    TimeNanosecond(i64),
-    Date32(i32),
-    Date64(i64),
+    Date16(u16),
+    Date32(u32),
 }
 
 impl TryFrom<&DataValue> for DataGroupValue {
@@ -60,13 +56,9 @@ impl TryFrom<&DataValue> for DataGroupValue {
             DataValue::UInt16(Some(v)) => DataGroupValue::UInt16(*v),
             DataValue::UInt32(Some(v)) => DataGroupValue::UInt32(*v),
             DataValue::UInt64(Some(v)) => DataGroupValue::UInt64(*v),
-            DataValue::TimestampSecond(Some(v)) => DataGroupValue::TimestampSecond(*v),
-            DataValue::TimestampMillisecond(Some(v)) => DataGroupValue::TimeMillisecond(*v),
-            DataValue::TimestampMicrosecond(Some(v)) => DataGroupValue::TimeMicrosecond(*v),
-            DataValue::TimestampNanosecond(Some(v)) => DataGroupValue::TimeNanosecond(*v),
             DataValue::Utf8(Some(v)) => DataGroupValue::Utf8(Box::new(v.clone())),
+            DataValue::Date16(Some(v)) => DataGroupValue::Date16(*v),
             DataValue::Date32(Some(v)) => DataGroupValue::Date32(*v),
-            DataValue::Date64(Some(v)) => DataGroupValue::Date64(*v),
 
             DataValue::Float32(None)
             | DataValue::Float64(None)
@@ -111,12 +103,8 @@ impl From<&DataGroupValue> for DataValue {
             DataGroupValue::UInt32(v) => DataValue::UInt32(Some(*v)),
             DataGroupValue::UInt64(v) => DataValue::UInt64(Some(*v)),
             DataGroupValue::Utf8(v) => DataValue::Utf8(Some(v.to_string())),
-            DataGroupValue::TimestampSecond(v) => DataValue::TimestampSecond(Some(*v)),
-            DataGroupValue::TimeMillisecond(v) => DataValue::TimestampMillisecond(Some(*v)),
-            DataGroupValue::TimeMicrosecond(v) => DataValue::TimestampMicrosecond(Some(*v)),
-            DataGroupValue::TimeNanosecond(v) => DataValue::TimestampNanosecond(Some(*v)),
+            DataGroupValue::Date16(v) => DataValue::Date16(Some(*v)),
             DataGroupValue::Date32(v) => DataValue::Date32(Some(*v)),
-            DataGroupValue::Date64(v) => DataValue::Date64(Some(*v)),
         }
     }
 }

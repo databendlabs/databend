@@ -24,7 +24,6 @@ use std::ops::Sub;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::DataValueArithmeticOperator;
 
@@ -138,21 +137,21 @@ pub trait NumOpsDispatch: Debug {
     }
 }
 
-impl<T> NumOpsDispatch for DataArray<T>
+impl<T> NumOpsDispatch for DFPrimitiveArray<T>
 where
-    T: DFNumericType,
+    T: DFPrimitiveType,
 
-    T::Native: ops::Add<Output = T::Native>
-        + ops::Sub<Output = T::Native>
-        + ops::Mul<Output = T::Native>
-        + ops::Div<Output = T::Native>
-        + ops::Rem<Output = T::Native>
+    T: ops::Add<Output = T>
+        + ops::Sub<Output = T>
+        + ops::Mul<Output = T>
+        + ops::Div<Output = T>
+        + ops::Rem<Output = T>
         + num::Zero
         + num::One
         + num::ToPrimitive
         + num::traits::AsPrimitive<u8>
         + num::NumCast,
-    DataArray<T>: IntoSeries,
+    DFPrimitiveArray<T>: IntoSeries,
 {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };

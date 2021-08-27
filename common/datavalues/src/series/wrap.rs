@@ -17,7 +17,9 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::compute::aggregate;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -26,17 +28,9 @@ use crate::series::*;
 
 pub struct SeriesWrap<T>(pub T);
 
-impl<T> From<DataArray<T>> for SeriesWrap<DataArray<T>> {
-    fn from(da: DataArray<T>) -> Self {
+impl<T> From<T> for SeriesWrap<T> {
+    fn from(da: T) -> Self {
         SeriesWrap(da)
-    }
-}
-
-impl<T> Deref for SeriesWrap<DataArray<T>> {
-    type Target = DataArray<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -61,30 +55,30 @@ macro_rules! impl_dyn_array {
 
         impl SeriesTrait for SeriesWrap<$da> {
             fn data_type(&self) -> DataType {
-                self.0.data_type()
+                self.0.array.data_type().into()
             }
             fn len(&self) -> usize {
-                self.0.len()
+                self.0.array.len()
             }
 
             fn is_empty(&self) -> bool {
-                self.0.is_empty()
+                self.len() == 0
             }
 
             fn is_null(&self, row: usize) -> bool {
-                self.0.is_null(row)
+                self.0.array.is_null(row)
             }
 
             fn null_count(&self) -> usize {
-                self.0.null_count()
+                self.0.array.null_count()
             }
 
             fn get_array_memory_size(&self) -> usize {
-                self.0.get_array_memory_size()
+                aggregate::estimated_bytes_size(&self.0.array)
             }
 
             fn get_array_ref(&self) -> ArrayRef {
-                self.0.get_array_ref()
+                Arc::new(self.0.array.clone()) as ArrayRef
             }
 
             fn to_values(&self) -> Result<Vec<DataValue>> {
@@ -93,15 +87,6 @@ macro_rules! impl_dyn_array {
 
             fn slice(&self, offset: usize, length: usize) -> Series {
                 self.0.slice(offset, length).into_series()
-            }
-
-            unsafe fn equal_element(
-                &self,
-                idx_self: usize,
-                idx_other: usize,
-                other: &Series,
-            ) -> bool {
-                self.0.equal_element(idx_self, idx_other, other)
             }
 
             fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
@@ -324,30 +309,6 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series: {:?} of type {:?} into utf8",
-                        self.name(),
-                        self.data_type(),
-                    )))
-                }
-            }
-
-            fn date32(&self) -> Result<&DFDate32Array> {
-                if matches!(self.0.data_type(), DataType::Date32) {
-                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFDate32Array)) }
-                } else {
-                    Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into date32",
-                        self.name(),
-                        self.data_type(),
-                    )))
-                }
-            }
-
-            fn date64(&self) -> Result<&DFDate64Array> {
-                if matches!(self.0.data_type(), DataType::Date64) {
-                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFDate64Array)) }
-                } else {
-                    Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into date64",
                         self.name(),
                         self.data_type(),
                     )))

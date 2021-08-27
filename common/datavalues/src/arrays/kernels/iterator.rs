@@ -27,10 +27,10 @@ unsafe impl<'a, I> TrustedLen for Box<dyn DFIterator<Item = I> + 'a> {}
 impl<T: ?Sized> DFIterator for T where T: ExactSizeIterator + DoubleEndedIterator + Send + Sync + TrustedLen
 {}
 
-impl<'a, T> IntoIterator for &'a DataArray<T>
-where T: DFNumericType
+impl<'a, T> IntoIterator for &'a DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    type Item = Option<T::Native>;
+    type Item = Option<T>;
     type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {

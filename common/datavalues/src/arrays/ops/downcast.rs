@@ -18,39 +18,27 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::utils::BitmapIter;
 use common_arrow::arrow::bitmap::utils::ZipValidity;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::series::Series;
 
-impl<T> AsRef<PrimitiveArray<T::Native>> for DataArray<T>
-where T: DFPrimitiveType
-{
-    fn as_ref(&self) -> &PrimitiveArray<T::Native> {
-        self.downcast_ref()
-    }
-}
-
-impl<T> DataArray<T>
+impl<T> DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
     #[inline]
-    pub fn downcast_ref(&self) -> &PrimitiveArray<T::Native> {
-        let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) }
+    pub fn downcast_ref(&self) -> &PrimitiveArray<T> {
+        &self.array
     }
 
-    pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ T::Native, std::slice::Iter<'_, T::Native>> {
-        let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const PrimitiveArray<T::Native>) };
-        arr.iter()
+    pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ T, std::slice::Iter<'_, T>> {
+        self.array.iter()
     }
 
-    pub fn collect_values(&self) -> Vec<Option<T::Native>> {
+    pub fn collect_values(&self) -> Vec<Option<T>> {
         let e = self.downcast_iter().map(|c| c.copied());
         e.collect()
     }
 
-    pub fn from_arrow_array(array: PrimitiveArray<T::Native>) -> Self {
+    pub fn from_arrow_array(array: PrimitiveArray<T>) -> Self {
         let array_ref = Arc::new(array) as ArrayRef;
         array_ref.into()
     }
@@ -65,14 +53,11 @@ impl AsRef<BooleanArray> for DFBooleanArray {
 impl DFBooleanArray {
     #[inline]
     pub fn downcast_ref(&self) -> &BooleanArray {
-        let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const BooleanArray) }
+        &self.array
     }
 
     pub fn downcast_iter(&self) -> ZipValidity<'_, bool, BitmapIter<'_>> {
-        let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const BooleanArray) };
-        arr.iter()
+        &self.array.iter()
     }
 
     pub fn collect_values(&self) -> Vec<Option<bool>> {
@@ -94,8 +79,7 @@ impl AsRef<LargeUtf8Array> for DFUtf8Array {
 impl DFUtf8Array {
     #[inline]
     pub fn downcast_ref(&self) -> &LargeUtf8Array {
-        let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const LargeUtf8Array) }
+        &self.array
     }
 
     pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ str, Utf8ValuesIter<'_, i64>> {
@@ -114,23 +98,13 @@ impl DFUtf8Array {
     }
 }
 
-impl AsRef<LargeListArray> for DFListArray {
-    fn as_ref(&self) -> &LargeListArray {
-        self.downcast_ref()
-    }
-}
-
 impl DFListArray {
     pub fn downcast_ref(&self) -> &LargeListArray {
-        let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const LargeListArray) }
+        &self.array
     }
 
     pub fn downcast_iter(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator {
-        let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const LargeListArray) };
-
-        arr.iter().map(|a| {
+        self.array.iter().map(|a| {
             a.map(|b| {
                 let c: ArrayRef = Arc::from(b);
                 c.into_series()
@@ -144,16 +118,9 @@ impl DFListArray {
     }
 }
 
-impl AsRef<LargeBinaryArray> for DFBinaryArray {
-    fn as_ref(&self) -> &LargeBinaryArray {
-        self.downcast_ref()
-    }
-}
-
 impl DFBinaryArray {
     pub fn downcast_ref(&self) -> &LargeBinaryArray {
-        let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const LargeBinaryArray) }
+        &self.array
     }
 
     pub fn collect_values(&self) -> Vec<Option<Vec<u8>>> {
@@ -167,15 +134,9 @@ impl DFBinaryArray {
     }
 }
 
-impl AsRef<StructArray> for DFStructArray {
-    fn as_ref(&self) -> &StructArray {
-        self.downcast_ref()
-    }
-}
 impl DFStructArray {
     pub fn downcast_ref(&self) -> &StructArray {
-        let arr = &*self.array;
-        unsafe { &*(arr as *const dyn Array as *const StructArray) }
+        &self.array
     }
 
     pub fn from_arrow_array(array: StructArray) -> Self {

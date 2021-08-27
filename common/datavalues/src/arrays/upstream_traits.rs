@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementations of upstream traits for DataArray<T>
+//! Implementations of upstream traits for DFPrimitiveArray<T>
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::types::NativeType;
 
 use super::get_list_builder;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::series::Series;
 use crate::utils::get_iter_capacity;
@@ -29,13 +29,13 @@ use crate::utils::NoNull;
 
 /// FromIterator trait
 
-impl<T> FromIterator<Option<T::Native>> for DataArray<T>
+impl<T> FromIterator<Option<T>> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn from_iter<I: IntoIterator<Item = Option<T::Native>>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = Option<T>>>(iter: I) -> Self {
         let iter = iter.into_iter();
 
-        let arr: PrimitiveArray<T::Native> = match iter.size_hint() {
+        let arr: PrimitiveArray<T> = match iter.size_hint() {
             (a, Some(b)) if a == b => {
                 // 2021-02-07: ~40% faster than builder.
                 // It is unsafe because we cannot be certain that the iterators length can be trusted.
@@ -60,14 +60,14 @@ where T: DFPrimitiveType
 }
 
 // NoNull is only a wrapper needed for specialization
-impl<T> FromIterator<T::Native> for NoNull<DataArray<T>>
+impl<T> FromIterator<T> for NoNull<DFPrimitiveArray<T>>
 where T: DFPrimitiveType
 {
     // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
     // know we don't have null values.
-    fn from_iter<I: IntoIterator<Item = T::Native>>(iter: I) -> Self {
-        let av = iter.into_iter().collect::<AlignedVec<T::Native>>();
-        NoNull::new(DataArray::<T>::new_from_aligned_vec(av))
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let av = iter.into_iter().collect::<AlignedVec<T>>();
+        NoNull::new(DFPrimitiveArray::<T>::new_from_aligned_vec(av))
     }
 }
 
@@ -155,10 +155,10 @@ impl From<DFBooleanArray> for Vec<Option<bool>> {
     }
 }
 
-impl<'a, T> From<&'a DataArray<T>> for Vec<Option<T::Native>>
-where T: DFNumericType
+impl<'a, T> From<&'a DFPrimitiveArray<T>> for Vec<Option<T>>
+where T: DFPrimitiveType
 {
-    fn from(ca: &'a DataArray<T>) -> Self {
+    fn from(ca: &'a DFPrimitiveArray<T>) -> Self {
         ca.collect_values()
     }
 }

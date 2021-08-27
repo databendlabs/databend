@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
@@ -136,12 +135,11 @@ where
     }
 }
 
-impl<'a, T> IntoTakeRandom<'a> for &'a DataArray<T>
-where T: DFNumericType
+impl<'a, T> IntoTakeRandom<'a> for &'a DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
-    type TakeRandom =
-        TakeRandBranch<NumTakeRandomCont<'a, T::Native>, NumTakeRandomSingleArray<'a, T>>;
+    type Item = T;
+    type TakeRandom = TakeRandBranch<NumTakeRandomCont<'a, T>, NumTakeRandomSingleArray<'a, T>>;
 
     #[inline]
     fn take_rand(&self) -> Self::TakeRandom {
@@ -232,15 +230,15 @@ where T: Copy
 }
 
 pub struct NumTakeRandomSingleArray<'a, T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
-    arr: &'a PrimitiveArray<T::Native>,
+    arr: &'a PrimitiveArray<T>,
 }
 
 impl<'a, T> TakeRandom for NumTakeRandomSingleArray<'a, T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
+    type Item = T;
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {

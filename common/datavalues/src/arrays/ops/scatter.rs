@@ -20,7 +20,6 @@ use common_exception::Result;
 use crate::arrays::get_list_builder;
 use crate::arrays::BinaryArrayBuilder;
 use crate::arrays::BooleanArrayBuilder;
-use crate::arrays::DataArray;
 use crate::arrays::PrimitiveArrayBuilder;
 use crate::arrays::Utf8ArrayBuilder;
 use crate::prelude::*;
@@ -54,8 +53,8 @@ pub trait ArrayScatter: Debug {
     }
 }
 
-impl<T> ArrayScatter for DataArray<T>
-where T: DFNumericType
+impl<T> ArrayScatter for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
     unsafe fn scatter_unchecked(
         &self,

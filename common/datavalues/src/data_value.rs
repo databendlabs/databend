@@ -53,23 +53,11 @@ pub enum DataValue {
     Binary(Option<Vec<u8>>),
     Utf8(Option<String>),
 
-    /// Datetime.
-    /// Date stored as a signed 32bit int
-    Date32(Option<i32>),
-    /// Date stored as a signed 64bit int
-    Date64(Option<i64>),
-    /// Timestamp Second
-    TimestampSecond(Option<i64>),
-    /// Timestamp Milliseconds
-    TimestampMillisecond(Option<i64>),
-    /// Timestamp Microseconds
-    TimestampMicrosecond(Option<i64>),
-    /// Timestamp Nanoseconds
-    TimestampNanosecond(Option<i64>),
-    /// Interval with YearMonth unit
-    IntervalYearMonth(Option<i32>),
-    /// Interval with DayTime unit
-    IntervalDayTime(Option<i64>),
+    /// Date stored as a unsigned 16bit int
+    Date16(Option<u16>),
+    /// Date stored as a unsigned 32bit int
+    Date32(Option<u32>),
+    DateTime32(Option<u32>),
 
     // Container struct.
     List(Option<Vec<DataValue>>, DataType),
@@ -95,12 +83,10 @@ impl DataValue {
                 | DataValue::Float64(None)
                 | DataValue::Binary(None)
                 | DataValue::Utf8(None)
+                | DataValue::Date16(None)
                 | DataValue::Date32(None)
-                | DataValue::Date64(None)
+                | DataValue::DateTime32(None)
                 | DataValue::Null
-                | DataValue::TimestampMillisecond(None)
-                | DataValue::TimestampMicrosecond(None)
-                | DataValue::TimestampNanosecond(None)
                 | DataValue::List(None, _)
         )
     }
@@ -120,14 +106,9 @@ impl DataValue {
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
             DataValue::Utf8(_) => DataType::Utf8,
+            DataValue::Date16(_) => DataType::Date32,
             DataValue::Date32(_) => DataType::Date32,
-            DataValue::Date64(_) => DataType::Date64,
-            DataValue::TimestampSecond(_) => DataType::Timestamp(TimeUnit::Second, None),
-            DataValue::TimestampMillisecond(_) => DataType::Timestamp(TimeUnit::Millisecond, None),
-            DataValue::TimestampMicrosecond(_) => DataType::Timestamp(TimeUnit::Microsecond, None),
-            DataValue::TimestampNanosecond(_) => DataType::Timestamp(TimeUnit::Nanosecond, None),
-            DataValue::IntervalYearMonth(_) => DataType::Interval(IntervalUnit::YearMonth),
-            DataValue::IntervalDayTime(_) => DataType::Interval(IntervalUnit::DayTime),
+            DataValue::DateTime32(_) => DataType::DateTime32,
             DataValue::List(_, data_type) => {
                 DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
             }
@@ -358,11 +339,9 @@ impl From<&DataType> for DataValue {
             DataType::Float32 => DataValue::Float32(None),
             DataType::Float64 => DataValue::Float64(None),
             DataType::Utf8 => DataValue::Utf8(None),
-            DataType::Date32 => DataValue::UInt32(None),
-            DataType::Date64 => DataValue::UInt64(None),
-            DataType::Timestamp(_, _) => DataValue::UInt64(None),
-            DataType::Interval(IntervalUnit::YearMonth) => DataValue::UInt32(None),
-            DataType::Interval(IntervalUnit::DayTime) => DataValue::UInt64(None),
+            DataType::Date16 => DataValue::Date16(None),
+            DataType::Date32 => DataValue::Date32(None),
+            DataType::DateTime32 => DataValue::DateTime32(None),
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::Binary => DataValue::Binary(None),
@@ -402,14 +381,10 @@ impl fmt::Display for DataValue {
                 }
                 Ok(())
             }
+            DataValue::Date16(v) => format_data_value_with_option!(f, v),
             DataValue::Date32(v) => format_data_value_with_option!(f, v),
-            DataValue::Date64(v) => format_data_value_with_option!(f, v),
-            DataValue::TimestampSecond(v) => format_data_value_with_option!(f, v),
-            DataValue::TimestampMillisecond(v) => format_data_value_with_option!(f, v),
-            DataValue::TimestampMicrosecond(v) => format_data_value_with_option!(f, v),
-            DataValue::TimestampNanosecond(v) => format_data_value_with_option!(f, v),
-            DataValue::IntervalDayTime(v) => format_data_value_with_option!(f, v),
-            DataValue::IntervalYearMonth(v) => format_data_value_with_option!(f, v),
+            DataValue::DateTime32(v) => format_data_value_with_option!(f, v),
+
             DataValue::List(None, ..) => write!(f, "NULL"),
             DataValue::List(Some(v), ..) => {
                 write!(
@@ -447,24 +422,9 @@ impl fmt::Debug for DataValue {
             DataValue::Utf8(v) => format_data_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "{}", self),
             DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
+            DataValue::Date16(_) => write!(f, "Date16(\"{}\")", self),
             DataValue::Date32(_) => write!(f, "Date32(\"{}\")", self),
-            DataValue::Date64(_) => write!(f, "Date64(\"{}\")", self),
-            DataValue::IntervalDayTime(_) => {
-                write!(f, "IntervalDayTime(\"{}\")", self)
-            }
-            DataValue::IntervalYearMonth(_) => {
-                write!(f, "IntervalYearMonth(\"{}\")", self)
-            }
-            DataValue::TimestampSecond(_) => write!(f, "TimestampSecond({})", self),
-            DataValue::TimestampMillisecond(_) => {
-                write!(f, "TimestampMillisecond({})", self)
-            }
-            DataValue::TimestampMicrosecond(_) => {
-                write!(f, "TimestampMicrosecond({})", self)
-            }
-            DataValue::TimestampNanosecond(_) => {
-                write!(f, "TimestampNanosecond({})", self)
-            }
+            DataValue::DateTime32(_) => write!(f, "DateTime32(\"{}\")", self),
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }

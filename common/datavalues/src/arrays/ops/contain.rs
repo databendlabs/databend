@@ -15,10 +15,10 @@
 use std::fmt::Debug;
 
 use common_arrow::arrow::compute::contains::contains;
+use common_arrow::arrow::types::NativeType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
 pub trait ArrayContain: Debug {
@@ -43,8 +43,8 @@ macro_rules! contain_internal {
     }};
 }
 
-impl<T> ArrayContain for DataArray<T>
-where T: DFNumericType
+impl<T> ArrayContain for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
     fn contain(&self, list: &DFListArray) -> Result<DFBooleanArray>
     where Self: std::marker::Sized {

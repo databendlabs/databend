@@ -17,6 +17,7 @@ use std::borrow::Borrow;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use common_arrow::arrow::types::NativeType;
 
 use super::DFAsRef;
 use crate::prelude::*;
@@ -94,10 +95,10 @@ pub trait FromTrustedLenIterator<A>: Sized {
     where T::IntoIter: TrustedLen;
 }
 
-impl<T> FromTrustedLenIterator<Option<T::Native>> for DataArray<T>
+impl<T> FromTrustedLenIterator<Option<T>> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn from_iter_trusted_length<I: IntoIterator<Item = Option<T::Native>>>(iter: I) -> Self {
+    fn from_iter_trusted_length<I: IntoIterator<Item = Option<T>>>(iter: I) -> Self {
         let iter = iter.into_iter();
 
         let arr = unsafe {
@@ -108,17 +109,17 @@ where T: DFPrimitiveType
 }
 
 // NoNull is only a wrapper needed for specialization
-impl<T> FromTrustedLenIterator<T::Native> for NoNull<DataArray<T>>
+impl<T> FromTrustedLenIterator<T> for NoNull<DFPrimitiveArray<T>>
 where T: DFPrimitiveType
 {
     // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
     // know we don't have null values.
-    fn from_iter_trusted_length<I: IntoIterator<Item = T::Native>>(iter: I) -> Self {
+    fn from_iter_trusted_length<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let iter = iter.into_iter();
         let values = unsafe { Buffer::from_trusted_len_iter_unchecked(iter) };
         let arr = PrimitiveArray::from_data(T::data_type().to_arrow(), values, None);
 
-        NoNull::new(DataArray::<T>::from_arrow_array(arr))
+        NoNull::new(DFPrimitiveArray::<T>::from_arrow_array(arr))
     }
 }
 impl<Ptr> FromTrustedLenIterator<Ptr> for DFListArray

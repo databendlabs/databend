@@ -18,7 +18,6 @@ use common_arrow::arrow::array::ArrayRef;
 
 use super::take_random::TakeRandom;
 use super::take_random::TakeRandomUtf8;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
 macro_rules! impl_take_random_get {
@@ -41,10 +40,10 @@ macro_rules! impl_take_random_get_unchecked {
     }};
 }
 
-impl<T> TakeRandom for DataArray<T>
-where T: DFNumericType
+impl<T> TakeRandom for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
+    type Item = T;
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
@@ -57,10 +56,10 @@ where T: DFNumericType
     }
 }
 
-impl<'a, T> TakeRandom for &'a DataArray<T>
-where T: DFNumericType
+impl<'a, T> TakeRandom for &'a DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
+    type Item = T;
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {

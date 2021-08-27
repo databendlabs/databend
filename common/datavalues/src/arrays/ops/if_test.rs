@@ -30,7 +30,7 @@ fn test_array_if() -> Result<()> {
         DFBooleanArray::new_from_slice(&vec![true]),
     ];
 
-    // DFNumericType.
+    // DFPrimitiveType.
     let lhs = DFUInt16Array::new_from_slice(&[1u16]);
     let rhs = DFUInt16Array::new_from_slice(&[2u16, 4u16, 6u16]);
     let res = lhs.if_then_else(&rhs, &conds[0])?;

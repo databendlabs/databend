@@ -13,32 +13,32 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::types::NativeType;
 use common_exception::Result;
 use common_io::prelude::*;
 use lexical_core::FromLexical;
 
 use super::ArrayDeserializer;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
 
 pub struct PrimitiveArrayBuilder<T>
 where
-    T: DFNumericType,
-    T::Native: Default,
+    T: DFPrimitiveType,
+    T: Default,
 {
-    builder: MutablePrimitiveArray<T::Native>,
+    builder: MutablePrimitiveArray<T>,
 }
 
-impl<T> ArrayBuilder<T::Native, T> for PrimitiveArrayBuilder<T>
+impl<T> ArrayBuilder<T, DFPrimitiveArray<T>> for PrimitiveArrayBuilder<T>
 where
-    T: DFNumericType,
-    T::Native: Default,
+    T: DFPrimitiveType,
+    T: Default,
 {
     /// Appends a value of type `T` into the builder
     #[inline]
-    fn append_value(&mut self, v: T::Native) {
+    fn append_value(&mut self, v: T) {
         self.builder.push(Some(v))
     }
 
@@ -48,7 +48,7 @@ where
         self.builder.push_null();
     }
 
-    fn finish(&mut self) -> DataArray<T> {
+    fn finish(&mut self) -> DFPrimitiveArray<T> {
         let array = self.builder.as_arc();
 
         array.into()
@@ -57,12 +57,12 @@ where
 
 impl<T> ArrayDeserializer for PrimitiveArrayBuilder<T>
 where
-    T: DFNumericType,
-    T::Native: Unmarshal<T::Native> + StatBuffer + FromLexical,
-    DataArray<T>: IntoSeries,
+    T: DFPrimitiveType,
+    T: Unmarshal<T> + StatBuffer + FromLexical,
+    DFPrimitiveArray<T>: IntoSeries,
 {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let value: T::Native = reader.read_scalar()?;
+        let value: T = reader.read_scalar()?;
         self.append_value(value);
         Ok(())
     }
@@ -70,7 +70,7 @@ where
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
-            let value: T::Native = reader.read_scalar()?;
+            let value: T = reader.read_scalar()?;
             self.append_value(value);
         }
         Ok(())
@@ -81,7 +81,7 @@ where
     }
 
     fn de_text(&mut self, reader: &[u8]) {
-        match lexical_core::parse::<T::Native>(reader) {
+        match lexical_core::parse::<T>(reader) {
             Ok(v) => self.append_value(v),
             Err(_) => self.append_null(),
         }
@@ -93,35 +93,35 @@ where
 }
 
 impl<T> PrimitiveArrayBuilder<T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
     pub fn with_capacity(capacity: usize) -> Self {
         PrimitiveArrayBuilder {
-            builder: MutablePrimitiveArray::<T::Native>::with_capacity(capacity),
+            builder: MutablePrimitiveArray::<T>::with_capacity(capacity),
         }
     }
 }
 
-impl<T> NewDataArray<T, T::Native> for DataArray<T>
-where T: DFNumericType
+impl<T> NewDataArray<T> for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    fn new_from_slice(v: &[T::Native]) -> Self {
+    fn new_from_slice(v: &[T]) -> Self {
         Self::new_from_iter(v.iter().copied())
     }
 
-    fn new_from_opt_slice(opt_v: &[Option<T::Native>]) -> Self {
+    fn new_from_opt_slice(opt_v: &[Option<T>]) -> Self {
         Self::new_from_opt_iter(opt_v.iter().copied())
     }
 
-    fn new_from_opt_iter(it: impl Iterator<Item = Option<T::Native>>) -> DataArray<T> {
+    fn new_from_opt_iter(it: impl Iterator<Item = Option<T>>) -> DFPrimitiveArray<T> {
         let mut builder = PrimitiveArrayBuilder::with_capacity(get_iter_capacity(&it));
         it.for_each(|opt| builder.append_option(opt));
         builder.finish()
     }
 
     /// Create a new DataArray from an iterator.
-    fn new_from_iter(it: impl Iterator<Item = T::Native>) -> DataArray<T> {
-        let ca: NoNull<DataArray<_>> = it.collect();
+    fn new_from_iter(it: impl Iterator<Item = T>) -> DFPrimitiveArray<T> {
+        let ca: NoNull<DFPrimitiveArray<_>> = it.collect();
         ca.into_inner()
     }
 }

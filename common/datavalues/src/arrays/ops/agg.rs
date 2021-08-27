@@ -20,7 +20,6 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute::aggregate;
 use common_arrow::arrow::compute::aggregate::sum_primitive;
 use common_arrow::arrow::types::simd::Simd;
-use common_arrow::arrow::types::NativeType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -72,31 +71,28 @@ pub trait ArrayAgg: Debug {
     }
 }
 
-impl<T> ArrayAgg for DataArray<T>
+impl<T> ArrayAgg for DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: NativeType
+    T: DFPrimitiveType
         + Simd
         + PartialOrd
         + Num
         + NumCast
         + Zero
         + Into<DataValue>
-        + AsPrimitive<<T::LargestType as DFPrimitiveType>::Native>,
+        + AsPrimitive<T::LargestType>,
 
-    <T::LargestType as DFPrimitiveType>::Native: Into<DataValue> + AddAssign + Default,
+    T::LargestType: Into<DataValue> + AddAssign + Default,
 
-    <T::Native as Simd>::Simd: Add<Output = <T::Native as Simd>::Simd>
-        + aggregate::Sum<T::Native>
-        + aggregate::SimdOrd<T::Native>,
-    Option<T::Native>: Into<DataValue>,
+    <T as Simd>::Simd: Add<Output = <T as Simd>::Simd> + aggregate::Sum<T> + aggregate::SimdOrd<T>,
+    Option<T>: Into<DataValue>,
 {
     fn sum(&self) -> Result<DataValue> {
         let array = self.downcast_ref();
         // if largest type is self and there is nullable, we just use simd
         // sum is faster in auto vectorized than manual simd
         let null_count = self.null_count();
-        if null_count > 0 && (T::SIZE == <T::LargestType as DFNumericType>::SIZE) {
+        if null_count > 0 && (T::SIZE == <T::LargestType as DFPrimitiveType>::SIZE) {
             return Ok(match sum_primitive(array) {
                 Some(x) => x.into(),
                 None => DataValue::from(self.data_type()),
@@ -107,7 +103,7 @@ where
             return Ok(DataValue::from(self.data_type()));
         }
 
-        let mut sum = <T::LargestType as DFPrimitiveType>::Native::default();
+        let mut sum = <T::LargestType>::default();
         if null_count == 0 {
             //fast path
             array.values().as_slice().iter().for_each(|f| {

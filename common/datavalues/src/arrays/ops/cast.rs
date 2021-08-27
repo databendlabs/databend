@@ -15,27 +15,18 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::cast;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::NumCast;
 
 use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
 
-/// Cast `DataArray<T>` to `DataArray<N>`
+/// Cast `DFPrimitiveArray<T>` to `DataArray<N>`
 pub trait ArrayCast: Debug {
-    /// Cast `DataArray<T>` to `DataArray<N>`
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported cast operation for {:?}",
-            self,
-        )))
-    }
-
     fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
         Err(ErrorCode::BadDataValueType(format!(
             "Unsupported cast_with_type operation for {:?}",
@@ -44,96 +35,35 @@ pub trait ArrayCast: Debug {
     }
 }
 
-fn cast_ca<N, T>(ca: &DataArray<T>) -> Result<DataArray<N>>
-where
-    N: DFDataType,
-    T: DFDataType,
-{
-    if N::data_type() == T::data_type() {
-        // convince the compiler that N and T are the same type
-        return unsafe {
-            let ca = std::mem::transmute(ca.clone());
-            Ok(ca)
-        };
-    }
-
+fn cast_ca(ca: &dyn Array, data_type: &DataType) -> Result<Series> {
+    let d = data_type.to_arrow();
     // we enable ignore_overflow by default
-    let ca: ArrayRef = Arc::from(cast::wrapping_cast(
-        ca.array.as_ref(),
-        &N::data_type().to_arrow(),
-    )?);
-    Ok(ca.into())
+    let array = cast::wrapping_cast(ca, &d)?;
+    let array: ArrayRef = Arc::from(array);
+    Ok(array.into_series())
 }
 
-macro_rules! cast_with_type {
-    ($self:expr, $data_type:expr) => {{
-        match $data_type {
-            DataType::Boolean => ArrayCast::cast::<BooleanType>($self).map(|ca| ca.into_series()),
-            DataType::Utf8 => ArrayCast::cast::<Utf8Type>($self).map(|ca| ca.into_series()),
-            DataType::UInt8 => ArrayCast::cast::<UInt8Type>($self).map(|ca| ca.into_series()),
-            DataType::UInt16 => ArrayCast::cast::<UInt16Type>($self).map(|ca| ca.into_series()),
-            DataType::UInt32 => ArrayCast::cast::<UInt32Type>($self).map(|ca| ca.into_series()),
-            DataType::UInt64 => ArrayCast::cast::<UInt64Type>($self).map(|ca| ca.into_series()),
-            DataType::Int8 => ArrayCast::cast::<Int8Type>($self).map(|ca| ca.into_series()),
-            DataType::Int16 => ArrayCast::cast::<Int16Type>($self).map(|ca| ca.into_series()),
-            DataType::Int32 => ArrayCast::cast::<Int32Type>($self).map(|ca| ca.into_series()),
-            DataType::Int64 => ArrayCast::cast::<Int64Type>($self).map(|ca| ca.into_series()),
-            DataType::Float32 => ArrayCast::cast::<Float32Type>($self).map(|ca| ca.into_series()),
-            DataType::Float64 => ArrayCast::cast::<Float64Type>($self).map(|ca| ca.into_series()),
-            DataType::Date32 => ArrayCast::cast::<Date32Type>($self).map(|ca| ca.into_series()),
-            DataType::Date64 => ArrayCast::cast::<Date64Type>($self).map(|ca| ca.into_series()),
-
-            DataType::List(_) => ArrayCast::cast::<ListType>($self).map(|ca| ca.into_series()),
-            dt => Err(ErrorCode::IllegalDataType(format!(
-                "Arrow datatype {:?} not supported by Datafuse",
-                dt
-            ))),
-        }
-    }};
-}
-
-impl<T> ArrayCast for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumCast,
+impl<T> ArrayCast for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        cast_ca(self)
-    }
-
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        cast_with_type!(self, data_type)
+        cast_ca(&self.array, data_type)
     }
 }
 
 impl ArrayCast for DFUtf8Array {
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        cast_ca(self)
-    }
-
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        cast_with_type!(self, data_type)
+        cast_ca(&self.array, data_type)
     }
 }
 
 impl ArrayCast for DFBooleanArray {
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        cast_ca(self)
-    }
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        cast_with_type!(self, data_type)
+        cast_ca(&self.array, data_type)
     }
 }
 
 impl ArrayCast for DFNullArray {
-    fn cast<N>(&self) -> Result<DataArray<N>>
-    where N: DFDataType {
-        cast_ca(self)
-    }
-
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         match data_type {
             DataType::Null => Ok(self.clone().into_series()),
@@ -149,8 +79,6 @@ impl ArrayCast for DFNullArray {
             DataType::Int64 => Ok(DFInt64Array::full_null(self.len()).into_series()),
             DataType::Float32 => Ok(DFFloat32Array::full_null(self.len()).into_series()),
             DataType::Float64 => Ok(DFFloat64Array::full_null(self.len()).into_series()),
-            DataType::Date32 => Ok(DFDate32Array::full_null(self.len()).into_series()),
-            DataType::Date64 => Ok(DFDate64Array::full_null(self.len()).into_series()),
             DataType::Binary => Ok(DFBinaryArray::full_null(self.len()).into_series()),
             DataType::List(_) => Ok(DFListArray::full_null(self.len()).into_series()),
 

@@ -16,10 +16,9 @@ use common_arrow::arrow::array::*;
 use common_exception::Result;
 use num::Num;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
-pub trait ArrayBuilder<N, T> {
+pub trait ArrayBuilder<N, Array> {
     fn append_value(&mut self, val: N);
     fn append_null(&mut self);
     fn append_option(&mut self, opt_val: Option<N>) {
@@ -28,7 +27,7 @@ pub trait ArrayBuilder<N, T> {
             None => self.append_null(),
         }
     }
-    fn finish(&mut self) -> DataArray<T>;
+    fn finish(&mut self) -> Array;
 }
 
 pub trait ArrayDeserializer {
@@ -40,16 +39,18 @@ pub trait ArrayDeserializer {
     fn finish_to_series(&mut self) -> Series;
 }
 
-pub type DFUInt8ArrayBuilder = PrimitiveArrayBuilder<UInt8Type>;
-pub type DFInt8ArrayBuilder = PrimitiveArrayBuilder<Int8Type>;
-pub type DFUInt16ArrayBuilder = PrimitiveArrayBuilder<UInt16Type>;
-pub type DFInt16ArrayBuilder = PrimitiveArrayBuilder<Int16Type>;
-pub type DFUInt32ArrayBuilder = PrimitiveArrayBuilder<UInt32Type>;
-pub type DFInt32ArrayBuilder = PrimitiveArrayBuilder<Int32Type>;
-pub type DFUInt64ArrayBuilder = PrimitiveArrayBuilder<UInt64Type>;
-pub type DFInt64ArrayBuilder = PrimitiveArrayBuilder<Int64Type>;
+pub type DFUInt8ArrayBuilder = PrimitiveArrayBuilder<u8>;
+pub type DFInt8ArrayBuilder = PrimitiveArrayBuilder<i8>;
+pub type DFUInt16ArrayBuilder = PrimitiveArrayBuilder<u16>;
+pub type DFInt16ArrayBuilder = PrimitiveArrayBuilder<i16>;
+pub type DFUInt32ArrayBuilder = PrimitiveArrayBuilder<u32>;
+pub type DFInt32ArrayBuilder = PrimitiveArrayBuilder<i32>;
+pub type DFUInt64ArrayBuilder = PrimitiveArrayBuilder<u64>;
+pub type DFInt64ArrayBuilder = PrimitiveArrayBuilder<i64>;
+pub type DFFloat32ArrayBuilder = PrimitiveArrayBuilder<f32>;
+pub type DFFloat64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 
-pub trait NewDataArray<T, N> {
+pub trait NewDataArray<N> {
     fn new_from_slice(v: &[N]) -> Self;
     fn new_from_opt_slice(opt_v: &[Option<N>]) -> Self;
 
@@ -74,7 +75,7 @@ type LargeListBooleanBuilder = MutableListArray<i64, MutableBooleanArray>;
 pub struct ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub builder: LargePrimitiveBuilder<T::Native>,
+    pub builder: LargePrimitiveBuilder<T>,
 }
 
 macro_rules! finish_list_builder {
@@ -88,13 +89,13 @@ impl<T> ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
-        let values = MutablePrimitiveArray::<T::Native>::with_capacity(values_capacity);
-        let builder = LargePrimitiveBuilder::<T::Native>::new_with_capacity(values, capacity);
+        let values = MutablePrimitiveArray::<T>::with_capacity(values_capacity);
+        let builder = LargePrimitiveBuilder::<T>::new_with_capacity(values, capacity);
 
         ListPrimitiveArrayBuilder { builder }
     }
 
-    pub fn append_slice(&mut self, opt_v: Option<&[T::Native]>) {
+    pub fn append_slice(&mut self, opt_v: Option<&[T]>) {
         match opt_v {
             Some(items) => {
                 let values = self.builder.mut_values();
@@ -113,7 +114,7 @@ where T: DFPrimitiveType
 impl<T> ListBuilderTrait for ListPrimitiveArrayBuilder<T>
 where
     T: DFPrimitiveType,
-    T::Native: Num,
+    T: Num,
 {
     #[inline]
     fn append_opt_series(&mut self, opt_s: Option<&Series>) {
@@ -133,10 +134,7 @@ where
     #[inline]
     fn append_series(&mut self, s: &Series) {
         let array = s.get_array_ref();
-        let arr = array
-            .as_any()
-            .downcast_ref::<PrimitiveArray<T::Native>>()
-            .unwrap();
+        let arr = array.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
 
         let values = self.builder.mut_values();
         unsafe { values.extend_trusted_len_unchecked(arr.into_iter()) }

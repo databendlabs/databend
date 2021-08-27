@@ -19,6 +19,7 @@ mod builders;
 mod comparison;
 mod kernels;
 mod ops;
+mod primitive;
 mod trusted_len;
 mod upstream_traits;
 
@@ -28,5 +29,6 @@ pub use comparison::*;
 pub use data_array::*;
 pub use kernels::*;
 pub use ops::*;
+pub use primitive::*;
 pub use trusted_len::*;
 pub use upstream_traits::*;

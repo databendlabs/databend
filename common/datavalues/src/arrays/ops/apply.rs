@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::arity::unary;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::utils::NoNull;
 
@@ -45,33 +44,21 @@ macro_rules! apply_enumerate {
     }};
 }
 
-pub trait ArrayApplyKernel<A> {
-    /// Apply kernel and return result as a new DataArray.
-    fn apply_kernel<F>(&self, f: F) -> Self
-    where F: Fn(&A) -> ArrayRef;
-
-    /// Apply a kernel that outputs an array of different type.
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
-    where
-        F: Fn(&A) -> ArrayRef,
-        S: DFDataType;
-}
-
 pub trait ArrayApply<'a, A, B> {
-    /// Apply a closure elementwise and cast to a Numeric DataArray. This is fastest when the null check branching is more expensive
+    /// Apply a closure elementwise and cast to a Numeric DFPrimitiveArray. This is fastest when the null check branching is more expensive
     /// than the closure application.
     ///
     /// Null values remain null.
-    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DataArray<S>
+    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(A) -> S::Native + Copy,
-        S: DFNumericType;
+        F: Fn(A) -> S + Copy,
+        S: DFPrimitiveType;
 
-    /// Apply a closure on optional values and cast to Numeric DataArray without null values.
-    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DataArray<S>
+    /// Apply a closure on optional values and cast to Numeric DFPrimitiveArray without null values.
+    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(Option<A>) -> S::Native + Copy,
-        S: DFNumericType;
+        F: Fn(Option<A>) -> S + Copy,
+        S: DFPrimitiveType;
 
     /// Apply a closure elementwise. This is fastest when the null check branching is more expensive
     /// than the closure application. Often it is.
@@ -91,39 +78,39 @@ pub trait ArrayApply<'a, A, B> {
     where F: Fn((usize, Option<A>)) -> Option<B> + Copy;
 }
 
-impl<'a, T> ArrayApply<'a, T::Native, T::Native> for DataArray<T>
-where T: DFNumericType
+impl<'a, T> ArrayApply<'a, T, T> for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    fn apply_cast_numeric<F, S>(&self, f: F) -> DataArray<S>
+    fn apply_cast_numeric<F, S>(&self, f: F, data_type: DataType) -> DFPrimitiveArray<S>
     where
-        F: Fn(T::Native) -> S::Native + Copy,
-        S: DFNumericType,
+        F: Fn(T) -> S + Copy,
+        S: DFPrimitiveType,
     {
         let array = unary(self.downcast_ref(), |n| f(n), S::data_type().to_arrow());
-        DataArray::<S>::from_arrow_array(array)
+        DFPrimitiveArray::<S>::from_arrow_array(array)
     }
 
-    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DataArray<S>
+    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(Option<T::Native>) -> S::Native + Copy,
-        S: DFNumericType,
+        F: Fn(Option<T>) -> S + Copy,
+        S: DFPrimitiveType,
     {
         let array = unary(
             self.downcast_ref(),
             |n| f(Some(n)),
             S::data_type().to_arrow(),
         );
-        DataArray::<S>::from_arrow_array(array)
+        DFPrimitiveArray::<S>::from_arrow_array(array)
     }
 
     fn apply<F>(&'a self, f: F) -> Self
-    where F: Fn(T::Native) -> T::Native + Copy {
+    where F: Fn(T) -> T + Copy {
         let array = unary(self.downcast_ref(), |n| f(n), T::data_type().to_arrow());
-        DataArray::<T>::from_arrow_array(array)
+        DFPrimitiveArray::<T>::from_arrow_array(array)
     }
 
     fn apply_with_idx<F>(&'a self, f: F) -> Self
-    where F: Fn((usize, T::Native)) -> T::Native + Copy {
+    where F: Fn((usize, T)) -> T + Copy {
         if self.null_count() == 0 {
             let ca: NoNull<_> = self
                 .into_no_null_iter()
@@ -142,7 +129,7 @@ where T: DFNumericType
     }
 
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
-    where F: Fn((usize, Option<T::Native>)) -> Option<T::Native> + Copy {
+    where F: Fn((usize, Option<T>)) -> Option<T> + Copy {
         self.into_iter()
             .enumerate()
             .map(f)
@@ -152,33 +139,30 @@ where T: DFNumericType
 }
 
 impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
-    fn apply_cast_numeric<F, S>(&self, f: F) -> DataArray<S>
+    fn apply_cast_numeric<F, S>(&self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(bool) -> S::Native + Copy,
-        S: DFNumericType,
+        F: Fn(bool) -> S + Copy,
+        S: DFPrimitiveType,
     {
-        self.apply_kernel_cast(|array| {
-            let values = array.values().iter().map(f);
-            let values = AlignedVec::<_>::from_trusted_len_iter(values);
-            let validity = array.validity().clone();
-            let arr = to_primitive::<S>(values, validity);
-            Arc::new(arr)
-        })
+        let values = self.values().iter().map(f);
+        let values = AlignedVec::<_>::from_trusted_len_iter(values);
+        let validity = self.validity().clone();
+        let arr = to_primitive::<S>(values, validity);
+        DFPrimitiveArray::<S>::new(arr)
     }
 
-    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DataArray<S>
+    fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(Option<bool>) -> S::Native + Copy,
-        S: DFNumericType,
+        F: Fn(Option<bool>) -> S + Copy,
+        S: DFPrimitiveType,
     {
-        self.apply_kernel_cast(|array| {
-            let av: AlignedVec<_> = array
-                .into_iter()
-                .map(f)
-                .trust_my_length(self.len())
-                .collect();
-            Arc::new(to_primitive::<S>(av, None)) as ArrayRef
-        })
+        let av: AlignedVec<_> = self
+            .into_iter()
+            .map(f)
+            .trust_my_length(self.len())
+            .collect();
+        let arr = to_primitive::<S>(av, None);
+        DFPrimitiveArray::<S>::new(arr)
     }
 
     fn apply<F>(&self, f: F) -> Self
@@ -197,10 +181,10 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
 }
 
 impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
-    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DataArray<S>
+    fn apply_cast_numeric<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(&'a str) -> S::Native + Copy,
-        S: DFNumericType,
+        F: Fn(&'a str) -> S + Copy,
+        S: DFPrimitiveType,
     {
         let arr = self.downcast_ref();
         let values_iter = arr.values_iter().map(|x| f(x));
@@ -211,10 +195,10 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
         array.into()
     }
 
-    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DataArray<S>
+    fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(Option<&'a str>) -> S::Native + Copy,
-        S: DFNumericType,
+        F: Fn(Option<&'a str>) -> S + Copy,
+        S: DFPrimitiveType,
     {
         let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.downcast_iter().map(f));
         let (_, validity) = self.null_bits();
@@ -234,60 +218,5 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
     where F: Fn((usize, Option<&'a str>)) -> Option<Cow<'a, str>> + Copy {
         self.downcast_iter().enumerate().map(f).collect()
-    }
-}
-
-impl ArrayApplyKernel<BooleanArray> for DFBooleanArray {
-    fn apply_kernel<F>(&self, f: F) -> Self
-    where F: Fn(&BooleanArray) -> ArrayRef {
-        let array = self.downcast_ref();
-        let array_ref = f(array);
-
-        DFBooleanArray::from(array_ref)
-    }
-
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
-    where
-        F: Fn(&BooleanArray) -> ArrayRef,
-        S: DFDataType,
-    {
-        let array = self.downcast_ref();
-        let array_ref = f(array);
-        DataArray::<S>::from(array_ref)
-    }
-}
-
-impl<T> ArrayApplyKernel<PrimitiveArray<T::Native>> for DataArray<T>
-where T: DFNumericType
-{
-    fn apply_kernel<F>(&self, f: F) -> Self
-    where F: Fn(&PrimitiveArray<T::Native>) -> ArrayRef {
-        self.apply_kernel_cast(f)
-    }
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
-    where
-        F: Fn(&PrimitiveArray<T::Native>) -> ArrayRef,
-        S: DFDataType,
-    {
-        let array = self.downcast_ref();
-        let array_ref = f(array);
-        DataArray::<S>::from(array_ref)
-    }
-}
-
-impl ArrayApplyKernel<LargeUtf8Array> for DFUtf8Array {
-    fn apply_kernel<F>(&self, f: F) -> Self
-    where F: Fn(&LargeUtf8Array) -> ArrayRef {
-        self.apply_kernel_cast(f)
-    }
-
-    fn apply_kernel_cast<F, S>(&self, f: F) -> DataArray<S>
-    where
-        F: Fn(&LargeUtf8Array) -> ArrayRef,
-        S: DFDataType,
-    {
-        let array = self.downcast_ref();
-        let array_ref = f(array);
-        DataArray::<S>::from(array_ref)
     }
 }
