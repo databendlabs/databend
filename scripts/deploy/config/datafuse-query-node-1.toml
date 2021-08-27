@@ -2,7 +2,9 @@
 # datafuse-query -c datafuse_query_config_spec.toml
 
 # Log level.
+[log]
 log_level = "ERROR"
+log_dir = "./_logs"
 
 # DatafuseQuery rpc address.
 # For flight rpc.

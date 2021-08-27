@@ -57,7 +57,7 @@ macro_rules! env_helper {
 macro_rules! env_struct_helper {
     ($config:expr,$struct: tt, $field:tt, $field_type: ty, $env:expr) => {
         let env_var = std::env::var_os($env)
-            .unwrap_or($config.$field.to_string().into())
+            .unwrap_or($config.$struct.$field.to_string().into())
             .into_string()
             .expect(format!("cannot convert {} to string", $env).as_str());
         $config.$struct.$field = env_var
@@ -105,10 +105,10 @@ const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NA
 /// Log config group.
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct LogConfig {
-    #[structopt(long, env = LOG_LEVEL, help = "Log level <DEBUG|INFO|ERROR>, default 'INFO'")]
+    #[structopt(long, env = LOG_LEVEL, default_value = "INFO" , help = "Log level <DEBUG|INFO|ERROR>")]
     pub log_level: String,
 
-    #[structopt(long, env = LOG_DIR, help = "Log file dir, default './_logs'")]
+    #[structopt(required = false, long, env = LOG_DIR, default_value = "./_logs", help = "Log file dir")]
     pub log_dir: String,
 }
 
@@ -124,13 +124,13 @@ impl LogConfig {
 /// Store config group.
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct StoreConfig {
-    #[structopt(long, env = STORE_ADDRESS, help = "Store backend address, Default ''")]
+    #[structopt(long, env = STORE_ADDRESS, default_value = "", help = "Store backend address")]
     pub store_address: String,
 
-    #[structopt(long, env = STORE_USERNAME, help = "Store backend user name, Default 'root'")]
+    #[structopt(long, env = STORE_USERNAME, default_value = "", help = "Store backend user name")]
     pub store_username: String,
 
-    #[structopt(long, env = STORE_PASSWORD, help = "Store backend user password, Default ''")]
+    #[structopt(long, env = STORE_PASSWORD, default_value = "", help = "Store backend user password")]
     pub store_password: String,
 }
 
@@ -157,16 +157,10 @@ impl fmt::Debug for StoreConfig {
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
     #[structopt(flatten)]
-    pub log_config: LogConfig,
+    pub log: LogConfig,
 
     #[structopt(flatten)]
-    pub store_config: StoreConfig,
-
-    #[structopt(long, env = LOG_LEVEL, default_value = "INFO")]
-    pub log_level: String,
-
-    #[structopt(long, env = LOG_DIR, default_value = "./_logs")]
-    pub log_dir: String,
+    pub store: StoreConfig,
 
     #[structopt(long, env = NUM_CPUS, default_value = "0")]
     pub num_cpus: u64,
@@ -355,10 +349,8 @@ impl Config {
     /// Default configs.
     pub fn default() -> Self {
         Config {
-            log_config: LogConfig::default(),
-            store_config: StoreConfig::default(),
-            log_level: "debug".to_string(),
-            log_dir: "./_logs".to_string(),
+            log: LogConfig::default(),
+            store: StoreConfig::default(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -398,9 +390,14 @@ impl Config {
 
     /// Load configs from toml file.
     pub fn load_from_toml(file: &str) -> Result<Self> {
-        let context = std::fs::read_to_string(file)
+        let txt = std::fs::read_to_string(file)
             .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
-        let mut cfg = Config::from_args_with_toml(context.as_str())
+        Self::load_from_toml_str(txt.as_str())
+    }
+
+    /// Load configs from toml str.
+    pub fn load_from_toml_str(toml_str: &str) -> Result<Self> {
+        let mut cfg = Config::from_args_with_toml(toml_str)
             .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
         if cfg.num_cpus == 0 {
             cfg.num_cpus = num_cpus::get() as u64;
@@ -416,9 +413,7 @@ impl Config {
                 std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap(),
             );
         }
-        env_struct_helper!(mut_config, log_config, log_level, String, LOG_LEVEL);
-        env_helper!(mut_config, log_level, String, LOG_LEVEL);
-        env_helper!(mut_config, log_dir, String, LOG_DIR);
+        env_struct_helper!(mut_config, log, log_level, String, LOG_LEVEL);
         env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
         env_helper!(mut_config, mysql_handler_host, String, MYSQL_HANDLER_HOST);
         env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);

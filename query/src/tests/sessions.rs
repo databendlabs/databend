@@ -26,7 +26,7 @@ pub fn try_create_sessions() -> Result<SessionManagerRef> {
     let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
-    config.log_dir = env::current_dir()?
+    config.log.log_dir = env::current_dir()?
         .join("../tests/data/logs")
         .display()
         .to_string();

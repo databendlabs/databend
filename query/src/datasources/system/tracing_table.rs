@@ -106,7 +106,7 @@ impl Table for TracingTable {
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
 
-        for entry in WalkDir::new(ctx.get_config().log_dir.as_str())
+        for entry in WalkDir::new(ctx.get_config().log.log_dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
         {
             let entry = entry.map_err(|e| ErrorCode::UnknownException(format!("{}", e)))?;

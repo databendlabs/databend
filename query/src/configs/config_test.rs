@@ -25,10 +25,8 @@ use crate::configs::StoreConfig;
 #[test]
 fn test_default_config() -> Result<()> {
     let expect = Config {
-        log_config: LogConfig::default(),
-        store_config: StoreConfig::default(),
-        log_level: "debug".to_string(),
-        log_dir: "./_logs".to_string(),
+        log: LogConfig::default(),
+        store: StoreConfig::default(),
         num_cpus: 8,
         mysql_handler_host: "127.0.0.1".to_string(),
         mysql_handler_port: 3307,
@@ -79,8 +77,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("CONFIG_FILE");
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
-    assert_eq!("DEBUG", configured.log_config.log_level);
-    assert_eq!("DEBUG", configured.log_level);
+    assert_eq!("DEBUG", configured.log.log_level);
     assert_eq!("0.0.0.0", configured.mysql_handler_host);
     assert_eq!(3306, configured.mysql_handler_port);
     assert_eq!(255, configured.max_active_sessions);
@@ -117,7 +114,7 @@ fn test_env_config() -> Result<()> {
 #[ignore]
 fn test_args_config() -> Result<()> {
     let actual = Config::load_from_args();
-    assert_eq!("INFO", actual.log_level);
+    assert_eq!("INFO", actual.log.log_level);
     Ok(())
 }
 
@@ -136,17 +133,18 @@ fn test_config_file_not_found() -> Result<()> {
 #[test]
 #[ignore]
 fn test_file_config() -> Result<()> {
-    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
-    let path = std::env::current_dir()
-        .unwrap()
-        .join("conf/datafuse_query_config_spec.toml")
-        .display()
-        .to_string();
+    let toml_str = r#"
+[log_config]
+log_level = "ERROR"
+log_dir = "./_logs"
+ "#;
 
-    let actual = Config::load_from_toml(path.as_str())?;
-    assert_eq!("INFO", actual.log_level);
+    let actual = Config::load_from_toml_str(toml_str)?;
+    assert_eq!("INFO", actual.log.log_level);
+
+    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
     let env = Config::load_from_env(&actual)?;
-    assert_eq!("INFO", env.log_level);
+    assert_eq!("INFO", env.log.log_level);
     std::env::remove_var("QUERY_LOG_LEVEL");
     Ok(())
 }
@@ -158,12 +156,12 @@ fn test_env_file_config() -> Result<()> {
     std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
     let config_path = std::env::current_dir()
         .unwrap()
-        .join("conf/datafuse_query_config_spec.toml")
+        .join("../scripts/deploy/config/datafuse-query-node-1.toml")
         .display()
         .to_string();
     std::env::set_var("CONFIG_FILE", config_path);
     let config = Config::load_from_env(&Config::default())?;
-    assert_eq!(config.log_level, "INFO");
+    assert_eq!(config.log.log_level, "INFO");
     std::env::remove_var("QUERY_LOG_LEVEL");
     std::env::remove_var("CONFIG_FILE");
     Ok(())

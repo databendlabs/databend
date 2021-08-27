@@ -45,13 +45,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     conf = Config::load_from_env(&conf)?;
 
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
+        env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),
     )
     .init();
     let _guards = init_tracing_with_file(
         "datafuse-query",
-        conf.log_dir.as_str(),
-        conf.log_level.as_str(),
+        conf.log.log_dir.as_str(),
+        conf.log.log_level.as_str(),
     );
 
     info!("{:?}", conf);
