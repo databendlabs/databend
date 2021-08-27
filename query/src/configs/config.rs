@@ -122,6 +122,23 @@ pub struct StoreConfig {
     #[structopt(long, env = STORE_PASSWORD, default_value = "", help = "Store backend user password")]
     #[serde(default)]
     pub store_password: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT",
+        default_value = "",
+        help = "Certificate for client to identify store rpc server"
+    )]
+    #[serde(default)]
+    pub rpc_tls_store_server_root_ca_cert: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME",
+        default_value = "localhost"
+    )]
+    #[serde(default)]
+    pub rpc_tls_store_service_domain_name: String,
 }
 
 impl StoreConfig {
@@ -130,6 +147,8 @@ impl StoreConfig {
             store_address: "".to_string(),
             store_username: "root".to_string(),
             store_password: "".to_string(),
+            rpc_tls_store_server_root_ca_cert: "".to_string(),
+            rpc_tls_store_service_domain_name: "localhost".to_string(),
         }
     }
 }
@@ -253,23 +272,6 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
-
-    #[structopt(
-        long,
-        env = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT",
-        default_value = "",
-        help = "Certificate for client to identify store rpc server"
-    )]
-    #[serde(default)]
-    pub rpc_tls_store_server_root_ca_cert: String,
-
-    #[structopt(
-        long,
-        env = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME",
-        default_value = "localhost"
-    )]
-    #[serde(default)]
-    pub rpc_tls_store_service_domain_name: String,
 }
 
 impl QueryConfig {
@@ -290,8 +292,6 @@ impl QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
-            rpc_tls_store_server_root_ca_cert: "".to_string(),
-            rpc_tls_store_service_domain_name: "localhost".to_string(),
         }
     }
 }
@@ -358,9 +358,27 @@ impl Config {
             );
         }
         env_helper!(mut_config, log, log_level, String, LOG_LEVEL);
+
         env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
         env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
         env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
+        // for store rpc client
+        env_helper!(
+            mut_config,
+            store,
+            rpc_tls_store_server_root_ca_cert,
+            String,
+            RPC_TLS_STORE_SERVER_ROOT_CA_CERT
+        );
+        env_helper!(
+            mut_config,
+            store,
+            rpc_tls_store_service_domain_name,
+            String,
+            RPC_TLS_STORE_SERVICE_DOMAIN_NAME
+        );
+
+        // Query.
         env_helper!(mut_config, query, num_cpus, u64, NUM_CPUS);
         env_helper!(
             mut_config,
@@ -469,23 +487,6 @@ impl Config {
             RPC_TLS_QUERY_SERVICE_DOMAIN_NAME
         );
 
-        // for store rpc client
-        env_helper!(
-            mut_config,
-            query,
-            rpc_tls_store_server_root_ca_cert,
-            String,
-            RPC_TLS_STORE_SERVER_ROOT_CA_CERT
-        );
-
-        env_helper!(
-            mut_config,
-            query,
-            rpc_tls_store_service_domain_name,
-            String,
-            RPC_TLS_STORE_SERVICE_DOMAIN_NAME
-        );
-
         Ok(mut_config)
     }
 
@@ -503,14 +504,14 @@ impl Config {
 
     pub fn tls_store_client_conf(&self) -> RpcClientTlsConfig {
         RpcClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.query.rpc_tls_store_server_root_ca_cert.to_string(),
-            domain_name: self.query.rpc_tls_store_service_domain_name.to_string(),
+            rpc_tls_server_root_ca_cert: self.store.rpc_tls_store_server_root_ca_cert.to_string(),
+            domain_name: self.store.rpc_tls_store_service_domain_name.to_string(),
         }
     }
 
     pub fn tls_store_cli_enabled(&self) -> bool {
-        !self.query.rpc_tls_store_server_root_ca_cert.is_empty()
-            && !self.query.rpc_tls_store_service_domain_name.is_empty()
+        !self.store.rpc_tls_store_server_root_ca_cert.is_empty()
+            && !self.store.rpc_tls_store_service_domain_name.is_empty()
     }
 
     pub fn tls_rpc_server_enabled(&self) -> bool {
