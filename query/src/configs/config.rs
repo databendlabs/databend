@@ -69,6 +69,11 @@ const FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 const METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 
+// Store env.
+const STORE_ADDRESS: &str = "STORE_ADDRESS";
+const STORE_USERNAME: &str = "STORE_USERNAME";
+const STORE_PASSWORD: &str = "STORE_PASSWORD";
+
 const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
 const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
 const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
@@ -85,9 +90,43 @@ const RPC_TLS_QUERY_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_QUERY_SERVICE_DOMAIN_NA
 const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
 const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
 
+#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+pub struct StoreConfig {
+    #[structopt(long, env = STORE_ADDRESS, default_value = "")]
+    pub store_address: String,
+
+    #[structopt(long, env = STORE_USERNAME, default_value = "root")]
+    pub store_username: String,
+
+    #[structopt(long, env = STORE_PASSWORD, default_value = "")]
+    pub store_password: String,
+}
+
+impl StoreConfig {
+    pub fn default() -> Self {
+        StoreConfig {
+            store_address: "".to_string(),
+            store_username: "".to_string(),
+            store_password: "".to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for StoreConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{")?;
+        write!(f, "store_address: \"{}\", ", self.store_address)?;
+        write!(f, "store_user: \"{}\", ", self.store_username)?;
+        write!(f, "store_password: \"******\"")?;
+        write!(f, "}}")
+    }
+}
+
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
 pub struct Config {
+    #[structopt(flatten)]
+    pub store_config: StoreConfig,
+
     #[structopt(long, env = LOG_LEVEL, default_value = "INFO")]
     pub log_level: String,
 
@@ -214,7 +253,6 @@ pub struct Config {
 }
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
 pub struct Password {
     pub store_api_password: String,
 }
@@ -247,7 +285,6 @@ impl fmt::Debug for Password {
 }
 
 #[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
 pub struct User {
     pub store_api_username: String,
 }
@@ -283,6 +320,7 @@ impl Config {
     /// Default configs.
     pub fn default() -> Self {
         Config {
+            store_config: StoreConfig::default(),
             log_level: "debug".to_string(),
             log_dir: "./_logs".to_string(),
             num_cpus: 8,
