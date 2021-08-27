@@ -1,27 +1,33 @@
 # Usage:
 # datafuse-query -c datafuse_query_config_spec.toml
 
-# Log level.
+[log]
 log_level = "ERROR"
+log_dir = "./_logs"
 
-# DatafuseQuery rpc address.
+# Store
+[store]
+store_address = "0.0.0.0:9191"
+store_username = "root"
+store_password = "root"
+
+[query]
+max_active_sessions = 256
+
 # For flight rpc.
 flight_api_address = "0.0.0.0:9092"
 
-# DatafuseQuery http address.
+# Datafuse Query http address.
 # For admin RESET API.
 http_api_address = "0.0.0.0:8082"
 
-# DatafuseQuery metrics RESET API.
+# Datafuse Query metrics RESET API.
 metric_api_address = "0.0.0.0:7072"
 
-# MySQL Handler.
+# Datafuse Query MySQL Handler.
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3308
 
-# ClickHouse Handler.
+# Datafuse Query ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9002
-
-# Store.
-store_api_address = "0.0.0.0:9191"

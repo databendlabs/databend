@@ -126,7 +126,7 @@ impl Catalog for DatabaseCatalog {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         self.databases.read().get(db_name).map_or_else(
             || {
-                if !self.conf.store_api_address.is_empty() {
+                if !self.conf.store.store_address.is_empty() {
                     self.meta_store_cli.get_database(db_name)
                 } else {
                     Err(ErrorCode::UnknownDatabase(format!(
@@ -147,7 +147,7 @@ impl Catalog for DatabaseCatalog {
         databases.extend(locals.keys().into_iter().cloned());
 
         // Remote databases.
-        if !self.conf.store_api_address.is_empty() {
+        if !self.conf.store.store_address.is_empty() {
             let remotes = self.meta_store_cli.get_databases()?;
             databases.extend(remotes.into_iter());
         }
@@ -185,7 +185,7 @@ impl Catalog for DatabaseCatalog {
             db_names.insert(db_name.clone());
         }
 
-        if !self.conf.store_api_address.is_empty() {
+        if !self.conf.store.store_address.is_empty() {
             let mut remotes = self
                 .meta_store_cli
                 .get_all_tables()?

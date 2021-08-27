@@ -62,7 +62,7 @@ impl SessionManager {
     }
 
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
-        let max_active_sessions = conf.max_active_sessions as usize;
+        let max_active_sessions = conf.query.max_active_sessions as usize;
         let meta_store_cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
             RemoteFactory::new(&conf).store_client_provider(),
         )));

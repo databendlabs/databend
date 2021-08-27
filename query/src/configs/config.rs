@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,12 +42,12 @@ lazy_static! {
 }
 
 macro_rules! env_helper {
-    ($config:expr, $field:tt, $field_type: ty, $env:expr) => {
+    ($config:expr,$struct: tt, $field:tt, $field_type: ty, $env:expr) => {
         let env_var = std::env::var_os($env)
-            .unwrap_or($config.$field.to_string().into())
+            .unwrap_or($config.$struct.$field.to_string().into())
             .into_string()
             .expect(format!("cannot convert {} to string", $env).as_str());
-        $config.$field = env_var
+        $config.$struct.$field = env_var
             .parse::<$field_type>()
             .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
     };
@@ -69,9 +68,10 @@ const FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 const METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 
-const STORE_API_ADDRESS: &str = "STORE_API_ADDRESS";
-const STORE_API_USERNAME: &str = "STORE_API_USERNAME";
-const STORE_API_PASSWORD: &str = "STORE_API_PASSWORD";
+// Store env.
+const STORE_ADDRESS: &str = "STORE_ADDRESS";
+const STORE_USERNAME: &str = "STORE_USERNAME";
+const STORE_PASSWORD: &str = "STORE_PASSWORD";
 
 const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
 const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
@@ -85,16 +85,90 @@ const RPC_TLS_QUERY_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_QUERY_SERVICE_DOMAIN_NA
 const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
 const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
 
+/// Log config group.
+/// serde(default) make the toml de to default working.
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
-pub struct Config {
-    #[structopt(long, env = LOG_LEVEL, default_value = "INFO")]
+pub struct LogConfig {
+    #[structopt(long, env = LOG_LEVEL, default_value = "INFO" , help = "Log level <DEBUG|INFO|ERROR>")]
+    #[serde(default)]
     pub log_level: String,
 
-    #[structopt(long, env = LOG_DIR, default_value = "./_logs")]
+    #[structopt(required = false, long, env = LOG_DIR, default_value = "./_logs", help = "Log file dir")]
+    #[serde(default)]
     pub log_dir: String,
+}
 
+impl LogConfig {
+    pub fn default() -> Self {
+        LogConfig {
+            log_level: "INFO".to_string(),
+            log_dir: "./_logs".to_string(),
+        }
+    }
+}
+
+/// Store config group.
+/// serde(default) make the toml de to default working.
+#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+pub struct StoreConfig {
+    #[structopt(long, env = STORE_ADDRESS, default_value = "", help = "Store backend address")]
+    #[serde(default)]
+    pub store_address: String,
+
+    #[structopt(long, env = STORE_USERNAME, default_value = "", help = "Store backend user name")]
+    #[serde(default)]
+    pub store_username: String,
+
+    #[structopt(long, env = STORE_PASSWORD, default_value = "", help = "Store backend user password")]
+    #[serde(default)]
+    pub store_password: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT",
+        default_value = "",
+        help = "Certificate for client to identify store rpc server"
+    )]
+    #[serde(default)]
+    pub rpc_tls_store_server_root_ca_cert: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME",
+        default_value = "localhost"
+    )]
+    #[serde(default)]
+    pub rpc_tls_store_service_domain_name: String,
+}
+
+impl StoreConfig {
+    pub fn default() -> Self {
+        StoreConfig {
+            store_address: "".to_string(),
+            store_username: "root".to_string(),
+            store_password: "".to_string(),
+            rpc_tls_store_server_root_ca_cert: "".to_string(),
+            rpc_tls_store_service_domain_name: "localhost".to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for StoreConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{")?;
+        write!(f, "store_address: \"{}\", ", self.store_address)?;
+        write!(f, "store_user: \"{}\", ", self.store_username)?;
+        write!(f, "store_password: \"******\"")?;
+        write!(f, "}}")
+    }
+}
+
+/// Query config group.
+/// serde(default) make the toml de to default working.
+#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+pub struct QueryConfig {
     #[structopt(long, env = NUM_CPUS, default_value = "0")]
+    #[serde(default)]
     pub num_cpus: u64,
 
     #[structopt(
@@ -102,9 +176,11 @@ pub struct Config {
     env = MYSQL_HANDLER_HOST,
     default_value = "127.0.0.1"
     )]
+    #[serde(default)]
     pub mysql_handler_host: String,
 
     #[structopt(long, env = MYSQL_HANDLER_PORT, default_value = "3307")]
+    #[serde(default)]
     pub mysql_handler_port: u16,
 
     #[structopt(
@@ -112,6 +188,7 @@ pub struct Config {
     env = MAX_ACTIVE_SESSIONS,
     default_value = "256"
     )]
+    #[serde(default)]
     pub max_active_sessions: u64,
 
     #[structopt(
@@ -119,6 +196,7 @@ pub struct Config {
     env = CLICKHOUSE_HANDLER_HOST,
     default_value = "127.0.0.1"
     )]
+    #[serde(default)]
     pub clickhouse_handler_host: String,
 
     #[structopt(
@@ -126,6 +204,7 @@ pub struct Config {
     env = CLICKHOUSE_HANDLER_PORT,
     default_value = "9000"
     )]
+    #[serde(default)]
     pub clickhouse_handler_port: u16,
 
     #[structopt(
@@ -133,6 +212,7 @@ pub struct Config {
     env = FLIGHT_API_ADDRESS,
     default_value = "127.0.0.1:9090"
     )]
+    #[serde(default)]
     pub flight_api_address: String,
 
     #[structopt(
@@ -140,6 +220,7 @@ pub struct Config {
     env = HTTP_API_ADDRESS,
     default_value = "127.0.0.1:8080"
     )]
+    #[serde(default)]
     pub http_api_address: String,
 
     #[structopt(
@@ -147,24 +228,15 @@ pub struct Config {
     env = METRICS_API_ADDRESS,
     default_value = "127.0.0.1:7070"
     )]
+    #[serde(default)]
     pub metric_api_address: String,
 
-    #[structopt(long, env = STORE_API_ADDRESS, default_value = "")]
-    pub store_api_address: String,
-
-    #[structopt(long, env = STORE_API_USERNAME, default_value = "root")]
-    pub store_api_username: User,
-
-    #[structopt(long, env = STORE_API_PASSWORD, default_value = "")]
-    pub store_api_password: Password,
-
-    #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
-    pub config_file: String,
-
     #[structopt(long, env = API_TLS_SERVER_CERT, default_value = "")]
+    #[serde(default)]
     pub api_tls_server_cert: String,
 
     #[structopt(long, env = API_TLS_SERVER_KEY, default_value = "")]
+    #[serde(default)]
     pub api_tls_server_key: String,
 
     #[structopt(
@@ -173,6 +245,7 @@ pub struct Config {
         default_value = "",
         help = "rpc server cert"
     )]
+    #[serde(default)]
     pub rpc_tls_server_cert: String,
 
     #[structopt(
@@ -180,6 +253,7 @@ pub struct Config {
         env = "RPC_TLS_SERVER_KEY",
         default_value = "key for rpc server cert"
     )]
+    #[serde(default)]
     pub rpc_tls_server_key: String,
 
     #[structopt(
@@ -188,6 +262,7 @@ pub struct Config {
         default_value = "",
         help = "Certificate for client to identify query rpc server"
     )]
+    #[serde(default)]
     pub rpc_tls_query_server_root_ca_cert: String,
 
     #[structopt(
@@ -195,96 +270,13 @@ pub struct Config {
         env = "RPC_TLS_QUERY_SERVICE_DOMAIN_NAME",
         default_value = "localhost"
     )]
+    #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
-
-    #[structopt(
-        long,
-        env = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT",
-        default_value = "",
-        help = "Certificate for client to identify store rpc server"
-    )]
-    pub rpc_tls_store_server_root_ca_cert: String,
-
-    #[structopt(
-        long,
-        env = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME",
-        default_value = "localhost"
-    )]
-    pub rpc_tls_store_service_domain_name: String,
 }
 
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
-pub struct Password {
-    pub store_api_password: String,
-}
-
-impl AsRef<String> for Password {
-    fn as_ref(&self) -> &String {
-        &self.store_api_password
-    }
-}
-
-impl FromStr for Password {
-    type Err = ErrorCode;
-    fn from_str(s: &str) -> common_exception::Result<Self> {
-        Ok(Self {
-            store_api_password: s.to_string(),
-        })
-    }
-}
-
-impl ToString for Password {
-    fn to_string(&self) -> String {
-        self.store_api_password.clone()
-    }
-}
-
-impl fmt::Debug for Password {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "******")
-    }
-}
-
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
-pub struct User {
-    pub store_api_username: String,
-}
-
-impl ToString for User {
-    fn to_string(&self) -> String {
-        self.store_api_username.clone()
-    }
-}
-
-impl fmt::Debug for User {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "******")
-    }
-}
-
-impl AsRef<String> for User {
-    fn as_ref(&self) -> &String {
-        &self.store_api_username
-    }
-}
-
-impl FromStr for User {
-    type Err = ErrorCode;
-    fn from_str(s: &str) -> common_exception::Result<Self> {
-        Ok(Self {
-            store_api_username: s.to_string(),
-        })
-    }
-}
-
-impl Config {
-    /// Default configs.
+impl QueryConfig {
     pub fn default() -> Self {
-        Config {
-            log_level: "debug".to_string(),
-            log_dir: "./_logs".to_string(),
+        QueryConfig {
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -294,42 +286,65 @@ impl Config {
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
-            store_api_address: "".to_string(),
-            store_api_username: User {
-                store_api_username: "root".to_string(),
-            },
-            store_api_password: Password {
-                store_api_password: "".to_string(),
-            },
-            config_file: "".to_string(),
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
             rpc_tls_server_cert: "".to_string(),
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
-            rpc_tls_store_server_root_ca_cert: "".to_string(),
-            rpc_tls_store_service_domain_name: "localhost".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[serde(default)]
+pub struct Config {
+    #[structopt(flatten)]
+    pub log: LogConfig,
+
+    #[structopt(flatten)]
+    pub store: StoreConfig,
+
+    #[structopt(flatten)]
+    pub query: QueryConfig,
+
+    #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
+    pub config_file: String,
+}
+
+impl Config {
+    /// Default configs.
+    pub fn default() -> Self {
+        Config {
+            log: LogConfig::default(),
+            store: StoreConfig::default(),
+            query: QueryConfig::default(),
+            config_file: "".to_string(),
         }
     }
 
     /// Load configs from args.
     pub fn load_from_args() -> Self {
         let mut cfg = Config::from_args();
-        if cfg.num_cpus == 0 {
-            cfg.num_cpus = num_cpus::get() as u64;
+        if cfg.query.num_cpus == 0 {
+            cfg.query.num_cpus = num_cpus::get() as u64;
         }
         cfg
     }
 
     /// Load configs from toml file.
     pub fn load_from_toml(file: &str) -> Result<Self> {
-        let context = std::fs::read_to_string(file)
+        let txt = std::fs::read_to_string(file)
             .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
-        let mut cfg = Config::from_args_with_toml(context.as_str())
+        Self::load_from_toml_str(txt.as_str())
+    }
+
+    /// Load configs from toml str.
+    pub fn load_from_toml_str(toml_str: &str) -> Result<Self> {
+        let mut cfg = Config::from_args_with_toml(toml_str)
             .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
-        if cfg.num_cpus == 0 {
-            cfg.num_cpus = num_cpus::get() as u64;
+        if cfg.query.num_cpus == 0 {
+            cfg.query.num_cpus = num_cpus::get() as u64;
         }
         Ok(cfg)
     }
@@ -342,68 +357,134 @@ impl Config {
                 std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap(),
             );
         }
-        env_helper!(mut_config, log_level, String, LOG_LEVEL);
-        env_helper!(mut_config, log_dir, String, LOG_DIR);
-        env_helper!(mut_config, num_cpus, u64, NUM_CPUS);
-        env_helper!(mut_config, mysql_handler_host, String, MYSQL_HANDLER_HOST);
-        env_helper!(mut_config, mysql_handler_port, u16, MYSQL_HANDLER_PORT);
-        env_helper!(mut_config, max_active_sessions, u64, MAX_ACTIVE_SESSIONS);
+        env_helper!(mut_config, log, log_level, String, LOG_LEVEL);
+
+        env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
+        env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
+        env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
+        // for store rpc client
         env_helper!(
             mut_config,
+            store,
+            rpc_tls_store_server_root_ca_cert,
+            String,
+            RPC_TLS_STORE_SERVER_ROOT_CA_CERT
+        );
+        env_helper!(
+            mut_config,
+            store,
+            rpc_tls_store_service_domain_name,
+            String,
+            RPC_TLS_STORE_SERVICE_DOMAIN_NAME
+        );
+
+        // Query.
+        env_helper!(mut_config, query, num_cpus, u64, NUM_CPUS);
+        env_helper!(
+            mut_config,
+            query,
+            mysql_handler_host,
+            String,
+            MYSQL_HANDLER_HOST
+        );
+        env_helper!(
+            mut_config,
+            query,
+            mysql_handler_port,
+            u16,
+            MYSQL_HANDLER_PORT
+        );
+        env_helper!(
+            mut_config,
+            query,
+            max_active_sessions,
+            u64,
+            MAX_ACTIVE_SESSIONS
+        );
+        env_helper!(
+            mut_config,
+            query,
             clickhouse_handler_host,
             String,
             CLICKHOUSE_HANDLER_HOST
         );
         env_helper!(
             mut_config,
+            query,
             clickhouse_handler_port,
             u16,
             CLICKHOUSE_HANDLER_PORT
         );
-        env_helper!(mut_config, flight_api_address, String, FLIGHT_API_ADDRESS);
-        env_helper!(mut_config, http_api_address, String, HTTP_API_ADDRESS);
-        env_helper!(mut_config, metric_api_address, String, METRICS_API_ADDRESS);
-        env_helper!(mut_config, store_api_address, String, STORE_API_ADDRESS);
-        env_helper!(mut_config, store_api_username, User, STORE_API_USERNAME);
-        env_helper!(mut_config, store_api_password, Password, STORE_API_PASSWORD);
+        env_helper!(
+            mut_config,
+            query,
+            flight_api_address,
+            String,
+            FLIGHT_API_ADDRESS
+        );
+        env_helper!(
+            mut_config,
+            query,
+            http_api_address,
+            String,
+            HTTP_API_ADDRESS
+        );
+        env_helper!(
+            mut_config,
+            query,
+            metric_api_address,
+            String,
+            METRICS_API_ADDRESS
+        );
 
         // for api http service
-        env_helper!(mut_config, api_tls_server_cert, String, API_TLS_SERVER_CERT);
+        env_helper!(
+            mut_config,
+            query,
+            api_tls_server_cert,
+            String,
+            API_TLS_SERVER_CERT
+        );
 
-        env_helper!(mut_config, api_tls_server_key, String, API_TLS_SERVER_KEY);
+        env_helper!(
+            mut_config,
+            query,
+            api_tls_server_key,
+            String,
+            API_TLS_SERVER_KEY
+        );
 
         // for query rpc server
-        env_helper!(mut_config, rpc_tls_server_cert, String, RPC_TLS_SERVER_CERT);
+        env_helper!(
+            mut_config,
+            query,
+            rpc_tls_server_cert,
+            String,
+            RPC_TLS_SERVER_CERT
+        );
 
-        env_helper!(mut_config, rpc_tls_server_key, String, RPC_TLS_SERVER_KEY);
+        env_helper!(
+            mut_config,
+            query,
+            rpc_tls_server_key,
+            String,
+            RPC_TLS_SERVER_KEY
+        );
 
         // for query rpc client
         env_helper!(
             mut_config,
+            query,
             rpc_tls_query_server_root_ca_cert,
             String,
             RPC_TLS_QUERY_SERVER_ROOT_CA_CERT
         );
         env_helper!(
             mut_config,
+            query,
             rpc_tls_query_service_domain_name,
             String,
             RPC_TLS_QUERY_SERVICE_DOMAIN_NAME
-        );
-
-        // for store rpc client
-        env_helper!(
-            mut_config,
-            rpc_tls_store_server_root_ca_cert,
-            String,
-            RPC_TLS_STORE_SERVER_ROOT_CA_CERT
-        );
-
-        env_helper!(
-            mut_config,
-            rpc_tls_store_service_domain_name,
-            String,
-            RPC_TLS_STORE_SERVICE_DOMAIN_NAME
         );
 
         Ok(mut_config)
@@ -411,29 +492,29 @@ impl Config {
 
     pub fn tls_query_client_conf(&self) -> RpcClientTlsConfig {
         RpcClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.to_string(),
-            domain_name: self.rpc_tls_query_service_domain_name.to_string(),
+            rpc_tls_server_root_ca_cert: self.query.rpc_tls_query_server_root_ca_cert.to_string(),
+            domain_name: self.query.rpc_tls_query_service_domain_name.to_string(),
         }
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {
-        !self.rpc_tls_query_server_root_ca_cert.is_empty()
-            && !self.rpc_tls_query_service_domain_name.is_empty()
+        !self.query.rpc_tls_query_server_root_ca_cert.is_empty()
+            && !self.query.rpc_tls_query_service_domain_name.is_empty()
     }
 
     pub fn tls_store_client_conf(&self) -> RpcClientTlsConfig {
         RpcClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.rpc_tls_store_server_root_ca_cert.to_string(),
-            domain_name: self.rpc_tls_store_service_domain_name.to_string(),
+            rpc_tls_server_root_ca_cert: self.store.rpc_tls_store_server_root_ca_cert.to_string(),
+            domain_name: self.store.rpc_tls_store_service_domain_name.to_string(),
         }
     }
 
     pub fn tls_store_cli_enabled(&self) -> bool {
-        !self.rpc_tls_store_server_root_ca_cert.is_empty()
-            && !self.rpc_tls_store_service_domain_name.is_empty()
+        !self.store.rpc_tls_store_server_root_ca_cert.is_empty()
+            && !self.store.rpc_tls_store_service_domain_name.is_empty()
     }
 
     pub fn tls_rpc_server_enabled(&self) -> bool {
-        !self.rpc_tls_server_key.is_empty() && !self.rpc_tls_server_cert.is_empty()
+        !self.query.rpc_tls_server_key.is_empty() && !self.query.rpc_tls_server_cert.is_empty()
     }
 }

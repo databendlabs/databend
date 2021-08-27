@@ -19,3 +19,6 @@ pub mod config;
 
 pub use common_flights::RpcClientTlsConfig;
 pub use config::Config;
+pub use config::LogConfig;
+pub use config::QueryConfig;
+pub use config::StoreConfig;
