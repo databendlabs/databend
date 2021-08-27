@@ -50,6 +50,7 @@ async fn test_null_table() -> Result<()> {
         let insert_plan = InsertIntoPlan {
             db_name: "default".to_string(),
             tbl_name: "a".to_string(),
+            tbl_id: 0,
             schema: schema.clone(),
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };

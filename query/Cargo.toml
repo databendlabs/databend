@@ -40,6 +40,7 @@ common-profling = { path = "../common/profiling" }
 common-store-api = { path = "../common/store-api" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
+common-dal= {path = "../common/dal"}
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 
 # Github dependencies
@@ -87,6 +88,9 @@ hyper = "0.14.12"
 headers = "0.3.4"
 tokio-rustls = "0.22.0"
 axum-server = { version = "0.2", features = ["tls-rustls"] }
+
+[dependencies.parquet-format-async-temp]
+version = "0.1.0"
 
 [dev-dependencies]
 pretty_assertions = "0.7"

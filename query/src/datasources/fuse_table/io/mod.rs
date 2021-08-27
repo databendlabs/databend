@@ -11,7 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-pub use arrow;
-pub use arrow_flight;
-pub use parquet2 as parquet;
+// consider remove these, read_util seems to be enough (type could be inferred)
+pub(crate) mod segment_reader;
+pub(crate) mod snapshot_reader;
+// end
+
+mod reader_util;
+
+pub(crate) mod block_appender;
+pub(crate) mod block_reader;

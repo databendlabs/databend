@@ -435,6 +435,7 @@ impl PlanParser {
         let table = self.ctx.get_catalog().get_table(&db_name, &tbl_name)?;
 
         let mut schema = table.raw().schema()?;
+        let tbl_id = table.meta_id();
 
         if !columns.is_empty() {
             let fields = columns
@@ -470,6 +471,7 @@ impl PlanParser {
         let plan_node = InsertIntoPlan {
             db_name,
             tbl_name,
+            tbl_id,
             schema,
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };

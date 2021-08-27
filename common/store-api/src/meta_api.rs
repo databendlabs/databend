@@ -61,6 +61,16 @@ pub struct DatabaseMetaSnapshot {
 }
 pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub enum CommitTableReply {
+    // done
+    Success,
+    // recoverable, returns the current snapshot-id, which should be merged with
+    Conflict(String),
+    // fatal, not recoverable, returns the current snapshot-id
+    Failure(String),
+}
+
 #[async_trait::async_trait]
 pub trait MetaApi {
     async fn create_database(
@@ -102,4 +112,11 @@ pub trait MetaApi {
         &mut self,
         current_ver: Option<u64>,
     ) -> common_exception::Result<DatabaseMetaReply>;
+
+    async fn commit_table(
+        &self,
+        table_id: MetaId,
+        prev_snapshot: String,
+        new_snapshot: String,
+    ) -> common_exception::Result<CommitTableReply>;
 }

@@ -11,7 +11,8 @@ edition = "2021"
 [features]
 default = ["arrow-default", "parquet-default"]
 arrow-default = ["arrow/compute", "arrow/regex", "arrow/merge_sort", "arrow/io_csv", "arrow/io_parquet", "arrow/io_json"]
-parquet-default = ["parquet/stream"]
+#parquet-default = ["parquet/stream"]
+parquet-default = ["parquet2/stream"]
 simd = ["arrow/simd"]
 
 [dependencies] # In alphabetical order
@@ -20,7 +21,9 @@ simd = ["arrow/simd"]
 # Github dependencies
 arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", default-features = false, rev = "4e4ea28" }
 arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "4e4ea28" }
-parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "83c3325" }
+#parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "83c3325" }
+#parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "1d310ee" }
+parquet2 = { version = "0.4", optional = false, default_features = false, features = ["stream"] }
 # Crates.io dependencies
 
 [dev-dependencies]

@@ -13,11 +13,14 @@
 //  limitations under the License.
 //
 
-mod blob_accessor;
-mod impls;
+pub fn block_info_location(name: &str) -> String {
+    format!("_b/{}", name)
+}
 
-pub use blob_accessor::Bytes;
-pub use blob_accessor::DataAccessor;
-pub use impls::Local;
-pub use impls::StorageScheme;
-pub use impls::S3;
+pub fn segment_info_location(name: &str) -> String {
+    format!("_sg/{}", name)
+}
+
+pub fn snapshot_location(name: &str) -> String {
+    format!("_ss/{}", name)
+}
