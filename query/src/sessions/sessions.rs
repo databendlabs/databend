@@ -39,7 +39,7 @@ use crate::sessions::session_ref::SessionRef;
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) cluster: ClusterRef,
-    pub(in crate::sessions) datasource: Arc<DatabaseCatalog>,
+    pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -52,7 +52,7 @@ impl SessionManager {
         Ok(Arc::new(SessionManager {
             conf: Config::default(),
             cluster: Cluster::empty(),
-            datasource: Arc::new(DatabaseCatalog::try_create()?),
+            catalog: Arc::new(DatabaseCatalog::try_create()?),
 
             max_sessions: max_mysql_sessions as usize,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
@@ -67,7 +67,7 @@ impl SessionManager {
             RemoteFactory::new(&conf).store_client_provider(),
         )));
         Ok(Arc::new(SessionManager {
-            datasource: Arc::new(DatabaseCatalog::try_create_with_config(
+            catalog: Arc::new(DatabaseCatalog::try_create_with_config(
                 conf.clone(),
                 meta_store_cli,
             )?),
@@ -86,8 +86,8 @@ impl SessionManager {
         self.cluster.clone()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.datasource.clone()
+    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
+        self.catalog.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {

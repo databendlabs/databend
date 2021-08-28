@@ -105,8 +105,8 @@ impl DatafuseQueryContextShared {
         self.session.get_settings()
     }
 
-    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
-        self.session.get_datasource()
+    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
+        self.session.get_catalog()
     }
 
     /// Init runtime when first get

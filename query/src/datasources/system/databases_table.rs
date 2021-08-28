@@ -91,7 +91,7 @@ impl Table for DatabasesTable {
         ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        ctx.get_datasource()
+        ctx.get_catalog()
             .get_databases()
             .map(|databases_name| -> SendableDataBlockStream {
                 let databases_name_str: Vec<&str> = databases_name

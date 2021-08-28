@@ -432,7 +432,7 @@ impl PlanParser {
             db_name = tbl_name;
             tbl_name = table_name.0[1].value.clone();
         }
-        let table = self.ctx.get_datasource().get_table(&db_name, &tbl_name)?;
+        let table = self.ctx.get_catalog().get_table(&db_name, &tbl_name)?;
 
         let mut schema = table.datasource().schema()?;
 

@@ -95,7 +95,7 @@ impl Table for TablesTable {
         ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let database_tables = ctx.get_datasource().get_all_tables()?;
+        let database_tables = ctx.get_catalog().get_all_tables()?;
 
         let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
         let names: Vec<&str> = database_tables
