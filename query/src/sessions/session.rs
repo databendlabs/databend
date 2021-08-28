@@ -166,7 +166,7 @@ impl Session {
         self.sessions.clone()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.sessions.get_datasource()
+    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
+        self.sessions.get_catalog()
     }
 }
