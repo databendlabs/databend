@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 
-use crate::arrays::builders::Utf8ArrayBuilder;
 use crate::prelude::*;
 use crate::series::Series;
 use crate::utils::NoNull;

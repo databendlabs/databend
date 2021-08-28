@@ -78,7 +78,7 @@ impl Rem for &Series {
         let result = lhs.remainder(&rhs, &dtype)?;
 
         // then cast back to the lowest types
-        if result.data_type() != dtype {
+        if result.data_type() != &dtype {
             result.cast_with_type(&dtype)
         } else {
             Ok(result)
@@ -154,39 +154,39 @@ where
     DFPrimitiveArray<T>: IntoSeries,
 {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
+        let rhs = unsafe { self.unpack(rhs)? };
         let out = (self - rhs)?;
         Ok(out.into_series())
     }
     fn add_to(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
+        let rhs = unsafe { self.unpack(rhs)? };
         let out = (self + rhs)?;
         Ok(out.into_series())
     }
     fn multiply(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
+        let rhs = unsafe { self.unpack(rhs)? };
         let out = (self * rhs)?;
         Ok(out.into_series())
     }
     fn divide(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
+        let rhs = unsafe { self.unpack(rhs)? };
         let out = (self / rhs)?;
         Ok(out.into_series())
     }
     fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
+        let rhs = unsafe { self.unpack(rhs)? };
         self.rem(rhs, dtype)
     }
 
     fn negative(&self) -> Result<Series> {
         let out = std::ops::Neg::neg(self)?;
-        Ok(out.into_series())
+        Ok(out)
     }
 }
 
 impl NumOpsDispatch for DFUtf8Array {
     fn add_to(&self, rhs: &Series) -> Result<Series> {
-        let rhs = unsafe { self.unpack_array_matching_physical_type(rhs)? };
+        let rhs = unsafe { self.unpack(rhs)? };
         let out = (self + rhs)?;
         Ok(out.into_series())
     }
@@ -205,12 +205,12 @@ fn coerce_lhs_rhs(
     let dtype = numerical_arithmetic_coercion(op, &lhs.data_type(), &rhs.data_type())?;
 
     let mut left = lhs.clone();
-    if lhs.data_type() != dtype {
+    if lhs.data_type() != &dtype {
         left = lhs.cast_with_type(&dtype)?;
     }
 
     let mut right = rhs.clone();
-    if rhs.data_type() != dtype {
+    if rhs.data_type() != &dtype {
         right = rhs.cast_with_type(&dtype)?;
     }
 
@@ -221,12 +221,12 @@ fn coerce_lhs_rhs_no_op(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> 
     let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type(), true)?;
 
     let mut left = lhs.clone();
-    if lhs.data_type() != dtype {
+    if lhs.data_type() != &dtype {
         left = lhs.cast_with_type(&dtype)?;
     }
 
     let mut right = rhs.clone();
-    if rhs.data_type() != dtype {
+    if rhs.data_type() != &dtype {
         right = rhs.cast_with_type(&dtype)?;
     }
 
@@ -237,7 +237,7 @@ fn coerce_to_signed(lhs: &Series) -> Result<Series> {
     let dtype = numerical_signed_coercion(&lhs.data_type())?;
 
     let mut left = lhs.clone();
-    if lhs.data_type() != dtype {
+    if lhs.data_type() != &dtype {
         left = lhs.cast_with_type(&dtype)?;
     }
 

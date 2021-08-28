@@ -43,7 +43,7 @@ macro_rules! impl_compare {
 }
 
 fn null_to_boolean(s: &Series) -> DFBooleanArray {
-    if s.data_type() == DataType::Null {
+    if s.data_type() == &DataType::Null {
         DFBooleanArray::full_null(s.len())
     } else {
         let array_ref = s.get_array_ref();
@@ -63,12 +63,12 @@ fn null_to_boolean(s: &Series) -> DFBooleanArray {
 
 fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
     if lhs.data_type() == rhs.data_type()
-        && (lhs.data_type() == DataType::Utf8 || lhs.data_type() == DataType::Boolean)
+        && (lhs.data_type() == &DataType::Utf8 || lhs.data_type() == &DataType::Boolean)
     {
         return Ok((lhs.clone(), rhs.clone()));
     }
 
-    if lhs.data_type() == DataType::Null || rhs.data_type() == DataType::Null {
+    if lhs.data_type() == &DataType::Null || rhs.data_type() == &DataType::Null {
         let lhs = null_to_boolean(lhs);
         let rhs = null_to_boolean(rhs);
 
@@ -78,12 +78,12 @@ fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
     let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type(), true)?;
 
     let mut left = lhs.clone();
-    if lhs.data_type() != dtype {
+    if lhs.data_type() != &dtype {
         left = lhs.cast_with_type(&dtype)?;
     }
 
     let mut right = rhs.clone();
-    if rhs.data_type() != dtype {
+    if rhs.data_type() != &dtype {
         right = rhs.cast_with_type(&dtype)?;
     }
 

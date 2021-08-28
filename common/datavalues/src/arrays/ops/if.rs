@@ -14,7 +14,6 @@
 
 use std::fmt::Debug;
 
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::if_then_else;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -67,11 +66,10 @@ macro_rules! impl_if_common {
             (_, _, _) => {
                 let result = if_then_else::if_then_else(
                     $predicate.downcast_ref(),
-                    $lhs.as_ref(),
-                    $rhs.as_ref(),
+                    &($lhs.array),
+                    &($rhs.array),
                 )?;
-                let result: ArrayRef = Arc::from(result);
-                Ok(result.into())
+                Ok(Self::from_arrow_array(result.as_ref()))
             }
         }
     }};

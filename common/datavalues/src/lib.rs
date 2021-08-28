@@ -37,6 +37,7 @@ mod data_value_ops;
 #[allow(dead_code)]
 mod utils;
 
+#[allow(dead_code)]
 pub mod arrays;
 pub mod columns;
 pub mod prelude;

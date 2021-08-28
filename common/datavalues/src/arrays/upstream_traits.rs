@@ -16,10 +16,8 @@
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::iter::FromIterator;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::types::NativeType;
 
 use super::get_list_builder;
 use crate::prelude::*;
@@ -54,8 +52,7 @@ where T: DFPrimitiveType
                 iter.collect()
             }
         };
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 
@@ -73,8 +70,8 @@ where T: DFPrimitiveType
 
 impl FromIterator<Option<bool>> for DFBooleanArray {
     fn from_iter<I: IntoIterator<Item = Option<bool>>>(iter: I) -> Self {
-        let array = Arc::new(BooleanArray::from_iter(iter)) as ArrayRef;
-        array.into()
+        let arr = BooleanArray::from_iter(iter);
+        arr.into()
     }
 }
 
@@ -83,8 +80,7 @@ impl FromIterator<bool> for DFBooleanArray {
         // 2021-02-07: this was ~70% faster than with the builder, even with the extra Option<T> added.
         let arr: BooleanArray = iter.into_iter().map(Some).collect();
 
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 
@@ -103,8 +99,7 @@ where Ptr: AsRef<str>
     fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
         // 2021-02-07: this was ~30% faster than with the builder.
         let arr = LargeUtf8Array::from_iter(iter);
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 
@@ -122,9 +117,7 @@ where Ptr: DFAsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
         let arr = LargeUtf8Array::from_iter_values(iter.into_iter());
-
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 

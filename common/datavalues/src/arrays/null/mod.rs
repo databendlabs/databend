@@ -12,21 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod boolean_test;
+mod null;
 
-#[cfg(test)]
-mod primitive_test;
-
-#[cfg(test)]
-mod utf8_test;
-
-mod boolean;
-mod builder;
-mod primitive;
-mod utf8;
-
-pub use boolean::*;
-pub use builder::*;
-pub use primitive::*;
-pub use utf8::*;
+pub use null::*;

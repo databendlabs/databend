@@ -95,24 +95,24 @@ where T: DFPrimitiveType
                 if self.is_empty() {
                     return Ok(Self::full_null(array.len()));
                 }
-                let taked_array = take::take(self.array.as_ref(), array)?;
-                Ok(Self::from(taked_array))
+                let taked_array = take::take(&self.array, array)?;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
             TakeIdx::Iter(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array =
+                let taked_array =
                     take_primitive_iter_unchecked::<T, _>(primitive_array, iter) as ArrayRef;
-                Ok(Self::from(array))
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
             TakeIdx::IterNulls(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array =
+                let taked_array =
                     take_primitive_opt_iter_unchecked::<T, _>(primitive_array, iter) as ArrayRef;
-                Ok(Self::from(array))
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
         }
     }
@@ -140,22 +140,22 @@ impl ArrayTake for DFBooleanArray {
                 if self.is_empty() {
                     return Ok(Self::full_null(array.len()));
                 }
-                let array = take::take(array, array)?;
-                Ok(Self::from(array))
+                let taked_array = take::take(array, array)?;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
             TakeIdx::Iter(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = take_bool_iter_unchecked(boolean_array, iter) as ArrayRef;
-                Ok(Self::from(array))
+                let taked_array = take_bool_iter_unchecked(boolean_array, iter) as ArrayRef;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
             TakeIdx::IterNulls(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = take_bool_opt_iter_unchecked(boolean_array, iter) as ArrayRef;
-                Ok(Self::from(array))
+                let taked_array = take_bool_opt_iter_unchecked(boolean_array, iter) as ArrayRef;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
         }
     }
@@ -180,22 +180,22 @@ impl ArrayTake for DFUtf8Array {
         let str_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
-                let array = take::take(str_array, array)?;
-                Ok(Self::from(array))
+                let taked_array = take::take(str_array, array)?;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
             TakeIdx::Iter(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = take_utf8_iter_unchecked(str_array, iter) as ArrayRef;
-                Ok(Self::from(array))
+                let taked_array = take_utf8_iter_unchecked(str_array, iter) as ArrayRef;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
             TakeIdx::IterNulls(iter) => {
                 if self.is_empty() {
                     return Ok(Self::full_null(iter.size_hint().0));
                 }
-                let array = take_utf8_opt_iter_unchecked(str_array, iter) as ArrayRef;
-                Ok(Self::from(array))
+                let taked_array = take_utf8_opt_iter_unchecked(str_array, iter) as ArrayRef;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
         }
     }
@@ -229,8 +229,8 @@ impl ArrayTake for DFListArray {
         let list_array = self.downcast_ref();
         match indices {
             TakeIdx::Array(array) => {
-                let array = take::take(list_array, array)?;
-                Ok(Self::from(array))
+                let taked_array = take::take(list_array, array)?;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
             }
             TakeIdx::Iter(iter) => {
                 if self.is_empty() {

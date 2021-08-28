@@ -28,21 +28,25 @@ pub trait ToValues: Debug {
     fn to_values(&self) -> Result<Vec<DataValue>>;
 }
 
-fn primitive_type_to_values_impl<T, F>(array: &DFPrimitiveArray<T>) -> Result<Vec<DataValue>>
-where T: DFPrimitiveType + Into<DataValue> {
+fn primitive_type_to_values_impl<T>(array: &DFPrimitiveArray<T>) -> Result<Vec<DataValue>>
+where
+    T: DFPrimitiveType,
+    Option<T>: Into<DataValue>,
+{
     let array = array.downcast_ref();
     let mut values = Vec::with_capacity(array.len());
 
     if array.null_count() == 0 {
         for index in 0..array.len() {
-            values.push(array.value(index).into())
+            values.push(Some(array.value(index)).into())
         }
     } else {
         for index in 0..array.len() {
-            match array.is_null(index) {
-                true => values.push(None),
-                false => values.push(array.value(index).into()),
-            }
+            let v: Option<T> = match array.is_null(index) {
+                true => None,
+                false => Some(array.value(index)),
+            };
+            values.push(v.into())
         }
     }
 
@@ -50,7 +54,9 @@ where T: DFPrimitiveType + Into<DataValue> {
 }
 
 impl<T> ToValues for DFPrimitiveArray<T>
-where T: DFPrimitiveType + Into<DataValue>
+where
+    T: DFPrimitiveType,
+    Option<T>: Into<DataValue>,
 {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         primitive_type_to_values_impl(self)

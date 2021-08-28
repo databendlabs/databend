@@ -23,11 +23,11 @@ impl DataColumn {
 
         let dtype = aggregate_types(&[lhs.data_type(), rhs.data_type()])?;
         let mut left = lhs.to_minimal_array()?;
-        if left.data_type() != dtype {
+        if left.data_type() != &dtype {
             left = left.cast_with_type(&dtype)?;
         }
         let mut right = rhs.to_minimal_array()?;
-        if right.data_type() != dtype {
+        if right.data_type() != &dtype {
             right = right.cast_with_type(&dtype)?;
         }
 

@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 
 use common_arrow::arrow::compute::contains::contains;
-use common_arrow::arrow::types::NativeType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -39,7 +38,7 @@ macro_rules! contain_internal {
         let arrow_array = $self.downcast_ref();
         let arrow_list = $list_arr.downcast_ref();
         let arrow_res = contains(arrow_list, arrow_array)?;
-        Ok(DFBooleanArray::from_arrow_array(arrow_res))
+        Ok(DFBooleanArray::new(arrow_res))
     }};
 }
 

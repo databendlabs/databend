@@ -37,11 +37,6 @@ where T: DFPrimitiveType
         let e = self.downcast_iter().map(|c| c.copied());
         e.collect()
     }
-
-    pub fn from_arrow_array(array: PrimitiveArray<T>) -> Self {
-        let array_ref = Arc::new(array) as ArrayRef;
-        array_ref.into()
-    }
 }
 
 impl AsRef<BooleanArray> for DFBooleanArray {
@@ -57,16 +52,11 @@ impl DFBooleanArray {
     }
 
     pub fn downcast_iter(&self) -> ZipValidity<'_, bool, BitmapIter<'_>> {
-        &self.array.iter()
+        self.array.iter()
     }
 
     pub fn collect_values(&self) -> Vec<Option<bool>> {
         self.downcast_iter().collect()
-    }
-
-    pub fn from_arrow_array(array: BooleanArray) -> Self {
-        let array_ref = Arc::new(array) as ArrayRef;
-        array_ref.into()
     }
 }
 
@@ -83,18 +73,11 @@ impl DFUtf8Array {
     }
 
     pub fn downcast_iter(&self) -> ZipValidity<'_, &'_ str, Utf8ValuesIter<'_, i64>> {
-        let arr = &*self.array;
-        let arr = unsafe { &*(arr as *const dyn Array as *const LargeUtf8Array) };
-        arr.iter()
+        self.array.iter()
     }
 
     pub fn collect_values(&self) -> Vec<Option<&'_ str>> {
         self.downcast_iter().collect()
-    }
-
-    pub fn from_arrow_array(array: LargeUtf8Array) -> Self {
-        let array_ref = Arc::new(array) as ArrayRef;
-        array_ref.into()
     }
 }
 
@@ -103,18 +86,14 @@ impl DFListArray {
         &self.array
     }
 
-    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator {
-        self.array.iter().map(|a| {
+    pub fn downcast_iter(&self) -> impl Iterator<Item = Option<Series>> + DoubleEndedIterator + '_ {
+        let arr = self.downcast_ref();
+        arr.iter().map(|a| {
             a.map(|b| {
                 let c: ArrayRef = Arc::from(b);
                 c.into_series()
             })
         })
-    }
-
-    pub fn from_arrow_array(array: LargeListArray) -> Self {
-        let array_ref = Arc::new(array) as ArrayRef;
-        array_ref.into()
     }
 }
 
@@ -127,20 +106,10 @@ impl DFBinaryArray {
         let e = self.downcast_ref().iter().map(|c| c.map(|d| d.to_owned()));
         e.collect()
     }
-
-    pub fn from_arrow_array(array: LargeBinaryArray) -> Self {
-        let array_ref = Arc::new(array) as ArrayRef;
-        array_ref.into()
-    }
 }
 
 impl DFStructArray {
     pub fn downcast_ref(&self) -> &StructArray {
         &self.array
-    }
-
-    pub fn from_arrow_array(array: StructArray) -> Self {
-        let array_ref = Arc::new(array) as ArrayRef;
-        array_ref.into()
     }
 }

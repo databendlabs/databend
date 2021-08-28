@@ -16,7 +16,6 @@ use common_arrow::arrow::array::*;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 
-use super::ArrayDeserializer;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 
@@ -58,7 +57,7 @@ impl Utf8ArrayBuilder {
 
     pub fn finish(&mut self) -> DFUtf8Array {
         let array = self.builder.as_arc();
-        array.into()
+        DFUtf8Array::from_arrow_array(array.as_ref())
     }
 }
 

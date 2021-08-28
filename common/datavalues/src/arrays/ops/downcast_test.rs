@@ -67,26 +67,25 @@ fn test_array_as_ref() -> Result<()> {
 }
 
 #[test]
-// Test from_arrow_array() and collect_values() which calls downcast_iter()
 fn test_array_downcast() -> Result<()> {
     // Test PrimitiveArray
     let vec_uint16 = vec![1u16, 2u16, 3u16];
     let arrow_array = PrimitiveArray::<u16>::from_trusted_len_values_iter(vec_uint16.into_iter());
-    let df_array = DFUInt16Array::from_arrow_array(arrow_array);
+    let df_array = DFUInt16Array::new(arrow_array);
     let values = df_array.collect_values();
     assert_eq!(&[Some(1u16), Some(2u16), Some(3u16)], values.as_slice());
 
     // Test BooleanArray
     let vec_bool = vec![true, false, true];
     let arrow_bool_array = BooleanArray::from_slice(&vec_bool);
-    let df_array = DFBooleanArray::from_arrow_array(arrow_bool_array);
+    let df_array = DFBooleanArray::new(arrow_bool_array);
     let values = df_array.collect_values();
     assert_eq!(&[Some(true), Some(false), Some(true)], values.as_slice());
 
     // Test Utf8Array
     let vec_str = vec![Some("foo"), None, Some("bar")];
     let arrow_str_array = LargeUtf8Array::from(vec_str);
-    let df_array = DFUtf8Array::from_arrow_array(arrow_str_array);
+    let df_array = DFUtf8Array::new(arrow_str_array);
     let values = df_array.collect_values();
     assert_eq!(&[Some("foo"), None, Some("bar")], values.as_slice());
 

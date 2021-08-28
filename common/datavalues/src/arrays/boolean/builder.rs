@@ -16,7 +16,6 @@ use common_arrow::arrow::array::*;
 use common_exception::Result;
 use common_io::prelude::*;
 
-use super::ArrayDeserializer;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 
@@ -24,7 +23,7 @@ pub struct BooleanArrayBuilder {
     builder: MutableBooleanArray,
 }
 
-impl ArrayBuilder<bool> for BooleanArrayBuilder {
+impl ArrayBuilder<bool, DFBooleanArray> for BooleanArrayBuilder {
     /// Appends a value of type `T` into the builder
     #[inline]
     fn append_value(&mut self, v: bool) {
@@ -39,7 +38,7 @@ impl ArrayBuilder<bool> for BooleanArrayBuilder {
 
     fn finish(&mut self) -> DFBooleanArray {
         let array = self.builder.as_arc();
-        array.into()
+        DFBooleanArray::from_arrow_array(array.as_ref())
     }
 }
 

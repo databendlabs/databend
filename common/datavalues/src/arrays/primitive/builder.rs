@@ -13,12 +13,10 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::types::NativeType;
 use common_exception::Result;
 use common_io::prelude::*;
 use lexical_core::FromLexical;
 
-use super::ArrayDeserializer;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
@@ -30,6 +28,17 @@ where
 {
     builder: MutablePrimitiveArray<T>,
 }
+
+pub type DFUInt8ArrayBuilder = PrimitiveArrayBuilder<u8>;
+pub type DFInt8ArrayBuilder = PrimitiveArrayBuilder<i8>;
+pub type DFUInt16ArrayBuilder = PrimitiveArrayBuilder<u16>;
+pub type DFInt16ArrayBuilder = PrimitiveArrayBuilder<i16>;
+pub type DFUInt32ArrayBuilder = PrimitiveArrayBuilder<u32>;
+pub type DFInt32ArrayBuilder = PrimitiveArrayBuilder<i32>;
+pub type DFUInt64ArrayBuilder = PrimitiveArrayBuilder<u64>;
+pub type DFInt64ArrayBuilder = PrimitiveArrayBuilder<i64>;
+pub type DFFloat32ArrayBuilder = PrimitiveArrayBuilder<f32>;
+pub type DFFloat64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 
 impl<T> ArrayBuilder<T, DFPrimitiveArray<T>> for PrimitiveArrayBuilder<T>
 where
@@ -50,8 +59,7 @@ where
 
     fn finish(&mut self) -> DFPrimitiveArray<T> {
         let array = self.builder.as_arc();
-
-        array.into()
+        DFPrimitiveArray::<T>::from_arrow_array(array.as_ref())
     }
 }
 

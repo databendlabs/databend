@@ -23,7 +23,7 @@ impl DFBooleanArray {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {
                 let result = compute::boolean_kleene::and(self.downcast_ref(), rhs.downcast_ref())?;
-                Ok(DFBooleanArray::from_arrow_array(result))
+                Ok(DFBooleanArray::new(result))
             }
             (_, 1) => {
                 let opt_rhs = rhs.get(0);
@@ -62,7 +62,7 @@ impl DFBooleanArray {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {
                 let result = compute::boolean_kleene::or(self.downcast_ref(), rhs.downcast_ref())?;
-                Ok(DFBooleanArray::from_arrow_array(result))
+                Ok(DFBooleanArray::new(result))
             }
             (_, 1) => {
                 let opt_rhs = rhs.get(0);
@@ -98,7 +98,7 @@ impl DFBooleanArray {
 
     pub fn not(&self) -> Result<Self> {
         let result = compute::boolean::not(self.downcast_ref());
-        Ok(DFBooleanArray::from_arrow_array(result))
+        Ok(DFBooleanArray::new(result))
     }
 
     /// Check if all values are true

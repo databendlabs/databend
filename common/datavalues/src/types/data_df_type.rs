@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow::types::NativeType;
+use num::NumCast;
 
 use super::data_type::*;
 use crate::DataField;
@@ -74,7 +75,7 @@ impl DFDataType for Struct {
     }
 }
 
-pub trait DFPrimitiveType: DFDataType + NativeType {
+pub trait DFPrimitiveType: DFDataType + NativeType + NumCast {
     type LargestType: DFPrimitiveType;
     const SIGN: bool;
     const FLOATING: bool;

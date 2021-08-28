@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::borrow::Cow;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::arity::unary;
@@ -81,13 +80,13 @@ pub trait ArrayApply<'a, A, B> {
 impl<'a, T> ArrayApply<'a, T, T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn apply_cast_numeric<F, S>(&self, f: F, data_type: DataType) -> DFPrimitiveArray<S>
+    fn apply_cast_numeric<F, S>(&self, f: F) -> DFPrimitiveArray<S>
     where
         F: Fn(T) -> S + Copy,
         S: DFPrimitiveType,
     {
         let array = unary(self.downcast_ref(), |n| f(n), S::data_type().to_arrow());
-        DFPrimitiveArray::<S>::from_arrow_array(array)
+        DFPrimitiveArray::<S>::new(array)
     }
 
     fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DFPrimitiveArray<S>
@@ -100,13 +99,13 @@ where T: DFPrimitiveType
             |n| f(Some(n)),
             S::data_type().to_arrow(),
         );
-        DFPrimitiveArray::<S>::from_arrow_array(array)
+        DFPrimitiveArray::<S>::new(array)
     }
 
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(T) -> T + Copy {
         let array = unary(self.downcast_ref(), |n| f(n), T::data_type().to_arrow());
-        DFPrimitiveArray::<T>::from_arrow_array(array)
+        DFPrimitiveArray::<T>::new(array)
     }
 
     fn apply_with_idx<F>(&'a self, f: F) -> Self
@@ -144,11 +143,10 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
         F: Fn(bool) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let values = self.values().iter().map(f);
+        let values = self.array.values().iter().map(f);
         let values = AlignedVec::<_>::from_trusted_len_iter(values);
-        let validity = self.validity().clone();
-        let arr = to_primitive::<S>(values, validity);
-        DFPrimitiveArray::<S>::new(arr)
+        let validity = self.array.validity().clone();
+        to_primitive::<S>(values, validity)
     }
 
     fn branch_apply_cast_numeric_no_null<F, S>(&self, f: F) -> DFPrimitiveArray<S>
@@ -161,8 +159,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
             .map(f)
             .trust_my_length(self.len())
             .collect();
-        let arr = to_primitive::<S>(av, None);
-        DFPrimitiveArray::<S>::new(arr)
+        to_primitive::<S>(av, None)
     }
 
     fn apply<F>(&self, f: F) -> Self
@@ -191,8 +188,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
         let av = AlignedVec::<_>::from_trusted_len_iter(values_iter);
 
         let (_, validity) = self.null_bits();
-        let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
-        array.into()
+        to_primitive::<S>(av, validity.clone())
     }
 
     fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
@@ -202,8 +198,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
     {
         let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.downcast_iter().map(f));
         let (_, validity) = self.null_bits();
-        let array = Arc::new(to_primitive::<S>(av, validity.clone())) as ArrayRef;
-        array.into()
+        to_primitive::<S>(av, validity.clone())
     }
 
     fn apply<F>(&'a self, f: F) -> Self

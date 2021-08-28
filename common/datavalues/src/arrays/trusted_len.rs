@@ -17,7 +17,6 @@ use std::borrow::Borrow;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
-use common_arrow::arrow::types::NativeType;
 
 use super::DFAsRef;
 use crate::prelude::*;
@@ -104,7 +103,7 @@ where T: DFPrimitiveType
         let arr = unsafe {
             PrimitiveArray::from_trusted_len_iter_unchecked(iter).to(T::data_type().to_arrow())
         };
-        Self::from_arrow_array(arr)
+        Self::new(arr)
     }
 }
 
@@ -119,7 +118,7 @@ where T: DFPrimitiveType
         let values = unsafe { Buffer::from_trusted_len_iter_unchecked(iter) };
         let arr = PrimitiveArray::from_data(T::data_type().to_arrow(), values, None);
 
-        NoNull::new(DFPrimitiveArray::<T>::from_arrow_array(arr))
+        NoNull::new(arr.into())
     }
 }
 impl<Ptr> FromTrustedLenIterator<Ptr> for DFListArray
@@ -145,7 +144,7 @@ impl FromTrustedLenIterator<Option<bool>> for DFBooleanArray {
     where I::IntoIter: TrustedLen {
         let iter = iter.into_iter();
         let arr = BooleanArray::from_trusted_len_iter(iter);
-        Self::from_arrow_array(arr)
+        Self::new(arr)
     }
 }
 
@@ -154,7 +153,7 @@ impl FromTrustedLenIterator<bool> for DFBooleanArray {
     where I::IntoIter: TrustedLen {
         let iter = iter.into_iter();
         let arr = BooleanArray::from_trusted_len_values_iter(iter);
-        Self::from_arrow_array(arr)
+        Self::new(arr)
     }
 }
 

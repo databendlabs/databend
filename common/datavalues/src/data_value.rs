@@ -134,7 +134,7 @@ impl DataValue {
     pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
         match self {
             DataValue::Null => {
-                let array = Arc::new(NullArray::new_null(size)) as ArrayRef;
+                let array = NullArray::new_null(size);
                 let array: DFNullArray = array.into();
                 Ok(array.into_series())
             }
@@ -161,18 +161,18 @@ impl DataValue {
             },
 
             DataValue::List(values, data_type) => match data_type {
-                DataType::Int8 => build_list_series! {Int8Type, values, size, data_type },
-                DataType::Int16 => build_list_series! {Int16Type, values, size, data_type },
-                DataType::Int32 => build_list_series! {Int32Type, values, size, data_type },
-                DataType::Int64 => build_list_series! {Int64Type, values, size, data_type },
+                DataType::Int8 => build_list_series! {i8, values, size, data_type },
+                DataType::Int16 => build_list_series! {i16, values, size, data_type },
+                DataType::Int32 => build_list_series! {i32, values, size, data_type },
+                DataType::Int64 => build_list_series! {i64, values, size, data_type },
 
-                DataType::UInt8 => build_list_series! {UInt8Type, values, size, data_type },
-                DataType::UInt16 => build_list_series! {UInt16Type, values, size, data_type },
-                DataType::UInt32 => build_list_series! {UInt32Type, values, size, data_type },
-                DataType::UInt64 => build_list_series! {UInt64Type, values, size, data_type },
+                DataType::UInt8 => build_list_series! {u8, values, size, data_type },
+                DataType::UInt16 => build_list_series! {u16, values, size, data_type },
+                DataType::UInt32 => build_list_series! {u32, values, size, data_type },
+                DataType::UInt64 => build_list_series! {u64, values, size, data_type },
 
-                DataType::Float32 => build_list_series! {Float32Type, values, size, data_type },
-                DataType::Float64 => build_list_series! {Float64Type, values, size, data_type },
+                DataType::Float32 => build_list_series! {f32, values, size, data_type },
+                DataType::Float64 => build_list_series! {f64, values, size, data_type },
 
                 DataType::Boolean => {
                     let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
@@ -224,7 +224,7 @@ impl DataValue {
 
                     arrays.push(val_array);
                 }
-                let r = Arc::new(StructArray::from_data(fields, arrays, None)) as ArrayRef;
+                let r: DFStructArray = StructArray::from_data(fields, arrays, None).into();
                 Ok(r.into_series())
             }
 
@@ -311,6 +311,13 @@ impl From<&str> for DataValue {
     }
 }
 
+impl From<Option<&str>> for DataValue {
+    fn from(x: Option<&str>) -> Self {
+        let x = x.map(|c| c.to_string());
+        DataValue::from(x)
+    }
+}
+
 impl From<String> for DataValue {
     fn from(x: String) -> Self {
         DataValue::Utf8(Some(x))
@@ -320,6 +327,18 @@ impl From<String> for DataValue {
 impl From<Option<String>> for DataValue {
     fn from(x: Option<String>) -> Self {
         DataValue::Utf8(x)
+    }
+}
+
+impl From<Vec<u8>> for DataValue {
+    fn from(x: Vec<u8>) -> Self {
+        DataValue::Binary(Some(x))
+    }
+}
+
+impl From<Option<Vec<u8>>> for DataValue {
+    fn from(x: Option<Vec<u8>>) -> Self {
+        DataValue::Binary(x)
     }
 }
 

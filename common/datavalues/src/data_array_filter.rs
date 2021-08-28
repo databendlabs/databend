@@ -53,7 +53,7 @@ impl DataArrayFilter {
         let mask = array.values();
         if let Some(v) = array.validity() {
             let mask = mask.bitand(v);
-            return DFBooleanArray::from_arrow_array(BooleanArray::from_data(mask, None));
+            return DFBooleanArray::new(BooleanArray::from_data(mask, None));
         }
         filter.clone()
     }

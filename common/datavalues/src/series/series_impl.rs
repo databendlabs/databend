@@ -47,7 +47,7 @@ pub trait IntoSeries {
 }
 
 pub trait SeriesTrait: Send + Sync + fmt::Debug {
-    fn data_type(&self) -> DataType;
+    fn data_type(&self) -> &DataType;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
     fn is_null(&self, row: usize) -> bool;
@@ -300,25 +300,25 @@ impl IntoSeries for ArrayRef {
     where Self: Sized {
         let data_type = DataType::try_from(self.data_type()).unwrap();
         match data_type {
-            DataType::Null => DFNullArray::from_array(self.as_ref()).into_series(),
-            DataType::Boolean => DFBooleanArray::from_array(self.as_ref()).into_series(),
-            DataType::UInt8 => DFUInt8Array::from_array(self.as_ref()).into_series(),
-            DataType::UInt16 => DFUInt16Array::from_array(self.as_ref()).into_series(),
-            DataType::UInt32 => DFUInt32Array::from_array(self.as_ref()).into_series(),
-            DataType::UInt64 => DFUInt64Array::from_array(self.as_ref()).into_series(),
+            DataType::Null => DFNullArray::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Boolean => DFBooleanArray::from_arrow_array(self.as_ref()).into_series(),
+            DataType::UInt8 => DFUInt8Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::UInt16 => DFUInt16Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::UInt32 => DFUInt32Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::UInt64 => DFUInt64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            DataType::Int8 => DFInt8Array::from_array(self.as_ref()).into_series(),
-            DataType::Int16 => DFInt16Array::from_array(self.as_ref()).into_series(),
-            DataType::Int32 => DFInt32Array::from_array(self.as_ref()).into_series(),
-            DataType::Int64 => DFInt64Array::from_array(self.as_ref()).into_series(),
+            DataType::Int8 => DFInt8Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Int16 => DFInt16Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Int32 => DFInt32Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Int64 => DFInt64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            DataType::Float32 => DFFloat32Array::from_array(self.as_ref()).into_series(),
-            DataType::Float64 => DFFloat64Array::from_array(self.as_ref()).into_series(),
-            DataType::Utf8 => DFUtf8Array::from_array(self.as_ref()).into_series(),
+            DataType::Float32 => DFFloat32Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Float64 => DFFloat64Array::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Utf8 => DFUtf8Array::from_arrow_array(self.as_ref()).into_series(),
 
-            DataType::List(_) => DFListArray::from_array(self.as_ref()).into_series(),
-            DataType::Struct(_) => DFStructArray::from_array(self.as_ref()).into_series(),
-            DataType::Binary => DFBinaryArray::from_array(self.as_ref()).into_series(),
+            DataType::List(_) => DFListArray::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Struct(_) => DFStructArray::from_arrow_array(self.as_ref()).into_series(),
+            DataType::Binary => DFBinaryArray::from_arrow_array(self.as_ref()).into_series(),
 
             _ => unreachable!(),
         }

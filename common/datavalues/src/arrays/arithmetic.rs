@@ -19,11 +19,10 @@ use std::ops::Mul;
 use std::ops::Neg;
 use std::ops::Rem;
 use std::ops::Sub;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::compute::arithmetics::basic;
 use common_arrow::arrow::compute::arithmetics::negate;
 use common_arrow::arrow::compute::arity::unary;
@@ -58,8 +57,7 @@ where
 {
     let ca = match (lhs.len(), rhs.len()) {
         (a, b) if a == b => {
-            let array = Arc::new(kernel(lhs.downcast_ref(), rhs.downcast_ref()).expect("output"))
-                as ArrayRef;
+            let array = kernel(lhs.downcast_ref(), rhs.downcast_ref()).expect("output");
 
             array.into()
         }
@@ -69,7 +67,7 @@ where
             match opt_rhs {
                 None => DFPrimitiveArray::<T>::full_null(lhs.len()),
                 Some(rhs) => {
-                    let array = Arc::new(scalar_kernel(lhs.downcast_ref(), &rhs)) as ArrayRef;
+                    let array = scalar_kernel(lhs.downcast_ref(), &rhs);
                     array.into()
                 }
             }
@@ -211,10 +209,8 @@ where
                     None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
                     Some(rhs) => match self.data_type() {
                         DataType::UInt64 => {
-                            let arr = &*self.array;
-                            let arr = unsafe {
-                                &*(arr as *const dyn Array as *const PrimitiveArray<u64>)
-                            };
+                            let arr = self.array.as_any().downcast_ref::<UInt64Array>().unwrap();
+
                             let rhs: u8 = rhs.as_();
                             let rhs = rhs as u64;
 
@@ -225,12 +221,12 @@ where
                                     |a| (a % reduced_modulo) as u8,
                                     ArrowDataType::UInt8,
                                 );
-                                let array = DFUInt8Array::from_arrow_array(res);
+                                let array = DFUInt8Array::new(res);
                                 Ok(array.into_series())
                             } else {
                                 let mask = rhs - 1;
                                 let res = unary(arr, |a| (a & mask) as u8, ArrowDataType::UInt8);
-                                let array = DFUInt8Array::from_arrow_array(res);
+                                let array = DFUInt8Array::new(res);
                                 Ok(array.into_series())
                             }
                         }
@@ -271,41 +267,46 @@ where
         + num::Zero
         + num::One,
 {
-    type Output = Result<DFPrimitiveArray<T>>;
+    type Output = Result<Series>;
 
     fn neg(self) -> Self::Output {
-        let arr = &*self.array;
-        let result = unsafe {
+        // let arr = negate(&self.array);
+        let arr = &self.array;
+        unsafe {
             match self.data_type() {
-                DataType::Int8 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i8>),
-                )) as ArrayRef),
+                DataType::Int8 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i8>));
+                    Ok(DFInt8Array::new(v).into_series())
+                }
 
-                DataType::Int16 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i16>),
-                )) as ArrayRef),
+                DataType::Int16 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i16>));
+                    Ok(DFInt16Array::new(v).into_series())
+                }
 
-                DataType::Int32 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i32>),
-                )) as ArrayRef),
-                DataType::Int64 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i64>),
-                )) as ArrayRef),
-                DataType::Float32 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<f32>),
-                )) as ArrayRef),
-                DataType::Float64 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<f64>),
-                )) as ArrayRef),
+                DataType::Int32 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i32>));
+                    Ok(DFInt32Array::new(v).into_series())
+                }
+                DataType::Int64 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i64>));
+                    Ok(DFInt64Array::new(v).into_series())
+                }
+                DataType::Float32 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<f32>));
+                    Ok(DFFloat32Array::new(v).into_series())
+                }
+                DataType::Float64 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<f64>));
+                    Ok(DFFloat64Array::new(v).into_series())
+                }
 
                 _ => Err(ErrorCode::IllegalDataType(format!(
                     "DataType {:?} is Unsupported for neg op",
                     self.data_type()
                 ))),
             }
-        };
-        let result = result?;
-        Ok(result.into())
+        }
     }
 }
 
@@ -382,15 +383,16 @@ where
     DFPrimitiveArray<T>: ArrayCast,
 {
     fn pow_f32(&self, exp: f32) -> DFFloat32Array {
-        self.cast::<Float32Type>()
-            .expect("f32 array")
-            .apply_kernel(|arr| Arc::new(basic::pow::powf_scalar(arr, exp)))
+        let arr = self.cast_with_type(&DataType::Float32).expect("f32 array");
+        let arr = arr.f32().unwrap();
+        DFFloat32Array::new(basic::pow::powf_scalar(&arr.array, exp))
     }
 
     fn pow_f64(&self, exp: f64) -> DFFloat64Array {
-        self.cast::<Float64Type>()
-            .expect("f64 array")
-            .apply_kernel(|arr| Arc::new(basic::pow::powf_scalar(arr, exp)))
+        let arr = self.cast_with_type(&DataType::Float64).expect("f64 array");
+        let arr = arr.f64().unwrap();
+
+        DFFloat64Array::new(basic::pow::powf_scalar(&arr.array, exp))
     }
 }
 
