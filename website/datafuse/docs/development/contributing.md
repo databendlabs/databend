@@ -18,6 +18,8 @@ Thank you.
 
 ## Contributing
 
+Note: In order to run `make test` successfully, make sure you have installed `mysql` client.
+
 To contribute to Datafuse, ensure that you have the latest version of the codebase, run the following:
 ```
 $ git clone https://github.com/datafuselabs/datafuse
