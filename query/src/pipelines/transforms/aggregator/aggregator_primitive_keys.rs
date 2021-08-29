@@ -22,7 +22,7 @@ use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::prelude::Series;
-use common_datavalues::DFNumericType;
+use common_datavalues::DFPrimitiveType;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
@@ -165,7 +165,7 @@ where
         Ok(groups_locker)
     }
 
-    pub fn aggregate_finalized<T: DFNumericType>(
+    pub fn aggregate_finalized<T: DFPrimitiveType>(
         &self,
         groups: &HashMap<T::Native, usize>,
         schema: DataSchemaRef,

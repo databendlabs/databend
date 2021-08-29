@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use common_arrow::arrow::types::NativeType;
+use common_io::prelude::*;
 use num::NumCast;
 
 use super::data_type::*;
+use crate::DFTryFrom;
 use crate::DataField;
+use crate::DataValue;
 
 pub trait DFDataType: std::fmt::Debug + Send + 'static + Sync {
     fn data_type() -> DataType;
@@ -75,7 +78,17 @@ impl DFDataType for Struct {
     }
 }
 
-pub trait DFPrimitiveType: DFDataType + NativeType + NumCast {
+pub trait DFPrimitiveType:
+    DFDataType
+    + NativeType
+    + NumCast
+    + PartialOrd
+    + Into<DataValue>
+    + Default
+    + BinarySer
+    + BinaryDe
+    + DFTryFrom<DataValue>
+{
     type LargestType: DFPrimitiveType;
     const SIGN: bool;
     const FLOATING: bool;

@@ -218,7 +218,7 @@ pub struct HashMethodFixedKeys<T> {
 }
 
 impl<T> HashMethodFixedKeys<T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
     pub fn default() -> Self {
         HashMethodFixedKeys { t: PhantomData }
@@ -262,7 +262,7 @@ where T: DFNumericType
 
 impl<T> HashMethod for HashMethodFixedKeys<T>
 where
-    T: DFNumericType,
+    T: DFPrimitiveType,
     T::Native: std::cmp::Eq + Hash + Clone + Debug,
 {
     type HashKey = T::Native;

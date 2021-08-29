@@ -67,35 +67,16 @@ pub struct AggregateSumFunction<T, SumT> {
 
 impl<T, SumT> AggregateFunction for AggregateSumFunction<T, SumT>
 where
-    T: DFNumericType,
-    SumT: DFNumericType,
-
-    T::Native: AsPrimitive<SumT::Native>
-        + DFTryFrom<DataValue>
-        + Clone
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
-    SumT::Native: DFTryFrom<DataValue>
-        + Into<DataValue>
-        + Clone
-        + Copy
-        + Default
-        + std::ops::Add<Output = SumT::Native>
-        + BinarySer
-        + BinaryDe
-        + Send
-        + Sync
-        + 'static,
-    Option<SumT::Native>: Into<DataValue>,
+    T: DFPrimitiveType + AsPrimitive<SumT>,
+    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
+    Option<SumT>: Into<DataValue>,
 {
     fn name(&self) -> &str {
         "AggregateSumFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
-        let value: DataValue = Some(SumT::Native::default()).into();
+        let value: DataValue = Some(SumT::default()).into();
 
         Ok(value.data_type())
     }
@@ -105,19 +86,19 @@ where
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateSumState::<SumT::Native> { value: None });
+        place.write(|| AggregateSumState::<SumT> { value: None });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateSumState<SumT::Native>>()
+        Layout::new::<AggregateSumState<SumT>>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
         let value = arrays[0].sum()?;
-        let opt_sum: Result<SumT::Native> = DFTryFrom::try_from(value);
+        let opt_sum: Result<SumT> = DFTryFrom::try_from(value);
 
         if let Ok(s) = opt_sum {
-            let state = place.get::<AggregateSumState<SumT::Native>>();
+            let state = place.get::<AggregateSumState<SumT>>();
             state.add(s);
         }
 
@@ -131,54 +112,56 @@ where
         arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()> {
-        let darray: &DataArray<T> = arrays[0].static_cast::<T>();
-        let array = darray.downcast_ref();
-
+        let darray: &DFPrimitiveArray<T> = arrays[0].static_cast();
         if darray.null_count() == 0 {
-            array
+            darray
+                .get_inner()
                 .values()
                 .as_slice()
                 .iter()
                 .zip(places.iter())
                 .for_each(|(v, place)| {
                     let place = place.next(offset);
-                    let state = place.get::<AggregateSumState<SumT::Native>>();
+                    let state = place.get::<AggregateSumState<SumT>>();
                     state.add(v.as_());
                 });
         } else {
-            array.into_iter().zip(places.iter()).for_each(|(c, place)| {
-                if let Some(v) = c {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateSumState<SumT::Native>>();
-                    state.add(v.as_());
-                }
-            });
+            darray
+                .into_iter()
+                .zip(places.iter())
+                .for_each(|(c, place)| {
+                    if let Some(v) = c {
+                        let place = place.next(offset);
+                        let state = place.get::<AggregateSumState<SumT>>();
+                        state.add(v.as_());
+                    }
+                });
         }
 
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT::Native>>();
+        let state = place.get::<AggregateSumState<SumT>>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT::Native>>();
+        let state = place.get::<AggregateSumState<SumT>>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateSumState<SumT::Native>>();
+        let rhs = rhs.get::<AggregateSumState<SumT>>();
         if let Some(s) = &rhs.value {
-            let state = place.get::<AggregateSumState<SumT::Native>>();
+            let state = place.get::<AggregateSumState<SumT>>();
             state.add(*s);
         }
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = place.get::<AggregateSumState<SumT::Native>>();
+        let state = place.get::<AggregateSumState<SumT>>();
         Ok(state.value.into())
     }
 }
@@ -191,28 +174,9 @@ impl<T, SumT> fmt::Display for AggregateSumFunction<T, SumT> {
 
 impl<T, SumT> AggregateSumFunction<T, SumT>
 where
-    T: DFNumericType,
-    SumT: DFNumericType,
-
-    T::Native: AsPrimitive<SumT::Native>
-        + DFTryFrom<DataValue>
-        + Clone
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
-    SumT::Native: DFTryFrom<DataValue>
-        + Into<DataValue>
-        + Clone
-        + Copy
-        + Default
-        + std::ops::Add<Output = SumT::Native>
-        + BinarySer
-        + BinaryDe
-        + Send
-        + Sync
-        + 'static,
-    Option<SumT::Native>: Into<DataValue>,
+    T: DFPrimitiveType + AsPrimitive<SumT>,
+    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
+    Option<SumT>: Into<DataValue>,
 {
     pub fn try_create(
         display_name: &str,
@@ -230,7 +194,7 @@ where
 macro_rules! creator {
     ($T: ident, $data_type: expr, $display_name: expr, $arguments: expr) => {
         if $T::data_type() == $data_type {
-            return AggregateSumFunction::<$T, <$T as DFNumericType>::LargestType>::try_create(
+            return AggregateSumFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
                 $display_name,
                 $arguments,
             );

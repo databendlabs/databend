@@ -88,7 +88,7 @@ The `_input_rows` is the rows of the current block, and it may be useful when th
 ## Example
 Let's take an example of aggregate function `sum`.
 
-It's declared as `AggregateSumFunction<T, SumT>`, we can accept varying integer types like `UInt8Type`, `Int8Type`. `T` and `SumT` is logic types which implement `DFNumericType`. e.g., `T` is `UInt8Type` and `SumT` must be `UInt64Type`.
+It's declared as `AggregateSumFunction<T, SumT>`, we can accept varying integer types like `UInt8Type`, `Int8Type`. `T` and `SumT` is logic types which implement `DFPrimitiveType`. e.g., `T` is `UInt8Type` and `SumT` must be `UInt64Type`.
 
 Also, we can dispatch it using macros by matching the types of the arguments. Take a look at the `dispatch_numeric_types` to understand the dispatch macros.
 

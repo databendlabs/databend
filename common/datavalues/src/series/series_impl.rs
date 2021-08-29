@@ -293,6 +293,13 @@ impl Series {
             unsafe { std::mem::transmute::<&dyn SeriesTrait, (usize, usize)>(object) };
         data_ptr
     }
+
+    /// Get a pointer to the underlying data of this Series.
+    /// Can be useful for fast comparisons.
+    pub fn static_cast<T>(&self) -> &T {
+        let object = self.0.deref();
+        unsafe { &*(object as *const dyn SeriesTrait as *const T) }
+    }
 }
 
 impl IntoSeries for ArrayRef {

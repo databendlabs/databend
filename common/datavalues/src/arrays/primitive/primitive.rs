@@ -24,7 +24,7 @@ use crate::prelude::*;
 /// DFPrimitiveArray is generic struct which wrapped arrow's PrimitiveArray
 #[derive(Debug, Clone)]
 pub struct DFPrimitiveArray<T: DFPrimitiveType> {
-    pub array: PrimitiveArray<T>,
+    pub(crate) array: PrimitiveArray<T>,
     data_type: DataType,
 }
 
