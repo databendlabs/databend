@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 
-use crate::datasources::Table;
-use crate::datasources::TableFunction;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 
 pub type TableMeta = DatasourceMeta<Arc<dyn Table>>;
 pub type TableFunctionMeta = DatasourceMeta<Arc<dyn TableFunction>>;
@@ -33,7 +33,7 @@ pub struct DatasourceMeta<T> {
 }
 
 impl<T> DatasourceMeta<T> {
-    pub fn new(datasource: T, id: MetaId) -> Self {
+    pub fn create(datasource: T, id: MetaId) -> Self {
         Self::with_version(datasource, id, None)
     }
 
@@ -64,7 +64,7 @@ pub struct InMemoryMetas {
 }
 
 impl InMemoryMetas {
-    pub fn new() -> Self {
+    pub fn create() -> Self {
         InMemoryMetas {
             name2meta: HashMap::default(),
             id2meta: HashMap::default(),

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use crate::catalogs::Database;
 use crate::datasources::local::LocalDatabase;
-use crate::datasources::Database;
 
 pub struct LocalFactory;
 

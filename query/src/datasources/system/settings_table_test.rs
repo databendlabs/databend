@@ -18,6 +18,7 @@ use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
+use crate::catalogs::Table;
 use crate::datasources::system::*;
 use crate::datasources::*;
 

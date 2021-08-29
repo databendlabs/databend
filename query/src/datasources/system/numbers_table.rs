@@ -28,10 +28,10 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 use crate::datasources::system::NumbersStream;
 use crate::datasources::Common;
-use crate::datasources::Table;
-use crate::datasources::TableFunction;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct NumbersTable {

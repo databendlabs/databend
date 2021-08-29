@@ -22,7 +22,7 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::meta::TableFunctionMeta;
 use crate::catalogs::meta::TableMeta;
-use crate::datasources::Database;
+use crate::catalogs::Database;
 
 #[async_trait::async_trait]
 pub trait Catalog {

@@ -13,7 +13,20 @@
 // limitations under the License.
 //
 
-pub(crate) mod catalog;
-pub(crate) mod impls;
-pub(crate) mod meta;
-pub(crate) mod meta_client;
+mod catalog;
+mod database;
+mod impls;
+mod meta;
+mod meta_client;
+mod table;
+mod table_function;
+
+pub use catalog::Catalog;
+pub use database::Database;
+pub use impls::database_catalog::*;
+pub use impls::remote_meta_store_client::RemoteMetaStoreClient;
+pub use meta::*;
+pub use meta_client::MetaClient;
+pub use table::Table;
+pub use table::TablePtr;
+pub use table_function::TableFunction;

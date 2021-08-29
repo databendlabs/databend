@@ -33,12 +33,12 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
-use crate::catalogs::meta::TableFunctionMeta;
-use crate::catalogs::meta::TableMeta;
+use crate::catalogs::Catalog;
+use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::DatafuseQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;

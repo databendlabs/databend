@@ -39,11 +39,11 @@ use lru::LruCache;
 
 use crate::catalogs::meta::TableMeta;
 use crate::catalogs::meta_client::MetaClient;
+use crate::catalogs::Database;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteTable;
 use crate::datasources::remote::StoreApis;
 use crate::datasources::remote::StoreApisProvider;
-use crate::datasources::Database;
 
 type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableMeta>>;
@@ -113,7 +113,7 @@ where T: 'static + StoreApis + Clone
             self.store_api_provider.clone(),
             TableOptions::new(),
         );
-        let tbl_meta = TableMeta::new(remote_table.into(), t_id);
+        let tbl_meta = TableMeta::create(remote_table.into(), t_id);
         Ok(tbl_meta)
     }
 }
@@ -176,7 +176,7 @@ where T: 'static + StoreApis + Clone
             self.store_api_provider.clone(),
             TableOptions::new(),
         );
-        let tbl_meta = TableMeta::new(tbl.into(), reply.table_id);
+        let tbl_meta = TableMeta::create(tbl.into(), reply.table_id);
         Ok(Arc::new(tbl_meta))
     }
 
@@ -238,7 +238,7 @@ where T: 'static + StoreApis + Clone
             self.store_api_provider.clone(),
             TableOptions::new(),
         );
-        let tbl_meta = TableMeta::new(tbl.into(), reply.table_id);
+        let tbl_meta = TableMeta::create(tbl.into(), reply.table_id);
         let meta_id = tbl_meta.meta_id();
         let mut cache = self.table_meta_cache.lock();
         let res = Arc::new(tbl_meta);

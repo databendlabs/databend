@@ -20,10 +20,10 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta::TableFunctionMeta;
-use crate::catalogs::meta::TableMeta;
-use crate::catalogs::meta_client::MetaClient;
-use crate::datasources::Database;
+use crate::catalogs::Database;
+use crate::catalogs::MetaClient;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 
 pub struct RemoteDatabase {
     _id: MetaId,

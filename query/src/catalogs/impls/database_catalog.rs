@@ -31,12 +31,12 @@ use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
 use crate::catalogs::meta::TableFunctionMeta;
 use crate::catalogs::meta::TableMeta;
 use crate::catalogs::meta_client::MetaClient;
+use crate::catalogs::Database;
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteFactory;
 use crate::datasources::system::SystemFactory;
-use crate::datasources::Database;
 
 // min id for system tables (inclusive)
 pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;

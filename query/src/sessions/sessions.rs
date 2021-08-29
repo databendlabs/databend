@@ -27,12 +27,12 @@ use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::future::Either;
 use metrics::counter;
 
-use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
+use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::RemoteMetaStoreClient;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::remote::RemoteFactory;
-use crate::datasources::DatabaseCatalog;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 

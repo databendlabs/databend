@@ -23,8 +23,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta::TableMeta;
-use crate::datasources::Database;
+use crate::catalogs::Database;
+use crate::catalogs::TableMeta;
 
 // Client of database meta store (the data dictionary)
 #[async_trait::async_trait]

@@ -62,7 +62,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
 use crate::functions::ContextFunction;
 use crate::sessions::DatafuseQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
