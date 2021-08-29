@@ -45,7 +45,7 @@ impl<T: DFPrimitiveType> TypeSerializer for DateSerializer<T> {
             .iter()
             .map(|x| {
                 x.map(|v| {
-                    let mut date = NaiveDate::from_num_days_from_ce(0);
+                    let mut date = NaiveDate::from_ymd(1970, 1, 1);
                     let d = Duration::days(v.to_i64().unwrap());
                     date.add_assign(d);
                     date.format("%Y-%m-%d").to_string()

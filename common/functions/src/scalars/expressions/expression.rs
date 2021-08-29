@@ -56,8 +56,14 @@ impl ToCastFunction {
                 Binary
             }
             // aliases
-            map.insert("tostring".into(), |display_name| {
+            map.insert("toString".into(), |display_name| {
                 CastFunction::create(display_name.to_string(), DataType::Utf8)
+            });
+            map.insert("toDate".into(), |display_name| {
+                CastFunction::create(display_name.to_string(), DataType::Date16)
+            });
+            map.insert("toDateTime".into(), |display_name| {
+                CastFunction::create(display_name.to_string(), DataType::DateTime32)
             });
         }
 
