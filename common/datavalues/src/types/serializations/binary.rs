@@ -12,14 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_df_type;
-mod data_type;
-mod data_type_coercion;
-mod physical_data_type;
-mod serializations;
+use common_exception::Result;
 
-pub use data_df_type::*;
-pub use data_type::*;
-pub use data_type_coercion::*;
-pub use physical_data_type::*;
-pub use serializations::*;
+use crate::prelude::*;
+
+pub struct BinarySerializer {}
+
+impl TypeSerializer for BinarySerializer {
+    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
+        let array = column.to_array()?;
+        let array: &DFBinaryArray = array.static_cast();
+
+        let result: Vec<String> = array
+            .into_iter()
+            .map(|x| {
+                x.map(|v| String::from_utf8_lossy(v).to_string())
+                    .unwrap_or_else(|| "NULL".to_owned())
+            })
+            .collect();
+        Ok(result)
+    }
+}

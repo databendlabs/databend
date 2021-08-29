@@ -149,9 +149,7 @@ where T: DFPrimitiveType
             };
             TakeRandBranch::SingleNoNull(t)
         } else {
-            let t = NumTakeRandomSingleArray {
-                arr: self.inner(),
-            };
+            let t = NumTakeRandomSingleArray { arr: self.inner() };
             TakeRandBranch::Single(t)
         }
     }
@@ -202,9 +200,7 @@ impl<'a> IntoTakeRandom<'a> for &'a DFListArray {
     type TakeRandom = TakeRandBranch<ListTakeRandom<'a>, ListTakeRandom<'a>>;
 
     fn take_rand(&self) -> Self::TakeRandom {
-        let t = ListTakeRandom {
-            arr: self.inner(),
-        };
+        let t = ListTakeRandom { arr: self.inner() };
         TakeRandBranch::Single(t)
     }
 }

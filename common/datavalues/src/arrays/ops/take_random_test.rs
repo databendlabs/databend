@@ -38,7 +38,7 @@ fn test_take_random() -> Result<()> {
     assert_eq!(false, unsafe_val);
 
     // Test ListArray
-    let mut builder = get_list_builder(DataType::UInt16, 12, 3);
+    let mut builder = get_list_builder(&DataType::UInt16, 12, 3);
     builder.append_series(&Series::new(vec![1_u16, 2, 3]));
     builder.append_series(&Series::new(vec![7_u16, 8, 9]));
     let df_list = &builder.finish();

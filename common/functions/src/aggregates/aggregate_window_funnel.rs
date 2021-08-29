@@ -49,7 +49,7 @@ where T: Ord
         + Sync
         + 'static
 {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             events_list: Vec::new(),
             sorted: true,

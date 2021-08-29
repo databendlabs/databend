@@ -61,6 +61,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 DataType::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                 DataType::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                 DataType::Utf8 => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::Binary => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 _ => Err(ErrorCode::UnImplement(format!(
@@ -91,12 +92,24 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 let mut row_writer = dataset_writer.start(&columns)?;
 
                 for block in &blocks {
+                    let mut datas = Vec::with_capacity(block.num_columns());
+                    for (idx, col) in block.columns().iter().enumerate() {
+                        let data_type = block.schema().fields()[idx].data_type();
+                        let serializer = data_type.get_serializer();
+                        datas.push(serializer.serialize_strings(col)?);
+                    }
+
                     let rows_size = block.column(0).len();
                     for row_index in 0..rows_size {
                         let mut row = Vec::with_capacity(columns_size);
                         for column_index in 0..columns_size {
-                            let column = block.column(column_index).to_array()?;
-                            row.push(format!("{}", column.try_get(row_index)?));
+                            let e = datas
+                                .get(column_index)
+                                .unwrap()
+                                .get(row_index)
+                                .unwrap()
+                                .to_string();
+                            row.push(e);
                         }
                         row_writer.write_row(row)?;
                     }

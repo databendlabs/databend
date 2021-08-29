@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_df_type;
-mod data_type;
-mod data_type_coercion;
-mod physical_data_type;
-mod serializations;
+use common_exception::Result;
 
-pub use data_df_type::*;
-pub use data_type::*;
-pub use data_type_coercion::*;
-pub use physical_data_type::*;
-pub use serializations::*;
+use crate::prelude::DataColumn;
+use crate::TypeSerializer;
+
+pub struct NullSerializer {}
+
+impl TypeSerializer for NullSerializer {
+    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
+        let result: Vec<String> = vec!["NULL".to_owned(); column.len()];
+        Ok(result)
+    }
+}

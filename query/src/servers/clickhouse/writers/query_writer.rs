@@ -166,79 +166,90 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
         let field = block.schema().field(column_index);
         let name = field.name();
         let is_nullable = field.is_nullable();
-        result =
-            match is_nullable {
-                true => match column.data_type() {
-                    DataType::Int8 => result.column(name, column.i8()?.collect_values()),
-                    DataType::Int16 => result.column(name, column.i16()?.collect_values()),
-                    DataType::Int32 => result.column(name, column.i32()?.collect_values()),
-                    DataType::Int64 => result.column(name, column.i64()?.collect_values()),
-                    DataType::UInt8 => result.column(name, column.u8()?.collect_values()),
-                    DataType::UInt16 => result.column(name, column.u16()?.collect_values()),
-                    DataType::UInt32 => result.column(name, column.u32()?.collect_values()),
-                    DataType::UInt64 => result.column(name, column.u64()?.collect_values()),
-                    DataType::Float32 => result.column(name, column.f32()?.collect_values()),
-                    DataType::Float64 => result.column(name, column.f64()?.collect_values()),
-                    DataType::Utf8 => result.column(name, column.utf8()?.collect_values()),
-                    DataType::Boolean => {
-                        let v: Vec<Option<u8>> = column
-                            .bool()?
-                            .into_iter()
-                            .map(|f| f.map(|v| v as u8))
-                            .collect();
-
-                        result.column(name, v)
-                    }
-                    _ => {
-                        return Err(ErrorCode::BadDataValueType(format!(
-                            "Unsupported column type:{:?}",
-                            column.data_type()
-                        )));
-                    }
-                },
-                false => {
-                    match column.data_type() {
-                        DataType::Int8 => result
-                            .column(name, column.i8()?.inner().values().as_slice().to_vec()),
-                        DataType::Int16 => result
-                            .column(name, column.i16()?.inner().values().as_slice().to_vec()),
-                        DataType::Int32 => result
-                            .column(name, column.i32()?.inner().values().as_slice().to_vec()),
-                        DataType::Int64 => result
-                            .column(name, column.i64()?.inner().values().as_slice().to_vec()),
-                        DataType::UInt8 => result
-                            .column(name, column.u8()?.inner().values().as_slice().to_vec()),
-                        DataType::UInt16 => result
-                            .column(name, column.u16()?.inner().values().as_slice().to_vec()),
-                        DataType::UInt32 => result
-                            .column(name, column.u32()?.inner().values().as_slice().to_vec()),
-                        DataType::UInt64 => result
-                            .column(name, column.u64()?.inner().values().as_slice().to_vec()),
-                        DataType::Float32 => result
-                            .column(name, column.f32()?.inner().values().as_slice().to_vec()),
-                        DataType::Float64 => result
-                            .column(name, column.f64()?.inner().values().as_slice().to_vec()),
-                        DataType::Utf8 => {
-                            let vs: Vec<&str> = column.utf8()?.into_no_null_iter().collect();
-                            result.column(name, vs)
-                        }
-                        DataType::Boolean => {
-                            let vs: Vec<u8> = column
-                                .bool()?
-                                .into_no_null_iter()
-                                .map(|c| c as u8)
-                                .collect();
-                            result.column(name, vs)
-                        }
-                        _ => {
-                            return Err(ErrorCode::BadDataValueType(format!(
-                                "Unsupported column type:{:?}",
-                                column.data_type()
-                            )));
-                        }
-                    }
+        result = match is_nullable {
+            true => match column.data_type() {
+                DataType::Int8 => result.column(name, column.i8()?.collect_values()),
+                DataType::Int16 => result.column(name, column.i16()?.collect_values()),
+                DataType::Int32 => result.column(name, column.i32()?.collect_values()),
+                DataType::Int64 => result.column(name, column.i64()?.collect_values()),
+                DataType::UInt8 => result.column(name, column.u8()?.collect_values()),
+                DataType::UInt16 | DataType::Date16 => {
+                    result.column(name, column.u16()?.collect_values())
                 }
-            }
+                DataType::UInt32 | DataType::Date32 | DataType::DateTime32 => {
+                    result.column(name, column.u32()?.collect_values())
+                }
+                DataType::UInt64 => result.column(name, column.u64()?.collect_values()),
+                DataType::Float32 => result.column(name, column.f32()?.collect_values()),
+                DataType::Float64 => result.column(name, column.f64()?.collect_values()),
+                DataType::Utf8 => result.column(name, column.utf8()?.collect_values()),
+                DataType::Boolean => {
+                    let v: Vec<Option<u8>> = column
+                        .bool()?
+                        .into_iter()
+                        .map(|f| f.map(|v| v as u8))
+                        .collect();
+
+                    result.column(name, v)
+                }
+                _ => {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "Unsupported column type:{:?}",
+                        column.data_type()
+                    )));
+                }
+            },
+            false => match column.data_type() {
+                DataType::Int8 => {
+                    result.column(name, column.i8()?.inner().values().as_slice().to_vec())
+                }
+                DataType::Int16 => {
+                    result.column(name, column.i16()?.inner().values().as_slice().to_vec())
+                }
+                DataType::Int32 => {
+                    result.column(name, column.i32()?.inner().values().as_slice().to_vec())
+                }
+                DataType::Int64 => {
+                    result.column(name, column.i64()?.inner().values().as_slice().to_vec())
+                }
+                DataType::UInt8 => {
+                    result.column(name, column.u8()?.inner().values().as_slice().to_vec())
+                }
+                DataType::UInt16 | DataType::Date16 => {
+                    result.column(name, column.u16()?.inner().values().as_slice().to_vec())
+                }
+                DataType::UInt32 | DataType::Date32 | DataType::DateTime32 => {
+                    result.column(name, column.u32()?.inner().values().as_slice().to_vec())
+                }
+                DataType::UInt64 => {
+                    result.column(name, column.u64()?.inner().values().as_slice().to_vec())
+                }
+                DataType::Float32 => {
+                    result.column(name, column.f32()?.inner().values().as_slice().to_vec())
+                }
+                DataType::Float64 => {
+                    result.column(name, column.f64()?.inner().values().as_slice().to_vec())
+                }
+                DataType::Utf8 => {
+                    let vs: Vec<&str> = column.utf8()?.into_no_null_iter().collect();
+                    result.column(name, vs)
+                }
+                DataType::Boolean => {
+                    let vs: Vec<u8> = column
+                        .bool()?
+                        .into_no_null_iter()
+                        .map(|c| c as u8)
+                        .collect();
+                    result.column(name, vs)
+                }
+                _ => {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "Unsupported column type:{:?}",
+                        column.data_type()
+                    )));
+                }
+            },
+        }
     }
     Ok(result)
 }
@@ -250,10 +261,10 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
             SqlType::UInt8 => {
                 Ok(DFUInt8Array::new_from_iter(col.iter::<u8>()?.copied()).into_series())
             }
-            SqlType::UInt16 => {
+            SqlType::UInt16 | SqlType::Date => {
                 Ok(DFUInt16Array::new_from_iter(col.iter::<u16>()?.copied()).into_series())
             }
-            SqlType::UInt32 => {
+            SqlType::UInt32 | SqlType::DateTime(_) => {
                 Ok(DFUInt32Array::new_from_iter(col.iter::<u32>()?.copied()).into_series())
             }
             SqlType::UInt64 => {

@@ -759,6 +759,7 @@ name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
+ "chrono",
  "comfy-table",
  "common-arrow",
  "common-exception",
