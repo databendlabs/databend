@@ -122,7 +122,7 @@ impl Server for MySQLHandler {
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
                 log::error!(
-                    "Unexpected error during shutdown ClickHouseHandler. cause {}",
+                    "Unexpected error during shutdown MySQLHandler. cause {}",
                     error
                 );
             }
