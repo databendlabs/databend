@@ -13,10 +13,10 @@
 // limitations under the License.
 //
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
-use common_datavalues::prelude::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;

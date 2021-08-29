@@ -17,6 +17,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Sub;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;

@@ -17,11 +17,11 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow_flight::FlightData;
-use common_datavalues::prelude::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
