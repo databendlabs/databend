@@ -46,11 +46,27 @@ async fn select_table() -> Result<String, ErrorCode> {
     if let PlanNode::Select(plan) =
         PlanParser::create(ctx.clone()).build_from_sql("select * from system.tracing")?
     {
+        /*
+        let table_meta = ctx.get_table("system", "tracing")?;
+        let table = table_meta.datasource();
+        let source_plan = table.read_plan(ctx.clone(),
+        &ScanPlan::empty(),
+        ctx.get_settings().get_max_threads()? as usize);
+        */
         let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
         let stream = executor.execute().await?;
         let result = stream.try_collect::<Vec<_>>().await?;
-        let r = format!("{:?}", result.as_slice());
-        return Ok(r.to_string());
+        let m = result[0].column_by_name("*");
+        match m {
+            Some(s1) => {
+                let r = format!("{:?}", s1);
+                return Ok(r.to_string());
+            }
+            None => todo!(),
+        }
+        
+        //let r = format!("{:?}", result.as_slice());
+        //return Ok(r.to_string());
     }
     Ok("".to_string())
 }
