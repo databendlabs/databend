@@ -20,9 +20,9 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
-use crate::catalogs::meta::TableFunctionMeta;
-use crate::catalogs::meta::TableMeta;
 use crate::catalogs::Database;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 
 #[async_trait::async_trait]
 pub trait Catalog {

@@ -37,9 +37,9 @@ use common_planners::TableOptions;
 use common_runtime::Runtime;
 use lru::LruCache;
 
-use crate::catalogs::meta::TableMeta;
-use crate::catalogs::meta_client::MetaClient;
 use crate::catalogs::Database;
+use crate::catalogs::MetaClient;
+use crate::catalogs::TableMeta;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteTable;
 use crate::datasources::remote::StoreApis;

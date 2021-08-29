@@ -27,11 +27,11 @@ use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::catalogs::meta::TableFunctionMeta;
-use crate::catalogs::meta::TableMeta;
 use crate::catalogs::meta_client::MetaClient;
 use crate::catalogs::Database;
+use crate::catalogs::RemoteMetaStoreClient;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::LocalFactory;
