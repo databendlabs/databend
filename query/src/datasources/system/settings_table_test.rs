@@ -20,7 +20,6 @@ use pretty_assertions::assert_eq;
 
 use crate::catalogs::Table;
 use crate::datasources::system::*;
-use crate::datasources::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_settings_table() -> Result<()> {
