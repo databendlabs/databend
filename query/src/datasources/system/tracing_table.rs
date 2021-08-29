@@ -29,8 +29,8 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use walkdir::WalkDir;
 
+use crate::catalogs::Table;
 use crate::datasources::system::TracingTableStream;
-use crate::datasources::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct TracingTable {

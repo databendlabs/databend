@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::ops::BitAnd;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::filter::build_filter;
 use common_exception::Result;
 
 use crate::prelude::*;
+
 pub struct DataArrayFilter;
 
 impl DataArrayFilter {

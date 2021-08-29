@@ -13,7 +13,8 @@
 // limitations under the License.
 //
 
-pub(crate) mod database_catalog;
-pub(crate) mod remote_meta_store_client;
 #[cfg(test)]
 mod remote_meta_store_client_test;
+
+pub(crate) mod database_catalog;
+pub(crate) mod remote_meta_store_client;

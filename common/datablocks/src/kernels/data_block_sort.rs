@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::iter::once;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::growable::make_growable;
 use common_arrow::arrow::array::Array;
