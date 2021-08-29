@@ -29,10 +29,11 @@ use metrics::counter;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::RemoteMetaStoreClient;
-use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteFactory;
+use crate::datasources::system::SystemFactory;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
@@ -48,29 +49,25 @@ pub struct SessionManager {
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn try_create(max_mysql_sessions: u64) -> Result<SessionManagerRef> {
-        Ok(Arc::new(SessionManager {
-            conf: Config::default(),
-            cluster: Cluster::empty(),
-            catalog: Arc::new(DatabaseCatalog::try_create()?),
-
-            max_sessions: max_mysql_sessions as usize,
-            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
-                max_mysql_sessions as usize,
-            ))),
-        }))
-    }
-
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let max_active_sessions = conf.query.max_active_sessions as usize;
         let meta_store_cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
             RemoteFactory::new(&conf).store_client_provider(),
         )));
+        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(
+            conf.clone(),
+            meta_store_cli,
+        )?);
+
+        // Register system databases.
+        let system = SystemFactory::create().load_databases()?;
+        catalog.register_databases(system)?;
+        // Register local databases(including default database).
+        let local = LocalFactory::create().load_databases()?;
+        catalog.register_databases(local)?;
+
         Ok(Arc::new(SessionManager {
-            catalog: Arc::new(DatabaseCatalog::try_create_with_config(
-                conf.clone(),
-                meta_store_cli,
-            )?),
+            catalog,
             conf,
             cluster,
             max_sessions: max_active_sessions,

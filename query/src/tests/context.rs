@@ -28,6 +28,7 @@ pub fn try_create_context() -> Result<DatafuseQueryContextRef> {
     let config = Config::default();
     try_create_context_with_conf(config)
 }
+
 pub fn try_create_context_with_conf(mut config: Config) -> Result<DatafuseQueryContextRef> {
     let cluster = Cluster::empty();
 

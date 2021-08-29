@@ -29,14 +29,10 @@ use common_planners::DropDatabasePlan;
 use crate::catalogs::backend::BackendClient;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::RemoteMetaStoreClient;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
-use crate::datasources::local::LocalFactory;
-use crate::datasources::remote::RemoteFactory;
-use crate::datasources::system::SystemFactory;
 
 // min id for system tables (inclusive)
 pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;
@@ -56,32 +52,17 @@ pub struct DatabaseCatalog {
 }
 
 impl DatabaseCatalog {
-    pub fn try_create() -> Result<Self> {
-        let conf = Config::default();
-
-        let remote_factory = RemoteFactory::new(&conf);
-        let store_client_provider = remote_factory.store_client_provider();
-        let cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
-            store_client_provider,
-        )));
-        Self::try_create_with_config(conf, cli)
-    }
-
     pub fn try_create_with_config(conf: Config, backend: Arc<dyn BackendClient>) -> Result<Self> {
-        let mut datasource = DatabaseCatalog {
+        let datasource = DatabaseCatalog {
             conf,
             databases: Default::default(),
             table_functions: Default::default(),
             backend,
         };
-
-        datasource.register_system_database()?;
-        datasource.register_local_database()?;
-        datasource.register_default_database()?;
         Ok(datasource)
     }
 
-    fn insert_databases(&mut self, databases: Vec<Arc<dyn Database>>) -> Result<()> {
+    pub fn register_databases(&self, databases: Vec<Arc<dyn Database>>) -> Result<()> {
         let mut db_lock = self.databases.write();
         for database in databases {
             db_lock.insert(database.name().to_lowercase(), database.clone());
@@ -91,29 +72,6 @@ impl DatabaseCatalog {
                     .insert(tbl_func.datasource().name().to_string(), tbl_func.clone());
             }
         }
-        Ok(())
-    }
-
-    // Register local database with System engine.
-    fn register_system_database(&mut self) -> Result<()> {
-        let factory = SystemFactory::create();
-        let databases = factory.load_databases()?;
-        self.insert_databases(databases)
-    }
-
-    // Register local database with Local engine.
-    fn register_local_database(&mut self) -> Result<()> {
-        let factory = LocalFactory::create();
-        let databases = factory.load_databases()?;
-        self.insert_databases(databases)
-    }
-
-    // Register default database with Local engine.
-    fn register_default_database(&mut self) -> Result<()> {
-        let default_db = LocalDatabase::create();
-        self.databases
-            .write()
-            .insert("default".to_string(), Arc::new(default_db));
         Ok(())
     }
 }

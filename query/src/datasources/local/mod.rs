@@ -23,6 +23,7 @@ mod parquet_table_test;
 
 mod csv_table;
 mod csv_table_stream;
+mod default_database;
 mod local_database;
 mod local_factory;
 mod memory_table;
@@ -32,6 +33,7 @@ mod parquet_table;
 
 pub use csv_table::CsvTable;
 pub use csv_table_stream::CsvTableStream;
+pub use default_database::DefaultDatabase;
 pub use local_database::LocalDatabase;
 pub use local_factory::LocalFactory;
 pub use memory_table::MemoryTable;
