@@ -46,7 +46,7 @@ where
     T: Marshal + StatBuffer + Sized,
 {
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
-        let array = self.downcast_ref();
+        let array = self.get_inner();
         let mut ptr = ptr;
         // let mut buffer = T::buffer();
         // value.marshal(buffer.as_mut());
@@ -69,7 +69,7 @@ where
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.into_no_null_iter().zip(vec.iter_mut()) {
-            BinaryWrite::write_scalar(vec, &value)?;
+            BinaryWrite::write_scalar(vec, value)?;
         }
         Ok(())
     }
@@ -77,7 +77,7 @@ where
 
 impl GroupHash for DFBooleanArray {
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
-        let array = self.downcast_ref();
+        let array = self.get_inner();
         let mut ptr = ptr;
 
         for value in array.values().iter() {

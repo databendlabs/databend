@@ -48,12 +48,12 @@ impl DFBooleanArray {
         )
     }
 
-    pub fn get_inner(&self) -> &BooleanArray {
-        &self.array
-    }
-
     pub fn data_type(&self) -> &DataType {
         &DataType::Boolean
+    }
+
+    pub fn get_inner(&self) -> &BooleanArray {
+        &self.array
     }
 
     /// # Safety
@@ -132,5 +132,9 @@ impl DFBooleanArray {
 
     pub fn get_array_memory_size(&self) -> usize {
         aggregate::estimated_bytes_size(&self.array)
+    }
+
+    pub fn collect_values(&self) -> Vec<Option<bool>> {
+        self.array.iter().collect()
     }
 }

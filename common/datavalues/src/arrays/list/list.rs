@@ -43,12 +43,12 @@ impl DFListArray {
         )
     }
 
-    pub fn get_inner(&self) -> &LargeListArray {
-        &self.array
-    }
-
     pub fn data_type(&self) -> &DataType {
         &self.data_type
+    }
+
+    pub fn get_inner(&self) -> &LargeListArray {
+        &self.array
     }
 
     /// # Safety

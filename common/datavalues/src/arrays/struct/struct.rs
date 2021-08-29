@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use common_arrow::arrow::array::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,6 +48,10 @@ impl DFStructArray {
 
     pub fn data_type(&self) -> &DataType {
         &self.data_type
+    }
+
+    pub fn get_inner(&self) -> &StructArray {
+        &self.array
     }
 
     /// # Safety

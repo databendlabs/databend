@@ -88,7 +88,7 @@ where
     Option<T>: Into<DataValue>,
 {
     fn sum(&self) -> Result<DataValue> {
-        let array = self.downcast_ref();
+        let array = self.get_inner();
         // if largest type is self and there is nullable, we just use simd
         // sum is faster in auto vectorized than manual simd
         let null_count = self.null_count();
@@ -132,7 +132,7 @@ where
         let null_count = self.null_count();
         if null_count == 0 {
             let c = self
-                .downcast_ref()
+                .array
                 .values()
                 .as_slice()
                 .iter()
@@ -142,7 +142,7 @@ where
                 None => DataValue::from(self.data_type()),
             });
         }
-        Ok(match aggregate::min_primitive(self.downcast_ref()) {
+        Ok(match aggregate::min_primitive(self.get_inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -156,7 +156,7 @@ where
         let null_count = self.null_count();
         if null_count == 0 {
             let c = self
-                .downcast_ref()
+                .get_inner()
                 .values()
                 .as_slice()
                 .iter()
@@ -167,7 +167,7 @@ where
             });
         }
 
-        Ok(match aggregate::max_primitive(self.downcast_ref()) {
+        Ok(match aggregate::max_primitive(self.get_inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -186,7 +186,7 @@ where
             .reduce(|acc, (idx, val)| if acc.1 > val { (idx, val) } else { acc });
 
         Ok(match value {
-            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
+            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), (*value).into()]),
             None => DataValue::Struct(vec![(0_u64).into(), DataValue::from(self.data_type())]),
         })
     }
@@ -204,7 +204,7 @@ where
             .reduce(|acc, (idx, val)| if acc.1 < val { (idx, val) } else { acc });
 
         Ok(match value {
-            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
+            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), (*value).into()]),
             None => DataValue::Struct(vec![(0_u64).into(), DataValue::from(self.data_type())]),
         })
     }
@@ -215,7 +215,7 @@ impl ArrayAgg for DFBooleanArray {
         if self.all_is_null() {
             return Ok(DataValue::Boolean(None));
         }
-        let sum = self.downcast_iter().fold(0, |acc: u64, x| match x {
+        let sum = self.into_iter().fold(0, |acc: u64, x| match x {
             Some(v) => acc + v as u64,
             None => acc,
         });
@@ -228,7 +228,7 @@ impl ArrayAgg for DFBooleanArray {
             return Ok(DataValue::Boolean(None));
         }
 
-        Ok(match aggregate::min_boolean(self.downcast_ref()) {
+        Ok(match aggregate::min_boolean(self.get_inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -239,7 +239,7 @@ impl ArrayAgg for DFBooleanArray {
             return Ok(DataValue::Boolean(None));
         }
 
-        Ok(match aggregate::max_boolean(self.downcast_ref()) {
+        Ok(match aggregate::max_boolean(self.get_inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -300,7 +300,7 @@ impl ArrayAgg for DFUtf8Array {
             return Ok(DataValue::Utf8(None));
         }
 
-        Ok(match aggregate::min_string(self.downcast_ref()) {
+        Ok(match aggregate::min_string(self.get_inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -311,7 +311,7 @@ impl ArrayAgg for DFUtf8Array {
             return Ok(DataValue::Utf8(None));
         }
 
-        Ok(match aggregate::max_string(self.downcast_ref()) {
+        Ok(match aggregate::max_string(self.get_inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })

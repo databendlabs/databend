@@ -89,7 +89,7 @@ where T: DFPrimitiveType
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let primitive_array = self.downcast_ref();
+        let primitive_array = self.get_inner();
         match indices {
             TakeIdx::Array(array) => {
                 if self.is_empty() {
@@ -134,7 +134,7 @@ impl ArrayTake for DFBooleanArray {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let boolean_array = self.downcast_ref();
+        let boolean_array = self.get_inner();
         match indices {
             TakeIdx::Array(array) => {
                 if self.is_empty() {
@@ -177,7 +177,7 @@ impl ArrayTake for DFUtf8Array {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let str_array = self.downcast_ref();
+        let str_array = self.get_inner();
         match indices {
             TakeIdx::Array(array) => {
                 let taked_array = take::take(str_array, array)?;
@@ -226,7 +226,7 @@ impl ArrayTake for DFListArray {
         I: Iterator<Item = usize>,
         INulls: Iterator<Item = Option<usize>>,
     {
-        let list_array = self.downcast_ref();
+        let list_array = self.get_inner();
         match indices {
             TakeIdx::Array(array) => {
                 let taked_array = take::take(list_array, array)?;

@@ -145,12 +145,12 @@ where T: DFPrimitiveType
     fn take_rand(&self) -> Self::TakeRandom {
         if self.null_count() == 0 {
             let t = NumTakeRandomCont {
-                slice: self.downcast_ref().values(),
+                slice: self.get_inner().values(),
             };
             TakeRandBranch::SingleNoNull(t)
         } else {
             let t = NumTakeRandomSingleArray {
-                arr: self.downcast_ref(),
+                arr: self.get_inner(),
             };
             TakeRandBranch::Single(t)
         }
@@ -180,7 +180,7 @@ impl<'a> IntoTakeRandom<'a> for &'a DFUtf8Array {
     type TakeRandom = TakeRandBranch<Utf8TakeRandom<'a>, Utf8TakeRandom<'a>>;
 
     fn take_rand(&self) -> Self::TakeRandom {
-        let arr = self.downcast_ref();
+        let arr = self.get_inner();
         let t = Utf8TakeRandom { arr };
         TakeRandBranch::Single(t)
     }
@@ -191,7 +191,7 @@ impl<'a> IntoTakeRandom<'a> for &'a DFBooleanArray {
     type TakeRandom = TakeRandBranch<BoolTakeRandom<'a>, BoolTakeRandom<'a>>;
 
     fn take_rand(&self) -> Self::TakeRandom {
-        let arr = self.downcast_ref();
+        let arr = self.get_inner();
         let t = BoolTakeRandom { arr };
         TakeRandBranch::Single(t)
     }
@@ -203,7 +203,7 @@ impl<'a> IntoTakeRandom<'a> for &'a DFListArray {
 
     fn take_rand(&self) -> Self::TakeRandom {
         let t = ListTakeRandom {
-            arr: self.downcast_ref(),
+            arr: self.get_inner(),
         };
         TakeRandBranch::Single(t)
     }

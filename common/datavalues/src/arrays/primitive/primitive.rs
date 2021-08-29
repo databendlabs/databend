@@ -15,7 +15,6 @@
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::trusted_len::TrustedLen;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -50,12 +49,12 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         )
     }
 
-    pub fn get_inner(&self) -> &PrimitiveArray<T> {
-        &self.array
-    }
-
     pub fn data_type(&self) -> &DataType {
         &self.data_type
+    }
+
+    pub fn get_inner(&self) -> &PrimitiveArray<T> {
+        &self.array
     }
 
     /// # Safety
@@ -153,16 +152,9 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         to_primitive::<T>(values, validity)
     }
 
-    pub fn into_no_null_iter(
-        &self,
-    ) -> impl Iterator<Item = T> + '_ + Send + Sync + ExactSizeIterator + DoubleEndedIterator + TrustedLen
-    {
-        // .copied was significantly slower in benchmark, next call did not inline?
-        self.array
-            .values()
-            .iter()
-            .copied()
-            .trust_my_length(self.len())
+    pub fn collect_values(&self) -> Vec<Option<T>> {
+        let e = self.array.iter().map(|c| c.copied());
+        e.collect()
     }
 }
 

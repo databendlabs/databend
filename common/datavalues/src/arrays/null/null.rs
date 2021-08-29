@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use common_arrow::arrow::array::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -42,14 +41,14 @@ impl DFNullArray {
         &DataType::Null
     }
 
+    pub fn get_inner(&self) -> &NullArray {
+        &self.array
+    }
+
     /// # Safety
     /// Note this doesn't do any bound checking, for performance reason.
     pub unsafe fn try_get(&self, _index: usize) -> Result<DataValue> {
         Ok(DataValue::Null)
-    }
-
-    pub fn get_inner(&self) -> &NullArray {
-        &self.array
     }
 
     pub fn len(&self) -> usize {

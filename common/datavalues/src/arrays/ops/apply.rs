@@ -24,7 +24,11 @@ macro_rules! apply {
         if $self.null_count() == 0 {
             $self.into_no_null_iter().map($f).collect()
         } else {
-            $self.downcast_iter().map(|opt_v| opt_v.map($f)).collect()
+            $self
+                .get_inner()
+                .iter()
+                .map(|opt_v| opt_v.map($f))
+                .collect()
         }
     }};
 }
@@ -35,7 +39,8 @@ macro_rules! apply_enumerate {
             $self.into_no_null_iter().enumerate().map($f).collect()
         } else {
             $self
-                .downcast_iter()
+                .get_inner()
+                .iter()
                 .enumerate()
                 .map(|(idx, opt_v)| opt_v.map(|v| $f((idx, v))))
                 .collect()
@@ -85,7 +90,7 @@ where T: DFPrimitiveType
         F: Fn(T) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let array = unary(self.downcast_ref(), |n| f(n), S::data_type().to_arrow());
+        let array = unary(self.get_inner(), f, S::data_type().to_arrow());
         DFPrimitiveArray::<S>::new(array)
     }
 
@@ -94,17 +99,13 @@ where T: DFPrimitiveType
         F: Fn(Option<T>) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let array = unary(
-            self.downcast_ref(),
-            |n| f(Some(n)),
-            S::data_type().to_arrow(),
-        );
+        let array = unary(self.get_inner(), |n| f(Some(n)), S::data_type().to_arrow());
         DFPrimitiveArray::<S>::new(array)
     }
 
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(T) -> T + Copy {
-        let array = unary(self.downcast_ref(), |n| f(n), T::data_type().to_arrow());
+        let array = unary(self.get_inner(), f, T::data_type().to_arrow());
         DFPrimitiveArray::<T>::new(array)
     }
 
@@ -114,15 +115,13 @@ where T: DFPrimitiveType
             let ca: NoNull<_> = self
                 .into_no_null_iter()
                 .enumerate()
-                .map(f)
-                .trust_my_length(self.len())
+                .map(|(idx, v)| f((idx, *v)))
                 .collect_trusted();
             ca.into_inner()
         } else {
             self.into_iter()
                 .enumerate()
-                .map(|(idx, opt_v)| opt_v.map(|v| f((idx, v))))
-                .trust_my_length(self.len())
+                .map(|(idx, opt_v)| opt_v.map(|v| f((idx, *v))))
                 .collect_trusted()
         }
     }
@@ -131,8 +130,7 @@ where T: DFPrimitiveType
     where F: Fn((usize, Option<T>)) -> Option<T> + Copy {
         self.into_iter()
             .enumerate()
-            .map(f)
-            .trust_my_length(self.len())
+            .map(|(idx, v)| f((idx, v.copied())))
             .collect_trusted()
     }
 }
@@ -154,11 +152,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
         F: Fn(Option<bool>) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let av: AlignedVec<_> = self
-            .into_iter()
-            .map(f)
-            .trust_my_length(self.len())
-            .collect();
+        let av: AlignedVec<_> = self.into_iter().map(f).collect();
         to_primitive::<S>(av, None)
     }
 
@@ -173,7 +167,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
 
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
     where F: Fn((usize, Option<bool>)) -> Option<bool> + Copy {
-        self.downcast_iter().enumerate().map(f).collect()
+        self.into_iter().enumerate().map(f).collect()
     }
 }
 
@@ -183,7 +177,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
         F: Fn(&'a str) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let arr = self.downcast_ref();
+        let arr = self.get_inner();
         let values_iter = arr.values_iter().map(|x| f(x));
         let av = AlignedVec::<_>::from_trusted_len_iter(values_iter);
 
@@ -196,7 +190,8 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
         F: Fn(Option<&'a str>) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.downcast_iter().map(f));
+        let av: AlignedVec<_> =
+            AlignedVec::<_>::from_trusted_len_iter(self.get_inner().iter().map(f));
         let (_, validity) = self.null_bits();
         to_primitive::<S>(av, validity.clone())
     }
@@ -212,6 +207,6 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
 
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
     where F: Fn((usize, Option<&'a str>)) -> Option<Cow<'a, str>> + Copy {
-        self.downcast_iter().enumerate().map(f).collect()
+        self.into_iter().enumerate().map(f).collect()
     }
 }

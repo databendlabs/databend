@@ -33,7 +33,7 @@ where
     T: DFPrimitiveType,
     Option<T>: Into<DataValue>,
 {
-    let array = array.downcast_ref();
+    let array = array.get_inner();
     let mut values = Vec::with_capacity(array.len());
 
     if array.null_count() == 0 {
@@ -66,7 +66,7 @@ where
 impl ToValues for DFUtf8Array {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         let mut values = Vec::with_capacity(self.len());
-        let array = self.downcast_ref();
+        let array = self.get_inner();
 
         if array.null_count() == 0 {
             for index in 0..self.len() {
@@ -88,7 +88,7 @@ impl ToValues for DFUtf8Array {
 impl ToValues for DFBooleanArray {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         let mut values = Vec::with_capacity(self.len());
-        let array = self.downcast_ref();
+        let array = self.get_inner();
 
         if array.null_count() == 0 {
             for index in 0..self.len() {
@@ -110,7 +110,7 @@ impl ToValues for DFBooleanArray {
 impl ToValues for DFBinaryArray {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         let mut values = Vec::with_capacity(self.len());
-        let array = self.downcast_ref();
+        let array = self.get_inner();
 
         if array.null_count() == 0 {
             for index in 0..self.len() {
@@ -132,7 +132,7 @@ impl ToValues for DFBinaryArray {
 impl ToValues for DFListArray {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         let mut values = Vec::with_capacity(self.len());
-        let array = self.downcast_ref();
+        let array = self.get_inner();
 
         if let DataType::List(ele_type) = DataType::from(array.data_type()) {
             let data_type = ele_type.data_type();
@@ -169,7 +169,7 @@ impl ToValues for DFNullArray {
 impl ToValues for DFStructArray {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         let mut values = Vec::with_capacity(self.len());
-        let array = self.downcast_ref();
+        let array = self.get_inner();
 
         let mut columns_values = Vec::with_capacity(array.fields().len());
 

@@ -13,46 +13,51 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitmapIter;
+use common_arrow::arrow::bitmap::utils::ZipValidity;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::prelude::*;
 use crate::series::Series;
 
-/// A `DFIterator` is an iterator over a `DFArray` which contains DF types. A `DFIterator`
-/// must implement   `DoubleEndedIterator`.
-pub trait DFIterator: DoubleEndedIterator + Send + Sync {}
-unsafe impl<'a, I> TrustedLen for Box<dyn DFIterator<Item = I> + 'a> {}
+impl<'a, T: DFPrimitiveType> IntoIterator for &'a DFPrimitiveArray<T> {
+    type Item = Option<&'a T>;
+    type IntoIter = ZipValidity<'a, &'a T, std::slice::Iter<'a, T>>;
 
-/// Implement DFIterator for every iterator that implements the needed traits.
-impl<T: ?Sized> DFIterator for T where T: ExactSizeIterator + DoubleEndedIterator + Send + Sync + TrustedLen
-{}
-
-impl<'a, T> IntoIterator for &'a DFPrimitiveArray<T>
-where T: DFPrimitiveType
-{
-    type Item = Option<T>;
-    type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
-
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(
-            self.downcast_iter()
-                .map(|x| x.copied())
-                .trust_my_length(self.len()),
-        )
+        self.iter()
     }
 }
+
+impl<'a, T: DFPrimitiveType> DFPrimitiveArray<T> {
+    /// constructs a new iterator
+    #[inline]
+    pub fn iter(&'a self) -> ZipValidity<'a, &'a T, std::slice::Iter<'a, T>> {
+        self.array.iter()
+    }
+
+    pub fn into_no_null_iter(
+        &'a self,
+    ) -> impl TrustedLen<Item = &'a T> + Send + Sync + ExactSizeIterator {
+        // .copied was significantly slower in benchmark, next call did not inline?
+        self.array.values().iter()
+    }
+}
+
 /// The no null iterator for a BooleanArray
 pub struct BoolIterNoNull<'a> {
     array: &'a BooleanArray,
     current: usize,
     current_end: usize,
 }
+unsafe impl<'a> TrustedLen for BoolIterNoNull<'a> {}
 
 impl<'a> IntoIterator for &'a DFBooleanArray {
     type Item = Option<bool>;
-    type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
+    type IntoIter = ZipValidity<'a, bool, BitmapIter<'a>>;
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.downcast_iter().trust_my_length(self.len()))
+        self.array.iter()
     }
 }
 
@@ -88,32 +93,23 @@ impl<'a> Iterator for BoolIterNoNull<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for BoolIterNoNull<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.current_end == self.current {
-            None
-        } else {
-            self.current_end -= 1;
-            unsafe { Some(self.array.value_unchecked(self.current_end)) }
-        }
-    }
-}
-
 impl DFBooleanArray {
-    pub fn into_no_null_iter(
-        &self,
-    ) -> impl Iterator<Item = bool> + '_ + Send + Sync + DoubleEndedIterator {
-        BoolIterNoNull::new(self.downcast_ref())
+    pub fn into_no_null_iter(&self) -> impl TrustedLen<Item = bool> + '_ + Send + Sync {
+        BoolIterNoNull::new(self.get_inner())
     }
 }
 
 impl<'a> IntoIterator for &'a DFUtf8Array {
     type Item = Option<&'a str>;
-    type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
+    type IntoIter = ZipValidity<'a, &'a str, Utf8ValuesIter<'a, i64>>;
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.downcast_iter())
+        self.array.iter()
     }
 }
+
+/// all arrays have known size.
+impl<'a> ExactSizeIterator for Utf8IterNoNull<'a> {}
+unsafe impl<'a> TrustedLen for Utf8IterNoNull<'a> {}
 
 pub struct Utf8IterNoNull<'a> {
     array: &'a LargeUtf8Array,
@@ -153,33 +149,53 @@ impl<'a> Iterator for Utf8IterNoNull<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for Utf8IterNoNull<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.current_end == self.current {
-            None
-        } else {
-            self.current_end -= 1;
-            unsafe { Some(self.array.value_unchecked(self.current_end)) }
+impl DFUtf8Array {
+    pub fn into_no_null_iter<'a>(&'a self) -> impl TrustedLen<Item = &'a str> + '_ + Send + Sync {
+        Utf8IterNoNull::new(self.get_inner())
+    }
+}
+
+pub struct ListIter<'a> {
+    array: &'a LargeListArray,
+    current: usize,
+    current_end: usize,
+}
+
+impl<'a> ListIter<'a> {
+    /// create a new iterator
+    pub fn new(array: &'a LargeListArray) -> Self {
+        Self {
+            array,
+            current: 0,
+            current_end: array.len(),
         }
     }
 }
 
-/// all arrays have known size.
-impl<'a> ExactSizeIterator for Utf8IterNoNull<'a> {}
-
-impl DFUtf8Array {
-    pub fn into_no_null_iter<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = &'a str> + '_ + Send + Sync + DoubleEndedIterator {
-        Utf8IterNoNull::new(self.downcast_ref())
-    }
-}
-
-impl<'a> IntoIterator for &'a DFListArray {
+impl<'a> Iterator for ListIter<'a> {
     type Item = Option<Series>;
-    type IntoIter = Box<dyn DFIterator<Item = Self::Item> + 'a>;
-    fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.downcast_iter().trust_my_length(self.len()))
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current == self.current_end {
+            None
+        } else {
+            let old = self.current;
+            self.current += 1;
+            match self.array.is_null(old) {
+                true => Some(None),
+                false => {
+                    let array: ArrayRef = Arc::from(unsafe { self.array.value_unchecked(old) });
+                    Some(Some(array.into_series()))
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (
+            self.array.len() - self.current,
+            Some(self.array.len() - self.current),
+        )
     }
 }
 
@@ -222,28 +238,25 @@ impl<'a> Iterator for ListIterNoNull<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for ListIterNoNull<'a> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.current_end == self.current {
-            None
-        } else {
-            self.current_end -= 1;
+/// all arrays have known size.
+impl<'a> ExactSizeIterator for ListIter<'a> {}
+unsafe impl<'a> TrustedLen for ListIter<'a> {}
 
-            let array: ArrayRef =
-                Arc::from(unsafe { self.array.value_unchecked(self.current_end) });
-            Some(array.into_series())
-        }
+impl<'a> ExactSizeIterator for ListIterNoNull<'a> {}
+unsafe impl<'a> TrustedLen for ListIterNoNull<'a> {}
+
+impl<'a> IntoIterator for &'a DFListArray {
+    type Item = Option<Series>;
+    type IntoIter = ListIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ListIter::new(&self.array)
     }
 }
 
-/// all arrays have known size.
-impl<'a> ExactSizeIterator for ListIterNoNull<'a> {}
-
 impl DFListArray {
-    pub fn into_no_null_iter(
-        &self,
-    ) -> impl Iterator<Item = Series> + '_ + Send + Sync + DoubleEndedIterator {
-        ListIterNoNull::new(self.downcast_ref())
+    pub fn into_no_null_iter(&self) -> impl TrustedLen<Item = Series> + '_ + Send + Sync {
+        ListIterNoNull::new(self.get_inner())
     }
 }
 /// Trait for DFArrays that don't have null values.
@@ -271,13 +284,5 @@ where I: Iterator
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.0.size_hint()
-    }
-}
-
-impl<I> DoubleEndedIterator for SomeIterator<I>
-where I: DoubleEndedIterator
-{
-    fn next_back(&mut self) -> Option<Self::Item> {
-        self.0.next_back().map(Some)
     }
 }

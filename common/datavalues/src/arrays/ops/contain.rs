@@ -35,8 +35,8 @@ pub trait ArrayContain: Debug {
 macro_rules! contain_internal {
     ($self:expr, $list_arr:expr) => {{
         assert_eq!($self.len(), $list_arr.len());
-        let arrow_array = $self.downcast_ref();
-        let arrow_list = $list_arr.downcast_ref();
+        let arrow_array = $self.get_inner();
+        let arrow_list = $list_arr.get_inner();
         let arrow_res = contains(arrow_list, arrow_array)?;
         Ok(DFBooleanArray::new(arrow_res))
     }};
