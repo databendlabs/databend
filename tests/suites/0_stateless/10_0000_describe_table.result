@@ -2,9 +2,9 @@ a	Int64	NO
 b	Int32	NO
 c	Utf8	NO
 d	Int16	NO
-e	Date32	NO
+e	Date16	NO
 a	Int64	NO
 b	Int32	NO
 c	Utf8	NO
 d	Int16	NO
-e	Date32	NO
+e	Date16	NO

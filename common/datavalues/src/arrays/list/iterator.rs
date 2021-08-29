@@ -121,6 +121,6 @@ impl<'a> IntoIterator for &'a DFListArray {
 
 impl DFListArray {
     pub fn into_no_null_iter(&self) -> impl TrustedLen<Item = Series> + '_ + Send + Sync {
-        ListIterNoNull::new(self.get_inner())
+        ListIterNoNull::new(self.inner())
     }
 }

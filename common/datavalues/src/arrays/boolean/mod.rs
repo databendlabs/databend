@@ -62,7 +62,7 @@ impl DFBooleanArray {
         &DataType::Boolean
     }
 
-    pub fn get_inner(&self) -> &BooleanArray {
+    pub fn inner(&self) -> &BooleanArray {
         &self.array
     }
 

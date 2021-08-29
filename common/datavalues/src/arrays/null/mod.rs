@@ -44,7 +44,7 @@ impl DFNullArray {
         &DataType::Null
     }
 
-    pub fn get_inner(&self) -> &NullArray {
+    pub fn inner(&self) -> &NullArray {
         &self.array
     }
 

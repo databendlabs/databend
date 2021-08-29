@@ -204,7 +204,7 @@ where
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
         let mut darrays = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let darray = arrays[i + 1].bool()?.get_inner();
+            let darray = arrays[i + 1].bool()?.inner();
             darrays.push(darray);
         }
 
@@ -231,7 +231,7 @@ where
     ) -> Result<()> {
         let mut darrays = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let darray = arrays[i + 1].bool()?.get_inner();
+            let darray = arrays[i + 1].bool()?.inner();
             darrays.push(darray);
         }
         let tarray: &DFPrimitiveArray<T> = arrays[0].static_cast();

@@ -70,6 +70,6 @@ impl<'a> Iterator for Utf8IterNoNull<'a> {
 
 impl DFUtf8Array {
     pub fn into_no_null_iter<'a>(&'a self) -> impl TrustedLen<Item = &'a str> + '_ + Send + Sync {
-        Utf8IterNoNull::new(self.get_inner())
+        Utf8IterNoNull::new(self.inner())
     }
 }

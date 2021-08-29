@@ -50,7 +50,7 @@ impl DFStructArray {
         &self.data_type
     }
 
-    pub fn get_inner(&self) -> &StructArray {
+    pub fn inner(&self) -> &StructArray {
         &self.array
     }
 

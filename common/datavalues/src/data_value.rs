@@ -53,12 +53,6 @@ pub enum DataValue {
     Binary(Option<Vec<u8>>),
     Utf8(Option<String>),
 
-    /// Date stored as a unsigned 16bit int
-    Date16(Option<u16>),
-    /// Date stored as a unsigned 32bit int
-    Date32(Option<u32>),
-    DateTime32(Option<u32>),
-
     // Container struct.
     List(Option<Vec<DataValue>>, DataType),
     Struct(Vec<DataValue>),
@@ -83,9 +77,6 @@ impl DataValue {
                 | DataValue::Float64(None)
                 | DataValue::Binary(None)
                 | DataValue::Utf8(None)
-                | DataValue::Date16(None)
-                | DataValue::Date32(None)
-                | DataValue::DateTime32(None)
                 | DataValue::Null
                 | DataValue::List(None, _)
         )
@@ -106,9 +97,6 @@ impl DataValue {
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
             DataValue::Utf8(_) => DataType::Utf8,
-            DataValue::Date16(_) => DataType::Date32,
-            DataValue::Date32(_) => DataType::Date32,
-            DataValue::DateTime32(_) => DataType::DateTime32,
             DataValue::List(_, data_type) => {
                 DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
             }
@@ -227,11 +215,6 @@ impl DataValue {
                 let r: DFStructArray = StructArray::from_data(fields, arrays, None).into();
                 Ok(r.into_series())
             }
-
-            other => Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{} for DataValue",
-                other
-            ))),
         }
     }
 
@@ -358,9 +341,9 @@ impl From<&DataType> for DataValue {
             DataType::Float32 => DataValue::Float32(None),
             DataType::Float64 => DataValue::Float64(None),
             DataType::Utf8 => DataValue::Utf8(None),
-            DataType::Date16 => DataValue::Date16(None),
-            DataType::Date32 => DataValue::Date32(None),
-            DataType::DateTime32 => DataValue::DateTime32(None),
+            DataType::Date16 => DataValue::UInt16(None),
+            DataType::Date32 => DataValue::UInt32(None),
+            DataType::DateTime32 => DataValue::UInt32(None),
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::Binary => DataValue::Binary(None),
@@ -400,9 +383,6 @@ impl fmt::Display for DataValue {
                 }
                 Ok(())
             }
-            DataValue::Date16(v) => format_data_value_with_option!(f, v),
-            DataValue::Date32(v) => format_data_value_with_option!(f, v),
-            DataValue::DateTime32(v) => format_data_value_with_option!(f, v),
 
             DataValue::List(None, ..) => write!(f, "NULL"),
             DataValue::List(Some(v), ..) => {
@@ -441,9 +421,6 @@ impl fmt::Debug for DataValue {
             DataValue::Utf8(v) => format_data_value_with_option!(f, v),
             DataValue::Binary(None) => write!(f, "{}", self),
             DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
-            DataValue::Date16(_) => write!(f, "Date16(\"{}\")", self),
-            DataValue::Date32(_) => write!(f, "Date32(\"{}\")", self),
-            DataValue::DateTime32(_) => write!(f, "DateTime32(\"{}\")", self),
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }

@@ -32,7 +32,7 @@ impl<'a> IntoIterator for &'a DFBinaryArray {
 
 impl DFBinaryArray {
     pub fn into_no_null_iter<'a>(&'a self) -> impl TrustedLen<Item = &'a [u8]> + '_ + Send + Sync {
-        BinaryIterNoNull::new(self.get_inner())
+        BinaryIterNoNull::new(self.inner())
     }
 }
 

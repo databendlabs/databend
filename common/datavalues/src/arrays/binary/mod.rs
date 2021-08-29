@@ -50,7 +50,7 @@ impl DFBinaryArray {
         )
     }
 
-    pub fn get_inner(&self) -> &LargeBinaryArray {
+    pub fn inner(&self) -> &LargeBinaryArray {
         &self.array
     }
 
@@ -124,7 +124,7 @@ impl DFBinaryArray {
     }
 
     pub fn collect_values(&self) -> Vec<Option<Vec<u8>>> {
-        let e = self.get_inner().iter().map(|c| c.map(|d| d.to_owned()));
+        let e = self.inner().iter().map(|c| c.map(|d| d.to_owned()));
         e.collect()
     }
 }

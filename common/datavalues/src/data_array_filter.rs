@@ -35,7 +35,7 @@ impl DataArrayFilter {
             return Self::filter_batch_array(array, &predicate);
         }
 
-        let filter = build_filter(predicate.get_inner())?;
+        let filter = build_filter(predicate.inner())?;
         let filtered_arrays: Vec<Series> = array
             .iter()
             .map(|a| {
@@ -51,7 +51,7 @@ impl DataArrayFilter {
 
     /// Remove null values by do a bitmask AND operation with null bits and the boolean bits.
     fn remove_null_filter(filter: &DFBooleanArray) -> DFBooleanArray {
-        let array = filter.get_inner();
+        let array = filter.inner();
         let mask = array.values();
         if let Some(v) = array.validity() {
             let mask = mask.bitand(v);

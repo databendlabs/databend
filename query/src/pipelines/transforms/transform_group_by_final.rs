@@ -132,7 +132,7 @@ impl Processor for GroupByFinalTransform {
 
                     for agg in states_series.iter().take(aggr_funcs_len) {
                         let aggr_array: &DFBinaryArray = agg.binary()?;
-                        let aggr_array = aggr_array.get_inner();
+                        let aggr_array = aggr_array.inner();
                         states_binary_arrays.push(aggr_array);
                     }
 

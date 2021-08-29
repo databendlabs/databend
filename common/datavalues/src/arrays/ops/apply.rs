@@ -24,11 +24,7 @@ macro_rules! apply {
         if $self.null_count() == 0 {
             $self.into_no_null_iter().map($f).collect()
         } else {
-            $self
-                .get_inner()
-                .iter()
-                .map(|opt_v| opt_v.map($f))
-                .collect()
+            $self.inner().iter().map(|opt_v| opt_v.map($f)).collect()
         }
     }};
 }
@@ -39,7 +35,7 @@ macro_rules! apply_enumerate {
             $self.into_no_null_iter().enumerate().map($f).collect()
         } else {
             $self
-                .get_inner()
+                .inner()
                 .iter()
                 .enumerate()
                 .map(|(idx, opt_v)| opt_v.map(|v| $f((idx, v))))
@@ -90,7 +86,7 @@ where T: DFPrimitiveType
         F: Fn(T) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let array = unary(self.get_inner(), f, S::data_type().to_arrow());
+        let array = unary(self.inner(), f, S::data_type().to_arrow());
         DFPrimitiveArray::<S>::new(array)
     }
 
@@ -99,13 +95,13 @@ where T: DFPrimitiveType
         F: Fn(Option<T>) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let array = unary(self.get_inner(), |n| f(Some(n)), S::data_type().to_arrow());
+        let array = unary(self.inner(), |n| f(Some(n)), S::data_type().to_arrow());
         DFPrimitiveArray::<S>::new(array)
     }
 
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(T) -> T + Copy {
-        let array = unary(self.get_inner(), f, T::data_type().to_arrow());
+        let array = unary(self.inner(), f, T::data_type().to_arrow());
         DFPrimitiveArray::<T>::new(array)
     }
 
@@ -177,7 +173,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
         F: Fn(&'a str) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let arr = self.get_inner();
+        let arr = self.inner();
         let values_iter = arr.values_iter().map(|x| f(x));
         let av = AlignedVec::<_>::from_trusted_len_iter(values_iter);
 
@@ -190,8 +186,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
         F: Fn(Option<&'a str>) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let av: AlignedVec<_> =
-            AlignedVec::<_>::from_trusted_len_iter(self.get_inner().iter().map(f));
+        let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.inner().iter().map(f));
         let (_, validity) = self.null_bits();
         to_primitive::<S>(av, validity.clone())
     }

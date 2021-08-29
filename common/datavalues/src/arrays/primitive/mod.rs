@@ -63,7 +63,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         &self.data_type
     }
 
-    pub fn get_inner(&self) -> &PrimitiveArray<T> {
+    pub fn inner(&self) -> &PrimitiveArray<T> {
         &self.array
     }
 

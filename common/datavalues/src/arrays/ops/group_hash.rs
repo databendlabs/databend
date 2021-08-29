@@ -46,7 +46,7 @@ where
     T: Marshal + StatBuffer + Sized,
 {
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
-        let array = self.get_inner();
+        let array = self.inner();
         let mut ptr = ptr;
         // let mut buffer = T::buffer();
         // value.marshal(buffer.as_mut());
@@ -77,7 +77,7 @@ where
 
 impl GroupHash for DFBooleanArray {
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
-        let array = self.get_inner();
+        let array = self.inner();
         let mut ptr = ptr;
 
         for value in array.values().iter() {

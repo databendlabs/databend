@@ -116,7 +116,7 @@ where
         let darray: &DFPrimitiveArray<T> = arrays[0].static_cast();
         if darray.null_count() == 0 {
             darray
-                .get_inner()
+                .inner()
                 .values()
                 .as_slice()
                 .iter()

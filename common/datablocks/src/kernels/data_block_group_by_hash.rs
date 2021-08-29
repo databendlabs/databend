@@ -156,7 +156,7 @@ pub struct HashMethodSerializer {}
 impl HashMethodSerializer {
     #[inline]
     pub fn get_key(&self, array: &DFBinaryArray, row: usize) -> Vec<u8> {
-        let v = array.get_inner().value(row);
+        let v = array.inner().value(row);
         v.to_owned()
     }
 
@@ -226,7 +226,7 @@ where T: DFPrimitiveType
 
     #[inline]
     pub fn get_key(&self, array: &DFPrimitiveArray<T>, row: usize) -> T {
-        array.get_inner().value(row)
+        array.inner().value(row)
     }
     pub fn de_group_columns(
         &self,

@@ -59,7 +59,7 @@ where
 {
     let ca = match (lhs.len(), rhs.len()) {
         (a, b) if a == b => {
-            let array = kernel(lhs.get_inner(), rhs.get_inner()).expect("output");
+            let array = kernel(lhs.inner(), rhs.inner()).expect("output");
 
             array.into()
         }
@@ -69,7 +69,7 @@ where
             match opt_rhs {
                 None => DFPrimitiveArray::<T>::full_null(lhs.len()),
                 Some(rhs) => {
-                    let array = scalar_kernel(lhs.get_inner(), &rhs);
+                    let array = scalar_kernel(lhs.inner(), &rhs);
                     array.into()
                 }
             }
@@ -335,9 +335,9 @@ impl Add for &DFUtf8Array {
 
         // todo! add no_null variants. Need 4 paths.
         Ok(self
-            .get_inner()
+            .inner()
             .iter()
-            .zip(rhs.get_inner().iter())
+            .zip(rhs.inner().iter())
             .map(|(opt_l, opt_r)| match (opt_l, opt_r) {
                 (Some(l), Some(r)) => Some(concat_strings(l, r)),
                 _ => None,
@@ -364,7 +364,7 @@ impl Add<&str> for &DFUtf8Array {
                 .map(|l| concat_strings(l, rhs))
                 .collect(),
             _ => self
-                .get_inner()
+                .inner()
                 .iter()
                 .map(|opt_l| opt_l.map(|l| concat_strings(l, rhs)))
                 .collect(),

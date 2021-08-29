@@ -124,13 +124,13 @@ where Ptr: DFAsRef<str>
 /// From trait
 impl<'a> From<&'a DFUtf8Array> for Vec<Option<&'a str>> {
     fn from(ca: &'a DFUtf8Array) -> Self {
-        ca.get_inner().iter().collect()
+        ca.inner().iter().collect()
     }
 }
 
 impl From<DFUtf8Array> for Vec<Option<String>> {
     fn from(ca: DFUtf8Array) -> Self {
-        ca.get_inner()
+        ca.inner()
             .iter()
             .map(|opt| opt.map(|s| s.to_string()))
             .collect()

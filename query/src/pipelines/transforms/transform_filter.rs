@@ -102,7 +102,7 @@ impl Processor for FilterTransform {
             let filter_array = filter_block.try_column_by_name(column_name)?.to_array()?;
             // Downcast to boolean array
             let filter_array = filter_array.cast_with_type(&DataType::Boolean)?;
-            let filter_array = filter_array.bool()?.get_inner();
+            let filter_array = filter_array.bool()?.inner();
             // Convert to arrow record_batch
 
             let mut filter_exit_true = filter_array.values().chunks::<u64>();

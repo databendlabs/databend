@@ -64,11 +64,8 @@ macro_rules! impl_if_common {
                     .collect())
             }
             (_, _, _) => {
-                let result = if_then_else::if_then_else(
-                    $predicate.get_inner(),
-                    &($lhs.array),
-                    &($rhs.array),
-                )?;
+                let result =
+                    if_then_else::if_then_else($predicate.inner(), &($lhs.array), &($rhs.array))?;
                 Ok(Self::from_arrow_array(result.as_ref()))
             }
         }
@@ -119,11 +116,8 @@ macro_rules! impl_if_bool_utf8 {
                     .collect())
             }
             (_, _, _) => {
-                let result = if_then_else::if_then_else(
-                    $predicate.get_inner(),
-                    &($lhs.array),
-                    &($rhs.array),
-                )?;
+                let result =
+                    if_then_else::if_then_else($predicate.inner(), &($lhs.array), &($rhs.array))?;
                 Ok(Self::from_arrow_array(result.as_ref()))
             }
         }

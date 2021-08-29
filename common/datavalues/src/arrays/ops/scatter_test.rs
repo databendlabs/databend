@@ -28,10 +28,10 @@ fn test_scatter() -> Result<()> {
     assert_eq!(df_uint16_array.len(), indices.len());
 
     let array_vec = unsafe { df_uint16_array.scatter_unchecked(&mut indices.into_iter(), 4)? };
-    assert_eq!(&[7u16, 10], array_vec[0].get_inner().values().as_slice());
-    assert_eq!(&[1u16, 4, 9], array_vec[1].get_inner().values().as_slice());
-    assert_eq!(&[2u16, 6], array_vec[2].get_inner().values().as_slice());
-    assert_eq!(&[3u16, 5, 8], array_vec[3].get_inner().values().as_slice());
+    assert_eq!(&[7u16, 10], array_vec[0].inner().values().as_slice());
+    assert_eq!(&[1u16, 4, 9], array_vec[1].inner().values().as_slice());
+    assert_eq!(&[2u16, 6], array_vec[2].inner().values().as_slice());
+    assert_eq!(&[3u16, 5, 8], array_vec[3].inner().values().as_slice());
 
     // Test DFUint16Array
     let df_utf8_array = DFUtf8Array::new_from_slice(&["a", "b", "c", "d"]);
@@ -70,13 +70,13 @@ fn test_scatter() -> Result<()> {
     let array_vec = unsafe { df_binary_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
 
     let values: Vec<Vec<u8>> = (0..array_vec[0].len())
-        .map(|idx| array_vec[0].get_inner().value(idx).to_vec())
+        .map(|idx| array_vec[0].inner().value(idx).to_vec())
         .collect();
 
     assert_eq!(vec![b"ab".to_vec(), b"c1".to_vec()], values);
 
     let values: Vec<Vec<u8>> = (0..array_vec[1].len())
-        .map(|idx| array_vec[1].get_inner().value(idx).to_vec())
+        .map(|idx| array_vec[1].inner().value(idx).to_vec())
         .collect();
     assert_eq!(vec![b"12".to_vec(), b"32".to_vec()], values);
 
@@ -91,21 +91,21 @@ fn test_scatter() -> Result<()> {
     let indices = vec![1, 0, 0, 1];
     let array_vec = unsafe { df_list.scatter_unchecked(&mut indices.into_iter(), 2)? };
 
-    let c0 = array_vec[0].get_inner().value(0);
+    let c0 = array_vec[0].inner().value(0);
     let c0 = DFUInt16Array::from_arrow_array(c0.as_ref());
-    let c1 = array_vec[1].get_inner().value(0);
+    let c1 = array_vec[1].inner().value(0);
     let c1 = DFUInt16Array::from_arrow_array(c1.as_ref());
 
-    assert_eq!(&[7, 8, 9], c0.get_inner().values().as_slice());
-    assert_eq!(&[1, 2, 3], c1.get_inner().values().as_slice());
+    assert_eq!(&[7, 8, 9], c0.inner().values().as_slice());
+    assert_eq!(&[1, 2, 3], c1.inner().values().as_slice());
 
-    let c0 = array_vec[0].get_inner().value(1);
+    let c0 = array_vec[0].inner().value(1);
     let c0 = DFUInt16Array::from_arrow_array(c0.as_ref());
-    let c1 = array_vec[1].get_inner().value(1);
+    let c1 = array_vec[1].inner().value(1);
     let c1 = DFUInt16Array::from_arrow_array(c1.as_ref());
 
-    assert_eq!(&[10, 11, 12], c0.get_inner().values().as_slice());
-    assert_eq!(&[4, 5, 6], c1.get_inner().values().as_slice());
+    assert_eq!(&[10, 11, 12], c0.inner().values().as_slice());
+    assert_eq!(&[4, 5, 6], c1.inner().values().as_slice());
 
     Ok(())
 }

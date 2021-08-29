@@ -104,7 +104,7 @@ impl AggregateFunction for AggregateIfCombinator {
         let boolean_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
         let boolean_array = boolean_array.bool()?;
 
-        let arrow_filter_array = boolean_array.get_inner();
+        let arrow_filter_array = boolean_array.inner();
         let bitmap = arrow_filter_array.values();
 
         let mut column_array = Vec::with_capacity(self.argument_len - 1);

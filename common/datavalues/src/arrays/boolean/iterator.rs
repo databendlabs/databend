@@ -69,6 +69,6 @@ impl<'a> Iterator for BoolIterNoNull<'a> {
 
 impl DFBooleanArray {
     pub fn into_no_null_iter(&self) -> impl TrustedLen<Item = bool> + '_ + Send + Sync {
-        BoolIterNoNull::new(self.get_inner())
+        BoolIterNoNull::new(self.inner())
     }
 }

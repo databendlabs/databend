@@ -52,7 +52,7 @@ impl DFListArray {
         &self.data_type
     }
 
-    pub fn get_inner(&self) -> &LargeListArray {
+    pub fn inner(&self) -> &LargeListArray {
         &self.array
     }
 

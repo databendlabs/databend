@@ -58,7 +58,7 @@ impl DFUtf8Array {
         &DataType::Utf8
     }
 
-    pub fn get_inner(&self) -> &LargeUtf8Array {
+    pub fn inner(&self) -> &LargeUtf8Array {
         &self.array
     }
 
@@ -133,7 +133,7 @@ impl DFUtf8Array {
     }
 
     pub fn collect_values(&self) -> Vec<Option<&'_ str>> {
-        self.get_inner().iter().collect()
+        self.inner().iter().collect()
     }
 }
 

@@ -79,11 +79,11 @@ fn test_array_apply() -> Result<()> {
     ];
 
     let values = vec![
-        arrays[0].get_inner(),
-        arrays[1].get_inner(),
-        arrays[2].get_inner(),
-        arrays[3].get_inner(),
-        arrays[4].get_inner(),
+        arrays[0].inner(),
+        arrays[1].inner(),
+        arrays[2].inner(),
+        arrays[3].inner(),
+        arrays[4].inner(),
     ];
 
     assert_eq!(2, values[0].null_count());
@@ -137,11 +137,7 @@ fn test_boolean_array_apply() -> Result<()> {
         }),
     ];
 
-    let values = vec![
-        arrays[0].get_inner(),
-        arrays[1].get_inner(),
-        arrays[2].get_inner(),
-    ];
+    let values = vec![arrays[0].inner(), arrays[1].inner(), arrays[2].inner()];
 
     assert_eq!(2, values[0].null_count());
     assert_eq!(true, values[0].is_null(0));
@@ -180,11 +176,7 @@ fn test_utf8_array_apply() -> Result<()> {
         }),
     ];
 
-    let values = vec![
-        arrays[0].get_inner(),
-        arrays[1].get_inner(),
-        arrays[2].get_inner(),
-    ];
+    let values = vec![arrays[0].inner(), arrays[1].inner(), arrays[2].inner()];
 
     let cast_arrays = vec![
         array.apply_cast_numeric::<_, u16>(|arr| arr.len() as u16),
@@ -194,7 +186,7 @@ fn test_utf8_array_apply() -> Result<()> {
         }),
     ];
 
-    let cast_values = vec![cast_arrays[0].get_inner(), cast_arrays[1].get_inner()];
+    let cast_values = vec![cast_arrays[0].inner(), cast_arrays[1].inner()];
 
     assert_eq!(2, values[0].null_count());
     assert_eq!(true, values[0].is_null(0));

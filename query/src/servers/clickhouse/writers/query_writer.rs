@@ -199,25 +199,25 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 false => {
                     match column.data_type() {
                         DataType::Int8 => result
-                            .column(name, column.i8()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.i8()?.inner().values().as_slice().to_vec()),
                         DataType::Int16 => result
-                            .column(name, column.i16()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.i16()?.inner().values().as_slice().to_vec()),
                         DataType::Int32 => result
-                            .column(name, column.i32()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.i32()?.inner().values().as_slice().to_vec()),
                         DataType::Int64 => result
-                            .column(name, column.i64()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.i64()?.inner().values().as_slice().to_vec()),
                         DataType::UInt8 => result
-                            .column(name, column.u8()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.u8()?.inner().values().as_slice().to_vec()),
                         DataType::UInt16 => result
-                            .column(name, column.u16()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.u16()?.inner().values().as_slice().to_vec()),
                         DataType::UInt32 => result
-                            .column(name, column.u32()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.u32()?.inner().values().as_slice().to_vec()),
                         DataType::UInt64 => result
-                            .column(name, column.u64()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.u64()?.inner().values().as_slice().to_vec()),
                         DataType::Float32 => result
-                            .column(name, column.f32()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.f32()?.inner().values().as_slice().to_vec()),
                         DataType::Float64 => result
-                            .column(name, column.f64()?.get_inner().values().as_slice().to_vec()),
+                            .column(name, column.f64()?.inner().values().as_slice().to_vec()),
                         DataType::Utf8 => {
                             let vs: Vec<&str> = column.utf8()?.into_no_null_iter().collect();
                             result.column(name, vs)

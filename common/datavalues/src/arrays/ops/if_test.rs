@@ -34,38 +34,38 @@ fn test_array_if() -> Result<()> {
     let rhs = DFUInt16Array::new_from_slice(&[2u16, 4u16, 6u16]);
     let res = lhs.if_then_else(&rhs, &conds[0])?;
     assert_eq!(3, res.len());
-    assert_eq!(1u16, res.get_inner().value(0));
-    assert_eq!(4u16, res.get_inner().value(1));
-    assert_eq!(1u16, res.get_inner().value(2));
+    assert_eq!(1u16, res.inner().value(0));
+    assert_eq!(4u16, res.inner().value(1));
+    assert_eq!(1u16, res.inner().value(2));
 
     let lhs = DFUInt16Array::new_from_iter(1u16..4u16);
     let res = lhs.if_then_else(&rhs, &conds[0])?;
     assert_eq!(3, res.len());
-    assert_eq!(1u16, res.get_inner().value(0));
-    assert_eq!(4u16, res.get_inner().value(1));
-    assert_eq!(3u16, res.get_inner().value(2));
+    assert_eq!(1u16, res.inner().value(0));
+    assert_eq!(4u16, res.inner().value(1));
+    assert_eq!(3u16, res.inner().value(2));
 
     // DFBooleanArray.
     let lhs = DFBooleanArray::new_from_slice(&[true]);
     let rhs = DFBooleanArray::new_from_slice(&[false, false, true]);
     let res = lhs.if_then_else(&rhs, &conds[1])?;
     assert_eq!(1, res.len());
-    assert_eq!(true, res.get_inner().value(0));
+    assert_eq!(true, res.inner().value(0));
 
     let res = rhs.if_then_else(&lhs, &conds[0])?;
     assert_eq!(3, res.len());
-    assert_eq!(false, res.get_inner().value(0));
-    assert_eq!(true, res.get_inner().value(1));
-    assert_eq!(true, res.get_inner().value(2));
+    assert_eq!(false, res.inner().value(0));
+    assert_eq!(true, res.inner().value(1));
+    assert_eq!(true, res.inner().value(2));
 
     // DFUtf8Array.
     let lhs = DFUtf8Array::new_from_slice(&["a"]);
     let rhs = DFUtf8Array::new_from_slice(&["b"]);
     let res = lhs.if_then_else(&rhs, &conds[0])?;
     assert_eq!(3, res.len());
-    assert_eq!("a", res.get_inner().value(0));
-    assert_eq!("b", res.get_inner().value(1));
-    assert_eq!("a", res.get_inner().value(2));
+    assert_eq!("a", res.inner().value(0));
+    assert_eq!("b", res.inner().value(1));
+    assert_eq!("a", res.inner().value(2));
 
     // DFNullArray.
     let lhs = NullArray::new_null(2);

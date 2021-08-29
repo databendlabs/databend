@@ -64,7 +64,7 @@ where T: DFPrimitiveType
     where
         Self: std::marker::Sized,
     {
-        let array = self.get_inner();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
@@ -104,7 +104,7 @@ impl ArrayScatter for DFUtf8Array {
     where
         Self: std::marker::Sized,
     {
-        let array = self.get_inner();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
@@ -144,7 +144,7 @@ impl ArrayScatter for DFBooleanArray {
     where
         Self: std::marker::Sized,
     {
-        let array = self.get_inner();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
@@ -235,7 +235,7 @@ impl ArrayScatter for DFBinaryArray {
             builders.push(builder);
         }
 
-        let binary_data = self.get_inner();
+        let binary_data = self.inner();
         for (i, index) in indices.enumerate() {
             if !self.is_null(i as usize) {
                 builders[index as usize].append_value(binary_data.value(i as usize));
