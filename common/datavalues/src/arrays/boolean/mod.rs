@@ -14,9 +14,11 @@
 
 mod boolean;
 mod builder;
+mod iterator;
 
 #[cfg(test)]
 mod builder_test;
 
 pub use boolean::*;
 pub use builder::*;
+pub use iterator::*;

@@ -13,10 +13,12 @@
 // limitations under the License.
 
 mod builder;
+mod iterator;
 mod utf8;
 
 #[cfg(test)]
 mod builder_test;
 
 pub use builder::*;
+pub use iterator::*;
 pub use utf8::*;

@@ -38,6 +38,8 @@ use strength_reduce::StrengthReducedU64;
 use crate::arrays::ops::*;
 use crate::prelude::*;
 
+/// TODO: sundy
+/// check division by zero in rem & div ops
 fn arithmetic_helper<T, Kernel, SKernel, F>(
     lhs: &DFPrimitiveArray<T>,
     rhs: &DFPrimitiveArray<T>,

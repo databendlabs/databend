@@ -14,6 +14,8 @@
 
 mod binary;
 mod builder;
+mod iterator;
 
 pub use binary::*;
 pub use builder::*;
+pub use iterator::*;

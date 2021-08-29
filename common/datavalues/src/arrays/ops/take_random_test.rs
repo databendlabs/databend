@@ -15,7 +15,6 @@
 //use common_arrow::arrow::array::ListArray;
 use common_exception::Result;
 
-use crate::arrays::builders::*;
 use crate::arrays::get_list_builder;
 use crate::prelude::*;
 

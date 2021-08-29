@@ -13,10 +13,12 @@
 // limitations under the License.
 
 mod builder;
+mod iterator;
 mod primitive;
 
 #[cfg(test)]
 mod builder_test;
 
 pub use builder::*;
+pub use iterator::*;
 pub use primitive::*;

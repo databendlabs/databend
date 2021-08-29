@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod arithmetic_test;
+
 #[macro_use]
 mod arithmetic;
 mod builder;
 mod comparison;
-mod kernels;
 mod ops;
 mod trusted_len;
 mod upstream_traits;
@@ -34,7 +36,6 @@ pub use binary::*;
 pub use boolean::*;
 pub use builder::*;
 pub use comparison::*;
-pub use kernels::*;
 pub use list::*;
 pub use null::*;
 pub use ops::*;

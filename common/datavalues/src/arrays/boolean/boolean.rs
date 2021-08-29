@@ -138,3 +138,67 @@ impl DFBooleanArray {
         self.array.iter().collect()
     }
 }
+
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
+/// Take kernel for single chunk without nulls and an iterator as index.
+pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
+    arr: &BooleanArray,
+    indices: I,
+) -> Arc<BooleanArray> {
+    match arr.null_count() {
+        0 => {
+            let iter = indices.into_iter().map(|idx| {
+                if arr.is_null(idx) {
+                    None
+                } else {
+                    Some(arr.value(idx))
+                }
+            });
+
+            Arc::new(iter.collect())
+        }
+        _ => {
+            let iter = indices.into_iter().map(|idx| {
+                if arr.is_null(idx) {
+                    None
+                } else {
+                    Some(arr.value_unchecked(idx))
+                }
+            });
+
+            Arc::new(iter.collect())
+        }
+    }
+}
+
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
+/// Take kernel for single chunk and an iterator as index.
+pub unsafe fn take_bool_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
+    arr: &BooleanArray,
+    indices: I,
+) -> Arc<BooleanArray> {
+    match arr.null_count() {
+        0 => {
+            let iter = indices
+                .into_iter()
+                .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
+
+            Arc::new(iter.collect())
+        }
+        _ => {
+            let iter = indices.into_iter().map(|opt_idx| {
+                opt_idx.and_then(|idx| {
+                    if arr.is_null(idx) {
+                        None
+                    } else {
+                        Some(arr.value_unchecked(idx))
+                    }
+                })
+            });
+
+            Arc::new(iter.collect())
+        }
+    }
+}

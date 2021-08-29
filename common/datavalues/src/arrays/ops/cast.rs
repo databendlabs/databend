@@ -25,7 +25,6 @@ use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
 
-/// Cast `DFPrimitiveArray<T>` to `DataArray<N>`
 pub trait ArrayCast: Debug {
     fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
         Err(ErrorCode::BadDataValueType(format!(

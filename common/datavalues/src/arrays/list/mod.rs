@@ -13,7 +13,9 @@
 // limitations under the License.
 
 mod builder;
+mod iterator;
 mod list;
 
 pub use builder::*;
+pub use iterator::*;
 pub use list::*;

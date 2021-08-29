@@ -22,7 +22,7 @@ use crate::prelude::*;
 fn test_array_fill() -> Result<()> {
     // Test full for PrimitiveArray
     let mut df_uint16_array = DFUInt16Array::full(5u16, 3);
-    let arrow_uint16_array = df_uint16_array.as_ref();
+    let arrow_uint16_array = df_uint16_array.get_inner();
     assert_eq!(&[5u16, 5u16, 5u16], &arrow_uint16_array.values().as_slice());
     // Test full_null for PrimitiveArray
     df_uint16_array = DFUInt16Array::full_null(3);
@@ -48,9 +48,9 @@ fn test_array_fill() -> Result<()> {
     assert_eq!(false, df_utf8_array.is_null(0));
     assert_eq!(false, df_utf8_array.is_null(1));
     assert_eq!(false, df_utf8_array.is_null(2));
-    assert_eq!("ab", df_utf8_array.as_ref().value(0));
-    assert_eq!("ab", df_utf8_array.as_ref().value(1));
-    assert_eq!("ab", df_utf8_array.as_ref().value(2));
+    assert_eq!("ab", df_utf8_array.get_inner().value(0));
+    assert_eq!("ab", df_utf8_array.get_inner().value(1));
+    assert_eq!("ab", df_utf8_array.get_inner().value(2));
 
     // Test full_null for Utf8Array
     df_utf8_array = DFUtf8Array::full_null(3);

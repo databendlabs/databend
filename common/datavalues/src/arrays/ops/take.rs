@@ -26,7 +26,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::TakeIdx;
-use crate::arrays::kernels::*;
 use crate::prelude::*;
 
 // TODO add unchecked take

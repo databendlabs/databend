@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
@@ -126,5 +125,61 @@ impl DFUtf8Array {
 
     pub fn collect_values(&self) -> Vec<Option<&'_ str>> {
         self.get_inner().iter().collect()
+    }
+}
+
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
+pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
+    arr: &LargeUtf8Array,
+    indices: I,
+) -> Arc<LargeUtf8Array> {
+    match arr.null_count() {
+        0 => {
+            let iter = indices
+                .into_iter()
+                .map(|idx| Some(arr.value_unchecked(idx)));
+            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+        }
+        _ => {
+            let iter = indices.into_iter().map(|idx| {
+                if arr.is_null(idx) {
+                    None
+                } else {
+                    Some(arr.value_unchecked(idx))
+                }
+            });
+            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+        }
+    }
+}
+
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
+pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
+    arr: &LargeUtf8Array,
+    indices: I,
+) -> Arc<LargeUtf8Array> {
+    match arr.null_count() {
+        0 => {
+            let iter = indices
+                .into_iter()
+                .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
+
+            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+        }
+        _ => {
+            let iter = indices.into_iter().map(|opt_idx| {
+                opt_idx.and_then(|idx| {
+                    if arr.is_null(idx) {
+                        None
+                    } else {
+                        Some(arr.value_unchecked(idx))
+                    }
+                })
+            });
+
+            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+        }
     }
 }

@@ -14,9 +14,8 @@
 
 use common_exception::Result;
 
-use crate::arrays::builders::*;
 use crate::arrays::ops::group_hash::GroupHash;
-use crate::prelude::DFUInt16Array;
+use crate::prelude::*;
 
 #[test]
 fn test_group_hash() -> Result<()> {
