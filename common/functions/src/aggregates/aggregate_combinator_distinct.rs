@@ -17,6 +17,7 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
+use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;

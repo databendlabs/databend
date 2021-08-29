@@ -33,12 +33,12 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::Catalog;
+use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DatabaseCatalog;
 use crate::sessions::context_shared::DatafuseQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -146,12 +146,12 @@ impl DatafuseQueryContext {
         self.shared.try_get_cluster()
     }
 
-    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
-        self.shared.get_datasource()
+    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
+        self.shared.get_catalog()
     }
 
     pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
-        self.get_datasource().get_table(database, table)
+        self.get_catalog().get_table(database, table)
     }
 
     pub async fn get_table_by_id(
@@ -160,12 +160,12 @@ impl DatafuseQueryContext {
         table_id: MetaId,
         table_ver: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.get_datasource()
+        self.get_catalog()
             .get_table_by_id(database, table_id, table_ver)
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        self.get_datasource().get_table_function(function_name)
+        self.get_catalog().get_table_function(function_name)
     }
 
     pub fn get_id(&self) -> String {
@@ -183,10 +183,7 @@ impl DatafuseQueryContext {
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        match self
-            .get_datasource()
-            .get_database(new_database_name.as_str())
-        {
+        match self.get_catalog().get_database(new_database_name.as_str()) {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(

@@ -45,13 +45,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     conf = Config::load_from_env(&conf)?;
 
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
+        env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),
     )
     .init();
     let _guards = init_tracing_with_file(
         "datafuse-query",
-        conf.log_dir.as_str(),
-        conf.log_level.as_str(),
+        conf.log.log_dir.as_str(),
+        conf.log.log_level.as_str(),
     );
 
     info!("{:?}", conf);
@@ -68,8 +68,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let listening = format!(
             "{}:{}",
-            conf.mysql_handler_host.clone(),
-            conf.mysql_handler_port
+            conf.query.mysql_handler_host.clone(),
+            conf.query.mysql_handler_port
         );
         let listening = listening.parse::<SocketAddr>()?;
 
@@ -87,8 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ClickHouse handler.
     {
-        let hostname = conf.clickhouse_handler_host.clone();
-        let listening = format!("{}:{}", hostname, conf.clickhouse_handler_port);
+        let hostname = conf.query.clickhouse_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.clickhouse_handler_port);
         let listening = listening.parse::<SocketAddr>()?;
 
         let mut srv = ClickHouseHandler::create(session_manager.clone());
@@ -105,7 +105,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Metric API service.
     {
-        let listening = conf.metric_api_address.parse::<std::net::SocketAddr>()?;
+        let listening = conf
+            .query
+            .metric_api_address
+            .parse::<std::net::SocketAddr>()?;
         let mut srv = MetricService::create();
         let listening = srv.start(listening).await?;
         shutdown_handle.add_service(srv);
@@ -114,7 +117,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // HTTP API service.
     {
-        let listening = conf.http_api_address.parse::<std::net::SocketAddr>()?;
+        let listening = conf
+            .query
+            .http_api_address
+            .parse::<std::net::SocketAddr>()?;
         let mut srv = HttpService::create(conf.clone(), cluster.clone());
         let listening = srv.start(listening).await?;
         shutdown_handle.add_service(srv);
@@ -123,7 +129,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // RPC API service.
     {
-        let addr = conf.flight_api_address.parse::<std::net::SocketAddr>()?;
+        let addr = conf
+            .query
+            .flight_api_address
+            .parse::<std::net::SocketAddr>()?;
         let mut srv = RpcService::create(session_manager.clone());
         let listening = srv.start(addr).await?;
         shutdown_handle.add_service(srv);

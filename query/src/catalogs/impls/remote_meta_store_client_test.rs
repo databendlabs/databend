@@ -13,10 +13,10 @@
 // limitations under the License.
 //
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
-use common_datavalues::prelude::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -48,8 +48,8 @@ use common_store_api::MetaApi;
 use common_streams::SendableDataBlockStream;
 use TableEngineType::JSONEachRow;
 
+use crate::catalogs::backend::BackendClient;
 use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::catalogs::meta_store_client::DBMetaStoreClient;
 use crate::datasources::remote::GetStoreApiClient;
 use crate::datasources::remote::StoreApis;
 

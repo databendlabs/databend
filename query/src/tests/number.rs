@@ -23,7 +23,8 @@ use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
+use crate::catalogs::DatabaseCatalog;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::DatafuseQueryContextRef;
 
@@ -43,7 +44,7 @@ impl NumberTestData {
     }
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
-        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
+        let datasource = DatabaseCatalog::try_create()?;
         datasource
             .get_table(self.db, self.table)?
             .datasource()
@@ -51,7 +52,7 @@ impl NumberTestData {
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
-        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
+        let datasource = DatabaseCatalog::try_create()?;
         let table_meta = datasource.get_table(self.db, self.table)?;
         let table = table_meta.datasource();
         table.read_plan(

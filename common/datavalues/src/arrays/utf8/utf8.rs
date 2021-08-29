@@ -133,13 +133,13 @@ impl DFUtf8Array {
 pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
     arr: &LargeUtf8Array,
     indices: I,
-) -> Arc<LargeUtf8Array> {
+) -> LargeUtf8Array {
     match arr.null_count() {
         0 => {
             let iter = indices
                 .into_iter()
                 .map(|idx| Some(arr.value_unchecked(idx)));
-            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
         }
         _ => {
             let iter = indices.into_iter().map(|idx| {
@@ -149,7 +149,7 @@ pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
                     Some(arr.value_unchecked(idx))
                 }
             });
-            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
         }
     }
 }
@@ -159,14 +159,14 @@ pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
 pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
     arr: &LargeUtf8Array,
     indices: I,
-) -> Arc<LargeUtf8Array> {
+) -> LargeUtf8Array {
     match arr.null_count() {
         0 => {
             let iter = indices
                 .into_iter()
                 .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
 
-            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
         }
         _ => {
             let iter = indices.into_iter().map(|opt_idx| {
@@ -179,7 +179,7 @@ pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>
                 })
             });
 
-            Arc::new(LargeUtf8Array::from_trusted_len_iter_unchecked(iter))
+            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
         }
     }
 }

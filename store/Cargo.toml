@@ -63,7 +63,7 @@ tokio-stream = "0.1"
 tracing-appender = "0.1.2"
 tonic = { version = "0.5.2", features = ["tls"]}
 
-sha2 = "0.9.5"
+sha2 = "0.9.6"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 warp = { version = "0.3.1", features = ["tls"] }
 

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::aggregate;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -145,18 +146,14 @@ impl DFBooleanArray {
 pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
     arr: &BooleanArray,
     indices: I,
-) -> Arc<BooleanArray> {
+) -> BooleanArray {
     match arr.null_count() {
         0 => {
-            let iter = indices.into_iter().map(|idx| {
-                if arr.is_null(idx) {
-                    None
-                } else {
-                    Some(arr.value(idx))
-                }
-            });
-
-            Arc::new(iter.collect())
+            let iter = indices.into_iter().map(|idx| arr.value(idx));
+            BooleanArray::from_data(
+                MutableBitmap::from_trusted_len_iter_unchecked(iter).into(),
+                None,
+            )
         }
         _ => {
             let iter = indices.into_iter().map(|idx| {
@@ -167,7 +164,7 @@ pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
                 }
             });
 
-            Arc::new(iter.collect())
+            BooleanArray::from_trusted_len_iter_unchecked(iter)
         }
     }
 }
@@ -178,14 +175,14 @@ pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
 pub unsafe fn take_bool_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
     arr: &BooleanArray,
     indices: I,
-) -> Arc<BooleanArray> {
+) -> BooleanArray {
     match arr.null_count() {
         0 => {
             let iter = indices
                 .into_iter()
                 .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
 
-            Arc::new(iter.collect())
+            BooleanArray::from_trusted_len_iter_unchecked(iter)
         }
         _ => {
             let iter = indices.into_iter().map(|opt_idx| {
@@ -198,7 +195,7 @@ pub unsafe fn take_bool_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>
                 })
             });
 
-            Arc::new(iter.collect())
+            BooleanArray::from_trusted_len_iter_unchecked(iter)
         }
     }
 }

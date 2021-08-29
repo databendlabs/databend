@@ -186,7 +186,7 @@ pub type DFFloat64Array = DFPrimitiveArray<f64>;
 pub unsafe fn take_primitive_iter_unchecked<T: DFPrimitiveType, I: IntoIterator<Item = usize>>(
     arr: &PrimitiveArray<T>,
     indices: I,
-) -> Arc<PrimitiveArray<T>> {
+) -> PrimitiveArray<T> {
     match arr.null_count() {
         0 => {
             let array_values = arr.values().as_slice();
@@ -195,27 +195,19 @@ pub unsafe fn take_primitive_iter_unchecked<T: DFPrimitiveType, I: IntoIterator<
                 .map(|idx| *array_values.get_unchecked(idx));
 
             let values = Buffer::from_trusted_len_iter_unchecked(iter);
-            Arc::new(PrimitiveArray::from_data(
-                T::data_type().to_arrow(),
-                values,
-                None,
-            ))
+            PrimitiveArray::from_data(T::data_type().to_arrow(), values, None)
         }
         _ => {
             let array_values = arr.values();
 
-            let arr = indices
-                .into_iter()
-                .map(|idx| {
-                    if arr.is_valid(idx) {
-                        Some(array_values[idx])
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            Arc::new(arr)
+            let iter = indices.into_iter().map(|idx| {
+                if arr.is_valid(idx) {
+                    Some(array_values[idx])
+                } else {
+                    None
+                }
+            });
+            PrimitiveArray::from_trusted_len_iter_unchecked(iter).to(T::data_type().to_arrow())
         }
     }
 }
@@ -230,7 +222,7 @@ pub unsafe fn take_primitive_opt_iter_unchecked<
 >(
     arr: &PrimitiveArray<T>,
     indices: I,
-) -> Arc<PrimitiveArray<T>> {
+) -> PrimitiveArray<T> {
     match arr.null_count() {
         0 => {
             let array_values = arr.values();
@@ -238,9 +230,7 @@ pub unsafe fn take_primitive_opt_iter_unchecked<
             let iter = indices
                 .into_iter()
                 .map(|opt_idx| opt_idx.map(|idx| *array_values.get_unchecked(idx)));
-            let arr = PrimitiveArray::from_trusted_len_iter_unchecked(iter);
-
-            Arc::new(arr)
+            PrimitiveArray::from_trusted_len_iter_unchecked(iter)
         }
         _ => {
             let array_values = arr.values();
@@ -254,9 +244,8 @@ pub unsafe fn take_primitive_opt_iter_unchecked<
                     }
                 })
             });
-            let arr = PrimitiveArray::from_trusted_len_iter_unchecked(iter);
 
-            Arc::new(arr)
+            PrimitiveArray::from_trusted_len_iter_unchecked(iter).to(T::data_type().to_arrow())
         }
     }
 }

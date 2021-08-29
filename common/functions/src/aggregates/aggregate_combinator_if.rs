@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_arrow::arrow;

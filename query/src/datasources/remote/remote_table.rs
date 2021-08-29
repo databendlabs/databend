@@ -29,9 +29,9 @@ use common_planners::TruncateTablePlan;
 use common_store_api::ReadPlanResult;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::Table;
 use crate::datasources::remote::store_client_provider::StoreApis;
 use crate::datasources::remote::StoreApisProvider;
-use crate::datasources::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 #[allow(dead_code)]

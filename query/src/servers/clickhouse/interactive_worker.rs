@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use clickhouse_srv::connection::Connection;
 use clickhouse_srv::CHContext;
 use clickhouse_srv::ClickHouseSession;
-use common_datavalues::prelude::Arc;
 use metrics::histogram;
 
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;

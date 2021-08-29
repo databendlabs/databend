@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregator_primitive_keys;
+use std::sync::Arc;
 
-pub use aggregator_primitive_keys::Aggregator;
+use crate::catalogs::Table;
+
+pub trait TableFunction: Sync + Send + Table {
+    fn function_name(&self) -> &str;
+    fn db(&self) -> &str;
+
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    where Self: 'a;
+}

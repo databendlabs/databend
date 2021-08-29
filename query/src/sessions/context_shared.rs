@@ -23,9 +23,9 @@ use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
+use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DatabaseCatalog;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 
@@ -105,8 +105,8 @@ impl DatafuseQueryContextShared {
         self.session.get_settings()
     }
 
-    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
-        self.session.get_datasource()
+    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
+        self.session.get_catalog()
     }
 
     /// Init runtime when first get

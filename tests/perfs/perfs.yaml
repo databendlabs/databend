@@ -22,10 +22,10 @@ perfs:
     query: SELECT sum(number % 3) from numbers_mt(1000000000)
 
   - name: Sort
-    query: SELECT number FROM numbers_mt(1000000) ORDER BY number DESC LIMIT 10
+    query: SELECT number FROM numbers_mt(100000000) ORDER BY number DESC LIMIT 10
 
   - name: Substring
-    query: SELECT substring(cast(number as text) from 3) from numbers_mt(100000) where number > 100 order by number desc limit 10
+    query: SELECT substring(cast(number as text) from 3) from numbers_mt(100000000) where number > 100 order by number desc limit 10
 
   - name: Group By Single Aggr
     query: SELECT sum(number) as sum FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5

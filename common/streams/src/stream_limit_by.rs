@@ -18,10 +18,11 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow;
+use common_arrow::arrow::array::BooleanArray;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues::prelude::*;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
@@ -50,8 +51,7 @@ impl LimitByStream {
     }
 
     pub fn limit_by(&mut self, block: &DataBlock) -> Result<Option<DataBlock>> {
-        // TODO: use BitVec here.
-        let mut filter_vec = vec![false; block.num_rows()];
+        let mut filter_vec = MutableBitmap::from_len_zeroed(block.num_rows());
         let method = HashMethodSerializer::default();
         let group_indices = method.group_by_get_indices(block, &self.limit_by_columns_name)?;
 
@@ -59,15 +59,13 @@ impl LimitByStream {
             for row in rows {
                 let count = self.keys_count.entry(limit_by_key.clone()).or_default();
                 *count += 1;
-                filter_vec[row as usize] = *count <= self.limit;
+                filter_vec.set(row as usize, *count <= self.limit);
             }
         }
 
-        let filter_array = DFBooleanArray::new_from_slice(&filter_vec);
-
+        let array = BooleanArray::from_data(filter_vec.into(), None);
         let batch = block.clone().try_into()?;
-        let batch =
-            arrow::compute::filter::filter_record_batch(&batch, filter_array.downcast_ref())?;
+        let batch = arrow::compute::filter::filter_record_batch(&batch, &array)?;
         Some(batch.try_into()).transpose()
     }
 }

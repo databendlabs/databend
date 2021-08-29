@@ -18,8 +18,8 @@ use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 
+use crate::catalogs::Table;
 use crate::datasources::system::*;
-use crate::datasources::*;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {

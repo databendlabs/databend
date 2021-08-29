@@ -26,17 +26,17 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 
+use crate::catalogs::backend::BackendClient;
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::catalogs::meta_store_client::DBMetaStoreClient;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::Database;
+use crate::catalogs::RemoteMetaStoreClient;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteFactory;
 use crate::datasources::system::SystemFactory;
-use crate::datasources::Database;
 
 // min id for system tables (inclusive)
 pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;
@@ -49,10 +49,10 @@ pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
 
 // Maintain all the databases of user.
 pub struct DatabaseCatalog {
+    conf: Config,
     databases: RwLock<HashMap<String, Arc<dyn Database>>>,
     table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
-    meta_store_cli: Arc<dyn DBMetaStoreClient>,
-    disable_remote: bool,
+    backend: Arc<dyn BackendClient>,
 }
 
 impl DatabaseCatalog {
@@ -64,18 +64,15 @@ impl DatabaseCatalog {
         let cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
             store_client_provider,
         )));
-        Self::try_create_with_config(conf.disable_remote_catalog, cli)
+        Self::try_create_with_config(conf, cli)
     }
 
-    pub fn try_create_with_config(
-        disable_remote_catalog: bool,
-        meta_store_cli: Arc<dyn DBMetaStoreClient>,
-    ) -> Result<Self> {
+    pub fn try_create_with_config(conf: Config, backend: Arc<dyn BackendClient>) -> Result<Self> {
         let mut datasource = DatabaseCatalog {
+            conf,
             databases: Default::default(),
             table_functions: Default::default(),
-            meta_store_cli,
-            disable_remote: disable_remote_catalog,
+            backend,
         };
 
         datasource.register_system_database()?;
@@ -126,8 +123,8 @@ impl Catalog for DatabaseCatalog {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         self.databases.read().get(db_name).map_or_else(
             || {
-                if !self.disable_remote {
-                    self.meta_store_cli.get_database(db_name)
+                if !self.conf.store.store_address.is_empty() {
+                    self.backend.get_database(db_name)
                 } else {
                     Err(ErrorCode::UnknownDatabase(format!(
                         "Unknown database {}",
@@ -140,23 +137,21 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn get_databases(&self) -> Result<Vec<String>> {
-        let locals = self.databases.read();
+        let mut databases = vec![];
 
-        if self.disable_remote {
-            return Ok(locals
-                .iter()
-                .map(|(k, _v)| k.to_owned())
-                .collect::<Vec<_>>());
+        // Local databases.
+        let locals = self.databases.read();
+        databases.extend(locals.keys().into_iter().cloned());
+
+        // Remote databases.
+        if !self.conf.store.store_address.is_empty() {
+            let remotes = self.backend.get_databases()?;
+            databases.extend(remotes.into_iter());
         }
 
-        // merge with remote meta data
-        let locals = locals.iter().map(|(k, _v)| k).collect::<HashSet<_>>();
-        let remotes = self.meta_store_cli.get_databases()?;
-        let remotes = remotes.iter().collect::<HashSet<_>>();
-        let db_names = remotes.union(&locals);
-        let mut r = db_names.into_iter().cloned().collect::<Vec<_>>();
-        r.sort();
-        Ok(r.into_iter().cloned().collect())
+        // Sort.
+        databases.sort();
+        Ok(databases)
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
@@ -187,9 +182,9 @@ impl Catalog for DatabaseCatalog {
             db_names.insert(db_name.clone());
         }
 
-        if !self.disable_remote {
+        if !self.conf.store.store_address.is_empty() {
             let mut remotes = self
-                .meta_store_cli
+                .backend
                 .get_all_tables()?
                 .into_iter()
                 // local and system dbs should shadow remote db
@@ -229,7 +224,7 @@ impl Catalog for DatabaseCatalog {
                 self.databases.write().insert(plan.db, Arc::new(database));
             }
             DatabaseEngineType::Remote => {
-                self.meta_store_cli.create_database(plan).await?;
+                self.backend.create_database(plan).await?;
             }
         }
         Ok(())
@@ -240,13 +235,13 @@ impl Catalog for DatabaseCatalog {
         let db = self.get_database(db_name);
         let database = match db {
             Err(_) => {
-                if plan.if_exists {
-                    return Ok(());
+                return if plan.if_exists {
+                    Ok(())
                 } else {
-                    return Err(ErrorCode::UnknownDatabase(format!(
+                    Err(ErrorCode::UnknownDatabase(format!(
                         "Unknown database: '{}'",
                         plan.db
-                    )));
+                    )))
                 }
             }
             Ok(v) => v,
@@ -255,7 +250,7 @@ impl Catalog for DatabaseCatalog {
         if database.is_local() {
             self.databases.write().remove(db_name);
         } else {
-            self.meta_store_cli.drop_database(plan).await?;
+            self.backend.drop_database(plan).await?;
         };
 
         Ok(())

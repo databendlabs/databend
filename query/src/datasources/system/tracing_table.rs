@@ -29,8 +29,8 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use walkdir::WalkDir;
 
+use crate::catalogs::Table;
 use crate::datasources::system::TracingTableStream;
-use crate::datasources::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct TracingTable {
@@ -106,7 +106,7 @@ impl Table for TracingTable {
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
 
-        for entry in WalkDir::new(ctx.get_config().log_dir.as_str())
+        for entry in WalkDir::new(ctx.get_config().log.log_dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
         {
             let entry = entry.map_err(|e| ErrorCode::UnknownException(format!("{}", e)))?;

@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+mod aggregator;
+mod aggregator_keys_builder;
+mod aggregator_params;
+mod aggregator_polymorphic_keys;
+mod aggregator_state;
+mod keys_ref;
 
-use crate::datasources::Table;
-
-pub trait TableFunction: Sync + Send + Table {
-    fn function_name(&self) -> &str;
-    fn db(&self) -> &str;
-
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a;
-}
+pub use aggregator::Aggregator;
+pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
+pub use aggregator_state::AggregatorState;

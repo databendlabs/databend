@@ -14,6 +14,7 @@
 //
 
 use std::convert::TryFrom;
+use std::sync::Arc;
 
 // io::ipc::write::common::{encoded_batch, DictionaryTracker, EncodedData, IpcWriteOptions}
 use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
