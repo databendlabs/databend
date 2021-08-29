@@ -20,23 +20,27 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalogs::BackendClient;
 use crate::catalogs::Database;
-use crate::catalogs::MetaClient;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
 pub struct RemoteDatabase {
     _id: MetaId,
     name: String,
-    meta_client: Arc<dyn MetaClient>,
+    backend: Arc<dyn BackendClient>,
 }
 
 impl RemoteDatabase {
-    pub fn create_new(id: MetaId, name: impl Into<String>, cli: Arc<dyn MetaClient>) -> Self {
+    pub fn create_new(
+        id: MetaId,
+        name: impl Into<String>,
+        backend: Arc<dyn BackendClient>,
+    ) -> Self {
         Self {
             _id: id,
             name: name.into(),
-            meta_client: cli,
+            backend,
         }
     }
 }
@@ -56,7 +60,7 @@ impl Database for RemoteDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        self.meta_client.get_table(&self.name, table_name)
+        self.backend.get_table(&self.name, table_name)
     }
 
     fn get_table_by_id(
@@ -64,12 +68,12 @@ impl Database for RemoteDatabase {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.meta_client
+        self.backend
             .get_table_by_id(&self.name, table_id, table_version)
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        self.meta_client.get_db_tables(&self.name)
+        self.backend.get_db_tables(&self.name)
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
@@ -77,10 +81,10 @@ impl Database for RemoteDatabase {
     }
 
     async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.meta_client.create_table(plan).await
+        self.backend.create_table(plan).await
     }
 
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.meta_client.drop_table(plan).await
+        self.backend.drop_table(plan).await
     }
 }

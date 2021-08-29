@@ -13,21 +13,21 @@
 // limitations under the License.
 //
 
+mod backend;
 mod catalog;
 mod database;
 mod impls;
 mod meta;
-mod meta_client;
 mod table;
 mod table_function;
 mod table_meta;
 
+pub use backend::BackendClient;
 pub use catalog::Catalog;
 pub use database::Database;
 pub use impls::database_catalog::*;
 pub use impls::remote_meta_store_client::RemoteMetaStoreClient;
 pub use meta::Meta;
-pub use meta_client::MetaClient;
 pub use table::Table;
 pub use table::TablePtr;
 pub use table_function::TableFunction;

@@ -28,7 +28,7 @@ use crate::catalogs::TableMeta;
 
 // Client of database meta store (the data dictionary)
 #[async_trait::async_trait]
-pub trait MetaClient: Send + Sync {
+pub trait BackendClient: Send + Sync {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
     fn get_databases(&self) -> Result<Vec<String>>;
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;

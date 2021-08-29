@@ -48,8 +48,8 @@ use common_store_api::MetaApi;
 use common_streams::SendableDataBlockStream;
 use TableEngineType::JSONEachRow;
 
+use crate::catalogs::backend::BackendClient;
 use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::catalogs::meta_client::MetaClient;
 use crate::datasources::remote::GetStoreApiClient;
 use crate::datasources::remote::StoreApis;
 

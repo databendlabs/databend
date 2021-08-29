@@ -16,6 +16,7 @@
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 
+/// The wrapper of the T with meta version.
 #[derive(Debug)]
 pub struct Meta<T> {
     t: T,

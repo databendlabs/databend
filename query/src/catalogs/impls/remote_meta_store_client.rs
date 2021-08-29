@@ -37,8 +37,8 @@ use common_planners::TableOptions;
 use common_runtime::Runtime;
 use lru::LruCache;
 
+use crate::catalogs::BackendClient;
 use crate::catalogs::Database;
-use crate::catalogs::MetaClient;
 use crate::catalogs::TableMeta;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteTable;
@@ -119,7 +119,7 @@ where T: 'static + StoreApis + Clone
 }
 
 #[async_trait::async_trait]
-impl<T> MetaClient for RemoteMetaStoreClient<T>
+impl<T> BackendClient for RemoteMetaStoreClient<T>
 where T: 'static + StoreApis + Clone
 {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
