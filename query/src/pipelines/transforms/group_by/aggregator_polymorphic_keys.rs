@@ -20,7 +20,9 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
-use common_datavalues::DFNumericType;
+use common_datavalues::prelude::DFPrimitiveArray;
+use common_datavalues::series::IntoSeries;
+use common_datavalues::DFPrimitiveType;
 
 use crate::common::HashTable;
 use crate::common::HashTableKeyable;
@@ -77,11 +79,12 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 
 impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::Eq + Clone + Debug,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T::Native>,
+    T: DFPrimitiveType,
+    T: std::cmp::Eq + Clone + Debug,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    DFPrimitiveArray<T>: IntoSeries,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
-    FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, HashKeyState = T::Native>,
+    FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, HashKeyState = T>,
 {
     type State = FixedKeysAggregatorState<T>;
     fn aggregate_state(&self) -> Self::State {

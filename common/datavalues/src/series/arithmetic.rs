@@ -70,8 +70,8 @@ impl Rem for &Series {
         // apply rem with the largest types
         let dtype = numerical_arithmetic_coercion(
             &DataValueArithmeticOperator::Modulo,
-            &self.data_type(),
-            &rhs.data_type(),
+            self.data_type(),
+            rhs.data_type(),
         )?;
 
         let (lhs, rhs) = coerce_lhs_rhs_no_op(self, rhs)?;
@@ -202,7 +202,7 @@ fn coerce_lhs_rhs(
     lhs: &Series,
     rhs: &Series,
 ) -> Result<(Series, Series)> {
-    let dtype = numerical_arithmetic_coercion(op, &lhs.data_type(), &rhs.data_type())?;
+    let dtype = numerical_arithmetic_coercion(op, lhs.data_type(), rhs.data_type())?;
 
     let mut left = lhs.clone();
     if lhs.data_type() != &dtype {
@@ -218,7 +218,7 @@ fn coerce_lhs_rhs(
 }
 
 fn coerce_lhs_rhs_no_op(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
-    let dtype = numerical_coercion(&lhs.data_type(), &rhs.data_type(), true)?;
+    let dtype = numerical_coercion(lhs.data_type(), rhs.data_type(), true)?;
 
     let mut left = lhs.clone();
     if lhs.data_type() != &dtype {
@@ -234,7 +234,7 @@ fn coerce_lhs_rhs_no_op(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> 
 }
 
 fn coerce_to_signed(lhs: &Series) -> Result<Series> {
-    let dtype = numerical_signed_coercion(&lhs.data_type())?;
+    let dtype = numerical_signed_coercion(lhs.data_type())?;
 
     let mut left = lhs.clone();
     if lhs.data_type() != &dtype {

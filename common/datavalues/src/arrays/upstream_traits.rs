@@ -167,7 +167,7 @@ where Ptr: Borrow<Series>
         // first take one to get the dtype. We panic if we have an empty iterator
         let v = it.next().unwrap();
         // We don't know the needed capacity. We arbitrarily choose an average of 5 elements per series.
-        let mut builder = get_list_builder(&v.borrow().data_type(), capacity * 5, capacity);
+        let mut builder = get_list_builder(v.borrow().data_type(), capacity * 5, capacity);
 
         builder.append_series(v.borrow());
         for s in it {
@@ -205,7 +205,7 @@ where Ptr: Borrow<Series>
         }
         let v = owned_v.borrow();
         let capacity = get_iter_capacity(&it);
-        let mut builder = get_list_builder(&v.data_type(), capacity * 5, capacity);
+        let mut builder = get_list_builder(v.data_type(), capacity * 5, capacity);
 
         // first fill all None's we encountered
         while cnt > 0 {

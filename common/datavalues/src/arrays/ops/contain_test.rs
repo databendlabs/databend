@@ -23,7 +23,7 @@ fn test_contain() -> Result<()> {
     // Create DFUint16Array
     let df_uint16_array = &DFUInt16Array::new_from_iter(1u16..4u16);
     // Create ListArray
-    let mut builder = get_list_builder(&DataType::UInt16, 3, 1);
+    let mut builder = get_list_builder(DataType::UInt16, 3, 1);
     builder.append_series(&Series::new(vec![1_u16, 2, 5]));
     builder.append_series(&Series::new(vec![0_u16, 3]));
     builder.append_series(&Series::new(vec![3_u16, 4]));
@@ -41,7 +41,7 @@ fn test_contain() -> Result<()> {
     utf8_builder.append_value("4d");
     let df_utf8_array = utf8_builder.finish();
 
-    let mut builder = get_list_builder(&DataType::Utf8, 12, 1);
+    let mut builder = get_list_builder(DataType::Utf8, 12, 1);
     builder.append_series(&Series::new(vec!["2b", "4d"]));
     builder.append_series(&Series::new(vec!["2b", "4d"]));
     builder.append_series(&Series::new(vec!["2b", "4d"]));

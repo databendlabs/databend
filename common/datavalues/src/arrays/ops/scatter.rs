@@ -188,7 +188,7 @@ impl ArrayScatter for DFListArray {
 
         let capacity = get_iter_capacity(&indices);
         for _i in 0..scattered_size {
-            let builder = get_list_builder(&self.sub_data_type(), capacity * 5, capacity);
+            let builder = get_list_builder(self.sub_data_type(), capacity * 5, capacity);
 
             builders.push(builder);
         }

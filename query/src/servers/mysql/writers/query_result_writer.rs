@@ -62,8 +62,6 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 DataType::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                 DataType::Utf8 => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                DataType::Date32 => Ok(ColumnType::MYSQL_TYPE_TIMESTAMP),
-                DataType::Date64 => Ok(ColumnType::MYSQL_TYPE_TIMESTAMP),
                 DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 _ => Err(ErrorCode::UnImplement(format!(
                     "Unsupported column type:{:?}",

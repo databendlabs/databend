@@ -81,7 +81,7 @@ fn test_scatter() -> Result<()> {
     assert_eq!(vec![b"12".to_vec(), b"32".to_vec()], values);
 
     // Test LargeListArray
-    let mut builder = get_list_builder(&DataType::UInt16, 12, 3);
+    let mut builder = get_list_builder(DataType::UInt16, 12, 3);
     builder.append_series(&Series::new(vec![1_u16, 2, 3]));
     builder.append_series(&Series::new(vec![7_u16, 8, 9]));
     builder.append_series(&Series::new(vec![10_u16, 11, 12]));

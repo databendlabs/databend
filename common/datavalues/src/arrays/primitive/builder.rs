@@ -22,9 +22,7 @@ use crate::utils::get_iter_capacity;
 use crate::utils::NoNull;
 
 pub struct PrimitiveArrayBuilder<T>
-where
-    T: DFPrimitiveType,
-    T: Default,
+where T: DFPrimitiveType
 {
     builder: MutablePrimitiveArray<T>,
 }
@@ -41,9 +39,7 @@ pub type DFFloat32ArrayBuilder = PrimitiveArrayBuilder<f32>;
 pub type DFFloat64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 
 impl<T> ArrayBuilder<T, DFPrimitiveArray<T>> for PrimitiveArrayBuilder<T>
-where
-    T: DFPrimitiveType,
-    T: Default,
+where T: DFPrimitiveType
 {
     /// Appends a value of type `T` into the builder
     #[inline]

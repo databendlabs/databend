@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 /// Trait for DFArrays that don't have null values.
 /// The result is the most efficient implementation `Iterator`, according to the number of chunks.
 pub trait IntoNoNullIterator {

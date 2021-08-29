@@ -42,8 +42,7 @@ impl Deref for Series {
 }
 
 pub trait IntoSeries {
-    fn into_series(self) -> Series
-    where Self: Sized;
+    fn into_series(self) -> Series;
 }
 
 pub trait SeriesTrait: Send + Sync + fmt::Debug {
@@ -303,8 +302,7 @@ impl Series {
 }
 
 impl IntoSeries for ArrayRef {
-    fn into_series(self) -> Series
-    where Self: Sized {
+    fn into_series(self) -> Series {
         let data_type = DataType::try_from(self.data_type()).unwrap();
         match data_type {
             DataType::Null => DFNullArray::from_arrow_array(self.as_ref()).into_series(),

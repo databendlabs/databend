@@ -20,7 +20,6 @@ use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::prelude::Series;
-use common_datavalues::DFPrimitiveType;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;

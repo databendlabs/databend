@@ -99,11 +99,11 @@ struct AggregateSumState<T> {
 }
 ```
 
-The generic `T` is from `SumT::Native`, the `Option<T>` can return `null` if nothing is passed into this function.
+The generic `T` is from `SumT`, the `Option<T>` can return `null` if nothing is passed into this function.
 
 Let's take into the function `accumulate_keys`, because this is the only function that a little hard to understand in this case.
 
-The `places` is the memory address of the first state in this row, so we can get the address of `AggregateSumState<T>` using `places[row] + offset`, then using `place.get::<AggregateSumState<SumT::Native>>()` to get the value of the corresponding state.
+The `places` is the memory address of the first state in this row, so we can get the address of `AggregateSumState<T>` using `places[row] + offset`, then using `place.get::<AggregateSumState<SumT>>()` to get the value of the corresponding state.
 
 Since we already know the array type of this function, we can safely cast it to arrow's `PrimitiveArray<T>`, here we make two branches to reduce the branch prediction of CPU, `null` and `no_null`. In `no_null` case, we just iterate the array and apply the `sum`, this is good for compiler to optimize the codes into vectorized codes.
 

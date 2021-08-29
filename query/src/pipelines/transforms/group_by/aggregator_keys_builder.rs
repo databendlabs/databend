@@ -17,9 +17,8 @@ use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::arrays::ArrayBuilder;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::prelude::Series;
-use common_datavalues::DFNumericType;
+use common_datavalues::prelude::*;
+use common_datavalues::DFPrimitiveType;
 
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
@@ -30,23 +29,24 @@ pub trait KeysArrayBuilder<Value> {
 }
 
 pub struct FixedKeysArrayBuilder<T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
     pub inner_builder: PrimitiveArrayBuilder<T>,
 }
 
-impl<T> KeysArrayBuilder<T::Native> for FixedKeysArrayBuilder<T>
+impl<T> KeysArrayBuilder<T> for FixedKeysArrayBuilder<T>
 where
-    T: DFNumericType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T::Native>,
+    T: DFPrimitiveType,
+    DFPrimitiveArray<T>: IntoSeries,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
     #[inline]
     fn finish(mut self) -> Series {
-        self.inner_builder.finish().array.into_series()
+        self.inner_builder.finish().into_series()
     }
 
     #[inline]
-    fn append_value(&mut self, v: &T::Native) {
+    fn append_value(&mut self, v: &T) {
         self.inner_builder.append_value(*v)
     }
 }
@@ -57,7 +57,7 @@ pub struct SerializedKeysArrayBuilder {
 
 impl KeysArrayBuilder<KeysRef> for SerializedKeysArrayBuilder {
     fn finish(mut self) -> Series {
-        self.inner_builder.finish().array.into_series()
+        self.inner_builder.finish().into_series()
     }
 
     fn append_value(&mut self, v: &KeysRef) {

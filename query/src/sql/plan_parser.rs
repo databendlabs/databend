@@ -897,19 +897,6 @@ impl PlanParser {
             sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(Expression::create_literal(
                 DataValue::Utf8(Some(value.clone())),
             )),
-            sqlparser::ast::Value::Interval {
-                value,
-                leading_field,
-                leading_precision,
-                last_field,
-                fractional_seconds_precision,
-            } => SQLCommon::make_sql_interval_to_literal(
-                value,
-                leading_field,
-                leading_precision,
-                last_field,
-                fractional_seconds_precision,
-            ),
             sqlparser::ast::Value::Boolean(b) => {
                 Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
             }
