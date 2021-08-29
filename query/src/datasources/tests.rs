@@ -18,15 +18,15 @@ use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::DatabaseCatalog;
+use crate::tests::try_create_catalog;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_datasource() -> Result<()> {
-    let datasource = DatabaseCatalog::try_create()?;
+    let catalog = try_create_catalog()?;
 
     // Table check.
-    datasource.get_table("system", "numbers_mt")?;
-    if let Err(e) = datasource.get_table("system", "numbersxx") {
+    catalog.get_table("system", "numbers_mt")?;
+    if let Err(e) = catalog.get_table("system", "numbersxx") {
         let expect = "Code: 25, displayText = Unknown table: \'numbersxx\'.";
         let actual = format!("{}", e);
         assert_eq!(expect, actual);
@@ -35,7 +35,7 @@ async fn test_datasource() -> Result<()> {
     // Database tests.
     {
         // Create database.
-        datasource
+        catalog
             .create_database(CreateDatabasePlan {
                 if_not_exists: false,
                 db: "test_db".to_string(),
@@ -45,11 +45,11 @@ async fn test_datasource() -> Result<()> {
             .await?;
 
         // Check
-        let result = datasource.get_database("test_db");
+        let result = catalog.get_database("test_db");
         assert_eq!(true, result.is_ok());
 
         // Drop database.
-        datasource
+        catalog
             .drop_database(DropDatabasePlan {
                 if_exists: false,
                 db: "test_db".to_string(),
@@ -57,7 +57,7 @@ async fn test_datasource() -> Result<()> {
             .await?;
 
         // Check.
-        let result = datasource.get_database("test_db");
+        let result = catalog.get_database("test_db");
         assert_eq!(true, result.is_err());
     }
 

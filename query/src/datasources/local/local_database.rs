@@ -47,6 +47,7 @@ impl LocalDatabase {
             tbl_id_seq: AtomicU64::new(LOCAL_TBL_ID_BEGIN),
         }
     }
+
     fn next_db_id(&self) -> u64 {
         // `fetch_add` wraps around on overflow, but as LOCAL_TBL_ID_BEGIN
         // is defined as (1 << 62) + 10000, there are about 13 quintillion ids are reserved

@@ -25,7 +25,7 @@ use crate::api::rpc::DatafuseQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
-use crate::tests::try_create_sessions;
+use crate::tests::try_create_session_mgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
@@ -53,7 +53,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
         let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
 
-        let sessions = try_create_sessions()?;
+        let sessions = try_create_session_mgr(None)?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
         flight_dispatcher.shuffle_action(
@@ -95,7 +95,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
         let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
 
-        let sessions = try_create_sessions()?;
+        let sessions = try_create_session_mgr(None)?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
         flight_dispatcher.shuffle_action(

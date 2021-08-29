@@ -21,15 +21,17 @@ use crate::configs::Config;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
 
-pub fn try_create_sessions() -> Result<SessionManagerRef> {
-    let mut config = Config::default();
-    let cluster = Cluster::empty();
-
+pub fn try_create_session_mgr(max_active_sessions: Option<u64>) -> Result<SessionManagerRef> {
+    let mut conf = Config::default();
     // Setup log dir to the tests directory.
-    config.log.log_dir = env::current_dir()?
+    conf.log.log_dir = env::current_dir()?
         .join("../tests/data/logs")
         .display()
         .to_string();
+    // Set max active session number if have.
+    if let Some(max) = max_active_sessions {
+        conf.query.max_active_sessions = max;
+    }
 
-    SessionManager::from_conf(config, cluster)
+    SessionManager::from_conf(conf, Cluster::empty())
 }
