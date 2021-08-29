@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::catalogs::DatabaseCatalog;
-use crate::catalogs::RemoteMetaStoreClient;
+use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::impls::RemoteMetaStoreClient;
 use crate::configs::Config;
 use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteFactory;

@@ -27,8 +27,8 @@ use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::future::Either;
 use metrics::counter;
 
-use crate::catalogs::DatabaseCatalog;
-use crate::catalogs::RemoteMetaStoreClient;
+use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::impls::RemoteMetaStoreClient;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::local::LocalFactory;

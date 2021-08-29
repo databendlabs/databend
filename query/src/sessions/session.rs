@@ -21,7 +21,7 @@ use common_infallible::Mutex;
 use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::context_shared::DatafuseQueryContextShared;

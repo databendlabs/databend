@@ -22,14 +22,14 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalogs::impls::SYS_TBL_ID_BEGIN;
+use crate::catalogs::impls::SYS_TBL_ID_END;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
-use crate::catalogs::SYS_TBL_ID_BEGIN;
-use crate::catalogs::SYS_TBL_ID_END;
 use crate::datasources::system;
 
 pub struct SystemDatabase {

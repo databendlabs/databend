@@ -23,7 +23,7 @@ use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::Session;

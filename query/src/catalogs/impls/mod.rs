@@ -16,5 +16,10 @@
 #[cfg(test)]
 mod remote_meta_store_client_test;
 
-pub(crate) mod database_catalog;
-pub(crate) mod remote_meta_store_client;
+mod backend;
+mod database_catalog;
+mod remote_meta_store_client;
+
+pub use backend::BackendClient;
+pub use database_catalog::*;
+pub use remote_meta_store_client::RemoteMetaStoreClient;

@@ -26,8 +26,8 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 
-use crate::catalogs::backend::BackendClient;
 use crate::catalogs::catalog::Catalog;
+use crate::catalogs::impls::BackendClient;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
