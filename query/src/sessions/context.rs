@@ -33,8 +33,8 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
-use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;

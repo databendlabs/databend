@@ -37,7 +37,7 @@ use common_planners::TableOptions;
 use common_runtime::Runtime;
 use lru::LruCache;
 
-use crate::catalogs::BackendClient;
+use crate::catalogs::impls::BackendClient;
 use crate::catalogs::Database;
 use crate::catalogs::TableMeta;
 use crate::datasources::remote::RemoteDatabase;

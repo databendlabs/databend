@@ -25,11 +25,11 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
+use crate::catalogs::impls::LOCAL_TBL_ID_BEGIN;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
-use crate::catalogs::LOCAL_TBL_ID_BEGIN;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::MemoryTable;
 use crate::datasources::local::NullTable;
