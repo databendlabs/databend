@@ -15,5 +15,5 @@
 
 pub(crate) mod catalog;
 pub(crate) mod impls;
-pub(crate) mod meta_store_client;
-pub(crate) mod utils;
+pub(crate) mod meta;
+pub(crate) mod meta_client;

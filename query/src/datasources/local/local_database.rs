@@ -26,9 +26,9 @@ use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
 use crate::catalogs::impls::database_catalog::LOCAL_TBL_ID_BEGIN;
-use crate::catalogs::utils::InMemoryMetas;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::meta::InMemoryMetas;
+use crate::catalogs::meta::TableFunctionMeta;
+use crate::catalogs::meta::TableMeta;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::MemoryTable;
 use crate::datasources::local::NullTable;

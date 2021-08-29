@@ -34,8 +34,8 @@ use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::meta::TableFunctionMeta;
+use crate::catalogs::meta::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::DatabaseCatalog;

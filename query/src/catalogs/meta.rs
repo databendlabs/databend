@@ -14,8 +14,8 @@
 //
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use common_datavalues::prelude::Arc;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 

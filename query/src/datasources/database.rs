@@ -20,8 +20,8 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::meta::TableFunctionMeta;
+use crate::catalogs::meta::TableMeta;
 
 #[async_trait::async_trait]
 pub trait Database: Sync + Send {

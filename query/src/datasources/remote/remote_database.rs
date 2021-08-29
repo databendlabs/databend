@@ -20,23 +20,19 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta_store_client::DBMetaStoreClient;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::meta::TableFunctionMeta;
+use crate::catalogs::meta::TableMeta;
+use crate::catalogs::meta_client::MetaClient;
 use crate::datasources::Database;
 
 pub struct RemoteDatabase {
     _id: MetaId,
     name: String,
-    meta_client: Arc<dyn DBMetaStoreClient>,
+    meta_client: Arc<dyn MetaClient>,
 }
 
 impl RemoteDatabase {
-    pub fn create_new(
-        id: MetaId,
-        name: impl Into<String>,
-        cli: Arc<dyn DBMetaStoreClient>,
-    ) -> Self {
+    pub fn create_new(id: MetaId, name: impl Into<String>, cli: Arc<dyn MetaClient>) -> Self {
         Self {
             _id: id,
             name: name.into(),

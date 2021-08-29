@@ -49,7 +49,7 @@ use common_streams::SendableDataBlockStream;
 use TableEngineType::JSONEachRow;
 
 use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::catalogs::meta_store_client::DBMetaStoreClient;
+use crate::catalogs::meta_client::MetaClient;
 use crate::datasources::remote::GetStoreApiClient;
 use crate::datasources::remote::StoreApis;
 

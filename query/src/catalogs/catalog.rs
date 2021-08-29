@@ -20,8 +20,8 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::meta::TableFunctionMeta;
+use crate::catalogs::meta::TableMeta;
 use crate::datasources::Database;
 
 #[async_trait::async_trait]

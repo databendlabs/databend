@@ -28,9 +28,9 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::catalogs::meta_store_client::DBMetaStoreClient;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::meta::TableFunctionMeta;
+use crate::catalogs::meta::TableMeta;
+use crate::catalogs::meta_client::MetaClient;
 use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::LocalFactory;
@@ -52,7 +52,7 @@ pub struct DatabaseCatalog {
     conf: Config,
     databases: RwLock<HashMap<String, Arc<dyn Database>>>,
     table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
-    meta_store_cli: Arc<dyn DBMetaStoreClient>,
+    meta_client: Arc<dyn MetaClient>,
 }
 
 impl DatabaseCatalog {
@@ -69,13 +69,13 @@ impl DatabaseCatalog {
 
     pub fn try_create_with_config(
         conf: Config,
-        meta_store_cli: Arc<dyn DBMetaStoreClient>,
+        meta_store_cli: Arc<dyn MetaClient>,
     ) -> Result<Self> {
         let mut datasource = DatabaseCatalog {
             conf,
             databases: Default::default(),
             table_functions: Default::default(),
-            meta_store_cli,
+            meta_client: meta_store_cli,
         };
 
         datasource.register_system_database()?;
@@ -127,7 +127,7 @@ impl Catalog for DatabaseCatalog {
         self.databases.read().get(db_name).map_or_else(
             || {
                 if !self.conf.store.store_address.is_empty() {
-                    self.meta_store_cli.get_database(db_name)
+                    self.meta_client.get_database(db_name)
                 } else {
                     Err(ErrorCode::UnknownDatabase(format!(
                         "Unknown database {}",
@@ -148,7 +148,7 @@ impl Catalog for DatabaseCatalog {
 
         // Remote databases.
         if !self.conf.store.store_address.is_empty() {
-            let remotes = self.meta_store_cli.get_databases()?;
+            let remotes = self.meta_client.get_databases()?;
             databases.extend(remotes.into_iter());
         }
 
@@ -187,7 +187,7 @@ impl Catalog for DatabaseCatalog {
 
         if !self.conf.store.store_address.is_empty() {
             let mut remotes = self
-                .meta_store_cli
+                .meta_client
                 .get_all_tables()?
                 .into_iter()
                 // local and system dbs should shadow remote db
@@ -227,7 +227,7 @@ impl Catalog for DatabaseCatalog {
                 self.databases.write().insert(plan.db, Arc::new(database));
             }
             DatabaseEngineType::Remote => {
-                self.meta_store_cli.create_database(plan).await?;
+                self.meta_client.create_database(plan).await?;
             }
         }
         Ok(())
@@ -253,7 +253,7 @@ impl Catalog for DatabaseCatalog {
         if database.is_local() {
             self.databases.write().remove(db_name);
         } else {
-            self.meta_store_cli.drop_database(plan).await?;
+            self.meta_client.drop_database(plan).await?;
         };
 
         Ok(())

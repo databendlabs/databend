@@ -24,9 +24,9 @@ use common_planners::DropTablePlan;
 
 use crate::catalogs::impls::database_catalog::SYS_TBL_ID_BEGIN;
 use crate::catalogs::impls::database_catalog::SYS_TBL_ID_END;
-use crate::catalogs::utils::InMemoryMetas;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::meta::InMemoryMetas;
+use crate::catalogs::meta::TableFunctionMeta;
+use crate::catalogs::meta::TableMeta;
 use crate::datasources::system;
 use crate::datasources::Database;
 use crate::datasources::Table;
