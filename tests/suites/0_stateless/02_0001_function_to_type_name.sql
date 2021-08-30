@@ -28,3 +28,8 @@ select 'UInt64 OP UInt8',  toTypeName(65536 * 65536 + 2),             toTypeName
 select 'UInt64 OP UInt16', toTypeName(65536 * 65536 + 256),           toTypeName(65536 * 65536 - 256),            toTypeName(65536 * 65536 * 256),            toTypeName(65536 * 65536 / 256) ;
 select 'UInt64 OP UInt32', toTypeName(65536 * 65536 + 65536),         toTypeName(65536 * 65536 - 65536),          toTypeName(65536 * 65536 * 65536),          toTypeName(65536 * 65536 / 65536) ;
 select 'UInt64 OP UInt64', toTypeName(65536 * 65536 + 65536 * 65536), toTypeName(65536 * 65536 - 65536 * 65536),  toTypeName(65536 * 65536 * 65536),  toTypeName(65536 * 65536 / (65536 * 65536)) ;
+
+select '=== TEST_datetimes';
+
+select toTypeName(now()) == 'DateTime32';
+select toTypeName(today()) == 'Date16';

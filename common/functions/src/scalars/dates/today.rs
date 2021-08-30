@@ -49,7 +49,7 @@ impl Function for TodayFunction {
         Ok(false)
     }
 
-    fn eval(&self, _columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
 

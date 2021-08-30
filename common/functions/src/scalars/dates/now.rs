@@ -46,7 +46,7 @@ impl Function for NowFunction {
         Ok(false)
     }
 
-    fn eval(&self, _columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let utc: DateTime<Utc> = Utc::now();
         let value = DataValue::UInt32(Some((utc.timestamp_millis() / 1000) as u32));
         Ok(DataColumn::Constant(value, input_rows))
