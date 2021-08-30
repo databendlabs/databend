@@ -18,8 +18,8 @@ use std::ops::AddAssign;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute::aggregate;
+use common_arrow::arrow::compute::aggregate::sum_primitive;
 use common_arrow::arrow::types::simd::Simd;
-use common_arrow::arrow::types::NativeType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -71,32 +71,29 @@ pub trait ArrayAgg: Debug {
     }
 }
 
-impl<T> ArrayAgg for DataArray<T>
+impl<T> ArrayAgg for DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: NativeType
+    T: DFPrimitiveType
         + Simd
         + PartialOrd
         + Num
         + NumCast
         + Zero
         + Into<DataValue>
-        + AsPrimitive<<T::LargestType as DFPrimitiveType>::Native>,
+        + AsPrimitive<T::LargestType>,
 
-    <T::LargestType as DFPrimitiveType>::Native: Into<DataValue> + AddAssign + Default,
+    T::LargestType: Into<DataValue> + AddAssign + Default,
 
-    <T::Native as Simd>::Simd: Add<Output = <T::Native as Simd>::Simd>
-        + aggregate::Sum<T::Native>
-        + aggregate::SimdOrd<T::Native>,
-    Option<T::Native>: Into<DataValue>,
+    <T as Simd>::Simd: Add<Output = <T as Simd>::Simd> + aggregate::Sum<T> + aggregate::SimdOrd<T>,
+    Option<T>: Into<DataValue>,
 {
     fn sum(&self) -> Result<DataValue> {
-        let array = self.downcast_ref();
+        let array = self.inner();
         // if largest type is self and there is nullable, we just use simd
         // sum is faster in auto vectorized than manual simd
         let null_count = self.null_count();
-        if null_count > 0 && (T::SIZE == <T::LargestType as DFNumericType>::SIZE) {
-            return Ok(match aggregate::sum(array) {
+        if null_count > 0 && (T::SIZE == <T::LargestType as DFPrimitiveType>::SIZE) {
+            return Ok(match sum_primitive(array) {
                 Some(x) => x.into(),
                 None => DataValue::from(self.data_type()),
             });
@@ -106,7 +103,7 @@ where
             return Ok(DataValue::from(self.data_type()));
         }
 
-        let mut sum = <T::LargestType as DFPrimitiveType>::Native::default();
+        let mut sum = <T::LargestType>::default();
         if null_count == 0 {
             //fast path
             array.values().as_slice().iter().for_each(|f| {
@@ -135,7 +132,7 @@ where
         let null_count = self.null_count();
         if null_count == 0 {
             let c = self
-                .downcast_ref()
+                .array
                 .values()
                 .as_slice()
                 .iter()
@@ -145,7 +142,7 @@ where
                 None => DataValue::from(self.data_type()),
             });
         }
-        Ok(match aggregate::min_primitive(self.downcast_ref()) {
+        Ok(match aggregate::min_primitive(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -159,7 +156,7 @@ where
         let null_count = self.null_count();
         if null_count == 0 {
             let c = self
-                .downcast_ref()
+                .inner()
                 .values()
                 .as_slice()
                 .iter()
@@ -170,7 +167,7 @@ where
             });
         }
 
-        Ok(match aggregate::max_primitive(self.downcast_ref()) {
+        Ok(match aggregate::max_primitive(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -189,7 +186,7 @@ where
             .reduce(|acc, (idx, val)| if acc.1 > val { (idx, val) } else { acc });
 
         Ok(match value {
-            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
+            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), (*value).into()]),
             None => DataValue::Struct(vec![(0_u64).into(), DataValue::from(self.data_type())]),
         })
     }
@@ -207,7 +204,7 @@ where
             .reduce(|acc, (idx, val)| if acc.1 < val { (idx, val) } else { acc });
 
         Ok(match value {
-            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
+            Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), (*value).into()]),
             None => DataValue::Struct(vec![(0_u64).into(), DataValue::from(self.data_type())]),
         })
     }
@@ -218,7 +215,7 @@ impl ArrayAgg for DFBooleanArray {
         if self.all_is_null() {
             return Ok(DataValue::Boolean(None));
         }
-        let sum = self.downcast_iter().fold(0, |acc: u64, x| match x {
+        let sum = self.into_iter().fold(0, |acc: u64, x| match x {
             Some(v) => acc + v as u64,
             None => acc,
         });
@@ -231,7 +228,7 @@ impl ArrayAgg for DFBooleanArray {
             return Ok(DataValue::Boolean(None));
         }
 
-        Ok(match aggregate::min_boolean(self.downcast_ref()) {
+        Ok(match aggregate::min_boolean(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -242,7 +239,7 @@ impl ArrayAgg for DFBooleanArray {
             return Ok(DataValue::Boolean(None));
         }
 
-        Ok(match aggregate::max_boolean(self.downcast_ref()) {
+        Ok(match aggregate::max_boolean(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -303,7 +300,7 @@ impl ArrayAgg for DFUtf8Array {
             return Ok(DataValue::Utf8(None));
         }
 
-        Ok(match aggregate::min_string(self.downcast_ref()) {
+        Ok(match aggregate::min_string(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -314,7 +311,7 @@ impl ArrayAgg for DFUtf8Array {
             return Ok(DataValue::Utf8(None));
         }
 
-        Ok(match aggregate::max_string(self.downcast_ref()) {
+        Ok(match aggregate::max_string(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })

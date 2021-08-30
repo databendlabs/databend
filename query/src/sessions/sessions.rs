@@ -27,19 +27,20 @@ use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::future::Either;
 use metrics::counter;
 
-use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::clusters::Cluster;
+use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::impls::RemoteMetaStoreClient;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteFactory;
-use crate::datasources::DatabaseCatalog;
+use crate::datasources::system::SystemFactory;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) cluster: ClusterRef,
-    pub(in crate::sessions) datasource: Arc<DatabaseCatalog>,
+    pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -48,29 +49,25 @@ pub struct SessionManager {
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn try_create(max_mysql_sessions: u64) -> Result<SessionManagerRef> {
-        Ok(Arc::new(SessionManager {
-            conf: Config::default(),
-            cluster: Cluster::empty(),
-            datasource: Arc::new(DatabaseCatalog::try_create()?),
-
-            max_sessions: max_mysql_sessions as usize,
-            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(
-                max_mysql_sessions as usize,
-            ))),
-        }))
-    }
-
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
-        let max_active_sessions = conf.max_active_sessions as usize;
+        let max_active_sessions = conf.query.max_active_sessions as usize;
         let meta_store_cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
             RemoteFactory::new(&conf).store_client_provider(),
         )));
+        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(
+            conf.clone(),
+            meta_store_cli,
+        )?);
+
+        // Register system databases.
+        let system = SystemFactory::create().load_databases()?;
+        catalog.register_databases(system)?;
+        // Register local databases(including default database).
+        let local = LocalFactory::create().load_databases()?;
+        catalog.register_databases(local)?;
+
         Ok(Arc::new(SessionManager {
-            datasource: Arc::new(DatabaseCatalog::try_create_with_config(
-                conf.disable_remote_catalog,
-                meta_store_cli,
-            )?),
+            catalog,
             conf,
             cluster,
             max_sessions: max_active_sessions,
@@ -86,8 +83,8 @@ impl SessionManager {
         self.cluster.clone()
     }
 
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.datasource.clone()
+    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
+        self.catalog.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {

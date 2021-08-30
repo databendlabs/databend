@@ -62,6 +62,9 @@ pub enum Expression {
     Literal {
         value: DataValue,
         column_name: Option<String>,
+
+        // Logic data_type for this literal
+        data_type: DataType,
     },
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
@@ -117,9 +120,19 @@ pub enum Expression {
 
 impl Expression {
     pub fn create_literal(value: DataValue) -> Expression {
+        let data_type = value.data_type();
         Expression::Literal {
             value,
             column_name: None,
+            data_type,
+        }
+    }
+
+    pub fn create_literal_with_type(value: DataValue, data_type: DataType) -> Expression {
+        Expression::Literal {
+            value,
+            column_name: None,
+            data_type,
         }
     }
 
@@ -127,7 +140,9 @@ impl Expression {
         match self {
             Expression::Alias(name, _expr) => name.clone(),
             Expression::Column(name) => name.clone(),
-            Expression::Literal { value, column_name } => match column_name {
+            Expression::Literal {
+                value, column_name, ..
+            } => match column_name {
                 Some(name) => name.clone(),
                 None => {
                     if let DataValue::Utf8(Some(_)) = value {
@@ -235,7 +250,7 @@ impl Expression {
         match self {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
-            Expression::Literal { value, .. } => Ok(value.data_type()),
+            Expression::Literal { data_type, .. } => Ok(data_type.clone()),
             Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
                 Ok(Self::to_scalar_subquery_type(query_plan))

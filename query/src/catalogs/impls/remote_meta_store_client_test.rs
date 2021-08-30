@@ -13,10 +13,10 @@
 // limitations under the License.
 //
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
-use common_datavalues::prelude::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -48,8 +48,8 @@ use common_store_api::MetaApi;
 use common_streams::SendableDataBlockStream;
 use TableEngineType::JSONEachRow;
 
-use crate::catalogs::impls::remote_meta_store_client::RemoteMetaStoreClient;
-use crate::catalogs::meta_store_client::DBMetaStoreClient;
+use crate::catalogs::impls::BackendClient;
+use crate::catalogs::impls::RemoteMetaStoreClient;
 use crate::datasources::remote::GetStoreApiClient;
 use crate::datasources::remote::StoreApis;
 
@@ -369,7 +369,7 @@ fn test_get_table() -> common_exception::Result<()> {
     assert!(res.is_ok());
     let res = res?;
     assert_eq!(res.meta_id(), 0);
-    // table version not implemented in persistent store yet, we fake this shortcoming as well
+    // table version not implemented in persistent store yet, we fake it as well
     assert_eq!(res.meta_ver(), None);
 
     // table does not exist

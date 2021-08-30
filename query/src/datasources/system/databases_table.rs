@@ -25,8 +25,8 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
-use crate::datasources::Table;
+use crate::catalogs::Catalog;
+use crate::catalogs::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct DatabasesTable {
@@ -91,7 +91,7 @@ impl Table for DatabasesTable {
         ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        ctx.get_datasource()
+        ctx.get_catalog()
             .get_databases()
             .map(|databases_name| -> SendableDataBlockStream {
                 let databases_name_str: Vec<&str> = databases_name

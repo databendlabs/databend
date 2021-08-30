@@ -15,6 +15,7 @@
 use std::alloc::Layout;
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DFTryFrom;
@@ -32,13 +33,13 @@ use crate::dispatch_numeric_types;
 
 // count = 0 means it's all nullable
 // so we do not need option like sum
-struct AggregateAvgState<T: BinarySer + BinaryDe> {
+struct AggregateAvgState<T: DFPrimitiveType> {
     pub value: T,
     pub count: u64,
 }
 
 impl<T> AggregateAvgState<T>
-where T: std::ops::Add<Output = T> + Clone + Copy + BinarySer + BinaryDe
+where T: std::ops::Add<Output = T> + DFPrimitiveType
 {
     #[inline(always)]
     fn add(&mut self, value: &Option<T>, count: u64) {
@@ -65,30 +66,9 @@ pub struct AggregateAvgFunction<T, SumT> {
 
 impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
 where
-    T: DFNumericType,
-    SumT: DFNumericType,
-    T::Native: AsPrimitive<SumT::Native>
-        + NumCast
-        + DFTryFrom<DataValue>
-        + Clone
-        + Copy
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
-    SumT::Native: NumCast
-        + DFTryFrom<DataValue>
-        + Into<DataValue>
-        + Clone
-        + Copy
-        + Default
-        + std::ops::Add<Output = SumT::Native>
-        + BinarySer
-        + BinaryDe
-        + Send
-        + Sync
-        + 'static,
-    Option<SumT::Native>: Into<DataValue>,
+    T: DFPrimitiveType + AsPrimitive<SumT>,
+    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
+    Option<SumT>: Into<DataValue>,
 {
     fn name(&self) -> &str {
         "AggregateAvgFunction"
@@ -103,21 +83,21 @@ where
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateAvgState::<SumT::Native> {
-            value: SumT::Native::default(),
+        place.write(|| AggregateAvgState::<SumT> {
+            value: SumT::default(),
             count: 0,
         });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateAvgState<SumT::Native>>()
+        Layout::new::<AggregateAvgState<SumT>>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT::Native>>();
+        let state = place.get::<AggregateAvgState<SumT>>();
         let value = arrays[0].sum()?;
         let count = arrays[0].len() - arrays[0].null_count();
-        let opt_sum: Option<SumT::Native> = DFTryFrom::try_from(value).ok();
+        let opt_sum: Option<SumT> = DFTryFrom::try_from(value).ok();
 
         state.add(&opt_sum, count as u64);
         Ok(())
@@ -130,11 +110,11 @@ where
         arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()> {
-        let array: &DataArray<T> = arrays[0].static_cast();
+        let array: &DFPrimitiveArray<T> = arrays[0].static_cast();
 
         array.into_iter().zip(places.iter()).for_each(|(v, place)| {
             let place = place.next(offset);
-            let state = place.get::<AggregateAvgState<SumT::Native>>();
+            let state = place.get::<AggregateAvgState<SumT>>();
             state.add(&v.map(|v| v.as_()), 1);
         });
 
@@ -142,27 +122,27 @@ where
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT::Native>>();
+        let state = place.get::<AggregateAvgState<SumT>>();
         state.value.serialize_to_buf(writer)?;
         state.count.serialize_to_buf(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT::Native>>();
-        state.value = SumT::Native::deserialize(reader)?;
+        let state = place.get::<AggregateAvgState<SumT>>();
+        state.value = SumT::deserialize(reader)?;
         state.count = u64::deserialize(reader)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateAvgState<SumT::Native>>();
-        let rhs = rhs.get::<AggregateAvgState<SumT::Native>>();
+        let state = place.get::<AggregateAvgState<SumT>>();
+        let rhs = rhs.get::<AggregateAvgState<SumT>>();
         state.merge(rhs);
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = place.get::<AggregateAvgState<SumT::Native>>();
+        let state = place.get::<AggregateAvgState<SumT>>();
 
         if state.count == 0 {
             return Ok(DataValue::Float64(None));
@@ -180,30 +160,9 @@ impl<T, SumT> fmt::Display for AggregateAvgFunction<T, SumT> {
 
 impl<T, SumT> AggregateAvgFunction<T, SumT>
 where
-    T: DFNumericType,
-    SumT: DFNumericType,
-    T::Native: AsPrimitive<SumT::Native>
-        + NumCast
-        + DFTryFrom<DataValue>
-        + Clone
-        + Copy
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
-    SumT::Native: NumCast
-        + DFTryFrom<DataValue>
-        + Into<DataValue>
-        + Clone
-        + Copy
-        + Default
-        + std::ops::Add<Output = SumT::Native>
-        + BinarySer
-        + BinaryDe
-        + Send
-        + Sync
-        + 'static,
-    Option<SumT::Native>: Into<DataValue>,
+    T: DFPrimitiveType + AsPrimitive<SumT>,
+    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
+    Option<SumT>: Into<DataValue>,
 {
     pub fn try_create(
         display_name: &str,
@@ -221,7 +180,7 @@ where
 macro_rules! creator {
     ($T: ident, $data_type: expr, $display_name: expr, $arguments: expr) => {
         if $T::data_type() == $data_type {
-            return AggregateAvgFunction::<$T, <$T as DFNumericType>::LargestType>::try_create(
+            return AggregateAvgFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
                 $display_name,
                 $arguments,
             );

@@ -57,9 +57,9 @@ impl TryGetStoreClient for ClientProvider {
         };
 
         let client = StoreClient::with_tls_conf(
-            &self.conf.store_api_address,
-            self.conf.store_api_username.as_ref(),
-            self.conf.store_api_password.as_ref(),
+            &self.conf.store.store_address,
+            self.conf.store.store_username.as_ref(),
+            self.conf.store.store_password.as_ref(),
             tls_conf,
         )
         .await

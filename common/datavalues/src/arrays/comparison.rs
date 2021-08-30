@@ -13,23 +13,20 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::Arc;
 
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::comparison::boolean_compare_scalar;
 use common_arrow::arrow::compute::comparison::compare;
 use common_arrow::arrow::compute::comparison::primitive_compare_scalar;
 use common_arrow::arrow::compute::comparison::utf8_compare_scalar;
 use common_arrow::arrow::compute::comparison::Operator;
+use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::like;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::Num;
 use num::NumCast;
 
-use super::DataArray;
 use crate::prelude::*;
-use crate::series::Series;
 
 pub trait NumComp: Num + NumCast + PartialOrd {}
 
@@ -108,21 +105,18 @@ pub trait ArrayCompare<Rhs>: Debug {
     }
 }
 
-impl<T> DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: NumComp,
+impl<T> DFPrimitiveArray<T>
+where T: DFPrimitiveType + NumComp + Simd8
 {
     /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
     /// the comparison operator.
-    fn comparison(&self, rhs: &DataArray<T>, op: Operator) -> Result<DFBooleanArray> {
-        let (lhs, rhs) = (self.array.as_ref(), rhs.array.as_ref());
-        let array = Arc::new(compare(lhs, rhs, op)?) as ArrayRef;
+    fn comparison(&self, rhs: &DFPrimitiveArray<T>, op: Operator) -> Result<DFBooleanArray> {
+        let array = compare(&self.array, &rhs.array, op)?;
         Ok(array.into())
     }
 
-    fn comparison_scalar(&self, rhs: T::Native, op: Operator) -> Result<DFBooleanArray> {
-        let array = Arc::new(primitive_compare_scalar(self.as_ref(), rhs, op)?) as ArrayRef;
+    fn comparison_scalar(&self, rhs: T, op: Operator) -> Result<DFBooleanArray> {
+        let array = primitive_compare_scalar(&self.array, rhs, op);
         Ok(array.into())
     }
 }
@@ -145,32 +139,32 @@ macro_rules! impl_cmp_common {
     }};
 }
 
-impl<T> ArrayCompare<&DataArray<T>> for DataArray<T>
+impl<T> ArrayCompare<&DFPrimitiveArray<T>> for DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: NumComp,
+    T: DFPrimitiveType,
+    T: NumComp + Simd8,
 {
-    fn eq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
+    fn eq(&self, rhs: &DFPrimitiveArray<T>) -> Result<DFBooleanArray> {
         impl_cmp_common! {self, rhs, Eq, eq}
     }
 
-    fn neq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
+    fn neq(&self, rhs: &DFPrimitiveArray<T>) -> Result<DFBooleanArray> {
         impl_cmp_common! {self, rhs, Neq, neq}
     }
 
-    fn gt(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
+    fn gt(&self, rhs: &DFPrimitiveArray<T>) -> Result<DFBooleanArray> {
         impl_cmp_common! {self, rhs, Gt, lt_eq}
     }
 
-    fn gt_eq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
+    fn gt_eq(&self, rhs: &DFPrimitiveArray<T>) -> Result<DFBooleanArray> {
         impl_cmp_common! {self, rhs, GtEq, lt}
     }
 
-    fn lt(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
+    fn lt(&self, rhs: &DFPrimitiveArray<T>) -> Result<DFBooleanArray> {
         impl_cmp_common! {self, rhs, Lt, gt_eq}
     }
 
-    fn lt_eq(&self, rhs: &DataArray<T>) -> Result<DFBooleanArray> {
+    fn lt_eq(&self, rhs: &DFPrimitiveArray<T>) -> Result<DFBooleanArray> {
         impl_cmp_common! {self, rhs, LtEq, gt}
     }
 }
@@ -179,13 +173,12 @@ impl DFBooleanArray {
     /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
     /// the comparison operator.
     fn comparison(&self, rhs: &DFBooleanArray, op: Operator) -> Result<DFBooleanArray> {
-        let (lhs, rhs) = (self.array.as_ref(), rhs.array.as_ref());
-        let array = Arc::new(compare(lhs, rhs, op)?) as ArrayRef;
+        let array = compare(&self.array, &rhs.array, op)?;
         Ok(array.into())
     }
 
     fn comparison_scalar(&self, rhs: bool, op: Operator) -> Result<DFBooleanArray> {
-        let array = Arc::new(boolean_compare_scalar(self.as_ref(), rhs, op)?) as ArrayRef;
+        let array = boolean_compare_scalar(&self.array, rhs, op);
         Ok(array.into())
     }
 }
@@ -218,35 +211,34 @@ impl ArrayCompare<&DFBooleanArray> for DFBooleanArray {
 
 impl DFUtf8Array {
     fn comparison(&self, rhs: &DFUtf8Array, op: Operator) -> Result<DFBooleanArray> {
-        let (lhs, rhs) = (self.array.as_ref(), rhs.array.as_ref());
-        let array = Arc::new(compare(lhs, rhs, op)?) as ArrayRef;
+        let array = compare(&self.array, &rhs.array, op)?;
         Ok(array.into())
     }
 
     fn comparison_scalar(&self, rhs: &str, op: Operator) -> Result<DFBooleanArray> {
-        let array = Arc::new(utf8_compare_scalar(self.as_ref(), rhs, op)) as ArrayRef;
+        let array = utf8_compare_scalar(&self.array, rhs, op);
         Ok(array.into())
     }
 
     // pub fn like_utf8<O: Offset>(lhs: &Utf8Array<O>, rhs: &Utf8Array<O>)
     fn like(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        let array = like::like_utf8(self.downcast_ref(), rhs.downcast_ref())?;
-        Ok(DFBooleanArray::from_arrow_array(array))
+        let array = like::like_utf8(&self.array, &rhs.array)?;
+        Ok(array.into())
     }
 
     fn like_scalar(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let array = like::like_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(array))
+        let array = like::like_utf8_scalar(&self.array, rhs)?;
+        Ok(array.into())
     }
 
     fn nlike(&self, rhs: &DFUtf8Array) -> Result<DFBooleanArray> {
-        let array = like::nlike_utf8(self.downcast_ref(), rhs.downcast_ref())?;
-        Ok(DFBooleanArray::from_arrow_array(array))
+        let array = like::nlike_utf8(&self.array, &rhs.array)?;
+        Ok(array.into())
     }
 
     fn nlike_scalar(&self, rhs: &str) -> Result<DFBooleanArray> {
-        let array = like::nlike_utf8_scalar(self.downcast_ref(), rhs)?;
-        Ok(DFBooleanArray::from_arrow_array(array))
+        let array = like::nlike_utf8_scalar(&self.array, rhs)?;
+        Ok(array.into())
     }
 }
 
@@ -354,55 +346,3 @@ impl ArrayCompare<&DFListArray> for DFListArray {
         self.eq(rhs)?.not()
     }
 }
-
-// private
-pub(crate) trait ArrayEqualElement {
-    /// Check if element in self is equal to element in other, assumes same data_types
-    ///
-    /// # Safety
-    ///
-    /// No type checks.
-    unsafe fn equal_element(&self, _idx_self: usize, _idx_other: usize, _other: &Series) -> bool {
-        unimplemented!()
-    }
-}
-
-impl<T> ArrayEqualElement for DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: PartialEq,
-{
-    unsafe fn equal_element(&self, idx_self: usize, idx_other: usize, other: &Series) -> bool {
-        let ca_other = other.as_ref().as_ref();
-        debug_assert!(self.data_type() == other.data_type());
-        let ca_other = &*(ca_other as *const DataArray<T>);
-        // Should be get and not get_unchecked, because there could be nulls
-        self.get(idx_self) == ca_other.get(idx_other)
-    }
-}
-
-impl ArrayEqualElement for DFBooleanArray {
-    unsafe fn equal_element(&self, idx_self: usize, idx_other: usize, other: &Series) -> bool {
-        let ca_other = other.as_ref().as_ref();
-        debug_assert!(self.data_type() == other.data_type());
-        let ca_other = &*(ca_other as *const DFBooleanArray);
-        self.get(idx_self) == ca_other.get(idx_other)
-    }
-}
-
-impl ArrayEqualElement for DFUtf8Array {
-    unsafe fn equal_element(&self, idx_self: usize, idx_other: usize, other: &Series) -> bool {
-        let ca_other = other.as_ref().as_ref();
-        debug_assert!(self.data_type() == other.data_type());
-        let ca_other = &*(ca_other as *const DFUtf8Array);
-        self.get(idx_self) == ca_other.get(idx_other)
-    }
-}
-
-impl ArrayEqualElement for DFListArray {}
-
-impl ArrayEqualElement for DFNullArray {}
-
-impl ArrayEqualElement for DFStructArray {}
-
-impl ArrayEqualElement for DFBinaryArray {}

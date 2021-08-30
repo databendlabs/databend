@@ -14,10 +14,11 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::Deref;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::compute::aggregate;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -26,17 +27,9 @@ use crate::series::*;
 
 pub struct SeriesWrap<T>(pub T);
 
-impl<T> From<DataArray<T>> for SeriesWrap<DataArray<T>> {
-    fn from(da: DataArray<T>) -> Self {
+impl<T> From<T> for SeriesWrap<T> {
+    fn from(da: T) -> Self {
         SeriesWrap(da)
-    }
-}
-
-impl<T> Deref for SeriesWrap<DataArray<T>> {
-    type Target = DataArray<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -60,19 +53,20 @@ macro_rules! impl_dyn_array {
         }
 
         impl SeriesTrait for SeriesWrap<$da> {
-            fn data_type(&self) -> DataType {
+            fn data_type(&self) -> &DataType {
                 self.0.data_type()
             }
+
             fn len(&self) -> usize {
                 self.0.len()
             }
 
             fn is_empty(&self) -> bool {
-                self.0.is_empty()
+                self.len() == 0
             }
 
             fn is_null(&self, row: usize) -> bool {
-                self.0.is_null(row)
+                self.0.array.is_null(row)
             }
 
             fn null_count(&self) -> usize {
@@ -80,11 +74,11 @@ macro_rules! impl_dyn_array {
             }
 
             fn get_array_memory_size(&self) -> usize {
-                self.0.get_array_memory_size()
+                aggregate::estimated_bytes_size(&self.0.array)
             }
 
             fn get_array_ref(&self) -> ArrayRef {
-                self.0.get_array_ref()
+                Arc::new(self.0.array.clone()) as ArrayRef
             }
 
             fn to_values(&self) -> Result<Vec<DataValue>> {
@@ -95,32 +89,27 @@ macro_rules! impl_dyn_array {
                 self.0.slice(offset, length).into_series()
             }
 
-            unsafe fn equal_element(
-                &self,
-                idx_self: usize,
-                idx_other: usize,
-                other: &Series,
-            ) -> bool {
-                self.0.equal_element(idx_self, idx_other, other)
-            }
-
             fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
                 ArrayCast::cast_with_type(&self.0, data_type)
             }
 
             fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series> {
-                if self.data_type() == rhs.data_type() {
-                    Ok(self
-                        .0
-                        .if_then_else(rhs.as_ref().as_ref(), predicate.bool()?)?
-                        .into_series())
-                } else {
-                    Err(ErrorCode::BadArguments(format!(
+                if predicate.data_type() != &DataType::Boolean {
+                    return Err(ErrorCode::BadDataValueType(
+                        "If function requires the first argument type must be Boolean",
+                    ));
+                }
+
+                if self.data_type() != rhs.data_type() {
+                    return Err(ErrorCode::BadArguments(format!(
                         "If then else requires the arguments to have the same datatypes ({} != {})",
                         self.data_type(),
                         rhs.data_type()
-                    )))
+                    )));
                 }
+
+                let rhs = unsafe { self.0.unpack(rhs)? };
+                Ok(self.0.if_then_else(rhs, predicate.bool()?)?.into_series())
             }
 
             fn try_get(&self, index: usize) -> Result<DataValue> {
@@ -178,12 +167,11 @@ macro_rules! impl_dyn_array {
             }
 
             fn i8(&self) -> Result<&DFInt8Array> {
-                if matches!(self.0.data_type(), DataType::Int8) {
+                if matches!(self.0.data_type(), &DataType::Int8) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt8Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into i8",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into i8",
                         self.data_type(),
                     )))
                 }
@@ -191,158 +179,123 @@ macro_rules! impl_dyn_array {
 
             // For each column create a series
             fn i16(&self) -> Result<&DFInt16Array> {
-                if matches!(self.0.data_type(), DataType::Int16) {
+                if matches!(self.0.data_type(), &DataType::Int16) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt16Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into i16",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into i16",
                         self.data_type(),
                     )))
                 }
             }
 
             fn i32(&self) -> Result<&DFInt32Array> {
-                if matches!(self.0.data_type(), DataType::Int32) {
+                if matches!(self.0.data_type(), &DataType::Int32) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt32Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into i32",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into i32",
                         self.data_type(),
                     )))
                 }
             }
 
             fn i64(&self) -> Result<&DFInt64Array> {
-                if matches!(self.0.data_type(), DataType::Int64) {
+                if matches!(self.0.data_type(), &DataType::Int64) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt64Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into i64",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into i64",
                         self.data_type(),
                     )))
                 }
             }
 
             fn f32(&self) -> Result<&DFFloat32Array> {
-                if matches!(self.0.data_type(), DataType::Float32) {
+                if matches!(self.0.data_type(), &DataType::Float32) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFFloat32Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into f32",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into f32",
                         self.data_type(),
                     )))
                 }
             }
 
             fn f64(&self) -> Result<&DFFloat64Array> {
-                if matches!(self.0.data_type(), DataType::Float64) {
+                if matches!(self.0.data_type(), &DataType::Float64) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFFloat64Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into f64",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into f64",
                         self.data_type(),
                     )))
                 }
             }
 
             fn u8(&self) -> Result<&DFUInt8Array> {
-                if matches!(self.0.data_type(), DataType::UInt8) {
+                if matches!(self.0.data_type(), &DataType::UInt8) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt8Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into u8",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into u8",
                         self.data_type(),
                     )))
                 }
             }
 
             fn u16(&self) -> Result<&DFUInt16Array> {
-                if matches!(self.0.data_type(), DataType::UInt16) {
+                if matches!(self.0.data_type(), &DataType::UInt16) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt16Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into u16",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into u16",
                         self.data_type(),
                     )))
                 }
             }
 
             fn u32(&self) -> Result<&DFUInt32Array> {
-                if matches!(self.0.data_type(), DataType::UInt32) {
+                if matches!(self.0.data_type(), &DataType::UInt32) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt32Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into u32",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into u32",
                         self.data_type(),
                     )))
                 }
             }
 
             fn u64(&self) -> Result<&DFUInt64Array> {
-                if matches!(self.0.data_type(), DataType::UInt64) {
+                if matches!(self.0.data_type(), &DataType::UInt64) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt64Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into u64",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into u64",
                         self.data_type(),
                     )))
                 }
             }
 
             fn bool(&self) -> Result<&DFBooleanArray> {
-                if matches!(self.0.data_type(), DataType::Boolean)
-                    || matches!(self.0.data_type(), DataType::Null)
+                if matches!(self.0.data_type(), &DataType::Boolean)
+                    || matches!(self.0.data_type(), &DataType::Null)
                 {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBooleanArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into bool",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into bool",
                         self.data_type(),
                     )))
                 }
             }
 
             fn utf8(&self) -> Result<&DFUtf8Array> {
-                if matches!(self.0.data_type(), DataType::Utf8) {
+                if matches!(self.0.data_type(), &DataType::Utf8) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUtf8Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into utf8",
-                        self.name(),
-                        self.data_type(),
-                    )))
-                }
-            }
-
-            fn date32(&self) -> Result<&DFDate32Array> {
-                if matches!(self.0.data_type(), DataType::Date32) {
-                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFDate32Array)) }
-                } else {
-                    Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into date32",
-                        self.name(),
-                        self.data_type(),
-                    )))
-                }
-            }
-
-            fn date64(&self) -> Result<&DFDate64Array> {
-                if matches!(self.0.data_type(), DataType::Date64) {
-                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFDate64Array)) }
-                } else {
-                    Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into date64",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into utf8",
                         self.data_type(),
                     )))
                 }
@@ -350,12 +303,11 @@ macro_rules! impl_dyn_array {
 
             /// Unpack to DFArray of data_type binary
             fn binary(&self) -> Result<&DFBinaryArray> {
-                if matches!(self.0.data_type(), DataType::Binary) {
+                if matches!(self.0.data_type(), &DataType::Binary) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBinaryArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series: {:?} of type {:?} into binary",
-                        self.name(),
+                        "cannot unpack Series of type {:?} into binary",
                         self.data_type(),
                     )))
                 }

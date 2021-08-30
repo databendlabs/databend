@@ -25,15 +25,15 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
-use crate::catalogs::impls::database_catalog::LOCAL_TBL_ID_BEGIN;
-use crate::catalogs::utils::InMemoryMetas;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::impls::LOCAL_TBL_ID_BEGIN;
+use crate::catalogs::Database;
+use crate::catalogs::InMemoryMetas;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::MemoryTable;
 use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
-use crate::datasources::Database;
 
 pub struct LocalDatabase {
     tables: RwLock<InMemoryMetas>,
@@ -43,10 +43,11 @@ pub struct LocalDatabase {
 impl LocalDatabase {
     pub fn create() -> Self {
         LocalDatabase {
-            tables: RwLock::new(InMemoryMetas::new()),
+            tables: RwLock::new(InMemoryMetas::create()),
             tbl_id_seq: AtomicU64::new(LOCAL_TBL_ID_BEGIN),
         }
     }
+
     fn next_db_id(&self) -> u64 {
         // `fetch_add` wraps around on overflow, but as LOCAL_TBL_ID_BEGIN
         // is defined as (1 << 62) + 10000, there are about 13 quintillion ids are reserved
@@ -136,7 +137,7 @@ impl Database for LocalDatabase {
         };
 
         let mut tables = self.tables.write();
-        let table_meta = TableMeta::new(Arc::from(table), self.next_db_id());
+        let table_meta = TableMeta::create(Arc::from(table), self.next_db_id());
         tables.insert(table_meta);
         Ok(())
     }

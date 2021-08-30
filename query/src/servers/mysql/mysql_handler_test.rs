@@ -29,11 +29,11 @@ use mysql::FromRowError;
 use mysql::Row;
 
 use crate::servers::MySQLHandler;
-use crate::sessions::SessionManager;
+use crate::tests::try_create_session_mgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler = MySQLHandler::create(try_create_session_mgr(Some(1))?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -49,7 +49,7 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler = MySQLHandler::create(try_create_session_mgr(Some(1))?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -107,7 +107,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler = MySQLHandler::create(try_create_session_mgr(Some(1))?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;

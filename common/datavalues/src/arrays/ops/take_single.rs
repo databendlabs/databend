@@ -18,14 +18,13 @@ use common_arrow::arrow::array::ArrayRef;
 
 use super::take_random::TakeRandom;
 use super::take_random::TakeRandomUtf8;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
 macro_rules! impl_take_random_get {
     ($self:ident, $index:ident) => {{
         // Safety:
         // index should be in bounds
-        let arr = $self.downcast_ref();
+        let arr = $self.inner();
         if arr.is_valid($index) {
             Some(arr.value_unchecked($index))
         } else {
@@ -36,15 +35,15 @@ macro_rules! impl_take_random_get {
 
 macro_rules! impl_take_random_get_unchecked {
     ($self:ident, $index:ident) => {{
-        let arr = $self.downcast_ref();
+        let arr = $self.inner();
         arr.value_unchecked($index)
     }};
 }
 
-impl<T> TakeRandom for DataArray<T>
-where T: DFNumericType
+impl<T> TakeRandom for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
+    type Item = T;
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
@@ -57,10 +56,10 @@ where T: DFNumericType
     }
 }
 
-impl<'a, T> TakeRandom for &'a DataArray<T>
-where T: DFNumericType
+impl<'a, T> TakeRandom for &'a DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
+    type Item = T;
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
@@ -130,7 +129,7 @@ impl TakeRandom for DFListArray {
     fn get(&self, index: usize) -> Option<Self::Item> {
         // Safety:
         // Out of bounds is checked and downcast is of correct type
-        let arr = self.downcast_ref();
+        let arr = self.inner();
         if arr.is_valid(index) {
             return Some(Arc::from(arr.value(index)));
         }
@@ -139,7 +138,7 @@ impl TakeRandom for DFListArray {
 
     #[inline]
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item {
-        let arr = self.downcast_ref();
+        let arr = self.inner();
         return Arc::from(arr.value_unchecked(index));
     }
 }

@@ -13,8 +13,6 @@
 // limitations under the License.
 
 //! Everything you need to get started with this crate.
-pub use std::sync::Arc;
-
 pub use crate::arrays::to_primitive;
 // arrays
 pub use crate::arrays::*;

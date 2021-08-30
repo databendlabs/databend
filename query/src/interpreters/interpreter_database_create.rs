@@ -20,7 +20,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::DatafuseQueryContextRef;
@@ -48,7 +48,7 @@ impl Interpreter for CreateDatabaseInterpreter {
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_datasource();
+        let datasource = self.ctx.get_catalog();
         datasource.create_database(self.plan.clone()).await?;
 
         Ok(Box::pin(DataBlockStream::create(

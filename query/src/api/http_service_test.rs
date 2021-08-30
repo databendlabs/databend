@@ -34,8 +34,8 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 async fn test_http_service_tls_server() -> Result<()> {
     let mut conf = Config::default();
 
-    conf.api_tls_server_key = TEST_SERVER_KEY.to_owned();
-    conf.api_tls_server_cert = TEST_SERVER_CERT.to_owned();
+    conf.query.api_tls_server_key = TEST_SERVER_KEY.to_owned();
+    conf.query.api_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
     let addr_str = "127.0.0.1:0";
     let cluster = Cluster::create_global(conf.clone())?;

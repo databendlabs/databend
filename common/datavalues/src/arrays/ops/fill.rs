@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 
-use crate::arrays::builders::Utf8ArrayBuilder;
 use crate::prelude::*;
 use crate::series::Series;
 use crate::utils::NoNull;
@@ -71,43 +70,41 @@ pub trait ArrayFullNull {
     where Self: std::marker::Sized;
 }
 
-impl<T> ArrayFull<T::Native> for DataArray<T>
+impl<T> ArrayFull<T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn full(value: T::Native, length: usize) -> Self
-    where T::Native: Copy {
-        (0..length)
+    fn full(value: T, length: usize) -> Self
+    where T: Copy {
+        std::iter::repeat(value)
+            .take(length)
             .map(|_| value)
-            .trust_my_length(length)
-            .collect_trusted::<NoNull<DataArray<T>>>()
+            .into_iter()
+            .collect_trusted::<NoNull<DFPrimitiveArray<T>>>()
             .into_inner()
     }
 }
 
-impl<T> ArrayFullNull for DataArray<T>
+impl<T> ArrayFullNull for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
     fn full_null(length: usize) -> Self {
-        (0..length)
-            .map(|_| None)
-            .trust_my_length(length)
+        std::iter::repeat(None)
+            .take(length)
             .collect_trusted::<Self>()
     }
 }
 impl ArrayFull<bool> for DFBooleanArray {
     fn full(value: bool, length: usize) -> Self {
-        (0..length)
-            .map(|_| value)
-            .trust_my_length(length)
+        std::iter::repeat(value)
+            .take(length)
             .collect_trusted::<DFBooleanArray>()
     }
 }
 
 impl ArrayFullNull for DFBooleanArray {
     fn full_null(length: usize) -> Self {
-        (0..length)
-            .map(|_| None)
-            .trust_my_length(length)
+        std::iter::repeat(None)
+            .take(length)
             .collect_trusted::<Self>()
     }
 }

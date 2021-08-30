@@ -63,6 +63,11 @@ impl Function for ArithmeticFunction {
         if args.len() == 1 {
             return Ok(args[0].clone());
         }
+
+        // TODO support: date <op> number
+        // if is_date_or_date_time(&args[0]) || is_date_or_date_time(&args[1]) {
+        //     return common_datavalues::datetime_arithmetic_coercion(&self.op, &args[0], &args[1]);
+        // }
         common_datavalues::numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
     }
 

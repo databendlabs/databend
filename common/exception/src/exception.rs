@@ -245,6 +245,10 @@ build_exceptions! {
     // kv-api error codes
     UnknownKey(6000),
 
+
+    // DAL error
+    DALTransportError(7000)
+
 }
 // General errors
 build_exceptions! {

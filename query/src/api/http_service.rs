@@ -127,7 +127,7 @@ impl Server for HttpService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        match self.abort_registration.take() {
+      match self.abort_registration.take() {
             None => Err(ErrorCode::LogicalError("Http Service already running.")),
             Some(registration) => {
                 let (stream, listener) = Self::listener_tcp(listening).await?;

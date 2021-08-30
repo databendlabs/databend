@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/datafuse-store &> /tmp/datafuse-store.log  &
+/datafuse-store --single true &> /tmp/datafuse-store.log  &
 P1=$!
 /datafuse-query -c datafuse-query.toml &> /tmp/datafuse-query.log  &
 P2=$!

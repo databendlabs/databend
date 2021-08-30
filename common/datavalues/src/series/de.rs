@@ -34,11 +34,6 @@ impl DataType {
 
         match self {
             DataType::Boolean => Ok(Box::new(BooleanArrayBuilder::with_capacity(capacity))),
-
-            DataType::UInt8 => Ok(Box::new(PrimitiveArrayBuilder::<UInt8Type>::with_capacity(
-                capacity,
-            ))),
-
             DataType::Utf8 => Ok(Box::new(Utf8ArrayBuilder::with_capacity(capacity))),
 
             other => Err(ErrorCode::BadDataValueType(format!(

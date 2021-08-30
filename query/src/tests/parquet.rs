@@ -15,7 +15,7 @@
 use std::fs::File;
 
 use common_arrow::arrow::io::parquet::write::write_file;
-use common_arrow::arrow::io::parquet::write::CompressionCodec;
+use common_arrow::arrow::io::parquet::write::Compression;
 use common_arrow::arrow::io::parquet::write::Encoding;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::Version;
@@ -58,7 +58,7 @@ impl ParquetTestData {
 
         let options = WriteOptions {
             write_statistics: true,
-            compression: CompressionCodec::Uncompressed,
+            compression: Compression::Uncompressed,
             version: Version::V2,
         };
 
