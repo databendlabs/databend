@@ -15,15 +15,28 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use axum::handler::get;
+use axum::handler::post;
+use axum::AddExtensionLayer;
+use axum::Router;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::Notify;
 use common_runtime::tokio::task::JoinHandle;
+use common_runtime::Runtime;
+use futures::future::AbortHandle;
+use futures::future::AbortRegistration;
+use futures::future::Abortable;
 use futures::Future;
+use futures::StreamExt;
+use hyper::server::conn::Http;
+use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::api::http::router::Router;
+// use crate::api::http::router::Router;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::servers::server::ListeningStream;
 use crate::servers::Server;
 
 pub struct HttpService {
@@ -31,15 +44,36 @@ pub struct HttpService {
     cluster: ClusterRef,
     abort_notify: Arc<Notify>,
     join_handle: Option<JoinHandle<()>>,
+    abort_handle: AbortHandle,
+    abort_registration: Option<AbortRegistration>,
+}
+
+// build axum router
+macro_rules! build_router {
+    ($cfg: expr, $cluster: expr) => {
+        Router::new()
+            .route("/v1/hello", get(super::http::v1::hello::hello_handler))
+            .route("/v1/config", get(super::http::v1::config::config_handler))
+            .route("/v1/cluster/add", post(super::http::v1::cluster::cluster_add_handler))
+            .route("/v1/cluster/list", get(super::http::v1::cluster::cluster_list_handler))
+            .route("/v1/cluster/remove", post(super::http::v1::cluster::cluster_remove_handler))
+            .route("/debug/home", get(super::http::debug::home::debug_home_handler))
+            .route("/debug/pprof", get(super::http::debug::pprof::debug_pprof_handler))
+            .layer(AddExtensionLayer::new($cluster.clone()))
+            .layer(AddExtensionLayer::new($cfg.clone()));
+    };
 }
 
 impl HttpService {
     pub fn create(cfg: Config, cluster: ClusterRef) -> Box<Self> {
+        let (abort_handle, registration) = AbortHandle::new_pair();
         Box::new(HttpService {
             cfg,
             cluster,
             abort_notify: Arc::new(Notify::new()),
             join_handle: None,
+            abort_handle,
+            abort_registration: Some(registration),
         })
     }
 
@@ -48,6 +82,28 @@ impl HttpService {
         async move {
             notified.notified().await;
         }
+    }
+    async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
+        let listener = tokio::net::TcpListener::bind(socket).await?;
+        let listener_addr = listener.local_addr()?;
+        Ok((TcpListenerStream::new(listener), listener_addr))
+    }
+
+    fn listen_loop(&self, stream: ListeningStream, r: Arc<Runtime>) -> impl Future<Output = ()> {
+        let mut app = build_router!(self.cfg.clone(), self.cluster.clone());
+        stream.for_each(move |accept_socket| {
+            let app = app.clone();
+            async move {
+                match accept_socket {
+                    Err(error) => log::error!("Broken http connection: {}", error),
+                    Ok(socket) => {
+                        tokio::spawn(async move {
+                            Http::new().serve_connection(socket, app).await;
+                        });
+                    }
+                };
+            }
+        })
     }
 }
 
@@ -67,28 +123,15 @@ impl Server for HttpService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let router = Router::create(self.cfg.clone(), self.cluster.clone());
-        let server = warp::serve(router.router()?);
-
-        let conf = self.cfg.clone();
-        let tls_cert = conf.api_tls_server_cert;
-        let tls_key = conf.api_tls_server_key;
-
-        if !tls_cert.is_empty() && !tls_key.is_empty() {
-            log::info!("Http API TLS enabled");
-            let (listening, server) = server
-                .tls()
-                .cert_path(tls_cert)
-                .key_path(tls_key)
-                .bind_with_graceful_shutdown(listening, self.shutdown_notify());
-            self.join_handle = Some(tokio::spawn(server));
-            Ok(listening)
-        } else {
-            log::warn!("Http API TLS not set");
-            let (listening, server) =
-                server.bind_with_graceful_shutdown(listening, self.shutdown_notify());
-            self.join_handle = Some(tokio::spawn(server));
-            Ok(listening)
+        match self.abort_registration.take() {
+            None => Err(ErrorCode::LogicalError("Http Service already running.")),
+            Some(registration) => {
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let (stream, listener) = Self::listener_tcp(listening).await?;
+                let stream = Abortable::new(stream, registration);
+                self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));
+                Ok(listener)
+            }
         }
     }
 }
