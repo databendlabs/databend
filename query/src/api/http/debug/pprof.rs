@@ -12,49 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use warp::Filter;
-
+use axum::extract::TypedHeader;
+use axum::extract::Query;
+use headers::ContentType;
 use crate::api::http::debug::PProfRequest;
-use crate::configs::Config;
+use common_runtime::tokio::time::Duration;
+use common_profling::Profiling;
+use axum::response::IntoResponse;
+use axum::response::Html;
+use common_tracing::tracing;
 
-pub fn pprof_handler(
-    _cfg: Config,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("debug" / "pprof" / "profile")
-        .and(warp::get())
-        .and(warp::header::optional::<String>("Accept"))
-        .and(warp::query::<PProfRequest>())
-        .and_then(handlers::pprof)
-}
-
-mod handlers {
-    use std::time::Duration;
-
-    use common_profling::Profiling;
-    use common_tracing::tracing;
-
-    use crate::api::http::debug::pprof::PProfRequest;
-
-    pub async fn pprof(
-        header: Option<String>,
-        req: PProfRequest,
-    ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        let body;
-        let duration = Duration::from_secs(req.seconds);
-        let profile = Profiling::create(duration, req.frequency.get());
-
-        tracing::info!("start pprof request:{:?}", req);
-        if let Some(accept) = header {
-            // Browser.
-            if accept.contains("text/html") {
-                body = profile.dump_flamegraph().await.unwrap();
-            } else {
-                body = profile.dump_proto().await.unwrap();
-            }
-        } else {
-            body = profile.dump_proto().await.unwrap();
+// run pprof
+// example: /debug/pprof/profile?seconds=5&frequency=99
+// req query contains pprofrequest information
+pub async fn debug_pprof_handler(content_type: Option<TypedHeader<ContentType>>, req: Option<Query<PProfRequest>>) -> impl IntoResponse {
+    let profile = match req {
+        Some(query)=> {
+            let duration = Duration::from_secs(query.seconds);
+            tracing::info!("start pprof request second: {:?} frequency: {:?}", query.seconds, query.frequency);
+            Profiling::create(duration, i32::from(query.frequency))
         }
-        tracing::info!("finished pprof request:{:?}", req);
-        Ok(warp::reply::html(body))
+        None => {
+            let duration = Duration::from_secs(PProfRequest::default_seconds());
+            tracing::info!("start pprof request second: {:?} frequency: {:?}", PProfRequest::default_seconds(), PProfRequest::default_frequency());
+            Profiling::create(duration, i32::from(PProfRequest::default_frequency()))
+        }
+    };
+    let body;
+    if content_type.is_some() && content_type.unwrap().0.to_string().eq("text/html") {
+        body = profile.dump_flamegraph().await.unwrap();
+    } else {
+        body = profile.dump_proto().await.unwrap();
     }
+
+    tracing::info!("finished pprof request");
+    Html(body).into_response()
+
 }
