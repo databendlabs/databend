@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use axum::handler::get;
 use axum::handler::post;
@@ -22,9 +21,7 @@ use axum::Router;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio;
-use common_runtime::tokio::sync::Notify;
 use common_runtime::tokio::task::JoinHandle;
-use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
@@ -42,7 +39,6 @@ use crate::servers::Server;
 pub struct HttpService {
     cfg: Config,
     cluster: ClusterRef,
-    abort_notify: Arc<Notify>,
     join_handle: Option<JoinHandle<()>>,
     abort_handle: AbortHandle,
     abort_registration: Option<AbortRegistration>,
@@ -54,13 +50,28 @@ macro_rules! build_router {
         Router::new()
             .route("/v1/hello", get(super::http::v1::hello::hello_handler))
             .route("/v1/config", get(super::http::v1::config::config_handler))
-            .route("/v1/cluster/add", post(super::http::v1::cluster::cluster_add_handler))
-            .route("/v1/cluster/list", get(super::http::v1::cluster::cluster_list_handler))
-            .route("/v1/cluster/remove", post(super::http::v1::cluster::cluster_remove_handler))
-            .route("/debug/home", get(super::http::debug::home::debug_home_handler))
-            .route("/debug/pprof", get(super::http::debug::pprof::debug_pprof_handler))
+            .route(
+                "/v1/cluster/add",
+                post(super::http::v1::cluster::cluster_add_handler),
+            )
+            .route(
+                "/v1/cluster/list",
+                get(super::http::v1::cluster::cluster_list_handler),
+            )
+            .route(
+                "/v1/cluster/remove",
+                post(super::http::v1::cluster::cluster_remove_handler),
+            )
+            .route(
+                "/debug/home",
+                get(super::http::debug::home::debug_home_handler),
+            )
+            .route(
+                "/debug/pprof/profile",
+                get(super::http::debug::pprof::debug_pprof_handler),
+            )
             .layer(AddExtensionLayer::new($cluster.clone()))
-            .layer(AddExtensionLayer::new($cfg.clone()));
+            .layer(AddExtensionLayer::new($cfg.clone()))
     };
 }
 
@@ -70,27 +81,20 @@ impl HttpService {
         Box::new(HttpService {
             cfg,
             cluster,
-            abort_notify: Arc::new(Notify::new()),
             join_handle: None,
             abort_handle,
             abort_registration: Some(registration),
         })
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
-        let notified = self.abort_notify.clone();
-        async move {
-            notified.notified().await;
-        }
-    }
     async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
         let listener = tokio::net::TcpListener::bind(socket).await?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: ListeningStream, r: Arc<Runtime>) -> impl Future<Output = ()> {
-        let mut app = build_router!(self.cfg.clone(), self.cluster.clone());
+    fn listen_loop(&self, stream: ListeningStream) -> impl Future<Output = ()> {
+        let app = build_router!(self.cfg.clone(), self.cluster.clone());
         stream.for_each(move |accept_socket| {
             let app = app.clone();
             async move {
@@ -98,7 +102,7 @@ impl HttpService {
                     Err(error) => log::error!("Broken http connection: {}", error),
                     Ok(socket) => {
                         tokio::spawn(async move {
-                            Http::new().serve_connection(socket, app).await;
+                            Http::new().serve_connection(socket, app).await.unwrap();
                         });
                     }
                 };
@@ -110,12 +114,12 @@ impl HttpService {
 #[async_trait::async_trait]
 impl Server for HttpService {
     async fn shutdown(&mut self) {
-        self.abort_notify.notify_waiters();
+        self.abort_handle.abort();
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
                 log::error!(
-                    "Unexpected error during shutdown HttpServer. cause {}",
+                    "Unexpected error during shutdown Http API handler. cause {}",
                     error
                 );
             }
@@ -126,10 +130,9 @@ impl Server for HttpService {
         match self.abort_registration.take() {
             None => Err(ErrorCode::LogicalError("Http Service already running.")),
             Some(registration) => {
-                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);
-                self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));
+                self.join_handle = Some(tokio::spawn(self.listen_loop(stream)));
                 Ok(listener)
             }
         }

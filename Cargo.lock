@@ -251,6 +251,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
+name = "axum"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e2423522684032529c51d209740c77d57cc56bfef7b9a18630f919a974d2616"
+dependencies = [
+ "async-trait",
+ "bitflags",
+ "bytes",
+ "futures-util",
+ "headers",
+ "http",
+ "http-body",
+ "hyper",
+ "pin-project-lite",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1352,6 +1380,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
  "async-trait",
+ "axum",
  "bumpalo",
  "byteorder",
  "clickhouse-rs",
@@ -1380,6 +1409,8 @@ dependencies = [
  "env_logger 0.9.0",
  "flaky_test",
  "futures",
+ "headers",
+ "hyper",
  "indexmap",
  "lazy_static",
  "log",
@@ -1407,6 +1438,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "tower",
  "uuid",
  "walkdir",
  "warp",
@@ -5037,6 +5069,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_wrapper"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
+
+[[package]]
 name = "synstructure"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5432,6 +5470,22 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b7b56efe69aa0ad2b5da6b942e57ea9f6fe683b7a314d4ff48662e2c8838de1"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "http",
+ "http-body",
+ "pin-project",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]

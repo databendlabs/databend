@@ -14,19 +14,8 @@
 
 use std::num::NonZeroI32;
 
-use axum::{
-    extract::Query,
-    handler::get,
-    Router,
-};
-use axum::extract::TypedHeader;
-
-use crate::configs::Config;
-use axum::response::{Html, IntoResponse};
-use common_runtime::tokio::time::Duration;
-use common_profling::Profiling;
-use common_tracing::tracing;
-use headers::{ContentType, Header};
+use axum::response::Html;
+use axum::response::IntoResponse;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct PProfRequest {
@@ -48,15 +37,8 @@ impl PProfRequest {
 // return home page for default pprof results
 pub async fn debug_home_handler() -> impl IntoResponse {
     return Html(format!(
-            r#"<a href="/debug/pprof/profile?seconds={}">pprof/profile</a>"#,
-            PProfRequest::default_seconds()
-        )).into_response();
+        r#"<a href="/debug/pprof/profile?seconds={}">pprof/profile</a>"#,
+        PProfRequest::default_seconds()
+    ))
+    .into_response();
 }
-
-
-
-// pub fn debug_handler(
-//     cfg: Config,
-// ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-//     debug_home_handler().or(pprof_handler(cfg))
-// }

@@ -97,7 +97,8 @@ async fn test_cluster() -> Result<()> {
 
     // List Node
     {
-        let response = cluster_router.clone()
+        let response = cluster_router
+            .clone()
             .oneshot(
                 Request::builder()
                     .uri("/v1/cluster/list")
@@ -116,7 +117,8 @@ async fn test_cluster() -> Result<()> {
 
     // Remove.
     {
-        let response = cluster_router.clone()
+        let response = cluster_router
+            .clone()
             .clone()
             .oneshot(
                 Request::builder()
@@ -162,7 +164,6 @@ async fn test_cluster() -> Result<()> {
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(String::from_utf8_lossy(&*body.to_vec()), "[{\"name\":\"9090\",\"priority\":8,\"address\":\"127.0.0.1:9090\",\"local\":true,\"sequence\":0}]");
     }
-
 
     Ok(())
 }
