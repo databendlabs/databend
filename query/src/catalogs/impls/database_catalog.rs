@@ -14,7 +14,6 @@
 //
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -23,7 +22,6 @@ use common_infallible::RwLock;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
-use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
@@ -32,7 +30,6 @@ use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::configs::Config;
-use crate::datasources::local::LocalDatabase;
 
 // min id for system tables (inclusive)
 pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;
@@ -45,21 +42,23 @@ pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
 
 // Maintain all the catalog backends of user.
 pub struct DatabaseCatalog {
-    conf: Config,
     catalog_backends: RwLock<HashMap<String, Arc<dyn CatalogBackend>>>,
 }
 
 impl DatabaseCatalog {
-    pub fn try_create_with_config(conf: Config) -> Result<Self> {
+    pub fn try_create_with_config(_conf: Config) -> Result<Self> {
         Ok(DatabaseCatalog {
-            conf,
             catalog_backends: Default::default(),
         })
     }
 }
 
 impl Catalog for DatabaseCatalog {
-    fn register_backend(&self, engine_type: &str, backend: Arc<dyn CatalogBackend>) -> Result<()> {
+    fn register_db_engine(
+        &self,
+        engine_type: &str,
+        backend: Arc<dyn CatalogBackend>,
+    ) -> Result<()> {
         let engine = engine_type.to_lowercase();
         self.catalog_backends.write().insert(engine, backend);
         Ok(())
@@ -67,18 +66,18 @@ impl Catalog for DatabaseCatalog {
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let mut databases = vec![];
-        let backends = self.catalog_backends.read().values();
-        for backend in backends {
+        let backends = self.catalog_backends.read();
+        for backend in backends.values() {
             databases.extend(backend.get_databases()?)
         }
         Ok(databases)
     }
 
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        let backends = self.catalog_backends.read().values();
-        for backend in backends {
+        let backends = self.catalog_backends.read();
+        for backend in backends.values() {
             if let Some(db) = backend.get_database(db_name)? {
-                Ok(db)
+                return Ok(db);
             }
         }
 
@@ -90,10 +89,10 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn exists_database(&self, db_name: &str) -> Result<bool> {
-        let backends = self.catalog_backends.read().values();
-        for backend in backends {
+        let backends = self.catalog_backends.read();
+        for backend in backends.values() {
             if backend.exists_database(db_name)? {
-                Ok(true)
+                return Ok(true);
             }
         }
 
@@ -115,23 +114,39 @@ impl Catalog for DatabaseCatalog {
         db.get_table_by_id(table_id, table_version)
     }
 
+    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>> {
+        let databases = self.get_databases()?;
+        for database in databases {
+            let funcs = database.get_table_functions()?;
+            for func in funcs {
+                if func.raw().name() == func_name {
+                    return Ok(func);
+                }
+            }
+        }
+        Err(ErrorCode::UnknownTableFunction(format!(
+            "Unknown table function: '{}'",
+            func_name
+        )))
+    }
+
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
         let exists = self.exists_database(db_name)?;
         if exists {
             if plan.if_not_exists {
-                Ok(())
+                return Ok(());
             } else {
-                Err(ErrorCode::UnknownDatabase(format!(
+                return Err(ErrorCode::UnknownDatabase(format!(
                     "Database: '{}' already exists.",
                     db_name
-                )))
+                )));
             }
         }
 
         // Get the database backend and create it.
-        let engine = plan.engine.to_string().as_str();
-        if let Some(backend) = self.catalog_backends.read().get(engine) {
+        let engine = plan.engine.clone().to_string();
+        if let Some(backend) = self.catalog_backends.read().get(engine.as_str()) {
             backend.create_database(plan)
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
@@ -143,11 +158,10 @@ impl Catalog for DatabaseCatalog {
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-
-        let backends = self.catalog_backends.read().values();
-        for backend in backends {
+        let backends = self.catalog_backends.read();
+        for backend in backends.values() {
             if backend.exists_database(db_name)? {
-                backend.drop_database(plan.clone())
+                return backend.drop_database(plan.clone());
             }
         }
 

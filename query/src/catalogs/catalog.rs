@@ -22,6 +22,7 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
+use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
 pub trait Catalog {
@@ -29,7 +30,8 @@ pub trait Catalog {
     // local: local database catalog backend.
     // remote: remote database catalog backend.
     // mysql : mysql database catalog backend.
-    fn register_backend(&self, engine_type: &str, backend: Arc<dyn CatalogBackend>) -> Result<()>;
+    fn register_db_engine(&self, engine_type: &str, backend: Arc<dyn CatalogBackend>)
+        -> Result<()>;
 
     // Get all the databases.
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
@@ -46,6 +48,8 @@ pub trait Catalog {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
+    // Get function by name.
+    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>>;
 
     // Operation with database.
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;

@@ -49,6 +49,6 @@ pub trait Database: Sync + Send {
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>>;
 
     /// DDL
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 }

@@ -41,7 +41,7 @@ impl InMemoryMetas {
     pub fn insert(&mut self, tbl_meta: TableMeta) {
         let met_ref = Arc::new(tbl_meta);
         self.name2meta
-            .insert(met_ref.datasource().name().to_owned(), met_ref.clone());
+            .insert(met_ref.raw().name().to_owned(), met_ref.clone());
         self.id2meta.insert(met_ref.meta_id(), met_ref);
     }
 }

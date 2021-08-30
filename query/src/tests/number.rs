@@ -45,16 +45,13 @@ impl NumberTestData {
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
         let catalog = try_create_catalog()?;
-        catalog
-            .get_table(self.db, self.table)?
-            .datasource()
-            .schema()
+        catalog.get_table(self.db, self.table)?.raw().schema()
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
         let catalog = try_create_catalog()?;
         let table_meta = catalog.get_table(self.db, self.table)?;
-        let table = table_meta.datasource();
+        let table = table_meta.raw();
         table.read_plan(
             self.ctx.clone(),
             &ScanPlan {

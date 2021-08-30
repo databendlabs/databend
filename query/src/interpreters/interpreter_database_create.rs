@@ -49,7 +49,7 @@ impl Interpreter for CreateDatabaseInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_catalog();
-        datasource.create_database(self.plan.clone()).await?;
+        datasource.create_database(self.plan.clone())?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

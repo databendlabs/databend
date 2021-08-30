@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 mod remote_database;
-mod remote_factory;
+mod remote_databases;
 mod remote_table;
 mod remote_table_do_read;
 mod store_client_provider;
 
 pub use remote_database::RemoteDatabase;
-pub use remote_factory::RemoteFactory;
 pub use remote_table::RemoteTable;
 pub use store_client_provider::GetStoreApiClient;
 pub use store_client_provider::StoreApis;

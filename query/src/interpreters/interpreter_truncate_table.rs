@@ -48,7 +48,7 @@ impl Interpreter for TruncateTableInterpreter {
             .ctx
             .get_table(self.plan.db.as_str(), self.plan.table.as_str())?;
         table
-            .datasource()
+            .raw()
             .truncate(self.ctx.clone(), self.plan.clone())
             .await?;
         Ok(Box::pin(DataBlockStream::create(

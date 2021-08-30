@@ -20,32 +20,22 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::impls::BackendClient;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
 pub struct RemoteDatabase {
-    _id: MetaId,
     name: String,
-    backend: Arc<dyn BackendClient>,
 }
 
 impl RemoteDatabase {
-    pub fn create_new(
-        id: MetaId,
-        name: impl Into<String>,
-        backend: Arc<dyn BackendClient>,
-    ) -> Self {
+    pub fn create(name: &str) -> Self {
         Self {
-            _id: id,
-            name: name.into(),
-            backend,
+            name: name.to_string(),
         }
     }
 }
 
-#[async_trait::async_trait]
 impl Database for RemoteDatabase {
     fn name(&self) -> &str {
         self.name.as_str()
@@ -59,32 +49,35 @@ impl Database for RemoteDatabase {
         false
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        self.backend.get_table(&self.name, table_name)
+    fn get_table(&self, _table_name: &str) -> Result<Arc<TableMeta>> {
+        todo!()
+    }
+
+    fn exists_table(&self, _table_name: &str) -> Result<bool> {
+        todo!()
     }
 
     fn get_table_by_id(
         &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
+        _table_id: MetaId,
+        _table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.backend
-            .get_table_by_id(&self.name, table_id, table_version)
+        todo!()
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        self.backend.get_db_tables(&self.name)
+        todo!()
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(vec![])
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.backend.create_table(plan).await
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+        todo!()
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.backend.drop_table(plan).await
+    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+        todo!()
     }
 }

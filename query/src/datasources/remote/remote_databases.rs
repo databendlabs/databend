@@ -15,19 +15,38 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_planners::CreateDatabasePlan;
+use common_planners::DropDatabasePlan;
 
+use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
-use crate::datasources::system::SystemDatabase;
 
-pub struct SystemFactory;
+pub struct RemoteDatabases {}
 
-impl SystemFactory {
+impl RemoteDatabases {
     pub fn create() -> Self {
-        Self
+        RemoteDatabases {}
+    }
+}
+
+impl CatalogBackend for RemoteDatabases {
+    fn get_database(&self, _db_name: &str) -> Result<Option<Arc<dyn Database>>> {
+        todo!()
     }
 
-    pub fn load_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let databases: Vec<Arc<dyn Database>> = vec![Arc::new(SystemDatabase::create())];
-        Ok(databases)
+    fn exists_database(&self, _db_name: &str) -> Result<bool> {
+        todo!()
+    }
+
+    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+        todo!()
+    }
+
+    fn create_database(&self, _plan: CreateDatabasePlan) -> Result<()> {
+        todo!()
+    }
+
+    fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
+        todo!()
     }
 }
