@@ -15,20 +15,13 @@
 use std::borrow::Cow;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::compute::arithmetics::basic::add;
-use common_arrow::arrow::compute::boolean::and;
-use common_arrow::arrow::compute::boolean::or;
 use common_exception::Result;
 
 use crate::arrays::ops::apply::ArrayApply;
-use crate::arrays::ops::apply::ArrayApplyKernel;
-use crate::arrays::DataArray;
 use crate::prelude::*;
-use crate::BooleanType;
-use crate::UInt16Type;
 
-fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Type> {
-    let mut builder = PrimitiveArrayBuilder::<UInt16Type>::with_capacity(cap);
+fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DFPrimitiveArray<u16> {
+    let mut builder = PrimitiveArrayBuilder::<u16>::with_capacity(cap);
 
     (begin..end).for_each(|index| {
         if index % 3 == 0 {
@@ -40,7 +33,7 @@ fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DataArray<UInt16Ty
     builder.finish()
 }
 
-fn new_test_boolean_array(cap: usize, begin: i32, end: i32) -> DataArray<BooleanType> {
+fn new_test_boolean_array(cap: usize, begin: i32, end: i32) -> DFBooleanArray {
     let mut builder = BooleanArrayBuilder::with_capacity(cap);
 
     (begin..end).for_each(|index| {
@@ -86,11 +79,11 @@ fn test_array_apply() -> Result<()> {
     ];
 
     let values = vec![
-        arrays[0].downcast_ref(),
-        arrays[1].downcast_ref(),
-        arrays[2].downcast_ref(),
-        arrays[3].downcast_ref(),
-        arrays[4].downcast_ref(),
+        arrays[0].inner(),
+        arrays[1].inner(),
+        arrays[2].inner(),
+        arrays[3].inner(),
+        arrays[4].inner(),
     ];
 
     assert_eq!(2, values[0].null_count());
@@ -131,37 +124,6 @@ fn test_array_apply() -> Result<()> {
 }
 
 #[test]
-fn test_array_apply_kernel() -> Result<()> {
-    // array=[null, 1, 2, null, 4]
-    let array1 = new_test_uint16_array(5, 0, 5);
-    // array=[5, null, 7, 8, null]
-    let array2 = new_test_uint16_array(5, 5, 10);
-
-    let arrays = vec![
-        array1.apply_kernel(|arr| Arc::new(add::add(arr, array2.as_ref()).unwrap())),
-        array1.apply_kernel_cast(|arr| Arc::new(add::add(arr, array2.as_ref()).unwrap())),
-    ];
-
-    let values = vec![arrays[0].downcast_ref(), arrays[1].downcast_ref()];
-
-    assert_eq!(4, values[0].null_count());
-    assert_eq!(true, values[0].is_null(0));
-    assert_eq!(true, values[0].is_null(1));
-    assert_eq!(9, values[0].value(2));
-    assert_eq!(true, values[0].is_null(3));
-    assert_eq!(true, values[0].is_null(4));
-
-    assert_eq!(4, values[1].null_count());
-    assert_eq!(true, values[1].is_null(0));
-    assert_eq!(true, values[1].is_null(1));
-    assert_eq!(9, values[1].value(2));
-    assert_eq!(true, values[1].is_null(3));
-    assert_eq!(true, values[1].is_null(4));
-
-    Ok(())
-}
-
-#[test]
 fn test_boolean_array_apply() -> Result<()> {
     // array= [null, true, false, null, true]
     let array = new_test_boolean_array(5, 0, 5);
@@ -175,11 +137,7 @@ fn test_boolean_array_apply() -> Result<()> {
         }),
     ];
 
-    let values = vec![
-        arrays[0].downcast_ref(),
-        arrays[1].downcast_ref(),
-        arrays[2].downcast_ref(),
-    ];
+    let values = vec![arrays[0].inner(), arrays[1].inner(), arrays[2].inner()];
 
     assert_eq!(2, values[0].null_count());
     assert_eq!(true, values[0].is_null(0));
@@ -206,37 +164,6 @@ fn test_boolean_array_apply() -> Result<()> {
 }
 
 #[test]
-fn test_boolean_array_apply_kernel() -> Result<()> {
-    // array1= [null, true, false, null, true]
-    let array1 = new_test_boolean_array(5, 0, 5);
-    // array2= [false, null, true, false, null]
-    let array2 = new_test_boolean_array(5, 5, 10);
-
-    let arrays = vec![
-        array1.apply_kernel(|arr| Arc::new(and(arr, array2.as_ref()).unwrap())),
-        array1.apply_kernel_cast(|arr| Arc::new(or(arr, array2.as_ref()).unwrap())),
-    ];
-
-    let values = vec![arrays[0].downcast_ref(), arrays[1].downcast_ref()];
-
-    assert_eq!(4, values[0].null_count());
-    assert_eq!(true, values[0].is_null(0));
-    assert_eq!(true, values[0].is_null(1));
-    assert_eq!(false, values[0].value(2));
-    assert_eq!(true, values[0].is_null(3));
-    assert_eq!(true, values[0].is_null(4));
-
-    assert_eq!(4, values[0].null_count());
-    assert_eq!(true, values[1].is_null(0));
-    assert_eq!(true, values[1].is_null(1));
-    assert_eq!(true, values[1].value(2));
-    assert_eq!(true, values[1].is_null(3));
-    assert_eq!(true, values[1].is_null(4));
-
-    Ok(())
-}
-
-#[test]
 fn test_utf8_array_apply() -> Result<()> {
     // array=[null, "by", "cz", null, "13"]
     let array = new_test_utf8_array(5, 0, 5);
@@ -249,21 +176,17 @@ fn test_utf8_array_apply() -> Result<()> {
         }),
     ];
 
-    let values = vec![
-        arrays[0].downcast_ref(),
-        arrays[1].downcast_ref(),
-        arrays[2].downcast_ref(),
-    ];
+    let values = vec![arrays[0].inner(), arrays[1].inner(), arrays[2].inner()];
 
     let cast_arrays = vec![
-        array.apply_cast_numeric::<_, UInt16Type>(|arr| arr.len() as u16),
-        array.branch_apply_cast_numeric_no_null::<_, UInt16Type>(|arr| match arr {
+        array.apply_cast_numeric::<_, u16>(|arr| arr.len() as u16),
+        array.branch_apply_cast_numeric_no_null::<_, u16>(|arr| match arr {
             Some(v) => (v.len() + 1) as u16,
             None => 0 as u16,
         }),
     ];
 
-    let cast_values = vec![cast_arrays[0].downcast_ref(), cast_arrays[1].downcast_ref()];
+    let cast_values = vec![cast_arrays[0].inner(), cast_arrays[1].inner()];
 
     assert_eq!(2, values[0].null_count());
     assert_eq!(true, values[0].is_null(0));

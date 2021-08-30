@@ -54,7 +54,8 @@ fn test_udf_example_function() -> Result<()> {
 
     for t in tests {
         let func = t.func;
-        if let Err(e) = func.eval(&t.columns, t.columns[0].len()) {
+
+        if let Err(e) = func.eval(&vec![], t.columns[0].len()) {
             assert_eq!(t.error, e.to_string());
         }
 
@@ -68,10 +69,9 @@ fn test_udf_example_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.columns, t.columns[0].len())?;
-        // Type check.
-        let arg_types = vec![];
-        let expect_type = func.return_type(&arg_types)?;
+        let columns = vec![];
+        let ref v = func.eval(&columns, t.columns[0].len())?;
+        let expect_type = func.return_type(&[])?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
         assert_eq!(v, &t.expect);

@@ -13,18 +13,20 @@
 // limitations under the License.
 
 use common_arrow::arrow::types::NativeType;
+use common_io::prelude::*;
+use num::NumCast;
 
 use super::data_type::*;
+use crate::DFTryFrom;
 use crate::DataField;
+use crate::DataValue;
 
-pub trait DFDataType: Send + Sync {
+pub trait DFDataType: std::fmt::Debug + Send + 'static + Sync {
     fn data_type() -> DataType;
 }
 
 macro_rules! impl_df_datatype {
     ($ca:ident, $variant:ident) => {
-        pub struct $ca {}
-
         impl DFDataType for $ca {
             fn data_type() -> DataType {
                 DataType::$variant
@@ -33,126 +35,69 @@ macro_rules! impl_df_datatype {
     };
 }
 
-impl_df_datatype!(UInt8Type, UInt8);
-impl_df_datatype!(UInt16Type, UInt16);
-impl_df_datatype!(UInt32Type, UInt32);
-impl_df_datatype!(UInt64Type, UInt64);
+impl_df_datatype!(u8, UInt8);
+impl_df_datatype!(u16, UInt16);
+impl_df_datatype!(u32, UInt32);
+impl_df_datatype!(u64, UInt64);
 
-impl_df_datatype!(Int8Type, Int8);
-impl_df_datatype!(Int16Type, Int16);
-impl_df_datatype!(Int32Type, Int32);
-impl_df_datatype!(Int64Type, Int64);
-impl_df_datatype!(Float32Type, Float32);
-impl_df_datatype!(Float64Type, Float64);
-impl_df_datatype!(BooleanType, Boolean);
-impl_df_datatype!(Date32Type, Date32);
-impl_df_datatype!(Date64Type, Date64);
+impl_df_datatype!(i8, Int8);
+impl_df_datatype!(i16, Int16);
+impl_df_datatype!(i32, Int32);
+impl_df_datatype!(i64, Int64);
+impl_df_datatype!(f32, Float32);
+impl_df_datatype!(f64, Float64);
+impl_df_datatype!(bool, Boolean);
 
-impl_df_datatype!(Utf8Type, Utf8);
-impl_df_datatype!(NullType, Null);
-impl_df_datatype!(BinaryType, Binary);
+impl_df_datatype!(String, Utf8);
 
-pub struct TimestampSecondType;
-impl DFDataType for TimestampSecondType {
+#[derive(Debug)]
+pub struct Null;
+impl_df_datatype!(Null, Null);
+
+impl DFDataType for Vec<u8> {
     fn data_type() -> DataType {
-        DataType::Timestamp(TimeUnit::Second, None)
+        DataType::Binary
     }
 }
 
-pub struct TimestampMillisecondType;
-impl DFDataType for TimestampMillisecondType {
-    fn data_type() -> DataType {
-        DataType::Timestamp(TimeUnit::Millisecond, None)
-    }
-}
-
-pub struct TimestampMicrosecondType;
-impl DFDataType for TimestampMicrosecondType {
-    fn data_type() -> DataType {
-        DataType::Timestamp(TimeUnit::Microsecond, None)
-    }
-}
-
-pub struct TimestampNanosecondType;
-impl DFDataType for TimestampNanosecondType {
-    fn data_type() -> DataType {
-        DataType::Timestamp(TimeUnit::Nanosecond, None)
-    }
-}
-
-pub struct IntervalYearMonthType;
-impl DFDataType for IntervalYearMonthType {
-    fn data_type() -> DataType {
-        DataType::Interval(IntervalUnit::YearMonth)
-    }
-}
-pub struct IntervalDayTimeType;
-impl DFDataType for IntervalDayTimeType {
-    fn data_type() -> DataType {
-        DataType::Interval(IntervalUnit::DayTime)
-    }
-}
-
-pub struct ListType;
-impl DFDataType for ListType {
+#[derive(Debug)]
+pub struct List;
+impl DFDataType for List {
     fn data_type() -> DataType {
         // null as we cannot no anything without self.
         DataType::List(Box::new(DataField::new("", DataType::Null, true)))
     }
 }
 
-pub struct StructType;
-impl DFDataType for StructType {
+#[derive(Debug)]
+pub struct Struct;
+impl DFDataType for Struct {
     fn data_type() -> DataType {
         // null as we cannot no anything without self.
         DataType::Struct(vec![DataField::new("", DataType::Null, true)])
     }
 }
 
-pub trait DFPrimitiveType: Send + Sync + DFDataType + 'static {
-    type Native: NativeType;
-}
-
-macro_rules! impl_primitive {
-    ($ca:ident, $native:ident) => {
-        impl DFPrimitiveType for $ca {
-            type Native = $native;
-        }
-    };
-}
-
-impl_primitive!(UInt8Type, u8);
-impl_primitive!(UInt16Type, u16);
-impl_primitive!(UInt32Type, u32);
-impl_primitive!(UInt64Type, u64);
-impl_primitive!(Int8Type, i8);
-impl_primitive!(Int16Type, i16);
-impl_primitive!(Int32Type, i32);
-impl_primitive!(Int64Type, i64);
-impl_primitive!(Float32Type, f32);
-impl_primitive!(Float64Type, f64);
-
-impl_primitive!(Date32Type, i32);
-impl_primitive!(Date64Type, i64);
-
-impl_primitive!(TimestampSecondType, i64);
-impl_primitive!(TimestampMillisecondType, i64);
-impl_primitive!(TimestampMicrosecondType, i64);
-impl_primitive!(TimestampNanosecondType, i64);
-
-impl_primitive!(IntervalYearMonthType, i32);
-impl_primitive!(IntervalDayTimeType, i64);
-
-pub trait DFNumericType: DFPrimitiveType {
-    type LargestType: DFNumericType;
+pub trait DFPrimitiveType:
+    DFDataType
+    + NativeType
+    + NumCast
+    + PartialOrd
+    + Into<DataValue>
+    + Default
+    + BinarySer
+    + BinaryDe
+    + DFTryFrom<DataValue>
+{
+    type LargestType: DFPrimitiveType;
     const SIGN: bool;
     const FLOATING: bool;
     const SIZE: usize;
 }
 
-macro_rules! impl_numeric {
+macro_rules! impl_primitive {
     ($ca:ident, $lg: ident, $sign: expr, $floating: expr, $size: expr) => {
-        impl DFNumericType for $ca {
+        impl DFPrimitiveType for $ca {
             type LargestType = $lg;
             const SIGN: bool = $sign;
             const FLOATING: bool = $floating;
@@ -161,29 +106,18 @@ macro_rules! impl_numeric {
     };
 }
 
-impl_numeric!(UInt8Type, UInt64Type, false, false, 1);
-impl_numeric!(UInt16Type, UInt64Type, false, false, 2);
-impl_numeric!(UInt32Type, UInt64Type, false, false, 4);
-impl_numeric!(UInt64Type, UInt64Type, false, false, 8);
-impl_numeric!(Int8Type, Int64Type, true, false, 1);
-impl_numeric!(Int16Type, Int64Type, true, false, 2);
-impl_numeric!(Int32Type, Int64Type, true, false, 4);
-impl_numeric!(Int64Type, Int64Type, true, false, 8);
-impl_numeric!(Float32Type, Float64Type, true, true, 4);
-impl_numeric!(Float64Type, Float64Type, true, true, 8);
+impl_primitive!(u8, u64, false, false, 1);
+impl_primitive!(u16, u64, false, false, 2);
+impl_primitive!(u32, u64, false, false, 4);
+impl_primitive!(u64, u64, false, false, 8);
+impl_primitive!(i8, i64, true, false, 1);
+impl_primitive!(i16, i64, true, false, 2);
+impl_primitive!(i32, i64, true, false, 4);
+impl_primitive!(i64, i64, true, false, 8);
+impl_primitive!(f32, f64, true, true, 4);
+impl_primitive!(f64, f64, true, true, 8);
 
-impl_numeric!(Date32Type, Int64Type, true, false, 4);
-impl_numeric!(Date64Type, Int64Type, true, false, 8);
-
-impl_numeric!(TimestampSecondType, Int64Type, true, false, 8);
-impl_numeric!(TimestampMillisecondType, Int64Type, true, false, 8);
-impl_numeric!(TimestampMicrosecondType, Int64Type, true, false, 8);
-impl_numeric!(TimestampNanosecondType, Int64Type, true, false, 8);
-
-impl_numeric!(IntervalYearMonthType, Int64Type, true, false, 4);
-impl_numeric!(IntervalDayTimeType, Int64Type, true, false, 8);
-
-pub trait DFIntegerType: DFNumericType {}
+pub trait DFIntegerType: DFPrimitiveType {}
 
 macro_rules! impl_integer {
     ($ca:ident, $native:ident) => {
@@ -191,26 +125,15 @@ macro_rules! impl_integer {
     };
 }
 
-impl_integer!(UInt8Type, u8);
-impl_integer!(UInt16Type, u16);
-impl_integer!(UInt32Type, u32);
-impl_integer!(UInt64Type, u64);
-impl_integer!(Int8Type, i8);
-impl_integer!(Int16Type, i16);
-impl_integer!(Int32Type, i32);
-impl_integer!(Int64Type, i64);
+impl_integer!(u8, u8);
+impl_integer!(u16, u16);
+impl_integer!(u32, u32);
+impl_integer!(u64, u64);
+impl_integer!(i8, i8);
+impl_integer!(i16, i16);
+impl_integer!(i32, i32);
+impl_integer!(i64, i64);
 
-impl_integer!(Date32Type, i32);
-impl_integer!(Date64Type, i64);
-
-impl_integer!(TimestampSecondType, i64);
-impl_integer!(TimestampMillisecondType, i64);
-impl_integer!(TimestampMicrosecondType, i64);
-impl_integer!(TimestampNanosecondType, i64);
-
-impl_integer!(IntervalYearMonthType, i32);
-impl_integer!(IntervalDayTimeType, i64);
-
-pub trait DFFloatType: DFNumericType {}
-impl DFFloatType for Float32Type {}
-impl DFFloatType for Float64Type {}
+pub trait DFFloatType: DFPrimitiveType {}
+impl DFFloatType for f32 {}
+impl DFFloatType for f64 {}

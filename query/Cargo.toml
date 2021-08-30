@@ -37,14 +37,13 @@ common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-profling = { path = "../common/profiling" }
 common-store-api = { path = "../common/store-api" }
-common-management = { path = "../common/management" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "ed40333" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "cc53408" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "a92e193" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "2535347" }
 
 # Crates.io dependencies
 clickhouse-srv = "0.3.1"
@@ -63,11 +62,13 @@ log = "0.4"
 metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
-nom = "7.0.0-alpha2"
+nom = "7.0.0"
 num_cpus = "1.0"
 paste = "^1.0"
 pnet = "0.28.0"
-prost = "0.7"
+chrono-tz = "0.5"
+chrono =  "0.4.0"
+prost = "0.8.0"
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -76,7 +77,7 @@ structopt-toml = "0.5.0"
 threadpool = "1.8.1"
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
-tonic = "0.4.3"
+tonic = "0.5.2"
 walkdir = "2.3.2"
 warp = { version = "0.3.1", features = ["tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }

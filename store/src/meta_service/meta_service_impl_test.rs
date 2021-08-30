@@ -26,12 +26,12 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
-use crate::tests::service::init_store_unittest;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_add_file() -> anyhow::Result<()> {
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -71,7 +71,8 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_set_file() -> anyhow::Result<()> {
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -113,7 +114,8 @@ async fn test_meta_server_set_file() -> anyhow::Result<()> {
 async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
     // Test Cmd::AddFile, Cmd::SetFile, Cma::GetFile
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -208,7 +210,8 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc = new_test_context();
     let addr = tc.config.meta_api_addr();
@@ -247,7 +250,8 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     // - Bring up a cluster of one leader and one non-voter
     // - Assert that writing on the non-voter returns ForwardToLeader error
 
-    init_store_unittest();
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
 
     let tc0 = new_test_context();
     let tc1 = new_test_context();

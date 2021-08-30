@@ -46,7 +46,8 @@ mod test {
 
         let buffer = write_in_memory(block)?;
         let cursor = Cursor::new(buffer);
-        let mut reader = read::RecordReader::try_new(cursor, None, None, Arc::new(|_, _| true))?;
+        let mut reader =
+            read::RecordReader::try_new(cursor, None, None, Arc::new(|_, _| true), None)?;
         let arrow_schema = schema.to_arrow();
 
         if let Some(maybe_batch) = reader.next() {

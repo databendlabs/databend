@@ -43,9 +43,9 @@ fn index_of<T>(slice: &[T], item: &T) -> Option<usize> {
 
 /// Just a wrapper structure. Useful for certain impl specializations
 /// This is for instance use to implement
-/// `impl<T> FromIterator<T::Native> for NoNull<DataArray<T>>`
-/// as `Option<T::Native>` was already implemented:
-/// `impl<T> FromIterator<Option<T::Native>> for DataArray<T>`
+/// `impl<T> FromIterator<T> for NoNull<DFPrimitiveArrary<T>>`
+/// as `Option<T>` was already implemented:
+/// `impl<T> FromIterator<Option<T>> for DFPrimitiveArrary<T>`
 pub struct NoNull<T> {
     inner: T,
 }

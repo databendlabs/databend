@@ -16,7 +16,6 @@
 use common_exception::Result;
 
 use super::TakeIdx;
-use crate::arrays::builders::*;
 use crate::arrays::get_list_builder;
 use crate::prelude::*;
 

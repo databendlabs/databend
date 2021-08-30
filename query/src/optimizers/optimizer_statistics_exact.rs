@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_io::prelude::BinaryWrite;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -49,6 +50,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     ref op,
                     distinct: false,
                     ref args,
+                    ..
                 }],
                 PlanNode::Expression(ExpressionPlan { input, .. }),
             ) if op == "count" && args.len() == 1 => match (&args[0], input.as_ref()) {
@@ -57,14 +59,14 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                 {
                     let db_name = "system";
                     let table_name = "one";
-                    let table_id = 1;
-                    let table_version = None;
 
                     let dummy_read_plan =
                         self.ctx
                             .get_table(db_name, table_name)
                             .and_then(|table_meta| {
                                 let table = table_meta.datasource();
+                                let table_id = table_meta.meta_id();
+                                let table_version = table_meta.meta_ver();
                                 table
                                     .schema()
                                     .and_then(|ref schema| {
@@ -91,17 +93,12 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                                         }
                                     })
                             })?;
-                    let rows = read_source_plan.statistics.read_rows as u64;
-                    let states = DataValue::Struct(vec![DataValue::UInt64(Some(rows))]);
-                    let ser = serde_json::to_string(&states)?;
+                    let mut body: Vec<u8> = Vec::new();
+                    body.write_uvarint(read_source_plan.statistics.read_rows as u64)?;
+                    let expr = Expression::create_literal(DataValue::Binary(Some(body)));
                     PlanBuilder::from(&dummy_read_plan)
-                        .expression(
-                            &[Expression::create_literal(DataValue::Utf8(Some(
-                                ser.clone(),
-                            )))],
-                            "Exact Statistics",
-                        )?
-                        .project(&[Expression::Column(ser).alias("count(0)")])?
+                        .expression(&[expr.clone()], "Exact Statistics")?
+                        .project(&[expr.alias("count(0)")])?
                         .build()?
                 }
                 _ => PlanNode::AggregatorPartial(plan.clone()),

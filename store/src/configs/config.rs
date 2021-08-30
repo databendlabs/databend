@@ -41,6 +41,10 @@ lazy_static! {
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
+    /// Identify a config. This is only meant to make debugging easier with more than one Config involved.
+    #[structopt(long, default_value = "")]
+    pub config_id: String,
+
     #[structopt(long, env = "STORE_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
@@ -121,6 +125,14 @@ pub struct Config {
                       " Different value of this setting on leader and followers may cause unexpected behavior.")
     )]
     pub heartbeat_interval: u64,
+
+    #[structopt(
+        long,
+        env = "STORE_INSTALL_SNAPSHOT_TIMEOUT",
+        default_value = "4000",
+        help = concat!("The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.")
+    )]
+    pub install_snapshot_timeout: u64,
 
     #[structopt(
         long,
@@ -211,7 +223,7 @@ impl Config {
     /// Create a unique sled::Tree name by prepending a unique prefix.
     /// So that multiple instance that depends on a sled::Tree can be used in one process.
     /// sled does not allow to open multiple `sled::Db` in one process.
-    pub fn tree_name(&self, name: &str) -> String {
+    pub fn tree_name(&self, name: impl std::fmt::Display) -> String {
         format!("{}{}", self.sled_tree_prefix, name)
     }
 }

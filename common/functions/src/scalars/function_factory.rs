@@ -23,6 +23,8 @@ use unicase::UniCase;
 
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::ComparisonFunction;
+use crate::scalars::ConditionalFunction;
+use crate::scalars::DateFunction;
 use crate::scalars::Function;
 use crate::scalars::HashesFunction;
 use crate::scalars::LogicFunction;
@@ -46,6 +48,8 @@ lazy_static! {
         UdfFunction::register(map.clone()).unwrap();
         HashesFunction::register(map.clone()).unwrap();
         ToCastFunction::register(map.clone()).unwrap();
+        ConditionalFunction::register(map.clone()).unwrap();
+        DateFunction::register(map.clone()).unwrap();
 
         map
     };

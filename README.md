@@ -1,8 +1,8 @@
 <div align="center">
 <h1>Datafuse</h1>
-<a href="https://datafuse.rs" target="_blank">
- <strong>The Open Source Cloud Warehouse for Everyone</strong>
- </a>
+<strong>The Open Source Cloud Warehouse for Everyone</strong>
+<br>
+ https://datafuse.rs
 <br>
 <br>
 
@@ -29,10 +29,20 @@
 </div>
 <br>
 
+- [What is Datafuse?](#what-is-datafuse)
+- [Design Overview](#design-overview)
+   - [Meta Service Layer](#meta-service-layer)
+   - [Compute Layer](#compute-layer)
+   - [Storage Layer](#storage-layer)
+- [Getting Started](#getting-started)
+- [Roadmap](#roadmap)
+
+## What is Datafuse?
+
 Datafuse is an open source **elastic** and **scalable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
 
-We design Datafuse with the following key functionalities in mind:
-1. **Elastic**  In Datafuse storage and compute resources can be scaled in/out on demand.
+Datafuse design principles:
+1. **Elastic**  In Datafuse, storage and compute resources can dynamically scale up and down on demand.
 2. **Secure** All data files and network traffic in Datafuse is encrypted end-to-end, and provide Role Based Access Control in SQL level.
 3. **User-friendly** Datafuse is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
 4. **Cost-efficient** Datafuse processes queries with high performance, and the user only pays for what is actually used.
@@ -41,32 +51,29 @@ We design Datafuse with the following key functionalities in mind:
 
 ![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
 
-The picture above shows the high-level architecture of Datafuse, it consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
+Datafuse consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
 
 ### Meta Service Layer
 
 The meta service is a layer to service multiple tenants.
 In current implementation, the meta service has components:
-* Metadata, which manages all metadata of databases, tables, clusters, the transaction, etc.
-* Administration, which stores user info, user management, access control information, usage statistics, etc.
-* Security, which performs authorization and authentication to protect the privacy of users' data.
+* **Metadata** - Which manages all metadata of databases, tables, clusters, the transaction, etc.
+* **Administration** Which stores user info, user management, access control information, usage statistics, etc.
+* **Security** Which performs authorization and authentication to protect the privacy of users' data.
 
 ### Compute Layer
 
-The compute layer is the layer to carry out computation for query processing. This layer may consist of many clusters,
-and each cluster may consist of many nodes. Each node is a compute unit, and is a collection of components:
-* Planner 
-* Optimizer
-* Processors
-* Cache
+The compute layer is the clusters that running computing workloads, each cluster have many nodes, each node has components:
+* **Planner** - Builds execution plan from the user's SQL statement.
+* **Optimizer** - Optimizer rules like predicate push down or pruning of unused columns.
+* **Processors** - Vector-based query execution pipeline, which is build by planner instructions.
+* **Cache** - Caching Data and Indexes based on the version.
 
-Node is the smallest unit of the compute layer, they can be registered as one cluster via namespace.
 Many clusters can attach the same database, so they can serve the query in parallel by different users.
 
 ### Storage Layer
 
 Datafuse stores data in an efficient, columnar format as Parquet files.
-Each Parquet file is sorted by the primary key before being written to the underlying shared storage.
 For efficient pruning, Datafuse also creates indexes for each Parquet file to speed up the queries.
 
 ## Getting Started

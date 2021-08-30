@@ -29,8 +29,8 @@ use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
 use super::MemoryTableStream;
+use crate::catalogs::Table;
 use crate::datasources::Common;
-use crate::datasources::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct MemoryTable {

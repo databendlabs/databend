@@ -200,11 +200,27 @@ impl TransformerSqlparser {
         })
     }
 
-    fn transform_from(&self, orig_ast: &[TableWithJoins]) -> Result<Vec<TableReference>> {
-        orig_ast
+    fn transform_from(&self, orig_ast: &[TableWithJoins]) -> Result<TableReference> {
+        let mut table_refs: Vec<TableReference> = orig_ast
             .iter()
             .map(|v| self.transform_table_with_joins(v))
-            .collect()
+            .collect::<Result<_>>()?;
+        if !table_refs.is_empty() {
+            let head = table_refs.drain(0..1).next().unwrap();
+            table_refs.into_iter().fold(Ok(head), |acc, r| {
+                Ok(TableReference::Join(Join {
+                    op: JoinOperator::CrossJoin,
+                    condition: JoinCondition::None,
+                    left: Box::new(acc?),
+                    right: Box::new(r),
+                }))
+            })
+        } else {
+            Err(ErrorCode::SyntaxException(format!(
+                "Invalid SQL statement: {}",
+                self.orig_stmt
+            )))
+        }
     }
 
     fn transform_table_with_joins(
@@ -274,64 +290,62 @@ impl TransformerSqlparser {
                     ))),
                 },
 
-                SqlparserJoinOperator::RightOuter(constraint) => {
-                    match constraint {
-                        JoinConstraint::On(cond) => Ok(TableReference::Join(Join {
-                            op: JoinOperator::RightOuter,
-                            condition: JoinCondition::On(self.transform_expr(cond)?),
-                            left: Box::from(left_table),
-                            right: Box::from(right_table),
-                        })),
-                        JoinConstraint::Using(idents) => Ok(TableReference::Join(Join {
-                            op: JoinOperator::RightOuter,
-                            condition: JoinCondition::Using(
-                                idents.iter().map(Identifier::from).collect(),
-                            ),
-                            left: Box::from(left_table),
-                            right: Box::from(right_table),
-                        })),
-                        JoinConstraint::Natural => Ok(TableReference::Join(Join {
-                            op: JoinOperator::RightOuter,
-                            condition: JoinCondition::Natural,
-                            left: Box::from(left_table),
-                            right: Box::from(right_table),
-                        })),
-                        // Cannot run OUTER JOIN without condition
-                        JoinConstraint::None => Err(ErrorCode::SyntaxException(format!(
-                            "Invalid SQL statement: {}",
-                            self.orig_stmt
-                        ))),
-                    }
-                }
-                SqlparserJoinOperator::FullOuter(constraint) => {
-                    match constraint {
-                        JoinConstraint::On(cond) => Ok(TableReference::Join(Join {
-                            op: JoinOperator::FullOuter,
-                            condition: JoinCondition::On(self.transform_expr(cond)?),
-                            left: Box::from(left_table),
-                            right: Box::from(right_table),
-                        })),
-                        JoinConstraint::Using(idents) => Ok(TableReference::Join(Join {
-                            op: JoinOperator::FullOuter,
-                            condition: JoinCondition::Using(
-                                idents.iter().map(Identifier::from).collect(),
-                            ),
-                            left: Box::from(left_table),
-                            right: Box::from(right_table),
-                        })),
-                        JoinConstraint::Natural => Ok(TableReference::Join(Join {
-                            op: JoinOperator::FullOuter,
-                            condition: JoinCondition::Natural,
-                            left: Box::from(left_table),
-                            right: Box::from(right_table),
-                        })),
-                        // Cannot run OUTER JOIN without condition
-                        JoinConstraint::None => Err(ErrorCode::SyntaxException(format!(
-                            "Invalid SQL statement: {}",
-                            self.orig_stmt
-                        ))),
-                    }
-                }
+                SqlparserJoinOperator::RightOuter(constraint) => match constraint {
+                    JoinConstraint::On(cond) => Ok(TableReference::Join(Join {
+                        op: JoinOperator::RightOuter,
+                        condition: JoinCondition::On(self.transform_expr(cond)?),
+                        left: Box::from(left_table),
+                        right: Box::from(right_table),
+                    })),
+                    JoinConstraint::Using(idents) => Ok(TableReference::Join(Join {
+                        op: JoinOperator::RightOuter,
+                        condition: JoinCondition::Using(
+                            idents.iter().map(Identifier::from).collect(),
+                        ),
+                        left: Box::from(left_table),
+                        right: Box::from(right_table),
+                    })),
+                    JoinConstraint::Natural => Ok(TableReference::Join(Join {
+                        op: JoinOperator::RightOuter,
+                        condition: JoinCondition::Natural,
+                        left: Box::from(left_table),
+                        right: Box::from(right_table),
+                    })),
+                    // Cannot run OUTER JOIN without condition
+                    JoinConstraint::None => Err(ErrorCode::SyntaxException(format!(
+                        "Invalid SQL statement: {}",
+                        self.orig_stmt
+                    ))),
+                },
+
+                SqlparserJoinOperator::FullOuter(constraint) => match constraint {
+                    JoinConstraint::On(cond) => Ok(TableReference::Join(Join {
+                        op: JoinOperator::FullOuter,
+                        condition: JoinCondition::On(self.transform_expr(cond)?),
+                        left: Box::from(left_table),
+                        right: Box::from(right_table),
+                    })),
+                    JoinConstraint::Using(idents) => Ok(TableReference::Join(Join {
+                        op: JoinOperator::FullOuter,
+                        condition: JoinCondition::Using(
+                            idents.iter().map(Identifier::from).collect(),
+                        ),
+                        left: Box::from(left_table),
+                        right: Box::from(right_table),
+                    })),
+                    JoinConstraint::Natural => Ok(TableReference::Join(Join {
+                        op: JoinOperator::FullOuter,
+                        condition: JoinCondition::Natural,
+                        left: Box::from(left_table),
+                        right: Box::from(right_table),
+                    })),
+                    // Cannot run OUTER JOIN without condition
+                    JoinConstraint::None => Err(ErrorCode::SyntaxException(format!(
+                        "Invalid SQL statement: {}",
+                        self.orig_stmt
+                    ))),
+                },
+
                 SqlparserJoinOperator::CrossJoin => Ok(TableReference::Join(Join {
                     op: JoinOperator::CrossJoin,
                     condition: JoinCondition::None,
@@ -350,23 +364,40 @@ impl TransformerSqlparser {
 
     fn transform_table_factor(&self, table_factor: &TableFactor) -> Result<TableReference> {
         let result = match table_factor {
-            TableFactor::Table { name, alias, .. } => TableReference::Table {
-                name: Self::transform_object_name(name),
-                alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
-            },
+            TableFactor::Table { name, alias, .. } => {
+                let idents = &name.0;
+                if idents.len() == 1 {
+                    Ok(TableReference::Table {
+                        database: None,
+                        table: Identifier::from(&idents[0]),
+                        alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
+                    })
+                } else if idents.len() == 2 {
+                    Ok(TableReference::Table {
+                        database: Some(Identifier::from(&idents[0])),
+                        table: Identifier::from(&idents[1]),
+                        alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
+                    })
+                } else {
+                    Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    )))
+                }
+            }
             TableFactor::Derived {
                 subquery, alias, ..
-            } => TableReference::Subquery {
+            } => Ok(TableReference::Subquery {
                 subquery: Box::from(self.transform_query(subquery.as_ref())?),
                 alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
-            },
-            TableFactor::TableFunction { expr, alias } => TableReference::TableFunction {
+            }),
+            TableFactor::TableFunction { expr, alias } => Ok(TableReference::TableFunction {
                 expr: self.transform_expr(expr)?,
                 alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
-            },
-            TableFactor::NestedJoin(nested_join) => self.transform_table_with_joins(nested_join)?,
+            }),
+            TableFactor::NestedJoin(nested_join) => self.transform_table_with_joins(nested_join),
         };
-        Ok(result)
+        result
     }
 
     #[inline]
@@ -384,13 +415,38 @@ impl TransformerSqlparser {
 
     fn transform_expr(&self, orig_ast: &SqlparserExpr) -> Result<Expr> {
         match orig_ast {
-            SqlparserExpr::Identifier(ident) => {
-                Ok(Expr::ColumnRef(vec![Identifier::from(ident.to_owned())]))
-            }
+            SqlparserExpr::Identifier(ident) => Ok(Expr::ColumnRef {
+                database: None,
+                table: None,
+                column: Identifier::from(ident),
+            }),
             SqlparserExpr::Wildcard => Ok(Expr::Wildcard),
-            SqlparserExpr::CompoundIdentifier(idents) => Ok(Expr::ColumnRef(
-                idents.iter().map(Identifier::from).collect(),
-            )),
+            SqlparserExpr::CompoundIdentifier(idents) => {
+                if idents.len() == 3 {
+                    Ok(Expr::ColumnRef {
+                        database: Some(Identifier::from(&idents[0])),
+                        table: Some(Identifier::from(&idents[1])),
+                        column: Identifier::from(&idents[2]),
+                    })
+                } else if idents.len() == 2 {
+                    Ok(Expr::ColumnRef {
+                        database: None,
+                        table: Some(Identifier::from(&idents[0])),
+                        column: Identifier::from(&idents[1]),
+                    })
+                } else if idents.len() == 1 {
+                    Ok(Expr::ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Identifier::from(&idents[0]),
+                    })
+                } else {
+                    Err(ErrorCode::SyntaxException(std::format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    )))
+                }
+            }
             SqlparserExpr::IsNull(arg) => Ok(Expr::IsNull(Box::new(self.transform_expr(arg)?))),
             SqlparserExpr::IsNotNull(arg) => Ok(Expr::IsNull(Box::new(self.transform_expr(arg)?))),
             SqlparserExpr::InList {
@@ -526,7 +582,7 @@ impl TransformerSqlparser {
             SqlparserBinaryOperator::Minus => Ok(BinaryOperator::Minus),
             SqlparserBinaryOperator::Multiply => Ok(BinaryOperator::Multiply),
             SqlparserBinaryOperator::Divide => Ok(BinaryOperator::Divide),
-            SqlparserBinaryOperator::Modulus => Ok(BinaryOperator::Modulus),
+            SqlparserBinaryOperator::Modulo => Ok(BinaryOperator::Modulo),
             SqlparserBinaryOperator::StringConcat => Ok(BinaryOperator::StringConcat),
             SqlparserBinaryOperator::Gt => Ok(BinaryOperator::Gt),
             SqlparserBinaryOperator::Lt => Ok(BinaryOperator::Lt),

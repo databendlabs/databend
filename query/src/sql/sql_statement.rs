@@ -22,16 +22,24 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 use sqlparser::ast::ColumnDef;
+use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement as SQLStatement;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowTables;
+pub enum DfShowTables {
+    All,
+    Like(Ident),
+    Where(Expr),
+    FromOrIn(ObjectName),
+}
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowDatabases;
+pub struct DfShowDatabases {
+    pub where_opt: Option<Expr>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowSettings;

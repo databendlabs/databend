@@ -32,12 +32,11 @@ common-profling = { path = "../common/profiling" }
 common-runtime = {path = "../common/runtime"}
 common-tracing = {path = "../common/tracing"}
 
-
 # Github dependencies
 
 # Crates.io dependencies
 anyhow = "1.0.43"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.9" }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
 async-trait = "0.1"
 byteorder = "1.1.0"
 env_logger = "0.9"
@@ -50,8 +49,7 @@ metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
 num_cpus = "1.0"
-paste = "^1.0"
-prost = "0.7"
+prost = "0.8.0"
 rand = "0.8.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -62,9 +60,10 @@ tempfile = "3.2.0"
 thiserror = "1.0.26"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
-tonic = { version = "0.4.3", features = ["tls"]}
+tracing-appender = "0.1.2"
+tonic = { version = "0.5.2", features = ["tls"]}
 
-sha2 = "0.9.5"
+sha2 = "0.9.6"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 warp = { version = "0.3.1", features = ["tls"] }
 
@@ -76,4 +75,4 @@ flaky_test = "0.1"
 
 [build-dependencies]
 common-building = {path = "../common/building"}
-tonic-build = "0.4"
+tonic-build = "0.5.2"

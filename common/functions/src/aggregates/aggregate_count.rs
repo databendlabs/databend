@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
@@ -37,6 +38,7 @@ pub struct AggregateCountFunction {
 impl AggregateCountFunction {
     pub fn try_create(
         display_name: &str,
+        _params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;

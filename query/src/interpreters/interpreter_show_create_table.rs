@@ -26,7 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use log::debug;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::DatafuseQueryContextRef;
@@ -52,7 +52,7 @@ impl Interpreter for ShowCreateTableInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_datasource();
+        let datasource = self.ctx.get_catalog();
         let database = datasource.get_database(self.plan.db.as_str())?;
         let table_meta = database.get_table(self.plan.table.as_str())?;
         let table = table_meta.datasource();

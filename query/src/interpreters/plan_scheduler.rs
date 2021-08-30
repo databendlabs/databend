@@ -46,8 +46,8 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
+use crate::catalogs::TablePtr;
 use crate::clusters::Node;
-use crate::datasources::TablePtr;
 use crate::sessions::DatafuseQueryContext;
 use crate::sessions::DatafuseQueryContextRef;
 

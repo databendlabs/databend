@@ -88,7 +88,7 @@ The `_input_rows` is the rows of the current block, and it may be useful when th
 ## Example
 Let's take an example of aggregate function `sum`.
 
-It's declared as `AggregateSumFunction<T, SumT>`, we can accept varying integer types like `UInt8Type`, `Int8Type`. `T` and `SumT` is logic types which implement `DFNumericType`. e.g., `T` is `UInt8Type` and `SumT` must be `UInt64Type`.
+It's declared as `AggregateSumFunction<T, SumT>`, we can accept varying integer types like `u8`, `i8`. `T` and `SumT` is logic types which implement `DFPrimitiveType`. e.g., `T` is `u8` and `SumT` must be `u64`.
 
 Also, we can dispatch it using macros by matching the types of the arguments. Take a look at the `dispatch_numeric_types` to understand the dispatch macros.
 
@@ -99,11 +99,11 @@ struct AggregateSumState<T> {
 }
 ```
 
-The generic `T` is from `SumT::Native`, the `Option<T>` can return `null` if nothing is passed into this function.
+The generic `T` is from `SumT`, the `Option<T>` can return `null` if nothing is passed into this function.
 
 Let's take into the function `accumulate_keys`, because this is the only function that a little hard to understand in this case.
 
-The `places` is the memory address of the first state in this row, so we can get the address of `AggregateSumState<T>` using `places[row] + offset`, then using `place.get::<AggregateSumState<SumT::Native>>()` to get the value of the corresponding state.
+The `places` is the memory address of the first state in this row, so we can get the address of `AggregateSumState<T>` using `places[row] + offset`, then using `place.get::<AggregateSumState<SumT>>()` to get the value of the corresponding state.
 
 Since we already know the array type of this function, we can safely cast it to arrow's `PrimitiveArray<T>`, here we make two branches to reduce the branch prediction of CPU, `null` and `no_null`. In `no_null` case, we just iterate the array and apply the `sum`, this is good for compiler to optimize the codes into vectorized codes.
 

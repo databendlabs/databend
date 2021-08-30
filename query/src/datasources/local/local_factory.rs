@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use crate::catalogs::Database;
+use crate::datasources::local::DefaultDatabase;
 use crate::datasources::local::LocalDatabase;
-use crate::datasources::Database;
 
 pub struct LocalFactory;
 
@@ -26,8 +27,12 @@ impl LocalFactory {
         Self
     }
 
+    /// Local databases: Local database + Default database.
     pub fn load_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let databases: Vec<Arc<dyn Database>> = vec![Arc::new(LocalDatabase::create())];
+        let databases: Vec<Arc<dyn Database>> = vec![
+            Arc::new(LocalDatabase::create()),
+            Arc::new(DefaultDatabase::create()),
+        ];
         Ok(databases)
     }
 }

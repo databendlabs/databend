@@ -25,6 +25,9 @@ cli:
 unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 
+cli-test:
+	bash ./scripts/ci/ci-run-cli-unit-tests.sh
+
 stateless-test:
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-standalone.sh

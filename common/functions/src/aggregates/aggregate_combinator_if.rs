@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_arrow::arrow;
@@ -38,6 +39,7 @@ pub struct AggregateIfCombinator {
 impl AggregateIfCombinator {
     pub fn try_create(
         nested_name: &str,
+        params: Vec<DataValue>,
         arguments: Vec<DataField>,
         nested_creator: FactoryFunc,
     ) -> Result<AggregateFunctionRef> {
@@ -62,7 +64,7 @@ impl AggregateIfCombinator {
         }
 
         let nested_arguments = &arguments[0..argument_len - 1];
-        let nested = nested_creator(nested_name, nested_arguments.to_vec())?;
+        let nested = nested_creator(nested_name, params, nested_arguments.to_vec())?;
 
         Ok(Arc::new(AggregateIfCombinator {
             name,
@@ -102,7 +104,7 @@ impl AggregateFunction for AggregateIfCombinator {
         let boolean_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
         let boolean_array = boolean_array.bool()?;
 
-        let arrow_filter_array = boolean_array.downcast_ref();
+        let arrow_filter_array = boolean_array.inner();
         let bitmap = arrow_filter_array.values();
 
         let mut column_array = Vec::with_capacity(self.argument_len - 1);

@@ -116,10 +116,10 @@ pub trait HashMethod {
     fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>>;
 }
 
-pub type HashMethodKeysU8 = HashMethodFixedKeys<UInt8Type>;
-pub type HashMethodKeysU16 = HashMethodFixedKeys<UInt16Type>;
-pub type HashMethodKeysU32 = HashMethodFixedKeys<UInt32Type>;
-pub type HashMethodKeysU64 = HashMethodFixedKeys<UInt64Type>;
+pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
+pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
+pub type HashMethodKeysU32 = HashMethodFixedKeys<u32>;
+pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
@@ -156,7 +156,7 @@ pub struct HashMethodSerializer {}
 impl HashMethodSerializer {
     #[inline]
     pub fn get_key(&self, array: &DFBinaryArray, row: usize) -> Vec<u8> {
-        let v = array.as_ref().value(row);
+        let v = array.inner().value(row);
         v.to_owned()
     }
 
@@ -218,24 +218,24 @@ pub struct HashMethodFixedKeys<T> {
 }
 
 impl<T> HashMethodFixedKeys<T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
     pub fn default() -> Self {
         HashMethodFixedKeys { t: PhantomData }
     }
 
     #[inline]
-    pub fn get_key(&self, array: &DataArray<T>, row: usize) -> T::Native {
-        array.as_ref().value(row)
+    pub fn get_key(&self, array: &DFPrimitiveArray<T>, row: usize) -> T {
+        array.inner().value(row)
     }
     pub fn de_group_columns(
         &self,
-        keys: Vec<T::Native>,
+        keys: Vec<T>,
         group_fields: &[DataField],
     ) -> Result<Vec<Series>> {
         let mut keys = keys;
         let rows = keys.len();
-        let step = std::mem::size_of::<T::Native>();
+        let step = std::mem::size_of::<T>();
         let length = rows * step;
         let capacity = keys.capacity() * step;
         let mutptr = keys.as_mut_ptr() as *mut u8;
@@ -262,18 +262,18 @@ where T: DFNumericType
 
 impl<T> HashMethod for HashMethodFixedKeys<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::Eq + Hash + Clone + Debug,
+    T: DFPrimitiveType,
+    T: std::cmp::Eq + Hash + Clone + Debug,
 {
-    type HashKey = T::Native;
+    type HashKey = T;
 
     fn name(&self) -> String {
         format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
     }
 
     fn build_keys(&self, group_columns: &[&DataColumn], rows: usize) -> Result<Vec<Self::HashKey>> {
-        let step = std::mem::size_of::<T::Native>();
-        let mut group_keys: Vec<T::Native> = vec![T::Native::default(); rows];
+        let step = std::mem::size_of::<T>();
+        let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
         let mut offsize = 0;
         let mut size = step;

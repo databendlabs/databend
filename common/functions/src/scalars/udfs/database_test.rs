@@ -25,11 +25,12 @@ fn test_database_function() -> Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        columns: Vec<DataColumn>,
+        columns: Vec<DataColumnWithField>,
         expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
     }
+    let dummy = DataField::new("dummy", DataType::Utf8, false);
 
     let tests = vec![Test {
         name: "database-function-passed",
@@ -37,16 +38,17 @@ fn test_database_function() -> Result<()> {
         nullable: false,
         func: DatabaseFunction::try_create("database")?,
         columns: vec![
-            Series::new(vec!["default"]).into(),
-            Series::new(vec![4]).into(),
+            DataColumnWithField::new(Series::new(vec!["default"]).into(), dummy.clone()),
+            DataColumnWithField::new(Series::new(vec![4]).into(), dummy.clone()),
         ],
         expect: Series::new(vec!["default"]).into(),
         error: "",
     }];
 
     for t in tests {
-        let rows = t.columns[0].len();
+        let rows = t.columns[0].column().len();
         let func = t.func;
+
         match func.eval(&t.columns, rows) {
             Ok(v) => {
                 // Display check.

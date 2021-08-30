@@ -55,7 +55,16 @@ impl MySQLHandler {
     }
 
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
-        let listener = tokio::net::TcpListener::bind(listening).await?;
+        let listener = tokio::net::TcpListener::bind(listening)
+            .await
+            .map_err(|e| {
+                ErrorCode::TokioError(format!(
+                    "{{{}:{}}} {}",
+                    listening.ip().to_string(),
+                    listening.port().to_string(),
+                    e
+                ))
+            })?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
@@ -113,7 +122,7 @@ impl Server for MySQLHandler {
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
                 log::error!(
-                    "Unexpected error during shutdown ClickHouseHandler. cause {}",
+                    "Unexpected error during shutdown MySQLHandler. cause {}",
                     error
                 );
             }

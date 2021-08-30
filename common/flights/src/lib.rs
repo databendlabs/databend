@@ -23,7 +23,6 @@ pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
 pub use impls::kv_api_impl;
 pub use impls::meta_api_impl;
-pub use impls::session_api_impl;
 pub use impls::storage_api_impl;
 pub use store_client::StoreClient;
 pub use store_do_action::RequestFor;

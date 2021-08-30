@@ -200,3 +200,22 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_projection_push_down_optimizer_4() -> Result<()> {
+    let ctx = crate::tests::try_create_context()?;
+
+    let plan = PlanParser::create(ctx.clone())
+        .build_from_sql("select substring(value from 1 for 3)  as c1 from system.settings")?;
+
+    let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
+    let optimized = project_push_down.optimize(&plan)?;
+
+    let expect = "Projection: substring(value, 1, 3) as c1:Utf8\
+                        \n  Expression: substring(value, 1, 3):Utf8 (Before Projection)\
+                        \n    ReadDataSource: scan partitions: [1], scan schema: [value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+
+    let actual = format!("{:?}", optimized);
+    assert_eq!(expect, actual);
+    Ok(())
+}

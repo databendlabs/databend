@@ -87,10 +87,20 @@ fn test_cast_function() -> Result<()> {
             error: "",
         },
     ];
+
+    let dummy = DataField::new("dummy", DataType::Utf8, false);
+
     for t in tests {
         let rows = t.columns[0].len();
+
+        let columns: Vec<DataColumnWithField> = t
+            .columns
+            .iter()
+            .map(|c| DataColumnWithField::new(c.clone(), dummy.clone()))
+            .collect();
+
         let func = t.func.unwrap();
-        if let Err(e) = func.eval(&t.columns, rows) {
+        if let Err(e) = func.eval(&columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
         // Display check.
@@ -103,9 +113,9 @@ fn test_cast_function() -> Result<()> {
         let actual_null = func.nullable(&DataSchema::empty())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.columns, rows)?;
+        let ref v = func.eval(&columns, rows)?;
         // Type check.
-        let expect_type = func.return_type(&vec![t.columns[0].data_type()])?;
+        let expect_type = func.return_type(&[])?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
 

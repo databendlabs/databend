@@ -20,10 +20,10 @@ mod test {
     fn test_display_create_database() {
         let stmt = Statement::CreateDatabase {
             if_not_exists: true,
-            name: vec![Identifier {
+            name: Identifier {
                 name: String::from("column"),
                 quote: Some('`'),
-            }],
+            },
             engine: "".to_string(),
             options: vec![],
         };
@@ -37,16 +37,14 @@ mod test {
     fn test_display_create_table() {
         let stmt = Statement::CreateTable {
             if_not_exists: true,
-            name: vec![
-                Identifier {
-                    name: "db".to_owned(),
-                    quote: Some('`'),
-                },
-                Identifier {
-                    name: "table".to_owned(),
-                    quote: Some('`'),
-                },
-            ],
+            database: Some(Identifier {
+                name: "db".to_owned(),
+                quote: Some('`'),
+            }),
+            table: Identifier {
+                name: "table".to_owned(),
+                quote: Some('`'),
+            },
             columns: vec![ColumnDefinition {
                 name: Identifier {
                     name: "column".to_owned(),
@@ -82,71 +80,97 @@ mod test {
                 ]),
                 SelectTarget::Indirections(vec![Indirection::Star]),
             ],
-            from: vec![
-                TableReference::Table {
-                    name: vec![Identifier {
-                        name: "table".to_owned(),
+            from: TableReference::Join(Join {
+                op: JoinOperator::Inner,
+                condition: JoinCondition::Natural,
+                left: Box::new(TableReference::Table {
+                    database: None,
+                    table: Identifier {
+                        name: "left_table".to_owned(),
                         quote: None,
-                    }],
-                    alias: Some(TableAlias {
-                        name: Identifier {
-                            name: "table1".to_owned(),
-                            quote: None,
-                        },
-                        columns: vec![],
-                    }),
-                },
-                TableReference::Join(Join {
-                    op: JoinOperator::Inner,
-                    condition: JoinCondition::Natural,
-                    left: Box::new(TableReference::Table {
-                        name: vec![Identifier {
-                            name: "left_table".to_owned(),
-                            quote: None,
-                        }],
-                        alias: None,
-                    }),
-                    right: Box::new(TableReference::Table {
-                        name: vec![Identifier {
-                            name: "right_table".to_owned(),
-                            quote: None,
-                        }],
-                        alias: None,
-                    }),
+                    },
+                    alias: None,
                 }),
-            ],
+                right: Box::new(TableReference::Table {
+                    database: None,
+                    table: Identifier {
+                        name: "right_table".to_owned(),
+                        quote: None,
+                    },
+                    alias: None,
+                }),
+            }),
             selection: Some(Expr::BinaryOp {
                 op: BinaryOperator::Eq,
-                left: Box::new(Expr::ColumnRef(vec![Identifier {
+                left: Box::new(Expr::ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "a".to_owned(),
+                        quote: None,
+                    },
+                }),
+                right: Box::new(Expr::ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "b".to_owned(),
+                        quote: None,
+                    },
+                }),
+            }),
+            group_by: vec![Expr::ColumnRef {
+                database: None,
+                table: None,
+                column: Identifier {
                     name: "a".to_owned(),
                     quote: None,
-                }])),
-                right: Box::new(Expr::ColumnRef(vec![Identifier {
-                    name: "b".to_owned(),
-                    quote: None,
-                }])),
-            }),
-            group_by: vec![Expr::ColumnRef(vec![Identifier {
-                name: "a".to_owned(),
-                quote: None,
-            }])],
+                },
+            }],
             having: Some(Expr::BinaryOp {
                 op: BinaryOperator::NotEq,
-                left: Box::new(Expr::ColumnRef(vec![Identifier {
-                    name: "a".to_owned(),
-                    quote: None,
-                }])),
-                right: Box::new(Expr::ColumnRef(vec![Identifier {
-                    name: "b".to_owned(),
-                    quote: None,
-                }])),
+                left: Box::new(Expr::ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "a".to_owned(),
+                        quote: None,
+                    },
+                }),
+                right: Box::new(Expr::ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "b".to_owned(),
+                        quote: None,
+                    },
+                }),
             }),
         };
 
         assert_eq!(
             format!("{}", stmt),
-            r#"SELECT DISTINCT table.column, * FROM table AS table1, left_table NATURAL INNER JOIN right_table WHERE a = b GROUP BY a HAVING a <> b"#
+            r#"SELECT DISTINCT table.column, * FROM left_table NATURAL INNER JOIN right_table WHERE a = b GROUP BY a HAVING a <> b"#
         );
+    }
+
+    #[test]
+    fn test_display_table_reference() {
+        let table_ref = TableReference::Table {
+            database: None,
+            table: Identifier {
+                name: "table".to_owned(),
+                quote: None,
+            },
+            alias: Some(TableAlias {
+                name: Identifier {
+                    name: "table1".to_owned(),
+                    quote: None,
+                },
+                columns: vec![],
+            }),
+        };
+        assert_eq!(format!("{}", table_ref), "table AS table1");
     }
 
     #[test]
