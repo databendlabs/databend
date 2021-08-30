@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::boxed::Box;
-use std::error::Error as StdError;
 use std::ffi::OsStr;
 use std::ffi::OsString;
-use std::fmt;
 use std::fs::File;
 use std::fs::{self};
 use std::hash::BuildHasher;
@@ -31,19 +28,9 @@ use filetime::FileTime;
 use ritelinked::DefaultHashBuilder;
 use walkdir::WalkDir;
 
-pub use crate::memory_cache::LruCache;
-pub use crate::memory_cache::Meter;
-
-struct FileSize;
-
-/// Given a tuple of (path, filesize), use the filesize for measurement.
-impl<K> Meter<K, u64> for FileSize {
-    type Measure = usize;
-    fn measure<Q: ?Sized>(&self, _: &Q, v: &u64) -> usize
-    where K: Borrow<Q> {
-        *v as usize
-    }
-}
+use crate::Cache;
+use crate::FileSize;
+use crate::LruCache;
 
 /// Return an iterator of `(path, size)` of files under `path` sorted by ascending last-modified
 /// time, such that the oldest modified file is returned first.
@@ -76,46 +63,6 @@ pub struct LruDiskCache<S: BuildHasher = DefaultHashBuilder> {
     lru: LruCache<OsString, u64, S, FileSize>,
     root: PathBuf,
 }
-
-/// Errors returned by this crate.
-#[derive(Debug)]
-pub enum Error {
-    /// The file was too large to fit in the cache.
-    FileTooLarge,
-    /// The file was not in the cache.
-    FileNotInCache,
-    /// An IO Error occurred.
-    Io(io::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::FileTooLarge => write!(f, "File too large"),
-            Error::FileNotInCache => write!(f, "File not in cache"),
-            Error::Io(ref e) => write!(f, "{}", e),
-        }
-    }
-}
-
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Error::FileTooLarge => None,
-            Error::FileNotInCache => None,
-            Error::Io(ref e) => Some(e),
-        }
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Error {
-        Error::Io(e)
-    }
-}
-
-/// A convenience `Result` type
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// Trait objects can't be bounded by more than one non-builtin trait.
 pub trait ReadSeek: Read + Seek + Send {}
@@ -209,7 +156,7 @@ impl LruDiskCache {
         };
         //TODO: ideally LRUCache::insert would give us back the entries it had to remove.
         while self.lru.size() as u64 + size > self.lru.capacity() as u64 {
-            let (rel_path, _) = self.lru.remove_lru().expect("Unexpectedly empty cache!");
+            let (rel_path, _) = self.lru.pop_by_policy().expect("Unexpectedly empty cache!");
             let remove_path = self.rel_to_abs_path(rel_path);
             //TODO: check that files are removable during `init`, so that this is only
             // due to outside interference.
@@ -217,7 +164,7 @@ impl LruDiskCache {
                 panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
             });
         }
-        self.lru.insert(rel_path.to_owned(), size);
+        self.lru.put(rel_path.to_owned(), size);
         Ok(())
     }
 
@@ -288,7 +235,7 @@ impl LruDiskCache {
 
     /// Return `true` if a file with path `key` is in the cache.
     pub fn contains_key<K: AsRef<OsStr>>(&self, key: K) -> bool {
-        self.lru.contains_key(key.as_ref())
+        self.lru.contains(key.as_ref())
     }
 
     /// Get an opened `File` for `key`, if one exists and can be opened. Updates the LRU state
@@ -314,7 +261,7 @@ impl LruDiskCache {
 
     /// Remove the given key from the cache.
     pub fn remove<K: AsRef<OsStr>>(&mut self, key: K) -> Result<()> {
-        match self.lru.remove(key.as_ref()) {
+        match self.lru.pop(key.as_ref()) {
             Some(_) => {
                 let path = self.rel_to_abs_path(key.as_ref());
                 fs::remove_file(&path).map_err(|e| {
@@ -326,3 +273,51 @@ impl LruDiskCache {
         }
     }
 }
+
+pub mod result {
+    use std::error::Error as StdError;
+    use std::fmt;
+    use std::io;
+
+    /// Errors returned by this crate.
+    #[derive(Debug)]
+    pub enum Error {
+        /// The file was too large to fit in the cache.
+        FileTooLarge,
+        /// The file was not in the cache.
+        FileNotInCache,
+        /// An IO Error occurred.
+        Io(io::Error),
+    }
+
+    impl fmt::Display for Error {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Error::FileTooLarge => write!(f, "File too large"),
+                Error::FileNotInCache => write!(f, "File not in cache"),
+                Error::Io(ref e) => write!(f, "{}", e),
+            }
+        }
+    }
+
+    impl StdError for Error {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            match self {
+                Error::FileTooLarge => None,
+                Error::FileNotInCache => None,
+                Error::Io(ref e) => Some(e),
+            }
+        }
+    }
+
+    impl From<io::Error> for Error {
+        fn from(e: io::Error) -> Error {
+            Error::Io(e)
+        }
+    }
+
+    /// A convenience `Result` type
+    pub type Result<T> = std::result::Result<T, Error>;
+}
+
+use result::*;

@@ -24,8 +24,8 @@ use filetime::set_file_times;
 use filetime::FileTime;
 use tempfile::TempDir;
 
-use crate::disk_cache::Error;
 use crate::disk_cache::LruDiskCache;
+use crate::DiskCacheError;
 
 struct TestFixture {
     /// Temp directory.
@@ -207,7 +207,7 @@ fn test_insert_bytes_too_large() {
     let f = TestFixture::new();
     let mut c = LruDiskCache::new(f.tmp(), 1).unwrap();
     match c.insert_bytes("a/b/c", &[0; 2]) {
-        Err(Error::FileTooLarge) => {}
+        Err(DiskCacheError::FileTooLarge) => {}
         x => panic!("Unexpected result: {:?}", x),
     }
 }
