@@ -32,7 +32,7 @@ impl DataColumn {
     #[inline]
     pub fn data_type(&self) -> DataType {
         match self {
-            DataColumn::Array(array) => array.data_type(),
+            DataColumn::Array(array) => array.data_type().clone(),
             DataColumn::Constant(v, _) => v.data_type(),
         }
     }

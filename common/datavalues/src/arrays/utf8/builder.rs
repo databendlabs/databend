@@ -16,10 +16,8 @@ use common_arrow::arrow::array::*;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 
-use super::ArrayDeserializer;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
-use crate::Utf8Type;
 
 pub struct Utf8ArrayBuilder {
     pub builder: MutableUtf8Array<i64>,
@@ -59,7 +57,7 @@ impl Utf8ArrayBuilder {
 
     pub fn finish(&mut self) -> DFUtf8Array {
         let array = self.builder.as_arc();
-        array.into()
+        DFUtf8Array::from_arrow_array(array.as_ref())
     }
 }
 
@@ -95,7 +93,7 @@ impl ArrayDeserializer for Utf8ArrayBuilder {
     }
 }
 
-impl<S> NewDataArray<Utf8Type, S> for DFUtf8Array
+impl<S> NewDataArray<S> for DFUtf8Array
 where S: AsRef<str>
 {
     fn new_from_slice(v: &[S]) -> Self {

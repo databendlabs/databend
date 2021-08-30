@@ -53,7 +53,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
                 "|       |   `b` Int32,       |",
                 "|       |   `c` Utf8,        |",
                 "|       |   `d` Int16,       |",
-                "|       |   `e` Date32,      |",
+                "|       |   `e` Date16,      |",
                 "|       | ) ENGINE=Null      |",
                 "+-------+--------------------+",
             ];

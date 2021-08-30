@@ -40,15 +40,15 @@ pub trait GroupHash: Debug {
     }
 }
 
-impl<T> GroupHash for DataArray<T>
+impl<T> GroupHash for DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Marshal + StatBuffer + Sized,
+    T: DFPrimitiveType,
+    T: Marshal + StatBuffer + Sized,
 {
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
-        let array = self.downcast_ref();
+        let array = self.inner();
         let mut ptr = ptr;
-        // let mut buffer = T::Native::buffer();
+        // let mut buffer = T::buffer();
         // value.marshal(buffer.as_mut());
         // &buffer.as_ref()[0] as *const u8,
 
@@ -56,9 +56,9 @@ where
         for value in array.values().iter() {
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    value as *const T::Native as *const u8,
+                    value as *const T as *const u8,
                     ptr,
-                    std::mem::size_of::<T::Native>(),
+                    std::mem::size_of::<T>(),
                 );
                 ptr = ptr.add(step);
             }
@@ -69,7 +69,7 @@ where
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.into_no_null_iter().zip(vec.iter_mut()) {
-            BinaryWrite::write_scalar(vec, &value)?;
+            BinaryWrite::write_scalar(vec, value)?;
         }
         Ok(())
     }
@@ -77,7 +77,7 @@ where
 
 impl GroupHash for DFBooleanArray {
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()> {
-        let array = self.downcast_ref();
+        let array = self.inner();
         let mut ptr = ptr;
 
         for value in array.values().iter() {

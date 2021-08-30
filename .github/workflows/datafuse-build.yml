@@ -34,3 +34,5 @@ jobs:
 
       - name: Build
         run: cargo build --verbose
+        env:
+          CARGO_INCREMENTAL: '0'

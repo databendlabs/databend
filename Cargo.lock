@@ -759,6 +759,8 @@ name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
+ "chrono",
+ "chrono-tz",
  "comfy-table",
  "common-arrow",
  "common-exception",
@@ -1399,6 +1401,8 @@ dependencies = [
  "async-trait",
  "bumpalo",
  "byteorder",
+ "chrono",
+ "chrono-tz",
  "clickhouse-rs",
  "clickhouse-srv",
  "common-arrow",

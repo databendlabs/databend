@@ -18,7 +18,6 @@ use common_arrow::arrow::compute::contains::contains;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
 pub trait ArrayContain: Debug {
@@ -36,15 +35,15 @@ pub trait ArrayContain: Debug {
 macro_rules! contain_internal {
     ($self:expr, $list_arr:expr) => {{
         assert_eq!($self.len(), $list_arr.len());
-        let arrow_array = $self.downcast_ref();
-        let arrow_list = $list_arr.downcast_ref();
+        let arrow_array = $self.inner();
+        let arrow_list = $list_arr.inner();
         let arrow_res = contains(arrow_list, arrow_array)?;
-        Ok(DFBooleanArray::from_arrow_array(arrow_res))
+        Ok(DFBooleanArray::new(arrow_res))
     }};
 }
 
-impl<T> ArrayContain for DataArray<T>
-where T: DFNumericType
+impl<T> ArrayContain for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
     fn contain(&self, list: &DFListArray) -> Result<DFBooleanArray>
     where Self: std::marker::Sized {

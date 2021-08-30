@@ -141,7 +141,7 @@ struct RequireColumnsVisitor {
     required_columns: HashSet<String>,
 }
 impl RequireColumnsVisitor {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             required_columns: HashSet::new(),
         }

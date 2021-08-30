@@ -19,11 +19,10 @@ use std::ops::Mul;
 use std::ops::Neg;
 use std::ops::Rem;
 use std::ops::Sub;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::compute::arithmetics::basic;
 use common_arrow::arrow::compute::arithmetics::negate;
 use common_arrow::arrow::compute::arity::unary;
@@ -37,34 +36,30 @@ use num::ToPrimitive;
 use strength_reduce::StrengthReducedU64;
 
 use crate::arrays::ops::*;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 
+/// TODO: sundy
+/// check division by zero in rem & div ops
 fn arithmetic_helper<T, Kernel, SKernel, F>(
-    lhs: &DataArray<T>,
-    rhs: &DataArray<T>,
+    lhs: &DFPrimitiveArray<T>,
+    rhs: &DFPrimitiveArray<T>,
     kernel: Kernel,
     scalar_kernel: SKernel,
     operation: F,
-) -> Result<DataArray<T>>
+) -> Result<DFPrimitiveArray<T>>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + num::Zero,
+    T: DFPrimitiveType,
+    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + num::Zero,
     Kernel: Fn(
-        &PrimitiveArray<T::Native>,
-        &PrimitiveArray<T::Native>,
-    ) -> std::result::Result<PrimitiveArray<T::Native>, ArrowError>,
-    SKernel: Fn(&PrimitiveArray<T::Native>, &T::Native) -> PrimitiveArray<T::Native>,
-    F: Fn(T::Native, T::Native) -> T::Native,
+        &PrimitiveArray<T>,
+        &PrimitiveArray<T>,
+    ) -> std::result::Result<PrimitiveArray<T>, ArrowError>,
+    SKernel: Fn(&PrimitiveArray<T>, &T) -> PrimitiveArray<T>,
+    F: Fn(T, T) -> T,
 {
     let ca = match (lhs.len(), rhs.len()) {
         (a, b) if a == b => {
-            let array = Arc::new(kernel(lhs.downcast_ref(), rhs.downcast_ref()).expect("output"))
-                as ArrayRef;
+            let array = kernel(lhs.inner(), rhs.inner()).expect("output");
 
             array.into()
         }
@@ -72,9 +67,9 @@ where
         (_, 1) => {
             let opt_rhs = rhs.get(0);
             match opt_rhs {
-                None => DataArray::full_null(lhs.len()),
+                None => DFPrimitiveArray::<T>::full_null(lhs.len()),
                 Some(rhs) => {
-                    let array = Arc::new(scalar_kernel(lhs.downcast_ref(), &rhs)) as ArrayRef;
+                    let array = scalar_kernel(lhs.inner(), &rhs);
                     array.into()
                 }
             }
@@ -82,7 +77,7 @@ where
         (1, _) => {
             let opt_lhs = lhs.get(0);
             match opt_lhs {
-                None => DataArray::full_null(rhs.len()),
+                None => DFPrimitiveArray::<T>::full_null(rhs.len()),
                 Some(lhs) => rhs.apply(|rhs| operation(lhs, rhs)),
             }
         }
@@ -91,17 +86,16 @@ where
     Ok(ca)
 }
 
-impl<T> Add for &DataArray<T>
-where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
+impl<T> Add for &DFPrimitiveArray<T>
+where T: DFPrimitiveType
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
         + NumCast
-        + num::Zero,
+        + num::Zero
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn add(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -114,17 +108,17 @@ where
     }
 }
 
-impl<T> Sub for &DataArray<T>
+impl<T> Sub for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + num::Zero,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -137,18 +131,18 @@ where
     }
 }
 
-impl<T> Mul for &DataArray<T>
+impl<T> Mul for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + num::Zero,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -161,19 +155,19 @@ where
     }
 }
 
-impl<T> Div for &DataArray<T>
+impl<T> Div for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + num::Zero
         + num::One,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<DFPrimitiveArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
         arithmetic_helper(
@@ -192,15 +186,15 @@ where
 // 1. turn it into UInt64 % Const UInt64
 // 2. create UInt8Array to accept the result, this could save lots of allocation than UInt64Array
 
-impl<T> DataArray<T>
+impl<T> DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    DataArray<T>: IntoSeries,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    DFPrimitiveArray<T>: IntoSeries,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + ToPrimitive
         + AsPrimitive<u8>
@@ -217,10 +211,8 @@ where
                     None => Ok(DFUInt8Array::full_null(self.len()).into_series()),
                     Some(rhs) => match self.data_type() {
                         DataType::UInt64 => {
-                            let arr = &*self.array;
-                            let arr = unsafe {
-                                &*(arr as *const dyn Array as *const PrimitiveArray<u64>)
-                            };
+                            let arr = self.array.as_any().downcast_ref::<UInt64Array>().unwrap();
+
                             let rhs: u8 = rhs.as_();
                             let rhs = rhs as u64;
 
@@ -231,12 +223,12 @@ where
                                     |a| (a % reduced_modulo) as u8,
                                     ArrowDataType::UInt8,
                                 );
-                                let array = DFUInt8Array::from_arrow_array(res);
+                                let array = DFUInt8Array::new(res);
                                 Ok(array.into_series())
                             } else {
                                 let mask = rhs - 1;
                                 let res = unary(arr, |a| (a & mask) as u8, ArrowDataType::UInt8);
-                                let array = DFUInt8Array::from_arrow_array(res);
+                                let array = DFUInt8Array::new(res);
                                 Ok(array.into_series())
                             }
                         }
@@ -265,53 +257,58 @@ where
     }
 }
 
-impl<T> Neg for &DataArray<T>
+impl<T> Neg for &DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    T::Native: Add<Output = T::Native>
-        + Sub<Output = T::Native>
-        + Mul<Output = T::Native>
-        + Div<Output = T::Native>
-        + Rem<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Rem<Output = T>
         + NumCast
         + num::Zero
         + num::One,
 {
-    type Output = Result<DataArray<T>>;
+    type Output = Result<Series>;
 
     fn neg(self) -> Self::Output {
-        let arr = &*self.array;
-        let result = unsafe {
+        // let arr = negate(&self.array);
+        let arr = &self.array;
+        unsafe {
             match self.data_type() {
-                DataType::Int8 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i8>),
-                )) as ArrayRef),
+                DataType::Int8 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i8>));
+                    Ok(DFInt8Array::new(v).into_series())
+                }
 
-                DataType::Int16 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i16>),
-                )) as ArrayRef),
+                DataType::Int16 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i16>));
+                    Ok(DFInt16Array::new(v).into_series())
+                }
 
-                DataType::Int32 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i32>),
-                )) as ArrayRef),
-                DataType::Int64 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<i64>),
-                )) as ArrayRef),
-                DataType::Float32 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<f32>),
-                )) as ArrayRef),
-                DataType::Float64 => Ok(Arc::new(negate(
-                    &*(arr as *const dyn Array as *const PrimitiveArray<f64>),
-                )) as ArrayRef),
+                DataType::Int32 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i32>));
+                    Ok(DFInt32Array::new(v).into_series())
+                }
+                DataType::Int64 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i64>));
+                    Ok(DFInt64Array::new(v).into_series())
+                }
+                DataType::Float32 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<f32>));
+                    Ok(DFFloat32Array::new(v).into_series())
+                }
+                DataType::Float64 => {
+                    let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<f64>));
+                    Ok(DFFloat64Array::new(v).into_series())
+                }
 
                 _ => Err(ErrorCode::IllegalDataType(format!(
                     "DataType {:?} is Unsupported for neg op",
                     self.data_type()
                 ))),
             }
-        };
-        let result = result?;
-        Ok(result.into())
+        }
     }
 }
 
@@ -338,8 +335,9 @@ impl Add for &DFUtf8Array {
 
         // todo! add no_null variants. Need 4 paths.
         Ok(self
-            .downcast_iter()
-            .zip(rhs.downcast_iter())
+            .inner()
+            .iter()
+            .zip(rhs.inner().iter())
             .map(|(opt_l, opt_r)| match (opt_l, opt_r) {
                 (Some(l), Some(r)) => Some(concat_strings(l, r)),
                 _ => None,
@@ -366,7 +364,8 @@ impl Add<&str> for &DFUtf8Array {
                 .map(|l| concat_strings(l, rhs))
                 .collect(),
             _ => self
-                .downcast_iter()
+                .inner()
+                .iter()
                 .map(|opt_l| opt_l.map(|l| concat_strings(l, rhs)))
                 .collect(),
         })
@@ -382,21 +381,22 @@ pub trait Pow {
     }
 }
 
-impl<T> Pow for DataArray<T>
+impl<T> Pow for DFPrimitiveArray<T>
 where
-    T: DFNumericType,
-    DataArray<T>: ArrayCast,
+    T: DFPrimitiveType,
+    DFPrimitiveArray<T>: ArrayCast,
 {
     fn pow_f32(&self, exp: f32) -> DFFloat32Array {
-        self.cast::<Float32Type>()
-            .expect("f32 array")
-            .apply_kernel(|arr| Arc::new(basic::pow::powf_scalar(arr, exp)))
+        let arr = self.cast_with_type(&DataType::Float32).expect("f32 array");
+        let arr = arr.f32().unwrap();
+        DFFloat32Array::new(basic::pow::powf_scalar(&arr.array, exp))
     }
 
     fn pow_f64(&self, exp: f64) -> DFFloat64Array {
-        self.cast::<Float64Type>()
-            .expect("f64 array")
-            .apply_kernel(|arr| Arc::new(basic::pow::powf_scalar(arr, exp)))
+        let arr = self.cast_with_type(&DataType::Float64).expect("f64 array");
+        let arr = arr.f64().unwrap();
+
+        DFFloat64Array::new(basic::pow::powf_scalar(&arr.array, exp))
     }
 }
 

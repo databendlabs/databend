@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementations of upstream traits for DataArray<T>
+//! Implementations of upstream traits for DFPrimitiveArray<T>
 use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::iter::FromIterator;
-use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 
 use super::get_list_builder;
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::series::Series;
 use crate::utils::get_iter_capacity;
@@ -29,13 +27,13 @@ use crate::utils::NoNull;
 
 /// FromIterator trait
 
-impl<T> FromIterator<Option<T::Native>> for DataArray<T>
+impl<T> FromIterator<Option<T>> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn from_iter<I: IntoIterator<Item = Option<T::Native>>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = Option<T>>>(iter: I) -> Self {
         let iter = iter.into_iter();
 
-        let arr: PrimitiveArray<T::Native> = match iter.size_hint() {
+        let arr: PrimitiveArray<T> = match iter.size_hint() {
             (a, Some(b)) if a == b => {
                 // 2021-02-07: ~40% faster than builder.
                 // It is unsafe because we cannot be certain that the iterators length can be trusted.
@@ -54,27 +52,26 @@ where T: DFPrimitiveType
                 iter.collect()
             }
         };
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 
 // NoNull is only a wrapper needed for specialization
-impl<T> FromIterator<T::Native> for NoNull<DataArray<T>>
+impl<T> FromIterator<T> for NoNull<DFPrimitiveArray<T>>
 where T: DFPrimitiveType
 {
     // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
     // know we don't have null values.
-    fn from_iter<I: IntoIterator<Item = T::Native>>(iter: I) -> Self {
-        let av = iter.into_iter().collect::<AlignedVec<T::Native>>();
-        NoNull::new(DataArray::<T>::new_from_aligned_vec(av))
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let av = iter.into_iter().collect::<AlignedVec<T>>();
+        NoNull::new(DFPrimitiveArray::<T>::new_from_aligned_vec(av))
     }
 }
 
 impl FromIterator<Option<bool>> for DFBooleanArray {
     fn from_iter<I: IntoIterator<Item = Option<bool>>>(iter: I) -> Self {
-        let array = Arc::new(BooleanArray::from_iter(iter)) as ArrayRef;
-        array.into()
+        let arr = BooleanArray::from_iter(iter);
+        arr.into()
     }
 }
 
@@ -83,8 +80,7 @@ impl FromIterator<bool> for DFBooleanArray {
         // 2021-02-07: this was ~70% faster than with the builder, even with the extra Option<T> added.
         let arr: BooleanArray = iter.into_iter().map(Some).collect();
 
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 
@@ -103,8 +99,7 @@ where Ptr: AsRef<str>
     fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
         // 2021-02-07: this was ~30% faster than with the builder.
         let arr = LargeUtf8Array::from_iter(iter);
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 
@@ -122,22 +117,21 @@ where Ptr: DFAsRef<str>
 {
     fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
         let arr = LargeUtf8Array::from_iter_values(iter.into_iter());
-
-        let array = Arc::new(arr) as ArrayRef;
-        array.into()
+        arr.into()
     }
 }
 
 /// From trait
 impl<'a> From<&'a DFUtf8Array> for Vec<Option<&'a str>> {
     fn from(ca: &'a DFUtf8Array) -> Self {
-        ca.downcast_iter().collect()
+        ca.inner().iter().collect()
     }
 }
 
 impl From<DFUtf8Array> for Vec<Option<String>> {
     fn from(ca: DFUtf8Array) -> Self {
-        ca.downcast_iter()
+        ca.inner()
+            .iter()
             .map(|opt| opt.map(|s| s.to_string()))
             .collect()
     }
@@ -155,10 +149,10 @@ impl From<DFBooleanArray> for Vec<Option<bool>> {
     }
 }
 
-impl<'a, T> From<&'a DataArray<T>> for Vec<Option<T::Native>>
-where T: DFNumericType
+impl<'a, T> From<&'a DFPrimitiveArray<T>> for Vec<Option<T>>
+where T: DFPrimitiveType
 {
-    fn from(ca: &'a DataArray<T>) -> Self {
+    fn from(ca: &'a DFPrimitiveArray<T>) -> Self {
         ca.collect_values()
     }
 }
@@ -173,7 +167,7 @@ where Ptr: Borrow<Series>
         // first take one to get the dtype. We panic if we have an empty iterator
         let v = it.next().unwrap();
         // We don't know the needed capacity. We arbitrarily choose an average of 5 elements per series.
-        let mut builder = get_list_builder(&v.borrow().data_type(), capacity * 5, capacity);
+        let mut builder = get_list_builder(v.borrow().data_type(), capacity * 5, capacity);
 
         builder.append_series(v.borrow());
         for s in it {
@@ -211,7 +205,7 @@ where Ptr: Borrow<Series>
         }
         let v = owned_v.borrow();
         let capacity = get_iter_capacity(&it);
-        let mut builder = get_list_builder(&v.data_type(), capacity * 5, capacity);
+        let mut builder = get_list_builder(v.data_type(), capacity * 5, capacity);
 
         // first fill all None's we encountered
         while cnt > 0 {
