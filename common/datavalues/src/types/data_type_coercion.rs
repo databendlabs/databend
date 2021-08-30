@@ -268,7 +268,7 @@ pub fn datetime_arithmetic_coercion(
     rhs_type: &DataType,
 ) -> Result<DataType> {
     let e = Result::Err(ErrorCode::BadDataValueType(format!(
-        "DataValue Error: Unsupported ({:?}) {} ({:?})",
+        "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
         lhs_type, op, rhs_type
     )));
 
