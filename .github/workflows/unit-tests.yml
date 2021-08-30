@@ -41,7 +41,7 @@ jobs:
         with:
           command: test
           components: rustfmt
-          args: --workspace --exclude datafuse-cli --all-features --no-fail-fast
+          args: --all-features --no-fail-fast
         env:
           RUST_LOG: debug
           RUST_BACKTRACE: full
