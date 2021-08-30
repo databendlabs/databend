@@ -27,7 +27,7 @@ use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::impls::BackendClient;
+use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
@@ -43,79 +43,66 @@ pub const SYS_TBL_ID_END: u64 = SYS_TBL_ID_BEGIN + 10000;
 // max id for local tables is u64:MAX
 pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
 
-// Maintain all the databases of user.
+// Maintain all the catalog backends of user.
 pub struct DatabaseCatalog {
     conf: Config,
-    databases: RwLock<HashMap<String, Arc<dyn Database>>>,
-    table_functions: RwLock<HashMap<String, Arc<TableFunctionMeta>>>,
-    backend: Arc<dyn BackendClient>,
+    catalog_backends: RwLock<HashMap<String, Arc<dyn CatalogBackend>>>,
 }
 
 impl DatabaseCatalog {
-    pub fn try_create_with_config(conf: Config, backend: Arc<dyn BackendClient>) -> Result<Self> {
-        let datasource = DatabaseCatalog {
+    pub fn try_create_with_config(conf: Config) -> Result<Self> {
+        Ok(DatabaseCatalog {
             conf,
-            databases: Default::default(),
-            table_functions: Default::default(),
-            backend,
-        };
-        Ok(datasource)
+            catalog_backends: Default::default(),
+        })
     }
 }
 
-#[async_trait::async_trait]
 impl Catalog for DatabaseCatalog {
-    fn register_database(&self, databases: Vec<Arc<dyn Database>>) -> Result<()> {
-        let mut db_lock = self.databases.write();
-        for database in databases {
-            db_lock.insert(database.name().to_lowercase(), database.clone());
-            for tbl_func in database.get_table_functions()? {
-                self.table_functions
-                    .write()
-                    .insert(tbl_func.datasource().name().to_string(), tbl_func.clone());
-            }
-        }
+    fn register_backend(&self, engine_type: &str, backend: Arc<dyn CatalogBackend>) -> Result<()> {
+        let engine = engine_type.to_lowercase();
+        self.catalog_backends.write().insert(engine, backend);
         Ok(())
     }
 
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        self.databases.read().get(db_name).map_or_else(
-            || {
-                if !self.conf.store.store_address.is_empty() {
-                    self.backend.get_database(db_name)
-                } else {
-                    Err(ErrorCode::UnknownDatabase(format!(
-                        "Unknown database {}",
-                        &db_name
-                    )))
-                }
-            },
-            |v| Ok(v.clone()),
-        )
-    }
-
-    fn get_databases(&self) -> Result<Vec<String>> {
+    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let mut databases = vec![];
-
-        // Local databases.
-        let locals = self.databases.read();
-        databases.extend(locals.keys().into_iter().cloned());
-
-        // Remote databases.
-        if !self.conf.store.store_address.is_empty() {
-            let remotes = self.backend.get_databases()?;
-            databases.extend(remotes.into_iter());
+        let backends = self.catalog_backends.read().values();
+        for backend in backends {
+            databases.extend(backend.get_databases()?)
         }
-
-        // Sort.
-        databases.sort();
         Ok(databases)
     }
 
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+        let backends = self.catalog_backends.read().values();
+        for backend in backends {
+            if let Some(db) = backend.get_database(db_name)? {
+                Ok(db)
+            }
+        }
+
+        // Can't found in all the backend for the db_name.
+        Err(ErrorCode::UnknownDatabase(format!(
+            "Unknown database {}",
+            db_name
+        )))
+    }
+
+    fn exists_database(&self, db_name: &str) -> Result<bool> {
+        let backends = self.catalog_backends.read().values();
+        for backend in backends {
+            if backend.exists_database(db_name)? {
+                Ok(true)
+            }
+        }
+
+        Ok(false)
+    }
+
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
-        let database = self.get_database(db_name)?;
-        let table = database.get_table(table_name)?;
-        Ok(table.clone())
+        let db = self.get_database(db_name)?;
+        db.get_table(table_name)
     }
 
     fn get_table_by_id(
@@ -124,93 +111,53 @@ impl Catalog for DatabaseCatalog {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        let database = self.get_database(db_name)?;
-        let table = database.get_table_by_id(table_id, table_version)?;
-        Ok(table.clone())
+        let db = self.get_database(db_name)?;
+        db.get_table_by_id(table_id, table_version)
     }
 
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
-        let mut results = vec![];
-        let mut db_names = HashSet::new();
-        for (db_name, v) in self.databases.read().iter() {
-            let tables = v.get_tables()?;
-            for table in tables {
-                results.push((db_name.clone(), table.clone()));
-            }
-            db_names.insert(db_name.clone());
-        }
-
-        if !self.conf.store.store_address.is_empty() {
-            let mut remotes = self
-                .backend
-                .get_all_tables()?
-                .into_iter()
-                // local and system dbs should shadow remote db
-                .filter(|(n, _)| !db_names.contains(n))
-                .collect::<Vec<_>>();
-            results.append(&mut remotes);
-        }
-
-        Ok(results)
-    }
-
-    fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>> {
-        let table_func_lock = self.table_functions.read();
-        let table = table_func_lock.get(name).ok_or_else(|| {
-            ErrorCode::UnknownTableFunction(format!("Unknown table function: '{}'", name))
-        })?;
-        // no function of remote database for the time being
-        Ok(table.clone())
-    }
-
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-        if self.databases.read().get(db_name).is_some() {
-            return if plan.if_not_exists {
+        let exists = self.exists_database(db_name)?;
+        if exists {
+            if plan.if_not_exists {
                 Ok(())
             } else {
                 Err(ErrorCode::UnknownDatabase(format!(
                     "Database: '{}' already exists.",
-                    plan.db
+                    db_name
                 )))
-            };
+            }
         }
 
-        match plan.engine {
-            DatabaseEngineType::Local => {
-                let database = LocalDatabase::create();
-                self.databases.write().insert(plan.db, Arc::new(database));
-            }
-            DatabaseEngineType::Remote => {
-                self.backend.create_database(plan).await?;
-            }
+        // Get the database backend and create it.
+        let engine = plan.engine.to_string().as_str();
+        if let Some(backend) = self.catalog_backends.read().get(engine) {
+            backend.create_database(plan)
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "Database: unknown engine '{}'.",
+                engine
+            )))
         }
-        Ok(())
     }
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-        let db = self.get_database(db_name);
-        let database = match db {
-            Err(_) => {
-                return if plan.if_exists {
-                    Ok(())
-                } else {
-                    Err(ErrorCode::UnknownDatabase(format!(
-                        "Unknown database: '{}'",
-                        plan.db
-                    )))
-                }
+
+        let backends = self.catalog_backends.read().values();
+        for backend in backends {
+            if backend.exists_database(db_name)? {
+                backend.drop_database(plan.clone())
             }
-            Ok(v) => v,
-        };
+        }
 
-        if database.is_local() {
-            self.databases.write().remove(db_name);
+        if plan.if_exists {
+            Ok(())
         } else {
-            self.backend.drop_database(plan).await?;
-        };
-
-        Ok(())
+            Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database: '{}'",
+                plan.db
+            )))
+        }
     }
 }

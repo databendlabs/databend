@@ -36,13 +36,15 @@ use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
 
 pub struct LocalDatabase {
+    name: String,
     tables: RwLock<InMemoryMetas>,
     tbl_id_seq: AtomicU64,
 }
 
 impl LocalDatabase {
-    pub fn create() -> Self {
+    pub fn create(name: &str) -> Self {
         LocalDatabase {
+            name: name.to_string(),
             tables: RwLock::new(InMemoryMetas::create()),
             tbl_id_seq: AtomicU64::new(LOCAL_TBL_ID_BEGIN),
         }
@@ -56,10 +58,9 @@ impl LocalDatabase {
     }
 }
 
-#[async_trait::async_trait]
 impl Database for LocalDatabase {
     fn name(&self) -> &str {
-        "local"
+        self.name.as_str()
     }
 
     fn engine(&self) -> &str {
@@ -77,6 +78,11 @@ impl Database for LocalDatabase {
             .get(table_name)
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
         Ok(table.clone())
+    }
+
+    fn exists_table(&self, table_name: &str) -> Result<bool> {
+        let tables = self.tables.read();
+        Ok(tables.name2meta.get(table_name).is_some())
     }
 
     fn get_table_by_id(
@@ -100,7 +106,7 @@ impl Database for LocalDatabase {
         Ok(vec![])
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
         let clone = plan.clone();
         let db_name = clone.db.as_str();
         let table_name = clone.table.as_str();
@@ -142,7 +148,7 @@ impl Database for LocalDatabase {
         Ok(())
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
         let table_name = plan.table.as_str();
         let tbl_id = {
             let tables = self.tables.read();

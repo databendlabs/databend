@@ -30,8 +30,10 @@ pub trait Database: Sync + Send {
     fn engine(&self) -> &str;
     fn is_local(&self) -> bool;
 
-    /// Get one table by name.
+    /// Get the table by name.
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>>;
+    /// Check the table exists or not.
+    fn exists_table(&self, table_name: &str) -> Result<bool>;
 
     /// Get table by meta id
     fn get_table_by_id(

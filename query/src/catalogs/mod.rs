@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+mod backend;
 mod catalog;
 mod database;
 mod meta;
@@ -22,6 +23,7 @@ mod table_meta;
 
 pub mod impls;
 
+pub use backend::CatalogBackend;
 pub use catalog::Catalog;
 pub use database::Database;
 pub use meta::Meta;

@@ -11,28 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_planners::CreateDatabasePlan;
+use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
-use crate::datasources::local::DefaultDatabase;
-use crate::datasources::local::LocalDatabase;
 
-pub struct LocalFactory;
+// Backend client api for catalog.
+pub trait CatalogBackend: Send + Sync {
+    // Get the database by db_name.
+    fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>>;
+    // Check the database is exists or not.
+    fn exists_database(&self, db_name: &str) -> Result<bool>;
+    // Get all the databases of this backend.
+    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
 
-impl LocalFactory {
-    pub fn create() -> Self {
-        Self
-    }
-
-    /// Local databases: Local database + Default database.
-    pub fn load_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let databases: Vec<Arc<dyn Database>> = vec![
-            Arc::new(LocalDatabase::create()),
-            Arc::new(DefaultDatabase::create()),
-        ];
-        Ok(databases)
-    }
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }

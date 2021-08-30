@@ -20,18 +20,25 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
+use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
-#[async_trait::async_trait]
 pub trait Catalog {
-    // Register some databases to catalog.
-    fn register_database(&self, databases: Vec<Arc<dyn Database>>) -> Result<()>;
+    // Register catalog backend by engine type, for example:
+    // local: local database catalog backend.
+    // remote: remote database catalog backend.
+    // mysql : mysql database catalog backend.
+    fn register_backend(&self, engine_type: &str, backend: Arc<dyn CatalogBackend>) -> Result<()>;
 
+    // Get all the databases.
+    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+    // Get the database by name.
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
-    fn get_databases(&self) -> Result<Vec<String>>;
+    // Check the database exists or not.
+    fn exists_database(&self, db_name: &str) -> Result<bool>;
 
+    // Get one table by db and table name.
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
     fn get_table_by_id(
         &self,
@@ -39,10 +46,8 @@ pub trait Catalog {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>>;
-    fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>>;
 
     // Operation with database.
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }

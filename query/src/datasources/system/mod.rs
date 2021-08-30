@@ -39,6 +39,7 @@ mod one_table;
 mod processes_table;
 mod settings_table;
 mod system_database;
+mod system_databases;
 mod system_factory;
 mod tables_table;
 mod tracing_table;
