@@ -181,6 +181,7 @@ pub fn rebase_expr_from_input(expr: &Expression, schema: &DataSchemaRef) -> Resu
         | Expression::Literal {
             value: _,
             column_name: None,
+            ..
         }
         | Expression::Alias(_, _) => Ok(None),
         _ => {

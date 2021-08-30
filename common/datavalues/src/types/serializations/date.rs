@@ -15,9 +15,14 @@
 use std::marker::PhantomData;
 use std::ops::AddAssign;
 
+use chrono::Date;
+use chrono::DateTime;
 use chrono::Duration;
 use chrono::NaiveDate;
+use chrono::TimeZone;
+use chrono_tz::Tz;
 use common_exception::Result;
+use num::cast::AsPrimitive;
 
 use crate::prelude::DFPrimitiveArray;
 use crate::prelude::DataColumn;
@@ -54,5 +59,28 @@ impl<T: DFPrimitiveType> TypeSerializer for DateSerializer<T> {
             })
             .collect();
         Ok(result)
+    }
+}
+
+pub trait DateConverter {
+    fn to_date(&self, tz: &Tz) -> Date<Tz>;
+    fn to_date_time(&self, tz: &Tz) -> DateTime<Tz>;
+}
+
+impl<T> DateConverter for T
+where T: AsPrimitive<i64>
+{
+    fn to_date(&self, tz: &Tz) -> Date<Tz> {
+        let mut dt = tz.ymd(1970, 1, 1);
+        dt = dt.checked_add_signed(Duration::days(self.as_())).unwrap();
+        dt
+    }
+
+    fn to_date_time(&self, tz: &Tz) -> DateTime<Tz> {
+        let mut dt = tz.timestamp_millis(0);
+        dt = dt
+            .checked_add_signed(Duration::seconds(self.as_()))
+            .unwrap();
+        dt
     }
 }

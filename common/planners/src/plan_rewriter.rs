@@ -159,9 +159,14 @@ pub trait PlanRewriter {
             }),
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
-            Expression::Literal { value, column_name } => Ok(Expression::Literal {
+            Expression::Literal {
+                value,
+                column_name,
+                data_type,
+            } => Ok(Expression::Literal {
                 value: value.clone(),
                 column_name: column_name.clone(),
+                data_type: data_type.clone(),
             }),
             Expression::Subquery { name, query_plan } => {
                 let new_subquery = self.rewrite_subquery_plan(query_plan)?;

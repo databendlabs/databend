@@ -30,9 +30,9 @@ impl TypeSerializer for BooleanSerializer {
             .map(|x| {
                 x.map(|v| {
                     if v {
-                        "TRUE".to_owned()
+                        "true".to_owned()
                     } else {
-                        "FALSE".to_owned()
+                        "false".to_owned()
                     }
                 })
                 .unwrap_or_else(|| "NULL".to_owned())

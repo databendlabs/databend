@@ -14,11 +14,15 @@
 
 use std::borrow::Cow;
 
+use chrono::Date;
+use chrono::DateTime;
+use chrono_tz::Tz;
 use clickhouse_srv::connection::Connection;
 use clickhouse_srv::errors::Error as CHError;
 use clickhouse_srv::errors::Result as CHResult;
 use clickhouse_srv::errors::ServerError;
 use clickhouse_srv::types::Block;
+use clickhouse_srv::types::DateTimeType;
 use clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -161,6 +165,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
         return Ok(result);
     }
 
+    let tz: Tz = "UTC".parse().unwrap();
     for column_index in 0..block.num_columns() {
         let column = block.column(column_index).to_array()?;
         let field = block.schema().field(column_index);
@@ -173,11 +178,33 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 DataType::Int32 => result.column(name, column.i32()?.collect_values()),
                 DataType::Int64 => result.column(name, column.i64()?.collect_values()),
                 DataType::UInt8 => result.column(name, column.u8()?.collect_values()),
-                DataType::UInt16 | DataType::Date16 => {
-                    result.column(name, column.u16()?.collect_values())
+                DataType::UInt16 => result.column(name, column.u16()?.collect_values()),
+
+                DataType::Date16 => {
+                    let c: Vec<Option<Date<Tz>>> = column
+                        .u16()?
+                        .into_iter()
+                        .map(|x| x.map(|v| v.to_date(&tz)))
+                        .collect();
+                    result.column(name, c)
                 }
-                DataType::UInt32 | DataType::Date32 | DataType::DateTime32 => {
-                    result.column(name, column.u32()?.collect_values())
+                DataType::UInt32 => result.column(name, column.u32()?.collect_values()),
+                DataType::Date32 => {
+                    let c: Vec<Option<Date<Tz>>> = column
+                        .u32()?
+                        .into_iter()
+                        .map(|x| x.map(|v| v.to_date(&tz)))
+                        .collect();
+                    result.column(name, c)
+                }
+                DataType::DateTime32 => {
+                    let c: Vec<Option<DateTime<Tz>>> = column
+                        .u32()?
+                        .into_iter()
+                        .map(|x| x.map(|v| v.to_date_time(&tz)))
+                        .collect();
+
+                    result.column(name, c)
                 }
                 DataType::UInt64 => result.column(name, column.u64()?.collect_values()),
                 DataType::Float32 => result.column(name, column.f32()?.collect_values()),
@@ -215,12 +242,42 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 DataType::UInt8 => {
                     result.column(name, column.u8()?.inner().values().as_slice().to_vec())
                 }
-                DataType::UInt16 | DataType::Date16 => {
+                DataType::UInt16 => {
                     result.column(name, column.u16()?.inner().values().as_slice().to_vec())
                 }
-                DataType::UInt32 | DataType::Date32 | DataType::DateTime32 => {
+
+                DataType::Date16 => {
+                    let c: Vec<Date<Tz>> = column
+                        .u16()?
+                        .into_no_null_iter()
+                        .map(|v| v.to_date(&tz))
+                        .collect();
+
+                    result.column(name, c)
+                }
+                DataType::UInt32 => {
                     result.column(name, column.u32()?.inner().values().as_slice().to_vec())
                 }
+                DataType::Date32 => {
+                    let c: Vec<Date<Tz>> = column
+                        .u32()?
+                        .into_no_null_iter()
+                        .map(|v| v.to_date(&tz))
+                        .collect();
+
+                    result.column(name, c)
+                }
+
+                DataType::DateTime32 => {
+                    let c: Vec<DateTime<Tz>> = column
+                        .u32()?
+                        .into_no_null_iter()
+                        .map(|v| v.to_date_time(&tz))
+                        .collect();
+
+                    result.column(name, c)
+                }
+
                 DataType::UInt64 => {
                     result.column(name, column.u64()?.inner().values().as_slice().to_vec())
                 }
@@ -264,7 +321,7 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
             SqlType::UInt16 | SqlType::Date => {
                 Ok(DFUInt16Array::new_from_iter(col.iter::<u16>()?.copied()).into_series())
             }
-            SqlType::UInt32 | SqlType::DateTime(_) => {
+            SqlType::UInt32 | SqlType::DateTime(DateTimeType::DateTime32) => {
                 Ok(DFUInt32Array::new_from_iter(col.iter::<u32>()?.copied()).into_series())
             }
             SqlType::UInt64 => {
@@ -301,14 +358,15 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
                 col.iter::<Option<u8>>()?.map(|c| c.copied()),
             )
             .into_series()),
-            SqlType::Nullable(SqlType::UInt16) => Ok(DFUInt16Array::new_from_opt_iter(
-                col.iter::<Option<u16>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::UInt32) => Ok(DFUInt32Array::new_from_opt_iter(
-                col.iter::<Option<u32>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
+            SqlType::Nullable(SqlType::UInt16) | SqlType::Nullable(SqlType::Date) => Ok(
+                DFUInt16Array::new_from_opt_iter(col.iter::<Option<u16>>()?.map(|c| c.copied()))
+                    .into_series(),
+            ),
+            SqlType::Nullable(SqlType::UInt32)
+            | SqlType::Nullable(SqlType::DateTime(DateTimeType::DateTime32)) => Ok(
+                DFUInt32Array::new_from_opt_iter(col.iter::<Option<u32>>()?.map(|c| c.copied()))
+                    .into_series(),
+            ),
             SqlType::Nullable(SqlType::UInt64) => Ok(DFUInt64Array::new_from_opt_iter(
                 col.iter::<Option<u64>>()?.map(|c| c.copied()),
             )

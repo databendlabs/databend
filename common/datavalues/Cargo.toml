@@ -26,6 +26,7 @@ comfy-table = "4.1.1"
 strength_reduce = "0.2.3"
 lexical-core = "0.7.6"
 chrono = "0.4.0"
+chrono-tz = "0.5"
 
 
 [dev-dependencies]
