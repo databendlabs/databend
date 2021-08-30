@@ -75,10 +75,12 @@ impl Function for ArithmeticFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         match columns.len() {
-            1 => std::ops::Neg::neg(&columns[0]),
-            _ => columns[0].arithmetic(self.op.clone(), &columns[1]),
+            1 => std::ops::Neg::neg(columns[0].column()),
+            _ => columns[0]
+                .column()
+                .arithmetic(self.op.clone(), columns[1].column()),
         }
     }
 

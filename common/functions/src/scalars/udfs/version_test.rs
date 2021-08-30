@@ -47,10 +47,16 @@ fn test_version_function() -> Result<()> {
         error: "",
     }];
 
+    let dummy = DataField::new("dummy", DataType::Utf8, false);
     for t in tests {
         let rows = t.columns[0].len();
         let func = t.func;
-        match func.eval(&t.columns, rows) {
+        let columns = vec![DataColumnWithField::new(
+            t.columns[0].clone(),
+            dummy.clone(),
+        )];
+
+        match func.eval(&columns, rows) {
             Ok(v) => {
                 // Display check.
                 let expect_display = t.display.to_string();

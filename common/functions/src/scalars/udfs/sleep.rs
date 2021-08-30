@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::is_numeric;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -63,8 +64,8 @@ impl Function for SleepFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        match &columns[0] {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        match columns[0].column() {
             DataColumn::Array(_) => Err(ErrorCode::BadArguments(format!(
                 "The argument of function {} must be constant.",
                 self.display_name

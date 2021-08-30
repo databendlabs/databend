@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -46,7 +47,7 @@ impl Function for LiteralFunction {
         Ok(self.value.is_null())
     }
 
-    fn eval(&self, _columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         Ok(DataColumn::Constant(self.value.clone(), input_rows))
     }
 
