@@ -61,8 +61,11 @@ impl DatabaseCatalog {
         };
         Ok(datasource)
     }
+}
 
-    pub fn register_databases(&self, databases: Vec<Arc<dyn Database>>) -> Result<()> {
+#[async_trait::async_trait]
+impl Catalog for DatabaseCatalog {
+    fn register_database(&self, databases: Vec<Arc<dyn Database>>) -> Result<()> {
         let mut db_lock = self.databases.write();
         for database in databases {
             db_lock.insert(database.name().to_lowercase(), database.clone());
@@ -74,10 +77,7 @@ impl DatabaseCatalog {
         }
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl Catalog for DatabaseCatalog {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         self.databases.read().get(db_name).map_or_else(
             || {

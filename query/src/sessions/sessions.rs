@@ -29,6 +29,7 @@ use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::impls::RemoteMetaStoreClient;
+use crate::catalogs::Catalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::local::LocalFactory;
@@ -61,10 +62,10 @@ impl SessionManager {
 
         // Register system databases.
         let system = SystemFactory::create().load_databases()?;
-        catalog.register_databases(system)?;
+        catalog.register_database(system)?;
         // Register local databases(including default database).
         let local = LocalFactory::create().load_databases()?;
-        catalog.register_databases(local)?;
+        catalog.register_database(local)?;
 
         Ok(Arc::new(SessionManager {
             catalog,

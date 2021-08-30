@@ -26,8 +26,12 @@ use crate::catalogs::TableMeta;
 
 #[async_trait::async_trait]
 pub trait Catalog {
+    // Register some databases to catalog.
+    fn register_database(&self, databases: Vec<Arc<dyn Database>>) -> Result<()>;
+
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
     fn get_databases(&self) -> Result<Vec<String>>;
+
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
     fn get_table_by_id(
         &self,
@@ -38,6 +42,7 @@ pub trait Catalog {
     fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>>;
     fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>>;
 
+    // Operation with database.
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }

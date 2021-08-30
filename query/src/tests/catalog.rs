@@ -18,6 +18,7 @@ use common_exception::Result;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::impls::RemoteMetaStoreClient;
+use crate::catalogs::Catalog;
 use crate::configs::Config;
 use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteFactory;
@@ -32,9 +33,9 @@ pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     )));
     let catalog = DatabaseCatalog::try_create_with_config(conf, cli)?;
     let system = SystemFactory::create().load_databases()?;
-    catalog.register_databases(system)?;
+    catalog.register_database(system)?;
     let local = LocalFactory::create().load_databases()?;
-    catalog.register_databases(local)?;
+    catalog.register_database(local)?;
 
     Ok(catalog)
 }
