@@ -15,17 +15,17 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use common_exception::ErrorCode;
-use common_planners::PlanNode;
+use common_planners::ScanPlan;
 use futures::TryStreamExt;
 use warp::reject::Reject;
 use warp::Filter;
 
-use crate::interpreters::SelectInterpreter;
 use crate::sessions::SessionManager;
-use crate::sql::PlanParser;
 
 pub fn log_handler() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "logs").and(warp::get()).and_then(get_log)
+    warp::path!("v1" / "logs")
+        .and(warp::get())
+        .and_then(get_log)
 }
 
 async fn get_log() -> Result<impl warp::Reply, warp::Rejection> {
@@ -43,32 +43,17 @@ async fn select_table() -> Result<String, ErrorCode> {
     let session_manager = SessionManager::try_create(1)?;
     let executor_session = session_manager.create_session("HTTP")?;
     let ctx = executor_session.create_context();
-    if let PlanNode::Select(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("select * from system.tracing")?
-    {
-        /*
-        let table_meta = ctx.get_table("system", "tracing")?;
-        let table = table_meta.datasource();
-        let source_plan = table.read_plan(ctx.clone(),
+    let table_meta = ctx.get_table("system", "tracing")?;
+    let table = table_meta.datasource();
+    let source_plan = table.read_plan(
+        ctx.clone(),
         &ScanPlan::empty(),
-        ctx.get_settings().get_max_threads()? as usize);
-        */
-        let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-        let stream = executor.execute().await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let m = result[0].column_by_name("*");
-        match m {
-            Some(s1) => {
-                let r = format!("{:?}", s1);
-                return Ok(r.to_string());
-            }
-            None => todo!(),
-        }
-        
-        //let r = format!("{:?}", result.as_slice());
-        //return Ok(r.to_string());
-    }
-    Ok("".to_string())
+        ctx.get_settings().get_max_threads()? as usize,
+    )?;
+    let stream = table.read(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let r = format!("{:?}", result);
+    Ok(r.to_string())
 }
 struct NoBacktraceErrorCode(ErrorCode);
 
