@@ -172,7 +172,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
         let name = field.name();
         let is_nullable = field.is_nullable();
         result = match is_nullable {
-            true => match column.data_type() {
+            true => match field.data_type() {
                 DataType::Int8 => result.column(name, column.i8()?.collect_values()),
                 DataType::Int16 => result.column(name, column.i16()?.collect_values()),
                 DataType::Int32 => result.column(name, column.i32()?.collect_values()),
@@ -226,7 +226,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                     )));
                 }
             },
-            false => match column.data_type() {
+            false => match field.data_type() {
                 DataType::Int8 => {
                     result.column(name, column.i8()?.inner().values().as_slice().to_vec())
                 }

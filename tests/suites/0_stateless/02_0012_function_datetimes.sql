@@ -1,0 +1,2 @@
+SELECT today() >= 18869;
+SELECT now() >= 1630295616;

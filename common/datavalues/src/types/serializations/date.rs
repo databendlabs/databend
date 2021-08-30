@@ -77,10 +77,6 @@ where T: AsPrimitive<i64>
     }
 
     fn to_date_time(&self, tz: &Tz) -> DateTime<Tz> {
-        let mut dt = tz.timestamp_millis(0);
-        dt = dt
-            .checked_add_signed(Duration::seconds(self.as_()))
-            .unwrap();
-        dt
+        tz.timestamp_millis(self.as_() * 1000)
     }
 }
