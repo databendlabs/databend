@@ -20,6 +20,7 @@ use futures::TryStreamExt;
 use warp::reject::Reject;
 use warp::Filter;
 
+use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 
@@ -28,7 +29,7 @@ pub fn log_handler(
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "logs")
         .and(warp::get())
-        .and(cfg)
+        .and(warp::any().map(move || cfg.clone()))
         .and_then(get_log)
 }
 

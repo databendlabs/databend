@@ -35,7 +35,7 @@ impl Router {
             .or(super::v1::config::config_handler(self.cfg.clone()))
             .or(super::v1::cluster::cluster_handler(self.cluster.clone()))
             .or(super::debug::home::debug_handler(self.cfg.clone()))
-            .or(super::v1::logs::log_handler());
+            .or(super::v1::logs::log_handler(self.cfg.clone()));
         let routes = v1.with(warp::log("v1"));
         Ok(routes)
     }
