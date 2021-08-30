@@ -30,6 +30,8 @@ use crate::common::HashTableKeyable;
 use crate::common::KeyValueEntity;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
+pub type Entity<T> = *mut KeyValueEntity<T, usize>;
+
 /// Aggregate state of the SELECT query, destroy when group by is completed.
 ///
 /// It helps manage the following states:
@@ -37,19 +39,16 @@ use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 ///     - Aggregate function state data memory pool
 ///     - Group by key data memory pool (if necessary)
 pub trait AggregatorState<Method: HashMethod> {
-    type HashKeyState: HashTableKeyable;
+    type Key: HashTableKeyable;
+    type Entity: HashTableEntity<Key=Self::Key, Value=usize>;
 
     fn len(&self) -> usize;
 
     fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
 
-    fn iter(&self) -> HashMapIterator<Self::HashKeyState, usize>;
+    fn iter(&self) -> HashMapIterator<Self::Entity>;
 
-    fn insert_key(
-        &mut self,
-        key: &Method::HashKey,
-        inserted: &mut bool,
-    ) -> *mut KeyValueEntity<Self::HashKeyState, usize>;
+    fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
 }
 
 // TODO: Optimize the type with length below 2
@@ -71,7 +70,8 @@ where
     HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
-    type HashKeyState = <HashMethodFixedKeys<T> as HashMethod>::HashKey;
+    type Key = T;
+    type Entity = KeyValueEntity<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize>;
 
     #[inline(always)]
     fn len(&self) -> usize {
@@ -84,16 +84,12 @@ where
     }
 
     #[inline(always)]
-    fn iter(&self) -> HashMapIterator<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
+    fn iter(&self) -> HashMapIterator<Self::Entity> {
         self.data.iter()
     }
 
     #[inline(always)]
-    fn insert_key(
-        &mut self,
-        key: &<HashMethodFixedKeys<T> as HashMethod>::HashKey,
-        inserted: &mut bool,
-    ) -> *mut KeyValueEntity<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
+    fn entity(&mut self, key: &<HashMethodFixedKeys<T> as HashMethod>::HashKey, inserted: &mut bool) -> *mut Self::Entity {
         self.data.insert_key(key, inserted)
     }
 }
@@ -105,7 +101,8 @@ pub struct SerializedKeysAggregatorState {
 }
 
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
-    type HashKeyState = KeysRef;
+    type Key = KeysRef;
+    type Entity = KeyValueEntity<KeysRef, usize>;
 
     fn len(&self) -> usize {
         self.data_state_map.len()
@@ -115,15 +112,11 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         self.state_area.alloc_layout(layout)
     }
 
-    fn iter(&self) -> HashMapIterator<KeysRef, usize> {
+    fn iter(&self) -> HashMapIterator<Self::Entity> {
         self.data_state_map.iter()
     }
 
-    fn insert_key(
-        &mut self,
-        keys: &Vec<u8>,
-        inserted: &mut bool,
-    ) -> *mut KeyValueEntity<KeysRef, usize> {
+    fn entity(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
         let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
 

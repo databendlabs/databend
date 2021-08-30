@@ -14,50 +14,32 @@
 
 use crate::common::hash_table_key::HashTableKeyable;
 
-pub trait HashTableEntity<Key>: Sized {
-    unsafe fn is_zero(self: *mut Self) -> bool;
-    unsafe fn key_equals(self: *mut Self, key: &Key, hash: u64) -> bool;
-    unsafe fn set_key_and_hash(self: *mut Self, key: &Key, hash: u64);
+pub trait HashTableEntity: Sized {
+    type Key: HashTableKeyable;
+    type Value: Sized + Copy;
 
-    fn get_key<'a>(self: *mut Self) -> &'a Key;
+    unsafe fn is_zero(self: *mut Self) -> bool;
+    unsafe fn key_equals(self: *mut Self, key: &Self::Key, hash: u64) -> bool;
+    unsafe fn set_key_and_hash(self: *mut Self, key: &Self::Key, hash: u64);
+
+    fn get_key<'a>(self: *mut Self) -> &'a Self::Key;
+    fn set_value(self: *mut Self, value: Self::Value);
+    fn get_value<'a>(self: *mut Self) -> &'a Self::Value;
     unsafe fn get_hash(self: *mut Self) -> u64;
 
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool;
 }
 
-pub struct KeyValueEntity<Key, Value>
-where
-    Key: HashTableKeyable,
-    Value: Sized + Copy,
-{
+pub struct KeyValueEntity<Key, Value> {
     key: Key,
     value: Value,
     hash: u64,
 }
 
-impl<Key, Value> KeyValueEntity<Key, Value>
-where
-    Key: HashTableKeyable,
-    Value: Sized + Copy,
-{
-    #[inline(always)]
-    pub fn set_value(self: *mut Self, value: Value) {
-        unsafe {
-            (*self).value = value;
-        }
-    }
+impl<Key: HashTableKeyable, Value: Sized + Copy> HashTableEntity for KeyValueEntity<Key, Value> {
+    type Key = Key;
+    type Value = Value;
 
-    #[inline(always)]
-    pub fn get_value<'a>(self: *mut Self) -> &'a Value {
-        unsafe { &(*self).value }
-    }
-}
-
-impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value>
-where
-    Key: HashTableKeyable,
-    Value: Sized + Copy,
-{
     unsafe fn is_zero(self: *mut Self) -> bool {
         (*self).key.is_zero()
     }
@@ -77,6 +59,18 @@ where
 
     fn get_key<'a>(self: *mut Self) -> &'a Key {
         unsafe { &(*self).key }
+    }
+
+    #[inline(always)]
+    fn set_value(self: *mut Self, value: Value) {
+        unsafe {
+            (*self).value = value;
+        }
+    }
+
+    #[inline(always)]
+    fn get_value<'a>(self: *mut Self) -> &'a Value {
+        unsafe { &(*self).value }
     }
 
     unsafe fn get_hash(self: *mut Self) -> u64 {

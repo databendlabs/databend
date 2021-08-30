@@ -112,7 +112,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             {
                 for group_key in group_keys.iter() {
                     let mut inserted = true;
-                    let entity = groups.insert_key(group_key, &mut inserted);
+                    let entity = groups.entity(group_key, &mut inserted);
 
                     match inserted {
                         true => {

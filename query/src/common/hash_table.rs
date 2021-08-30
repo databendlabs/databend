@@ -23,7 +23,7 @@ use crate::common::hash_table_grower::Grower;
 use crate::common::hash_table_iter::HashTableIter;
 use crate::common::hash_table_key::HashTableKeyable;
 
-pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>> {
+pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> {
     size: usize,
     grower: Grower,
     entities: *mut Entity,
@@ -35,7 +35,7 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>> {
     generics_hold: PhantomData<Key>,
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key, Entity> {
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> Drop for HashTable<Key, Entity> {
     fn drop(&mut self) {
         unsafe {
             let size = (self.grower.max_size() as usize) * mem::size_of::<Entity>();
@@ -53,7 +53,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key
     }
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity> {
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> HashTable<Key, Entity> {
     pub fn create() -> HashTable<Key, Entity> {
         let size = (1 << 8) * mem::size_of::<Entity>();
         unsafe {
@@ -83,7 +83,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity>
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> HashTableIter<Key, Entity> {
+    pub fn iter(&self) -> HashTableIter<Entity> {
         HashTableIter::create(self.grower.max_size(), self.entities, self.zero_entity)
     }
 

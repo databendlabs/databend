@@ -16,16 +16,16 @@ use std::marker::PhantomData;
 
 use crate::common::hash_table_entity::HashTableEntity;
 
-pub struct HashTableIter<Key, Entity: HashTableEntity<Key>> {
+pub struct HashTableIter<Entity: HashTableEntity> {
     idx: isize,
     capacity: isize,
     entities: *mut Entity,
     zero_entity: Option<*mut Entity>,
 
-    phantom: PhantomData<Key>,
+    phantom: PhantomData<Entity>,
 }
 
-impl<Key, Entity: HashTableEntity<Key>> HashTableIter<Key, Entity> {
+impl<Entity: HashTableEntity> HashTableIter<Entity> {
     pub fn create(
         capacity: isize,
         entities: *mut Entity,
@@ -41,7 +41,7 @@ impl<Key, Entity: HashTableEntity<Key>> HashTableIter<Key, Entity> {
     }
 }
 
-impl<Key, Entity: HashTableEntity<Key>> Iterator for HashTableIter<Key, Entity> {
+impl<Entity: HashTableEntity> Iterator for HashTableIter<Entity> {
     type Item = *mut Entity;
 
     fn next(&mut self) -> Option<Self::Item> {

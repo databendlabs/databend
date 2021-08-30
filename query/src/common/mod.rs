@@ -29,4 +29,4 @@ pub use hash_table_iter::HashTableIter;
 pub use hash_table_key::HashTableKeyable;
 
 pub type HashMap<Key, Value> = HashTable<Key, KeyValueEntity<Key, Value>>;
-pub type HashMapIterator<Key, Value> = HashTableIter<Key, KeyValueEntity<Key, Value>>;
+pub type HashMapIterator<Entity> = HashTableIter<Entity>;

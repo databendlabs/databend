@@ -24,7 +24,7 @@ use common_datavalues::prelude::DFPrimitiveArray;
 use common_datavalues::series::IntoSeries;
 use common_datavalues::DFPrimitiveType;
 
-use crate::common::HashTable;
+use crate::common::{HashTable, HashTableEntity, KeyValueEntity};
 use crate::common::HashTableKeyable;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::FixedKeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
@@ -73,18 +73,18 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type State: AggregatorState<Method>;
     fn aggregate_state(&self) -> Self::State;
 
-    type ArrayBuilder: KeysArrayBuilder<<Self::State as AggregatorState<Method>>::HashKeyState>;
+    type ArrayBuilder: KeysArrayBuilder<<Self::State as AggregatorState<Method>>::Key>;
     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
 }
 
 impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T>
-where
-    T: DFPrimitiveType,
-    T: std::cmp::Eq + Clone + Debug,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
-    DFPrimitiveArray<T>: IntoSeries,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
-    FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, HashKeyState = T>,
+    where
+        T: DFPrimitiveType,
+        T: std::cmp::Eq + Clone + Debug,
+        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
+        DFPrimitiveArray<T>: IntoSeries,
+        <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+        FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, Key=T>,
 {
     type State = FixedKeysAggregatorState<T>;
     fn aggregate_state(&self) -> Self::State {
