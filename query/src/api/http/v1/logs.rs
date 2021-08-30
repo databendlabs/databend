@@ -20,16 +20,20 @@ use futures::TryStreamExt;
 use warp::reject::Reject;
 use warp::Filter;
 
+use crate::configs::Config;
 use crate::sessions::SessionManager;
 
-pub fn log_handler() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+pub fn log_handler(
+    cfg: Config,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path!("v1" / "logs")
         .and(warp::get())
+        .and(cfg)
         .and_then(get_log)
 }
 
-async fn get_log() -> Result<impl warp::Reply, warp::Rejection> {
-    let result = select_table().await;
+async fn get_log(cfg: Config) -> Result<impl warp::Reply, warp::Rejection> {
+    let result = select_table(cfg).await;
     match result {
         Ok(s) => Ok(warp::reply::with_status(
             s.to_string(),
@@ -39,8 +43,8 @@ async fn get_log() -> Result<impl warp::Reply, warp::Rejection> {
     }
 }
 
-async fn select_table() -> Result<String, ErrorCode> {
-    let session_manager = SessionManager::try_create(1)?;
+async fn select_table(cfg: Config) -> Result<String, ErrorCode> {
+    let session_manager = SessionManager::from_conf(cfg, Cluster::empty())?;
     let executor_session = session_manager.create_session("HTTP")?;
     let ctx = executor_session.create_context();
     let table_meta = ctx.get_table("system", "tracing")?;
