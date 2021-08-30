@@ -14,7 +14,8 @@
 
 use common_exception::Result;
 
-use super::{now::NowFunction, today::TodayFunction};
+use super::now::NowFunction;
+use super::today::TodayFunction;
 use crate::scalars::FactoryFuncRef;
 
 #[derive(Clone)]

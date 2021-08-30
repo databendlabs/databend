@@ -272,7 +272,7 @@ pub fn datetime_arithmetic_coercion(
         lhs_type, op, rhs_type
     )));
 
-    if !is_date_or_date_time(&lhs_type) && !is_date_or_date_time(&rhs_type) {
+    if !is_date_or_date_time(lhs_type) && !is_date_or_date_time(rhs_type) {
         return e;
     }
 
