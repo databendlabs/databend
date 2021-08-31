@@ -15,7 +15,7 @@
 use std::fmt::Debug;
 
 use bumpalo::Bump;
-use common_datablocks::HashMethod;
+use common_datablocks::{HashMethod, HashMethodKeysU8, HashMethodKeysU16, HashMethodKeysU32, HashMethodKeysU64};
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::arrays::BinaryArrayBuilder;
@@ -29,9 +29,10 @@ use crate::common::HashTableKeyable;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::FixedKeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
-use crate::pipelines::transforms::group_by::aggregator_state::FixedKeysAggregatorState;
+use crate::pipelines::transforms::group_by::aggregator_state::{LongerFixedKeysAggregatorState, ShortFixedKeysAggregatorState};
 use crate::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::AggregatorState;
+use std::marker::PhantomData;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //
@@ -77,27 +78,64 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder;
 }
 
-impl<T> PolymorphicKeysHelper<Self> for HashMethodFixedKeys<T>
-    where
-        T: DFPrimitiveType,
-        T: std::cmp::Eq + Clone + Debug,
-        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
-        DFPrimitiveArray<T>: IntoSeries,
-        <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
-        FixedKeysAggregatorState<T>: AggregatorState<HashMethodFixedKeys<T>, Key=T>,
-{
-    type State = FixedKeysAggregatorState<T>;
+impl PolymorphicKeysHelper<HashMethodKeysU8> for HashMethodKeysU8 {
+    type State = ShortFixedKeysAggregatorState<u8>;
     fn aggregate_state(&self) -> Self::State {
-        FixedKeysAggregatorState::<T> {
+        Self::State::create(u8::MAX as usize)
+    }
+
+    type ArrayBuilder = FixedKeysArrayBuilder<u8>;
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+        FixedKeysArrayBuilder::<u8> {
+            inner_builder: PrimitiveArrayBuilder::<u8>::with_capacity(capacity),
+        }
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodKeysU16> for HashMethodKeysU16 {
+    type State = ShortFixedKeysAggregatorState<u16>;
+    fn aggregate_state(&self) -> Self::State {
+        Self::State::create(u16::MAX as usize)
+    }
+
+    type ArrayBuilder = FixedKeysArrayBuilder<u16>;
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+        FixedKeysArrayBuilder::<u16> {
+            inner_builder: PrimitiveArrayBuilder::<u16>::with_capacity(capacity),
+        }
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodKeysU32> for HashMethodKeysU32 {
+    type State = LongerFixedKeysAggregatorState<u32>;
+    fn aggregate_state(&self) -> Self::State {
+        LongerFixedKeysAggregatorState::<u32> {
             area: Bump::new(),
             data: HashTable::create(),
         }
     }
 
-    type ArrayBuilder = FixedKeysArrayBuilder<T>;
+    type ArrayBuilder = FixedKeysArrayBuilder<u32>;
     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
-        FixedKeysArrayBuilder::<T> {
-            inner_builder: PrimitiveArrayBuilder::<T>::with_capacity(capacity),
+        FixedKeysArrayBuilder::<u32> {
+            inner_builder: PrimitiveArrayBuilder::<u32>::with_capacity(capacity),
+        }
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodKeysU64> for HashMethodKeysU64 {
+    type State = LongerFixedKeysAggregatorState<u64>;
+    fn aggregate_state(&self) -> Self::State {
+        LongerFixedKeysAggregatorState::<u64> {
+            area: Bump::new(),
+            data: HashTable::create(),
+        }
+    }
+
+    type ArrayBuilder = FixedKeysArrayBuilder<u64>;
+    fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
+        FixedKeysArrayBuilder::<u64> {
+            inner_builder: PrimitiveArrayBuilder::<u64>::with_capacity(capacity),
         }
     }
 }

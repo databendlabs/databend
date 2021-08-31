@@ -1,4 +1,0 @@
-// trait FixedKeysAggregatorStateHelper {
-//     type Map =
-// }
-//
