@@ -15,6 +15,8 @@
 #[cfg(test)]
 mod csv_table_test;
 #[cfg(test)]
+mod local_meta_backend_test;
+#[cfg(test)]
 mod memory_table_test;
 #[cfg(test)]
 mod null_table_test;
