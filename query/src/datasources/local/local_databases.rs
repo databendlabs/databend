@@ -45,7 +45,7 @@ impl DatabaseEngine for LocalDatabases {
         "local"
     }
 
-    fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>> {
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         self.meta_backend.get_database(db_name)
     }
 

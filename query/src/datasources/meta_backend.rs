@@ -38,7 +38,7 @@ pub trait MetaBackend: Sync + Send {
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>>;
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
     fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
-    fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>>;
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
     fn exists_database(&self, _db_name: &str) -> Result<bool>;
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;

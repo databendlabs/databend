@@ -76,8 +76,8 @@ impl Catalog for DatabaseCatalog {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         let engines = self.database_engines.read();
         for engine in engines.values() {
-            if let Some(db) = engine.get_database(db_name)? {
-                return Ok(db);
+            if engine.exists_database(db_name)? {
+                return engine.get_database(db_name);
             }
         }
 

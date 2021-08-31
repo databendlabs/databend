@@ -231,12 +231,15 @@ impl MetaBackend for LocalMetaBackend {
         Ok(())
     }
 
-    fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>> {
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         let lock = self.databases.read();
         let db = lock.get(db_name);
         match db {
-            None => Ok(None),
-            Some(v) => Ok(Some(v.clone())),
+            None => Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database: '{}'",
+                db_name
+            ))),
+            Some(v) => Ok(v.clone()),
         }
     }
 

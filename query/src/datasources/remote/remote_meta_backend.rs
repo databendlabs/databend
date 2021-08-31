@@ -230,7 +230,7 @@ impl MetaBackend for RemoteMetaClient {
         Ok(())
     }
 
-    fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>> {
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         let cli_provider = self.store_api_provider.clone();
         let db = {
             let db_name = db_name.to_owned();
@@ -240,11 +240,11 @@ impl MetaBackend for RemoteMetaClient {
             })??
         };
 
-        Ok(Some(Arc::new(RemoteDatabase::create(
+        Ok(Arc::new(RemoteDatabase::create(
             db.database_id,
             db_name,
             Arc::new(self.clone()),
-        ))))
+        )))
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {

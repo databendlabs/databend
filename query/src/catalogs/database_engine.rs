@@ -26,7 +26,7 @@ pub trait DatabaseEngine: Send + Sync {
     // Engine name of the database.
     fn engine_name(&self) -> &str;
     // Get the database by db_name.
-    fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>>;
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
     // Check the database is exists or not.
     fn exists_database(&self, db_name: &str) -> Result<bool>;
     // Get all the databases of this backend.

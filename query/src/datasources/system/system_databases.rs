@@ -40,8 +40,8 @@ impl DatabaseEngine for SystemDatabases {
         "system"
     }
 
-    fn get_database(&self, _db_name: &str) -> Result<Option<Arc<dyn Database>>> {
-        Ok(Some(self.database.clone()))
+    fn get_database(&self, _db_name: &str) -> Result<Arc<dyn Database>> {
+        Ok(self.database.clone())
     }
 
     fn exists_database(&self, db_name: &str) -> Result<bool> {
