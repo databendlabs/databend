@@ -42,7 +42,6 @@ async fn test_tables_table() -> Result<()> {
         "| name    |",
         "+---------+",
         "| default |",
-        "| local   |",
         "| system  |",
         "+---------+",
     ];

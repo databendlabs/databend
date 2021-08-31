@@ -131,14 +131,35 @@ impl MetaBackend for LocalMetaBackend {
         let db_name = clone.db.as_str();
         let table_name = clone.table.as_str();
 
+        let table = match &plan.engine {
+            TableEngineType::Parquet => {
+                ParquetTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
+            }
+            TableEngineType::Csv => {
+                CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
+            }
+            TableEngineType::Null => {
+                NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
+            }
+            TableEngineType::Memory => {
+                MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
+            }
+            _ => {
+                return Result::Err(ErrorCode::UnImplement(format!(
+                    "Local database does not support '{:?}' table engine",
+                    plan.engine
+                )));
+            }
+        };
+        let table_meta = TableMeta::create(Arc::from(table), self.next_db_id());
+
         let mut lock = self.tables.write();
         let tables = lock.get_mut(db_name);
         match tables {
             None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: {}",
-                    db_name
-                )))
+                let mut metas = InMemoryMetas::create();
+                metas.insert(table_meta);
+                lock.insert(db_name.to_string(), metas);
             }
             Some(v) => {
                 if v.name2meta.get(table_name).is_some() {
@@ -151,33 +172,10 @@ impl MetaBackend for LocalMetaBackend {
                         )));
                     };
                 }
-
-                let table = match &plan.engine {
-                    TableEngineType::Parquet => {
-                        ParquetTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-                    }
-                    TableEngineType::Csv => {
-                        CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-                    }
-                    TableEngineType::Null => {
-                        NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-                    }
-                    TableEngineType::Memory => {
-                        MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-                    }
-                    _ => {
-                        return Result::Err(ErrorCode::UnImplement(format!(
-                            "Local database does not support '{:?}' table engine",
-                            plan.engine
-                        )));
-                    }
-                };
-
-                let table_meta = TableMeta::create(Arc::from(table), self.next_db_id());
                 v.insert(table_meta);
-                Ok(())
             }
         }
+        Ok(())
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
