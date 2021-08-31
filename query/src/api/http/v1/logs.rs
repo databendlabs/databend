@@ -49,7 +49,7 @@ async fn select_table(cfg: Config) -> Result<String, ErrorCode> {
     let executor_session = session_manager.create_session("HTTP")?;
     let ctx = executor_session.create_context();
     let table_meta = ctx.get_table("system", "tracing")?;
-    let table = table_meta.datasource();
+    let table = table_meta.raw();
     let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
