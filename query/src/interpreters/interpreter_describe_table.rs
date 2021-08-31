@@ -50,7 +50,7 @@ impl Interpreter for DescribeTableInterpreter {
         let table = self
             .ctx
             .get_table(self.plan.db.as_str(), self.plan.table.as_str())?;
-        let schema = table.datasource().schema()?;
+        let schema = table.raw().schema()?;
 
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];

@@ -68,11 +68,7 @@ const FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 const METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 
-// Store env.
-const STORE_ADDRESS: &str = "STORE_ADDRESS";
-const STORE_USERNAME: &str = "STORE_USERNAME";
-const STORE_PASSWORD: &str = "STORE_PASSWORD";
-
+// Query env.
 const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
 const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
 
@@ -82,6 +78,18 @@ const RPC_TLS_SERVER_CERT: &str = "RPC_TLS_SERVER_CERT";
 const RPC_TLS_SERVER_KEY: &str = "RPC_TLS_SERVER_KEY";
 const RPC_TLS_QUERY_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_QUERY_SERVER_ROOT_CA_CERT";
 const RPC_TLS_QUERY_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_QUERY_SERVICE_DOMAIN_NAME";
+
+// Meta env.
+const META_ADDRESS: &str = "META_ADDRESS";
+const META_USERNAME: &str = "META_USERNAME";
+const META_PASSWORD: &str = "META_PASSWORD";
+const RPC_TLS_META_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_META_SERVER_ROOT_CA_CERT";
+const RPC_TLS_META_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_META_SERVICE_DOMAIN_NAME";
+
+// Store env.
+const STORE_ADDRESS: &str = "STORE_ADDRESS";
+const STORE_USERNAME: &str = "STORE_USERNAME";
+const STORE_PASSWORD: &str = "STORE_PASSWORD";
 const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
 const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
 
@@ -159,6 +167,62 @@ impl fmt::Debug for StoreConfig {
         write!(f, "store_address: \"{}\", ", self.store_address)?;
         write!(f, "store_user: \"{}\", ", self.store_username)?;
         write!(f, "store_password: \"******\"")?;
+        write!(f, "}}")
+    }
+}
+
+/// Meta config group.
+/// serde(default) make the toml de to default working.
+#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+pub struct MetaConfig {
+    #[structopt(long, env = META_ADDRESS, default_value = "", help = "Store backend address")]
+    #[serde(default)]
+    pub meta_address: String,
+
+    #[structopt(long, env = META_USERNAME, default_value = "", help = "Store backend user name")]
+    #[serde(default)]
+    pub meta_username: String,
+
+    #[structopt(long, env = META_PASSWORD, default_value = "", help = "Store backend user password")]
+    #[serde(default)]
+    pub meta_password: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_META_SERVER_ROOT_CA_CERT",
+        default_value = "",
+        help = "Certificate for client to identify meta rpc server"
+    )]
+    #[serde(default)]
+    pub rpc_tls_meta_server_root_ca_cert: String,
+
+    #[structopt(
+        long,
+        env = "RPC_TLS_META_SERVICE_DOMAIN_NAME",
+        default_value = "localhost"
+    )]
+    #[serde(default)]
+    pub rpc_tls_meta_service_domain_name: String,
+}
+
+impl MetaConfig {
+    pub fn default() -> Self {
+        MetaConfig {
+            meta_address: "".to_string(),
+            meta_username: "root".to_string(),
+            meta_password: "".to_string(),
+            rpc_tls_meta_server_root_ca_cert: "".to_string(),
+            rpc_tls_meta_service_domain_name: "localhost".to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for MetaConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{")?;
+        write!(f, "meta_address: \"{}\", ", self.meta_address)?;
+        write!(f, "meta_user: \"{}\", ", self.meta_username)?;
+        write!(f, "meta_password: \"******\"")?;
         write!(f, "}}")
     }
 }
@@ -302,9 +366,15 @@ pub struct Config {
     #[structopt(flatten)]
     pub log: LogConfig,
 
+    // Meta Service config.
+    #[structopt(flatten)]
+    pub meta: MetaConfig,
+
+    // Storage backend config.
     #[structopt(flatten)]
     pub store: StoreConfig,
 
+    // Query engine config.
     #[structopt(flatten)]
     pub query: QueryConfig,
 
@@ -317,6 +387,7 @@ impl Config {
     pub fn default() -> Self {
         Config {
             log: LogConfig::default(),
+            meta: MetaConfig::default(),
             store: StoreConfig::default(),
             query: QueryConfig::default(),
             config_file: "".to_string(),
@@ -359,10 +430,29 @@ impl Config {
         }
         env_helper!(mut_config, log, log_level, String, LOG_LEVEL);
 
+        // Meta.
+        env_helper!(mut_config, meta, meta_address, String, META_ADDRESS);
+        env_helper!(mut_config, meta, meta_username, String, META_USERNAME);
+        env_helper!(mut_config, meta, meta_password, String, META_PASSWORD);
+        env_helper!(
+            mut_config,
+            meta,
+            rpc_tls_meta_server_root_ca_cert,
+            String,
+            RPC_TLS_META_SERVER_ROOT_CA_CERT
+        );
+        env_helper!(
+            mut_config,
+            meta,
+            rpc_tls_meta_service_domain_name,
+            String,
+            RPC_TLS_META_SERVICE_DOMAIN_NAME
+        );
+
+        // Store.
         env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
         env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
         env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
-        // for store rpc client
         env_helper!(
             mut_config,
             store,

@@ -64,7 +64,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                         self.ctx
                             .get_table(db_name, table_name)
                             .and_then(|table_meta| {
-                                let table = table_meta.datasource();
+                                let table = table_meta.raw();
                                 let table_id = table_meta.meta_id();
                                 let table_version = table_meta.meta_ver();
                                 table

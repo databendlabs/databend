@@ -15,6 +15,7 @@
 
 mod catalog;
 mod database;
+mod database_engine;
 mod meta;
 mod table;
 mod table_function;
@@ -24,6 +25,7 @@ pub mod impls;
 
 pub use catalog::Catalog;
 pub use database::Database;
+pub use database_engine::DatabaseEngine;
 pub use meta::Meta;
 pub use table::Table;
 pub use table::TablePtr;

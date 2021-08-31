@@ -47,7 +47,7 @@ impl Interpreter for CreateTableInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_catalog();
         let database = datasource.get_database(self.plan.db.as_str())?;
-        database.create_table(self.plan.clone()).await?;
+        database.create_table(self.plan.clone())?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),

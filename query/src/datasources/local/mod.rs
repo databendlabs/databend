@@ -15,6 +15,8 @@
 #[cfg(test)]
 mod csv_table_test;
 #[cfg(test)]
+mod local_meta_backend_test;
+#[cfg(test)]
 mod memory_table_test;
 #[cfg(test)]
 mod null_table_test;
@@ -23,9 +25,9 @@ mod parquet_table_test;
 
 mod csv_table;
 mod csv_table_stream;
-mod default_database;
 mod local_database;
-mod local_factory;
+mod local_databases;
+mod local_meta_backend;
 mod memory_table;
 mod memory_table_stream;
 mod null_table;
@@ -33,9 +35,9 @@ mod parquet_table;
 
 pub use csv_table::CsvTable;
 pub use csv_table_stream::CsvTableStream;
-pub use default_database::DefaultDatabase;
 pub use local_database::LocalDatabase;
-pub use local_factory::LocalFactory;
+pub use local_databases::LocalDatabases;
+pub use local_meta_backend::LocalMetaBackend;
 pub use memory_table::MemoryTable;
 pub use memory_table_stream::MemoryTableStream;
 pub use null_table::NullTable;

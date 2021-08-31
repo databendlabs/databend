@@ -434,7 +434,7 @@ impl PlanParser {
         }
         let table = self.ctx.get_catalog().get_table(&db_name, &tbl_name)?;
 
-        let mut schema = table.datasource().schema()?;
+        let mut schema = table.raw().schema()?;
 
         if !columns.is_empty() {
             let fields = columns
@@ -702,7 +702,7 @@ impl PlanParser {
         self.ctx
             .get_table(db_name, table_name)
             .and_then(|table_meta| {
-                let table = table_meta.datasource();
+                let table = table_meta.raw();
                 let table_id = table_meta.meta_id();
                 let table_version = table_meta.meta_ver();
                 table
@@ -770,14 +770,14 @@ impl PlanParser {
                     let func_meta = self.ctx.get_table_function(&table_name)?;
                     meta_id = func_meta.meta_id();
                     meta_version = func_meta.meta_ver();
-                    let table_function = func_meta.datasource().clone();
+                    let table_function = func_meta.raw().clone();
                     table_name = table_function.name().to_string();
                     table = table_function.as_table();
                 } else {
                     let table_meta = self.ctx.get_table(&db_name, &table_name)?;
                     meta_id = table_meta.meta_id();
                     meta_version = table_meta.meta_ver();
-                    table = table_meta.datasource().clone();
+                    table = table_meta.raw().clone();
                 }
 
                 let scan = {
