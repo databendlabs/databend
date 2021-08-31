@@ -15,16 +15,16 @@
 #[macro_export]
 macro_rules! dispatch_numeric_types {
     ($dispatch: ident, $data_type: expr, $($args:expr),*) => {
-        $dispatch! { UInt8Type, $data_type, $($args),* }
-        $dispatch! { UInt16Type, $data_type, $($args),* }
-        $dispatch! { UInt32Type, $data_type, $($args),* }
-        $dispatch! { UInt64Type, $data_type, $($args),* }
-        $dispatch! { Int8Type, $data_type, $($args),* }
-        $dispatch! { Int16Type, $data_type, $($args),* }
-        $dispatch! { Int32Type, $data_type, $($args),* }
-        $dispatch! { Int64Type, $data_type, $($args),* }
-        $dispatch! { Float32Type, $data_type, $($args),* }
-        $dispatch! { Float64Type, $data_type, $($args),* }
+        $dispatch! { u8, $data_type, $($args),* }
+        $dispatch! { u16, $data_type, $($args),* }
+        $dispatch! { u32, $data_type, $($args),* }
+        $dispatch! { u64, $data_type, $($args),* }
+        $dispatch! { i8, $data_type, $($args),* }
+        $dispatch! { i16, $data_type, $($args),* }
+        $dispatch! { i32, $data_type, $($args),* }
+        $dispatch! { i64, $data_type, $($args),* }
+        $dispatch! { f32, $data_type, $($args),* }
+        $dispatch! { f64, $data_type, $($args),* }
     };
 }
 
@@ -45,8 +45,8 @@ macro_rules! match_data_type_apply_macro_ca {
             DataType::Int64 => $macro!($self.i64().unwrap() $(, $opt_args)*),
             DataType::Float32 => $macro!($self.f32().unwrap() $(, $opt_args)*),
             DataType::Float64 => $macro!($self.f64().unwrap() $(, $opt_args)*),
-            DataType::Date32 => $macro!($self.date32().unwrap() $(, $opt_args)*),
-            DataType::Date64 => $macro!($self.date64().unwrap() $(, $opt_args)*),
+            DataType::Date16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
+            DataType::Date32 => $macro!($self.u32().unwrap() $(, $opt_args)*),
             _ => unimplemented!(),
         }
     }};
@@ -67,8 +67,8 @@ macro_rules! apply_method_numeric_series {
             DataType::Int64 => $self.i64().unwrap().$method($($args),*),
             DataType::Float32 => $self.f32().unwrap().$method($($args),*),
             DataType::Float64 => $self.f64().unwrap().$method($($args),*),
-            DataType::Date32 => $self.date32().unwrap().$method($($args),*),
-            DataType::Date64 => $self.date64().unwrap().$method($($args),*),
+            DataType::Date16 => $self.u16().unwrap().$method($($args),*),
+            DataType::Date32 => $self.u32().unwrap().$method($($args),*),
 
             _ => unimplemented!(),
         }
@@ -81,18 +81,16 @@ macro_rules! match_data_type_apply_macro {
         match $obj {
             DataType::Utf8 => $macro_utf8!($($opt_args)*),
             DataType::Boolean => $macro_bool!($($opt_args)*),
-            DataType::UInt8 => $macro!(UInt8Type $(, $opt_args)*),
-            DataType::UInt16 => $macro!(UInt16Type $(, $opt_args)*),
-            DataType::UInt32 => $macro!(UInt32Type $(, $opt_args)*),
-            DataType::UInt64 => $macro!(UInt64Type $(, $opt_args)*),
-            DataType::Int8 => $macro!(Int8Type $(, $opt_args)*),
-            DataType::Int16 => $macro!(Int16Type $(, $opt_args)*),
-            DataType::Int32 => $macro!(Int32Type $(, $opt_args)*),
-            DataType::Int64 => $macro!(Int64Type $(, $opt_args)*),
-            DataType::Float32 => $macro!(Float32Type $(, $opt_args)*),
-            DataType::Float64 => $macro!(Float64Type $(, $opt_args)*),
-            DataType::Date32 => $macro!(Date32Type $(, $opt_args)*),
-            DataType::Date64 => $macro!(Date64Type $(, $opt_args)*),
+            DataType::UInt8 => $macro!(u8 $(, $opt_args)*),
+            DataType::UInt16 => $macro!(u16 $(, $opt_args)*),
+            DataType::UInt32 => $macro!(u32 $(, $opt_args)*),
+            DataType::UInt64 => $macro!(u64 $(, $opt_args)*),
+            DataType::Int8 => $macro!(i8 $(, $opt_args)*),
+            DataType::Int16 => $macro!(i16 $(, $opt_args)*),
+            DataType::Int32 => $macro!(i32 $(, $opt_args)*),
+            DataType::Int64 => $macro!(i64 $(, $opt_args)*),
+            DataType::Float32 => $macro!(f32 $(, $opt_args)*),
+            DataType::Float64 => $macro!(f64 $(, $opt_args)*),
             _ => unimplemented!(),
         }
     }};
@@ -150,7 +148,7 @@ macro_rules! build_constant_series {
 }
 
 macro_rules! build_list_series {
-    ($TYPE:ident,  $VALUES:expr, $SIZE:expr, $D_TYPE: expr) => {{
+    ($TYPE:ty,  $VALUES:expr, $SIZE:expr, $D_TYPE: expr) => {{
         type B = ListPrimitiveArrayBuilder<$TYPE>;
         let mut builder = B::with_capacity(0, $SIZE);
         match $VALUES {
@@ -169,8 +167,8 @@ macro_rules! build_list_series {
 }
 
 macro_rules! try_build_array {
-    ($VALUE_BUILDER_TY:ident, $DF_TY:ident, $SCALAR_TY:ident, $VALUES:expr) => {{
-        let mut builder = $VALUE_BUILDER_TY::<crate::$DF_TY>::with_capacity($VALUES.len());
+    ($VALUE_BUILDER_TY:ident, $DF_TY:ty, $SCALAR_TY:ident, $VALUES:expr) => {{
+        let mut builder = $VALUE_BUILDER_TY::<$DF_TY>::with_capacity($VALUES.len());
         for value in $VALUES.iter() {
             match value {
                 DataValue::$SCALAR_TY(Some(v)) => builder.append_value(*v),

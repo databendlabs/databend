@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
@@ -51,8 +52,8 @@ impl Function for CastFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
-        let series = columns[0].to_minimal_array()?;
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let series = columns[0].column().clone().to_minimal_array()?;
         let column: DataColumn = series.cast_with_type(&self.cast_type)?.into();
         Ok(column.resize_constant(input_rows))
     }

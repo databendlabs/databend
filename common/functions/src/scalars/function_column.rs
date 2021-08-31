@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -51,8 +52,8 @@ impl Function for ColumnFunction {
         Ok(field.is_nullable())
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        Ok(columns[0].clone())
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        Ok(columns[0].column().clone())
     }
 
     fn num_arguments(&self) -> usize {

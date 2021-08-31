@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValueLogicOperator;
@@ -62,7 +63,8 @@ impl Function for LogicFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let columns: Vec<DataColumn> = columns.iter().map(|c| c.column().clone()).collect();
         columns[0].logic(self.op.clone(), &columns[1..])
     }
 }

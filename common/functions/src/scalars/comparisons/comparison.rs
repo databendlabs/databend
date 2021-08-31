@@ -72,8 +72,10 @@ impl Function for ComparisonFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        columns[0].compare(self.op.clone(), &columns[1])
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        columns[0]
+            .column()
+            .compare(self.op.clone(), columns[1].column())
     }
 
     fn num_arguments(&self) -> usize {

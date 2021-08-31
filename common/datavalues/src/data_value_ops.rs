@@ -62,26 +62,26 @@ impl DataValue {
     pub fn try_into_data_array(values: &[DataValue], data_type: &DataType) -> Result<Series> {
         match data_type {
             DataType::Int8 => {
-                try_build_array! {PrimitiveArrayBuilder, Int8Type, Int8, values}
+                try_build_array! {PrimitiveArrayBuilder, i8, Int8, values}
             }
-            DataType::Int16 => try_build_array! {PrimitiveArrayBuilder, Int16Type, Int16, values},
-            DataType::Int32 => try_build_array! {PrimitiveArrayBuilder, Int32Type, Int32, values},
-            DataType::Int64 => try_build_array! {PrimitiveArrayBuilder, Int64Type, Int64, values},
-            DataType::UInt8 => try_build_array! {PrimitiveArrayBuilder, UInt8Type, UInt8, values},
+            DataType::Int16 => try_build_array! {PrimitiveArrayBuilder, i16, Int16, values},
+            DataType::Int32 => try_build_array! {PrimitiveArrayBuilder, i32, Int32, values},
+            DataType::Int64 => try_build_array! {PrimitiveArrayBuilder, i64, Int64, values},
+            DataType::UInt8 => try_build_array! {PrimitiveArrayBuilder, u8, UInt8, values},
             DataType::UInt16 => {
-                try_build_array! {PrimitiveArrayBuilder, UInt16Type, UInt16, values}
+                try_build_array! {PrimitiveArrayBuilder, u16, UInt16, values}
             }
             DataType::UInt32 => {
-                try_build_array! {PrimitiveArrayBuilder, UInt32Type, UInt32, values}
+                try_build_array! {PrimitiveArrayBuilder, u32, UInt32, values}
             }
             DataType::UInt64 => {
-                try_build_array! {PrimitiveArrayBuilder, UInt64Type, UInt64, values}
+                try_build_array! {PrimitiveArrayBuilder, u64, UInt64, values}
             }
             DataType::Float32 => {
-                try_build_array! {PrimitiveArrayBuilder, Float32Type, Float32, values}
+                try_build_array! {PrimitiveArrayBuilder, f32, Float32, values}
             }
             DataType::Float64 => {
-                try_build_array! {PrimitiveArrayBuilder, Float64Type, Float64, values}
+                try_build_array! {PrimitiveArrayBuilder, f64, Float64, values}
             }
             DataType::Boolean => try_build_array! {values},
             DataType::Utf8 => try_build_array! {Utf8, values},

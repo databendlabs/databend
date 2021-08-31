@@ -123,24 +123,25 @@ fn test_plan_parser() -> Result<()> {
             expect: "",
             error: "Code: 8, displayText = Unsupported function: \"unsupported\".",
         },
-        Test {
-            name: "interval-passed",
-            sql: "SELECT INTERVAL '1 year', INTERVAL '1 month', INTERVAL '1 day', INTERVAL '1 hour', INTERVAL '1 minute', INTERVAL '1 second'",
-            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
-            error: "",
-        },
-        Test {
-            name: "interval-unsupported",
-            sql: "SELECT INTERVAL '1 year 1 day'",
-            expect: "",
-            error: "Code: 5, displayText = DF does not support intervals that have both a Year/Month part as well as Days/Hours/Mins/Seconds: \"1 year 1 day\". Hint: try breaking the interval into two parts, one with Year/Month and the other with Days/Hours/Mins/Seconds - e.g. (NOW() + INTERVAL \'1 year\') + INTERVAL \'1 day\'.",
-        },
-        Test {
-            name: "interval-out-of-range",
-            sql: "SELECT INTERVAL '100000000000000000 day'",
-            expect: "",
-            error: "Code: 5, displayText = Interval field value out of range: \"100000000000000000 day\".",
-        },
+        // TODO: support interval type
+        // Test {
+        //     name: "interval-passed",
+        //     sql: "SELECT INTERVAL '1 year', INTERVAL '1 month', INTERVAL '1 day', INTERVAL '1 hour', INTERVAL '1 minute', INTERVAL '1 second'",
+        //     expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 4294967296:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+        //     error: "",
+        // },
+        // Test {
+        //     name: "interval-unsupported",
+        //     sql: "SELECT INTERVAL '1 year 1 day'",
+        //     expect: "",
+        //     error: "Code: 5, displayText = DF does not support intervals that have both a Year/Month part as well as Days/Hours/Mins/Seconds: \"1 year 1 day\". Hint: try breaking the interval into two parts, one with Year/Month and the other with Days/Hours/Mins/Seconds - e.g. (NOW() + INTERVAL \'1 year\') + INTERVAL \'1 day\'.",
+        // },
+        // Test {
+        //     name: "interval-out-of-range",
+        //     sql: "SELECT INTERVAL '100000000000000000 day'",
+        //     expect: "",
+        //     error: "Code: 5, displayText = Interval field value out of range: \"100000000000000000 day\".",
+        // },
         Test {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",

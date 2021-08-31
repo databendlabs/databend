@@ -21,7 +21,7 @@ use bumpalo::Bump;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues::DFNumericType;
+use common_datavalues::DFPrimitiveType;
 
 use crate::common::HashMap;
 use crate::common::HashMapIterator;
@@ -55,20 +55,20 @@ pub trait AggregatorState<Method: HashMethod> {
 // TODO: Optimize the type with length below 2
 pub struct FixedKeysAggregatorState<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::Eq + Clone + Debug,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T::Native>,
+    T: DFPrimitiveType,
+    T: std::cmp::Eq + Clone + Debug,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     pub area: Bump,
-    pub data: HashMap<T::Native, usize>,
+    pub data: HashMap<T, usize>,
 }
 
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for FixedKeysAggregatorState<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::Eq + Hash + Clone + Debug,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T::Native>,
+    T: DFPrimitiveType,
+    T: std::cmp::Eq + Hash + Clone + Debug,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type HashKeyState = <HashMethodFixedKeys<T> as HashMethod>::HashKey;

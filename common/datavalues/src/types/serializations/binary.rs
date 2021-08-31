@@ -12,8 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod iterator;
-mod take;
+use common_exception::Result;
 
-pub use iterator::*;
-pub use take::*;
+use crate::prelude::*;
+
+pub struct BinarySerializer {}
+
+impl TypeSerializer for BinarySerializer {
+    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
+        let array = column.to_array()?;
+        let array: &DFBinaryArray = array.static_cast();
+
+        let result: Vec<String> = array
+            .into_iter()
+            .map(|x| {
+                x.map(|v| String::from_utf8_lossy(v).to_string())
+                    .unwrap_or_else(|| "NULL".to_owned())
+            })
+            .collect();
+        Ok(result)
+    }
+}
