@@ -24,12 +24,12 @@ impl<Key: ShortFixedKeyable> Iterator for ShortFixedKeysStateIterator<Key> {
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            while self.index < self.capacity {
-                if unlikely(self.index == 0) {
-                    self.index += 1;
-                    return Some(self.entities.offset(self.index));
-                }
+            if unlikely(self.index == 0) {
+                self.index += 1;
+                return Some(self.entities.offset(self.index));
+            }
 
+            while self.index < self.capacity {
                 let entity = self.entities.offset(self.index);
                 self.index += 1;
 

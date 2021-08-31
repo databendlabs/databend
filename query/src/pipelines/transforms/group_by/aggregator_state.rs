@@ -71,6 +71,7 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
             let entity_layout = Layout::from_size_align_unchecked(size, entity_align);
 
             let raw_ptr = std::alloc::alloc_zeroed(entity_layout);
+
             ShortFixedKeysAggregatorState::<T> {
                 area: Default::default(),
                 data: raw_ptr as *mut ShortFixedKeysStateEntity<T>,
@@ -120,16 +121,23 @@ impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorStat
     #[inline(always)]
     fn entity(&mut self, key: &T, inserted: &mut bool) -> *mut Self::Entity {
         unsafe {
+            *inserted = false;
             let index = key.lookup();
 
             if index == 0 {
-                *inserted = !self.has_zero;
-                self.has_zero = true;
+                if !self.has_zero {
+                    self.size += 1;
+                    *inserted = true;
+                    self.has_zero = true;
+                }
+
                 return self.data.offset(index);
             }
 
             let value = self.data.offset(index);
             if value.get_state_key().is_zero_key() {
+                self.size += 1;
+                *inserted = true;
                 value.set_state_key(key);
             }
             value
