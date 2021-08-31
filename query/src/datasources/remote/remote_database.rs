@@ -23,20 +23,20 @@ use common_planners::DropTablePlan;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
-use crate::datasources::remote::RemoteMetaBackend;
+use crate::datasources::MetaBackend;
 
 pub struct RemoteDatabase {
     _id: MetaId,
     name: String,
-    meta_client: Arc<dyn RemoteMetaBackend>,
+    meta_store: Arc<dyn MetaBackend>,
 }
 
 impl RemoteDatabase {
-    pub fn create(id: MetaId, name: &str, meta_client: Arc<dyn RemoteMetaBackend>) -> Self {
+    pub fn create(id: MetaId, name: &str, meta_store: Arc<dyn MetaBackend>) -> Self {
         Self {
             _id: id,
             name: name.to_string(),
-            meta_client,
+            meta_store,
         }
     }
 }
@@ -55,7 +55,7 @@ impl Database for RemoteDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        self.meta_client.get_table(self.name.as_str(), table_name)
+        self.meta_store.get_table(self.name.as_str(), table_name)
     }
 
     fn exists_table(&self, _table_name: &str) -> Result<bool> {
@@ -67,12 +67,12 @@ impl Database for RemoteDatabase {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.meta_client
+        self.meta_store
             .get_table_by_id(self.name.as_str(), table_id, table_version)
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        self.meta_client.get_tables(self.name.as_str())
+        self.meta_store.get_tables(self.name.as_str())
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
@@ -80,10 +80,10 @@ impl Database for RemoteDatabase {
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.meta_client.create_table(plan)
+        self.meta_store.create_table(plan)
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.meta_client.drop_table(plan)
+        self.meta_store.drop_table(plan)
     }
 }

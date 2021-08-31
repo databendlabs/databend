@@ -22,6 +22,7 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
+use crate::configs::Config;
 use crate::datasources::local::LocalDatabase;
 
 /// The collection of the local database.
@@ -30,7 +31,7 @@ pub struct LocalDatabases {
 }
 
 impl LocalDatabases {
-    pub fn create() -> Self {
+    pub fn create(_conf: Config) -> Self {
         let databases: RwLock<HashMap<String, Arc<dyn Database>>> = Default::default();
         let default_database = Arc::new(LocalDatabase::create("default"));
         databases

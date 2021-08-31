@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod meta_store_client;
 mod remote_database;
 mod remote_databases;
 mod remote_factory;
@@ -20,10 +19,10 @@ mod remote_table;
 mod remote_table_do_read;
 mod store_client_provider;
 
-pub use meta_store_client::MetaStoreClient;
 pub use remote_database::RemoteDatabase;
+pub use remote_databases::RemoteDatabases;
 pub use remote_factory::RemoteFactory;
-pub use remote_meta_backend::RemoteMetaBackend;
+pub use remote_meta_backend::RemoteMetaClient;
 pub use remote_table::RemoteTable;
 pub use store_client_provider::GetStoreApiClient;
 pub use store_client_provider::StoreApis;

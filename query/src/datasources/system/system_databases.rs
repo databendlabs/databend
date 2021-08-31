@@ -21,6 +21,7 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
+use crate::configs::Config;
 use crate::datasources::system::SystemDatabase;
 
 pub struct SystemDatabases {
@@ -28,7 +29,7 @@ pub struct SystemDatabases {
 }
 
 impl SystemDatabases {
-    pub fn create() -> Self {
+    pub fn create(_conf: Config) -> Self {
         let database = Arc::new(SystemDatabase::create());
         SystemDatabases { database }
     }
