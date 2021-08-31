@@ -99,13 +99,21 @@ impl MetaBackend for LocalMetaBackend {
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
+        // Check database.
+        if self.databases.read().get(db_name).is_none() {
+            return Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database: {}",
+                db_name
+            )));
+        }
+
         let lock = self.tables.read();
         let tables = lock.get(db_name);
         match tables {
             None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: {}",
-                    db_name
+                return Err(ErrorCode::UnknownTable(format!(
+                    "Unknown table: '{}'",
+                    table_name
                 )))
             }
             Some(v) => {
