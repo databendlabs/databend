@@ -35,24 +35,22 @@ async fn test_datasource() -> Result<()> {
     // Database tests.
     {
         // Create database.
-        catalog
-            .create_database(CreateDatabasePlan {
-                if_not_exists: false,
-                db: "test_db".to_string(),
-                engine: DatabaseEngineType::Local,
-                options: Default::default(),
-            })?;
+        catalog.create_database(CreateDatabasePlan {
+            if_not_exists: false,
+            db: "test_db".to_string(),
+            engine: DatabaseEngineType::Local,
+            options: Default::default(),
+        })?;
 
         // Check
         let result = catalog.get_database("test_db");
         assert_eq!(true, result.is_ok());
 
         // Drop database.
-        catalog
-            .drop_database(DropDatabasePlan {
-                if_exists: false,
-                db: "test_db".to_string(),
-            })?;
+        catalog.drop_database(DropDatabasePlan {
+            if_exists: false,
+            db: "test_db".to_string(),
+        })?;
 
         // Check.
         let result = catalog.get_database("test_db");

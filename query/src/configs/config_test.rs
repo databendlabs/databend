@@ -25,6 +25,7 @@ use crate::configs::StoreConfig;
 fn test_default_config() -> Result<()> {
     let expect = Config {
         log: LogConfig::default(),
+        meta: StoreConfig::default(),
         store: StoreConfig::default(),
         query: QueryConfig::default(),
         config_file: "".to_string(),

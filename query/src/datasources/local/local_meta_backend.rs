@@ -120,15 +120,10 @@ impl MetaBackend for LocalMetaBackend {
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>> {
         let lock = self.tables.read();
         let tables = lock.get(db_name);
-        match tables {
-            None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: {}",
-                    db_name
-                )))
-            }
-            Some(v) => Ok(v.name2meta.values().cloned().collect()),
-        }
+        Ok(match tables {
+            None => vec![],
+            Some(v) => v.name2meta.values().cloned().collect(),
+        })
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {

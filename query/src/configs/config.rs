@@ -302,9 +302,15 @@ pub struct Config {
     #[structopt(flatten)]
     pub log: LogConfig,
 
+    // Meta Service config.
+    #[structopt(flatten)]
+    pub meta: StoreConfig,
+
+    // Storage backend config.
     #[structopt(flatten)]
     pub store: StoreConfig,
 
+    // Query engine config.
     #[structopt(flatten)]
     pub query: QueryConfig,
 
@@ -317,6 +323,7 @@ impl Config {
     pub fn default() -> Self {
         Config {
             log: LogConfig::default(),
+            meta: StoreConfig::default(),
             store: StoreConfig::default(),
             query: QueryConfig::default(),
             config_file: "".to_string(),
@@ -359,10 +366,29 @@ impl Config {
         }
         env_helper!(mut_config, log, log_level, String, LOG_LEVEL);
 
+        // Meta.
+        env_helper!(mut_config, meta, store_address, String, STORE_ADDRESS);
+        env_helper!(mut_config, meta, store_username, String, STORE_USERNAME);
+        env_helper!(mut_config, meta, store_password, String, STORE_PASSWORD);
+        env_helper!(
+            mut_config,
+            meta,
+            rpc_tls_store_server_root_ca_cert,
+            String,
+            RPC_TLS_STORE_SERVER_ROOT_CA_CERT
+        );
+        env_helper!(
+            mut_config,
+            meta,
+            rpc_tls_store_service_domain_name,
+            String,
+            RPC_TLS_STORE_SERVICE_DOMAIN_NAME
+        );
+
+        // Store.
         env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
         env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
         env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
-        // for store rpc client
         env_helper!(
             mut_config,
             store,

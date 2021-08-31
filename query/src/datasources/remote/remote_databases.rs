@@ -21,6 +21,7 @@ use common_planners::DropDatabasePlan;
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
+use crate::datasources::local::LocalMetaBackend;
 use crate::datasources::remote::RemoteFactory;
 use crate::datasources::remote::RemoteMetaClient;
 use crate::datasources::MetaBackend;
@@ -32,10 +33,15 @@ pub struct RemoteDatabases {
 impl RemoteDatabases {
     pub fn create(conf: Config) -> Self {
         // TODO(bohu): meta URI check, local or fuse?
-        let meta_backend = Arc::new(RemoteMetaClient::create(Arc::new(
-            RemoteFactory::new(&conf).store_client_provider(),
-        )));
-        RemoteDatabases { meta_backend }
+        if conf.meta.store_address.is_empty() {
+            let meta_backend = Arc::new(LocalMetaBackend::create());
+            RemoteDatabases { meta_backend }
+        } else {
+            let meta_backend = Arc::new(RemoteMetaClient::create(Arc::new(
+                RemoteFactory::new(&conf).store_client_provider(),
+            )));
+            RemoteDatabases { meta_backend }
+        }
     }
 }
 

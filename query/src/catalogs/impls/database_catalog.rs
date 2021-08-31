@@ -146,7 +146,11 @@ impl Catalog for DatabaseCatalog {
 
         // Get the database backend and create it.
         let engine = plan.engine.clone().to_string();
-        if let Some(engine) = self.database_engines.read().get(engine.as_str()) {
+        if let Some(engine) = self
+            .database_engines
+            .read()
+            .get(engine.to_lowercase().as_str())
+        {
             engine.create_database(plan)
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
