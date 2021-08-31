@@ -27,7 +27,11 @@ jobs:
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh
-
+      - name: Install openssl
+        if: ${{ matrix.config.os == "ubuntu-latest"}}
+        run: |
+          sudo apt-get update -y
+          sudo apt install pkg-config libssl-dev -y
       - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
