@@ -17,6 +17,7 @@ mod cluster_test;
 
 pub mod cluster;
 pub mod config;
+
 pub mod hello;
 pub mod logs;
 mod logs_test;

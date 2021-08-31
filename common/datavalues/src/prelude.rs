@@ -20,6 +20,8 @@ pub use crate::bit_util::*;
 // columns
 pub use crate::columns::DataColumn;
 pub use crate::columns::DataColumnCommon;
+pub use crate::columns::DataColumnWithField;
+pub use crate::columns::DataColumnsWithField;
 pub use crate::data_array_filter::*;
 pub use crate::data_value::DFTryFrom;
 // series

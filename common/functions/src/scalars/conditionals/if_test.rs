@@ -59,6 +59,13 @@ fn test_if_function() -> Result<()> {
 
     for t in tests {
         let func = t.func;
+
+        let columns: Vec<DataColumnWithField> = t
+            .columns
+            .iter()
+            .map(|c| DataColumnWithField::new(c.clone(), DataField::new("a", c.data_type(), false)))
+            .collect();
+
         // Display check.
         let expect_display = t.display.to_string();
         let actual_display = format!("{}", func);
@@ -69,7 +76,7 @@ fn test_if_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.columns, t.columns[0].len())?;
+        let ref v = func.eval(&columns, t.columns[0].len())?;
         // Type check.
         let expect_type = func.return_type(&t.args)?;
         let actual_type = v.data_type();

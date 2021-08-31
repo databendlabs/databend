@@ -43,6 +43,7 @@ pub struct ActionInput {
 pub struct ActionConstant {
     pub name: String,
     pub value: DataValue,
+    pub data_type: DataType,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +58,7 @@ pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
     pub return_type: DataType,
+    pub is_nullable: bool,
     pub is_aggregated: bool,
 
     // for functions

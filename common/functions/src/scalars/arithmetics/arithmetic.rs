@@ -63,22 +63,34 @@ impl Function for ArithmeticFunction {
         if args.len() == 1 {
             return Ok(args[0].clone());
         }
-
-        // TODO support: date <op> number
-        // if is_date_or_date_time(&args[0]) || is_date_or_date_time(&args[1]) {
-        //     return common_datavalues::datetime_arithmetic_coercion(&self.op, &args[0], &args[1]);
-        // }
-        common_datavalues::numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
+        if is_date_or_date_time(&args[0]) || is_date_or_date_time(&args[1]) {
+            return datetime_arithmetic_coercion(&self.op, &args[0], &args[1]);
+        }
+        numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        match columns.len() {
-            1 => std::ops::Neg::neg(&columns[0]),
-            _ => columns[0].arithmetic(self.op.clone(), &columns[1]),
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let result = match columns.len() {
+            1 => std::ops::Neg::neg(columns[0].column()),
+            _ => columns[0]
+                .column()
+                .arithmetic(self.op.clone(), columns[1].column()),
+        }?;
+
+        let has_date_or_date_time = columns.iter().any(|c| is_date_or_date_time(c.data_type()));
+        if has_date_or_date_time {
+            let args = columns
+                .iter()
+                .map(|f| f.data_type().clone())
+                .collect::<Vec<_>>();
+            let data_type = self.return_type(&args)?;
+            result.cast_with_type(&data_type)
+        } else {
+            Ok(result)
         }
     }
 

@@ -47,6 +47,7 @@ impl IntoResponse for LogTemplate {
     }
 }
 
+// read log files from cfg.log.log_dir
 pub async fn logs_handler(cfg_extension: Extension<Config>) -> LogTemplate {
     let cfg = cfg_extension.0;
     log::info!(
@@ -59,7 +60,6 @@ pub async fn logs_handler(cfg_extension: Extension<Config>) -> LogTemplate {
     }
 }
 
-// read log files from cfg.log.log_dir
 async fn select_table(cfg: Config) -> Result<String, ErrorCode> {
     let session_manager = SessionManager::from_conf(cfg, Cluster::empty())?;
     let executor_session = session_manager.create_session("HTTP")?;

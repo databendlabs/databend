@@ -57,7 +57,7 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 structopt = "0.3"
 structopt-toml = "0.5.0"
 tempfile = "3.2.0"
-thiserror = "1.0.26"
+thiserror = "1.0.28"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
 tracing-appender = "0.1.2"
