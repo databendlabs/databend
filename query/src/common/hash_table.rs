@@ -23,7 +23,7 @@ use crate::common::hash_table_grower::Grower;
 use crate::common::hash_table_iter::HashTableIter;
 use crate::common::hash_table_key::HashTableKeyable;
 
-pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> {
+pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>> {
     size: usize,
     grower: Grower,
     entities: *mut Entity,
@@ -35,7 +35,7 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> {
     generics_hold: PhantomData<Key>,
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> Drop for HashTable<Key, Entity> {
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key, Entity> {
     fn drop(&mut self) {
         unsafe {
             let size = (self.grower.max_size() as usize) * mem::size_of::<Entity>();
@@ -53,7 +53,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> Drop for HashTable
     }
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> HashTable<Key, Entity> {
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity> {
     pub fn create() -> HashTable<Key, Entity> {
         let size = (1 << 8) * mem::size_of::<Entity>();
         unsafe {
@@ -83,7 +83,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> HashTable<Key, Ent
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> HashTableIter<Entity> {
+    pub fn iter(&self) -> HashTableIter<Key, Entity> {
         HashTableIter::create(self.grower.max_size(), self.entities, self.zero_entity)
     }
 
@@ -121,9 +121,9 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key=Key>> HashTable<Key, Ent
             let mut place_value = grower.place(hash_value);
             while !self.entities.offset(place_value).is_zero()
                 && !self
-                    .entities
-                    .offset(place_value)
-                    .key_equals(key, hash_value)
+                .entities
+                .offset(place_value)
+                .key_equals(key, hash_value)
             {
                 place_value = grower.next_place(place_value);
             }

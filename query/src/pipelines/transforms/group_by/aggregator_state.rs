@@ -148,7 +148,7 @@ impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorSta
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable {
     type Key = T;
     type Entity = KeyValueEntity<T, usize>;
-    type Iterator = HashMapIterator<Self::Entity>;
+    type Iterator = HashMapIterator<T, usize>;
 
     #[inline(always)]
     fn len(&self) -> usize {
@@ -180,13 +180,13 @@ pub struct SerializedKeysAggregatorState {
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     type Key = KeysRef;
     type Entity = KeyValueEntity<KeysRef, usize>;
-    type Iterator = HashMapIterator<Self::Entity>;
+    type Iterator = HashMapIterator<KeysRef, usize>;
 
     fn len(&self) -> usize {
         self.data_state_map.len()
     }
 
-    fn iter(&self) -> HashMapIterator<Self::Entity> {
+    fn iter(&self) -> Self::Iterator {
         self.data_state_map.iter()
     }
 
