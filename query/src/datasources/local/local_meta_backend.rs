@@ -195,7 +195,7 @@ impl MetaBackend for LocalMetaBackend {
         let db_name = plan.db.as_str();
         let table_name = plan.table.as_str();
 
-        let lock = self.databases.read();
+        let mut lock = self.databases.write();
         let v = lock.get(db_name);
         let tbl_id = match v {
             None => {
@@ -222,7 +222,6 @@ impl MetaBackend for LocalMetaBackend {
             }
         };
 
-        let mut lock = self.databases.write();
         let v = lock.get_mut(db_name);
         match v {
             None => {

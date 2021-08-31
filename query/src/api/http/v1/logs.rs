@@ -36,10 +36,7 @@ pub fn log_handler(
 async fn get_log(cfg: Config) -> Result<impl warp::Reply, warp::Rejection> {
     let result = select_table(cfg).await;
     match result {
-        Ok(s) => Ok(warp::reply::with_status(
-            s.to_string(),
-            warp::http::StatusCode::OK,
-        )),
+        Ok(s) => Ok(warp::reply::with_status(s, warp::http::StatusCode::OK)),
         Err(error_codes) => Err(warp::reject::custom(NoBacktraceErrorCode(error_codes))),
     }
 }
@@ -58,7 +55,7 @@ async fn select_table(cfg: Config) -> Result<String, ErrorCode> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let r = format!("{:?}", result);
-    Ok(r.to_string())
+    Ok(r)
 }
 struct NoBacktraceErrorCode(ErrorCode);
 
