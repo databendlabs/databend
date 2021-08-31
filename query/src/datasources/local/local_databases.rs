@@ -31,7 +31,11 @@ pub struct LocalDatabases {
 
 impl LocalDatabases {
     pub fn create(_conf: Config) -> Self {
-        let meta_backend = Arc::new(LocalMetaBackend::create());
+        let local_backend = LocalMetaBackend::create();
+        // Register 'default' database.
+        local_backend.register_database("default");
+
+        let meta_backend = Arc::new(local_backend);
         LocalDatabases { meta_backend }
     }
 }

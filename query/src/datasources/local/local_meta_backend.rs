@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -40,33 +38,38 @@ use crate::datasources::local::ParquetTable;
 use crate::datasources::MetaBackend;
 
 /// The backend of the local database.
+#[derive(Clone)]
 pub struct LocalMetaBackend {
-    databases: RwLock<HashMap<String, Arc<dyn Database>>>,
-    tables: RwLock<HashMap<String, InMemoryMetas>>,
-    tbl_id_seq: AtomicU64,
+    databases: Arc<RwLock<HashMap<String, Arc<dyn Database>>>>,
+    tables: Arc<RwLock<HashMap<String, InMemoryMetas>>>,
+    tbl_id_seq: Arc<RwLock<u64>>,
 }
 
 impl LocalMetaBackend {
     pub fn create() -> Self {
-        let databases: RwLock<HashMap<String, Arc<dyn Database>>> = Default::default();
-        let default_database = Arc::new(LocalDatabase::create("default"));
-        databases
-            .write()
-            .insert("default".to_string(), default_database);
-
-        let tbl_id_seq = AtomicU64::new(LOCAL_TBL_ID_BEGIN);
+        let tbl_id_seq = Arc::new(RwLock::new(LOCAL_TBL_ID_BEGIN));
         LocalMetaBackend {
-            databases,
-            tables: Default::default(),
+            databases: Arc::new(Default::default()),
+            tables: Arc::new(Default::default()),
             tbl_id_seq,
         }
+    }
+
+    // Register database.
+    pub fn register_database(&self, db_name: &str) {
+        let local = LocalDatabase::create(db_name, Arc::new(self.clone()));
+        self.databases
+            .write()
+            .insert(db_name.to_string(), Arc::new(local));
     }
 
     fn next_db_id(&self) -> u64 {
         // `fetch_add` wraps around on overflow, but as LOCAL_TBL_ID_BEGIN
         // is defined as (1 << 62) + 10000, there are about 13 quintillion ids are reserved
         // for local tables, we do not check overflow here.
-        self.tbl_id_seq.fetch_add(1, Ordering::SeqCst)
+        *self.tbl_id_seq.write() += 1;
+        let r = self.tbl_id_seq.read();
+        *r
     }
 }
 
@@ -263,7 +266,7 @@ impl MetaBackend for LocalMetaBackend {
             };
         }
 
-        let database = LocalDatabase::create(db_name);
+        let database = LocalDatabase::create(db_name, Arc::new(self.clone()));
         self.databases.write().insert(plan.db, Arc::new(database));
         Ok(())
     }
