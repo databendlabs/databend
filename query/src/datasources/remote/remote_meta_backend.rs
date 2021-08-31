@@ -255,31 +255,27 @@ impl MetaBackend for RemoteMetaClient {
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        /*
         let cli_provider = self.store_api_provider.clone();
         let db = self.do_block(async move {
             let mut client = cli_provider.try_get_store_apis().await?;
             client.get_database_meta(None).await
         })??;
-        db.map_or_else(
-            || Ok(vec![]),
-            |snapshot| {
-                let res = snapshot
-                    .db_metas
-                    .iter()
-                    .map(|(name, db)| {
-                        Arc::new(RemoteDatabase::create(
-                            db.database_id,
-                            name,
-                            Arc::new(self.clone()),
-                        ))
-                    })
-                    .collect::<Vec<Arc<RemoteDatabase>>>();
+
+        match db {
+            None => Ok(vec![]),
+            Some(snapshot) => {
+                let mut res = vec![];
+                let db_metas = snapshot.db_metas;
+                for (name, database) in db_metas {
+                    res.push(Arc::new(RemoteDatabase::create(
+                        database.database_id,
+                        name.as_str(),
+                        Arc::new(self.clone()),
+                    )) as Arc<dyn Database>);
+                }
                 Ok(res)
-            },
-        )
-         */
-        todo!()
+            }
+        }
     }
 
     fn exists_database(&self, db_name: &str) -> Result<bool> {
