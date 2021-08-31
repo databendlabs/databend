@@ -20,7 +20,6 @@ use common_exception::Result;
 use crate::prelude::DataType;
 use crate::DataField;
 use crate::DataValueArithmeticOperator;
-use crate::PhysicalDataType;
 
 /// Determine if a DataType is signed numeric or not
 pub fn is_signed_numeric(dt: &DataType) -> bool {
