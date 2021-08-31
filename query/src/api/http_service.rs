@@ -63,6 +63,7 @@ macro_rules! build_router {
         Router::new()
             .route("/v1/hello", get(super::http::v1::hello::hello_handler))
             .route("/v1/config", get(super::http::v1::config::config_handler))
+            .route("/v1/logs", get(super::http::v1::logs::logs_handler))
             .route(
                 "/v1/cluster/add",
                 post(super::http::v1::cluster::cluster_add_handler),
