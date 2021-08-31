@@ -29,6 +29,7 @@ mod aggregate_min_max;
 mod aggregate_window_funnel;
 
 // mod aggregate_min_max;
+mod aggregate_stddev_pop;
 mod aggregate_sum;
 mod aggregator;
 mod aggregator_common;
@@ -47,6 +48,7 @@ pub use aggregate_function_factory::AggregateFunctionFactory;
 pub use aggregate_function_state::get_layout_offsets;
 pub use aggregate_function_state::StateAddr;
 pub use aggregate_min_max::AggregateMinMaxFunction;
+pub use aggregate_stddev_pop::AggregateStddevPopFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
