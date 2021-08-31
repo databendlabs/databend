@@ -20,6 +20,7 @@ use common_exception::Result;
 use crate::prelude::DataType;
 use crate::DataField;
 use crate::DataValueArithmeticOperator;
+use crate::PhysicalDataType;
 
 /// Determine if a DataType is signed numeric or not
 pub fn is_signed_numeric(dt: &DataType) -> bool {
@@ -278,7 +279,7 @@ pub fn datetime_arithmetic_coercion(
 
     let mut a = lhs_type.clone();
     let mut b = rhs_type.clone();
-    if !is_numeric(lhs_type) {
+    if !is_date_or_date_time(&a) {
         a = rhs_type.clone();
         b = lhs_type.clone();
     }
@@ -290,16 +291,8 @@ pub fn datetime_arithmetic_coercion(
             if is_numeric(&b) {
                 Ok(a)
             } else {
-                if a != b {
-                    return e;
-                }
-
-                match a {
-                    DataType::Date16 => Ok(DataType::UInt16),
-                    DataType::Date32 => Ok(DataType::UInt32),
-                    DataType::DateTime32 => Ok(DataType::UInt32),
-                    _ => e,
-                }
+                // Date minus Date or DateTime minus DateTime
+                Ok(DataType::Int32)
             }
         }
         _ => e,
