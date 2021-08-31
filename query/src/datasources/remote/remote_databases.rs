@@ -32,8 +32,9 @@ pub struct RemoteDatabases {
 
 impl RemoteDatabases {
     pub fn create(conf: Config) -> Self {
-        // TODO(bohu): meta URI check, local or fuse?
-        if conf.meta.store_address.is_empty() {
+        // If the meta meta_address is empty
+        // We use the local backend as Remote meta data storage.
+        if conf.meta.meta_address.is_empty() {
             let meta_backend = Arc::new(LocalMetaBackend::create());
             RemoteDatabases { meta_backend }
         } else {

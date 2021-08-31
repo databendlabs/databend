@@ -40,6 +40,7 @@ use crate::datasources::MetaBackend;
 type Databases = Arc<RwLock<HashMap<String, (Arc<dyn Database>, InMemoryMetas)>>>;
 
 /// The backend of the local database.
+/// Maintainer all the database and table information.
 #[derive(Clone)]
 pub struct LocalMetaBackend {
     databases: Databases,
