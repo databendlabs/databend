@@ -17,7 +17,6 @@ use common_runtime::tokio;
 
 use crate::configs::Config;
 
-
 pub async fn hello_handler(cfg: Extension<Config>) -> String {
     format!("{:?}", cfg)
 }
@@ -33,6 +32,7 @@ async fn test_hello() -> common_exception::Result<()> {
     use axum::Router;
     use pretty_assertions::assert_eq;
     use tower::ServiceExt;
+
     use crate::api::http::v1::config::config_handler;
     use crate::configs::Config; // for `app.oneshot()`
 

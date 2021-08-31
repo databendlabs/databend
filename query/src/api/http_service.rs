@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
+use std::io::BufReader;
+use std::io::{self};
 use std::net::SocketAddr;
+use std::path::Path;
+use std::sync::Arc;
 
 use axum::handler::get;
 use axum::handler::post;
@@ -28,6 +33,13 @@ use futures::future::Abortable;
 use futures::Future;
 use futures::StreamExt;
 use hyper::server::conn::Http;
+use tokio_rustls::rustls::internal::pemfile::certs;
+use tokio_rustls::rustls::internal::pemfile::pkcs8_private_keys;
+use tokio_rustls::rustls::Certificate;
+use tokio_rustls::rustls::NoClientAuth;
+use tokio_rustls::rustls::PrivateKey;
+use tokio_rustls::rustls::ServerConfig;
+use tokio_rustls::TlsAcceptor;
 use tokio_stream::wrappers::TcpListenerStream;
 
 // use crate::api::http::router::Router;
@@ -42,6 +54,7 @@ pub struct HttpService {
     join_handle: Option<JoinHandle<()>>,
     abort_handle: AbortHandle,
     abort_registration: Option<AbortRegistration>,
+    tls_acceptor: Option<TlsAcceptor>,
 }
 
 // build axum router
@@ -78,13 +91,52 @@ macro_rules! build_router {
 impl HttpService {
     pub fn create(cfg: Config, cluster: ClusterRef) -> Box<Self> {
         let (abort_handle, registration) = AbortHandle::new_pair();
+        let tls_config = HttpService::build_tls(cfg.clone());
+        let tls_acceptor = tls_config.map(HttpService::build_acceptor);
         Box::new(HttpService {
             cfg,
             cluster,
             join_handle: None,
             abort_handle,
             abort_registration: Some(registration),
+            tls_acceptor,
         })
+    }
+
+    fn build_tls(cfg: Config) -> Option<ServerConfig> {
+        if cfg.query.api_tls_server_key.is_empty() || cfg.query.api_tls_server_cert.is_empty() {
+            return None;
+        }
+        let certs = HttpService::load_certs(Path::new(cfg.query.api_tls_server_cert.as_str()))
+            .expect("cannot load TLS cert for http service");
+        let key = HttpService::load_keys(Path::new(cfg.query.api_tls_server_key.as_str()))
+            .expect("cannot load TLS key for http service")
+            .remove(0);
+        let config = HttpService::build_tls_config(certs, key);
+        Some(config)
+    }
+
+    fn build_acceptor(config: ServerConfig) -> TlsAcceptor {
+        TlsAcceptor::from(Arc::new(config))
+    }
+
+    fn build_tls_config(certs: Vec<Certificate>, key: PrivateKey) -> ServerConfig {
+        let mut config = ServerConfig::new(NoClientAuth::new());
+        config
+            .set_single_cert(certs, key)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))
+            .expect("cannot build TLS config for http service");
+        config
+    }
+    fn load_certs(path: &Path) -> io::Result<Vec<Certificate>> {
+        certs(&mut BufReader::new(File::open(path)?))
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid cert"))
+    }
+
+    // currently only RSA key supports for TLS setup
+    fn load_keys(path: &Path) -> io::Result<Vec<PrivateKey>> {
+        pkcs8_private_keys(&mut BufReader::new(File::open(path)?))
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid key"))
     }
 
     async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
@@ -95,16 +147,25 @@ impl HttpService {
 
     fn listen_loop(&self, stream: ListeningStream) -> impl Future<Output = ()> {
         let app = build_router!(self.cfg.clone(), self.cluster.clone());
+        let acceptor = self.tls_acceptor.clone();
         stream.for_each(move |accept_socket| {
             let app = app.clone();
+            let acceptor = acceptor.clone();
             async move {
                 match accept_socket {
                     Err(error) => log::error!("Broken http connection: {}", error),
-                    Ok(socket) => {
-                        tokio::spawn(async move {
-                            Http::new().serve_connection(socket, app).await.unwrap();
-                        });
-                    }
+                    Ok(socket) => match acceptor {
+                        Some(acceptor) => {
+                            if let Ok(socket) = acceptor.accept(socket).await {
+                                Http::new().serve_connection(socket, app).await.unwrap();
+                            }
+                        }
+                        None => {
+                            tokio::spawn(async move {
+                                Http::new().serve_connection(socket, app).await.unwrap();
+                            });
+                        }
+                    },
                 };
             }
         })
@@ -127,7 +188,7 @@ impl Server for HttpService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-      match self.abort_registration.take() {
+        match self.abort_registration.take() {
             None => Err(ErrorCode::LogicalError("Http Service already running.")),
             Some(registration) => {
                 let (stream, listener) = Self::listener_tcp(listening).await?;
