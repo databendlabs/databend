@@ -23,15 +23,20 @@ use common_planners::DropTablePlan;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::datasources::remote::RemoteMetaBackend;
 
 pub struct RemoteDatabase {
+    _id: MetaId,
     name: String,
+    meta_client: Arc<dyn RemoteMetaBackend>,
 }
 
 impl RemoteDatabase {
-    pub fn create(name: &str) -> Self {
+    pub fn create(id: MetaId, name: &str, meta_client: Arc<dyn RemoteMetaBackend>) -> Self {
         Self {
+            _id: id,
             name: name.to_string(),
+            meta_client,
         }
     }
 }
@@ -49,8 +54,8 @@ impl Database for RemoteDatabase {
         false
     }
 
-    fn get_table(&self, _table_name: &str) -> Result<Arc<TableMeta>> {
-        todo!()
+    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
+        self.meta_client.get_table(self.name.as_str(), table_name)
     }
 
     fn exists_table(&self, _table_name: &str) -> Result<bool> {
@@ -59,25 +64,26 @@ impl Database for RemoteDatabase {
 
     fn get_table_by_id(
         &self,
-        _table_id: MetaId,
-        _table_version: Option<MetaVersion>,
+        table_id: MetaId,
+        table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        todo!()
+        self.meta_client
+            .get_table_by_id(self.name.as_str(), table_id, table_version)
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        todo!()
+        self.meta_client.get_tables(self.name.as_str())
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(vec![])
     }
 
-    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
-        todo!()
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
+        self.meta_client.create_table(plan)
     }
 
-    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
-        todo!()
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
+        self.meta_client.drop_table(plan)
     }
 }

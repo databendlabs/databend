@@ -20,12 +20,22 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
+use crate::configs::Config;
+use crate::datasources::remote::MetaStoreClient;
+use crate::datasources::remote::RemoteFactory;
+use crate::datasources::remote::RemoteMetaBackend;
 
-pub struct RemoteDatabases {}
+pub struct RemoteDatabases {
+    meta_store_client: Arc<dyn RemoteMetaBackend>,
+}
 
 impl RemoteDatabases {
-    pub fn create() -> Self {
-        RemoteDatabases {}
+    pub fn create(conf: Config) -> Self {
+        // TODO(bohu): meta URI check, local or fuse?
+        let meta_store_client = Arc::new(MetaStoreClient::create(Arc::new(
+            RemoteFactory::new(&conf).store_client_provider(),
+        )));
+        RemoteDatabases { meta_store_client }
     }
 }
 
@@ -34,23 +44,23 @@ impl DatabaseEngine for RemoteDatabases {
         "remote"
     }
 
-    fn get_database(&self, _db_name: &str) -> Result<Option<Arc<dyn Database>>> {
-        todo!()
+    fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>> {
+        self.meta_store_client.get_database(db_name)
     }
 
-    fn exists_database(&self, _db_name: &str) -> Result<bool> {
-        todo!()
+    fn exists_database(&self, db_name: &str) -> Result<bool> {
+        self.meta_store_client.exists_database(db_name)
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        todo!()
+        self.meta_store_client.get_databases()
     }
 
-    fn create_database(&self, _plan: CreateDatabasePlan) -> Result<()> {
-        todo!()
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+        self.meta_store_client.create_database(plan)
     }
 
-    fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
-        todo!()
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+        self.meta_store_client.drop_database(plan)
     }
 }
