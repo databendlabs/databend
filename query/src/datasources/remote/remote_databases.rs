@@ -26,16 +26,16 @@ use crate::datasources::remote::RemoteMetaClient;
 use crate::datasources::MetaBackend;
 
 pub struct RemoteDatabases {
-    meta_store: Arc<dyn MetaBackend>,
+    meta_backend: Arc<dyn MetaBackend>,
 }
 
 impl RemoteDatabases {
     pub fn create(conf: Config) -> Self {
         // TODO(bohu): meta URI check, local or fuse?
-        let meta_store = Arc::new(RemoteMetaClient::create(Arc::new(
+        let meta_backend = Arc::new(RemoteMetaClient::create(Arc::new(
             RemoteFactory::new(&conf).store_client_provider(),
         )));
-        RemoteDatabases { meta_store }
+        RemoteDatabases { meta_backend }
     }
 }
 
@@ -45,22 +45,22 @@ impl DatabaseEngine for RemoteDatabases {
     }
 
     fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>> {
-        self.meta_store.get_database(db_name)
+        self.meta_backend.get_database(db_name)
     }
 
     fn exists_database(&self, db_name: &str) -> Result<bool> {
-        self.meta_store.exists_database(db_name)
+        self.meta_backend.exists_database(db_name)
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        self.meta_store.get_databases()
+        self.meta_backend.get_databases()
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
-        self.meta_store.create_database(plan)
+        self.meta_backend.create_database(plan)
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        self.meta_store.drop_database(plan)
+        self.meta_backend.drop_database(plan)
     }
 }

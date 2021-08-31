@@ -28,15 +28,15 @@ use crate::datasources::MetaBackend;
 pub struct RemoteDatabase {
     _id: MetaId,
     name: String,
-    meta_store: Arc<dyn MetaBackend>,
+    meta_backend: Arc<dyn MetaBackend>,
 }
 
 impl RemoteDatabase {
-    pub fn create(id: MetaId, name: &str, meta_store: Arc<dyn MetaBackend>) -> Self {
+    pub fn create(id: MetaId, name: &str, meta_backend: Arc<dyn MetaBackend>) -> Self {
         Self {
             _id: id,
             name: name.to_string(),
-            meta_store,
+            meta_backend,
         }
     }
 }
@@ -55,11 +55,12 @@ impl Database for RemoteDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        self.meta_store.get_table(self.name.as_str(), table_name)
+        self.meta_backend.get_table(self.name.as_str(), table_name)
     }
 
-    fn exists_table(&self, _table_name: &str) -> Result<bool> {
-        todo!()
+    fn exists_table(&self, table_name: &str) -> Result<bool> {
+        let r = self.get_table(table_name);
+        Ok(r.is_ok())
     }
 
     fn get_table_by_id(
@@ -67,12 +68,12 @@ impl Database for RemoteDatabase {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.meta_store
+        self.meta_backend
             .get_table_by_id(self.name.as_str(), table_id, table_version)
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        self.meta_store.get_tables(self.name.as_str())
+        self.meta_backend.get_tables(self.name.as_str())
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
@@ -80,10 +81,10 @@ impl Database for RemoteDatabase {
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.meta_store.create_table(plan)
+        self.meta_backend.create_table(plan)
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.meta_store.drop_table(plan)
+        self.meta_backend.drop_table(plan)
     }
 }

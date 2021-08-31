@@ -178,45 +178,38 @@ impl MetaBackend for RemoteMetaClient {
         Ok(Arc::new(tbl_meta))
     }
 
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>> {
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>> {
         let cli = self.store_api_provider.clone();
-        let db = self.do_block(async move {
+        let reply = self.do_block(async move {
             let mut client = cli.try_get_store_apis().await?;
             // always take the latest snapshot
             client.get_database_meta(None).await
         })??;
 
-        match db {
+        match reply {
             None => Ok(vec![]),
             Some(snapshot) => {
                 let id_tbls = snapshot.tbl_metas.into_iter().collect::<HashMap<_, _>>();
                 let dbs = snapshot.db_metas;
-                let mut res: Vec<(String, Arc<TableMeta>)> = vec![];
-                for (db_name, db) in dbs {
-                    for (t_name, t_id) in db.tables {
-                        let tbl = id_tbls.get(&t_id).ok_or_else(|| {
-                            ErrorCode::IllegalMetaState(format!(
-                                "db meta inconsistent with table meta, table of id {}, not found",
-                                t_id
-                            ))
-                        })?;
-                        let tbl_meta = self.to_table_meta(&db_name, &t_name, tbl)?;
-                        let r = (db_name.clone(), Arc::new(tbl_meta));
-                        res.push(r);
+                let mut res: Vec<Arc<TableMeta>> = vec![];
+                for (db, database) in dbs {
+                    if db == db_name {
+                        for (t_name, t_id) in database.tables {
+                            let tbl = id_tbls.get(&t_id).ok_or_else(|| {
+                                ErrorCode::IllegalMetaState(format!(
+                                    "db meta inconsistent with table meta, table of id {}, not found",
+                                    t_id
+                                ))
+                            })?;
+                            let tbl_meta = self.to_table_meta(&db, &t_name, tbl)?;
+                            let r = Arc::new(tbl_meta);
+                            res.push(r);
+                        }
                     }
                 }
                 Ok(res)
             }
         }
-    }
-
-    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>> {
-        let all_tables = self.get_all_tables()?;
-        Ok(all_tables
-            .into_iter()
-            .filter(|item| item.0 == db_name)
-            .map(|item| item.1)
-            .collect::<Vec<_>>())
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {

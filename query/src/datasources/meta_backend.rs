@@ -35,7 +35,6 @@ pub trait MetaBackend: Sync + Send {
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>>;
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>>;
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
     fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
