@@ -14,16 +14,14 @@
 
 use std::alloc::Layout;
 
-use futures::StreamExt;
-
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::columns::DataColumn;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::prelude::Series;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
@@ -32,8 +30,8 @@ use common_io::prelude::BytesMut;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use futures::StreamExt;
 
-use crate::common::HashTableEntity;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParamsRef;

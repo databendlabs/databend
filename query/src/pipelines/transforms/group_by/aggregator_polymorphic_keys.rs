@@ -12,27 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-
 use bumpalo::Bump;
-use common_datablocks::{HashMethod, HashMethodKeysU8, HashMethodKeysU16, HashMethodKeysU32, HashMethodKeysU64};
-use common_datablocks::HashMethodFixedKeys;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKeysU16;
+use common_datablocks::HashMethodKeysU32;
+use common_datablocks::HashMethodKeysU64;
+use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
-use common_datavalues::prelude::DFPrimitiveArray;
-use common_datavalues::series::IntoSeries;
-use common_datavalues::DFPrimitiveType;
 
-use crate::common::{HashTable, HashTableEntity, KeyValueEntity};
-use crate::common::HashTableKeyable;
+use crate::common::HashTable;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::FixedKeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
-use crate::pipelines::transforms::group_by::aggregator_state::{LongerFixedKeysAggregatorState, ShortFixedKeysAggregatorState};
+use crate::pipelines::transforms::group_by::aggregator_state::LongerFixedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
+use crate::pipelines::transforms::group_by::aggregator_state::ShortFixedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::AggregatorState;
-use std::marker::PhantomData;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //

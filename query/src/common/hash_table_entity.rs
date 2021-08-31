@@ -26,9 +26,9 @@ pub trait HashTableEntity<Key>: Sized {
 }
 
 pub struct KeyValueEntity<Key, Value>
-    where
-        Key: HashTableKeyable,
-        Value: Sized + Copy,
+where
+    Key: HashTableKeyable,
+    Value: Sized + Copy,
 {
     key: Key,
     value: Value,
@@ -36,9 +36,9 @@ pub struct KeyValueEntity<Key, Value>
 }
 
 impl<Key, Value> KeyValueEntity<Key, Value>
-    where
-        Key: HashTableKeyable,
-        Value: Sized + Copy,
+where
+    Key: HashTableKeyable,
+    Value: Sized + Copy,
 {
     #[inline(always)]
     pub fn set_value(self: *mut Self, value: Value) {
@@ -54,9 +54,9 @@ impl<Key, Value> KeyValueEntity<Key, Value>
 }
 
 impl<Key, Value> HashTableEntity<Key> for KeyValueEntity<Key, Value>
-    where
-        Key: HashTableKeyable,
-        Value: Sized + Copy,
+where
+    Key: HashTableKeyable,
+    Value: Sized + Copy,
 {
     unsafe fn is_zero(self: *mut Self) -> bool {
         (*self).key.is_zero()

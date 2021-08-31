@@ -21,8 +21,6 @@ use common_datavalues::prelude::*;
 use common_datavalues::DFPrimitiveType;
 
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
-use crate::common::{HashTableEntity, HashTableKeyable};
-use lru::KeyRef;
 
 /// Remove the group by key from the state and rebuild it into a column
 pub trait KeysArrayBuilder<Key> {
@@ -31,16 +29,16 @@ pub trait KeysArrayBuilder<Key> {
 }
 
 pub struct FixedKeysArrayBuilder<T>
-    where T: DFPrimitiveType
+where T: DFPrimitiveType
 {
     pub inner_builder: PrimitiveArrayBuilder<T>,
 }
 
 impl<T> KeysArrayBuilder<T> for FixedKeysArrayBuilder<T>
-    where
-        T: DFPrimitiveType,
-        DFPrimitiveArray<T>: IntoSeries,
-        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
+where
+    T: DFPrimitiveType,
+    DFPrimitiveArray<T>: IntoSeries,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
     #[inline]
     fn finish(mut self) -> Series {

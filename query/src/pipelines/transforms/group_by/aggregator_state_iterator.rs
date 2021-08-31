@@ -1,5 +1,8 @@
-use crate::pipelines::transforms::group_by::aggregator_state_entity::{ShortFixedKeysStateEntity, ShortFixedKeyable, StateEntity};
 use std::intrinsics::unlikely;
+
+use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 
 type Entities<Key> = *mut ShortFixedKeysStateEntity<Key>;
 
@@ -9,12 +12,19 @@ pub struct ShortFixedKeysStateIterator<Key: ShortFixedKeyable> {
     entities: *mut ShortFixedKeysStateEntity<Key>,
 }
 
-
 impl<Key: ShortFixedKeyable> ShortFixedKeysStateIterator<Key> {
     pub fn create(entities: Entities<Key>, capacity: isize, has_zero: bool) -> Self {
         match has_zero {
-            true => ShortFixedKeysStateIterator::<Key> { index: 0, capacity, entities },
-            false => ShortFixedKeysStateIterator::<Key> { index: 1, capacity, entities }
+            true => ShortFixedKeysStateIterator::<Key> {
+                index: 0,
+                capacity,
+                entities,
+            },
+            false => ShortFixedKeysStateIterator::<Key> {
+                index: 1,
+                capacity,
+                entities,
+            },
         }
     }
 }

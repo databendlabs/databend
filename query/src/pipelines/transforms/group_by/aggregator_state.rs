@@ -13,13 +13,9 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use bumpalo::Bump;
-
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
@@ -30,9 +26,11 @@ use crate::common::HashMapIterator;
 use crate::common::HashTableEntity;
 use crate::common::HashTableKeyable;
 use crate::common::KeyValueEntity;
-use crate::pipelines::transforms::group_by::aggregator_state_entity::{StateEntity, ShortFixedKeysStateEntity, ShortFixedKeyable};
-use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
 ///
@@ -43,7 +41,7 @@ use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixe
 pub trait AggregatorState<Method: HashMethod> {
     type Key;
     type Entity: StateEntity<Self::Key>;
-    type Iterator: Iterator<Item=*mut Self::Entity>;
+    type Iterator: Iterator<Item = *mut Self::Entity>;
 
     fn len(&self) -> usize;
 
@@ -76,7 +74,7 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
                 area: Default::default(),
                 data: raw_ptr as *mut ShortFixedKeysStateEntity<T>,
                 size: 0,
-                max_size: max_size,
+                max_size,
                 has_zero: false,
             }
         }
@@ -94,9 +92,10 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
     }
 }
 
-impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T> where
+impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T>
+where
     T: DFPrimitiveType + ShortFixedKeyable,
-    HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type Key = T;
@@ -150,10 +149,12 @@ pub struct LongerFixedKeysAggregatorState<T: HashTableKeyable> {
     pub data: HashMap<T, usize>,
 }
 
-impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T> where
+impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
+where
     T: DFPrimitiveType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable {
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+{
     type Key = T;
     type Entity = KeyValueEntity<T, usize>;
     type Iterator = HashMapIterator<T, usize>;

@@ -121,9 +121,9 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity>
             let mut place_value = grower.place(hash_value);
             while !self.entities.offset(place_value).is_zero()
                 && !self
-                .entities
-                .offset(place_value)
-                .key_equals(key, hash_value)
+                    .entities
+                    .offset(place_value)
+                    .key_equals(key, hash_value)
             {
                 place_value = grower.next_place(place_value);
             }

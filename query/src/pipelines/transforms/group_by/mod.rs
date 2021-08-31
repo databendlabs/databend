@@ -17,9 +17,9 @@ mod aggregator_keys_builder;
 mod aggregator_params;
 mod aggregator_polymorphic_keys;
 mod aggregator_state;
-mod keys_ref;
 mod aggregator_state_entity;
 mod aggregator_state_iterator;
+mod keys_ref;
 
 pub use aggregator::Aggregator;
 pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
