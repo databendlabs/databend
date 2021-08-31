@@ -20,18 +20,22 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
-use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
+/// Catalog is the global view of all the databases of the user.
+/// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
+/// or others(like MySQL-Database, engine=MySQL)
+/// When we create a new database, we first to get the engine from the registered engines,
+/// and use the engine to create them.
 pub trait Catalog {
-    // Register catalog backend by engine type, for example:
-    // local: local database catalog backend.
-    // remote: remote database catalog backend.
-    // mysql : mysql database catalog backend.
-    fn register_db_engine(&self, engine_type: &str, backend: Arc<dyn CatalogBackend>)
-        -> Result<()>;
+    fn register_db_engine(
+        &self,
+        engine_type: &str,
+        database_engine: Arc<dyn DatabaseEngine>,
+    ) -> Result<()>;
 
     // Get all the databases.
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;

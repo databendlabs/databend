@@ -19,8 +19,8 @@ use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
-use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::datasources::system::SystemDatabase;
 
 pub struct SystemDatabases {
@@ -34,7 +34,11 @@ impl SystemDatabases {
     }
 }
 
-impl CatalogBackend for SystemDatabases {
+impl DatabaseEngine for SystemDatabases {
+    fn engine_name(&self) -> &str {
+        "system"
+    }
+
     fn get_database(&self, _db_name: &str) -> Result<Option<Arc<dyn Database>>> {
         Ok(Some(self.database.clone()))
     }

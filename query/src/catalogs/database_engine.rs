@@ -21,8 +21,10 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
 
-// Backend client api for catalog.
-pub trait CatalogBackend: Send + Sync {
+/// Database engine type, for maintaining databases, like create/drop or others lookup.
+pub trait DatabaseEngine: Send + Sync {
+    // Engine name of the database.
+    fn engine_name(&self) -> &str;
     // Get the database by db_name.
     fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>>;
     // Check the database is exists or not.

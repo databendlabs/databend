@@ -13,9 +13,9 @@
 // limitations under the License.
 //
 
-mod backend;
 mod catalog;
 mod database;
+mod database_engine;
 mod meta;
 mod table;
 mod table_function;
@@ -23,9 +23,9 @@ mod table_meta;
 
 pub mod impls;
 
-pub use backend::CatalogBackend;
 pub use catalog::Catalog;
 pub use database::Database;
+pub use database_engine::DatabaseEngine;
 pub use meta::Meta;
 pub use table::Table;
 pub use table::TablePtr;

@@ -25,8 +25,8 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::configs::Config;
@@ -40,15 +40,15 @@ pub const SYS_TBL_ID_END: u64 = SYS_TBL_ID_BEGIN + 10000;
 // max id for local tables is u64:MAX
 pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
 
-// Maintain all the catalog backends of user.
+// Maintain all the databases of user.
 pub struct DatabaseCatalog {
-    catalog_backends: RwLock<HashMap<String, Arc<dyn CatalogBackend>>>,
+    database_engines: RwLock<HashMap<String, Arc<dyn DatabaseEngine>>>,
 }
 
 impl DatabaseCatalog {
     pub fn try_create_with_config(_conf: Config) -> Result<Self> {
         Ok(DatabaseCatalog {
-            catalog_backends: Default::default(),
+            database_engines: Default::default(),
         })
     }
 }
@@ -57,26 +57,26 @@ impl Catalog for DatabaseCatalog {
     fn register_db_engine(
         &self,
         engine_type: &str,
-        backend: Arc<dyn CatalogBackend>,
+        backend: Arc<dyn DatabaseEngine>,
     ) -> Result<()> {
         let engine = engine_type.to_lowercase();
-        self.catalog_backends.write().insert(engine, backend);
+        self.database_engines.write().insert(engine, backend);
         Ok(())
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let mut databases = vec![];
-        let backends = self.catalog_backends.read();
-        for backend in backends.values() {
-            databases.extend(backend.get_databases()?)
+        let engines = self.database_engines.read();
+        for engine in engines.values() {
+            databases.extend(engine.get_databases()?)
         }
         Ok(databases)
     }
 
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        let backends = self.catalog_backends.read();
-        for backend in backends.values() {
-            if let Some(db) = backend.get_database(db_name)? {
+        let engines = self.database_engines.read();
+        for engine in engines.values() {
+            if let Some(db) = engine.get_database(db_name)? {
                 return Ok(db);
             }
         }
@@ -89,9 +89,9 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn exists_database(&self, db_name: &str) -> Result<bool> {
-        let backends = self.catalog_backends.read();
-        for backend in backends.values() {
-            if backend.exists_database(db_name)? {
+        let engines = self.database_engines.read();
+        for engine in engines.values() {
+            if engine.exists_database(db_name)? {
                 return Ok(true);
             }
         }
@@ -146,8 +146,8 @@ impl Catalog for DatabaseCatalog {
 
         // Get the database backend and create it.
         let engine = plan.engine.clone().to_string();
-        if let Some(backend) = self.catalog_backends.read().get(engine.as_str()) {
-            backend.create_database(plan)
+        if let Some(engine) = self.database_engines.read().get(engine.as_str()) {
+            engine.create_database(plan)
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
                 "Database: unknown engine '{}'.",
@@ -158,10 +158,10 @@ impl Catalog for DatabaseCatalog {
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let db_name = plan.db.as_str();
-        let backends = self.catalog_backends.read();
-        for backend in backends.values() {
-            if backend.exists_database(db_name)? {
-                return backend.drop_database(plan.clone());
+        let engines = self.database_engines.read();
+        for engine in engines.values() {
+            if engine.exists_database(db_name)? {
+                return engine.drop_database(plan.clone());
             }
         }
 

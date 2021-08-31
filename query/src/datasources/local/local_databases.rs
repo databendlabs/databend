@@ -20,8 +20,8 @@ use common_infallible::RwLock;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
-use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::datasources::local::LocalDatabase;
 
 /// The collection of the local database.
@@ -41,7 +41,11 @@ impl LocalDatabases {
     }
 }
 
-impl CatalogBackend for LocalDatabases {
+impl DatabaseEngine for LocalDatabases {
+    fn engine_name(&self) -> &str {
+        "local"
+    }
+
     fn get_database(&self, db_name: &str) -> Result<Option<Arc<dyn Database>>> {
         Ok(self.databases.read().get(db_name).cloned())
     }

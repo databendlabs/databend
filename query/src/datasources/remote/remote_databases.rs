@@ -18,8 +18,8 @@ use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
-use crate::catalogs::CatalogBackend;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 
 pub struct RemoteDatabases {}
 
@@ -29,7 +29,11 @@ impl RemoteDatabases {
     }
 }
 
-impl CatalogBackend for RemoteDatabases {
+impl DatabaseEngine for RemoteDatabases {
+    fn engine_name(&self) -> &str {
+        "remote"
+    }
+
     fn get_database(&self, _db_name: &str) -> Result<Option<Arc<dyn Database>>> {
         todo!()
     }
