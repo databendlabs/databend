@@ -17,25 +17,19 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::catalogs::impls::DatabaseCatalog;
-use crate::catalogs::impls::RemoteMetaStoreClient;
 use crate::catalogs::Catalog;
 use crate::configs::Config;
-use crate::datasources::local::LocalFactory;
-use crate::datasources::remote::RemoteFactory;
-use crate::datasources::system::SystemFactory;
+use crate::datasources::local::LocalDatabases;
+use crate::datasources::remote::RemoteDatabases;
+use crate::datasources::system::SystemDatabases;
 
 pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     let conf = Config::default();
-    let remote_factory = RemoteFactory::new(&conf);
-    let store_client_provider = remote_factory.store_client_provider();
-    let cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
-        store_client_provider,
-    )));
-    let catalog = DatabaseCatalog::try_create_with_config(conf, cli)?;
-    let system = SystemFactory::create().load_databases()?;
-    catalog.register_database(system)?;
-    let local = LocalFactory::create().load_databases()?;
-    catalog.register_database(local)?;
+    let catalog = DatabaseCatalog::try_create_with_config(conf.clone())?;
+    // Register local/system and remote database engine.
+    catalog.register_db_engine("local", Arc::new(LocalDatabases::create(conf.clone())))?;
+    catalog.register_db_engine("system", Arc::new(SystemDatabases::create(conf.clone())))?;
+    catalog.register_db_engine("remote", Arc::new(RemoteDatabases::create(conf.clone())))?;
 
     Ok(catalog)
 }

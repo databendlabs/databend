@@ -41,8 +41,7 @@ async fn test_datasource() -> Result<()> {
                 db: "test_db".to_string(),
                 engine: DatabaseEngineType::Local,
                 options: Default::default(),
-            })
-            .await?;
+            })?;
 
         // Check
         let result = catalog.get_database("test_db");
@@ -53,8 +52,7 @@ async fn test_datasource() -> Result<()> {
             .drop_database(DropDatabasePlan {
                 if_exists: false,
                 db: "test_db".to_string(),
-            })
-            .await?;
+            })?;
 
         // Check.
         let result = catalog.get_database("test_db");

@@ -51,7 +51,6 @@ pub type SessionManagerRef = Arc<SessionManager>;
 impl SessionManager {
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
-
         // Register local/system and remote database engine.
         catalog.register_db_engine("local", Arc::new(LocalDatabases::create(conf.clone())))?;
         catalog.register_db_engine("system", Arc::new(SystemDatabases::create(conf.clone())))?;
