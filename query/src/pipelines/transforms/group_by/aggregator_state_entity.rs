@@ -3,7 +3,6 @@ use crate::common::HashTableKeyable;
 use crate::common::KeyValueEntity;
 
 pub trait StateEntity<Key> {
-    fn set_state_key(self: *mut Self, key: &Key);
     fn get_state_key<'a>(self: *mut Self) -> &'a Key;
     fn set_state_value(self: *mut Self, value: usize);
     fn get_state_value<'a>(self: *mut Self) -> &'a usize;
@@ -15,15 +14,12 @@ pub trait ShortFixedKeyable: Sized + Clone {
 }
 
 pub struct ShortFixedKeysStateEntity<Key: ShortFixedKeyable> {
-    key: Key,
-    value: usize,
+    pub key: Key,
+    pub value: usize,
+    pub fill: bool,
 }
 
 impl<Key: ShortFixedKeyable> StateEntity<Key> for ShortFixedKeysStateEntity<Key> {
-    #[inline(always)]
-    fn set_state_key(self: *mut Self, key: &Key) {
-        unsafe { (*self).key = key.clone() }
-    }
 
     #[inline(always)]
     fn get_state_key<'a>(self: *mut Self) -> &'a Key {
@@ -42,10 +38,6 @@ impl<Key: ShortFixedKeyable> StateEntity<Key> for ShortFixedKeysStateEntity<Key>
 }
 
 impl<Key: HashTableKeyable> StateEntity<Key> for KeyValueEntity<Key, usize> {
-    fn set_state_key(self: *mut Self, _key: &Key) {
-        unimplemented!()
-    }
-
     #[inline(always)]
     fn get_state_key<'a>(self: *mut Self) -> &'a Key {
         self.get_key()

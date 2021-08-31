@@ -57,7 +57,6 @@ pub struct ShortFixedKeysAggregatorState<T: ShortFixedKeyable> {
     area: Bump,
     size: usize,
     max_size: usize,
-    has_zero: bool,
     data: *mut ShortFixedKeysStateEntity<T>,
 }
 
@@ -75,7 +74,6 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
                 data: raw_ptr as *mut ShortFixedKeysStateEntity<T>,
                 size: 0,
                 max_size,
-                has_zero: false,
             }
         }
     }
@@ -109,7 +107,7 @@ where
 
     #[inline(always)]
     fn iter(&self) -> Self::Iterator {
-        Self::Iterator::create(self.data, self.max_size as isize, self.has_zero)
+        Self::Iterator::create(self.data, self.max_size as isize)
     }
 
     #[inline(always)]
@@ -120,25 +118,18 @@ where
     #[inline(always)]
     fn entity(&mut self, key: &T, inserted: &mut bool) -> *mut Self::Entity {
         unsafe {
-            *inserted = false;
             let index = key.lookup();
-
-            if index == 0 {
-                if !self.has_zero {
-                    self.size += 1;
-                    *inserted = true;
-                    self.has_zero = true;
-                }
-
-                return self.data.offset(index);
-            }
-
             let value = self.data.offset(index);
-            if value.get_state_key().is_zero_key() {
-                self.size += 1;
-                *inserted = true;
-                value.set_state_key(key);
+
+            if (*value).fill {
+                *inserted = false;
+                return value;
             }
+
+            *inserted = true;
+            self.size += 1;
+            (*value).key = *key;
+            (*value).fill = true;
             value
         }
     }
