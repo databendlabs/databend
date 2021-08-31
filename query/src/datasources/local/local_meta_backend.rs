@@ -37,11 +37,12 @@ use crate::datasources::local::NullTable;
 use crate::datasources::local::ParquetTable;
 use crate::datasources::MetaBackend;
 
+type Databases = Arc<RwLock<HashMap<String, (Arc<dyn Database>, InMemoryMetas)>>>;
+
 /// The backend of the local database.
 #[derive(Clone)]
 pub struct LocalMetaBackend {
-    databases: Arc<RwLock<HashMap<String, Arc<dyn Database>>>>,
-    tables: Arc<RwLock<HashMap<String, InMemoryMetas>>>,
+    databases: Databases,
     tbl_id_seq: Arc<RwLock<u64>>,
 }
 
@@ -50,7 +51,6 @@ impl LocalMetaBackend {
         let tbl_id_seq = Arc::new(RwLock::new(LOCAL_TBL_ID_BEGIN));
         LocalMetaBackend {
             databases: Arc::new(Default::default()),
-            tables: Arc::new(Default::default()),
             tbl_id_seq,
         }
     }
@@ -58,9 +58,10 @@ impl LocalMetaBackend {
     // Register database.
     pub fn register_database(&self, db_name: &str) {
         let local = LocalDatabase::create(db_name, Arc::new(self.clone()));
-        self.databases
-            .write()
-            .insert(db_name.to_string(), Arc::new(local));
+        self.databases.write().insert(
+            db_name.to_string(),
+            (Arc::new(local), InMemoryMetas::create()),
+        );
     }
 
     fn next_db_id(&self) -> u64 {
@@ -80,17 +81,17 @@ impl MetaBackend for LocalMetaBackend {
         table_id: MetaId,
         _table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        let lock = self.tables.read();
-        let tables = lock.get(db_name);
-        match tables {
+        let lock = self.databases.read();
+        let v = lock.get(db_name);
+        match v {
             None => {
                 return Err(ErrorCode::UnknownDatabase(format!(
                     "Unknown database: {}",
                     db_name
                 )))
             }
-            Some(v) => {
-                let table = v.id2meta.get(&table_id).ok_or_else(|| {
+            Some((_, metas)) => {
+                let table = metas.id2meta.get(&table_id).ok_or_else(|| {
                     ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
                 })?;
                 Ok(table.clone())
@@ -99,25 +100,15 @@ impl MetaBackend for LocalMetaBackend {
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
-        // Check database.
-        if self.databases.read().get(db_name).is_none() {
-            return Err(ErrorCode::UnknownDatabase(format!(
+        let lock = self.databases.read();
+        let v = lock.get(db_name);
+        match v {
+            None => Err(ErrorCode::UnknownDatabase(format!(
                 "Unknown database: {}",
                 db_name
-            )));
-        }
-
-        let lock = self.tables.read();
-        let tables = lock.get(db_name);
-        match tables {
-            None => {
-                return Err(ErrorCode::UnknownTable(format!(
-                    "Unknown table: '{}'",
-                    table_name
-                )))
-            }
-            Some(v) => {
-                let table = v.name2meta.get(table_name).ok_or_else(|| {
+            ))),
+            Some((_, metas)) => {
+                let table = metas.name2meta.get(table_name).ok_or_else(|| {
                     ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
                 })?;
                 Ok(table.clone())
@@ -126,12 +117,23 @@ impl MetaBackend for LocalMetaBackend {
     }
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>> {
-        let lock = self.tables.read();
-        let tables = lock.get(db_name);
-        Ok(match tables {
-            None => vec![],
-            Some(v) => v.name2meta.values().cloned().collect(),
-        })
+        let mut res = vec![];
+        let lock = self.databases.read();
+        let v = lock.get(db_name);
+        match v {
+            None => {
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Unknown database: {}",
+                    db_name
+                )));
+            }
+            Some((_, metas)) => {
+                for meta in metas.name2meta.values() {
+                    res.push(meta.clone());
+                }
+            }
+        }
+        Ok(res)
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
@@ -161,18 +163,19 @@ impl MetaBackend for LocalMetaBackend {
         };
         let table_meta = TableMeta::create(Arc::from(table), self.next_db_id());
 
-        let mut lock = self.tables.write();
-        let tables = lock.get_mut(db_name);
-        match tables {
+        let mut lock = self.databases.write();
+        let v = lock.get_mut(db_name);
+        match v {
             None => {
-                let mut metas = InMemoryMetas::create();
-                metas.insert(table_meta);
-                lock.insert(db_name.to_string(), metas);
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Unknown database: {}",
+                    db_name
+                )));
             }
-            Some(v) => {
-                if v.name2meta.get(table_name).is_some() {
-                    return if plan.if_not_exists {
-                        Ok(())
+            Some((_, metas)) => {
+                if metas.name2meta.get(table_name).is_some() {
+                    if plan.if_not_exists {
+                        return Ok(());
                     } else {
                         return Err(ErrorCode::UnImplement(format!(
                             "Table: '{}.{}' already exists.",
@@ -180,9 +183,10 @@ impl MetaBackend for LocalMetaBackend {
                         )));
                     };
                 }
-                v.insert(table_meta);
+                metas.insert(table_meta);
             }
         }
+
         Ok(())
     }
 
@@ -190,19 +194,17 @@ impl MetaBackend for LocalMetaBackend {
         let db_name = plan.db.as_str();
         let table_name = plan.table.as_str();
 
-        let lock = self.tables.read();
-        let tables = lock.get(db_name);
-
-        // Get the table id.
-        let tbl_id = match tables {
+        let lock = self.databases.read();
+        let v = lock.get(db_name);
+        let tbl_id = match v {
             None => {
                 return Err(ErrorCode::UnknownDatabase(format!(
                     "Unknown database: {}",
                     db_name
                 )))
             }
-            Some(v) => {
-                let by_name = v.name2meta.get(table_name);
+            Some((_, metas)) => {
+                let by_name = metas.name2meta.get(table_name);
                 match by_name {
                     None => {
                         if plan.if_exists {
@@ -219,21 +221,21 @@ impl MetaBackend for LocalMetaBackend {
             }
         };
 
-        // Remove.
-        let mut lock = self.tables.write();
-        let tables = lock.get_mut(db_name);
-        match tables {
+        let mut lock = self.databases.write();
+        let v = lock.get_mut(db_name);
+        match v {
             None => {
                 return Err(ErrorCode::UnknownDatabase(format!(
                     "Unknown database: {}",
                     db_name
                 )))
             }
-            Some(v) => {
-                v.name2meta.remove(table_name);
-                v.id2meta.remove(&tbl_id);
+            Some((_, metas)) => {
+                metas.name2meta.remove(table_name);
+                metas.id2meta.remove(&tbl_id);
             }
         }
+
         Ok(())
     }
 
@@ -245,12 +247,18 @@ impl MetaBackend for LocalMetaBackend {
                 "Unknown database: '{}'",
                 db_name
             ))),
-            Some(v) => Ok(v.clone()),
+            Some((v, _)) => Ok(v.clone()),
         }
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        Ok(self.databases.read().values().cloned().collect::<Vec<_>>())
+        let mut res = vec![];
+        let lock = self.databases.read();
+        let values = lock.values();
+        for (db, _) in values {
+            res.push(db.clone());
+        }
+        Ok(res)
     }
 
     fn exists_database(&self, db_name: &str) -> Result<bool> {
@@ -271,7 +279,9 @@ impl MetaBackend for LocalMetaBackend {
         }
 
         let database = LocalDatabase::create(db_name, Arc::new(self.clone()));
-        self.databases.write().insert(plan.db, Arc::new(database));
+        self.databases
+            .write()
+            .insert(plan.db, (Arc::new(database), InMemoryMetas::create()));
         Ok(())
     }
 
