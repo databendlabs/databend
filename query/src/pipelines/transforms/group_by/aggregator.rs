@@ -55,56 +55,58 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         }
     }
 
+    // If we set it to inline(performance degradation).
+    // Because it will make other internal functions to no inline
     #[inline(never)]
     pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<Mutex<Method::State>> {
+
+        // This may be confusing
+        // It will help us improve performance ~10% when we declare local references for them.
         let hash_method = &self.method;
-
-        let groups_locker = Mutex::new(hash_method.aggregate_state());
-
         let aggregator_params = self.params.as_ref();
 
-        let aggr_len = aggregator_params.aggregate_functions.len();
-        let aggregate_functions = &aggregator_params.aggregate_functions;
-
-        // let layout = self.memory_layout.layout;
-        let offsets_aggregate_states = &self.layout.offsets_aggregate_states;
+        let aggregate_state = Mutex::new(hash_method.aggregate_state());
 
         while let Some(block) = stream.next().await {
             let block = block?;
+            let mut groups = aggregate_state.lock();
 
             // 1.1 and 1.2.
             let group_columns = Self::group_columns(&group_cols, &block)?;
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
 
-            let mut groups = groups_locker.lock();
-
-            // TODO: In fact, this can be moved outside the while
-            let places: StateAddrs = match aggregator_params.aggregate_functions.is_empty() {
+            // TODO: This can be moved outside the while
+            // In fact, the rust compiler will help us do this(optimize the while match to match while),
+            // but we need to ensure that the match is simple enough(otherwise there will be performance degradation).
+            let places: StateAddrs = match self.params.aggregate_functions.is_empty() {
                 true => self.lookup_key(group_keys, &mut groups),
                 false => self.lookup_state(group_keys, &mut groups),
             };
 
-            {
-                let aggregate_arguments_columns = Self::aggregate_arguments(&block, aggregator_params)?;
-
-                // this can benificial for the case of dereferencing
-                let aggr_arg_columns_slice = &aggregate_arguments_columns;
-
-                for ((idx, func), args) in aggregate_functions
-                    .iter()
-                    .enumerate()
-                    .zip(aggr_arg_columns_slice.iter())
-                {
-                    func.accumulate_keys(
-                        &places,
-                        offsets_aggregate_states[idx],
-                        args,
-                        block.num_rows(),
-                    )?;
-                }
-            }
+            self.execute_block(aggregator_params, &block, &places)?;
         }
-        Ok(groups_locker)
+        Ok(aggregate_state)
+    }
+
+    #[inline(always)]
+    fn execute_block(&self, params: &AggregatorParams, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+        let aggregate_functions = &params.aggregate_functions;
+        let offsets_aggregate_states = &self.layout.offsets_aggregate_states;
+        let aggregate_arguments_columns = Self::aggregate_arguments(&block, params)?;
+
+        // This can benificial for the case of dereferencing
+        // This will help improve the performance of Intel by hundreds of megabits per second
+        let aggr_arg_columns_slice = &aggregate_arguments_columns;
+
+        for index in 0..aggregate_functions.len() {
+            let rows = block.num_rows();
+            let function = &aggregate_functions[index];
+            let state_offset = offsets_aggregate_states[index];
+            let function_arguments = &aggr_arg_columns_slice[index];
+            function.accumulate_keys(&places, state_offset, function_arguments, rows)?;
+        }
+
+        Ok(())
     }
 
     #[inline(always)]
@@ -170,6 +172,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         Ok(aggregate_arguments_columns)
     }
 
+    #[inline(never)]
     pub fn aggregate_finalized(
         &self,
         groups: &Method::State,
