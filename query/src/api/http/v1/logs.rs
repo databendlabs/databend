@@ -36,7 +36,7 @@ impl IntoResponse for LogTemplate {
     type Body = Full<Bytes>;
     type BodyError = Infallible;
 
-  fn into_response(self) -> Response<Self::Body> {
+    fn into_response(self) -> Response<Self::Body> {
         match self.result {
             Ok(log) => Html(log).into_response(),
             Err(err) => Response::builder()
