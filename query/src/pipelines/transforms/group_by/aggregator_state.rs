@@ -14,7 +14,6 @@
 
 use std::alloc::Layout;
 use std::intrinsics::likely;
-use std::ptr::NonNull;
 
 use bumpalo::Bump;
 use common_datablocks::HashMethod;
@@ -32,7 +31,6 @@ use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedK
 use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
-use crate::pipelines::transforms::group_by::aggregator_layout::AggregatorLayout;
 use crate::pipelines::transforms::group_by::AggregatorParams;
 use common_functions::aggregates::StateAddr;
 
@@ -51,9 +49,9 @@ pub trait AggregatorState<Method: HashMethod> {
 
     fn iter(&self) -> Self::Iterator;
 
-    fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr;
 
-    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr;
+    fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
 }
 
 /// The fixed length array is used as the data structure to locate the key by subscript
@@ -115,11 +113,11 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.area.alloc_layout(layout.layout).into();
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(params.layout).into();
 
-        for idx in 0..layout.offsets_aggregate_states.len() {
-            let aggr_state = layout.offsets_aggregate_states[idx];
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
             let aggr_state_place = place.next(aggr_state);
             params.aggregate_functions[idx].init_state(aggr_state_place);
         }
@@ -178,11 +176,11 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.area.alloc_layout(layout.layout).into();
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(params.layout).into();
 
-        for idx in 0..layout.offsets_aggregate_states.len() {
-            let aggr_state = layout.offsets_aggregate_states[idx];
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
             let aggr_state_place = place.next(aggr_state);
             params.aggregate_functions[idx].init_state(aggr_state_place);
         }
@@ -233,11 +231,11 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.state_area.alloc_layout(layout.layout).into();
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.state_area.alloc_layout(params.layout).into();
 
-        for idx in 0..layout.offsets_aggregate_states.len() {
-            let aggr_state = layout.offsets_aggregate_states[idx];
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
             let aggr_state_place = place.next(aggr_state);
             params.aggregate_functions[idx].init_state(aggr_state_place);
         }

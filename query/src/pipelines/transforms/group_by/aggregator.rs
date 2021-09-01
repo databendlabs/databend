@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
-
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datavalues::arrays::BinaryArrayBuilder;
@@ -23,11 +21,10 @@ use common_datavalues::prelude::Series;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_functions::aggregates::{get_layout_offsets, StateAddrs};
+use common_functions::aggregates::StateAddrs;
 use common_functions::aggregates::StateAddr;
 use common_infallible::Mutex;
 use common_io::prelude::BytesMut;
-use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -38,21 +35,15 @@ use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParamsR
 use crate::pipelines::transforms::group_by::aggregator_state::AggregatorState;
 use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::transforms::group_by::aggregator_layout::AggregatorLayout;
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
     params: AggregatorParamsRef,
-    layout: AggregatorLayout,
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     pub fn create(method: Method, params: AggregatorParamsRef) -> Aggregator<Method> {
-        Aggregator {
-            method,
-            params: params.clone(),
-            layout: AggregatorLayout::create(params.as_ref()),
-        }
+        Aggregator { method, params }
     }
 
     // If we set it to inline(performance degradation).
@@ -91,7 +82,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     #[inline(always)]
     fn execute_block(&self, params: &AggregatorParams, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
-        let offsets_aggregate_states = &self.layout.offsets_aggregate_states;
+        let offsets_aggregate_states = &params.offsets_aggregate_states;
         let aggregate_arguments_columns = Self::aggregate_arguments(&block, params)?;
 
         // This can benificial for the case of dereferencing
@@ -125,7 +116,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         let mut places = Vec::with_capacity(keys.len());
 
         let mut inserted = true;
-        let layout = &self.layout;
         let params = self.params.as_ref();
 
         for key in keys.iter() {
@@ -133,7 +123,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
             match inserted {
                 true => {
-                    let place = state.alloc_layout(layout, params);
+                    let place = state.alloc_layout(params);
                     places.push(place);
                     entity.set_state_value(place.addr());
                 }
@@ -189,7 +179,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         let aggregator_params = self.params.as_ref();
         let funcs = &aggregator_params.aggregate_functions;
         let aggr_len = funcs.len();
-        let offsets_aggregate_states = &self.layout.offsets_aggregate_states;
+        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
         // Builders.
         let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
