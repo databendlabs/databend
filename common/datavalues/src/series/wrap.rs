@@ -290,24 +290,13 @@ macro_rules! impl_dyn_array {
                 }
             }
 
-            fn utf8(&self) -> Result<&DFUtf8Array> {
-                if matches!(self.0.data_type(), &DataType::Utf8) {
-                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUtf8Array)) }
+            /// Unpack to DFArray of data_type string
+            fn string(&self) -> Result<&DFStringArray> {
+                if matches!(self.0.data_type(), &DataType::String) {
+                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFStringArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series of type {:?} into utf8",
-                        self.data_type(),
-                    )))
-                }
-            }
-
-            /// Unpack to DFArray of data_type binary
-            fn binary(&self) -> Result<&DFBinaryArray> {
-                if matches!(self.0.data_type(), &DataType::Binary) {
-                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBinaryArray)) }
-                } else {
-                    Err(ErrorCode::IllegalDataType(format!(
-                        "cannot unpack Series of type {:?} into binary",
+                        "cannot unpack Series of type {:?} into string",
                         self.data_type(),
                     )))
                 }
@@ -351,8 +340,7 @@ impl_dyn_array!(DFInt8Array);
 impl_dyn_array!(DFInt16Array);
 impl_dyn_array!(DFInt32Array);
 impl_dyn_array!(DFInt64Array);
-impl_dyn_array!(DFUtf8Array);
 impl_dyn_array!(DFListArray);
 impl_dyn_array!(DFBooleanArray);
-impl_dyn_array!(DFBinaryArray);
+impl_dyn_array!(DFStringArray);
 impl_dyn_array!(DFStructArray);

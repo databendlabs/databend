@@ -312,16 +312,15 @@ where
     }
 }
 
-fn concat_strings(l: &str, r: &str) -> String {
-    // fastest way to concat strings according to https://github.com/hoodie/concatenation_benchmarks-rs
-    let mut s = String::with_capacity(l.len() + r.len());
-    s.push_str(l);
-    s.push_str(r);
+fn concat_strings(l: &[u8], r: &[u8]) -> Vec<u8> {
+    let mut s = Vec::with_capacity(l.len() + r.len());
+    s.extend_from_slice(l);
+    s.extend_from_slice(r);
     s
 }
 
-impl Add for &DFUtf8Array {
-    type Output = Result<DFUtf8Array>;
+impl Add for &DFStringArray {
+    type Output = Result<DFStringArray>;
 
     fn add(self, rhs: Self) -> Self::Output {
         // broadcasting path
@@ -329,7 +328,7 @@ impl Add for &DFUtf8Array {
             let rhs = rhs.get(0);
             return match rhs {
                 Some(rhs) => self.add(rhs),
-                None => Ok(DFUtf8Array::full_null(self.len())),
+                None => Ok(DFStringArray::full_null(self.len())),
             };
         }
 
@@ -346,18 +345,18 @@ impl Add for &DFUtf8Array {
     }
 }
 
-impl Add for DFUtf8Array {
-    type Output = Result<DFUtf8Array>;
+impl Add for DFStringArray {
+    type Output = Result<DFStringArray>;
 
     fn add(self, rhs: Self) -> Self::Output {
         (&self).add(&rhs)
     }
 }
 
-impl Add<&str> for &DFUtf8Array {
-    type Output = Result<DFUtf8Array>;
+impl Add<&[u8]> for &DFStringArray {
+    type Output = Result<DFStringArray>;
 
-    fn add(self, rhs: &str) -> Self::Output {
+    fn add(self, rhs: &[u8]) -> Self::Output {
         Ok(match self.null_count() {
             0 => self
                 .into_no_null_iter()
@@ -401,5 +400,5 @@ where
 }
 
 impl Pow for DFBooleanArray {}
-impl Pow for DFUtf8Array {}
+impl Pow for DFStringArray {}
 impl Pow for DFListArray {}

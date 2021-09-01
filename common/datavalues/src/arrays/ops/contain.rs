@@ -51,7 +51,7 @@ where T: DFPrimitiveType
     }
 }
 
-impl ArrayContain for DFUtf8Array {
+impl ArrayContain for DFStringArray {
     fn contain(&self, list: &DFListArray) -> Result<DFBooleanArray>
     where Self: std::marker::Sized {
         contain_internal!(self, list)

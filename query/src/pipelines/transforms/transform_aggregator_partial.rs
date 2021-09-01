@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
-use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
@@ -133,7 +133,7 @@ impl Processor for AggregatorPartialTransform {
         for (idx, func) in funcs.iter().enumerate() {
             let place = places[idx].into();
             func.serialize(place, &mut bytes)?;
-            let mut array_builder = BinaryArrayBuilder::with_capacity(4);
+            let mut array_builder = StringArrayBuilder::with_capacity(4);
             array_builder.append_value(&bytes[..]);
             bytes.clear();
             let array = array_builder.finish();

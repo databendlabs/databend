@@ -40,7 +40,7 @@ pub trait TakeRandom {
 }
 
 // Utility trait because associated type needs a lifetime
-pub trait TakeRandomUtf8 {
+pub trait TakeRandomString {
     type Item;
 
     /// Get a nullable value by index.
@@ -155,12 +155,12 @@ where T: DFPrimitiveType
     }
 }
 
-pub struct Utf8TakeRandom<'a> {
-    arr: &'a LargeUtf8Array,
+pub struct StringTakeRandom<'a> {
+    arr: &'a LargeBinaryArray,
 }
 
-impl<'a> TakeRandom for Utf8TakeRandom<'a> {
-    type Item = &'a str;
+impl<'a> TakeRandom for StringTakeRandom<'a> {
+    type Item = &'a [u8];
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
@@ -173,13 +173,13 @@ impl<'a> TakeRandom for Utf8TakeRandom<'a> {
     }
 }
 
-impl<'a> IntoTakeRandom<'a> for &'a DFUtf8Array {
-    type Item = &'a str;
-    type TakeRandom = TakeRandBranch<Utf8TakeRandom<'a>, Utf8TakeRandom<'a>>;
+impl<'a> IntoTakeRandom<'a> for &'a DFStringArray {
+    type Item = &'a [u8];
+    type TakeRandom = TakeRandBranch<StringTakeRandom<'a>, StringTakeRandom<'a>>;
 
     fn take_rand(&self) -> Self::TakeRandom {
         let arr = self.inner();
-        let t = Utf8TakeRandom { arr };
+        let t = StringTakeRandom { arr };
         TakeRandBranch::Single(t)
     }
 }

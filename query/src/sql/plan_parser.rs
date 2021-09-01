@@ -342,8 +342,8 @@ impl PlanParser {
         }
 
         let fields = vec![
-            DataField::new("Table", DataType::Utf8, false),
-            DataField::new("Create Table", DataType::Utf8, false),
+            DataField::new("Table", DataType::String, false),
+            DataField::new("Create Table", DataType::String, false),
         ];
 
         let schema = DataSchemaRefExt::create(fields);
@@ -368,9 +368,9 @@ impl PlanParser {
         }
 
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Field", DataType::Utf8, false),
-            DataField::new("Type", DataType::Utf8, false),
-            DataField::new("Null", DataType::Utf8, false),
+            DataField::new("Field", DataType::String, false),
+            DataField::new("Type", DataType::String, false),
+            DataField::new("Null", DataType::String, false),
         ]);
 
         Ok(PlanNode::DescribeTable(DescribeTablePlan {
@@ -895,7 +895,7 @@ impl PlanParser {
                 DataValue::try_from_literal(n).map(Expression::create_literal)
             }
             sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(Expression::create_literal(
-                DataValue::Utf8(Some(value.clone())),
+                DataValue::String(Some(value.clone().into_bytes())),
             )),
             sqlparser::ast::Value::Boolean(b) => {
                 Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
@@ -1005,8 +1005,8 @@ impl PlanParser {
             sqlparser::ast::Expr::Wildcard => Ok(Expression::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
                 SQLCommon::make_data_type(data_type).map(|data_type| Expression::Cast {
-                    expr: Box::new(Expression::create_literal(DataValue::Utf8(Some(
-                        value.clone(),
+                    expr: Box::new(Expression::create_literal(DataValue::String(Some(
+                        value.clone().into_bytes(),
                     )))),
                     data_type,
                 })

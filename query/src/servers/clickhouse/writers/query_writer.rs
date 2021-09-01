@@ -209,7 +209,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 DataType::UInt64 => result.column(name, column.u64()?.collect_values()),
                 DataType::Float32 => result.column(name, column.f32()?.collect_values()),
                 DataType::Float64 => result.column(name, column.f64()?.collect_values()),
-                DataType::Utf8 => result.column(name, column.utf8()?.collect_values()),
+                DataType::String => result.column(name, column.string()?.collect_values()),
                 DataType::Boolean => {
                     let v: Vec<Option<u8>> = column
                         .bool()?
@@ -287,8 +287,8 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 DataType::Float64 => {
                     result.column(name, column.f64()?.inner().values().as_slice().to_vec())
                 }
-                DataType::Utf8 => {
-                    let vs: Vec<&str> = column.utf8()?.into_no_null_iter().collect();
+                DataType::String => {
+                    let vs: Vec<&[u8]> = column.string()?.into_no_null_iter().collect();
                     result.column(name, vs)
                 }
                 DataType::Boolean => {
@@ -345,14 +345,10 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
             SqlType::Float64 => {
                 Ok(DFFloat64Array::new_from_iter(col.iter::<f64>()?.copied()).into_series())
             }
-            SqlType::String => Ok(DFUtf8Array::new_from_iter(
-                col.iter::<&[u8]>()?.map(|c| String::from_utf8_lossy(c)),
-            )
-            .into_series()),
-            SqlType::FixedString(_) => Ok(DFUtf8Array::new_from_iter(
-                col.iter::<&[u8]>()?.map(|c| String::from_utf8_lossy(c)),
-            )
-            .into_series()),
+            SqlType::String => Ok(DFStringArray::new_from_iter(col.iter::<&[u8]>()?).into_series()),
+            SqlType::FixedString(_) => {
+                Ok(DFStringArray::new_from_iter(col.iter::<&[u8]>()?).into_series())
+            }
 
             SqlType::Nullable(SqlType::UInt8) => Ok(DFUInt8Array::new_from_opt_iter(
                 col.iter::<Option<u8>>()?.map(|c| c.copied()),
@@ -395,16 +391,12 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
                 col.iter::<Option<f64>>()?.map(|c| c.copied()),
             )
             .into_series()),
-            SqlType::Nullable(SqlType::String) => Ok(DFUtf8Array::new_from_opt_iter(
-                col.iter::<Option<&[u8]>>()?
-                    .map(|c| c.map(|d| String::from_utf8_lossy(d))),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::FixedString(_)) => Ok(DFUtf8Array::new_from_opt_iter(
-                col.iter::<Option<&[u8]>>()?
-                    .map(|c| c.map(|d| String::from_utf8_lossy(d))),
-            )
-            .into_series()),
+            SqlType::Nullable(SqlType::String) => {
+                Ok(DFStringArray::new_from_opt_iter(col.iter::<Option<&[u8]>>()?).into_series())
+            }
+            SqlType::Nullable(SqlType::FixedString(_)) => {
+                Ok(DFStringArray::new_from_opt_iter(col.iter::<Option<&[u8]>>()?).into_series())
+            }
 
             other => Err(CHError::Other(Cow::from(format!(
                 "Unsupported type: {:?}",

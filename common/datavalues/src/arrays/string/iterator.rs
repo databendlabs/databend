@@ -19,37 +19,37 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::prelude::*;
 
-impl<'a> IntoIterator for &'a DFBinaryArray {
+impl<'a> IntoIterator for &'a DFStringArray {
     type Item = Option<&'a [u8]>;
-    type IntoIter = ZipValidity<'a, &'a [u8], BinaryValueIter<'a, i64>>;
+    type IntoIter = ZipValidity<'a, &'a [u8], StringValueIter<'a, i64>>;
     fn into_iter(self) -> Self::IntoIter {
         zip_validity(
-            BinaryValueIter::new(&self.array),
+            StringValueIter::new(&self.array),
             self.array.validity().as_ref().map(|x| x.iter()),
         )
     }
 }
 
-impl DFBinaryArray {
+impl DFStringArray {
     pub fn into_no_null_iter<'a>(&'a self) -> impl TrustedLen<Item = &'a [u8]> + '_ + Send + Sync {
-        BinaryIterNoNull::new(self.inner())
+        StringIterNoNull::new(self.inner())
     }
 }
 
 /// Iterator over slices of `&[u8]`.
 #[derive(Debug, Clone)]
-pub struct BinaryValueIter<'a, O: Offset> {
+pub struct StringValueIter<'a, O: Offset> {
     array: &'a BinaryArray<O>,
     index: usize,
 }
 
-impl<'a, O: Offset> BinaryValueIter<'a, O> {
+impl<'a, O: Offset> StringValueIter<'a, O> {
     pub fn new(array: &'a BinaryArray<O>) -> Self {
         Self { array, index: 0 }
     }
 }
 
-impl<'a, O: Offset> Iterator for BinaryValueIter<'a, O> {
+impl<'a, O: Offset> Iterator for StringValueIter<'a, O> {
     type Item = &'a [u8];
 
     #[inline]
@@ -71,19 +71,19 @@ impl<'a, O: Offset> Iterator for BinaryValueIter<'a, O> {
 }
 
 /// all arrays have known size.
-impl<'a> ExactSizeIterator for BinaryIterNoNull<'a> {}
-unsafe impl<'a> TrustedLen for BinaryIterNoNull<'a> {}
+impl<'a> ExactSizeIterator for StringIterNoNull<'a> {}
+unsafe impl<'a> TrustedLen for StringIterNoNull<'a> {}
 
-pub struct BinaryIterNoNull<'a> {
+pub struct StringIterNoNull<'a> {
     array: &'a LargeBinaryArray,
     current: usize,
     current_end: usize,
 }
 
-impl<'a> BinaryIterNoNull<'a> {
+impl<'a> StringIterNoNull<'a> {
     /// create a new iterator
     pub fn new(array: &'a LargeBinaryArray) -> Self {
-        BinaryIterNoNull {
+        StringIterNoNull {
             array,
             current: 0,
             current_end: array.len(),
@@ -91,7 +91,7 @@ impl<'a> BinaryIterNoNull<'a> {
     }
 }
 
-impl<'a> Iterator for BinaryIterNoNull<'a> {
+impl<'a> Iterator for StringIterNoNull<'a> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {

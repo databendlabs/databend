@@ -15,8 +15,8 @@
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::arrays::ArrayBuilder;
-use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::prelude::*;
 use common_datavalues::DFPrimitiveType;
 
@@ -52,7 +52,7 @@ where
 }
 
 pub struct SerializedKeysArrayBuilder {
-    pub inner_builder: BinaryArrayBuilder,
+    pub inner_builder: StringArrayBuilder,
 }
 
 impl KeysArrayBuilder<KeysRef> for SerializedKeysArrayBuilder {

@@ -109,40 +109,21 @@ impl ArrayFullNull for DFBooleanArray {
     }
 }
 
-impl<'a> ArrayFull<&'a str> for DFUtf8Array {
-    fn full(value: &'a str, length: usize) -> Self {
-        let mut builder = Utf8ArrayBuilder::with_capacity(length * value.len());
-
-        for _ in 0..length {
-            builder.append_value(value);
-        }
-        builder.finish()
-    }
-}
-
-impl ArrayFullNull for DFUtf8Array {
-    fn full_null(length: usize) -> Self {
-        (0..length)
-            .map::<Option<String>, _>(|_| None)
-            .collect::<Self>()
-    }
-}
-
 impl ArrayFull<&Series> for DFListArray {
-    fn full(_value: &Series, _length: usize) -> DFListArray {
+    fn full(_value: &Series, _length: usize) -> Self {
         todo!()
     }
 }
 
 impl ArrayFullNull for DFListArray {
-    fn full_null(_length: usize) -> DFListArray {
+    fn full_null(_length: usize) -> Self {
         todo!()
     }
 }
 
-impl ArrayFull<&[u8]> for DFBinaryArray {
-    fn full(value: &[u8], length: usize) -> DFBinaryArray {
-        let mut builder = BinaryArrayBuilder::with_capacity(length);
+impl ArrayFull<&[u8]> for DFStringArray {
+    fn full(value: &[u8], length: usize) -> Self {
+        let mut builder = StringArrayBuilder::with_capacity(length);
         for _ in 0..length {
             builder.append_value(value);
         }
@@ -150,9 +131,9 @@ impl ArrayFull<&[u8]> for DFBinaryArray {
     }
 }
 
-impl ArrayFullNull for DFBinaryArray {
-    fn full_null(length: usize) -> DFBinaryArray {
-        let mut builder = BinaryArrayBuilder::with_capacity(length);
+impl ArrayFullNull for DFStringArray {
+    fn full_null(length: usize) -> Self {
+        let mut builder = StringArrayBuilder::with_capacity(length);
         for _ in 0..length {
             builder.append_null();
         }

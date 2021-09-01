@@ -72,7 +72,7 @@ macro_rules! impl_if_common {
     }};
 }
 
-macro_rules! impl_if_bool_utf8 {
+macro_rules! impl_if_bool_string {
     ($predicate:ident, $lhs:ident, $rhs:ident) => {{
         match ($predicate.len(), $lhs.len(), $rhs.len()) {
             (1, b, c) if b == c || b == 1 || c == 1 => {
@@ -144,13 +144,13 @@ where T: DFPrimitiveType
 
 impl ArrayIf for DFBooleanArray {
     fn if_then_else(&self, rhs: &Self, predicate: &DFBooleanArray) -> Result<Self> {
-        impl_if_bool_utf8! {predicate, self, rhs}
+        impl_if_bool_string! {predicate, self, rhs}
     }
 }
 
-impl ArrayIf for DFUtf8Array {
+impl ArrayIf for DFStringArray {
     fn if_then_else(&self, rhs: &Self, predicate: &DFBooleanArray) -> Result<Self> {
-        impl_if_bool_utf8! {predicate, self, rhs}
+        impl_if_bool_string! {predicate, self, rhs}
     }
 }
 
@@ -162,4 +162,3 @@ impl ArrayIf for DFNullArray {
 
 impl ArrayIf for DFListArray {}
 impl ArrayIf for DFStructArray {}
-impl ArrayIf for DFBinaryArray {}

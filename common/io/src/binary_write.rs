@@ -26,6 +26,7 @@ pub trait BinaryWrite {
 
     fn write_string(&mut self, text: impl AsRef<str>) -> Result<()>;
     fn write_uvarint(&mut self, v: u64) -> Result<()>;
+    fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()>;
 
     fn write_opt_scalar<V>(&mut self, v: &Option<V>) -> Result<()>
     where V: Marshal + StatBuffer {
@@ -63,6 +64,13 @@ where T: std::io::Write
         self.write_all(&scratch[..ln])?;
         Ok(())
     }
+
+    fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()> {
+        let bytes = text.as_ref();
+        self.write_uvarint(bytes.len() as u64)?;
+        self.write_all(bytes)?;
+        Ok(())
+    }
 }
 
 // Another trait like BinaryWrite
@@ -83,6 +91,7 @@ pub trait BinaryWriteBuf {
     }
     fn write_string(&mut self, text: impl AsRef<str>) -> Result<()>;
     fn write_uvarint(&mut self, v: u64) -> Result<()>;
+    fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()>;
 }
 
 // We must ensure there are enough buffer to write because BytesMut do not implicitly grow the buffer.
@@ -109,6 +118,13 @@ where T: BufMut
         let mut scratch = [0u8; MAX_VARINT_LEN64];
         let ln = put_uvarint(&mut scratch[..], v);
         self.put_slice(&scratch[..ln]);
+        Ok(())
+    }
+
+    fn write_binary(&mut self, text: impl AsRef<[u8]>) -> Result<()> {
+        let bytes = text.as_ref();
+        self.write_uvarint(bytes.len() as u64)?;
+        self.put_slice(bytes);
         Ok(())
     }
 }

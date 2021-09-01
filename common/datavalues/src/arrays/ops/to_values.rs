@@ -64,28 +64,6 @@ where
     }
 }
 
-impl ToValues for DFUtf8Array {
-    fn to_values(&self) -> Result<Vec<DataValue>> {
-        let mut values = Vec::with_capacity(self.len());
-        let array = self.inner();
-
-        if array.null_count() == 0 {
-            for index in 0..self.len() {
-                values.push(DataValue::Utf8(Some(array.value(index).to_string())))
-            }
-        } else {
-            for index in 0..self.len() {
-                match array.is_null(index) {
-                    true => values.push(DataValue::Utf8(None)),
-                    false => values.push(DataValue::Utf8(Some(array.value(index).to_string()))),
-                }
-            }
-        }
-
-        Ok(values)
-    }
-}
-
 impl ToValues for DFBooleanArray {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         let mut values = Vec::with_capacity(self.len());
@@ -108,20 +86,20 @@ impl ToValues for DFBooleanArray {
     }
 }
 
-impl ToValues for DFBinaryArray {
+impl ToValues for DFStringArray {
     fn to_values(&self) -> Result<Vec<DataValue>> {
         let mut values = Vec::with_capacity(self.len());
         let array = self.inner();
 
         if array.null_count() == 0 {
             for index in 0..self.len() {
-                values.push(DataValue::Binary(Some(array.value(index).to_vec())))
+                values.push(DataValue::String(Some(array.value(index).to_vec())))
             }
         } else {
             for index in 0..self.len() {
                 match array.is_null(index) {
-                    true => values.push(DataValue::Binary(None)),
-                    false => values.push(DataValue::Binary(Some(array.value(index).to_vec()))),
+                    true => values.push(DataValue::String(None)),
+                    false => values.push(DataValue::String(Some(array.value(index).to_vec()))),
                 }
             }
         }

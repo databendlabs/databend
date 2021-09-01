@@ -25,17 +25,17 @@ pub use iterator::*;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct DFBinaryArray {
+pub struct DFStringArray {
     pub(crate) array: LargeBinaryArray,
 }
 
-impl From<LargeBinaryArray> for DFBinaryArray {
+impl From<LargeBinaryArray> for DFStringArray {
     fn from(array: LargeBinaryArray) -> Self {
         Self { array }
     }
 }
 
-impl DFBinaryArray {
+impl DFStringArray {
     pub fn new(array: LargeBinaryArray) -> Self {
         Self { array }
     }
@@ -55,7 +55,7 @@ impl DFBinaryArray {
     }
 
     pub fn data_type(&self) -> &DataType {
-        &DataType::Binary
+        &DataType::String
     }
 
     /// # Safety
@@ -80,6 +80,11 @@ impl DFBinaryArray {
     #[inline]
     pub fn null_count(&self) -> usize {
         self.array.null_count()
+    }
+
+    #[inline]
+    pub fn all_is_null(&self) -> bool {
+        self.null_count() == self.len()
     }
 
     #[inline]
@@ -126,5 +131,61 @@ impl DFBinaryArray {
     pub fn collect_values(&self) -> Vec<Option<Vec<u8>>> {
         let e = self.inner().iter().map(|c| c.map(|d| d.to_owned()));
         e.collect()
+    }
+}
+
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
+pub unsafe fn take_string_iter_unchecked<I: IntoIterator<Item = usize>>(
+    arr: &LargeBinaryArray,
+    indices: I,
+) -> LargeBinaryArray {
+    match arr.null_count() {
+        0 => {
+            let iter = indices
+                .into_iter()
+                .map(|idx| Some(arr.value_unchecked(idx)));
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
+        }
+        _ => {
+            let iter = indices.into_iter().map(|idx| {
+                if arr.is_null(idx) {
+                    None
+                } else {
+                    Some(arr.value_unchecked(idx))
+                }
+            });
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
+        }
+    }
+}
+
+/// # Safety
+/// Note this doesn't do any bound checking, for performance reason.
+pub unsafe fn take_string_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
+    arr: &LargeBinaryArray,
+    indices: I,
+) -> LargeBinaryArray {
+    match arr.null_count() {
+        0 => {
+            let iter = indices
+                .into_iter()
+                .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
+
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
+        }
+        _ => {
+            let iter = indices.into_iter().map(|opt_idx| {
+                opt_idx.and_then(|idx| {
+                    if arr.is_null(idx) {
+                        None
+                    } else {
+                        Some(arr.value_unchecked(idx))
+                    }
+                })
+            });
+
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
+        }
     }
 }

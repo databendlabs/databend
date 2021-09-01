@@ -14,7 +14,7 @@
 
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
-use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::prelude::Series;
@@ -190,8 +190,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
         // Builders.
-        let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
-            .map(|_| BinaryArrayBuilder::with_capacity(groups.len() * 4))
+        let mut state_builders: Vec<StringArrayBuilder> = (0..aggr_len)
+            .map(|_| StringArrayBuilder::with_capacity(groups.len() * 4))
             .collect();
 
         let mut group_key_builder = self.method.state_array_builder(groups.len());

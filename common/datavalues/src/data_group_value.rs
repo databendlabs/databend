@@ -34,7 +34,7 @@ pub enum DataGroupValue {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    Utf8(Box<String>),
+    String(Box<Vec<u8>>),
     Boolean(bool),
 }
 
@@ -54,7 +54,7 @@ impl TryFrom<&DataValue> for DataGroupValue {
             DataValue::UInt16(Some(v)) => DataGroupValue::UInt16(*v),
             DataValue::UInt32(Some(v)) => DataGroupValue::UInt32(*v),
             DataValue::UInt64(Some(v)) => DataGroupValue::UInt64(*v),
-            DataValue::Utf8(Some(v)) => DataGroupValue::Utf8(Box::new(v.clone())),
+            DataValue::String(Some(v)) => DataGroupValue::String(Box::new(v.clone())),
 
             DataValue::Float32(None)
             | DataValue::Float64(None)
@@ -67,7 +67,7 @@ impl TryFrom<&DataValue> for DataGroupValue {
             | DataValue::UInt16(None)
             | DataValue::UInt32(None)
             | DataValue::UInt64(None)
-            | DataValue::Utf8(None) => {
+            | DataValue::String(None) => {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "Cannot convert a DataValue holding NULL ({:?})",
                     value
@@ -98,7 +98,7 @@ impl From<&DataGroupValue> for DataValue {
             DataGroupValue::UInt16(v) => DataValue::UInt16(Some(*v)),
             DataGroupValue::UInt32(v) => DataValue::UInt32(Some(*v)),
             DataGroupValue::UInt64(v) => DataValue::UInt64(Some(*v)),
-            DataGroupValue::Utf8(v) => DataValue::Utf8(Some(v.to_string())),
+            DataGroupValue::String(v) => DataValue::String(Some(v.to_vec())),
         }
     }
 }

@@ -111,7 +111,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=7765067#77650672233bd7bbb9839a2a616f11ebffa15807"
+source = "git+https://github.com/zhyass/arrow2?rev=05f2b5c#05f2b5c129c7f83cade7f371f50c87658613135e"
 dependencies = [
  "arrow2",
  "bytes",
@@ -125,7 +125,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.4.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=7765067#77650672233bd7bbb9839a2a616f11ebffa15807"
+source = "git+https://github.com/zhyass/arrow2?rev=05f2b5c#05f2b5c129c7f83cade7f371f50c87658613135e"
 dependencies = [
  "ahash 0.7.4",
  "base64",
@@ -142,9 +142,9 @@ dependencies = [
  "lexical-core",
  "lz4",
  "multiversion",
- "num",
+ "num-traits",
  "packed_simd_2",
- "parquet2 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parquet2 0.4.0",
  "rand 0.8.4",
  "regex",
  "serde",
@@ -736,7 +736,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
- "parquet2 0.3.0 (git+https://github.com/datafuse-extras/parquet2?rev=d28330f)",
+ "parquet2 0.3.0",
 ]
 
 [[package]]
@@ -3634,21 +3634,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "parquet2"
-version = "0.3.0"
+name = "parquet-format-async-temp"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b9cfd5adabbb93efd417dcee71a2ebbb0f4978b1d8e65ab7fce84b72b966bc"
+checksum = "03abc2f9c83fe9ceec83f47c76cc071bfd56caba33794340330f35623ab1f544"
 dependencies = [
- "async-stream",
- "bitpacking",
- "brotli",
- "flate2",
+ "async-trait",
+ "byteorder",
  "futures",
- "lz4",
- "parquet-format-async-temp",
- "snap",
- "streaming-iterator",
- "zstd",
+ "integer-encoding 3.0.2",
+ "ordered-float 1.1.1",
 ]
 
 [[package]]
@@ -3662,7 +3657,25 @@ dependencies = [
  "flate2",
  "futures",
  "lz4",
- "parquet-format-async-temp",
+ "parquet-format-async-temp 0.1.1",
+ "snap",
+ "streaming-iterator",
+ "zstd",
+]
+
+[[package]]
+name = "parquet2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73758f76c8c842dfd846dfbc6ee05779aff626908531fffc3305a30cbccc55e7"
+dependencies = [
+ "async-stream",
+ "bitpacking",
+ "brotli",
+ "flate2",
+ "futures",
+ "lz4",
+ "parquet-format-async-temp 0.2.0",
  "snap",
  "streaming-iterator",
  "zstd",

@@ -50,7 +50,7 @@ where T: DFPrimitiveType
     }
 }
 
-impl ArrayCast for DFUtf8Array {
+impl ArrayCast for DFStringArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         cast_ca(&self.array, data_type)
     }
@@ -67,7 +67,6 @@ impl ArrayCast for DFNullArray {
         match data_type {
             DataType::Null => Ok(self.clone().into_series()),
             DataType::Boolean => Ok(DFBooleanArray::full_null(self.len()).into_series()),
-            DataType::Utf8 => Ok(DFUtf8Array::full_null(self.len()).into_series()),
             DataType::UInt8 => Ok(DFUInt8Array::full_null(self.len()).into_series()),
             DataType::UInt16 => Ok(DFUInt16Array::full_null(self.len()).into_series()),
             DataType::UInt32 => Ok(DFUInt32Array::full_null(self.len()).into_series()),
@@ -78,7 +77,7 @@ impl ArrayCast for DFNullArray {
             DataType::Int64 => Ok(DFInt64Array::full_null(self.len()).into_series()),
             DataType::Float32 => Ok(DFFloat32Array::full_null(self.len()).into_series()),
             DataType::Float64 => Ok(DFFloat64Array::full_null(self.len()).into_series()),
-            DataType::Binary => Ok(DFBinaryArray::full_null(self.len()).into_series()),
+            DataType::String => Ok(DFStringArray::full_null(self.len()).into_series()),
             DataType::List(_) => Ok(DFListArray::full_null(self.len()).into_series()),
 
             _ => Err(ErrorCode::BadDataValueType(format!(
@@ -90,5 +89,4 @@ impl ArrayCast for DFNullArray {
 }
 
 impl ArrayCast for DFListArray {}
-impl ArrayCast for DFBinaryArray {}
 impl ArrayCast for DFStructArray {}

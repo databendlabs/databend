@@ -59,15 +59,15 @@ fn test_scatter() -> Result<()> {
         array_vec[1].into_no_null_iter().collect::<Vec<bool>>()
     );
 
-    // Test BinaryArray
-    let mut binary_builder = BinaryArrayBuilder::with_capacity(8);
-    binary_builder.append_value(&"12");
-    binary_builder.append_value(&"ab");
-    binary_builder.append_value(&"c1");
-    binary_builder.append_value(&"32");
-    let df_binary_array = binary_builder.finish();
+    // Test StringArray
+    let mut string_builder = StringArrayBuilder::with_capacity(8);
+    string_builder.append_value(&"12");
+    string_builder.append_value(&"ab");
+    string_builder.append_value(&"c1");
+    string_builder.append_value(&"32");
+    let df_string_array = string_builder.finish();
     let indices = vec![1, 0, 0, 1];
-    let array_vec = unsafe { df_binary_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
+    let array_vec = unsafe { df_string_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
 
     let values: Vec<Vec<u8>> = (0..array_vec[0].len())
         .map(|idx| array_vec[0].inner().value(idx).to_vec())
