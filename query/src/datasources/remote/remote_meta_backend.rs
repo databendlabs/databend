@@ -22,6 +22,8 @@ use std::time::Duration;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow_flight::FlightData;
+use common_cache::Cache;
+use common_cache::LruCache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,7 +38,6 @@ use common_planners::DropTablePlan;
 use common_planners::TableOptions;
 use common_runtime::Runtime;
 use common_store_api::MetaApi;
-use lru::LruCache;
 
 use crate::catalogs::Database;
 use crate::catalogs::TableMeta;
