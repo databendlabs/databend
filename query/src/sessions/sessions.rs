@@ -31,6 +31,7 @@ use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::datasources::example::ExampleDatabases;
 use crate::datasources::local::LocalDatabases;
 use crate::datasources::remote::RemoteDatabases;
 use crate::datasources::system::SystemDatabases;
@@ -55,6 +56,8 @@ impl SessionManager {
         catalog.register_db_engine("local", Arc::new(LocalDatabases::create(conf.clone())))?;
         catalog.register_db_engine("system", Arc::new(SystemDatabases::create(conf.clone())))?;
         catalog.register_db_engine("remote", Arc::new(RemoteDatabases::create(conf.clone())))?;
+        // Register the example for demo.
+        catalog.register_db_engine("example", Arc::new(ExampleDatabases::create(conf.clone())))?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {

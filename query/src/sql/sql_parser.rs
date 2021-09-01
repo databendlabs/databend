@@ -490,9 +490,13 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match &*w.value {
                 "Local" => Ok(DatabaseEngineType::Local),
                 "Remote" => Ok(DatabaseEngineType::Remote),
-                _ => self.expected("Engine must one of Local, Remote", Token::Word(w)),
+                "Example" => Ok(DatabaseEngineType::Example),
+                _ => self.expected(
+                    "Engine must one of Local, Remote or Example",
+                    Token::Word(w),
+                ),
             },
-            unexpected => self.expected("Engine must one of Local, Remote", unexpected),
+            unexpected => self.expected("Engine must one of Local, Remote or Example", unexpected),
         }
     }
 

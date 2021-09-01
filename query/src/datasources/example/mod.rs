@@ -12,18 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod common_test;
-#[cfg(test)]
-mod tests;
+mod example_database;
+mod example_databases;
+mod example_meta_backend;
+mod example_table;
 
-mod common;
-mod meta_backend;
-
-pub(crate) mod example;
-pub(crate) mod local;
-pub(crate) mod remote;
-pub(crate) mod system;
-
-pub use common::Common;
-pub use meta_backend::MetaBackend;
+pub use example_database::ExampleDatabase;
+pub use example_databases::ExampleDatabases;
+pub use example_table::ExampleTable;

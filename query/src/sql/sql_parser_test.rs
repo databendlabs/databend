@@ -93,12 +93,25 @@ mod tests {
             expect_parse_ok(sql, expected)?;
         }
 
+        // Local.
         {
             let sql = "CREATE DATABASE db1 ENGINE=Local";
             let expected = DfStatement::CreateDatabase(DfCreateDatabase {
                 if_not_exists: false,
                 name: ObjectName(vec![Ident::new("db1")]),
                 engine: DatabaseEngineType::Local,
+                options: vec![],
+            });
+            expect_parse_ok(sql, expected)?;
+        }
+
+        // Example.
+        {
+            let sql = "CREATE DATABASE db1 ENGINE=Example";
+            let expected = DfStatement::CreateDatabase(DfCreateDatabase {
+                if_not_exists: false,
+                name: ObjectName(vec![Ident::new("db1")]),
+                engine: DatabaseEngineType::Example,
                 options: vec![],
             });
             expect_parse_ok(sql, expected)?;
