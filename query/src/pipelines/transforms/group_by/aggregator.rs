@@ -79,21 +79,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
             // 1.1 and 1.2.
             let group_columns = Self::group_columns(&group_cols, &block)?;
-            let mut aggregate_arguments_columns = Vec::with_capacity(aggr_len);
-
-            {
-                for function_arguments in aggregate_functions_arguments {
-                    let mut function_arguments_column =
-                        Vec::with_capacity(function_arguments.len());
-
-                    for argument_name in function_arguments {
-                        let argument_column = block.try_column_by_name(argument_name)?;
-                        function_arguments_column.push(argument_column.to_array()?);
-                    }
-
-                    aggregate_arguments_columns.push(function_arguments_column);
-                }
-            }
+            let aggregate_arguments_columns = Self::aggregate_arguments(&block, aggregator_params)?;
 
             let mut places = Vec::with_capacity(block.num_rows());
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
@@ -153,6 +139,24 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             .iter()
             .map(|column_name| block.try_column_by_name(column_name))
             .collect::<Result<Vec<&DataColumn>>>()
+    }
+
+    #[inline(always)]
+    fn aggregate_arguments(block: &DataBlock, params: &AggregatorParams) -> Result<Vec<Vec<Series>>> {
+        let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
+        let mut aggregate_arguments_columns = Vec::with_capacity(aggregate_functions_arguments.len());
+        for function_arguments in aggregate_functions_arguments {
+            let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
+
+            for argument_name in function_arguments {
+                let argument_column = block.try_column_by_name(argument_name)?;
+                function_arguments_column.push(argument_column.to_array()?);
+            }
+
+            aggregate_arguments_columns.push(function_arguments_column);
+        }
+
+        Ok(aggregate_arguments_columns)
     }
 
     pub fn aggregate_finalized(
