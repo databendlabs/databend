@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
 use common_planners::TableEngineType;
 use nom::bytes::complete::tag;
@@ -88,7 +87,7 @@ pub struct DfTruncateTable {
 pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
-    pub engine: DatabaseEngineType,
+    pub engine: String,
     pub options: Vec<SqlOption>,
 }
 

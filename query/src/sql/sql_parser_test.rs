@@ -15,7 +15,6 @@
 #[cfg(test)]
 mod tests {
     use common_exception::Result;
-    use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
     use sqlparser::ast::*;
 
@@ -76,7 +75,7 @@ mod tests {
             let expected = DfStatement::CreateDatabase(DfCreateDatabase {
                 if_not_exists: false,
                 name: ObjectName(vec![Ident::new("db1")]),
-                engine: DatabaseEngineType::Remote,
+                engine: "Remote".to_string(),
                 options: vec![],
             });
             expect_parse_ok(sql, expected)?;
@@ -87,7 +86,7 @@ mod tests {
             let expected = DfStatement::CreateDatabase(DfCreateDatabase {
                 if_not_exists: true,
                 name: ObjectName(vec![Ident::new("db1")]),
-                engine: DatabaseEngineType::Remote,
+                engine: "Remote".to_string(),
                 options: vec![],
             });
             expect_parse_ok(sql, expected)?;
@@ -99,7 +98,7 @@ mod tests {
             let expected = DfStatement::CreateDatabase(DfCreateDatabase {
                 if_not_exists: false,
                 name: ObjectName(vec![Ident::new("db1")]),
-                engine: DatabaseEngineType::Local,
+                engine: "Local".to_string(),
                 options: vec![],
             });
             expect_parse_ok(sql, expected)?;
@@ -111,16 +110,10 @@ mod tests {
             let expected = DfStatement::CreateDatabase(DfCreateDatabase {
                 if_not_exists: false,
                 name: ObjectName(vec![Ident::new("db1")]),
-                engine: DatabaseEngineType::Example,
+                engine: "Example".to_string(),
                 options: vec![],
             });
             expect_parse_ok(sql, expected)?;
-        }
-
-        // Error cases: Invalid type
-        {
-            let sql = "CREATE DATABASE db1 ENGINE=XX";
-            expect_parse_error(sql, "Expected Engine must one of Local, Remote, found: XX")?;
         }
 
         Ok(())

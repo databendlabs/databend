@@ -29,7 +29,6 @@ use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
-use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
@@ -61,7 +60,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -182,7 +181,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
             // TODO test if_not_exists
             if_not_exists: false,
             db: "db1".to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -196,7 +195,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: "db2".to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -241,7 +240,6 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
     tracing::info!("init logging");
@@ -259,7 +257,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -369,7 +367,6 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
     tracing::info!("init logging");
@@ -387,7 +384,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -475,7 +472,6 @@ async fn test_do_append() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
     let (_tc, addr) = crate::tests::start_store_server().await?;
@@ -503,7 +499,7 @@ async fn test_do_append() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
         let res = client.create_database(plan.clone()).await;
@@ -549,7 +545,6 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
     use common_planners::TableEngineType;
 
     let (_tc, addr) = crate::tests::start_store_server().await?;
@@ -582,7 +577,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
         client.create_database(plan.clone()).await?;
@@ -1121,7 +1116,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let plan = CreateDatabasePlan {
         if_not_exists: false,
         db: "db1".to_string(),
-        engine: DatabaseEngineType::Local,
+        engine: "Local".to_string(),
         options: Default::default(),
     };
     client.create_database(plan).await?;
@@ -1147,7 +1142,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let plan = CreateDatabasePlan {
         if_not_exists: true, // <<--
         db: "db1".to_string(),
-        engine: DatabaseEngineType::Local, // accepts a Local engine?
+        engine: "Local".to_string(),
         options: Default::default(),
     };
 
@@ -1183,7 +1178,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     let plan = CreateDatabasePlan {
         if_not_exists: false,
         db: test_db.to_string(),
-        engine: DatabaseEngineType::Local,
+        engine: "Local".to_string(),
         options: Default::default(),
     };
     client.create_database(plan).await?;

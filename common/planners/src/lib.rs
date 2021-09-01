@@ -99,7 +99,6 @@ pub use plan_broadcast::BroadcastPlan;
 pub use plan_builder::PlanBuilder;
 pub use plan_builder_scan::TableScanInfo;
 pub use plan_database_create::CreateDatabasePlan;
-pub use plan_database_create::DatabaseEngineType;
 pub use plan_database_create::DatabaseOptions;
 pub use plan_database_drop::DropDatabasePlan;
 pub use plan_describe_table::DescribeTablePlan;

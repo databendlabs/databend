@@ -221,7 +221,7 @@ impl PlanParser {
         Ok(PlanNode::CreateDatabase(CreateDatabasePlan {
             if_not_exists: create.if_not_exists,
             db: name,
-            engine: create.engine,
+            engine: create.engine.clone(),
             options,
         }))
     }

@@ -38,7 +38,7 @@ async fn test_datasource() -> Result<()> {
         catalog.create_database(CreateDatabasePlan {
             if_not_exists: false,
             db: "test_db".to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         })?;
 
