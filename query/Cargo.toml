@@ -24,6 +24,7 @@ simd = ["common-arrow/simd"]
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
+common-cache = { path = "../common/cache"}
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
@@ -81,7 +82,6 @@ tonic = "0.5.2"
 walkdir = "2.3.2"
 warp = { version = "0.3.1", features = ["tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
-lru = "0.6.6"
 byteorder = "1"
 
 [dev-dependencies]

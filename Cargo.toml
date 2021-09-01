@@ -3,6 +3,7 @@ members = [
     # Common
     "common/arrow",
     "common/building",
+    "common/cache",
     "common/datablocks",
     "common/datavalues",
     "common/flights",

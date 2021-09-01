@@ -722,6 +722,14 @@ dependencies = [
 [[package]]
 name = "common-cache"
 version = "0.1.0"
+dependencies = [
+ "filetime",
+ "heapsize",
+ "log",
+ "ritelinked",
+ "tempfile",
+ "walkdir",
+]
 
 [[package]]
 name = "common-dal"
@@ -1407,6 +1415,7 @@ dependencies = [
  "clickhouse-srv",
  "common-arrow",
  "common-building",
+ "common-cache",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1432,7 +1441,6 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "log",
- "lru",
  "metrics",
  "metrics-exporter-prometheus",
  "msql-srv",
@@ -2189,6 +2197,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
+name = "griddle"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bb81d22191b89b117cd12d6549544bfcba0da741efdcec7c7d2fd06a0f56363"
+dependencies = [
+ "ahash 0.7.4",
+ "hashbrown",
+]
+
+[[package]]
 name = "group"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2262,6 +2280,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
  "http",
+]
+
+[[package]]
+name = "heapsize"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]
@@ -4347,6 +4374,17 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "ritelinked"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98f2771d255fd99f0294f13249fecd0cae6e074f86b4197ec1f1689d537b44d3"
+dependencies = [
+ "ahash 0.7.4",
+ "griddle",
+ "hashbrown",
 ]
 
 [[package]]
