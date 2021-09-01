@@ -17,6 +17,7 @@ use common_exception::Result;
 use super::aggregate_arg_min_max::try_create_aggregate_arg_minmax_function;
 use super::aggregate_avg::try_create_aggregate_avg_function;
 use super::aggregate_min_max::try_create_aggregate_minmax_function;
+use super::aggregate_stddev_pop::try_create_aggregate_stddev_pop_function;
 use super::aggregate_sum::try_create_aggregate_sum_function;
 use super::aggregate_window_funnel::try_create_aggregate_window_funnel_function;
 use crate::aggregates::aggregate_function_factory::FactoryCombinatorFuncRef;
@@ -47,6 +48,12 @@ impl Aggregators {
         map.insert("argMax".into(), |display_name, params, arguments| {
             try_create_aggregate_arg_minmax_function(false, display_name, params, arguments)
         });
+        map.insert("std".into(), try_create_aggregate_stddev_pop_function);
+        map.insert("stddev".into(), try_create_aggregate_stddev_pop_function);
+        map.insert(
+            "stddev_pop".into(),
+            try_create_aggregate_stddev_pop_function,
+        );
 
         map.insert(
             "windowFunnel".into(),
