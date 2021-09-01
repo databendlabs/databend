@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_planners::ExplainType;
-use common_planners::TableEngineType;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_till1;
 use nom::character::complete::digit1;
@@ -63,7 +62,7 @@ pub struct DfCreateTable {
     /// Table name
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
-    pub engine: TableEngineType,
+    pub engine: String,
     pub options: Vec<SqlOption>,
 }
 

@@ -319,7 +319,7 @@ impl PlanParser {
             db,
             table,
             schema,
-            engine: create.engine,
+            engine: create.engine.clone(),
             options,
         }))
     }

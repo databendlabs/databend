@@ -36,7 +36,7 @@ fn test_plan_display_indent() -> Result<()> {
         db: "foo".into(),
         table: "bar".into(),
         schema,
-        engine: TableEngineType::JSONEachRow,
+        engine: "JSON".to_string(),
         options,
     });
 

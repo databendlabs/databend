@@ -159,7 +159,6 @@ pub use plan_stage::StagePlan;
 pub use plan_statistics::Statistics;
 pub use plan_subqueries_set::SubQueriesSetPlan;
 pub use plan_table_create::CreateTablePlan;
-pub use plan_table_create::TableEngineType;
 pub use plan_table_create::TableOptions;
 pub use plan_table_drop::DropTablePlan;
 pub use plan_truncate_table::TruncateTablePlan;

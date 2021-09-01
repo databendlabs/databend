@@ -15,7 +15,6 @@
 #[cfg(test)]
 mod tests {
     use common_exception::Result;
-    use common_planners::TableEngineType;
     use sqlparser::ast::*;
 
     use crate::sql::sql_statement::DfDropDatabase;
@@ -31,28 +30,6 @@ mod tests {
             "Expected to parse exactly one statement"
         );
         assert_eq!(statements[0], expected);
-        Ok(())
-    }
-
-    /// Parses sql and asserts that the expected error message was found
-    fn expect_parse_error(sql: &str, expected_error: &str) -> Result<()> {
-        match DfParser::parse_sql(sql) {
-            Ok(statements) => {
-                panic!(
-                    "Expected parse error for '{}', but was successful: {:?}",
-                    sql, statements
-                );
-            }
-            Err(e) => {
-                let error_message = e.to_string();
-                assert!(
-                    error_message.contains(expected_error),
-                    "Expected error '{}' not found in actual error '{}'",
-                    expected_error,
-                    error_message
-                );
-            }
-        }
         Ok(())
     }
 
@@ -149,7 +126,7 @@ mod tests {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("t")]),
             columns: vec![make_column_def("c1", DataType::Int)],
-            engine: TableEngineType::Csv,
+            engine: "CSV".to_string(),
             options: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("/data/33.csv".into()),
@@ -167,20 +144,13 @@ mod tests {
                 make_column_def("c2", DataType::BigInt),
                 make_column_def("c3", DataType::Varchar(Some(255))),
             ],
-            engine: TableEngineType::Parquet,
+            engine: "Parquet".to_string(),
             options: vec![SqlOption {
                 name: Ident::new("LOCATION".to_string()),
                 value: Value::SingleQuotedString("foo.parquet".into()),
             }],
         });
         expect_parse_ok(sql, expected)?;
-
-        // Error cases: Invalid type
-        let sql = "CREATE TABLE t(c1 int) ENGINE = XX location = 'foo.parquet' ";
-        expect_parse_error(
-            sql,
-            "Expected Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV, found: XX",
-        )?;
 
         Ok(())
     }

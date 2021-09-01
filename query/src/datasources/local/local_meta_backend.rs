@@ -24,7 +24,6 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_planners::TableEngineType;
 
 use crate::catalogs::impls::LOCAL_TBL_ID_BEGIN;
 use crate::catalogs::Database;
@@ -142,22 +141,14 @@ impl MetaBackend for LocalMetaBackend {
         let db_name = clone.db.as_str();
         let table_name = clone.table.as_str();
 
-        let table = match &plan.engine {
-            TableEngineType::Parquet => {
-                ParquetTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-            }
-            TableEngineType::Csv => {
-                CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-            }
-            TableEngineType::Null => {
-                NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-            }
-            TableEngineType::Memory => {
-                MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?
-            }
+        let table = match plan.engine.to_uppercase().as_str() {
+            "JSON" => ParquetTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
+            "CSV" => CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
+            "NULL" => NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
+            "MEMORY" => MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             _ => {
                 return Result::Err(ErrorCode::UnImplement(format!(
-                    "Local database does not support '{:?}' table engine",
+                    "Local database does not support '{:?}' table engine, table engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
                     plan.engine
                 )));
             }

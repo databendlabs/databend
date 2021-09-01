@@ -32,7 +32,6 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
-use common_planners::TableEngineType;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
@@ -92,7 +91,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
             table: table_name.to_string(),
             schema: schema.clone(),
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            engine: TableEngineType::JSONEachRow,
+            engine: "JSON".to_string(),
         };
 
         {
@@ -240,7 +239,6 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::TableEngineType;
 
     tracing::info!("init logging");
 
@@ -287,7 +285,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             // TODO check get_table
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             // TODO
-            engine: TableEngineType::JSONEachRow,
+            engine: "JSON".to_string(),
         };
 
         {
@@ -367,7 +365,6 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::TableEngineType;
 
     tracing::info!("init logging");
 
@@ -414,7 +411,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
             // TODO check get_table
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             // TODO
-            engine: TableEngineType::JSONEachRow,
+            engine: "JSON".to_string(),
         };
 
         {
@@ -472,7 +469,6 @@ async fn test_do_append() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::TableEngineType;
 
     let (_tc, addr) = crate::tests::start_store_server().await?;
 
@@ -511,7 +507,7 @@ async fn test_do_append() -> anyhow::Result<()> {
             table: tbl_name.to_string(),
             schema: schema.clone(),
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            engine: TableEngineType::Parquet,
+            engine: "PARQUET".to_string(),
         };
         client.create_table(plan.clone()).await.unwrap();
     }
@@ -545,7 +541,6 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::TableEngineType;
 
     let (_tc, addr) = crate::tests::start_store_server().await?;
 
@@ -587,7 +582,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
             table: tbl_name.to_string(),
             schema: schema.clone(),
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            engine: TableEngineType::Parquet,
+            engine: "PARQUET".to_string(),
         };
         client.create_table(plan.clone()).await?;
     }
@@ -1198,7 +1193,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
         table: "tbl1".to_string(),
         schema: schema.clone(),
         options: Default::default(),
-        engine: TableEngineType::JSONEachRow,
+        engine: "JSON".to_string(),
     };
 
     client.create_table(plan.clone()).await?;
