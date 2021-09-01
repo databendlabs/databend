@@ -160,6 +160,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity>
             }
 
             self.size += 1;
+            *inserted = true;
             entity.set_key_and_hash(key, hash_value);
 
             if std::intrinsics::unlikely(self.grower.overflow(self.size)) {
@@ -192,6 +193,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity>
                     );
 
                     self.size += 1;
+                    *inserted = true;
                     self.zero_entity_raw = Some(std::alloc::alloc_zeroed(layout));
                     self.zero_entity = Some(self.zero_entity_raw.unwrap() as *mut Entity);
                     self.zero_entity.unwrap().set_key_and_hash(key, hash_value);
