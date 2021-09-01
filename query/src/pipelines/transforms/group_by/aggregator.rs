@@ -110,8 +110,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
             let mut groups = groups_locker.lock();
             {
+                let mut inserted = true;
                 for group_key in group_keys.iter() {
-                    let mut inserted = true;
                     let entity = groups.entity(group_key, &mut inserted);
 
                     match inserted {

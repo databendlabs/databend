@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::intrinsics::likely;
 use std::ptr::NonNull;
 
 use bumpalo::Bump;
@@ -121,7 +122,7 @@ where
             let index = key.lookup();
             let value = self.data.offset(index);
 
-            if (*value).fill {
+            if likely((*value).fill) {
                 *inserted = false;
                 return value;
             }
