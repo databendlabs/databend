@@ -176,9 +176,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let (plan, hints) = PlanParser::create(context.clone()).build_with_hint_from_sql(query);
 
         let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
+            let start = Instant::now();
             let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
             let data_stream = runtime.block_on(interpreter.execute())?;
-
+            histogram!(
+                super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
+                start.elapsed());
             runtime.block_on(data_stream.collect::<Result<Vec<DataBlock>>>())
         };
         let blocks = fetch_query_blocks();

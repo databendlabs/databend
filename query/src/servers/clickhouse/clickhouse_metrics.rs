@@ -14,3 +14,5 @@
 
 pub static METRIC_CLICKHOUSE_PROCESSOR_REQUEST_DURATION: &str =
     "clickhouse.process_request_duration";
+pub static METRIC_INTERPRETER_USEDTIME: &str = "interpreter.usedtime";
+
