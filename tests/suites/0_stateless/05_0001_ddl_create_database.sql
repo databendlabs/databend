@@ -9,4 +9,4 @@ CREATE DATABASE db ENGINE = Local; -- {ErrorCode 3}
 
 DROP DATABASE IF EXISTS db;
 
-CREATE DATABASE db ENGINE = NotExists;
+CREATE DATABASE db ENGINE = NotExists; -- {ErrorCode 3}
