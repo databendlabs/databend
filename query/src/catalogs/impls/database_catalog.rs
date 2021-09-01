@@ -54,7 +54,9 @@ impl DatabaseCatalog {
 
     // Get all the engines name.
     pub fn engines(&self) -> Vec<String> {
-        self.database_engines.read().keys().cloned().collect()
+        let mut res: Vec<String> = self.database_engines.read().keys().cloned().collect();
+        res.sort();
+        res
     }
 }
 
@@ -159,7 +161,7 @@ impl Catalog for DatabaseCatalog {
             engine.create_database(plan)
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
-                "Database: unknown engine '{}', engine must one of {:?}.",
+                "Database: unknown engine '{}', engine must one of {:?}",
                 engine,
                 self.engines()
             )))
