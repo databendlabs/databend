@@ -782,7 +782,7 @@ impl PlanScheduler {
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
         let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
-        let table = table_meta.datasource();
+        let table = table_meta.raw();
 
         match table.is_local() {
             true => self.visit_local_data_source(plan),

@@ -17,6 +17,7 @@ use pretty_assertions::assert_eq;
 
 use crate::configs::Config;
 use crate::configs::LogConfig;
+use crate::configs::MetaConfig;
 use crate::configs::QueryConfig;
 use crate::configs::StoreConfig;
 
@@ -25,6 +26,7 @@ use crate::configs::StoreConfig;
 fn test_default_config() -> Result<()> {
     let expect = Config {
         log: LogConfig::default(),
+        meta: MetaConfig::default(),
         store: StoreConfig::default(),
         query: QueryConfig::default(),
         config_file: "".to_string(),

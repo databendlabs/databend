@@ -41,7 +41,7 @@ impl<T> Meta<T> {
         self.id
     }
 
-    pub fn datasource(&self) -> &T {
+    pub fn raw(&self) -> &T {
         &self.t
     }
 }

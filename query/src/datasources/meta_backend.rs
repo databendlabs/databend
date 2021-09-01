@@ -26,24 +26,21 @@ use common_planners::DropTablePlan;
 use crate::catalogs::Database;
 use crate::catalogs::TableMeta;
 
-// Client of database meta store (the data dictionary)
-#[async_trait::async_trait]
-pub trait BackendClient: Send + Sync {
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
-    fn get_databases(&self) -> Result<Vec<String>>;
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>>;
+/// Backend trait for the meta data service which in the MetaStore or ETCD and other meta services.
+pub trait MetaBackend: Sync + Send {
     fn get_table_by_id(
         &self,
         db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
-    fn get_db_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>>;
-
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
-
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableMeta>>>;
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
+    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+    fn exists_database(&self, _db_name: &str) -> Result<bool>;
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }
