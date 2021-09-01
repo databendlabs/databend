@@ -66,7 +66,7 @@ impl Catalog for DatabaseCatalog {
         engine_type: &str,
         backend: Arc<dyn DatabaseEngine>,
     ) -> Result<()> {
-        let engine = engine_type.to_lowercase();
+        let engine = engine_type.to_uppercase();
         self.database_engines.write().insert(engine, backend);
         Ok(())
     }
@@ -156,7 +156,7 @@ impl Catalog for DatabaseCatalog {
         if let Some(engine) = self
             .database_engines
             .read()
-            .get(engine.to_lowercase().as_str())
+            .get(engine.to_uppercase().as_str())
         {
             engine.create_database(plan)
         } else {
