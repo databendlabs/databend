@@ -5,6 +5,12 @@
 log_level = "ERROR"
 log_dir = "./_logs"
 
+# Meta
+[meta]
+meta_address = "0.0.0.0:9191"
+meta_username = "root"
+meta_password = "root"
+
 # Store
 [store]
 store_address = "0.0.0.0:9191"

@@ -96,7 +96,7 @@ impl Table for DatabasesTable {
             .map(|databases_name| -> SendableDataBlockStream {
                 let databases_name_str: Vec<&str> = databases_name
                     .iter()
-                    .map(|database_name| database_name.as_str())
+                    .map(|database| database.name())
                     .collect();
 
                 let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(

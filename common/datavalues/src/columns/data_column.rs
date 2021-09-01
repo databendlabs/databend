@@ -48,7 +48,7 @@ impl DataColumnWithField {
     }
 }
 
-pub type DataColumnsWithField = Vec<DataColumnWithField>;
+pub type DataColumnsWithField = [DataColumnWithField];
 
 impl DataColumn {
     #[inline]

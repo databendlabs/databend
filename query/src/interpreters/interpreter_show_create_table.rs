@@ -55,7 +55,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         let datasource = self.ctx.get_catalog();
         let database = datasource.get_database(self.plan.db.as_str())?;
         let table_meta = database.get_table(self.plan.table.as_str())?;
-        let table = table_meta.datasource();
+        let table = table_meta.raw();
 
         let name = table.name();
         let engine = table.engine();

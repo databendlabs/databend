@@ -23,9 +23,9 @@ use common_datavalues::DFPrimitiveType;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 /// Remove the group by key from the state and rebuild it into a column
-pub trait KeysArrayBuilder<Value> {
+pub trait KeysArrayBuilder<Key> {
     fn finish(self) -> Series;
-    fn append_value(&mut self, v: &Value);
+    fn append_value(&mut self, v: &Key);
 }
 
 pub struct FixedKeysArrayBuilder<T>
