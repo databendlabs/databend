@@ -1,0 +1,6 @@
+[target.armv7-unknown-linux-gnueabihf]
+image = "datafuselabs/build-tool:armv7-unknown-linux-gnueabihf"
+[target.aarch64-unknown-linux-gnu]
+image = "datafuselabs/build-tool:aarch64-unknown-linux-gnu"
+[target.arm-unknown-linux-gnueabi]
+image = "datafuselabs/build-tool:arm-unknown-linux-gnueabi"
