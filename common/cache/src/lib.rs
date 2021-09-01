@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(generic_associated_types)]
-#![feature(in_band_lifetimes)]
-
 #[macro_use]
 extern crate log;
 #[cfg(feature = "heapsize")]
@@ -32,6 +29,7 @@ pub use cache::lru::LruCache;
 pub use cache::Cache;
 pub use disk_cache::result::Error as DiskCacheError;
 pub use disk_cache::result::Result as DiskCacheResult;
+pub use disk_cache::DiskCache;
 pub use disk_cache::LruDiskCache;
 pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;

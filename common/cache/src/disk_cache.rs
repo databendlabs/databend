@@ -59,8 +59,14 @@ fn get_all_files<P: AsRef<Path>>(path: P) -> Box<dyn Iterator<Item = (PathBuf, u
 }
 
 /// An LRU cache of files on disk.
-pub struct LruDiskCache<S: BuildHasher = DefaultHashBuilder> {
-    lru: LruCache<OsString, u64, S, FileSize>,
+pub type LruDiskCache = DiskCache<LruCache<OsString, u64, DefaultHashBuilder, FileSize>>;
+
+/// An basic disk cache of files on disk.
+pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
+where C: Cache<OsString, u64, S, FileSize>
+{
+    hash_builder: S,
+    cache: C,
     root: PathBuf,
 }
 
@@ -74,8 +80,11 @@ enum AddFile<'a> {
     RelPath(&'a OsStr),
 }
 
-impl LruDiskCache {
-    /// Create an `LruDiskCache` that stores files in `path`, limited to `size` bytes.
+impl<C> DiskCache<C, DefaultHashBuilder>
+where C: Cache<OsString, u64, DefaultHashBuilder, FileSize>
+{
+    /// Create an `DiskCache` with `ritelinked::DefaultHashBuilder` that stores files in `path`,
+    /// limited to `size` bytes.
     ///
     /// Existing files in `path` will be stored with their last-modified time from the filesystem
     /// used as the order for the recency of their use. Any files that are individually larger
@@ -85,8 +94,34 @@ impl LruDiskCache {
     /// expects to have sole maintence of the contents.
     pub fn new<T>(path: T, size: u64) -> Result<Self>
     where PathBuf: From<T> {
-        LruDiskCache {
-            lru: LruCache::with_meter(size, FileSize),
+        let default_hash_builder = DefaultHashBuilder::new();
+        DiskCache {
+            hash_builder: default_hash_builder.clone(),
+            cache: C::with_meter_and_hasher(size, FileSize, default_hash_builder),
+            root: PathBuf::from(path),
+        }
+        .init()
+    }
+}
+
+impl<C, S> DiskCache<C, S>
+where
+    C: Cache<OsString, u64, S, FileSize>,
+    S: BuildHasher + Clone,
+{
+    /// Create an `DiskCache` with hasher that stores files in `path`, limited to `size` bytes.
+    ///
+    /// Existing files in `path` will be stored with their last-modified time from the filesystem
+    /// used as the order for the recency of their use. Any files that are individually larger
+    /// than `size` bytes will be removed.
+    ///
+    /// The cache is not observant of changes to files under `path` from external sources, it
+    /// expects to have sole maintence of the contents.
+    pub fn new_with_hasher<T>(path: T, size: u64, hash_builder: S) -> Result<Self>
+    where PathBuf: From<T> {
+        DiskCache {
+            hash_builder: hash_builder.clone(),
+            cache: C::with_meter_and_hasher(size, FileSize, hash_builder),
             root: PathBuf::from(path),
         }
         .init()
@@ -94,21 +129,21 @@ impl LruDiskCache {
 
     /// Return the current size of all the files in the cache.
     pub fn size(&self) -> u64 {
-        self.lru.size()
+        self.cache.size()
     }
 
     /// Return the count of entries in the cache.
     pub fn len(&self) -> usize {
-        self.lru.len()
+        self.cache.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.lru.len() == 0
+        self.cache.len() == 0
     }
 
     /// Return the maximum size of the cache.
     pub fn capacity(&self) -> u64 {
-        self.lru.capacity()
+        self.cache.capacity()
     }
 
     /// Return the path in which the cache is stored.
@@ -142,7 +177,7 @@ impl LruDiskCache {
 
     /// Returns `true` if the disk cache can store a file of `size` bytes.
     pub fn can_store(&self, size: u64) -> bool {
-        size <= self.lru.capacity() as u64
+        size <= self.cache.capacity() as u64
     }
 
     /// Add the file at `path` of size `size` to the cache.
@@ -154,9 +189,12 @@ impl LruDiskCache {
             AddFile::AbsPath(ref p) => p.strip_prefix(&self.root).expect("Bad path?").as_os_str(),
             AddFile::RelPath(p) => p,
         };
-        //TODO: ideally LRUCache::insert would give us back the entries it had to remove.
-        while self.lru.size() as u64 + size > self.lru.capacity() as u64 {
-            let (rel_path, _) = self.lru.pop_by_policy().expect("Unexpectedly empty cache!");
+        //TODO: ideally Cache::put would give us back the entries it had to remove.
+        while self.cache.size() as u64 + size > self.cache.capacity() as u64 {
+            let (rel_path, _) = self
+                .cache
+                .pop_by_policy()
+                .expect("Unexpectedly empty cache!");
             let remove_path = self.rel_to_abs_path(rel_path);
             //TODO: check that files are removable during `init`, so that this is only
             // due to outside interference.
@@ -164,7 +202,7 @@ impl LruDiskCache {
                 panic!("Error removing file from cache: `{:?}`: {}", remove_path, e)
             });
         }
-        self.lru.put(rel_path.to_owned(), size);
+        self.cache.put(rel_path.to_owned(), size);
         Ok(())
     }
 
@@ -235,15 +273,15 @@ impl LruDiskCache {
 
     /// Return `true` if a file with path `key` is in the cache.
     pub fn contains_key<K: AsRef<OsStr>>(&self, key: K) -> bool {
-        self.lru.contains(key.as_ref())
+        self.cache.contains(key.as_ref())
     }
 
-    /// Get an opened `File` for `key`, if one exists and can be opened. Updates the LRU state
+    /// Get an opened `File` for `key`, if one exists and can be opened. Updates the Cache state
     /// of the file if present. Avoid using this method if at all possible, prefer `.get`.
     pub fn get_file<K: AsRef<OsStr>>(&mut self, key: K) -> Result<File> {
         let rel_path = key.as_ref();
         let path = self.rel_to_abs_path(rel_path);
-        self.lru
+        self.cache
             .get(rel_path)
             .ok_or(Error::FileNotInCache)
             .and_then(|_| {
@@ -254,14 +292,14 @@ impl LruDiskCache {
     }
 
     /// Get an opened readable and seekable handle to the file at `key`, if one exists and can
-    /// be opened. Updates the LRU state of the file if present.
+    /// be opened. Updates the Cache state of the file if present.
     pub fn get<K: AsRef<OsStr>>(&mut self, key: K) -> Result<Box<dyn ReadSeek>> {
         self.get_file(key).map(|f| Box::new(f) as Box<dyn ReadSeek>)
     }
 
     /// Remove the given key from the cache.
     pub fn remove<K: AsRef<OsStr>>(&mut self, key: K) -> Result<()> {
-        match self.lru.pop(key.as_ref()) {
+        match self.cache.pop(key.as_ref()) {
             Some(_) => {
                 let path = self.rel_to_abs_path(key.as_ref());
                 fs::remove_file(&path).map_err(|e| {

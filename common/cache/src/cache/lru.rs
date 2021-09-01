@@ -154,10 +154,12 @@ impl<K: Eq + Hash, V, S: BuildHasher> LruCache<K, V, S, Count> {
     }
 }
 
-impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<K, V, S, M> {
+impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
+    for LruCache<K, V, S, M>
+{
     /// Creates an empty cache that can hold at most `capacity` as measured by `meter` with the
     /// given hash builder.
-    pub fn with_meter_and_hasher(capacity: u64, meter: M, hash_builder: S) -> Self {
+    fn with_meter_and_hasher(capacity: u64, meter: M, hash_builder: S) -> Self {
         LruCache {
             map: LinkedHashMap::with_hasher(hash_builder),
             current_measure: Default::default(),
@@ -165,11 +167,28 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> LruCache<K, V, S,
             meter,
         }
     }
-}
 
-impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V>
-    for LruCache<K, V, S, M>
-{
+    /// Returns a reference to the value corresponding to the given key in the cache, if
+    /// any.
+    ///
+    /// Note that this method is not available for cache objects using `Meter` implementations
+    /// other than `Count`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use common_cache::{Cache, LruCache};
+    ///
+    /// let mut cache = LruCache::new(2);
+    ///
+    /// cache.put(1, "a");
+    /// cache.put(2, "b");
+    /// cache.put(2, "c");
+    /// cache.put(3, "d");
+    ///
+    /// assert_eq!(cache.get(&1), None);
+    /// assert_eq!(cache.get(&2), Some(&"c"));
+    /// ```
     fn get<Q>(&mut self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
@@ -207,6 +226,22 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V>
         self.map.get_refresh(k)
     }
 
+    /// Returns a reference to the value corresponding to the key in the cache or `None` if it is
+    /// not present in the cache. Unlike `get`, `peek` does not update the LRU list so the key's
+    /// position will be unchanged.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use common_cache::{Cache, LruCache};
+    /// let mut cache = LruCache::new(2);
+    ///
+    /// cache.put(1, "a");
+    /// cache.put(2, "b");
+    ///
+    /// assert_eq!(cache.peek(&1), Some(&"a"));
+    /// assert_eq!(cache.peek(&2), Some(&"b"));
+    /// ```
     fn peek<'a, Q>(&'a self, k: &Q) -> Option<&'a V>
     where
         K: Borrow<Q>,
@@ -214,6 +249,23 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V>
     {
         self.map.get(k)
     }
+
+    /// Returns a mutable reference to the value corresponding to the key in the cache or `None`
+    /// if it is not present in the cache. Unlike `get_mut`, `peek_mut` does not update the LRU
+    /// list so the key's position will be unchanged.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use common_cache::{Cache, LruCache};
+    /// let mut cache = LruCache::new(2);
+    ///
+    /// cache.put(1, "a");
+    /// cache.put(2, "b");
+    ///
+    /// assert_eq!(cache.peek_mut(&1), Some(&mut "a"));
+    /// assert_eq!(cache.peek_mut(&2), Some(&mut "b"));
+    /// ```
     fn peek_mut<'a, Q>(&'a mut self, k: &Q) -> Option<&'a mut V>
     where
         K: Borrow<Q>,
@@ -222,8 +274,23 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V>
         self.map.get_mut(k)
     }
 
-    fn peek_by_policy<'a>(&self) -> Option<(&'a K, &'a V)> {
-        todo!()
+    /// Returns the value corresponding to the least recently used item or `None` if the
+    /// cache is empty. Like `peek`, `peek_by_policy` does not update the LRU list so the item's
+    /// position will be unchanged.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use common_cache::{Cache, LruCache};
+    /// let mut cache = LruCache::new(2);
+    ///
+    /// cache.put(1, "a");
+    /// cache.put(2, "b");
+    ///
+    /// assert_eq!(cache.peek_by_policy(), Some((&1, &"a")));
+    /// ```
+    fn peek_by_policy(&self) -> Option<(&K, &V)> {
+        self.map.front()
     }
 
     /// Checks if the map contains the given key.

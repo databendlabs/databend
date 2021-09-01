@@ -24,8 +24,8 @@ use filetime::set_file_times;
 use filetime::FileTime;
 use tempfile::TempDir;
 
-use crate::disk_cache::LruDiskCache;
 use crate::DiskCacheError;
+use crate::LruDiskCache;
 
 struct TestFixture {
     /// Temp directory.
