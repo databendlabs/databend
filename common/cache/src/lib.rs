@@ -15,6 +15,7 @@
 #[macro_use]
 extern crate log;
 #[cfg(feature = "heapsize")]
+#[cfg(not(target_os = "macos"))]
 extern crate heapsize_;
 
 #[cfg(test)]
@@ -35,5 +36,6 @@ pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;
 pub use meter::file_meter::FileSize;
 #[cfg(feature = "heapsize")]
+#[cfg(not(target_os = "macos"))]
 pub use meter::heap_meter::HeapSize;
 pub use meter::Meter;

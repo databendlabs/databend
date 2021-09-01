@@ -50,6 +50,7 @@
 //! [meter]: trait.Meter.html
 
 #[cfg(feature = "heapsize")]
+#[cfg(not(target_os = "macos"))]
 extern crate heapsize_;
 
 use std::borrow::Borrow;

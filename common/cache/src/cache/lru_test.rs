@@ -208,6 +208,7 @@ fn test_metered_cache_oversize() {
 }
 
 #[cfg(feature = "heapsize")]
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn test_heapsize_cache() {
     use crate::HeapSize;
