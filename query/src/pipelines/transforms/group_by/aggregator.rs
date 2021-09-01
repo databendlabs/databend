@@ -47,31 +47,20 @@ pub struct Aggregator<Method: HashMethod> {
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
-    pub fn create(
-        method: Method,
-        aggr_exprs: &[Expression],
-        schema: DataSchemaRef,
-    ) -> Result<Aggregator<Method>> {
-        let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
-        // let aggregator_area = AggregatorArea::try_create(&aggregator_params)?;
-
-        let aggregate_functions = &aggregator_params.aggregate_functions;
+    pub fn create(method: Method, params: AggregatorParamsRef) -> Aggregator<Method> {
+        let aggregate_functions = &params.aggregate_functions;
         let (states_layout, states_offsets) = unsafe { get_layout_offsets(aggregate_functions) };
 
-        Ok(Aggregator {
+        Aggregator {
             method,
-            params: aggregator_params,
+            params,
             layout: states_layout,
             offsets_aggregate_states: states_offsets,
-        })
+        }
     }
 
     #[inline(never)]
-    pub async fn aggregate(
-        &self,
-        group_cols: Vec<String>,
-        mut stream: SendableDataBlockStream,
-    ) -> Result<Mutex<Method::State>> {
+    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<Mutex<Method::State>> {
         let hash_method = &self.method;
 
         let groups_locker = Mutex::new(hash_method.aggregate_state());

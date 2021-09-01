@@ -24,3 +24,5 @@ mod keys_ref;
 pub use aggregator::Aggregator;
 pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
 pub use aggregator_state::AggregatorState;
+pub use aggregator_params::AggregatorParams;
+pub use aggregator_params::AggregatorParamsRef;
