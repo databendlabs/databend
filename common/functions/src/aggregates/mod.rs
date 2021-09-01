@@ -46,6 +46,7 @@ pub use aggregate_function::AggregateFunctionRef;
 pub use aggregate_function_factory::AggregateFunctionFactory;
 pub use aggregate_function_state::get_layout_offsets;
 pub use aggregate_function_state::StateAddr;
+pub use aggregate_function_state::StateAddrs;
 pub use aggregate_min_max::AggregateMinMaxFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregator::Aggregators;

@@ -77,11 +77,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
 
             let mut groups = groups_locker.lock();
+
+            // TODO: In fact, this can be moved outside the while
             let places: StateAddrs = match aggregator_params.aggregate_functions.is_empty() {
                 true => self.lookup_key(group_keys, &mut groups),
                 false => self.lookup_state(group_keys, &mut groups),
             };
-            // let places = self.lookup_state(group_keys, &mut groups);
 
             {
                 let aggregate_arguments_columns = Self::aggregate_arguments(&block, aggregator_params)?;
