@@ -107,17 +107,17 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         let array: &DFPrimitiveArray<T> = arrays[0].static_cast();
 
         if array.null_count() == 0 {
-            for (_row, value) in array.into_no_null_iter().enumerate() {
+            for value in array.into_no_null_iter() {
                 let v: f64 = value.as_();
                 state.add(v);
             }
         } else {
-            for (_row, value) in array.into_iter().enumerate() {
+            array.iter().for_each(|value| {
                 if let Some(value) = value {
                     let v: f64 = value.as_();
                     state.add(v);
                 }
-            }
+            });
         }
         Ok(())
     }
@@ -142,18 +142,15 @@ where T: DFPrimitiveType + AsPrimitive<f64>
                     state.add(v);
                 });
         } else {
-            array
-                .into_iter()
-                .zip(places.iter())
-                .for_each(|(value, place)| {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateStddevPopState>();
+            array.iter().zip(places.iter()).for_each(|(value, place)| {
+                let place = place.next(offset);
+                let state = place.get::<AggregateStddevPopState>();
 
-                    if let Some(value) = value {
-                        let v: f64 = value.as_();
-                        state.add(v);
-                    }
-                });
+                if let Some(value) = value {
+                    let v: f64 = value.as_();
+                    state.add(v);
+                }
+            });
         }
         Ok(())
     }
