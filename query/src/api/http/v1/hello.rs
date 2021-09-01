@@ -17,5 +17,5 @@ use axum::extract::Extension;
 use crate::configs::Config;
 
 pub async fn hello_handler(cfg: Extension<Config>) -> String {
-    format!("{:?}", cfg)
+    format!("{:?}", cfg.0)
 }
