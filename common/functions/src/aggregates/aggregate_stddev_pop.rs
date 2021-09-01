@@ -105,9 +105,19 @@ where T: DFPrimitiveType + AsPrimitive<f64>
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
         let array: &DFPrimitiveArray<T> = arrays[0].static_cast();
-        for (_row, value) in array.into_no_null_iter().enumerate() {
-            let v: f64 = value.as_();
-            state.add(v);
+
+        if array.null_count() == 0 {
+            for (_row, value) in array.into_no_null_iter().enumerate() {
+                let v: f64 = value.as_();
+                state.add(v);
+            }
+        } else {
+            for (_row, value) in array.into_iter().enumerate() {
+                if let Some(value) = value {
+                    let v: f64 = value.as_();
+                    state.add(v);
+                }
+            }
         }
         Ok(())
     }
@@ -120,16 +130,31 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         _input_rows: usize,
     ) -> Result<()> {
         let array: &DFPrimitiveArray<T> = arrays[0].static_cast();
-        array
-            .into_no_null_iter()
-            .zip(places.iter())
-            .for_each(|(value, place)| {
-                let place = place.next(offset);
-                let state = place.get::<AggregateStddevPopState>();
+        if array.null_count() == 0 {
+            array
+                .into_no_null_iter()
+                .zip(places.iter())
+                .for_each(|(value, place)| {
+                    let place = place.next(offset);
+                    let state = place.get::<AggregateStddevPopState>();
 
-                let v: f64 = value.as_();
-                state.add(v);
-            });
+                    let v: f64 = value.as_();
+                    state.add(v);
+                });
+        } else {
+            array
+                .into_iter()
+                .zip(places.iter())
+                .for_each(|(value, place)| {
+                    let place = place.next(offset);
+                    let state = place.get::<AggregateStddevPopState>();
+
+                    if let Some(value) = value {
+                        let v: f64 = value.as_();
+                        state.add(v);
+                    }
+                });
+        }
         Ok(())
     }
 
