@@ -81,8 +81,13 @@ toml = "0.5.6"
 tonic = "0.5.2"
 walkdir = "2.3.2"
 warp = { version = "0.3.1", features = ["tls"] }
+axum = {version = "0.2.3", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
+hyper = { version = "0.14", features = ["full"] }
+tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
+headers = "0.3.4"
+tokio-rustls = "0.22.0"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
@@ -90,6 +95,7 @@ criterion = "0.3"
 mysql = "21.0.1"
 reqwest = { version = "0.11", features = ["json"] }
 flaky_test = "0.1"
+tempfile = "3.2.0"
 
 [build-dependencies]
 common-building = {path = "../common/building"}
