@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::borrow::Borrow;
 
-use common_exception::Result;
+use super::Meter;
 
-use crate::catalogs::Database;
-use crate::datasources::system::SystemDatabase;
+pub struct FileSize;
 
-pub struct SystemFactory;
-
-impl SystemFactory {
-    pub fn create() -> Self {
-        Self
-    }
-
-    pub fn load_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let databases: Vec<Arc<dyn Database>> = vec![Arc::new(SystemDatabase::create())];
-        Ok(databases)
+/// Given a tuple of (path, filesize), use the filesize for measurement.
+impl<K> Meter<K, u64> for FileSize {
+    type Measure = usize;
+    fn measure<Q: ?Sized>(&self, _: &Q, v: &u64) -> usize
+    where K: Borrow<Q> {
+        *v as usize
     }
 }

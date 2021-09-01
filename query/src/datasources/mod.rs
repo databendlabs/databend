@@ -18,8 +18,11 @@ mod common_test;
 mod tests;
 
 mod common;
-pub use common::Common;
+mod meta_backend;
 
 pub(crate) mod local;
 pub(crate) mod remote;
 pub(crate) mod system;
+
+pub use common::Common;
+pub use meta_backend::MetaBackend;

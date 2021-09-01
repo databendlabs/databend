@@ -28,12 +28,12 @@ use futures::future::Either;
 use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
-use crate::catalogs::impls::RemoteMetaStoreClient;
+use crate::catalogs::Catalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::local::LocalFactory;
-use crate::datasources::remote::RemoteFactory;
-use crate::datasources::system::SystemFactory;
+use crate::datasources::local::LocalDatabases;
+use crate::datasources::remote::RemoteDatabases;
+use crate::datasources::system::SystemDatabases;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
@@ -50,22 +50,13 @@ pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
+        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
+        // Register local/system and remote database engine.
+        catalog.register_db_engine("local", Arc::new(LocalDatabases::create(conf.clone())))?;
+        catalog.register_db_engine("system", Arc::new(SystemDatabases::create(conf.clone())))?;
+        catalog.register_db_engine("remote", Arc::new(RemoteDatabases::create(conf.clone())))?;
+
         let max_active_sessions = conf.query.max_active_sessions as usize;
-        let meta_store_cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
-            RemoteFactory::new(&conf).store_client_provider(),
-        )));
-        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(
-            conf.clone(),
-            meta_store_cli,
-        )?);
-
-        // Register system databases.
-        let system = SystemFactory::create().load_databases()?;
-        catalog.register_databases(system)?;
-        // Register local databases(including default database).
-        let local = LocalFactory::create().load_databases()?;
-        catalog.register_databases(local)?;
-
         Ok(Arc::new(SessionManager {
             catalog,
             conf,

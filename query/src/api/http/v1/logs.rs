@@ -11,36 +11,52 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::fmt::Debug;
-use std::fmt::Formatter;
 
+use std::convert::Infallible;
+
+use axum::body::Bytes;
+use axum::body::Full;
+use axum::extract::Extension;
+use axum::http::Response;
+use axum::http::StatusCode;
+use axum::response::Html;
+use axum::response::IntoResponse;
 use common_exception::ErrorCode;
 use common_planners::ScanPlan;
 use futures::TryStreamExt;
-use warp::reject::Reject;
-use warp::Filter;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 
-pub fn log_handler(
-    cfg: Config,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "logs")
-        .and(warp::get())
-        .and(warp::any().map(move || cfg.clone()))
-        .and_then(get_log)
+pub struct LogTemplate {
+    result: Result<String, ErrorCode>,
+}
+impl IntoResponse for LogTemplate {
+    type Body = Full<Bytes>;
+    type BodyError = Infallible;
+
+    fn into_response(self) -> Response<Self::Body> {
+        match self.result {
+            Ok(log) => Html(log).into_response(),
+            Err(err) => Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::from(format!("Failed to fetch log. Error: {}", err)))
+                .unwrap(),
+        }
+    }
 }
 
-async fn get_log(cfg: Config) -> Result<impl warp::Reply, warp::Rejection> {
-    let result = select_table(cfg).await;
-    match result {
-        Ok(s) => Ok(warp::reply::with_status(
-            s.to_string(),
-            warp::http::StatusCode::OK,
-        )),
-        Err(error_codes) => Err(warp::reject::custom(NoBacktraceErrorCode(error_codes))),
+// read log files from cfg.log.log_dir
+pub async fn logs_handler(cfg_extension: Extension<Config>) -> LogTemplate {
+    let cfg = cfg_extension.0;
+    log::info!(
+        "Read logs from : {} with log level {}",
+        cfg.log.log_dir,
+        cfg.log.log_level
+    );
+    LogTemplate {
+        result: select_table(cfg).await,
     }
 }
 
@@ -49,7 +65,7 @@ async fn select_table(cfg: Config) -> Result<String, ErrorCode> {
     let executor_session = session_manager.create_session("HTTP")?;
     let ctx = executor_session.create_context();
     let table_meta = ctx.get_table("system", "tracing")?;
-    let table = table_meta.datasource();
+    let table = table_meta.raw();
     let source_plan = table.read_plan(
         ctx.clone(),
         &ScanPlan::empty(),
@@ -58,14 +74,5 @@ async fn select_table(cfg: Config) -> Result<String, ErrorCode> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let r = format!("{:?}", result);
-    Ok(r.to_string())
+    Ok(r)
 }
-struct NoBacktraceErrorCode(ErrorCode);
-
-impl Debug for NoBacktraceErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Reject for NoBacktraceErrorCode {}

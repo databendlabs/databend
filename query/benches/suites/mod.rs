@@ -17,7 +17,6 @@ use common_planners::PlanNode;
 use common_runtime::tokio;
 use criterion::Criterion;
 use datafuse_query::interpreters::SelectInterpreter;
-use datafuse_query::sessions::SessionManager;
 use datafuse_query::sql::PlanParser;
 use datafuse_query::tests::try_create_session_mgr;
 use futures::StreamExt;

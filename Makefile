@@ -19,6 +19,24 @@ build:
 build-debug:
 	bash ./scripts/build/build-debug.sh
 
+build-tool:
+	docker build . -t ${HUB}/build-tool:arm-unknown-linux-gnueabi  --file ./docker/build-tool/armv6/Dockerfile
+	docker build . -t ${HUB}/build-tool:aarch64-unknown-linux-gnu  --file ./docker/build-tool/arm64/Dockerfile
+	docker build . -t ${HUB}/build-tool:armv7-unknown-linux-gnueabihf  --file ./docker/build-tool/armv7/Dockerfile
+	docker push ${HUB}/build-tool:arm-unknown-linux-gnueabi
+	docker push ${HUB}/build-tool:aarch64-unknown-linux-gnu
+	docker push ${HUB}/build-tool:armv7-unknown-linux-gnueabihf
+
+cross-compile-debug:
+	cross build --target aarch64-unknown-linux-gnu
+	cross build --target arm-unknown-linux-gnueabi
+	cross build --target armv7-unknown-linux-gnueabihf
+
+cross-compile-release:
+	cross build --target aarch64-unknown-linux-gnu --release
+	cross build --target arm-unknown-linux-gnueabi --release
+	cross build --target armv7-unknown-linux-gnueabihf --release
+
 cli:
 	bash ./scripts/build/build-cli.sh
 

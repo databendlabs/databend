@@ -265,6 +265,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
+name = "axum"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e2423522684032529c51d209740c77d57cc56bfef7b9a18630f919a974d2616"
+dependencies = [
+ "async-trait",
+ "bitflags",
+ "bytes",
+ "futures-util",
+ "headers",
+ "http",
+ "http-body",
+ "hyper",
+ "pin-project-lite",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -722,6 +750,14 @@ dependencies = [
 [[package]]
 name = "common-cache"
 version = "0.1.0"
+dependencies = [
+ "filetime",
+ "heapsize",
+ "log",
+ "ritelinked",
+ "tempfile",
+ "walkdir",
+]
 
 [[package]]
 name = "common-dal"
@@ -1399,6 +1435,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.7.4",
  "async-trait",
+ "axum",
  "bumpalo",
  "byteorder",
  "chrono",
@@ -1407,6 +1444,7 @@ dependencies = [
  "clickhouse-srv",
  "common-arrow",
  "common-building",
+ "common-cache",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1429,10 +1467,11 @@ dependencies = [
  "env_logger 0.9.0",
  "flaky_test",
  "futures",
+ "headers",
+ "hyper",
  "indexmap",
  "lazy_static",
  "log",
- "lru",
  "metrics",
  "metrics-exporter-prometheus",
  "msql-srv",
@@ -1452,10 +1491,13 @@ dependencies = [
  "sqlparser",
  "structopt",
  "structopt-toml",
+ "tempfile",
  "threadpool",
+ "tokio-rustls",
  "tokio-stream",
  "toml",
  "tonic",
+ "tower",
  "uuid",
  "walkdir",
  "warp",
@@ -2189,6 +2231,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
+name = "griddle"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bb81d22191b89b117cd12d6549544bfcba0da741efdcec7c7d2fd06a0f56363"
+dependencies = [
+ "ahash 0.7.4",
+ "hashbrown",
+]
+
+[[package]]
 name = "group"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2262,6 +2314,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
  "http",
+]
+
+[[package]]
+name = "heapsize"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]
@@ -4350,6 +4411,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ritelinked"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98f2771d255fd99f0294f13249fecd0cae6e074f86b4197ec1f1689d537b44d3"
+dependencies = [
+ "ahash 0.7.4",
+ "griddle",
+ "hashbrown",
+]
+
+[[package]]
 name = "rsa"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5145,6 +5217,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_wrapper"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
+
+[[package]]
 name = "synstructure"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5554,6 +5632,22 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b7b56efe69aa0ad2b5da6b942e57ea9f6fe683b7a314d4ff48662e2c8838de1"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "http",
+ "http-body",
+ "pin-project",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]

@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::fmt::Debug;
-use std::hash::Hash;
+use std::intrinsics::likely;
 use std::ptr::NonNull;
 
 use bumpalo::Bump;
@@ -28,6 +27,10 @@ use crate::common::HashMapIterator;
 use crate::common::HashTableEntity;
 use crate::common::HashTableKeyable;
 use crate::common::KeyValueEntity;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
+use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
@@ -37,45 +40,75 @@ use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 ///     - Aggregate function state data memory pool
 ///     - Group by key data memory pool (if necessary)
 pub trait AggregatorState<Method: HashMethod> {
-    type HashKeyState: HashTableKeyable;
+    type Key;
+    type Entity: StateEntity<Self::Key>;
+    type Iterator: Iterator<Item = *mut Self::Entity>;
 
     fn len(&self) -> usize;
 
+    fn iter(&self) -> Self::Iterator;
+
     fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
 
-    fn iter(&self) -> HashMapIterator<Self::HashKeyState, usize>;
-
-    fn insert_key(
-        &mut self,
-        key: &Method::HashKey,
-        inserted: &mut bool,
-    ) -> *mut KeyValueEntity<Self::HashKeyState, usize>;
+    fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
 }
 
-// TODO: Optimize the type with length below 2
-pub struct FixedKeysAggregatorState<T>
+/// The fixed length array is used as the data structure to locate the key by subscript
+pub struct ShortFixedKeysAggregatorState<T: ShortFixedKeyable> {
+    area: Bump,
+    size: usize,
+    max_size: usize,
+    data: *mut ShortFixedKeysStateEntity<T>,
+}
+
+impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
+    pub fn create(max_size: usize) -> Self {
+        unsafe {
+            let size = max_size * std::mem::size_of::<ShortFixedKeysStateEntity<T>>();
+            let entity_align = std::mem::align_of::<ShortFixedKeysStateEntity<T>>();
+            let entity_layout = Layout::from_size_align_unchecked(size, entity_align);
+
+            let raw_ptr = std::alloc::alloc_zeroed(entity_layout);
+
+            ShortFixedKeysAggregatorState::<T> {
+                area: Default::default(),
+                data: raw_ptr as *mut ShortFixedKeysStateEntity<T>,
+                size: 0,
+                max_size,
+            }
+        }
+    }
+}
+
+impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
+    fn drop(&mut self) {
+        unsafe {
+            let size = self.max_size * std::mem::size_of::<ShortFixedKeysStateEntity<T>>();
+            let entity_align = std::mem::align_of::<ShortFixedKeysStateEntity<T>>();
+            let layout = Layout::from_size_align_unchecked(size, entity_align);
+            std::alloc::dealloc(self.data as *mut u8, layout);
+        }
+    }
+}
+
+impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T>
 where
-    T: DFPrimitiveType,
-    T: std::cmp::Eq + Clone + Debug,
+    T: DFPrimitiveType + ShortFixedKeyable,
     HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
-    pub area: Bump,
-    pub data: HashMap<T, usize>,
-}
-
-impl<T> AggregatorState<HashMethodFixedKeys<T>> for FixedKeysAggregatorState<T>
-where
-    T: DFPrimitiveType,
-    T: std::cmp::Eq + Hash + Clone + Debug,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
-{
-    type HashKeyState = <HashMethodFixedKeys<T> as HashMethod>::HashKey;
+    type Key = T;
+    type Entity = ShortFixedKeysStateEntity<T>;
+    type Iterator = ShortFixedKeysStateIterator<T>;
 
     #[inline(always)]
     fn len(&self) -> usize {
-        self.data.len()
+        self.size
+    }
+
+    #[inline(always)]
+    fn iter(&self) -> Self::Iterator {
+        Self::Iterator::create(self.data, self.max_size as isize)
     }
 
     #[inline(always)]
@@ -84,16 +117,57 @@ where
     }
 
     #[inline(always)]
-    fn iter(&self) -> HashMapIterator<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
+    fn entity(&mut self, key: &T, inserted: &mut bool) -> *mut Self::Entity {
+        unsafe {
+            let index = key.lookup();
+            let value = self.data.offset(index);
+
+            if likely((*value).fill) {
+                *inserted = false;
+                return value;
+            }
+
+            *inserted = true;
+            self.size += 1;
+            (*value).key = *key;
+            (*value).fill = true;
+            value
+        }
+    }
+}
+
+pub struct LongerFixedKeysAggregatorState<T: HashTableKeyable> {
+    pub area: Bump,
+    pub data: HashMap<T, usize>,
+}
+
+impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
+where
+    T: DFPrimitiveType,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+{
+    type Key = T;
+    type Entity = KeyValueEntity<T, usize>;
+    type Iterator = HashMapIterator<T, usize>;
+
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    #[inline(always)]
+    fn iter(&self) -> Self::Iterator {
         self.data.iter()
     }
 
     #[inline(always)]
-    fn insert_key(
-        &mut self,
-        key: &<HashMethodFixedKeys<T> as HashMethod>::HashKey,
-        inserted: &mut bool,
-    ) -> *mut KeyValueEntity<<HashMethodFixedKeys<T> as HashMethod>::HashKey, usize> {
+    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
+        self.area.alloc_layout(layout)
+    }
+
+    #[inline(always)]
+    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
         self.data.insert_key(key, inserted)
     }
 }
@@ -105,25 +179,23 @@ pub struct SerializedKeysAggregatorState {
 }
 
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
-    type HashKeyState = KeysRef;
+    type Key = KeysRef;
+    type Entity = KeyValueEntity<KeysRef, usize>;
+    type Iterator = HashMapIterator<KeysRef, usize>;
 
     fn len(&self) -> usize {
         self.data_state_map.len()
+    }
+
+    fn iter(&self) -> Self::Iterator {
+        self.data_state_map.iter()
     }
 
     fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
         self.state_area.alloc_layout(layout)
     }
 
-    fn iter(&self) -> HashMapIterator<KeysRef, usize> {
-        self.data_state_map.iter()
-    }
-
-    fn insert_key(
-        &mut self,
-        keys: &Vec<u8>,
-        inserted: &mut bool,
-    ) -> *mut KeyValueEntity<KeysRef, usize> {
+    fn entity(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
         let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
 

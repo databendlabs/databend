@@ -14,6 +14,7 @@
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+
 pub trait Source: Sync + Send {
     fn read(&mut self) -> Result<Option<DataBlock>>;
 }

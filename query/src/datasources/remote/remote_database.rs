@@ -20,32 +20,27 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::impls::BackendClient;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::datasources::MetaBackend;
 
 pub struct RemoteDatabase {
     _id: MetaId,
     name: String,
-    backend: Arc<dyn BackendClient>,
+    meta_backend: Arc<dyn MetaBackend>,
 }
 
 impl RemoteDatabase {
-    pub fn create_new(
-        id: MetaId,
-        name: impl Into<String>,
-        backend: Arc<dyn BackendClient>,
-    ) -> Self {
+    pub fn create(id: MetaId, name: &str, meta_backend: Arc<dyn MetaBackend>) -> Self {
         Self {
             _id: id,
-            name: name.into(),
-            backend,
+            name: name.to_string(),
+            meta_backend,
         }
     }
 }
 
-#[async_trait::async_trait]
 impl Database for RemoteDatabase {
     fn name(&self) -> &str {
         self.name.as_str()
@@ -60,7 +55,12 @@ impl Database for RemoteDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        self.backend.get_table(&self.name, table_name)
+        self.meta_backend.get_table(self.name.as_str(), table_name)
+    }
+
+    fn exists_table(&self, table_name: &str) -> Result<bool> {
+        let r = self.get_table(table_name);
+        Ok(r.is_ok())
     }
 
     fn get_table_by_id(
@@ -68,23 +68,23 @@ impl Database for RemoteDatabase {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.backend
-            .get_table_by_id(&self.name, table_id, table_version)
+        self.meta_backend
+            .get_table_by_id(self.name.as_str(), table_id, table_version)
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        self.backend.get_db_tables(&self.name)
+        self.meta_backend.get_tables(self.name.as_str())
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(vec![])
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.backend.create_table(plan).await
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
+        self.meta_backend.create_table(plan)
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.backend.drop_table(plan).await
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
+        self.meta_backend.drop_table(plan)
     }
 }

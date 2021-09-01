@@ -17,6 +17,10 @@ mod cluster_test;
 
 pub mod cluster;
 pub mod config;
-pub mod logs;
 
 pub mod hello;
+#[cfg(test)]
+mod hello_test;
+pub mod logs;
+#[cfg(test)]
+mod logs_test;

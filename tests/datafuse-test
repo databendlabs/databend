@@ -332,14 +332,15 @@ def main(args):
         (name, ext) = os.path.splitext(case)
         return os.path.isfile(case_file) and (ext == '.sql' or ext == '.sh' or ext == '.py')
 
+
     def sute_key_func(item):
         if -1 == item.find('_'):
-            return 99998
+            return 99998, ''
         prefix, suffix = item.split('_', 1)
         try:
             return int(prefix), suffix
         except ValueError:
-            return 99997
+            return 99997, ''
 
     total_tests_run = 0
     for suite in sorted(os.listdir(base_dir), key=sute_key_func):
@@ -368,14 +369,14 @@ def main(args):
             def key_func(item):
                 reverse = 1
                 if -1 == item.find('_'):
-                    return 99998
+                    return 99998, ''
 
                 prefix, suffix = item.split('_', 1)
 
                 try:
                     return reverse * int(prefix), suffix
                 except ValueError:
-                    return 99997
+                    return 99997, ''
 
             all_tests = os.listdir(suite_dir)
             all_tests = filter(lambda case: is_test_from_dir(suite_dir, case), all_tests)
@@ -384,6 +385,13 @@ def main(args):
                 all_tests = [t for t in all_tests if any([re.search(r, t) for r in args.test])]
             else:
                 all_tests = [t for t in all_tests]
+
+            bad_tests = filter(lambda case: re.search('^[0-9]+_[0-9]+_(.*)$', case) is None, all_tests)
+            bad_tests = [t for t in bad_tests]
+
+            if len(bad_tests) > 0:
+                print("Illegal test case names: {}, must match `^[0-9]+_[0-9]+_(.*)$`".format(bad_tests))
+                sys.exit(1)
 
             all_tests.sort(key=key_func)
 
