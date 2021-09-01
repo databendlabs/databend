@@ -14,4 +14,3 @@
 
 pub static METRIC_MYSQL_PROCESSOR_REQUEST_DURATION: &str = "mysql.process_request_duration";
 pub static METRIC_INTERPRETER_USEDTIME: &str = "interpreter.usedtime";
-
