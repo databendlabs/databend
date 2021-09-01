@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregator;
-mod aggregator_keys_builder;
-mod aggregator_params;
-mod aggregator_polymorphic_keys;
-mod aggregator_state;
-mod aggregator_state_entity;
-mod aggregator_state_iterator;
-mod keys_ref;
+use std::borrow::Borrow;
 
-pub use aggregator::Aggregator;
-pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
-pub use aggregator_state::AggregatorState;
+use super::Meter;
+
+pub struct FileSize;
+
+/// Given a tuple of (path, filesize), use the filesize for measurement.
+impl<K> Meter<K, u64> for FileSize {
+    type Measure = usize;
+    fn measure<Q: ?Sized>(&self, _: &Q, v: &u64) -> usize
+    where K: Borrow<Q> {
+        *v as usize
+    }
+}

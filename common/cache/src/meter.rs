@@ -12,30 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate log;
+pub mod count_meter;
+pub mod file_meter;
 #[cfg(feature = "heapsize")]
 #[cfg(not(target_os = "macos"))]
-extern crate heapsize_;
+pub mod heap_meter;
 
-#[cfg(test)]
-mod disk_cache_test;
+use std::borrow::Borrow;
 
-mod cache;
-#[allow(dead_code)]
-mod disk_cache;
-mod meter;
-
-pub use cache::lru::LruCache;
-pub use cache::Cache;
-pub use disk_cache::result::Error as DiskCacheError;
-pub use disk_cache::result::Result as DiskCacheResult;
-pub use disk_cache::DiskCache;
-pub use disk_cache::LruDiskCache;
-pub use meter::count_meter::Count;
-pub use meter::count_meter::CountableMeter;
-pub use meter::file_meter::FileSize;
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-pub use meter::heap_meter::HeapSize;
-pub use meter::Meter;
+/// A trait for measuring the size of a cache entry.
+///
+/// If you implement this trait, you should use `usize` as the `Measure` type, otherwise you will
+/// also have to implement [`CountableMeter`][countablemeter].
+///
+/// [countablemeter]: trait.Meter.html
+pub trait Meter<K, V> {
+    /// The type used to store measurements.
+    type Measure: Default + Copy;
+    /// Calculate the size of `key` and `value`.
+    fn measure<Q: ?Sized>(&self, key: &Q, value: &V) -> Self::Measure
+    where K: Borrow<Q>;
+}

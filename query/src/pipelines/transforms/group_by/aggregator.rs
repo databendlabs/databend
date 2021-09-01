@@ -32,11 +32,11 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
-use crate::common::HashTableEntity;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParamsRef;
 use crate::pipelines::transforms::group_by::aggregator_state::AggregatorState;
+use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct Aggregator<Method: HashMethod> {
@@ -110,14 +110,14 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
             let mut groups = groups_locker.lock();
             {
+                let mut inserted = true;
                 for group_key in group_keys.iter() {
-                    let mut inserted = true;
-                    let entity = groups.insert_key(group_key, &mut inserted);
+                    let entity = groups.entity(group_key, &mut inserted);
 
                     match inserted {
                         true => {
                             if aggr_len == 0 {
-                                entity.set_value(0);
+                                entity.set_state_value(0);
                             } else {
                                 let place: StateAddr = groups.alloc_layout(layout).into();
                                 for idx in 0..aggr_len {
@@ -126,11 +126,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
                                     aggregate_functions[idx].init_state(aggr_state_place);
                                 }
                                 places.push(place);
-                                entity.set_value(place.addr());
+                                entity.set_state_value(place.addr());
                             }
                         }
                         false => {
-                            let place: StateAddr = (*entity.get_value()).into();
+                            let place: StateAddr = (*entity.get_state_value()).into();
                             places.push(place);
                         }
                     }
@@ -193,7 +193,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {
-            let place: StateAddr = (*group_entity.get_value()).into();
+            let place: StateAddr = (*group_entity.get_state_value()).into();
 
             for (idx, func) in funcs.iter().enumerate() {
                 let arg_place = place.next(offsets_aggregate_states[idx]);
@@ -202,7 +202,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
                 bytes.clear();
             }
 
-            group_key_builder.append_value(group_entity.get_key());
+            group_key_builder.append_value(group_entity.get_state_key());
         }
 
         let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());

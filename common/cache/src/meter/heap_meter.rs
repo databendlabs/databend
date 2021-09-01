@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregator;
-mod aggregator_keys_builder;
-mod aggregator_params;
-mod aggregator_polymorphic_keys;
-mod aggregator_state;
-mod aggregator_state_entity;
-mod aggregator_state_iterator;
-mod keys_ref;
+use std::borrow::Borrow;
 
-pub use aggregator::Aggregator;
-pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;
-pub use aggregator_state::AggregatorState;
+use heapsize_::HeapSizeOf;
+
+use super::Meter;
+
+/// Size limit based on the heap size of each cache item.
+///
+/// Requires cache entries that implement [`HeapSizeOf`][1].
+///
+/// [1]: https://doc.servo.org/heapsize/trait.HeapSizeOf.html
+pub struct HeapSize;
+
+impl<K, V: HeapSizeOf> Meter<K, V> for HeapSize {
+    type Measure = usize;
+
+    fn measure<Q: ?Sized>(&self, _: &Q, item: &V) -> usize
+    where K: Borrow<Q> {
+        item.heap_size_of_children() + ::std::mem::size_of::<V>()
+    }
+}
