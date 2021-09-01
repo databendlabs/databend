@@ -23,7 +23,7 @@ use crate::sql::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_database_interpreter() -> Result<()> {
-    common_tracing::init_default_tracing();
+    common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::try_create_context()?;
 

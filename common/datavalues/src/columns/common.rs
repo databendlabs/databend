@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute::concat;
 use common_exception::Result;
 
 use crate::prelude::*;
+
 pub struct DataColumnCommon;
 
 impl DataColumnCommon {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -95,21 +97,30 @@ impl ConstantFoldingImpl {
         let input_fields = vec![DataField::new("_dummy", DataType::UInt8, false)];
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
+        let data_type = expression.to_data_type(&input_schema)?;
         let expression_executor = Self::expr_executor(&input_schema, expression)?;
         let dummy_columns = vec![DataColumn::Constant(DataValue::UInt8(Some(1)), 1)];
         let data_block = DataBlock::create(input_schema, dummy_columns);
         let executed_data_block = expression_executor.execute(&data_block)?;
 
-        ConstantFoldingImpl::convert_to_expression(origin_name, executed_data_block)
+        ConstantFoldingImpl::convert_to_expression(origin_name, executed_data_block, data_type)
     }
 
-    fn convert_to_expression(column_name: String, data_block: DataBlock) -> Result<Expression> {
+    fn convert_to_expression(
+        column_name: String,
+        data_block: DataBlock,
+        data_type: DataType,
+    ) -> Result<Expression> {
         assert_eq!(data_block.num_rows(), 1);
         assert_eq!(data_block.num_columns(), 1);
 
         let column_name = Some(column_name);
         let value = data_block.column(0).to_values()?.remove(0);
-        Ok(Expression::Literal { value, column_name })
+        Ok(Expression::Literal {
+            value,
+            column_name,
+            data_type,
+        })
     }
 }
 
@@ -171,7 +182,12 @@ impl PlanRewriter for ConstantFoldingImpl {
                 let new_expr = self.rewrite_expr(schema, expr)?;
                 Ok(ConstantFoldingImpl::create_sort(asc, nulls_first, new_expr))
             }
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let args = args
                     .iter()
                     .map(|expr| Self::rewrite_expr(self, schema, expr))
@@ -179,7 +195,13 @@ impl PlanRewriter for ConstantFoldingImpl {
 
                 let op = op.clone();
                 let distinct = *distinct;
-                Ok(Expression::AggregateFunction { op, distinct, args })
+                let params = params.clone();
+                Ok(Expression::AggregateFunction {
+                    op,
+                    distinct,
+                    params,
+                    args,
+                })
             }
             _ => Ok(origin.clone()),
         }

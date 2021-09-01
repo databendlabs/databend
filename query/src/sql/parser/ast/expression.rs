@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use super::Identifier;
 use super::Query;
-use crate::sql::parser::ast::write_identifier_vec;
+use crate::sql::parser::ast::display_identifier_vec;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
@@ -25,7 +25,11 @@ pub enum Expr {
     // Wildcard star
     Wildcard,
     // Column reference, with indirection like `table.column`
-    ColumnRef(Vec<Identifier>),
+    ColumnRef {
+        database: Option<Identifier>,
+        table: Option<Identifier>,
+        column: Identifier,
+    },
     // `IS NULL` expression
     IsNull(Box<Expr>),
     // `IS NOT NULL` expression
@@ -124,7 +128,7 @@ pub enum BinaryOperator {
     Minus,
     Multiply,
     Divide,
-    Modulus,
+    Modulo,
     StringConcat,
     // `>` operator
     Gt,
@@ -183,7 +187,7 @@ impl Display for BinaryOperator {
             BinaryOperator::Divide => {
                 write!(f, "/")
             }
-            BinaryOperator::Modulus => {
+            BinaryOperator::Modulo => {
                 write!(f, "%")
             }
             BinaryOperator::StringConcat => {
@@ -329,8 +333,23 @@ impl Display for Expr {
             Expr::Wildcard => {
                 write!(f, "*")?;
             }
-            Expr::ColumnRef(name) => {
-                write_identifier_vec(name, f)?;
+            Expr::ColumnRef {
+                database,
+                table,
+                column,
+            } => {
+                display_identifier_vec(
+                    f,
+                    vec![
+                        database.to_owned(),
+                        table.to_owned(),
+                        Some(column.to_owned()),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                )?;
             }
             Expr::IsNull(expr) => {
                 write!(f, "{} IS NULL", expr)?;

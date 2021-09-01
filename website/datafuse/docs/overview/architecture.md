@@ -11,7 +11,7 @@ Datafuse is intended for executing workloads with data stored in cloud storage s
 
 We design Datafuse with the following key functionalities in mind:
 
-1. **Elastic**  In Datafuse storage and compute resources can be scaled in/out on demand.
+1. **Elastic** In Datafuse storage and compute resources can dynamically scale up and down on demand.
 2. **Secure** All data files and network traffic in Datafuse is encrypted end-to-end, and provider *Role Based Access Control*  in SQL level.
 3. **User-friendly** Datafuse is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
 4. **Cost-efficient** Datafuse processes queries with high performance, and the user only pays for what is actually used.
@@ -85,6 +85,7 @@ and each cluster may consist of many nodes. Each node is a compute unit, and is 
 
 Node is the smallest unit of the compute layer, they can be registered as one cluster via namespace.
 Many clusters can attach the same database, so they can serve the query in parallel by different users.
+When you add new nodes to a cluster, the currently running computational tasks can be scaled(known as work-stealing) guarantee.
 
 The `Compute Layer` codes mainly in the `query` directory.
 

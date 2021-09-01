@@ -105,7 +105,7 @@ impl Processor for AggregatorFinalTransform {
 
                 let binary_array = block.column(idx).to_array()?;
                 let binary_array: &DFBinaryArray = binary_array.binary()?;
-                let array = binary_array.downcast_ref();
+                let array = binary_array.inner();
 
                 let mut data = array.value(0);
                 let s = funcs[idx].state_layout();

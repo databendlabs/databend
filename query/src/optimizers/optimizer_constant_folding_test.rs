@@ -80,7 +80,7 @@ mod tests {
                 name: "Projection hash const recursion",
                 query: "SELECT sipHash('test_string')",
                 expect: "\
-                Projection: sipHash(test_string):UInt64\
+                Projection: sipHash('test_string'):UInt64\
                 \n  Expression: 17123704338732264132:UInt64 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -96,7 +96,7 @@ mod tests {
                 name: "Projection strings const recursion",
                 query: "SELECT SUBSTRING('1234567890' FROM 3 FOR 3)",
                 expect: "\
-                Projection: substring(1234567890, 3, 3):Utf8\
+                Projection: substring('1234567890', 3, 3):Utf8\
                 \n  Expression: 345:Utf8 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
@@ -104,7 +104,7 @@ mod tests {
                 name: "Projection to type name const recursion",
                 query: "SELECT toTypeName('1234567890')",
                 expect: "\
-                Projection: toTypeName(1234567890):Utf8\
+                Projection: toTypeName('1234567890'):Utf8\
                 \n  Expression: Utf8:Utf8 (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },

@@ -17,11 +17,11 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow_flight::FlightData;
-use common_datavalues::prelude::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,13 +37,13 @@ use common_planners::TableOptions;
 use common_runtime::Runtime;
 use lru::LruCache;
 
-use crate::catalogs::meta_store_client::DBMetaStoreClient;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::impls::BackendClient;
+use crate::catalogs::Database;
+use crate::catalogs::TableMeta;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteTable;
 use crate::datasources::remote::StoreApis;
 use crate::datasources::remote::StoreApisProvider;
-use crate::datasources::Database;
 
 type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableMeta>>;
@@ -113,13 +113,13 @@ where T: 'static + StoreApis + Clone
             self.store_api_provider.clone(),
             TableOptions::new(),
         );
-        let tbl_meta = TableMeta::new(remote_table.into(), t_id);
+        let tbl_meta = TableMeta::create(remote_table.into(), t_id);
         Ok(tbl_meta)
     }
 }
 
 #[async_trait::async_trait]
-impl<T> DBMetaStoreClient for RemoteMetaStoreClient<T>
+impl<T> BackendClient for RemoteMetaStoreClient<T>
 where T: 'static + StoreApis + Clone
 {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
@@ -176,7 +176,7 @@ where T: 'static + StoreApis + Clone
             self.store_api_provider.clone(),
             TableOptions::new(),
         );
-        let tbl_meta = TableMeta::new(tbl.into(), reply.table_id);
+        let tbl_meta = TableMeta::create(tbl.into(), reply.table_id);
         Ok(Arc::new(tbl_meta))
     }
 
@@ -238,7 +238,7 @@ where T: 'static + StoreApis + Clone
             self.store_api_provider.clone(),
             TableOptions::new(),
         );
-        let tbl_meta = TableMeta::new(tbl.into(), reply.table_id);
+        let tbl_meta = TableMeta::create(tbl.into(), reply.table_id);
         let meta_id = tbl_meta.meta_id();
         let mut cache = self.table_meta_cache.lock();
         let res = Arc::new(tbl_meta);

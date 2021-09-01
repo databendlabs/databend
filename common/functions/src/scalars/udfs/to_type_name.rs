@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -48,7 +49,7 @@ impl Function for ToTypeNameFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let type_name = format!("{}", columns[0].data_type());
         Ok(DataColumn::Constant(
             DataValue::Utf8(Some(type_name)),

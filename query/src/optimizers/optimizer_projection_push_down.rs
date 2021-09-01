@@ -24,13 +24,15 @@ use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
+use common_planners::ExpressionPlan;
+use common_planners::ExpressionVisitor;
 use common_planners::FilterPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
-use common_planners::RewriteHelper;
+use common_planners::Recursion;
 use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
@@ -91,6 +93,14 @@ impl PlanRewriter for ProjectionPushDownImpl {
             .build()
     }
 
+    fn rewrite_expression(&mut self, plan: &ExpressionPlan) -> Result<PlanNode> {
+        self.collect_column_names_from_expr_vec(&plan.exprs)?;
+        let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+        PlanBuilder::from(&new_input)
+            .expression(&plan.exprs, &plan.desc)?
+            .build()
+    }
+
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         self.collect_column_names_from_expr(&plan.predicate)?;
         let new_input = self.rewrite_plan_node(&plan.input)?;
@@ -127,6 +137,30 @@ impl PlanRewriter for ProjectionPushDownImpl {
     }
 }
 
+struct RequireColumnsVisitor {
+    required_columns: HashSet<String>,
+}
+impl RequireColumnsVisitor {
+    pub fn new() -> Self {
+        Self {
+            required_columns: HashSet::new(),
+        }
+    }
+}
+
+impl ExpressionVisitor for RequireColumnsVisitor {
+    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
+        match expr {
+            Expression::Column(c) => {
+                let mut v = self;
+                v.required_columns.insert(c.clone());
+                Ok(Recursion::Continue(v))
+            }
+            _ => Ok(Recursion::Continue(self)),
+        }
+    }
+}
+
 impl ProjectionPushDownImpl {
     pub fn new() -> ProjectionPushDownImpl {
         ProjectionPushDownImpl {
@@ -138,23 +172,20 @@ impl ProjectionPushDownImpl {
 
     // Recursively walk a list of expression trees, collecting the unique set of column
     // names referenced in the expression
-    fn collect_column_names_from_expr_vec(&mut self, expr: &[Expression]) -> Result<()> {
-        expr.iter().fold(Ok(()), |acc, e| {
-            acc.and_then(|_| self.collect_column_names_from_expr(e))
-        })
+    fn collect_column_names_from_expr_vec(&mut self, exprs: &[Expression]) -> Result<()> {
+        for expr in exprs {
+            self.collect_column_names_from_expr(expr)?;
+        }
+        Ok(())
     }
 
     // Recursively walk an expression tree, collecting the unique set of column names
     // referenced in the expression
     fn collect_column_names_from_expr(&mut self, expr: &Expression) -> Result<()> {
-        RewriteHelper::expression_plan_children(expr)?
-            .iter()
-            .fold(Ok(()), |acc, e| {
-                acc.and_then(|_| self.collect_column_names_from_expr(e))
-            })?;
-
-        if let Expression::Column(name) = expr {
-            self.required_columns.insert(name.clone());
+        let mut visitor = RequireColumnsVisitor::new();
+        visitor = expr.accept(visitor)?;
+        for k in visitor.required_columns {
+            self.required_columns.insert(k);
         }
         Ok(())
     }
@@ -167,6 +198,7 @@ impl ProjectionPushDownImpl {
             .map(|name| schema.index_of(name))
             .filter_map(Result::ok)
             .collect();
+
         if projection.is_empty() {
             if self.has_projection {
                 // Ensure reading at lease one column

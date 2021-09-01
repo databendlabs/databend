@@ -38,7 +38,7 @@ impl Cluster {
     pub fn create_global(cfg: Config) -> Result<ClusterRef> {
         Ok(Arc::new(Cluster {
             nodes: Mutex::new(HashMap::new()),
-            local_port: Address::create(&cfg.flight_api_address)?.port(),
+            local_port: Address::create(&cfg.query.flight_api_address)?.port(),
         }))
     }
 

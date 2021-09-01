@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+
 use tempfile::tempdir;
 
 use crate::cmds::Config;
@@ -20,8 +22,13 @@ use crate::error::Result;
 
 #[test]
 fn test_status() -> Result<()> {
-    let mut conf = Config::create();
-
+    let mut conf = Config {
+        group: "foo".to_string(),
+        datafuse_dir: "/tmp/.datafuse".to_string(),
+        download_url: "".to_string(),
+        tag_url: "".to_string(),
+        clap: RefCell::new(Default::default()),
+    };
     let t = tempdir()?;
     conf.datafuse_dir = t.path().to_str().unwrap().to_string();
 

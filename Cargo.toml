@@ -20,6 +20,9 @@ members = [
     "common/stoppable",
     "common/management",
     "common/io",
+    "common/cache",
+    "common/dal",
+    "common/indexing",
 
     # Datafuse Query
     "query",
@@ -42,3 +45,5 @@ debug = true
 
 [profile.dev]
 split-debuginfo = "unpacked"
+
+

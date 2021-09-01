@@ -15,42 +15,19 @@
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use crate::configs::config::Password;
-use crate::configs::config::User;
 use crate::configs::Config;
+use crate::configs::LogConfig;
+use crate::configs::QueryConfig;
+use crate::configs::StoreConfig;
 
 // Default.
 #[test]
 fn test_default_config() -> Result<()> {
     let expect = Config {
-        log_level: "debug".to_string(),
-        log_dir: "./_logs".to_string(),
-        num_cpus: 8,
-        mysql_handler_host: "127.0.0.1".to_string(),
-        mysql_handler_port: 3307,
-        max_active_sessions: 256,
-        clickhouse_handler_host: "127.0.0.1".to_string(),
-        clickhouse_handler_port: 9000,
-        flight_api_address: "127.0.0.1:9090".to_string(),
-        http_api_address: "127.0.0.1:8080".to_string(),
-        metric_api_address: "127.0.0.1:7070".to_string(),
-        store_api_address: "127.0.0.1:9191".to_string(),
-        store_api_username: User {
-            store_api_username: "root".to_string(),
-        },
-        store_api_password: Password {
-            store_api_password: "root".to_string(),
-        },
+        log: LogConfig::default(),
+        store: StoreConfig::default(),
+        query: QueryConfig::default(),
         config_file: "".to_string(),
-        api_tls_server_cert: "".to_string(),
-        api_tls_server_key: "".to_string(),
-        rpc_tls_server_cert: "".to_string(),
-        rpc_tls_server_key: "".to_string(),
-        rpc_tls_query_server_root_ca_cert: "".to_string(),
-        rpc_tls_query_service_domain_name: "localhost".to_string(),
-        rpc_tls_store_server_root_ca_cert: "".to_string(),
-        rpc_tls_store_service_domain_name: "localhost".to_string(),
-        disable_remote_catalog: false,
     };
     let actual = Config::default();
     assert_eq!(actual, expect);
@@ -69,43 +46,43 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
-    std::env::set_var("STORE_API_ADDRESS", "1.2.3.4:1234");
-    std::env::set_var("STORE_API_USERNAME", "admin");
-    std::env::set_var("STORE_API_PASSWORD", "password!");
+    std::env::set_var("STORE_ADDRESS", "1.2.3.4:1234");
+    std::env::set_var("STORE_USERNAME", "admin");
+    std::env::set_var("STORE_PASSWORD", "password!");
     std::env::set_var("DISABLE_REMOTE_CATALOG", "0");
     std::env::remove_var("CONFIG_FILE");
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
-    assert_eq!("DEBUG", configured.log_level);
-    assert_eq!("0.0.0.0", configured.mysql_handler_host);
-    assert_eq!(3306, configured.mysql_handler_port);
-    assert_eq!(255, configured.max_active_sessions);
-    assert_eq!("1.2.3.4", configured.clickhouse_handler_host);
-    assert_eq!(9000, configured.clickhouse_handler_port);
+    assert_eq!("DEBUG", configured.log.log_level);
 
-    assert_eq!("1.2.3.4:9091", configured.flight_api_address);
-    assert_eq!("1.2.3.4:8081", configured.http_api_address);
-    assert_eq!("1.2.3.4:7071", configured.metric_api_address);
+    assert_eq!("0.0.0.0", configured.query.mysql_handler_host);
+    assert_eq!(3306, configured.query.mysql_handler_port);
+    assert_eq!(255, configured.query.max_active_sessions);
+    assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
+    assert_eq!(9000, configured.query.clickhouse_handler_port);
 
-    assert_eq!("1.2.3.4:1234", configured.store_api_address);
-    assert_eq!("admin", configured.store_api_username.to_string());
-    assert_eq!("password!", configured.store_api_password.to_string());
-    assert_eq!(false, configured.disable_remote_catalog);
+    assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
+    assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
+    assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+
+    assert_eq!("1.2.3.4:1234", configured.store.store_address);
+    assert_eq!("admin", configured.store.store_username.to_string());
+    assert_eq!("password!", configured.store.store_password.to_string());
 
     // clean up
     std::env::remove_var("QUERY_LOG_LEVEL");
     std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
     std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
-    std::env::remove_var("QUERY_MYSQL_HANDLER_THREAD_NUM");
+    std::env::remove_var("QUERY_MAX_ACTIVE_SESSIONS");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_HOST");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_PORT");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_THREAD_NUM");
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
-    std::env::remove_var("STORE_API_ADDRESS");
-    std::env::remove_var("STORE_API_USERNAME");
-    std::env::remove_var("STORE_API_PASSWORD");
+    std::env::remove_var("STORE_ADDRESS");
+    std::env::remove_var("STORE_USERNAME");
+    std::env::remove_var("STORE_PASSWORD");
     Ok(())
 }
 
@@ -114,7 +91,7 @@ fn test_env_config() -> Result<()> {
 #[ignore]
 fn test_args_config() -> Result<()> {
     let actual = Config::load_from_args();
-    assert_eq!("INFO", actual.log_level);
+    assert_eq!("INFO", actual.log.log_level);
     Ok(())
 }
 
@@ -133,17 +110,18 @@ fn test_config_file_not_found() -> Result<()> {
 #[test]
 #[ignore]
 fn test_file_config() -> Result<()> {
-    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
-    let path = std::env::current_dir()
-        .unwrap()
-        .join("conf/datafuse_query_config_spec.toml")
-        .display()
-        .to_string();
+    let toml_str = r#"
+[log_config]
+log_level = "ERROR"
+log_dir = "./_logs"
+ "#;
 
-    let actual = Config::load_from_toml(path.as_str())?;
-    assert_eq!("INFO", actual.log_level);
+    let actual = Config::load_from_toml_str(toml_str)?;
+    assert_eq!("INFO", actual.log.log_level);
+
+    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
     let env = Config::load_from_env(&actual)?;
-    assert_eq!("INFO", env.log_level);
+    assert_eq!("INFO", env.log.log_level);
     std::env::remove_var("QUERY_LOG_LEVEL");
     Ok(())
 }
@@ -155,12 +133,12 @@ fn test_env_file_config() -> Result<()> {
     std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
     let config_path = std::env::current_dir()
         .unwrap()
-        .join("conf/datafuse_query_config_spec.toml")
+        .join("../scripts/deploy/config/datafuse-query-node-1.toml")
         .display()
         .to_string();
     std::env::set_var("CONFIG_FILE", config_path);
     let config = Config::load_from_env(&Config::default())?;
-    assert_eq!(config.log_level, "INFO");
+    assert_eq!(config.log.log_level, "INFO");
     std::env::remove_var("QUERY_LOG_LEVEL");
     std::env::remove_var("CONFIG_FILE");
     Ok(())

@@ -22,6 +22,7 @@ use common_runtime::tokio::sync::oneshot;
 use common_runtime::tokio::sync::oneshot::Receiver;
 use common_runtime::tokio::sync::oneshot::Sender;
 use common_tracing::tracing;
+use common_tracing::tracing::Instrument;
 use tonic::transport;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -57,18 +58,21 @@ impl StoreServer {
         })?;
 
         let fut = self.serve(stop_rx, fin_tx, tls_conf);
-        tokio::spawn(async move {
-            // TODO(xp): handle errors.
-            // TODO(xp): move server building up actions out of serve(). errors should be caught.
-            let res = fut.await;
-            tracing::info!("StoreServer serve res: {:?}", res);
-        });
+        tokio::spawn(
+            async move {
+                // TODO(xp): handle errors.
+                // TODO(xp): move server building up actions out of serve(). errors should be caught.
+                let res = fut.await;
+                tracing::info!("StoreServer serve res: {:?}", res);
+            }
+            .instrument(tracing::debug_span!("spawn-rpc")),
+        );
 
         Ok((stop_tx, fin_rx))
     }
 
     /// Start serving DatafuseStore. It does not return until StoreServer is stopped.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, stop_rx, fin_tx))]
     pub async fn serve(
         self,
         stop_rx: Receiver<()>,

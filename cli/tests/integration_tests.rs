@@ -48,6 +48,7 @@ macro_rules! contains_all {
 }
 
 #[test]
+#[ignore]
 fn basic() {
     fusectl()
         .arg("--help")
@@ -58,6 +59,7 @@ fn basic() {
 }
 
 #[test]
+#[ignore]
 fn version() {
     fusectl()
         .arg("version")
@@ -74,6 +76,7 @@ fn version() {
 }
 
 #[test]
+#[ignore]
 fn package() -> Result<(), CliError> {
     let tmp_dir = TempDir::new()?;
     // fetch

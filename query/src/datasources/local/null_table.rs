@@ -30,7 +30,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
-use crate::datasources::Table;
+use crate::catalogs::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct NullTable {

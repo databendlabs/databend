@@ -40,6 +40,8 @@ jobs:
 
       - name: Build
         run: cargo build --verbose
+        env:
+          CARGO_INCREMENTAL: '0'
 
       - name: Run Stateless Tests with Cluster mode
         run: |

@@ -25,9 +25,9 @@ use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::Table;
 use crate::datasources::local::CsvTableStream;
 use crate::datasources::Common;
-use crate::datasources::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct CsvTable {

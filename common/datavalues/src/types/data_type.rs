@@ -38,13 +38,16 @@ pub enum DataType {
     Float64,
     Utf8,
     /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in days (32 bits).
+    /// in days (16 bits), it's physical type is UInt16
+    Date16,
+    /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
+    /// in days (32 bits), it's physical type is UInt32
     Date32,
-    /// A 64-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in milliseconds (64 bits).
-    Date64,
-    Timestamp(TimeUnit, Option<String>),
-    Interval(IntervalUnit),
+
+    /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
+    /// in seconds, it's physical type is UInt32
+    DateTime32,
+
     List(Box<DataField>),
     Struct(Vec<DataField>),
     Binary,
@@ -113,10 +116,9 @@ impl DataType {
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
             Utf8 => ArrowDataType::LargeUtf8,
-            Date32 => ArrowDataType::Date32,
-            Date64 => ArrowDataType::Date64,
-            Timestamp(tu, f) => ArrowDataType::Timestamp(tu.to_arrow(), f.clone()),
-            Interval(tu) => ArrowDataType::Interval(tu.to_arrow()),
+            Date16 => ArrowDataType::UInt16,
+            Date32 => ArrowDataType::UInt32,
+            DateTime32 => ArrowDataType::UInt32,
             List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
@@ -153,15 +155,6 @@ impl From<&ArrowDataType> for DataType {
                 let f: DataField = (f.as_ref()).into();
                 DataType::List(Box::new(f))
             }
-            ArrowDataType::Date32 => DataType::Date32,
-            ArrowDataType::Date64 => DataType::Date64,
-
-            ArrowDataType::Timestamp(tu, f) => {
-                DataType::Timestamp(TimeUnit::from_arrow(tu), f.clone())
-            }
-
-            ArrowDataType::Interval(fu) => DataType::Interval(IntervalUnit::from_arrow(fu)),
-
             ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::Utf8,
             ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::Binary,
 

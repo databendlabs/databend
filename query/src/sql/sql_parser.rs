@@ -22,8 +22,10 @@ use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
 use common_planners::TableEngineType;
 use metrics::histogram;
+use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
+use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::TableConstraint;
@@ -167,11 +169,28 @@ impl<'a> DfParser<'a> {
                     }
                     Keyword::SHOW => {
                         self.parser.next_token();
-
                         if self.consume_token("TABLES") {
-                            Ok(DfStatement::ShowTables(DfShowTables))
+                            let tok = self.parser.next_token();
+                            match &tok {
+                                Token::EOF | Token::SemiColon => {
+                                    Ok(DfStatement::ShowTables(DfShowTables::All))
+                                }
+                                Token::Word(w) => match w.keyword {
+                                    Keyword::LIKE => Ok(DfStatement::ShowTables(
+                                        DfShowTables::Like(self.parser.parse_identifier()?),
+                                    )),
+                                    Keyword::WHERE => Ok(DfStatement::ShowTables(
+                                        DfShowTables::Where(self.parser.parse_expr()?),
+                                    )),
+                                    Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(
+                                        DfShowTables::FromOrIn(self.parser.parse_object_name()?),
+                                    )),
+                                    _ => self.expected("like or where", tok),
+                                },
+                                _ => self.expected("like or where", tok),
+                            }
                         } else if self.consume_token("DATABASES") {
-                            Ok(DfStatement::ShowDatabases(DfShowDatabases))
+                            self.parse_show_databases()
                         } else if self.consume_token("SETTINGS") {
                             Ok(DfStatement::ShowSettings(DfShowSettings))
                         } else if self.consume_token("CREATE") {
@@ -227,6 +246,38 @@ impl<'a> DfParser<'a> {
         let statement = Box::new(self.parser.parse_statement()?);
         let explain_plan = DfExplain { typ, statement };
         Ok(DfStatement::Explain(explain_plan))
+    }
+
+    // parse show databases where database = xxx or where database
+    fn parse_show_databases(&mut self) -> Result<DfStatement, ParserError> {
+        if self.parser.parse_keyword(Keyword::WHERE) {
+            let mut expr = self.parser.parse_expr()?;
+
+            expr = self.replace_show_database(expr);
+
+            Ok(DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(expr),
+            }))
+        } else if self.parser.parse_keyword(Keyword::LIKE) {
+            let pattern = self.parser.parse_expr()?;
+
+            let like_expr = Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: BinaryOperator::Like,
+                right: Box::new(pattern),
+            };
+            Ok(DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: Some(like_expr),
+            }))
+        } else if self.parser.peek_token() == Token::EOF
+            || self.parser.peek_token() == Token::SemiColon
+        {
+            Ok(DfStatement::ShowDatabases(DfShowDatabases {
+                where_opt: None,
+            }))
+        } else {
+            self.expected("where or like", self.parser.peek_token())
+        }
     }
 
     // This is a copy of the equivalent implementation in sqlparser.
@@ -539,6 +590,33 @@ impl<'a> DfParser<'a> {
             true
         } else {
             false
+        }
+    }
+
+    fn replace_show_database(&self, expr: Expr) -> Expr {
+        match expr {
+            Expr::BinaryOp { left, op, right } => {
+                let left_expr = match *left {
+                    Expr::Identifier(ref v) if v.value.to_uppercase() == *"DATABASE" => {
+                        Expr::Identifier(Ident::new("name"))
+                    }
+                    _ => self.replace_show_database(*left),
+                };
+
+                let right_expr = match *right {
+                    Expr::Identifier(ref v) if v.value.to_uppercase() == *"DATABASE" => {
+                        Expr::Identifier(Ident::new("name"))
+                    }
+                    _ => self.replace_show_database(*right),
+                };
+
+                Expr::BinaryOp {
+                    left: Box::new(left_expr),
+                    op,
+                    right: Box::new(right_expr),
+                }
+            }
+            _ => expr,
         }
     }
 }

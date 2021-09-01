@@ -30,7 +30,7 @@ impl DataBlock {
         let mut scattered_columns = Vec::with_capacity(scatter_size);
 
         for column_index in 0..columns_size {
-            let mut indices = array.into_no_null_iter();
+            let mut indices = array.into_no_null_iter().copied();
 
             let columns = unsafe {
                 block

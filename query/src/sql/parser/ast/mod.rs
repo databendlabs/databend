@@ -33,7 +33,7 @@ pub struct Identifier {
     pub quote: Option<char>,
 }
 
-fn write_identifier_vec(name: &[Identifier], f: &mut Formatter<'_>) -> std::fmt::Result {
+fn display_identifier_vec(f: &mut Formatter<'_>, name: &[Identifier]) -> std::fmt::Result {
     for i in 0..name.len() {
         write!(f, "{}", name[i])?;
         if i != name.len() - 1 {

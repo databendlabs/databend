@@ -30,7 +30,7 @@ impl<Key, Entity: HashTableEntity<Key>> HashTableIter<Key, Entity> {
         capacity: isize,
         entities: *mut Entity,
         zero_entity: Option<*mut Entity>,
-    ) -> impl Iterator<Item = *mut Entity> {
+    ) -> Self {
         Self {
             idx: -2,
             capacity,

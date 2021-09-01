@@ -34,7 +34,7 @@ use crossbeam::channel::bounded;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
-use crate::datasources::Table;
+use crate::catalogs::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct ParquetTable {
@@ -80,6 +80,7 @@ fn read_file(
         Some(projection.to_vec()),
         None,
         Arc::new(|_, _| true),
+        None,
     )?;
 
     for maybe_batch in reader {
