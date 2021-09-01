@@ -54,6 +54,13 @@ pub fn is_floating(dt: &DataType) -> bool {
     matches!(dt, DataType::Float32 | DataType::Float64)
 }
 
+pub fn is_date_or_date_time(dt: &DataType) -> bool {
+    matches!(
+        dt,
+        DataType::Date16 | DataType::Date32 | DataType::DateTime32
+    )
+}
+
 pub fn is_integer(dt: &DataType) -> bool {
     is_numeric(dt) && !is_floating(dt)
 }
@@ -251,6 +258,43 @@ pub fn numerical_arithmetic_coercion(
             construct_numeric_type(true, has_float, next_size(max_size))
         }
         DataValueArithmeticOperator::Div => Ok(DataType::Float64),
+    }
+}
+
+#[inline]
+pub fn datetime_arithmetic_coercion(
+    op: &DataValueArithmeticOperator,
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> Result<DataType> {
+    let e = Result::Err(ErrorCode::BadDataValueType(format!(
+        "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+        lhs_type, op, rhs_type
+    )));
+
+    if !is_date_or_date_time(lhs_type) && !is_date_or_date_time(rhs_type) {
+        return e;
+    }
+
+    let mut a = lhs_type.clone();
+    let mut b = rhs_type.clone();
+    if !is_date_or_date_time(&a) {
+        a = rhs_type.clone();
+        b = lhs_type.clone();
+    }
+
+    match op {
+        DataValueArithmeticOperator::Plus => Ok(a),
+
+        DataValueArithmeticOperator::Minus => {
+            if is_numeric(&b) {
+                Ok(a)
+            } else {
+                // Date minus Date or DateTime minus DateTime
+                Ok(DataType::Int32)
+            }
+        }
+        _ => e,
     }
 }
 

@@ -25,8 +25,8 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
-use crate::datasources::Table;
+use crate::catalogs::Catalog;
+use crate::catalogs::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct TablesTable {
@@ -95,16 +95,23 @@ impl Table for TablesTable {
         ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let database_tables = ctx.get_datasource().get_all_tables()?;
+        let databases = ctx.get_catalog().get_databases()?;
+        let mut database_tables = vec![];
+        for database in databases {
+            for table in database.get_tables()? {
+                let name = database.name().to_string();
+                database_tables.push((name, table));
+            }
+        }
 
         let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
         let names: Vec<&str> = database_tables
             .iter()
-            .map(|(_, v)| v.datasource().name())
+            .map(|(_, v)| v.raw().name())
             .collect();
         let engines: Vec<&str> = database_tables
             .iter()
-            .map(|(_, v)| v.datasource().engine())
+            .map(|(_, v)| v.raw().engine())
             .collect();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![

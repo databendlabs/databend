@@ -46,8 +46,8 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
+use crate::catalogs::TablePtr;
 use crate::clusters::Node;
-use crate::datasources::TablePtr;
 use crate::sessions::DatafuseQueryContext;
 use crate::sessions::DatafuseQueryContextRef;
 
@@ -782,7 +782,7 @@ impl PlanScheduler {
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
         let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
-        let table = table_meta.datasource();
+        let table = table_meta.raw();
 
         match table.is_local() {
             true => self.visit_local_data_source(plan),

@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -44,8 +45,8 @@ pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn merge_result(&mut self) -> Result<DataValue>;
 }
 
-struct NumericState<T: DFNumericType> {
-    pub value: Option<T::Native>,
+struct NumericState<T: DFPrimitiveType> {
+    pub value: Option<T>,
 }
 
 struct Utf8State {
@@ -54,12 +55,11 @@ struct Utf8State {
 
 impl<T> NumericState<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::PartialOrd + Clone + BinarySer + BinaryDe,
-    Option<T::Native>: Into<DataValue>,
+    T: DFPrimitiveType,
+    Option<T>: Into<DataValue>,
 {
     #[inline]
-    fn merge_value(&mut self, other: T::Native, is_min: bool) {
+    fn merge_value(&mut self, other: T, is_min: bool) {
         match &self.value {
             Some(a) => {
                 let ord = a.partial_cmp(&other);
@@ -77,9 +77,8 @@ where
 
 impl<T> AggregateMinMaxState for NumericState<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::PartialOrd + Clone + BinarySer + BinaryDe + DFTryFrom<DataValue>,
-    Option<T::Native>: Into<DataValue>,
+    T: DFPrimitiveType,
+    Option<T>: Into<DataValue>,
 {
     fn default() -> Self {
         Self { value: None }
@@ -92,8 +91,7 @@ where
         _rows: usize,
         is_min: bool,
     ) -> Result<()> {
-        let array: &DataArray<T> = series.static_cast();
-        let array = array.downcast_ref();
+        let array: &DFPrimitiveArray<T> = series.static_cast();
         array.into_iter().zip(places.iter()).for_each(|(x, place)| {
             if let Some(x) = x {
                 let place = place.next(offset);
@@ -106,7 +104,7 @@ where
 
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()> {
         let c = if is_min { series.min() } else { series.max() }?;
-        let other: Result<T::Native> = DFTryFrom::try_from(c);
+        let other: Result<T> = DFTryFrom::try_from(c);
         if let Ok(other) = other {
             self.merge_value(other, is_min);
         }
@@ -124,7 +122,7 @@ where
         self.value.serialize_to_buf(writer)
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<T::Native>::deserialize(reader)?;
+        self.value = Option::<T>::deserialize(reader)?;
         Ok(())
     }
 
@@ -161,8 +159,7 @@ impl AggregateMinMaxState for Utf8State {
         _rows: usize,
         is_min: bool,
     ) -> Result<()> {
-        let array: &DataArray<Utf8Type> = series.static_cast();
-        let array = array.downcast_ref();
+        let array: &DFUtf8Array = series.static_cast();
         array.into_iter().zip(places.iter()).for_each(|(x, place)| {
             let place = place.next(offset);
             if let Some(x) = x {

@@ -28,11 +28,33 @@ pub enum DataColumn {
     Constant(DataValue, usize),
 }
 
+#[derive(Clone, Debug)]
+pub struct DataColumnWithField {
+    pub(crate) column: DataColumn,
+    pub(crate) field: DataField,
+}
+impl DataColumnWithField {
+    pub fn new(column: DataColumn, field: DataField) -> Self {
+        Self { column, field }
+    }
+    pub fn column(&self) -> &DataColumn {
+        &self.column
+    }
+    pub fn field(&self) -> &DataField {
+        &self.field
+    }
+    pub fn data_type(&self) -> &DataType {
+        self.field.data_type()
+    }
+}
+
+pub type DataColumnsWithField = [DataColumnWithField];
+
 impl DataColumn {
     #[inline]
     pub fn data_type(&self) -> DataType {
         match self {
-            DataColumn::Array(array) => array.data_type(),
+            DataColumn::Array(array) => array.data_type().clone(),
             DataColumn::Constant(v, _) => v.data_type(),
         }
     }

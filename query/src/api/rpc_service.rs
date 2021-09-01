@@ -49,7 +49,14 @@ impl RpcService {
     }
 
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
-        let listener = TcpListener::bind(listening).await?;
+        let listener = TcpListener::bind(listening).await.map_err(|e| {
+            ErrorCode::TokioError(format!(
+                "{{{}:{}}} {}",
+                listening.ip().to_string(),
+                listening.port().to_string(),
+                e
+            ))
+        })?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
@@ -62,8 +69,8 @@ impl RpcService {
     }
 
     async fn server_tls_config(conf: &Config) -> Result<ServerTlsConfig> {
-        let cert = tokio::fs::read(conf.rpc_tls_server_cert.as_str()).await?;
-        let key = tokio::fs::read(conf.rpc_tls_server_key.as_str()).await?;
+        let cert = tokio::fs::read(conf.query.rpc_tls_server_cert.as_str()).await?;
+        let key = tokio::fs::read(conf.query.rpc_tls_server_key.as_str()).await?;
         let server_identity = Identity::from_pem(cert, key);
         let tls_conf = ServerTlsConfig::new().identity(server_identity);
         Ok(tls_conf)

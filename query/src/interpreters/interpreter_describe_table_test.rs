@@ -53,7 +53,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
                 "| b     | Int32  | NO   |",
                 "| c     | Utf8   | NO   |",
                 "| d     | Int16  | NO   |",
-                "| e     | Date32 | NO   |",
+                "| e     | Date16 | NO   |",
                 "+-------+--------+------+",
             ];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

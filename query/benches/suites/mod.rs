@@ -17,8 +17,8 @@ use common_planners::PlanNode;
 use common_runtime::tokio;
 use criterion::Criterion;
 use datafuse_query::interpreters::SelectInterpreter;
-use datafuse_query::sessions::SessionManager;
 use datafuse_query::sql::PlanParser;
+use datafuse_query::tests::try_create_session_mgr;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
@@ -27,7 +27,7 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-    let session_manager = SessionManager::try_create(1)?;
+    let session_manager = try_create_session_mgr(Some(1))?;
     let executor_session = session_manager.create_session("Benches")?;
     let ctx = executor_session.create_context();
 

@@ -22,15 +22,15 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::impls::database_catalog::SYS_TBL_ID_BEGIN;
-use crate::catalogs::impls::database_catalog::SYS_TBL_ID_END;
-use crate::catalogs::utils::InMemoryMetas;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::impls::SYS_TBL_ID_BEGIN;
+use crate::catalogs::impls::SYS_TBL_ID_END;
+use crate::catalogs::Database;
+use crate::catalogs::InMemoryMetas;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
+use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableMeta;
 use crate::datasources::system;
-use crate::datasources::Database;
-use crate::datasources::Table;
-use crate::datasources::TableFunction;
 
 pub struct SystemDatabase {
     tables: InMemoryMetas,
@@ -68,8 +68,8 @@ impl SystemDatabase {
         ];
         let tbl_meta_list = table_list
             .iter()
-            .map(|t| TableMeta::new(t.clone(), next_id()));
-        let mut tables = InMemoryMetas::new();
+            .map(|t| TableMeta::create(t.clone(), next_id()));
+        let mut tables = InMemoryMetas::create();
         for tbl in tbl_meta_list.into_iter() {
             tables.insert(tbl);
         }
@@ -85,7 +85,7 @@ impl SystemDatabase {
             let name = tbl_func.name();
             table_functions.insert(
                 name.to_string(),
-                Arc::new(TableFunctionMeta::new(
+                Arc::new(TableFunctionMeta::create(
                     tbl_func.clone(),
                     tables
                         .name2meta
@@ -103,7 +103,6 @@ impl SystemDatabase {
     }
 }
 
-#[async_trait::async_trait]
 impl Database for SystemDatabase {
     fn name(&self) -> &str {
         "system"
@@ -123,6 +122,10 @@ impl Database for SystemDatabase {
                 ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
             })?;
         Ok(table.clone())
+    }
+
+    fn exists_table(&self, table_name: &str) -> Result<bool> {
+        Ok(self.tables.name2meta.get(table_name).is_some())
     }
 
     fn get_table_by_id(
@@ -145,13 +148,13 @@ impl Database for SystemDatabase {
         Ok(self.table_functions.values().cloned().collect())
     }
 
-    async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         Result::Err(ErrorCode::UnImplement(
             "Cannot create table for system database",
         ))
     }
 
-    async fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
         Result::Err(ErrorCode::UnImplement(
             "Cannot drop table for system database",
         ))

@@ -34,7 +34,7 @@ use crossbeam::channel::bounded;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
-use crate::datasources::Table;
+use crate::catalogs::Table;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct ParquetTable {

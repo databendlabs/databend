@@ -20,7 +20,6 @@ use common_exception::Result;
 use crate::arrays::get_list_builder;
 use crate::arrays::BinaryArrayBuilder;
 use crate::arrays::BooleanArrayBuilder;
-use crate::arrays::DataArray;
 use crate::arrays::PrimitiveArrayBuilder;
 use crate::arrays::Utf8ArrayBuilder;
 use crate::prelude::*;
@@ -54,8 +53,8 @@ pub trait ArrayScatter: Debug {
     }
 }
 
-impl<T> ArrayScatter for DataArray<T>
-where T: DFNumericType
+impl<T> ArrayScatter for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
     unsafe fn scatter_unchecked(
         &self,
@@ -65,7 +64,7 @@ where T: DFNumericType
     where
         Self: std::marker::Sized,
     {
-        let array = self.downcast_ref();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
@@ -105,7 +104,7 @@ impl ArrayScatter for DFUtf8Array {
     where
         Self: std::marker::Sized,
     {
-        let array = self.downcast_ref();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
@@ -145,7 +144,7 @@ impl ArrayScatter for DFBooleanArray {
     where
         Self: std::marker::Sized,
     {
-        let array = self.downcast_ref();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
@@ -189,7 +188,7 @@ impl ArrayScatter for DFListArray {
 
         let capacity = get_iter_capacity(&indices);
         for _i in 0..scattered_size {
-            let builder = get_list_builder(&self.sub_data_type(), capacity * 5, capacity);
+            let builder = get_list_builder(self.sub_data_type(), capacity * 5, capacity);
 
             builders.push(builder);
         }
@@ -236,7 +235,7 @@ impl ArrayScatter for DFBinaryArray {
             builders.push(builder);
         }
 
-        let binary_data = self.downcast_ref();
+        let binary_data = self.inner();
         for (i, index) in indices.enumerate() {
             if !self.is_null(i as usize) {
                 builders[index as usize].append_value(binary_data.value(i as usize));

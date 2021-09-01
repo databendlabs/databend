@@ -25,7 +25,7 @@ fn test_buf_read() {
     assert_eq!(String::from_utf8_lossy(bs), "bytes   helloworld");
 
     let mut vec = vec![];
-    buffer.util(b's', &mut vec).unwrap();
+    buffer.until(b's', &mut vec).unwrap();
     assert_eq!(String::from_utf8_lossy(buffer.buffer()), "   helloworld");
     assert_eq!(String::from_utf8_lossy(&vec), "bytes".to_string());
 

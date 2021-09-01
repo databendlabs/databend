@@ -22,7 +22,7 @@ async-trait = "0.1"
 async-compat = "0.2.1"
 bytes = "1"
 futures = "0.3"
-hyper = { version = "0.14.5", features = ["stream"] }
+hyper = { version = "0.14.12", features = ["stream"] }
 log = "0.4"
 rusoto_s3 = "0.47.0"
 rusoto_core = "0.47.0"

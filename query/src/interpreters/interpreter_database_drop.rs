@@ -19,7 +19,7 @@ use common_planners::DropDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::DatafuseQueryContextRef;
@@ -45,8 +45,8 @@ impl Interpreter for DropDatabaseInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_datasource();
-        datasource.drop_database(self.plan.clone()).await?;
+        let datasource = self.ctx.get_catalog();
+        datasource.drop_database(self.plan.clone())?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

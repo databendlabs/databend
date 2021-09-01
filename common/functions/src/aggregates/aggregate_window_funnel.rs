@@ -17,6 +17,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Sub;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
@@ -48,7 +49,7 @@ where T: Ord
         + Sync
         + 'static
 {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             events_list: Vec::new(),
             sorted: true,
@@ -169,9 +170,9 @@ pub struct AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
-    T: DFNumericType,
-    T::Native: Ord
-        + Sub<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Ord
+        + Sub<Output = T>
         + AsPrimitive<u64>
         + BinarySer
         + BinaryDe
@@ -193,27 +194,27 @@ where
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(AggregateWindowFunnelState::<T::Native>::new);
+        place.write(AggregateWindowFunnelState::<T>::new);
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateWindowFunnelState<T::Native>>()
+        Layout::new::<AggregateWindowFunnelState<T>>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
         let mut darrays = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let darray = arrays[i + 1].bool()?.downcast_ref();
+            let darray = arrays[i + 1].bool()?.inner();
             darrays.push(darray);
         }
 
-        let tarray: &DataArray<T> = arrays[0].static_cast();
-        let state = place.get::<AggregateWindowFunnelState<T::Native>>();
+        let tarray: &DFPrimitiveArray<T> = arrays[0].static_cast();
+        let state = place.get::<AggregateWindowFunnelState<T>>();
         for (row, timestmap) in tarray.into_iter().enumerate() {
             if let Some(timestmap) = timestmap {
                 for (i, arr) in darrays.iter().enumerate().take(self.event_size) {
                     if arr.value(row) {
-                        state.add(timestmap, (i + 1) as u8);
+                        state.add(*timestmap, (i + 1) as u8);
                     }
                 }
             }
@@ -230,16 +231,16 @@ where
     ) -> Result<()> {
         let mut darrays = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let darray = arrays[i + 1].bool()?.downcast_ref();
+            let darray = arrays[i + 1].bool()?.inner();
             darrays.push(darray);
         }
-        let tarray: &DataArray<T> = arrays[0].static_cast();
+        let tarray: &DFPrimitiveArray<T> = arrays[0].static_cast();
         for ((row, timestmap), place) in tarray.into_iter().enumerate().zip(places.iter()) {
             if let Some(timestmap) = timestmap {
-                let state = (place.next(offset)).get::<AggregateWindowFunnelState<T::Native>>();
+                let state = (place.next(offset)).get::<AggregateWindowFunnelState<T>>();
                 for (i, arr) in darrays.iter().enumerate().take(self.event_size) {
                     if arr.value(row) {
-                        state.add(timestmap, (i + 1) as u8);
+                        state.add(*timestmap, (i + 1) as u8);
                     }
                 }
             }
@@ -248,18 +249,18 @@ where
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T::Native>>();
+        let state = place.get::<AggregateWindowFunnelState<T>>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T::Native>>();
+        let state = place.get::<AggregateWindowFunnelState<T>>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateWindowFunnelState<T::Native>>();
-        let state = place.get::<AggregateWindowFunnelState<T::Native>>();
+        let rhs = rhs.get::<AggregateWindowFunnelState<T>>();
+        let state = place.get::<AggregateWindowFunnelState<T>>();
 
         state.merge(rhs);
         Ok(())
@@ -279,9 +280,9 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateWindowFunnelFunction<T>
 where
-    T: DFNumericType,
-    T::Native: Ord
-        + Sub<Output = T::Native>
+    T: DFPrimitiveType,
+    T: Ord
+        + Sub<Output = T>
         + AsPrimitive<u64>
         + BinarySer
         + BinaryDe
@@ -311,7 +312,7 @@ where
     /// If found, returns the max event level, else return 0.
     /// The Algorithm complexity is O(n).
     fn get_event_level(&self, place: StateAddr) -> u8 {
-        let state = place.get::<AggregateWindowFunnelState<T::Native>>();
+        let state = place.get::<AggregateWindowFunnelState<T>>();
         if state.events_list.is_empty() {
             return 0;
         }
@@ -321,7 +322,7 @@ where
 
         state.sort();
 
-        let mut events_timestamp: Vec<Option<T::Native>> = Vec::with_capacity(self.event_size);
+        let mut events_timestamp: Vec<Option<T>> = Vec::with_capacity(self.event_size);
         for _i in 0..self.event_size {
             events_timestamp.push(None);
         }

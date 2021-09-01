@@ -28,11 +28,12 @@ pub fn try_create_context() -> Result<DatafuseQueryContextRef> {
     let config = Config::default();
     try_create_context_with_conf(config)
 }
+
 pub fn try_create_context_with_conf(mut config: Config) -> Result<DatafuseQueryContextRef> {
     let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
-    config.log_dir = env::current_dir()?
+    config.log.log_dir = env::current_dir()?
         .join("../tests/data/logs")
         .display()
         .to_string();

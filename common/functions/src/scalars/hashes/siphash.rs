@@ -58,8 +58,9 @@ impl Function for SipHashFunction {
             | DataType::UInt64
             | DataType::Float32
             | DataType::Float64
+            | DataType::Date16
             | DataType::Date32
-            | DataType::Date64
+            | DataType::DateTime32
             | DataType::Utf8
             | DataType::Binary => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCode::BadArguments(format!(
@@ -73,8 +74,8 @@ impl Function for SipHashFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
-        let series = columns[0].to_minimal_array()?;
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let series = columns[0].column().to_minimal_array()?;
         let hasher = DFHasher::SipHasher(DefaultHasher::new());
         let res: DataColumn = series.vec_hash(hasher)?.into();
         Ok(res.resize_constant(input_rows))

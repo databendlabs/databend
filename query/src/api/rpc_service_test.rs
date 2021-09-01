@@ -39,8 +39,8 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 async fn test_tls_rpc_server() -> Result<()> {
     // setup
     let mut conf = Config::default();
-    conf.rpc_tls_server_key = TEST_SERVER_KEY.to_owned();
-    conf.rpc_tls_server_cert = TEST_SERVER_CERT.to_owned();
+    conf.query.rpc_tls_server_key = TEST_SERVER_KEY.to_owned();
+    conf.query.rpc_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
     let cluster = Cluster::create_global(conf.clone())?;
     let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
@@ -84,8 +84,8 @@ async fn test_tls_rpc_server() -> Result<()> {
 async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     // setup, invalid cert locations
     let mut conf = Config::default();
-    conf.rpc_tls_server_key = "../tests/data/certs/none.key".to_owned();
-    conf.rpc_tls_server_cert = "../tests/data/certs/none.pem".to_owned();
+    conf.query.rpc_tls_server_key = "../tests/data/certs/none.key".to_owned();
+    conf.query.rpc_tls_server_cert = "../tests/data/certs/none.pem".to_owned();
 
     let cluster = Cluster::create_global(conf.clone())?;
     let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;

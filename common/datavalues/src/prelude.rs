@@ -13,8 +13,6 @@
 // limitations under the License.
 
 //! Everything you need to get started with this crate.
-pub use std::sync::Arc;
-
 pub use crate::arrays::to_primitive;
 // arrays
 pub use crate::arrays::*;
@@ -22,6 +20,8 @@ pub use crate::bit_util::*;
 // columns
 pub use crate::columns::DataColumn;
 pub use crate::columns::DataColumnCommon;
+pub use crate::columns::DataColumnWithField;
+pub use crate::columns::DataColumnsWithField;
 pub use crate::data_array_filter::*;
 pub use crate::data_value::DFTryFrom;
 // series
