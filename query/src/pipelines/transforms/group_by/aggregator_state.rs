@@ -32,6 +32,9 @@ use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedK
 use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
+use crate::pipelines::transforms::group_by::aggregator_layout::AggregatorLayout;
+use crate::pipelines::transforms::group_by::AggregatorParams;
+use common_functions::aggregates::StateAddr;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
 ///
@@ -42,15 +45,15 @@ use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 pub trait AggregatorState<Method: HashMethod> {
     type Key;
     type Entity: StateEntity<Self::Key>;
-    type Iterator: Iterator<Item = *mut Self::Entity>;
+    type Iterator: Iterator<Item=*mut Self::Entity>;
 
     fn len(&self) -> usize;
 
     fn iter(&self) -> Self::Iterator;
 
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
-
     fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
+
+    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr;
 }
 
 /// The fixed length array is used as the data structure to locate the key by subscript
@@ -112,8 +115,16 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        self.area.alloc_layout(layout)
+    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(layout.layout).into();
+
+        for idx in 0..layout.offsets_aggregate_states.len() {
+            let aggr_state = layout.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
     }
 
     #[inline(always)]
@@ -162,13 +173,21 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        self.area.alloc_layout(layout)
+    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
+        self.data.insert_key(key, inserted)
     }
 
     #[inline(always)]
-    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.data.insert_key(key, inserted)
+    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(layout.layout).into();
+
+        for idx in 0..layout.offsets_aggregate_states.len() {
+            let aggr_state = layout.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
     }
 }
 
@@ -191,9 +210,9 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         self.data_state_map.iter()
     }
 
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        self.state_area.alloc_layout(layout)
-    }
+    // fn alloc_layout(&self, memory_layout: &AggregatorLayout) -> NonNull<u8> {
+    //     self.state_area.alloc_layout(memory_layout.layout)
+    // }
 
     fn entity(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
@@ -211,5 +230,18 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         }
 
         state_entity
+    }
+
+    #[inline(always)]
+    fn alloc_layout(&self, layout: &AggregatorLayout, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.state_area.alloc_layout(layout.layout).into();
+
+        for idx in 0..layout.offsets_aggregate_states.len() {
+            let aggr_state = layout.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
     }
 }

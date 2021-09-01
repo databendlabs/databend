@@ -20,6 +20,7 @@ mod aggregator_state;
 mod aggregator_state_entity;
 mod aggregator_state_iterator;
 mod keys_ref;
+mod aggregator_layout;
 
 pub use aggregator::Aggregator;
 pub use aggregator_polymorphic_keys::PolymorphicKeysHelper;

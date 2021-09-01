@@ -23,7 +23,7 @@ use common_datavalues::prelude::Series;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::{get_layout_offsets, StateAddrs};
 use common_functions::aggregates::StateAddr;
 use common_infallible::Mutex;
 use common_io::prelude::BytesMut;
@@ -38,24 +38,20 @@ use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParamsR
 use crate::pipelines::transforms::group_by::aggregator_state::AggregatorState;
 use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::transforms::group_by::aggregator_layout::AggregatorLayout;
 
 pub struct Aggregator<Method: HashMethod> {
     method: Method,
     params: AggregatorParamsRef,
-    layout: Layout,
-    offsets_aggregate_states: Vec<usize>,
+    layout: AggregatorLayout,
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     pub fn create(method: Method, params: AggregatorParamsRef) -> Aggregator<Method> {
-        let aggregate_functions = &params.aggregate_functions;
-        let (states_layout, states_offsets) = unsafe { get_layout_offsets(aggregate_functions) };
-
         Aggregator {
             method,
-            params,
-            layout: states_layout,
-            offsets_aggregate_states: states_offsets,
+            params: params.clone(),
+            layout: AggregatorLayout::create(params.as_ref()),
         }
     }
 
@@ -69,50 +65,27 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
         let aggr_len = aggregator_params.aggregate_functions.len();
         let aggregate_functions = &aggregator_params.aggregate_functions;
-        let aggregate_functions_arguments = &aggregator_params.aggregate_functions_arguments_name;
 
-        let layout = self.layout;
-        let offsets_aggregate_states = &self.offsets_aggregate_states;
+        // let layout = self.memory_layout.layout;
+        let offsets_aggregate_states = &self.layout.offsets_aggregate_states;
 
         while let Some(block) = stream.next().await {
             let block = block?;
 
             // 1.1 and 1.2.
             let group_columns = Self::group_columns(&group_cols, &block)?;
-            let aggregate_arguments_columns = Self::aggregate_arguments(&block, aggregator_params)?;
-
-            let mut places = Vec::with_capacity(block.num_rows());
             let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
+
             let mut groups = groups_locker.lock();
-            {
-                let mut inserted = true;
-                for group_key in group_keys.iter() {
-                    let entity = groups.entity(group_key, &mut inserted);
-
-                    match inserted {
-                        true => {
-                            if aggr_len == 0 {
-                                entity.set_state_value(0);
-                            } else {
-                                let place: StateAddr = groups.alloc_layout(layout).into();
-                                for idx in 0..aggr_len {
-                                    let aggr_state = offsets_aggregate_states[idx];
-                                    let aggr_state_place = place.next(aggr_state);
-                                    aggregate_functions[idx].init_state(aggr_state_place);
-                                }
-                                places.push(place);
-                                entity.set_state_value(place.addr());
-                            }
-                        }
-                        false => {
-                            let place: StateAddr = (*entity.get_state_value()).into();
-                            places.push(place);
-                        }
-                    }
-                }
-            }
+            let places: StateAddrs = match aggregator_params.aggregate_functions.is_empty() {
+                true => self.lookup_key(group_keys, &mut groups),
+                false => self.lookup_state(group_keys, &mut groups),
+            };
+            // let places = self.lookup_state(group_keys, &mut groups);
 
             {
+                let aggregate_arguments_columns = Self::aggregate_arguments(&block, aggregator_params)?;
+
                 // this can benificial for the case of dereferencing
                 let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
@@ -131,6 +104,43 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             }
         }
         Ok(groups_locker)
+    }
+
+    #[inline(always)]
+    fn lookup_key(&self, keys: Vec<Method::HashKey>, state: &mut Method::State) -> StateAddrs {
+        let mut inserted = true;
+        for key in keys.iter() {
+            state.entity(key, &mut inserted);
+        }
+
+        vec![0_usize.into(); keys.len()]
+    }
+
+    /// Allocate aggregation function state for each key(the same key can always get the same state)
+    #[inline(always)]
+    fn lookup_state(&self, keys: Vec<Method::HashKey>, state: &mut Method::State) -> StateAddrs {
+        let mut places = Vec::with_capacity(keys.len());
+
+        let mut inserted = true;
+        let layout = &self.layout;
+        let params = self.params.as_ref();
+
+        for key in keys.iter() {
+            let entity = state.entity(key, &mut inserted);
+
+            match inserted {
+                true => {
+                    let place = state.alloc_layout(layout, params);
+                    places.push(place);
+                    entity.set_state_value(place.addr());
+                }
+                false => {
+                    let place: StateAddr = (*entity.get_state_value()).into();
+                    places.push(place);
+                }
+            }
+        }
+        places
     }
 
     #[inline(always)]
@@ -175,7 +185,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         let aggregator_params = self.params.as_ref();
         let funcs = &aggregator_params.aggregate_functions;
         let aggr_len = funcs.len();
-        let offsets_aggregate_states = &self.offsets_aggregate_states;
+        let offsets_aggregate_states = &self.layout.offsets_aggregate_states;
 
         // Builders.
         let mut state_builders: Vec<BinaryArrayBuilder> = (0..aggr_len)
