@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Read;
+
 use common_arrow::arrow::array::*;
 use common_exception::Result;
+use common_io::prelude::BinaryRead;
 
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
@@ -54,6 +57,9 @@ impl StringArrayBuilder {
 
 impl ArrayDeserializer for StringArrayBuilder {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let offset: u64 = reader.read_uvarint()?;
+        let mut values: Vec<u8> = Vec::with_capacity(offset as usize);
+        reader.read_exact(&mut values)?;
         self.append_value(reader.clone());
         Ok(())
     }
