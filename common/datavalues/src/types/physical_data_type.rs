@@ -31,10 +31,9 @@ pub enum PhysicalDataType {
     Int64,
     Float32,
     Float64,
-    Utf8,
     List(Box<DataField>),
     Struct(Vec<DataField>),
-    Binary,
+    String,
 }
 
 impl From<DataType> for PhysicalDataType {
@@ -53,10 +52,9 @@ impl From<DataType> for PhysicalDataType {
             DataType::Int64 => Int64,
             DataType::Float32 => Float32,
             DataType::Float64 => Float64,
-            DataType::Utf8 => Utf8,
             DataType::List(x) => List(x),
             DataType::Struct(x) => Struct(x),
-            DataType::Binary => Binary,
+            DataType::String => String,
         }
     }
 }
@@ -77,10 +75,9 @@ impl From<PhysicalDataType> for DataType {
             PhysicalDataType::Int64 => Int64,
             PhysicalDataType::Float32 => Float32,
             PhysicalDataType::Float64 => Float64,
-            PhysicalDataType::Utf8 => Utf8,
             PhysicalDataType::List(x) => List(x),
             PhysicalDataType::Struct(x) => Struct(x),
-            PhysicalDataType::Binary => Binary,
+            PhysicalDataType::String => String,
         }
     }
 }

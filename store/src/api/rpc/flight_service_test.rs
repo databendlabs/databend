@@ -474,7 +474,7 @@ async fn test_do_append() -> anyhow::Result<()> {
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
-        DataField::new("col_s", DataType::Utf8, false),
+        DataField::new("col_s", DataType::String, false),
     ]));
     let db_name = "test_db";
     let tbl_name = "test_tbl";
@@ -546,7 +546,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
-        DataField::new("col_s", DataType::Utf8, false),
+        DataField::new("col_s", DataType::String, false),
     ]));
     let db_name = "test_db";
     let tbl_name = "test_tbl";

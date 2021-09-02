@@ -36,7 +36,6 @@ pub enum DataType {
     Int64,
     Float32,
     Float64,
-    Utf8,
     /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
     /// in days (16 bits), it's physical type is UInt16
     Date16,
@@ -50,7 +49,7 @@ pub enum DataType {
 
     List(Box<DataField>),
     Struct(Vec<DataField>),
-    Binary,
+    String,
 }
 
 #[derive(
@@ -115,7 +114,6 @@ impl DataType {
             Int64 => ArrowDataType::Int64,
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
-            Utf8 => ArrowDataType::LargeUtf8,
             Date16 => ArrowDataType::UInt16,
             Date32 => ArrowDataType::UInt32,
             DateTime32 => ArrowDataType::UInt32,
@@ -124,7 +122,7 @@ impl DataType {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
                 ArrowDataType::Struct(arrows_fields)
             }
-            Binary => ArrowDataType::LargeBinary,
+            String => ArrowDataType::LargeBinary,
         }
     }
 }
@@ -155,8 +153,7 @@ impl From<&ArrowDataType> for DataType {
                 let f: DataField = (f.as_ref()).into();
                 DataType::List(Box::new(f))
             }
-            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::Utf8,
-            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::Binary,
+            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::String,
 
             // this is safe, because we define the datatype firstly
             _ => {

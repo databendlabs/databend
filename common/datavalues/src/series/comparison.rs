@@ -24,7 +24,7 @@ macro_rules! impl_compare {
     ($self:expr, $rhs:expr, $method:ident) => {{
         match $self.data_type() {
             DataType::Boolean => $self.bool().unwrap().$method($rhs.bool().unwrap()),
-            DataType::Utf8 => $self.utf8().unwrap().$method($rhs.utf8().unwrap()),
+            DataType::String => $self.string().unwrap().$method($rhs.string().unwrap()),
             DataType::UInt8 => $self.u8().unwrap().$method($rhs.u8().unwrap()),
             DataType::UInt16 => $self.u16().unwrap().$method($rhs.u16().unwrap()),
             DataType::UInt32 => $self.u32().unwrap().$method($rhs.u32().unwrap()),
@@ -63,7 +63,7 @@ fn null_to_boolean(s: &Series) -> DFBooleanArray {
 
 fn coerce_cmp_lhs_rhs(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> {
     if lhs.data_type() == rhs.data_type()
-        && (lhs.data_type() == &DataType::Utf8 || lhs.data_type() == &DataType::Boolean)
+        && (lhs.data_type() == &DataType::String || lhs.data_type() == &DataType::Boolean)
     {
         return Ok((lhs.clone(), rhs.clone()));
     }

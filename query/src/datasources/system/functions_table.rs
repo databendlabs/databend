@@ -38,7 +38,7 @@ impl FunctionsTable {
     pub fn create() -> Self {
         FunctionsTable {
             schema: DataSchemaRefExt::create(vec![
-                DataField::new("name", DataType::Utf8, false),
+                DataField::new("name", DataType::String, false),
                 DataField::new("is_aggregate", DataType::Boolean, false),
             ]),
         }
@@ -98,10 +98,10 @@ impl Table for FunctionsTable {
         let func_names = FunctionFactory::registered_names();
         let aggr_func_names = AggregateFunctionFactory::registered_names();
 
-        let names: Vec<&str> = func_names
+        let names: Vec<&[u8]> = func_names
             .iter()
             .chain(aggr_func_names.iter())
-            .map(|x| x.as_ref())
+            .map(|x| x.as_bytes())
             .collect();
 
         let is_aggregate = (0..names.len())

@@ -111,20 +111,6 @@ pub fn construct_numeric_type(
     }
 }
 
-/// Coercion rules for dictionary values (aka the type of the  dictionary itself)
-
-/// Coercion rules for Strings: the type that both lhs and rhs can be
-/// casted to for the purpose of a string computation
-pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    match (lhs_type, rhs_type) {
-        (DataType::Utf8, DataType::Utf8) => Ok(DataType::Utf8),
-        _ => Result::Err(ErrorCode::BadDataValueType(format!(
-            "Can't construct type from {} and {}",
-            lhs_type, rhs_type
-        ))),
-    }
-}
-
 /// Coercion rule for numerical types: The type that both lhs and rhs
 /// can be casted to for numerical calculation, while maintaining
 /// maximum precision

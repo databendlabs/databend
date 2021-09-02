@@ -28,7 +28,7 @@ fn test_parse_values() {
 
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::Utf8, false),
+        DataField::new("b", DataType::String, false),
         DataField::new("c", DataType::Float64, false),
     ]);
     let mut values_source = ValueSource::new(buffer.as_bytes(), schema, 10);
@@ -57,7 +57,7 @@ fn test_parse_csvs() {
 
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::Utf8, false),
+        DataField::new("b", DataType::String, false),
         DataField::new("c", DataType::Float64, false),
     ]);
     let mut values_source = CsvSource::new(buffer.as_bytes(), schema, 10);

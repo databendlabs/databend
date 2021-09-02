@@ -89,10 +89,10 @@ impl TracingTableStream {
             self.limit_offset += 1;
         }
 
-        let names: Vec<&str> = name_col.iter().map(|x| x.as_str()).collect();
-        let msgs: Vec<&str> = msg_col.iter().map(|x| x.as_str()).collect();
-        let hosts: Vec<&str> = host_col.iter().map(|x| x.as_str()).collect();
-        let times: Vec<&str> = time_col.iter().map(|x| x.as_str()).collect();
+        let names: Vec<&[u8]> = name_col.iter().map(|x| x.as_bytes()).collect();
+        let msgs: Vec<&[u8]> = msg_col.iter().map(|x| x.as_bytes()).collect();
+        let hosts: Vec<&[u8]> = host_col.iter().map(|x| x.as_bytes()).collect();
+        let times: Vec<&[u8]> = time_col.iter().map(|x| x.as_bytes()).collect();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Series::new(version_col),

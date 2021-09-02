@@ -145,8 +145,11 @@ impl Expression {
             } => match column_name {
                 Some(name) => name.clone(),
                 None => {
-                    if let DataValue::Utf8(Some(_)) = value {
-                        format!("'{:?}'", value)
+                    if let DataValue::String(Some(v)) = value {
+                        match std::str::from_utf8(v) {
+                            Ok(v) => format!("'{}'", v),
+                            Err(_e) => format!("{:?}", value),
+                        }
                     } else {
                         format!("{:?}", value)
                     }

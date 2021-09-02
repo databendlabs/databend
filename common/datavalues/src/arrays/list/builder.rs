@@ -25,7 +25,7 @@ pub trait ListBuilderTrait {
 }
 
 type LargeListPrimitiveBuilder<T> = MutableListArray<i64, MutablePrimitiveArray<T>>;
-type LargeListUtf8Builder = MutableListArray<i64, MutableUtf8Array<i64>>;
+type LargeListBinaryBuilder = MutableListArray<i64, MutableBinaryArray<i64>>;
 type LargeListBooleanBuilder = MutableListArray<i64, MutableBooleanArray>;
 
 pub struct ListPrimitiveArrayBuilder<T>
@@ -102,21 +102,21 @@ where
     }
 }
 
-pub struct ListUtf8ArrayBuilder {
-    builder: LargeListUtf8Builder,
+pub struct ListStringArrayBuilder {
+    builder: LargeListBinaryBuilder,
 }
 
-type LargeMutableUtf8Array = MutableUtf8Array<i64>;
-impl ListUtf8ArrayBuilder {
+type LargeMutableBinaryArray = MutableBinaryArray<i64>;
+impl ListStringArrayBuilder {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
-        let values = LargeMutableUtf8Array::with_capacity(values_capacity);
-        let builder = LargeListUtf8Builder::new_with_capacity(values, capacity);
+        let values = LargeMutableBinaryArray::with_capacity(values_capacity);
+        let builder = LargeListBinaryBuilder::new_with_capacity(values, capacity);
 
-        ListUtf8ArrayBuilder { builder }
+        ListStringArrayBuilder { builder }
     }
 }
 
-impl ListBuilderTrait for ListUtf8ArrayBuilder {
+impl ListBuilderTrait for ListStringArrayBuilder {
     fn append_opt_series(&mut self, opt_s: Option<&Series>) {
         match opt_s {
             Some(s) => self.append_series(s),
@@ -133,7 +133,7 @@ impl ListBuilderTrait for ListUtf8ArrayBuilder {
 
     #[inline]
     fn append_series(&mut self, s: &Series) {
-        let ca = s.utf8().unwrap();
+        let ca = s.string().unwrap();
         let value_builder = self.builder.mut_values();
         value_builder.try_extend(ca).unwrap();
         self.builder.try_push_valid().unwrap();
@@ -202,16 +202,16 @@ pub fn get_list_builder(
             Box::new(builder)
         }};
     }
-    macro_rules! get_utf8_builder {
+    macro_rules! get_string_builder {
         () => {{
-            let builder = ListUtf8ArrayBuilder::with_capacity(value_capacity, list_capacity);
+            let builder = ListStringArrayBuilder::with_capacity(value_capacity, list_capacity);
             Box::new(builder)
         }};
     }
     match_data_type_apply_macro!(
         dt,
         get_primitive_builder,
-        get_utf8_builder,
+        get_string_builder,
         get_bool_builder
     )
 }

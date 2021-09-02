@@ -167,10 +167,10 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
     }
 }
 
-impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
+impl<'a> ArrayApply<'a, &'a [u8], Cow<'a, [u8]>> for DFStringArray {
     fn apply_cast_numeric<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(&'a str) -> S + Copy,
+        F: Fn(&'a [u8]) -> S + Copy,
         S: DFPrimitiveType,
     {
         let arr = self.inner();
@@ -183,7 +183,7 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
 
     fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
     where
-        F: Fn(Option<&'a str>) -> S + Copy,
+        F: Fn(Option<&'a [u8]>) -> S + Copy,
         S: DFPrimitiveType,
     {
         let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.inner().iter().map(f));
@@ -192,16 +192,16 @@ impl<'a> ArrayApply<'a, &'a str, Cow<'a, str>> for DFUtf8Array {
     }
 
     fn apply<F>(&'a self, f: F) -> Self
-    where F: Fn(&'a str) -> Cow<'a, str> + Copy {
+    where F: Fn(&'a [u8]) -> Cow<'a, [u8]> + Copy {
         apply!(self, f)
     }
     fn apply_with_idx<F>(&'a self, f: F) -> Self
-    where F: Fn((usize, &'a str)) -> Cow<'a, str> + Copy {
+    where F: Fn((usize, &'a [u8])) -> Cow<'a, [u8]> + Copy {
         apply_enumerate!(self, f)
     }
 
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
-    where F: Fn((usize, Option<&'a str>)) -> Option<Cow<'a, str>> + Copy {
+    where F: Fn((usize, Option<&'a [u8]>)) -> Option<Cow<'a, [u8]>> + Copy {
         self.into_iter().enumerate().map(f).collect()
     }
 }

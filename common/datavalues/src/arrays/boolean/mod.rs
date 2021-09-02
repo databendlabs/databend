@@ -18,6 +18,7 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::aggregate;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -160,6 +161,7 @@ pub unsafe fn take_bool_iter_unchecked<I: IntoIterator<Item = usize>>(
         0 => {
             let iter = indices.into_iter().map(|idx| arr.value(idx));
             BooleanArray::from_data(
+                ArrowType::Boolean,
                 MutableBitmap::from_trusted_len_iter_unchecked(iter).into(),
                 None,
             )

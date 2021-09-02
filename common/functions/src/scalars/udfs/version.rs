@@ -41,7 +41,7 @@ impl Function for VersionFunction {
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::Utf8)
+        Ok(DataType::String)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

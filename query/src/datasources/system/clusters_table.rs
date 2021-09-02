@@ -36,8 +36,8 @@ impl ClustersTable {
     pub fn create() -> Self {
         ClustersTable {
             schema: DataSchemaRefExt::create(vec![
-                DataField::new("name", DataType::Utf8, false),
-                DataField::new("host", DataType::Utf8, false),
+                DataField::new("name", DataType::String, false),
+                DataField::new("host", DataType::String, false),
                 DataField::new("port", DataType::UInt16, false),
                 DataField::new("priority", DataType::UInt8, false),
             ]),
@@ -96,12 +96,12 @@ impl Table for ClustersTable {
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let nodes = ctx.try_get_cluster()?.get_nodes()?;
-        let names: Vec<&str> = nodes.iter().map(|x| x.name.as_str()).collect();
+        let names: Vec<&[u8]> = nodes.iter().map(|x| x.name.as_bytes()).collect();
         let hosts = nodes
             .iter()
             .map(|x| x.address.hostname())
             .collect::<Vec<_>>();
-        let hostnames = hosts.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
+        let hostnames = hosts.iter().map(|x| x.as_bytes()).collect::<Vec<&[u8]>>();
         let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
         let block = DataBlock::create_by_array(self.schema.clone(), vec![

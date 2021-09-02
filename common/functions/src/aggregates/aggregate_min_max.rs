@@ -49,8 +49,8 @@ struct NumericState<T: DFPrimitiveType> {
     pub value: Option<T>,
 }
 
-struct Utf8State {
-    pub value: Option<String>,
+struct StringState {
+    pub value: Option<Vec<u8>>,
 }
 
 impl<T> NumericState<T>
@@ -131,23 +131,23 @@ where
     }
 }
 
-impl Utf8State {
-    fn merge_value(&mut self, other: &str, is_min: bool) {
+impl StringState {
+    fn merge_value(&mut self, other: &[u8], is_min: bool) {
         match &self.value {
             Some(a) => {
-                let ord = a.as_str().partial_cmp(other);
+                let ord = a.as_slice().partial_cmp(other);
                 match (ord, is_min) {
                     (Some(Ordering::Greater), true) | (Some(Ordering::Less), false) => {
-                        self.value = Some(other.to_string())
+                        self.value = Some(other.to_vec())
                     }
                     _ => {}
                 }
             }
-            _ => self.value = Some(other.to_string()),
+            _ => self.value = Some(other.to_vec()),
         }
     }
 }
-impl AggregateMinMaxState for Utf8State {
+impl AggregateMinMaxState for StringState {
     fn default() -> Self {
         Self { value: None }
     }
@@ -159,7 +159,7 @@ impl AggregateMinMaxState for Utf8State {
         _rows: usize,
         is_min: bool,
     ) -> Result<()> {
-        let array: &DFUtf8Array = series.static_cast();
+        let array: &DFStringArray = series.static_cast();
         array.into_iter().zip(places.iter()).for_each(|(x, place)| {
             let place = place.next(offset);
             if let Some(x) = x {
@@ -172,16 +172,16 @@ impl AggregateMinMaxState for Utf8State {
 
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()> {
         let c = if is_min { series.min() } else { series.max() }?;
-        let other: Result<String> = DFTryFrom::try_from(c);
+        let other: Result<Vec<u8>> = DFTryFrom::try_from(c);
         if let Ok(other) = other {
-            self.merge_value(other.as_str(), is_min);
+            self.merge_value(other.as_slice(), is_min);
         }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()> {
         if let Some(other) = &rhs.value {
-            self.merge_value(other.as_str(), is_min);
+            self.merge_value(other.as_slice(), is_min);
         }
         Ok(())
     }
@@ -190,7 +190,7 @@ impl AggregateMinMaxState for Utf8State {
         self.value.serialize_to_buf(writer)
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<String>::deserialize(reader)?;
+        self.value = Option::<Vec<u8>>::deserialize(reader)?;
         Ok(())
     }
 
@@ -331,11 +331,11 @@ pub fn try_create_aggregate_minmax_function(
     let data_type = arguments[0].data_type();
 
     dispatch_numeric_types! {creator, data_type.clone(), is_min, display_name, arguments}
-    if data_type == &DataType::Utf8 {
+    if data_type == &DataType::String {
         if is_min {
-            return AggregateMinMaxFunction::<Utf8State>::try_create_min(display_name, arguments);
+            return AggregateMinMaxFunction::<StringState>::try_create_min(display_name, arguments);
         } else {
-            return AggregateMinMaxFunction::<Utf8State>::try_create_max(display_name, arguments);
+            return AggregateMinMaxFunction::<StringState>::try_create_max(display_name, arguments);
         }
     }
 

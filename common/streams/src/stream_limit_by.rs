@@ -20,6 +20,7 @@ use std::task::Poll;
 use common_arrow::arrow;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
@@ -70,7 +71,7 @@ impl LimitByStream {
             }
         }
 
-        let array = BooleanArray::from_data(filter.into(), None);
+        let array = BooleanArray::from_data(ArrowType::Boolean, filter.into(), None);
         let batch = block.clone().try_into()?;
         let batch = arrow::compute::filter::filter_record_batch(&batch, &array)?;
         Some(batch.try_into()).transpose()

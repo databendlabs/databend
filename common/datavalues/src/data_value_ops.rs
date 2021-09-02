@@ -21,7 +21,7 @@ impl DataValue {
     pub fn custom_display(&self, single_quote: bool) -> String {
         let s = self.to_string();
         if single_quote {
-            if let DataValue::Utf8(Some(_)) = self {
+            if let DataValue::String(Some(_)) = self {
                 return format!("'{}'", s);
             }
         }
@@ -84,7 +84,7 @@ impl DataValue {
                 try_build_array! {PrimitiveArrayBuilder, f64, Float64, values}
             }
             DataType::Boolean => try_build_array! {values},
-            DataType::Utf8 => try_build_array! {Utf8, values},
+            DataType::String => try_build_array! {String, values},
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{} for DataValue List",
                 other

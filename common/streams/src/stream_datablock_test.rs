@@ -23,7 +23,7 @@ use crate::*;
 async fn test_datablock_stream() {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("name", DataType::Int32, false),
-        DataField::new("age", DataType::Utf8, false),
+        DataField::new("age", DataType::String, false),
     ]);
 
     let data_blocks = vec![

@@ -167,46 +167,6 @@ impl ArrayTake for DFBooleanArray {
     }
 }
 
-impl ArrayTake for DFUtf8Array {
-    unsafe fn take_unchecked<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
-    where
-        Self: std::marker::Sized,
-        I: Iterator<Item = usize>,
-        INulls: Iterator<Item = Option<usize>>,
-    {
-        let str_array = self.inner();
-        match indices {
-            TakeIdx::Array(array) => {
-                let taked_array = take::take(str_array, array)?;
-                Ok(Self::from_arrow_array(taked_array.as_ref()))
-            }
-            TakeIdx::Iter(iter) => {
-                if self.is_empty() {
-                    return Ok(Self::full_null(iter.size_hint().0));
-                }
-                let taked_array = take_utf8_iter_unchecked(str_array, iter);
-                Ok(Self::from(taked_array))
-            }
-            TakeIdx::IterNulls(iter) => {
-                if self.is_empty() {
-                    return Ok(Self::full_null(iter.size_hint().0));
-                }
-                let taked_array = take_utf8_opt_iter_unchecked(str_array, iter);
-                Ok(Self::from(taked_array))
-            }
-        }
-    }
-
-    fn take<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
-    where
-        Self: std::marker::Sized,
-        I: Iterator<Item = usize>,
-        INulls: Iterator<Item = Option<usize>>,
-    {
-        unsafe { self.take_unchecked(indices) }
-    }
-}
-
 impl ArrayTake for DFListArray {
     unsafe fn take_unchecked<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
     where
@@ -248,9 +208,48 @@ impl ArrayTake for DFListArray {
     }
 }
 
+impl ArrayTake for DFStringArray {
+    unsafe fn take_unchecked<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
+    where
+        Self: std::marker::Sized,
+        I: Iterator<Item = usize>,
+        INulls: Iterator<Item = Option<usize>>,
+    {
+        let str_array = self.inner();
+        match indices {
+            TakeIdx::Array(array) => {
+                let taked_array = take::take(str_array, array)?;
+                Ok(Self::from_arrow_array(taked_array.as_ref()))
+            }
+            TakeIdx::Iter(iter) => {
+                if self.is_empty() {
+                    return Ok(Self::full_null(iter.size_hint().0));
+                }
+                let taked_array = take_string_iter_unchecked(str_array, iter);
+                Ok(Self::from(taked_array))
+            }
+            TakeIdx::IterNulls(iter) => {
+                if self.is_empty() {
+                    return Ok(Self::full_null(iter.size_hint().0));
+                }
+                let taked_array = take_string_opt_iter_unchecked(str_array, iter);
+                Ok(Self::from(taked_array))
+            }
+        }
+    }
+
+    fn take<I, INulls>(&self, indices: TakeIdx<I, INulls>) -> Result<Self>
+    where
+        Self: std::marker::Sized,
+        I: Iterator<Item = usize>,
+        INulls: Iterator<Item = Option<usize>>,
+    {
+        unsafe { self.take_unchecked(indices) }
+    }
+}
+
 impl ArrayTake for DFNullArray {}
 impl ArrayTake for DFStructArray {}
-impl ArrayTake for DFBinaryArray {}
 
 pub trait AsTakeIndex {
     fn as_take_iter<'a>(&'a self) -> Box<dyn Iterator<Item = usize> + 'a>;

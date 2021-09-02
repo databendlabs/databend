@@ -14,21 +14,19 @@
 
 use common_exception::Result;
 
-use crate::prelude::DFUtf8Array;
-use crate::prelude::DataColumn;
-use crate::TypeSerializer;
+use crate::prelude::*;
 
-pub struct Utf8Serializer {}
+pub struct StringSerializer {}
 
-impl TypeSerializer for Utf8Serializer {
+impl TypeSerializer for StringSerializer {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
         let array = column.to_array()?;
-        let array: &DFUtf8Array = array.static_cast();
+        let array: &DFStringArray = array.static_cast();
 
         let result: Vec<String> = array
             .into_iter()
             .map(|x| {
-                x.map(|v| v.to_string())
+                x.map(|v| String::from_utf8_lossy(v).to_string())
                     .unwrap_or_else(|| "NULL".to_owned())
             })
             .collect();

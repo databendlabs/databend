@@ -34,7 +34,7 @@ impl DataType {
 
         match self {
             DataType::Boolean => Ok(Box::new(BooleanArrayBuilder::with_capacity(capacity))),
-            DataType::Utf8 => Ok(Box::new(Utf8ArrayBuilder::with_capacity(capacity))),
+            DataType::String => Ok(Box::new(StringArrayBuilder::with_capacity(capacity))),
 
             other => Err(ErrorCode::BadDataValueType(format!(
                 "create_deserializer does not support type '{:?}'",

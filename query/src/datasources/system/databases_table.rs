@@ -36,7 +36,7 @@ pub struct DatabasesTable {
 impl DatabasesTable {
     pub fn create() -> Self {
         DatabasesTable {
-            schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::Utf8, false)]),
+            schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]),
         }
     }
 }
@@ -94,9 +94,9 @@ impl Table for DatabasesTable {
         ctx.get_catalog()
             .get_databases()
             .map(|databases_name| -> SendableDataBlockStream {
-                let databases_name_str: Vec<&str> = databases_name
+                let databases_name_str: Vec<&[u8]> = databases_name
                     .iter()
-                    .map(|database| database.name())
+                    .map(|database| database.name().as_bytes())
                     .collect();
 
                 let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(

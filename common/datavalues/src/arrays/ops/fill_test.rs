@@ -42,22 +42,22 @@ fn test_array_fill() -> Result<()> {
     assert_eq!(true, df_boolean_array.is_null(1));
     assert_eq!(true, df_boolean_array.is_null(2));
 
-    // Test full for Utf8Array
-    let mut df_utf8_array = DFUtf8Array::full("ab", 3);
-    assert_eq!(0, df_utf8_array.null_count());
-    assert_eq!(false, df_utf8_array.is_null(0));
-    assert_eq!(false, df_utf8_array.is_null(1));
-    assert_eq!(false, df_utf8_array.is_null(2));
-    assert_eq!("ab", df_utf8_array.inner().value(0));
-    assert_eq!("ab", df_utf8_array.inner().value(1));
-    assert_eq!("ab", df_utf8_array.inner().value(2));
+    // Test full for StringArray
+    let mut df_string_array = DFStringArray::full("ab".as_bytes(), 3);
+    assert_eq!(0, df_string_array.null_count());
+    assert_eq!(false, df_string_array.is_null(0));
+    assert_eq!(false, df_string_array.is_null(1));
+    assert_eq!(false, df_string_array.is_null(2));
+    assert_eq!("ab".as_bytes(), df_string_array.inner().value(0));
+    assert_eq!("ab".as_bytes(), df_string_array.inner().value(1));
+    assert_eq!("ab".as_bytes(), df_string_array.inner().value(2));
 
-    // Test full_null for Utf8Array
-    df_utf8_array = DFUtf8Array::full_null(3);
-    assert_eq!(3, df_utf8_array.null_count());
-    assert_eq!(true, df_utf8_array.is_null(0));
-    assert_eq!(true, df_utf8_array.is_null(1));
-    assert_eq!(true, df_utf8_array.is_null(2));
+    // Test full_null for StringArray
+    df_string_array = DFStringArray::full_null(3);
+    assert_eq!(3, df_string_array.null_count());
+    assert_eq!(true, df_string_array.is_null(0));
+    assert_eq!(true, df_string_array.is_null(1));
+    assert_eq!(true, df_string_array.is_null(2));
 
     Ok(())
 }
