@@ -83,7 +83,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     }
 
     #[inline(always)]
-    fn execute(params: &AggregatorParams, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute(params: &AggregatorParams, block: &DataBlock, places: &[StateAddr]) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
         let aggregate_arguments_columns = Self::aggregate_arguments(block, params)?;
