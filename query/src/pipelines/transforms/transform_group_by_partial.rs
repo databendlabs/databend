@@ -27,7 +27,8 @@ use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::group_by::{Aggregator, AggregatorParams};
+use crate::pipelines::transforms::group_by::Aggregator;
+use crate::pipelines::transforms::group_by::AggregatorParams;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct GroupByPartialTransform {

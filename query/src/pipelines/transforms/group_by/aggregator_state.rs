@@ -20,6 +20,7 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::DFPrimitiveType;
+use common_functions::aggregates::StateAddr;
 
 use crate::common::HashMap;
 use crate::common::HashMapIterator;
@@ -32,7 +33,6 @@ use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity
 use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::transforms::group_by::AggregatorParams;
-use common_functions::aggregates::StateAddr;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
 ///
@@ -43,7 +43,7 @@ use common_functions::aggregates::StateAddr;
 pub trait AggregatorState<Method: HashMethod> {
     type Key;
     type Entity: StateEntity<Self::Key>;
-    type Iterator: Iterator<Item=*mut Self::Entity>;
+    type Iterator: Iterator<Item = *mut Self::Entity>;
 
     fn len(&self) -> usize;
 

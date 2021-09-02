@@ -21,8 +21,8 @@ use common_datavalues::prelude::Series;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_functions::aggregates::StateAddrs;
 use common_functions::aggregates::StateAddr;
+use common_functions::aggregates::StateAddrs;
 use common_infallible::Mutex;
 use common_io::prelude::BytesMut;
 use common_streams::DataBlockStream;
@@ -49,8 +49,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     // If we set it to inline(performance degradation).
     // Because it will make other internal functions to no inline
     #[inline(never)]
-    pub async fn aggregate(&self, group_cols: Vec<String>, mut stream: SendableDataBlockStream) -> Result<Mutex<Method::State>> {
-
+    pub async fn aggregate(
+        &self,
+        group_cols: Vec<String>,
+        mut stream: SendableDataBlockStream,
+    ) -> Result<Mutex<Method::State>> {
         // This may be confusing
         // It will help us improve performance ~10% when we declare local references for them.
         let hash_method = &self.method;
@@ -69,24 +72,24 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             // TODO: This can be moved outside the while
             // In fact, the rust compiler will help us do this(optimize the while match to match while),
             // but we need to ensure that the match is simple enough(otherwise there will be performance degradation).
-            let places: StateAddrs = match self.params.aggregate_functions.is_empty() {
+            let places: StateAddrs = match aggregator_params.aggregate_functions.is_empty() {
                 true => self.lookup_key(group_keys, &mut groups),
                 false => self.lookup_state(group_keys, &mut groups),
             };
 
-            self.execute_block(aggregator_params, &block, &places)?;
+            Self::execute(aggregator_params, &block, &places)?;
         }
         Ok(aggregate_state)
     }
 
     #[inline(always)]
-    fn execute_block(&self, params: &AggregatorParams, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute(params: &AggregatorParams, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
-        let aggregate_arguments_columns = Self::aggregate_arguments(&block, params)?;
+        let aggregate_arguments_columns = Self::aggregate_arguments(block, params)?;
 
         // This can benificial for the case of dereferencing
-        // This will help improve the performance of Intel by hundreds of megabits per second
+        // This will help improve the performance ~hundreds of megabits per second
         let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
         for index in 0..aggregate_functions.len() {
@@ -94,7 +97,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             let function = &aggregate_functions[index];
             let state_offset = offsets_aggregate_states[index];
             let function_arguments = &aggr_arg_columns_slice[index];
-            function.accumulate_keys(&places, state_offset, function_arguments, rows)?;
+            function.accumulate_keys(places, state_offset, function_arguments, rows)?;
         }
 
         Ok(())
@@ -145,9 +148,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     }
 
     #[inline(always)]
-    fn aggregate_arguments(block: &DataBlock, params: &AggregatorParams) -> Result<Vec<Vec<Series>>> {
+    fn aggregate_arguments(
+        block: &DataBlock,
+        params: &AggregatorParams,
+    ) -> Result<Vec<Vec<Series>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
-        let mut aggregate_arguments_columns = Vec::with_capacity(aggregate_functions_arguments.len());
+        let mut aggregate_arguments_columns =
+            Vec::with_capacity(aggregate_functions_arguments.len());
         for function_arguments in aggregate_functions_arguments {
             let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
 

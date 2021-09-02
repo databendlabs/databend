@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::Layout;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets};
+use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::AggregateFunctionRef;
 use common_planners::Expression;
-use std::alloc::Layout;
 
 pub struct AggregatorParams {
     pub aggregate_functions: Vec<AggregateFunctionRef>,
