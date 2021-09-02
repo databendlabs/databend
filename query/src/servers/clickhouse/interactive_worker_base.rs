@@ -16,6 +16,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use clickhouse_srv::types::Block as ClickHouseBlock;
 use clickhouse_srv::CHContext;
@@ -31,6 +32,7 @@ use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
 use futures::SinkExt;
 use futures::StreamExt;
+use metrics::histogram;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -61,11 +63,14 @@ impl InteractiveWorkerBase {
         match plan {
             PlanNode::InsertInto(insert) => Self::process_insert_query(insert, ch_ctx, ctx).await,
             _ => {
+                let start = Instant::now();
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
-
                 let async_data_stream = interpreter.execute();
                 let mut data_stream = async_data_stream.await?;
-
+                histogram!(
+                    super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
+                    start.elapsed()
+                );
                 let mut interval_stream = IntervalStream::new(interval(Duration::from_millis(30)));
                 let cancel = Arc::new(AtomicBool::new(false));
 
@@ -116,10 +121,15 @@ impl InteractiveWorkerBase {
 
         // the data is comming in async mode
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
+        let start = Instant::now();
         ctx.execute_task(async move {
             interpreter.execute().await.unwrap();
             sent_all_data.notify_one();
         })?;
+        histogram!(
+            super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
+            start.elapsed()
+        );
         Ok(rx)
     }
 }

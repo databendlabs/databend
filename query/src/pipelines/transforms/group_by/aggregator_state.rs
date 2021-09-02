@@ -14,13 +14,13 @@
 
 use std::alloc::Layout;
 use std::intrinsics::likely;
-use std::ptr::NonNull;
 
 use bumpalo::Bump;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::DFPrimitiveType;
+use common_functions::aggregates::StateAddr;
 
 use crate::common::HashMap;
 use crate::common::HashMapIterator;
@@ -32,6 +32,7 @@ use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedK
 use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
+use crate::pipelines::transforms::group_by::AggregatorParams;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
 ///
@@ -48,7 +49,7 @@ pub trait AggregatorState<Method: HashMethod> {
 
     fn iter(&self) -> Self::Iterator;
 
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8>;
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr;
 
     fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
 }
@@ -112,8 +113,16 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        self.area.alloc_layout(layout)
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(params.layout).into();
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
     }
 
     #[inline(always)]
@@ -162,13 +171,21 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        self.area.alloc_layout(layout)
+    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
+        self.data.insert_key(key, inserted)
     }
 
     #[inline(always)]
-    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.data.insert_key(key, inserted)
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(params.layout).into();
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
     }
 }
 
@@ -191,9 +208,9 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         self.data_state_map.iter()
     }
 
-    fn alloc_layout(&self, layout: Layout) -> NonNull<u8> {
-        self.state_area.alloc_layout(layout)
-    }
+    // fn alloc_layout(&self, memory_layout: &AggregatorLayout) -> NonNull<u8> {
+    //     self.state_area.alloc_layout(memory_layout.layout)
+    // }
 
     fn entity(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
@@ -211,5 +228,18 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         }
 
         state_entity
+    }
+
+    #[inline(always)]
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.state_area.alloc_layout(params.layout).into();
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
     }
 }

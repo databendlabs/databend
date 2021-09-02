@@ -20,6 +20,7 @@ mod tests;
 mod common;
 mod meta_backend;
 
+pub(crate) mod example;
 pub(crate) mod local;
 pub(crate) mod remote;
 pub(crate) mod system;

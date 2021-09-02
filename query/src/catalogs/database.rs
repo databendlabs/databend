@@ -23,7 +23,6 @@ use common_planners::DropTablePlan;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
-#[async_trait::async_trait]
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
