@@ -11,3 +11,8 @@ select today() + 1 - today() = 1;
 select toTypeName(today() - today()) = 'Int32';
 select toTypeName(now() - now()) = 'Int32';
 select sum(today() + number - today()) = 45 from numbers(10);
+
+select today() - 1 = yesterday();
+select today() - yesterday()  = 1;
+select today() + 1 = tomorrow();
+select tomorrow() - today() = 1;
