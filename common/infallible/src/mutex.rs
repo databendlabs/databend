@@ -19,11 +19,8 @@ use parking_lot::MutexGuard;
 #[derive(Debug)]
 pub struct Mutex<T>(ParkingMutex<T>);
 
-/// Mutex is Send
-unsafe impl<T> Send for Mutex<T> {}
-
-/// Mutex is Sync
-unsafe impl<T> Sync for Mutex<T> {}
+unsafe impl<T> Send for Mutex<T> where ParkingMutex<T>: Send {}
+unsafe impl<T> Sync for Mutex<T> where ParkingMutex<T>: Sync {}
 
 impl<T> Mutex<T> {
     /// creates mutex
