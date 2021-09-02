@@ -51,6 +51,13 @@ impl DatabaseCatalog {
             database_engines: Default::default(),
         })
     }
+
+    // Get all the engines name.
+    pub fn engines(&self) -> Vec<String> {
+        let mut res: Vec<String> = self.database_engines.read().keys().cloned().collect();
+        res.sort();
+        res
+    }
 }
 
 impl Catalog for DatabaseCatalog {
@@ -59,7 +66,7 @@ impl Catalog for DatabaseCatalog {
         engine_type: &str,
         backend: Arc<dyn DatabaseEngine>,
     ) -> Result<()> {
-        let engine = engine_type.to_lowercase();
+        let engine = engine_type.to_uppercase();
         self.database_engines.write().insert(engine, backend);
         Ok(())
     }
@@ -145,17 +152,18 @@ impl Catalog for DatabaseCatalog {
         }
 
         // Get the database backend and create it.
-        let engine = plan.engine.clone().to_string();
+        let engine = plan.engine.clone();
         if let Some(engine) = self
             .database_engines
             .read()
-            .get(engine.to_lowercase().as_str())
+            .get(engine.to_uppercase().as_str())
         {
             engine.create_database(plan)
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
-                "Database: unknown engine '{}'.",
-                engine
+                "Database: unknown engine '{}', engine must one of {:?}",
+                engine,
+                self.engines()
             )))
         }
     }

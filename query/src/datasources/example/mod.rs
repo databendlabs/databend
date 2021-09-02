@@ -12,27 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+mod example_database;
+mod example_databases;
+mod example_meta_backend;
+mod example_table;
 
-use common_datavalues::DataSchemaRef;
-
-pub type TableOptions = HashMap<String, String>;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct CreateTablePlan {
-    pub if_not_exists: bool,
-    pub db: String,
-    /// The table name
-    pub table: String,
-    /// The table schema
-    pub schema: DataSchemaRef,
-    /// The file type of physical file
-    pub engine: String,
-    pub options: TableOptions,
-}
-
-impl CreateTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
-    }
-}
+pub use example_database::ExampleDatabase;
+pub use example_databases::ExampleDatabases;
+pub use example_table::ExampleTable;
