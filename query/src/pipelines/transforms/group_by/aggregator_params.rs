@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::Layout;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_planners::Expression;
 
@@ -23,6 +25,10 @@ pub struct AggregatorParams {
     pub aggregate_functions: Vec<AggregateFunctionRef>,
     pub aggregate_functions_column_name: Vec<String>,
     pub aggregate_functions_arguments_name: Vec<Vec<String>>,
+
+    // about function state memory layout
+    pub layout: Layout,
+    pub offsets_aggregate_states: Vec<usize>,
 }
 
 pub type AggregatorParamsRef = Arc<AggregatorParams>;
@@ -39,10 +45,14 @@ impl AggregatorParams {
             aggregate_functions_arguments_name.push(expr.to_aggregate_function_names()?);
         }
 
+        let (states_layout, states_offsets) = unsafe { get_layout_offsets(&aggregate_functions) };
+
         Ok(Arc::new(AggregatorParams {
             aggregate_functions,
             aggregate_functions_column_name,
             aggregate_functions_arguments_name,
+            layout: states_layout,
+            offsets_aggregate_states: states_offsets,
         }))
     }
 }
