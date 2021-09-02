@@ -12,7 +12,7 @@ sleep 1
 BIN=${1:-debug}
 
 echo 'Start DatafuseStore...'
-nohup target/${BIN}/datafuse-store --single true &
+nohup target/${BIN}/datafuse-store --single=true --log-level=ERROR &
 echo "Waiting on datafuse-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
