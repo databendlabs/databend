@@ -1500,7 +1500,6 @@ dependencies = [
  "tower",
  "uuid",
  "walkdir",
- "warp",
 ]
 
 [[package]]

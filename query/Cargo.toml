@@ -80,7 +80,6 @@ tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.5.2"
 walkdir = "2.3.2"
-warp = { version = "0.3.1", features = ["tls"] }
 axum = {version = "0.2.3", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
