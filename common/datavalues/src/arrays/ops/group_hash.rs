@@ -102,7 +102,7 @@ impl GroupHash for DFStringArray {
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.into_no_null_iter().zip(vec.iter_mut()) {
-            BinaryWrite::write_binary(vec, &value)?;
+            BinaryWrite::write_binary(vec, value)?;
         }
         Ok(())
     }

@@ -22,7 +22,6 @@ use common_datablocks::HashMethodSerializer;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
 use common_datavalues::arrays::StringArrayBuilder;
 
-
 use crate::common::HashTable;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::FixedKeysArrayBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;

@@ -20,6 +20,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -119,7 +120,7 @@ impl DataValue {
     pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
         match self {
             DataValue::Null => {
-                let array = NullArray::new_null(size);
+                let array = NullArray::new_null(ArrowType::Null, size);
                 let array: DFNullArray = array.into();
                 Ok(array.into_series())
             }
@@ -202,7 +203,8 @@ impl DataValue {
 
                     arrays.push(val_array);
                 }
-                let r: DFStructArray = StructArray::from_data(fields, arrays, None).into();
+                let r: DFStructArray =
+                    StructArray::from_data(ArrowType::Struct(fields), arrays, None).into();
                 Ok(r.into_series())
             }
         }
