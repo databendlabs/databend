@@ -24,7 +24,7 @@ use crate::*;
 async fn test_limitby_stream() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("id", DataType::UInt8, false),
-        DataField::new("name", DataType::Utf8, false),
+        DataField::new("name", DataType::String, false),
     ]);
 
     let ids = vec![2u8, 2, 2, 2, 3, 3, 3];

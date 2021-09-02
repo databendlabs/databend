@@ -34,7 +34,7 @@ pub enum DataGroupValue {
     Int16(i16),
     Int32(i32),
     Int64(i64),
-    String(Box<Vec<u8>>),
+    String(Vec<u8>),
     Boolean(bool),
 }
 
@@ -54,7 +54,7 @@ impl TryFrom<&DataValue> for DataGroupValue {
             DataValue::UInt16(Some(v)) => DataGroupValue::UInt16(*v),
             DataValue::UInt32(Some(v)) => DataGroupValue::UInt32(*v),
             DataValue::UInt64(Some(v)) => DataGroupValue::UInt64(*v),
-            DataValue::String(Some(v)) => DataGroupValue::String(Box::new(v.clone())),
+            DataValue::String(Some(v)) => DataGroupValue::String(v.clone()),
 
             DataValue::Float32(None)
             | DataValue::Float64(None)

@@ -43,7 +43,7 @@ fn test_explain_plan() -> Result<()> {
     assert_eq!(expect, actual);
     assert_eq!(explain.schema().fields().clone(), vec![DataField::new(
         "explain",
-        DataType::Utf8,
+        DataType::String,
         false
     )]);
 

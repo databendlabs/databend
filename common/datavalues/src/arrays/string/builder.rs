@@ -60,14 +60,14 @@ impl ArrayDeserializer for StringArrayBuilder {
         let offset: u64 = reader.read_uvarint()?;
         let mut values: Vec<u8> = Vec::with_capacity(offset as usize);
         reader.read_exact(&mut values)?;
-        self.append_value(reader.clone());
+        self.append_value(reader);
         Ok(())
     }
 
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let reader = &reader[step * row..];
-            self.append_value(reader.clone());
+            self.append_value(reader);
         }
         Ok(())
     }

@@ -27,11 +27,11 @@ pub struct Settings {
 
 impl Settings {
     apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
-        ("max_block_size", u64, 10000, "Maximum block size for reading".as_bytes().to_vec()),
-        ("max_threads", u64, 16, "The maximum number of threads to execute the request. By default, it is determined automatically.".as_bytes().to_vec()),
-        ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds".as_bytes().to_vec()),
-        ("min_distributed_rows", u64, 100000000, "Minimum distributed read rows. In cluster mode, when read rows exceeds this value, the local table converted to distributed query.".as_bytes().to_vec()),
-        ("min_distributed_bytes", u64, 500 * 1024 * 1024, "Minimum distributed read bytes. In cluster mode, when read bytes exceeds this value, the local table converted to distributed query.".as_bytes().to_vec())
+        ("max_block_size", u64, 10000, "Maximum block size for reading"),
+        ("max_threads", u64, 16, "The maximum number of threads to execute the request. By default, it is determined automatically."),
+        ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds"),
+        ("min_distributed_rows", u64, 100000000, "Minimum distributed read rows. In cluster mode, when read rows exceeds this value, the local table converted to distributed query."),
+        ("min_distributed_bytes", u64, 500 * 1024 * 1024, "Minimum distributed read bytes. In cluster mode, when read bytes exceeds this value, the local table converted to distributed query.")
     }
 
     pub fn try_create() -> Result<Arc<Settings>> {
@@ -68,12 +68,12 @@ impl SettingsBase {
 
     // TODO, to use macro generate this codes
     #[allow(unused)]
-    pub fn try_set_u64(&self, key: &'static str, val: u64, desc: Vec<u8>) -> Result<()> {
+    pub fn try_set_u64(&self, key: &'static str, val: u64, desc: &str) -> Result<()> {
         let mut settings = self.settings.write();
         let setting_val = DataValue::Struct(vec![
             DataValue::UInt64(Some(val)),
             DataValue::UInt64(Some(val)),
-            DataValue::String(Some(desc)),
+            DataValue::String(Some(desc.as_bytes().to_vec())),
         ]);
         settings.insert(key, setting_val);
         Ok(())
@@ -117,12 +117,12 @@ impl SettingsBase {
     }
 
     #[allow(unused)]
-    pub fn try_set_i64(&self, key: &'static str, val: i64, desc: Vec<u8>) -> Result<()> {
+    pub fn try_set_i64(&self, key: &'static str, val: i64, desc: &str) -> Result<()> {
         let mut settings = self.settings.write();
         let setting_val = DataValue::Struct(vec![
             DataValue::Int64(Some(val)),
             DataValue::Int64(Some(val)),
-            DataValue::String(Some(desc)),
+            DataValue::String(Some(desc.as_bytes().to_vec())),
         ]);
         settings.insert(key, setting_val);
         Ok(())
@@ -166,12 +166,12 @@ impl SettingsBase {
     }
 
     #[allow(unused)]
-    pub fn try_set_f64(&self, key: &'static str, val: f64, desc: Vec<u8>) -> Result<()> {
+    pub fn try_set_f64(&self, key: &'static str, val: f64, desc: &str) -> Result<()> {
         let mut settings = self.settings.write();
         let setting_val = DataValue::Struct(vec![
             DataValue::Float64(Some(val)),
             DataValue::Float64(Some(val)),
-            DataValue::String(Some(desc)),
+            DataValue::String(Some(desc.as_bytes().to_vec())),
         ]);
         settings.insert(key, setting_val);
         Ok(())
@@ -215,20 +215,20 @@ impl SettingsBase {
     }
 
     #[allow(unused)]
-    pub fn try_set_string(&self, key: &'static str, val: Vec<u8>, desc: Vec<u8>) -> Result<()> {
+    pub fn try_set_string(&self, key: &'static str, val: &str, desc: &str) -> Result<()> {
         let mut settings = self.settings.write();
-        let default_value = val.clone();
+        let default_value = val;
         let setting_val = DataValue::Struct(vec![
-            DataValue::String(Some(val)),
-            DataValue::String(Some(default_value)),
-            DataValue::String(Some(desc)),
+            DataValue::String(Some(val.as_bytes().to_vec())),
+            DataValue::String(Some(default_value.as_bytes().to_vec())),
+            DataValue::String(Some(desc.as_bytes().to_vec())),
         ]);
         settings.insert(key, setting_val);
         Ok(())
     }
 
     #[allow(unused)]
-    pub fn try_update_string(&self, key: &'static str, val: Vec<u8>) -> Result<()> {
+    pub fn try_update_string(&self, key: &'static str, val: &str) -> Result<()> {
         let mut settings = self.settings.write();
         let setting_val = settings
             .get(key)
@@ -236,7 +236,7 @@ impl SettingsBase {
 
         if let DataValue::Struct(values) = setting_val {
             let v = DataValue::Struct(vec![
-                DataValue::String(Some(val)),
+                DataValue::String(Some(val.as_bytes().to_vec())),
                 values[1].clone(),
                 values[2].clone(),
             ]);

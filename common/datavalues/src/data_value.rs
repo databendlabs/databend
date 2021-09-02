@@ -367,13 +367,15 @@ impl fmt::Display for DataValue {
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::String(None) => write!(f, "NULL"),
-            DataValue::String(Some(v)) => {
-                for c in v {
-                    write!(f, "{:02x}", c)?;
+            DataValue::String(Some(v)) => match std::str::from_utf8(v) {
+                Ok(v) => write!(f, "{}", v),
+                Err(_e) => {
+                    for c in v {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
-
+            },
             DataValue::List(None, ..) => write!(f, "NULL"),
             DataValue::List(Some(v), ..) => {
                 write!(

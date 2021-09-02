@@ -39,9 +39,9 @@ mod tests {
             table_id: 0,
             table_version: None,
             schema: DataSchemaRefExt::create(vec![
-                DataField::new("a", DataType::Utf8, false),
-                DataField::new("b", DataType::Utf8, false),
-                DataField::new("c", DataType::Utf8, false),
+                DataField::new("a", DataType::String, false),
+                DataField::new("b", DataType::String, false),
+                DataField::new("c", DataType::String, false),
             ]),
             parts: generate_partitions(8, total as u64),
             statistics: statistics.clone(),

@@ -51,7 +51,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
                 "+-------+--------+------+",
                 "| a     | Int64  | NO   |",
                 "| b     | Int32  | NO   |",
-                "| c     | Utf8   | NO   |",
+                "| c     | String | NO   |",
                 "| d     | Int16  | NO   |",
                 "| e     | Date16 | NO   |",
                 "+-------+--------+------+",

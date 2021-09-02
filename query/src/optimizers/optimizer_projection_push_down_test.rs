@@ -29,16 +29,16 @@ fn test_projection_push_down_optimizer_1() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Utf8, false),
-        DataField::new("b", DataType::Utf8, false),
-        DataField::new("c", DataType::Utf8, false),
-        DataField::new("d", DataType::Utf8, false),
+        DataField::new("a", DataType::String, false),
+        DataField::new("b", DataType::String, false),
+        DataField::new("c", DataType::String, false),
+        DataField::new("d", DataType::String, false),
     ]);
 
     let output_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Utf8, false),
-        DataField::new("b", DataType::Utf8, false),
-        DataField::new("c", DataType::Utf8, false),
+        DataField::new("a", DataType::String, false),
+        DataField::new("b", DataType::String, false),
+        DataField::new("c", DataType::String, false),
     ]);
 
     let plan = PlanNode::Projection(ProjectionPlan {
@@ -53,7 +53,7 @@ fn test_projection_push_down_optimizer_1() -> Result<()> {
     let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
-        Projection: a:Utf8, b:Utf8, c:Utf8";
+        Projection: a:String, b:String, c:String";
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
@@ -72,10 +72,10 @@ fn test_projection_push_down_optimizer_group_by() -> Result<()> {
     let optimized = project_push_down.optimize(&plan)?;
 
     let expect = "\
-        Projection: max(value) as c1:Utf8, name as c2:Utf8\
+        Projection: max(value) as c1:String, name as c2:String\
         \n  AggregatorFinal: groupBy=[[name]], aggr=[[max(value)]]\
         \n    AggregatorPartial: groupBy=[[name]], aggr=[[max(value)]]\
-        \n      ReadDataSource: scan partitions: [1], scan schema: [name:Utf8, value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+        \n      ReadDataSource: scan partitions: [1], scan schema: [name:String, value:String], statistics: [read_rows: 0, read_bytes: 0]";
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
@@ -96,9 +96,9 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
         table_id: 0,
         table_version: None,
         schema: DataSchemaRefExt::create(vec![
-            DataField::new("a", DataType::Utf8, false),
-            DataField::new("b", DataType::Utf8, false),
-            DataField::new("c", DataType::Utf8, false),
+            DataField::new("a", DataType::String, false),
+            DataField::new("b", DataType::String, false),
+            DataField::new("c", DataType::String, false),
         ]),
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
@@ -118,7 +118,7 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
 
     let plan = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
-        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]),
+        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]),
         input: Arc::from(filter_plan),
     });
 
@@ -126,9 +126,9 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
     let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
-        Projection: a:Utf8\
+        Projection: a:String\
         \n  Filter: ((a > 6) and (b <= 10))\
-        \n    ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+        \n    ReadDataSource: scan partitions: [8], scan schema: [a:String, b:String], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
 
@@ -149,13 +149,13 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
         table_id: 0,
         table_version: None,
         schema: DataSchemaRefExt::create(vec![
-            DataField::new("a", DataType::Utf8, false),
-            DataField::new("b", DataType::Utf8, false),
-            DataField::new("c", DataType::Utf8, false),
-            DataField::new("d", DataType::Utf8, false),
-            DataField::new("e", DataType::Utf8, false),
-            DataField::new("f", DataType::Utf8, false),
-            DataField::new("g", DataType::Utf8, false),
+            DataField::new("a", DataType::String, false),
+            DataField::new("b", DataType::String, false),
+            DataField::new("c", DataType::String, false),
+            DataField::new("d", DataType::String, false),
+            DataField::new("e", DataType::String, false),
+            DataField::new("f", DataType::String, false),
+            DataField::new("g", DataType::String, false),
         ]),
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
@@ -186,14 +186,14 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
     let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
-    Projection: a:Utf8\
+    Projection: a:String\
     \n  Limit: 10\
-    \n    Sort: c:Utf8\
+    \n    Sort: c:String\
     \n      Having: (a < 10)\
     \n        AggregatorFinal: groupBy=[[a, c]], aggr=[[]]\
     \n          AggregatorPartial: groupBy=[[a, c]], aggr=[[]]\
     \n            Filter: (b = 10)\
-    \n              ReadDataSource: scan partitions: [8], scan schema: [a:Utf8, b:Utf8, c:Utf8], statistics: [read_rows: 10000, read_bytes: 80000]";
+    \n              ReadDataSource: scan partitions: [8], scan schema: [a:String, b:String, c:String], statistics: [read_rows: 10000, read_bytes: 80000]";
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
@@ -211,9 +211,9 @@ fn test_projection_push_down_optimizer_4() -> Result<()> {
     let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = project_push_down.optimize(&plan)?;
 
-    let expect = "Projection: substring(value, 1, 3) as c1:Utf8\
-                        \n  Expression: substring(value, 1, 3):Utf8 (Before Projection)\
-                        \n    ReadDataSource: scan partitions: [1], scan schema: [value:Utf8], statistics: [read_rows: 0, read_bytes: 0]";
+    let expect = "Projection: substring(value, 1, 3) as c1:String\
+                        \n  Expression: substring(value, 1, 3):String (Before Projection)\
+                        \n    ReadDataSource: scan partitions: [1], scan schema: [value:String], statistics: [read_rows: 0, read_bytes: 0]";
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);

@@ -214,6 +214,18 @@ macro_rules! impl_from {
     };
 }
 
+impl<'a, T: AsRef<[&'a str]>> SeriesFrom<T, [&'a str]> for Series {
+    fn new(v: T) -> Self {
+        DFStringArray::new_from_slice(v.as_ref()).into_series()
+    }
+}
+
+impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Series {
+    fn new(v: T) -> Self {
+        DFStringArray::new_from_opt_slice(v.as_ref()).into_series()
+    }
+}
+
 impl<'a, T: AsRef<[&'a [u8]]>> SeriesFrom<T, [&'a [u8]]> for Series {
     fn new(v: T) -> Self {
         DFStringArray::new_from_slice(v.as_ref()).into_series()
