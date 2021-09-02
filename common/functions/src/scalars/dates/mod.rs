@@ -14,7 +14,9 @@
 
 mod date;
 mod now;
-mod today;
-mod yesterday;
+mod simple_date;
 
 pub use date::DateFunction;
+pub use simple_date::TodayFunction;
+pub use simple_date::TomorrowFunction;
+pub use simple_date::YesterdayFunction;
