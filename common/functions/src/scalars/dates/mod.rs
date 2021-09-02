@@ -15,5 +15,6 @@
 mod date;
 mod now;
 mod today;
+mod yesterday;
 
 pub use date::DateFunction;
