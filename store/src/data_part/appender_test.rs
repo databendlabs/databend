@@ -37,7 +37,7 @@ mod test {
     fn test_in_memory_write() -> anyhow::Result<()> {
         let schema = Arc::new(DataSchema::new(vec![
             DataField::new("col_i", DataType::Int64, false),
-            DataField::new("col_s", DataType::Utf8, false),
+            DataField::new("col_s", DataType::String, false),
         ]));
 
         let col0 = Series::new(vec![0 as i64, 1, 2]);
@@ -64,7 +64,7 @@ mod test {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_append() -> anyhow::Result<()> {
         let col0: ArrayRef = Arc::new(Int64Array::from_values(vec![0, 1, 2]));
-        let col1: ArrayRef = Arc::new(LargeUtf8Array::from_iter_values(
+        let col1: ArrayRef = Arc::new(LargeBinaryArray::from_iter_values(
             vec!["str1", "str2", "str3"].iter(),
         ));
 

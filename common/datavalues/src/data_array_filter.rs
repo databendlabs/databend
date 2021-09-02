@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::filter::build_filter;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -55,7 +56,7 @@ impl DataArrayFilter {
         let mask = array.values();
         if let Some(v) = array.validity() {
             let mask = mask.bitand(v);
-            return DFBooleanArray::new(BooleanArray::from_data(mask, None));
+            return DFBooleanArray::new(BooleanArray::from_data(ArrowType::Boolean, mask, None));
         }
         filter.clone()
     }

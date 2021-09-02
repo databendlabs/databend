@@ -23,12 +23,12 @@ use crate::*;
 fn test_select_wildcard_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
     let plan = PlanBuilder::create(schema).project(&[col("a")])?.build()?;
     let select = PlanNode::Select(SelectPlan {
         input: Arc::new(plan),
     });
-    let expect = "Projection: a:Utf8";
+    let expect = "Projection: a:String";
 
     let actual = format!("{:?}", select);
     assert_eq!(expect, actual);

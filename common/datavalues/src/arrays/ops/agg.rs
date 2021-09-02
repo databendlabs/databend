@@ -294,13 +294,13 @@ impl ArrayAgg for DFBooleanArray {
     }
 }
 
-impl ArrayAgg for DFUtf8Array {
+impl ArrayAgg for DFStringArray {
     fn min(&self) -> Result<DataValue> {
         if self.all_is_null() {
-            return Ok(DataValue::Utf8(None));
+            return Ok(DataValue::String(None));
         }
 
-        Ok(match aggregate::min_string(self.inner()) {
+        Ok(match aggregate::min_binary(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -308,10 +308,10 @@ impl ArrayAgg for DFUtf8Array {
 
     fn max(&self) -> Result<DataValue> {
         if self.all_is_null() {
-            return Ok(DataValue::Utf8(None));
+            return Ok(DataValue::String(None));
         }
 
-        Ok(match aggregate::max_string(self.inner()) {
+        Ok(match aggregate::max_binary(self.inner()) {
             Some(x) => x.into(),
             None => DataValue::from(self.data_type()),
         })
@@ -321,7 +321,7 @@ impl ArrayAgg for DFUtf8Array {
         if self.all_is_null() {
             return Ok(DataValue::Struct(vec![
                 (0_u64).into(),
-                DataValue::Utf8(None),
+                DataValue::String(None),
             ]));
         }
         let value = self
@@ -339,7 +339,7 @@ impl ArrayAgg for DFUtf8Array {
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0_u64).into(), DataValue::Utf8(None)]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::String(None)]),
         })
     }
 
@@ -347,7 +347,7 @@ impl ArrayAgg for DFUtf8Array {
         if self.all_is_null() {
             return Ok(DataValue::Struct(vec![
                 (0_u64).into(),
-                DataValue::Utf8(None),
+                DataValue::String(None),
             ]));
         }
         let value = self
@@ -357,14 +357,12 @@ impl ArrayAgg for DFUtf8Array {
 
         Ok(match value {
             Some((index, value)) => DataValue::Struct(vec![(index as u64).into(), value.into()]),
-            None => DataValue::Struct(vec![(0_u64).into(), DataValue::Utf8(None)]),
+            None => DataValue::Struct(vec![(0_u64).into(), DataValue::String(None)]),
         })
     }
 }
 
 impl ArrayAgg for DFListArray {}
-
-impl ArrayAgg for DFBinaryArray {}
 
 impl ArrayAgg for DFNullArray {}
 

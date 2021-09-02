@@ -42,7 +42,7 @@ impl Function for ToTypeNameFunction {
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::Utf8)
+        Ok(DataType::String)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -52,7 +52,7 @@ impl Function for ToTypeNameFunction {
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let type_name = format!("{}", columns[0].data_type());
         Ok(DataColumn::Constant(
-            DataValue::Utf8(Some(type_name)),
+            DataValue::String(Some(type_name.into_bytes())),
             input_rows,
         ))
     }

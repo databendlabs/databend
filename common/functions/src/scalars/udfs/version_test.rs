@@ -47,7 +47,7 @@ fn test_version_function() -> Result<()> {
         error: "",
     }];
 
-    let dummy = DataField::new("dummy", DataType::Utf8, false);
+    let dummy = DataField::new("dummy", DataType::String, false);
     for t in tests {
         let rows = t.columns[0].len();
         let func = t.func;

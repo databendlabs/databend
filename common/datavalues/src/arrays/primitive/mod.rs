@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
-
-use crate::prelude::*;
-
 mod builder;
 mod iterator;
 
@@ -28,7 +19,15 @@ mod iterator;
 mod builder_test;
 
 pub use builder::*;
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
+use common_exception::ErrorCode;
+use common_exception::Result;
 pub use iterator::*;
+
+use crate::prelude::*;
 
 /// DFPrimitiveArray is generic struct which wrapped arrow's PrimitiveArray
 #[derive(Debug, Clone)]

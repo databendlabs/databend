@@ -17,7 +17,7 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 
 use super::take_random::TakeRandom;
-use super::take_random::TakeRandomUtf8;
+use super::take_random::TakeRandomString;
 use crate::prelude::*;
 
 macro_rules! impl_take_random_get {
@@ -88,8 +88,8 @@ impl TakeRandom for DFBooleanArray {
     }
 }
 
-impl<'a> TakeRandom for &'a DFUtf8Array {
-    type Item = &'a str;
+impl<'a> TakeRandom for &'a DFStringArray {
+    type Item = &'a [u8];
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
@@ -106,8 +106,8 @@ impl<'a> TakeRandom for &'a DFUtf8Array {
 
 // extra trait such that it also works without extra reference.
 // Autoref will insert the reference and
-impl<'a> TakeRandomUtf8 for &'a DFUtf8Array {
-    type Item = &'a str;
+impl<'a> TakeRandomString for &'a DFStringArray {
+    type Item = &'a [u8];
 
     #[inline]
     fn get(self, index: usize) -> Option<Self::Item> {

@@ -37,9 +37,9 @@ impl TablesTable {
     pub fn create() -> Self {
         TablesTable {
             schema: DataSchemaRefExt::create(vec![
-                DataField::new("database", DataType::Utf8, false),
-                DataField::new("name", DataType::Utf8, false),
-                DataField::new("engine", DataType::Utf8, false),
+                DataField::new("database", DataType::String, false),
+                DataField::new("name", DataType::String, false),
+                DataField::new("engine", DataType::String, false),
             ]),
         }
     }
@@ -104,14 +104,14 @@ impl Table for TablesTable {
             }
         }
 
-        let databases: Vec<&str> = database_tables.iter().map(|(d, _)| d.as_str()).collect();
-        let names: Vec<&str> = database_tables
+        let databases: Vec<&[u8]> = database_tables.iter().map(|(d, _)| d.as_bytes()).collect();
+        let names: Vec<&[u8]> = database_tables
             .iter()
-            .map(|(_, v)| v.raw().name())
+            .map(|(_, v)| v.raw().name().as_bytes())
             .collect();
-        let engines: Vec<&str> = database_tables
+        let engines: Vec<&[u8]> = database_tables
             .iter()
-            .map(|(_, v)| v.raw().engine())
+            .map(|(_, v)| v.raw().engine().as_bytes())
             .collect();
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![

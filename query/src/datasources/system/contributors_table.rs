@@ -35,7 +35,7 @@ pub struct ContributorsTable {
 impl ContributorsTable {
     pub fn create() -> Self {
         ContributorsTable {
-            schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::Utf8, false)]),
+            schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]),
         }
     }
 }
@@ -90,9 +90,9 @@ impl Table for ContributorsTable {
         _ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let contributors: Vec<&str> = env!("FUSE_COMMIT_AUTHORS")
+        let contributors: Vec<&[u8]> = env!("FUSE_COMMIT_AUTHORS")
             .split_terminator(',')
-            .map(|x| x.trim())
+            .map(|x| x.trim().as_bytes())
             .collect();
         let block =
             DataBlock::create_by_array(self.schema.clone(), vec![Series::new(contributors)]);

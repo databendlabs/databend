@@ -23,16 +23,14 @@ mod ops;
 mod trusted_len;
 mod upstream_traits;
 
-mod binary;
 mod boolean;
 mod list;
 mod null;
 mod primitive;
+mod string;
 mod r#struct;
-mod utf8;
 
 pub use arithmetic::*;
-pub use binary::*;
 pub use boolean::*;
 pub use builder::*;
 pub use comparison::*;
@@ -41,6 +39,6 @@ pub use null::*;
 pub use ops::*;
 pub use primitive::*;
 pub use r#struct::*;
+pub use string::*;
 pub use trusted_len::*;
 pub use upstream_traits::*;
-pub use utf8::*;

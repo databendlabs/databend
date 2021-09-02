@@ -30,10 +30,10 @@ macro_rules! dispatch_numeric_types {
 
 #[macro_export]
 macro_rules! match_data_type_apply_macro_ca {
-    ($self:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
+    ($self:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
 
         match $self.data_type() {
-            DataType::Utf8 => $macro_utf8!($self.utf8().unwrap() $(, $opt_args)*),
+            DataType::String => $macro_string!($self.string().unwrap() $(, $opt_args)*),
             DataType::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
             DataType::UInt8 => $macro!($self.u8().unwrap() $(, $opt_args)*),
             DataType::UInt16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
@@ -52,7 +52,7 @@ macro_rules! match_data_type_apply_macro_ca {
     }};
 }
 
-// doesn't include Bool and Utf8
+// doesn't include Bool and String
 #[macro_export]
 macro_rules! apply_method_numeric_series {
     ($self:ident, $method:ident, $($args:expr),*) => {
@@ -77,9 +77,9 @@ macro_rules! apply_method_numeric_series {
 
 #[macro_export]
 macro_rules! match_data_type_apply_macro {
-    ($obj:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
+    ($obj:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
         match $obj {
-            DataType::Utf8 => $macro_utf8!($($opt_args)*),
+            DataType::String => $macro_string!($($opt_args)*),
             DataType::Boolean => $macro_bool!($($opt_args)*),
             DataType::UInt8 => $macro!(u8 $(, $opt_args)*),
             DataType::UInt16 => $macro!(u16 $(, $opt_args)*),
@@ -192,13 +192,13 @@ macro_rules! try_build_array {
         Ok(builder.finish().into_series())
     }};
 
-    // utf8
-    ($utf8:ident, $VALUES:expr) => {{
-        let mut builder = Utf8ArrayBuilder::with_capacity($VALUES.len());
+    // String
+    ($string:ident, $VALUES:expr) => {{
+        let mut builder = StringArrayBuilder::with_capacity($VALUES.len());
         for value in $VALUES.iter() {
             match value {
-                DataValue::Utf8(Some(v)) => builder.append_value(v),
-                DataValue::Utf8(None) => builder.append_null(),
+                DataValue::String(Some(v)) => builder.append_value(v),
+                DataValue::String(None) => builder.append_null(),
                 _ => unreachable!(),
             }
         }

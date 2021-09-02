@@ -37,7 +37,7 @@ impl ParquetTestData {
 
     pub fn write_parquet(&self, path: &str) {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::Utf8, true),
+            DataField::new("name", DataType::String, true),
             DataField::new("age", DataType::Int32, false),
         ]);
 

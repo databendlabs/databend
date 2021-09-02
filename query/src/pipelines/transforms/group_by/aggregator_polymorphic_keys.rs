@@ -19,8 +19,8 @@ use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 
 use crate::common::HashTable;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::FixedKeysArrayBuilder;
@@ -44,7 +44,7 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 // use bumpalo::Bump;
 // use datafuse_query::common::HashTable;
 // use common_datablocks::HashMethodSerializer;
-// use common_datavalues::arrays::BinaryArrayBuilder;
+// use common_datavalues::arrays::StringArrayBuilder;
 // use datafuse_query::pipelines::transforms::group_by::PolymorphicKeysHelper;
 // use datafuse_query::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 // use datafuse_query::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
@@ -62,7 +62,7 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 //     type ArrayBuilder = SerializedKeysArrayBuilder;
 //     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
 //         SerializedKeysArrayBuilder {
-//             inner_builder: BinaryArrayBuilder::with_capacity(capacity),
+//             inner_builder: StringArrayBuilder::with_capacity(capacity),
 //         }
 //     }
 // }
@@ -150,7 +150,7 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     type ArrayBuilder = SerializedKeysArrayBuilder;
     fn state_array_builder(&self, capacity: usize) -> Self::ArrayBuilder {
         SerializedKeysArrayBuilder {
-            inner_builder: BinaryArrayBuilder::with_capacity(capacity),
+            inner_builder: StringArrayBuilder::with_capacity(capacity),
         }
     }
 }

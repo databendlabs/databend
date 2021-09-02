@@ -61,7 +61,7 @@ impl Interpreter for SettingInterpreter {
             }
         }
 
-        let schema = DataSchemaRefExt::create(vec![DataField::new("set", DataType::Utf8, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("set", DataType::String, false)]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }

@@ -32,7 +32,7 @@ use crate::SparseIndexValue;
 #[test]
 fn test_sparse_index() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", DataType::Utf8, true),
+        DataField::new("name", DataType::String, true),
         DataField::new("age", DataType::Int32, false),
     ]);
 
@@ -51,13 +51,13 @@ fn test_sparse_index() -> Result<()> {
             col: "name".to_string(),
             values: vec![
                 SparseIndexValue {
-                    min: DataValue::Utf8(Some("jack".to_string())),
-                    max: DataValue::Utf8(Some("bohu".to_string())),
+                    min: DataValue::String(Some("jack".as_bytes().to_vec())),
+                    max: DataValue::String(Some("bohu".as_bytes().to_vec())),
                     page_no: 0,
                 },
                 SparseIndexValue {
-                    min: DataValue::Utf8(Some("xjack".to_string())),
-                    max: DataValue::Utf8(Some("xbohu".to_string())),
+                    min: DataValue::String(Some("xjack".as_bytes().to_vec())),
+                    max: DataValue::String(Some("xbohu".as_bytes().to_vec())),
                     page_no: 1,
                 },
             ],

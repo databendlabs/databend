@@ -98,17 +98,16 @@ impl GroupHash for DFBooleanArray {
     }
 }
 
-impl GroupHash for DFUtf8Array {
+impl GroupHash for DFStringArray {
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.into_no_null_iter().zip(vec.iter_mut()) {
-            BinaryWrite::write_string(vec, value)?;
+            BinaryWrite::write_binary(vec, value)?;
         }
         Ok(())
     }
 }
 
 impl GroupHash for DFListArray {}
-impl GroupHash for DFBinaryArray {}
 impl GroupHash for DFNullArray {}
 impl GroupHash for DFStructArray {}

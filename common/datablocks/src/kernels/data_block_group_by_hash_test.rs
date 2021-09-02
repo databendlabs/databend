@@ -23,7 +23,7 @@ fn test_data_block_group_by_hash() -> Result<()> {
         DataField::new("a", DataType::Int8, false),
         DataField::new("b", DataType::Int8, false),
         DataField::new("c", DataType::Int8, false),
-        DataField::new("x", DataType::Utf8, false),
+        DataField::new("x", DataType::String, false),
     ]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![

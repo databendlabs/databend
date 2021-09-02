@@ -43,12 +43,12 @@ impl TracingTable {
         TracingTable {
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("v", DataType::Int64, false),
-                DataField::new("name", DataType::Utf8, false),
-                DataField::new("msg", DataType::Utf8, false),
+                DataField::new("name", DataType::String, false),
+                DataField::new("msg", DataType::String, false),
                 DataField::new("level", DataType::Int8, false),
-                DataField::new("hostname", DataType::Utf8, false),
+                DataField::new("hostname", DataType::String, false),
                 DataField::new("pid", DataType::Int64, false),
-                DataField::new("time", DataType::Utf8, false),
+                DataField::new("time", DataType::String, false),
             ]),
         }
     }

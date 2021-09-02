@@ -17,6 +17,7 @@ use common_arrow::arrow::array::NullArray;
 use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::compute::comparison::compare_scalar;
 use common_arrow::arrow::compute::comparison::Operator;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::scalar::PrimitiveScalar;
 use common_exception::Result;
 
@@ -58,19 +59,19 @@ fn test_array_if() -> Result<()> {
     assert_eq!(true, res.inner().value(1));
     assert_eq!(true, res.inner().value(2));
 
-    // DFUtf8Array.
-    let lhs = DFUtf8Array::new_from_slice(&["a"]);
-    let rhs = DFUtf8Array::new_from_slice(&["b"]);
+    // DFStringArray.
+    let lhs = DFStringArray::new_from_slice(&["a"]);
+    let rhs = DFStringArray::new_from_slice(&["b"]);
     let res = lhs.if_then_else(&rhs, &conds[0])?;
     assert_eq!(3, res.len());
-    assert_eq!("a", res.inner().value(0));
-    assert_eq!("b", res.inner().value(1));
-    assert_eq!("a", res.inner().value(2));
+    assert_eq!(b"a", res.inner().value(0));
+    assert_eq!(b"b", res.inner().value(1));
+    assert_eq!(b"a", res.inner().value(2));
 
     // DFNullArray.
-    let lhs = NullArray::new_null(2);
+    let lhs = NullArray::new_null(ArrowType::Null, 2);
     let lhs: DFNullArray = lhs.into();
-    let rhs = NullArray::new_null(1);
+    let rhs = NullArray::new_null(ArrowType::Null, 1);
     let rhs: DFNullArray = rhs.into();
     let res = lhs.if_then_else(&rhs, &conds[0])?;
     assert_eq!(2, res.len());

@@ -27,10 +27,10 @@ impl SQLCommon {
             SQLDataType::Int => Ok(DataType::Int32),
             SQLDataType::TinyInt => Ok(DataType::Int8),
             SQLDataType::SmallInt => Ok(DataType::Int16),
-            SQLDataType::Char(_) => Ok(DataType::Utf8),
-            SQLDataType::Varchar(_) => Ok(DataType::Utf8),
-            SQLDataType::String => Ok(DataType::Utf8),
-            SQLDataType::Text => Ok(DataType::Utf8),
+            SQLDataType::Char(_) => Ok(DataType::String),
+            SQLDataType::Varchar(_) => Ok(DataType::String),
+            SQLDataType::String => Ok(DataType::String),
+            SQLDataType::Text => Ok(DataType::String),
             SQLDataType::Decimal(_, _) => Ok(DataType::Float64),
             SQLDataType::Float(_) => Ok(DataType::Float32),
             SQLDataType::Real | SQLDataType::Double => Ok(DataType::Float64),
@@ -53,7 +53,7 @@ impl SQLCommon {
                     "INT64" => Ok(DataType::Int64),
                     "FLOAT32" => Ok(DataType::Float32),
                     "FLOAT64" => Ok(DataType::Float64),
-                    "STRING" => Ok(DataType::Utf8),
+                    "STRING" => Ok(DataType::String),
 
                     _ => Result::Err(ErrorCode::IllegalDataType(format!(
                         "The SQL data type {:?} is not implemented",

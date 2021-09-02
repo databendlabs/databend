@@ -103,8 +103,8 @@ impl FromTrustedLenIterator<bool> for NoNull<DFBooleanArray> {
         iter.collect()
     }
 }
-impl<Ptr> FromTrustedLenIterator<Ptr> for DFUtf8Array
-where Ptr: DFAsRef<str>
+impl<Ptr> FromTrustedLenIterator<Ptr> for DFStringArray
+where Ptr: DFAsRef<[u8]>
 {
     fn from_iter_trusted_length<I: TrustedLen<Item = Ptr>>(iter: I) -> Self {
         iter.collect()

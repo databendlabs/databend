@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
-use common_exception::Result;
-
-use crate::prelude::*;
-
 mod builder;
 mod iterator;
 
@@ -26,21 +19,27 @@ mod iterator;
 mod builder_test;
 
 pub use builder::*;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
 pub use iterator::*;
 
+use crate::prelude::*;
+
 #[derive(Debug, Clone)]
-pub struct DFUtf8Array {
-    pub(crate) array: LargeUtf8Array,
+pub struct DFStringArray {
+    pub(crate) array: LargeBinaryArray,
 }
 
-impl From<LargeUtf8Array> for DFUtf8Array {
-    fn from(array: LargeUtf8Array) -> Self {
+impl From<LargeBinaryArray> for DFStringArray {
+    fn from(array: LargeBinaryArray) -> Self {
         Self { array }
     }
 }
 
-impl DFUtf8Array {
-    pub fn new(array: LargeUtf8Array) -> Self {
+impl DFStringArray {
+    pub fn new(array: LargeBinaryArray) -> Self {
         Self { array }
     }
 
@@ -48,18 +47,18 @@ impl DFUtf8Array {
         Self::new(
             array
                 .as_any()
-                .downcast_ref::<LargeUtf8Array>()
+                .downcast_ref::<LargeBinaryArray>()
                 .unwrap()
                 .clone(),
         )
     }
 
-    pub fn data_type(&self) -> &DataType {
-        &DataType::Utf8
+    pub fn inner(&self) -> &LargeBinaryArray {
+        &self.array
     }
 
-    pub fn inner(&self) -> &LargeUtf8Array {
-        &self.array
+    pub fn data_type(&self) -> &DataType {
+        &DataType::String
     }
 
     /// # Safety
@@ -67,7 +66,7 @@ impl DFUtf8Array {
     pub unsafe fn try_get(&self, index: usize) -> Result<DataValue> {
         let v = match self.array.is_null(index) {
             true => None,
-            false => Some(self.array.value_unchecked(index)),
+            false => Some(self.array.value_unchecked(index).to_owned()),
         };
         Ok(v.into())
     }
@@ -87,13 +86,13 @@ impl DFUtf8Array {
     }
 
     #[inline]
-    pub fn is_null(&self, i: usize) -> bool {
-        self.array.is_null(i)
+    pub fn all_is_null(&self) -> bool {
+        self.null_count() == self.len()
     }
 
     #[inline]
-    pub fn all_is_null(&self) -> bool {
-        self.null_count() == self.len()
+    pub fn is_null(&self, i: usize) -> bool {
+        self.array.is_null(i)
     }
 
     #[inline]
@@ -132,23 +131,24 @@ impl DFUtf8Array {
         }
     }
 
-    pub fn collect_values(&self) -> Vec<Option<&'_ str>> {
-        self.inner().iter().collect()
+    pub fn collect_values(&self) -> Vec<Option<Vec<u8>>> {
+        let e = self.inner().iter().map(|c| c.map(|d| d.to_owned()));
+        e.collect()
     }
 }
 
 /// # Safety
 /// Note this doesn't do any bound checking, for performance reason.
-pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
-    arr: &LargeUtf8Array,
+pub unsafe fn take_string_iter_unchecked<I: IntoIterator<Item = usize>>(
+    arr: &LargeBinaryArray,
     indices: I,
-) -> LargeUtf8Array {
+) -> LargeBinaryArray {
     match arr.null_count() {
         0 => {
             let iter = indices
                 .into_iter()
                 .map(|idx| Some(arr.value_unchecked(idx)));
-            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
         }
         _ => {
             let iter = indices.into_iter().map(|idx| {
@@ -158,24 +158,24 @@ pub unsafe fn take_utf8_iter_unchecked<I: IntoIterator<Item = usize>>(
                     Some(arr.value_unchecked(idx))
                 }
             });
-            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
         }
     }
 }
 
 /// # Safety
 /// Note this doesn't do any bound checking, for performance reason.
-pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
-    arr: &LargeUtf8Array,
+pub unsafe fn take_string_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>>(
+    arr: &LargeBinaryArray,
     indices: I,
-) -> LargeUtf8Array {
+) -> LargeBinaryArray {
     match arr.null_count() {
         0 => {
             let iter = indices
                 .into_iter()
                 .map(|opt_idx| opt_idx.map(|idx| arr.value_unchecked(idx)));
 
-            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
         }
         _ => {
             let iter = indices.into_iter().map(|opt_idx| {
@@ -188,7 +188,7 @@ pub unsafe fn take_utf8_opt_iter_unchecked<I: IntoIterator<Item = Option<usize>>
                 })
             });
 
-            LargeUtf8Array::from_trusted_len_iter_unchecked(iter)
+            LargeBinaryArray::from_trusted_len_iter_unchecked(iter)
         }
     }
 }

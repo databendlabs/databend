@@ -91,14 +91,14 @@ impl FromIterator<bool> for NoNull<DFBooleanArray> {
     }
 }
 
-// FromIterator for Utf8Type variants.Array
+// FromIterator for StringType variants.Array
 
-impl<Ptr> FromIterator<Option<Ptr>> for DFUtf8Array
-where Ptr: AsRef<str>
+impl<Ptr> FromIterator<Option<Ptr>> for DFStringArray
+where Ptr: AsRef<[u8]>
 {
     fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
         // 2021-02-07: this was ~30% faster than with the builder.
-        let arr = LargeUtf8Array::from_iter(iter);
+        let arr = LargeBinaryArray::from_iter(iter);
         arr.into()
     }
 }
@@ -106,33 +106,33 @@ where Ptr: AsRef<str>
 /// Local AsRef<T> trait to circumvent the orphan rule.
 pub trait DFAsRef<T: ?Sized>: AsRef<T> {}
 
-impl DFAsRef<str> for String {}
-impl DFAsRef<str> for &str {}
+impl DFAsRef<[u8]> for Vec<u8> {}
+impl DFAsRef<[u8]> for &[u8] {}
 // &["foo", "bar"]
-impl DFAsRef<str> for &&str {}
-impl<'a> DFAsRef<str> for Cow<'a, str> {}
+impl DFAsRef<[u8]> for &&[u8] {}
+impl<'a> DFAsRef<[u8]> for Cow<'a, [u8]> {}
 
-impl<Ptr> FromIterator<Ptr> for DFUtf8Array
-where Ptr: DFAsRef<str>
+impl<Ptr> FromIterator<Ptr> for DFStringArray
+where Ptr: DFAsRef<[u8]>
 {
     fn from_iter<I: IntoIterator<Item = Ptr>>(iter: I) -> Self {
-        let arr = LargeUtf8Array::from_iter_values(iter.into_iter());
+        let arr = LargeBinaryArray::from_iter_values(iter.into_iter());
         arr.into()
     }
 }
 
 /// From trait
-impl<'a> From<&'a DFUtf8Array> for Vec<Option<&'a str>> {
-    fn from(ca: &'a DFUtf8Array) -> Self {
+impl<'a> From<&'a DFStringArray> for Vec<Option<&'a [u8]>> {
+    fn from(ca: &'a DFStringArray) -> Self {
         ca.inner().iter().collect()
     }
 }
 
-impl From<DFUtf8Array> for Vec<Option<String>> {
-    fn from(ca: DFUtf8Array) -> Self {
+impl From<DFStringArray> for Vec<Option<Vec<u8>>> {
+    fn from(ca: DFStringArray) -> Self {
         ca.inner()
             .iter()
-            .map(|opt| opt.map(|s| s.to_string()))
+            .map(|opt| opt.map(|s| s.to_vec()))
             .collect()
     }
 }

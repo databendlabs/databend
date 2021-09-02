@@ -34,7 +34,7 @@ fn test_substring_function() -> Result<()> {
     }
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Utf8, false),
+        DataField::new("a", DataType::String, false),
         DataField::new("b", DataType::Int64, false),
         DataField::new("c", DataType::UInt64, false),
     ]);

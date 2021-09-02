@@ -60,21 +60,21 @@ fn test_take() -> Result<()> {
     let expected = Series::new(vec![7_u16, 8, 9]);
     assert!(vs[0].series_equal(&expected));
 
-    // Test DFUtf8Array
-    let mut utf8_builder = Utf8ArrayBuilder::with_capacity(3);
-    utf8_builder.append_value("1a");
-    utf8_builder.append_value("2b");
-    utf8_builder.append_value("3c");
-    let df_utf8_array = &utf8_builder.finish();
+    // Test DFStringArray
+    let mut string_builder = StringArrayBuilder::with_capacity(3);
+    string_builder.append_value("1a");
+    string_builder.append_value("2b");
+    string_builder.append_value("3c");
+    let df_string_array = &string_builder.finish();
     let index = TakeIdx::from(vec![0, 1].into_iter());
-    let take_res = df_utf8_array.take(index)?;
+    let take_res = df_string_array.take(index)?;
     let vs: Vec<_> = take_res.into_no_null_iter().collect();
-    assert_eq!(&vs, &["1a", "2b"]);
+    assert_eq!(&vs, &[b"1a", b"2b"]);
 
     let index = TakeIdx::from(vec![2, 1].into_iter());
-    let take_res = unsafe { df_utf8_array.take_unchecked(index)? };
+    let take_res = unsafe { df_string_array.take_unchecked(index)? };
     let vs: Vec<_> = take_res.into_no_null_iter().collect();
-    assert_eq!(&vs, &["3c", "2b"]);
+    assert_eq!(&vs, &[b"3c", b"2b"]);
 
     Ok(())
 }

@@ -184,7 +184,7 @@ where
     }
 }
 
-impl NumOpsDispatch for DFUtf8Array {
+impl NumOpsDispatch for DFStringArray {
     fn add_to(&self, rhs: &Series) -> Result<Series> {
         let rhs = unsafe { self.unpack(rhs)? };
         let out = (self + rhs)?;
@@ -193,7 +193,6 @@ impl NumOpsDispatch for DFUtf8Array {
 }
 impl NumOpsDispatch for DFBooleanArray {}
 impl NumOpsDispatch for DFListArray {}
-impl NumOpsDispatch for DFBinaryArray {}
 impl NumOpsDispatch for DFNullArray {}
 impl NumOpsDispatch for DFStructArray {}
 

@@ -39,11 +39,11 @@ impl ContextFunction {
         }
 
         Ok(match name.to_lowercase().as_str() {
-            "database" => vec![Expression::create_literal(DataValue::Utf8(Some(
-                ctx.get_current_database(),
+            "database" => vec![Expression::create_literal(DataValue::String(Some(
+                ctx.get_current_database().into_bytes(),
             )))],
-            "version" => vec![Expression::create_literal(DataValue::Utf8(Some(
-                ctx.get_fuse_version(),
+            "version" => vec![Expression::create_literal(DataValue::String(Some(
+                ctx.get_fuse_version().into_bytes(),
             )))],
             _ => vec![],
         })
