@@ -170,6 +170,10 @@ nav:
       - Conversion Functions:
           - CAST: sqlstatement/conversion-functions/cast.md
           - Type Conversion: sqlstatement/conversion-functions/type-conversion.md
+      - Date and Time Functions:
+          - NOW: sqlstatement/datetime-functions/now.md
+          - TODAY: sqlstatement/datetime-functions/today.md
+          - YESTERDAY: sqlstatement/datetime-functions/yesterday.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:
