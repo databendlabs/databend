@@ -14,18 +14,16 @@
 
 use std::io;
 use std::io::BufReader;
-use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_io::prelude::*;
 
 use crate::Source;
 
 pub struct ValueSource<R> {
-    reader: Arc<RwLock<BufReader<R>>>,
+    reader: BufReader<R>,
     schema: DataSchemaRef,
     block_size: usize,
     rows: usize,
@@ -37,7 +35,7 @@ where R: io::Read + Send + Sync
     pub fn new(reader: R, schema: DataSchemaRef, block_size: usize) -> Self {
         let reader = BufReader::new(reader);
         Self {
-            reader: Arc::new(RwLock::new(reader)),
+            reader,
             block_size,
             schema,
             rows: 0,
@@ -49,7 +47,7 @@ impl<R> Source for ValueSource<R>
 where R: io::Read + Send + Sync
 {
     fn read(&mut self) -> Result<Option<DataBlock>> {
-        let mut reader = self.reader.write();
+        let reader = &mut self.reader;
         let mut buf = Vec::new();
         let mut temp = Vec::new();
 

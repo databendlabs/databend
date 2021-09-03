@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io;
-use std::sync::Arc;
 
 use common_arrow::arrow::io::csv::read::ByteRecord;
 use common_arrow::arrow::io::csv::read::Reader;
@@ -23,12 +22,11 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_infallible::RwLock;
 
 use crate::Source;
 
 pub struct CsvSource<R> {
-    reader: Arc<RwLock<Reader<R>>>,
+    reader: Reader<R>,
     schema: DataSchemaRef,
     block_size: usize,
     rows: usize,
@@ -41,7 +39,7 @@ where R: io::Read + Sync + Send
         let reader = ReaderBuilder::new().has_headers(false).from_reader(reader);
 
         Self {
-            reader: Arc::new(RwLock::new(reader)),
+            reader,
             block_size,
             schema,
             rows: 0,
@@ -53,7 +51,6 @@ impl<R> Source for CsvSource<R>
 where R: io::Read + Sync + Send
 {
     fn read(&mut self) -> Result<Option<DataBlock>> {
-        let mut reader = self.reader.write();
         let mut record = ByteRecord::new();
         let mut desers = self
             .schema
@@ -63,7 +60,8 @@ where R: io::Read + Sync + Send
             .collect::<Result<Vec<_>>>()?;
 
         for row in 0..self.block_size {
-            let v = reader
+            let v = self
+                .reader
                 .read_byte_record(&mut record)
                 .map_err_to_code(ErrorCode::BadBytes, || {
                     format!("Parse csv error at line {}", self.rows)
