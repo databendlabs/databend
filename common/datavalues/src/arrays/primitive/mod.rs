@@ -49,9 +49,9 @@ impl<T: DFPrimitiveType> From<PrimitiveArray<T>> for DFPrimitiveArray<T> {
 fn precision(x: &TimeUnit) -> usize {
     match x {
         TimeUnit::Second => 1,
-        TimeUnit::Millisecond => 1000,
-        TimeUnit::Microsecond => 1000_000,
-        TimeUnit::Nanosecond => 1000_1000_1000,
+        TimeUnit::Millisecond => 1_000,
+        TimeUnit::Microsecond => 1_000_000,
+        TimeUnit::Nanosecond => 1_000_1000_1000,
     }
 }
 

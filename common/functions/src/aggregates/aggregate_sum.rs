@@ -29,7 +29,6 @@ use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
-use crate::dispatch_numeric_types;
 use crate::with_match_primitive_type;
 
 struct AggregateSumState<T> {
@@ -213,6 +212,6 @@ pub fn try_create_aggregate_sum_function(
         Err(ErrorCode::BadDataValueType(format!(
             "AggregateSumFunction does not support type '{:?}'",
             data_type
-            )))
+        )))
     })
 }

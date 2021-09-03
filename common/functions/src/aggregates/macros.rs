@@ -13,22 +13,6 @@
 // limitations under the License.
 
 #[macro_export]
-macro_rules! dispatch_numeric_types {
-    ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
-        $dispatch! { u8, $data_type,      $($args),* }
-        $dispatch! { u16, $data_type,     $($args),* }
-        $dispatch! { u32, $data_type,     $($args),* }
-        $dispatch! { u64, $data_type,     $($args),* }
-        $dispatch! { i8, $data_type,       $($args),* }
-        $dispatch! { i16, $data_type,      $($args),* }
-        $dispatch! { i32, $data_type,      $($args),* }
-        $dispatch! { i64, $data_type,      $($args),* }
-        $dispatch! { f32, $data_type,    $($args),* }
-        $dispatch! { f64, $data_type,    $($args),* }
-    };
-}
-
-#[macro_export]
 macro_rules! with_match_primitive_type {
     (
     $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
