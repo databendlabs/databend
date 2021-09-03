@@ -16,3 +16,6 @@ select today() - 1 = yesterday();
 select today() - yesterday()  = 1;
 select today() + 1 = tomorrow();
 select tomorrow() - today() = 1;
+
+select timeSlot() < now();
+select timeSlot() + 1800 = now();

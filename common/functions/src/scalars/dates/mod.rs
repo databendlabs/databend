@@ -15,8 +15,10 @@
 mod date;
 mod now;
 mod simple_date;
+mod times;
 
 pub use date::DateFunction;
 pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
 pub use simple_date::YesterdayFunction;
+pub use times::TimeSlotFunction;
