@@ -40,7 +40,7 @@ use crate::pipelines::transforms::group_by::AggregatorParams;
 ///     - Aggregate data(HashMap or MergeSort set in future)
 ///     - Aggregate function state data memory pool
 ///     - Group by key data memory pool (if necessary)
-pub trait AggregatorState<Method: HashMethod> {
+pub trait AggregatorState<Method: HashMethod>: Sync + Send {
     type Key;
     type Entity: StateEntity<Self::Key>;
     type Iterator: Iterator<Item = *mut Self::Entity>;
@@ -61,6 +61,16 @@ pub struct ShortFixedKeysAggregatorState<T: ShortFixedKeyable> {
     max_size: usize,
     data: *mut ShortFixedKeysStateEntity<T>,
 }
+
+// TODO:(Winter) Hack:
+// The *mut ShortFixedKeysStateEntity needs to be used externally, but we can ensure that *mut
+// ShortFixedKeysStateEntity will not be used multiple async, so ShortFixedKeysAggregatorState is Send
+unsafe impl<T: ShortFixedKeyable + Send> Send for ShortFixedKeysAggregatorState<T> {}
+
+// TODO:(Winter) Hack:
+// The *mut ShortFixedKeysStateEntity needs to be used externally, but we can ensure that &*mut
+// ShortFixedKeysStateEntity will not be used multiple async, so ShortFixedKeysAggregatorState is Sync
+unsafe impl<T: ShortFixedKeyable + Sync> Sync for ShortFixedKeysAggregatorState<T> {}
 
 impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
     pub fn create(max_size: usize) -> Self {
@@ -150,6 +160,16 @@ pub struct LongerFixedKeysAggregatorState<T: HashTableKeyable> {
     pub data: HashMap<T, usize>,
 }
 
+// TODO:(Winter) Hack:
+// The *mut KeyValueEntity needs to be used externally, but we can ensure that *mut KeyValueEntity
+// will not be used multiple async, so KeyValueEntity is Send
+unsafe impl<T: HashTableKeyable + Send> Send for LongerFixedKeysAggregatorState<T> {}
+
+// TODO:(Winter) Hack:
+// The *mut KeyValueEntity needs to be used externally, but we can ensure that &*mut KeyValueEntity
+// will not be used multiple async, so KeyValueEntity is Sync
+unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<T> {}
+
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
 where
     T: DFPrimitiveType,
@@ -171,11 +191,6 @@ where
     }
 
     #[inline(always)]
-    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
-        self.data.insert_key(key, inserted)
-    }
-
-    #[inline(always)]
     fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
         let place: StateAddr = self.area.alloc_layout(params.layout).into();
 
@@ -187,6 +202,11 @@ where
 
         place
     }
+
+    #[inline(always)]
+    fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
+        self.data.insert_key(key, inserted)
+    }
 }
 
 pub struct SerializedKeysAggregatorState {
@@ -194,6 +214,16 @@ pub struct SerializedKeysAggregatorState {
     pub state_area: Bump,
     pub data_state_map: HashMap<KeysRef, usize>,
 }
+
+// TODO:(Winter) Hack:
+// The *mut KeyValueEntity needs to be used externally, but we can ensure that *mut KeyValueEntity
+// will not be used multiple async, so KeyValueEntity is Send
+unsafe impl Send for SerializedKeysAggregatorState {}
+
+// TODO:(Winter) Hack:
+// The *mut KeyValueEntity needs to be used externally, but we can ensure that &*mut KeyValueEntity
+// will not be used multiple async, so KeyValueEntity is Sync
+unsafe impl Sync for SerializedKeysAggregatorState {}
 
 impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     type Key = KeysRef;
@@ -208,9 +238,18 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         self.data_state_map.iter()
     }
 
-    // fn alloc_layout(&self, memory_layout: &AggregatorLayout) -> NonNull<u8> {
-    //     self.state_area.alloc_layout(memory_layout.layout)
-    // }
+    #[inline(always)]
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.state_area.alloc_layout(params.layout).into();
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
+    }
 
     fn entity(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
@@ -228,18 +267,5 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         }
 
         state_entity
-    }
-
-    #[inline(always)]
-    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.state_area.alloc_layout(params.layout).into();
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-
-        place
     }
 }
