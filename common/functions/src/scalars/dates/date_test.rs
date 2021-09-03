@@ -14,8 +14,8 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
-use super::timeslot::TimeSlotFunction;
 
+use super::timeslot::TimeSlotFunction;
 use crate::scalars::*;
 
 #[allow(dead_code)]
@@ -31,18 +31,15 @@ struct Test {
 
 #[test]
 fn test_date_function() -> Result<()> {
-
-    let tests = vec![
-        Test {
-            name: "test-timeSlot",
-            display: "timeSlot",
-            nullable: false,
-            columns: vec![Series::new(vec!["2021-12-21 12:13:15"]).into()],
-            func: TimeSlotFunction::try_create("timeSlot"),
-            expect: Series::new(vec![1213321231u32]),
-            error: "",
-        },
-    ];
+    let tests = vec![Test {
+        name: "test-timeSlot",
+        display: "timeSlot",
+        nullable: false,
+        columns: vec![Series::new(vec!["2021-12-21 12:13:15"]).into()],
+        func: TimeSlotFunction::try_create("timeSlot"),
+        expect: Series::new(vec![1213321231u32]),
+        error: "",
+    }];
 
     for t in tests {
         do_test(t);

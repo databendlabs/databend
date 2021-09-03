@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use common_datavalues::chrono::{Utc, DateTime, Timelike};
 use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::chrono::Timelike;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -23,7 +23,7 @@ use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct TimeSlotFunction {
-    display_name: String
+    display_name: String,
 }
 
 impl TimeSlotFunction {
@@ -51,9 +51,9 @@ impl Function for TimeSlotFunction {
         let fmt = "%Y-%m-%d %H:%M:%S";
         let time_str: DataValue = columns[0].column().clone().to_values()?[0].clone();
         let parse_result = NaiveDateTime::parse_from_str(time_str.to_string().as_str(), fmt);
-        let mut date = parse_result.unwrap();
+        let date = parse_result.unwrap();
         let minute = date.minute();
-        let mut new_minute : u32 = 0;
+        let mut new_minute: u32 = 0;
         if minute >= 30 {
             new_minute = 30;
         }

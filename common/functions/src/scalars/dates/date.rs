@@ -15,11 +15,11 @@
 use common_exception::Result;
 
 use super::now::NowFunction;
+use super::timeslot::TimeSlotFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::FactoryFuncRef;
-use super::timeslot::TimeSlotFunction;
 
 #[derive(Clone)]
 pub struct DateFunction {}
