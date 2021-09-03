@@ -15,11 +15,11 @@
 use common_exception::Result;
 
 use super::now::NowFunction;
-use super::TimeSlotFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::FactoryFuncRef;
+use super::timeslot::TimeSlotFunction;
 
 #[derive(Clone)]
 pub struct DateFunction {}
@@ -32,6 +32,7 @@ impl DateFunction {
         map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
         map.insert("timeSlot".into(), TimeSlotFunction::try_create);
+
         Ok(())
     }
 }

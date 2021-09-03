@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod date_test;
+
 mod date;
 mod now;
 mod simple_date;
-mod times;
+mod timeslot;
 
 pub use date::DateFunction;
 pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
 pub use simple_date::YesterdayFunction;
-pub use times::TimeSlotFunction;

@@ -13,48 +13,28 @@
 // limitations under the License.
 
 use std::fmt;
-use std::marker::PhantomData;
 
-use common_datavalues::chrono::Utc;
+use common_datavalues::chrono::{Utc, DateTime, Timelike};
+use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
 
-#[derive(Clone, Debug)]
-pub struct TimeFunction<T> {
-    display_name: String,
-    t: PhantomData<T>,
-}
-
-pub trait NoArgTimeFunction {
-    fn execute() -> u32;
-}
-
 #[derive(Clone)]
-pub struct TimeSlot;
-
-impl NoArgTimeFunction for TimeSlot {
-    fn execute() -> u32 {
-        let utc = Utc::now();
-        (utc.timestamp_millis() / 1000 - 60 * 30) as u32
-    }
+pub struct TimeSlotFunction {
+    display_name: String
 }
 
-impl<T> TimeFunction<T>
-where T: NoArgTimeFunction + Clone + Sync + Send + 'static
-{
+impl TimeSlotFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(TimeFunction::<T> {
+        Ok(Box::new(TimeSlotFunction {
             display_name: display_name.to_string(),
-            t: PhantomData,
         }))
     }
 }
 
-impl<T> Function for TimeFunction<T>
-where T: NoArgTimeFunction + Clone + Sync + Send + 'static
-{
+impl Function for TimeSlotFunction {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
@@ -67,19 +47,29 @@ where T: NoArgTimeFunction + Clone + Sync + Send + 'static
         Ok(false)
     }
 
-    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let value = T::execute();
-        Ok(DataColumn::Constant(
-            DataValue::UInt32(Some(value)),
-            input_rows,
-        ))
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let fmt = "%Y-%m-%d %H:%M:%S";
+        let time_str: DataValue = columns[0].column().clone().to_values()?[0].clone();
+        let parse_result = NaiveDateTime::parse_from_str(time_str.to_string().as_str(), fmt);
+        let mut date = parse_result.unwrap();
+        let minute = date.minute();
+        let mut new_minute : u32 = 0;
+        if minute >= 30 {
+            new_minute = 30;
+        }
+        let result = date.with_minute(new_minute);
+        let new_date = result.unwrap();
+        let value = DataValue::UInt32(Some(new_date.timestamp() as u32));
+        Ok(DataColumn::Constant(value, input_rows))
+    }
+
+    fn num_arguments(&self) -> usize {
+        1
     }
 }
 
-impl<T> fmt::Display for TimeFunction<T> {
+impl fmt::Display for TimeSlotFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}()", self.display_name)
+        write!(f, "timeSlot")
     }
 }
-
-pub type TimeSlotFunction = TimeFunction<TimeSlot>;
