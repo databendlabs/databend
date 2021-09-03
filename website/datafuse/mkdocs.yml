@@ -173,6 +173,7 @@ nav:
       - Date and Time Functions:
           - NOW: sqlstatement/datetime-functions/now.md
           - TODAY: sqlstatement/datetime-functions/today.md
+          - TOMORROW: sqlstatement/datetime-functions/tomorrow.md
           - YESTERDAY: sqlstatement/datetime-functions/yesterday.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
