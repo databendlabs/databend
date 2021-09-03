@@ -51,7 +51,7 @@ fn precision(x: &TimeUnit) -> usize {
         TimeUnit::Second => 1,
         TimeUnit::Millisecond => 1_000,
         TimeUnit::Microsecond => 1_000_000,
-        TimeUnit::Nanosecond => 1_000_1000_1000,
+        TimeUnit::Nanosecond => 1_000_000_000,
     }
 }
 
@@ -73,11 +73,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                         .downcast_ref::<PrimitiveArray<i64>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(
-                        array,
-                        |x| (x as usize / p) as u32,
-                        expected_arrow_type.clone(),
-                    );
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
 
                     Self::from_arrow_array(&array)
                 }
@@ -104,11 +100,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                         .downcast_ref::<PrimitiveArray<i32>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(
-                        array,
-                        |x| (x as usize / p) as u32,
-                        expected_arrow_type.clone(),
-                    );
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
 
                     Self::from_arrow_array(&array)
                 }
@@ -119,11 +111,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                         .downcast_ref::<PrimitiveArray<i64>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(
-                        array,
-                        |x| (x as usize / p) as u32,
-                        expected_arrow_type.clone(),
-                    );
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
 
                     Self::from_arrow_array(&array)
                 }
