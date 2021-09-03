@@ -18,7 +18,7 @@ common-io = {path = "../io"}
 
 # Crates.io dependencies
 num = "^0.4"
-ordered-float = "2.7"
+ordered-float = "2.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ahash = "0.7.4"
