@@ -13,7 +13,11 @@
 //  limitations under the License.
 //
 
+use std::io::Error;
+
 use common_exception::ErrorCode;
+use futures::Stream;
+use futures::StreamExt;
 use rusoto_core::ByteStream;
 use rusoto_core::Region;
 use rusoto_s3::GetObjectRequest;
@@ -35,6 +39,24 @@ impl S3 {
     pub fn new(region: Region, bucket: String) -> Self {
         let client = S3Client::new(region);
         S3 { client, bucket }
+    }
+
+    async fn put_byte_stream(
+        &self,
+        path: &str,
+        input_stream: ByteStream,
+    ) -> common_exception::Result<()> {
+        let req = PutObjectRequest {
+            key: path.to_string(),
+            bucket: self.bucket.to_string(),
+            body: Some(input_stream),
+            ..Default::default()
+        };
+        self.client
+            .put_object(req)
+            .await
+            .map_err(|e| ErrorCode::DALTransportError(e.to_string()))?;
+        Ok(())
     }
 }
 
@@ -77,16 +99,20 @@ impl DataAccessor for S3 {
     }
 
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()> {
-        let req = PutObjectRequest {
-            key: path.to_string(),
-            bucket: self.bucket.to_string(),
-            body: Some(ByteStream::from(content)),
-            ..Default::default()
-        };
-        self.client
-            .put_object(req)
+        self.put_byte_stream(path, ByteStream::from(content)).await
+    }
+
+    async fn put_stream<S>(
+        &self,
+        path: &str,
+        input_stream: S,
+        stream_len: usize,
+    ) -> common_exception::Result<()>
+    where
+        S: Stream<Item = Result<Bytes, Error>> + Send + 'static,
+    {
+        let s = input_stream.map(|bytes| bytes.map(|b| bytes::Bytes::copy_from_slice(&b)));
+        self.put_byte_stream(path, ByteStream::new_with_size(s, stream_len))
             .await
-            .map_err(|e| ErrorCode::DALTransportError(e.to_string()))?;
-        Ok(())
     }
 }

@@ -21,6 +21,8 @@ use async_compat::Compat;
 use async_compat::CompatExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::Stream;
+use futures::StreamExt;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
@@ -76,6 +78,7 @@ impl DataAccessor for Local {
         Ok(contents)
     }
 
+    // not "atomic", for test purpose only
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()> {
         let path = self.prefix_with_root(path)?;
         let parent = path
@@ -84,6 +87,22 @@ impl DataAccessor for Local {
         tokio::fs::create_dir_all(parent).await?;
         let mut new_file = tokio::fs::File::create(path).await?;
         new_file.write_all(&content).await?;
+        Ok(())
+    }
+
+    // not "atomic", for test purpose only
+    async fn put_stream<S>(&self, path: &str, input_stream: S, _stream_len: usize) -> Result<()>
+    where S: Stream<Item = std::result::Result<Bytes, Error>> + Send + 'static {
+        let path = self.prefix_with_root(path)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| ErrorCode::UnknownException(""))?; // TODO customized error code
+        tokio::fs::create_dir_all(parent).await?;
+        let mut new_file = tokio::fs::File::create(path).await?;
+        let mut s = Box::pin(input_stream);
+        while let Some(Ok(v)) = s.next().await {
+            new_file.write_all(&v).await?
+        }
         Ok(())
     }
 }
