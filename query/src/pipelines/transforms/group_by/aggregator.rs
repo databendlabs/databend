@@ -60,23 +60,31 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
         let mut state = hash_method.aggregate_state();
 
-        while let Some(block) = stream.next().await {
-            let block = block?;
+        match aggregator_params.aggregate_functions.is_empty() {
+            true => {
+                while let Some(block) = stream.next().await {
+                    let block = block?;
 
-            // 1.1 and 1.2.
-            let group_columns = Self::group_columns(&group_cols, &block)?;
-            let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
+                    // 1.1 and 1.2.
+                    let group_columns = Self::group_columns(&group_cols, &block)?;
+                    let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
+                    self.lookup_key(group_keys, &mut state);
+                }
+            }
+            false => {
+                while let Some(block) = stream.next().await {
+                    let block = block?;
 
-            // TODO: This can be moved outside the while
-            // In fact, the rust compiler will help us do this(optimize the while match to match while),
-            // but we need to ensure that the match is simple enough(otherwise there will be performance degradation).
-            let places: StateAddrs = match aggregator_params.aggregate_functions.is_empty() {
-                true => self.lookup_key(group_keys, &mut state),
-                false => self.lookup_state(group_keys, &mut state),
-            };
+                    // 1.1 and 1.2.
+                    let group_columns = Self::group_columns(&group_cols, &block)?;
+                    let group_keys = hash_method.build_keys(&group_columns, block.num_rows())?;
 
-            Self::execute(aggregator_params, &block, &places)?;
+                    let places = self.lookup_state(group_keys, &mut state);
+                    Self::execute(aggregator_params, &block, &places)?;
+                }
+            }
         }
+
         Ok(state)
     }
 
@@ -103,13 +111,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     }
 
     #[inline(always)]
-    fn lookup_key(&self, keys: Vec<Method::HashKey>, state: &mut Method::State) -> StateAddrs {
+    fn lookup_key(&self, keys: Vec<Method::HashKey>, state: &mut Method::State) {
         let mut inserted = true;
         for key in keys.iter() {
             state.entity(key, &mut inserted);
         }
-
-        vec![0_usize.into(); keys.len()]
     }
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)
