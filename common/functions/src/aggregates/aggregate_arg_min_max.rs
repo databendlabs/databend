@@ -27,7 +27,7 @@ use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::dispatch_numeric_types;
+use crate::with_match_primitive_type;
 
 pub trait AggregateArgMinMaxState: Send + Sync + 'static {
     fn new(data_type: &DataType) -> Self;
@@ -367,25 +367,6 @@ where T: AggregateArgMinMaxState
     }
 }
 
-macro_rules! creator {
-    ($T: ident, $data_type: expr, $is_min: expr, $display_name: expr, $arguments: expr) => {
-        if $T::data_type() == $data_type {
-            type AggState = NumericState<$T>;
-            if $is_min {
-                return AggregateArgMinMaxFunction::<AggState>::try_create_arg_min(
-                    $display_name,
-                    $arguments,
-                );
-            } else {
-                return AggregateArgMinMaxFunction::<AggState>::try_create_arg_max(
-                    $display_name,
-                    $arguments,
-                );
-            }
-        }
-    };
-}
-
 pub fn try_create_aggregate_arg_minmax_function(
     is_min: bool,
     display_name: &str,
@@ -395,23 +376,40 @@ pub fn try_create_aggregate_arg_minmax_function(
     assert_binary_arguments(display_name, arguments.len())?;
     let data_type = arguments[1].data_type();
 
-    dispatch_numeric_types! {creator, data_type.clone(), is_min, display_name, arguments}
-    if data_type == &DataType::String {
+    with_match_primitive_type!(data_type, |$T| {
+        type AggState = NumericState<$T>;
         if is_min {
-            return AggregateArgMinMaxFunction::<StringState>::try_create_arg_min(
+             AggregateArgMinMaxFunction::<AggState>::try_create_arg_min(
                 display_name,
                 arguments,
-            );
+            )
         } else {
-            return AggregateArgMinMaxFunction::<StringState>::try_create_arg_max(
+             AggregateArgMinMaxFunction::<AggState>::try_create_arg_max(
                 display_name,
                 arguments,
-            );
+            )
         }
-    }
 
-    Err(ErrorCode::BadDataValueType(format!(
-        "AggregateArgMinMaxFunction does not support type '{:?}'",
-        data_type
-    )))
+    },
+
+    {
+        if data_type == &DataType::String {
+            if is_min {
+                return AggregateArgMinMaxFunction::<StringState>::try_create_arg_min(
+                    display_name,
+                    arguments,
+                );
+            } else {
+                return AggregateArgMinMaxFunction::<StringState>::try_create_arg_max(
+                    display_name,
+                    arguments,
+                );
+            }
+        }
+
+        Err(ErrorCode::BadDataValueType(format!(
+            "AggregateArgMinMaxFunction does not support type '{:?}'",
+            data_type
+        )))
+    })
 }

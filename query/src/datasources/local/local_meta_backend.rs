@@ -142,7 +142,7 @@ impl MetaBackend for LocalMetaBackend {
         let table_name = clone.table.as_str();
 
         let table = match plan.engine.to_uppercase().as_str() {
-            "JSON" => ParquetTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
+            "PARQUET" => ParquetTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             "CSV" => CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             "NULL" => NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             "MEMORY" => MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,

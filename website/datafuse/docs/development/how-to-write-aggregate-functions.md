@@ -90,7 +90,7 @@ Let's take an example of aggregate function `sum`.
 
 It's declared as `AggregateSumFunction<T, SumT>`, we can accept varying integer types like `u8`, `i8`. `T` and `SumT` is logic types which implement `DFPrimitiveType`. e.g., `T` is `u8` and `SumT` must be `u64`.
 
-Also, we can dispatch it using macros by matching the types of the arguments. Take a look at the `dispatch_numeric_types` to understand the dispatch macros.
+Also, we can dispatch it using macros by matching the types of the arguments. Take a look at the `with_match_primitive_type` to understand the dispatch macros.
 
 The `AggregateSumState` will be
 ```
