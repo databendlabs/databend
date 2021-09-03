@@ -15,8 +15,6 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::IntervalUnit as ArrowIntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit as ArrowTimeUnit;
 
 use crate::DataField;
 
@@ -50,52 +48,6 @@ pub enum DataType {
     List(Box<DataField>),
     Struct(Vec<DataField>),
     String,
-}
-
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
-pub enum TimeUnit {
-    /// Time in seconds.
-    Second,
-    /// Time in milliseconds.
-    Millisecond,
-    /// Time in microseconds.
-    Microsecond,
-    /// Time in nanoseconds.
-    Nanosecond,
-}
-
-impl TimeUnit {
-    pub fn to_arrow(&self) -> ArrowTimeUnit {
-        unsafe { std::mem::transmute(self.clone()) }
-    }
-
-    pub fn from_arrow(iu: &ArrowTimeUnit) -> Self {
-        unsafe { std::mem::transmute(iu.clone()) }
-    }
-}
-
-/// YEAR_MONTH or DAY_TIME interval in SQL style.
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
-pub enum IntervalUnit {
-    /// Indicates the number of elapsed whole months, stored as 4-byte integers.
-    YearMonth,
-    /// Indicates the number of elapsed days and milliseconds,
-    /// stored as 2 contiguous 32-bit integers (8-bytes in total).
-    DayTime,
-}
-
-impl IntervalUnit {
-    pub fn to_arrow(&self) -> ArrowIntervalUnit {
-        unsafe { std::mem::transmute(self.clone()) }
-    }
-
-    pub fn from_arrow(iu: &ArrowIntervalUnit) -> Self {
-        unsafe { std::mem::transmute(iu.clone()) }
-    }
 }
 
 impl DataType {
@@ -154,10 +106,15 @@ impl From<&ArrowDataType> for DataType {
                 DataType::List(Box::new(f))
             }
             ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::String,
+            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
+
+            ArrowDataType::Timestamp(_, _) => DataType::DateTime32,
+            ArrowDataType::Date32 => DataType::Date16,
+            ArrowDataType::Date64 => DataType::Date32,
 
             // this is safe, because we define the datatype firstly
             _ => {
-                unimplemented!()
+                unimplemented!("data_type: {}", dt)
             }
         }
     }

@@ -21,6 +21,8 @@ mod builder_test;
 pub use builder::*;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::compute::cast::binary_to_large_binary;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use iterator::*;
@@ -44,6 +46,26 @@ impl DFStringArray {
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
+        if array.data_type() == &ArrowDataType::Binary {
+            let arr = array.as_any().downcast_ref::<BinaryArray<i32>>().unwrap();
+            let arr = binary_to_large_binary(arr, ArrowDataType::LargeBinary);
+            return Self::new(arr);
+        }
+
+        if array.data_type() == &ArrowDataType::Utf8 {
+            let arr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
+
+            let iter = arr.iter().map(|x| x.map(|x| x.as_bytes()));
+            return Self::from_iter_trusted_length(iter);
+        }
+
+        if array.data_type() == &ArrowDataType::LargeUtf8 {
+            let arr = array.as_any().downcast_ref::<Utf8Array<i64>>().unwrap();
+
+            let iter = arr.iter().map(|x| x.map(|x| x.as_bytes()));
+            return Self::from_iter_trusted_length(iter);
+        }
+
         Self::new(
             array
                 .as_any()

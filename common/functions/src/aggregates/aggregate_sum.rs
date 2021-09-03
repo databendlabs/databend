@@ -30,6 +30,7 @@ use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::dispatch_numeric_types;
+use crate::with_match_primitive_type;
 
 struct AggregateSumState<T> {
     pub value: Option<T>,
@@ -192,17 +193,6 @@ where
     }
 }
 
-macro_rules! creator {
-    ($T: ident, $data_type: expr, $display_name: expr, $arguments: expr) => {
-        if $T::data_type() == $data_type {
-            return AggregateSumFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
-                $display_name,
-                $arguments,
-            );
-        }
-    };
-}
-
 pub fn try_create_aggregate_sum_function(
     display_name: &str,
     _params: Vec<DataValue>,
@@ -211,10 +201,18 @@ pub fn try_create_aggregate_sum_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
-    dispatch_numeric_types! {creator, data_type.clone(), display_name, arguments}
+    with_match_primitive_type!(data_type, |$T| {
+        AggregateSumFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
+             display_name,
+             arguments,
+        )
+    },
 
-    Err(ErrorCode::BadDataValueType(format!(
-        "AggregateSumFunction does not support type '{:?}'",
-        data_type
-    )))
+    // no matching branch
+    {
+        Err(ErrorCode::BadDataValueType(format!(
+            "AggregateSumFunction does not support type '{:?}'",
+            data_type
+            )))
+    })
 }

@@ -42,7 +42,7 @@ use crate::pipelines::transforms::ExpressionExecutor;
 pub struct ExpressionTransform {
     // The final schema(Build by plan_builder.expression).
     input: Arc<dyn Processor>,
-    executor: Arc<ExpressionExecutor>,
+    executor: ExpressionExecutor,
 }
 
 impl ExpressionTransform {
@@ -62,7 +62,7 @@ impl ExpressionTransform {
 
         Ok(ExpressionTransform {
             input: Arc::new(EmptyProcessor::create()),
-            executor: Arc::new(executor),
+            executor,
         })
     }
 }
@@ -89,12 +89,13 @@ impl Processor for ExpressionTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let executor = self.executor.clone();
         let input_stream = self.input.execute().await?;
-        let executor_fn = |executor: Arc<ExpressionExecutor>,
+
+        let executor_fn = |executor: &ExpressionExecutor,
                            block: Result<DataBlock>|
          -> Result<DataBlock> { executor.execute(&block?) };
 
-        let stream = input_stream
-            .filter_map(move |v| executor_fn(executor.clone(), v).map(Some).transpose());
+        let stream =
+            input_stream.filter_map(move |v| executor_fn(&executor, v).map(Some).transpose());
 
         Ok(Box::pin(stream))
     }
