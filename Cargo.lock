@@ -111,7 +111,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-source = "git+https://github.com/zhyass/arrow2?rev=23682f0#23682f033d6e473a8292e441414795e843b47188"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=d6879ba#d6879ba5023d5bbf0e5857b22d97690d6b59ed86"
 dependencies = [
  "arrow2",
  "bytes",
@@ -125,7 +125,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.4.0"
-source = "git+https://github.com/zhyass/arrow2?rev=23682f0#23682f033d6e473a8292e441414795e843b47188"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=d6879ba#d6879ba5023d5bbf0e5857b22d97690d6b59ed86"
 dependencies = [
  "ahash 0.7.4",
  "base64",
