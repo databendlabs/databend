@@ -35,7 +35,7 @@ pub struct CsvSource<R> {
 }
 
 impl<R> CsvSource<R>
-where R: io::Read
+where R: io::Read + Sync + Send
 {
     pub fn new(reader: R, schema: DataSchemaRef, block_size: usize) -> Self {
         let reader = ReaderBuilder::new().has_headers(false).from_reader(reader);
@@ -50,7 +50,7 @@ where R: io::Read
 }
 
 impl<R> Source for CsvSource<R>
-where R: io::Read
+where R: io::Read + Sync + Send
 {
     fn read(&mut self) -> Result<Option<DataBlock>> {
         let mut reader = self.reader.write();

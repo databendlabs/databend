@@ -77,14 +77,13 @@ impl GroupByPartialTransform {
         let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
 
         let aggregator = Aggregator::create(method, aggregator_params);
-        let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+        let state = aggregator.aggregate(group_cols, stream).await?;
 
         let delta = start.elapsed();
         tracing::debug!("Group by partial cost: {:?}", delta);
 
-        let groups = groups_locker.lock();
         let finalized_schema = self.schema.clone();
-        aggregator.aggregate_finalized(&groups, finalized_schema)
+        aggregator.aggregate_finalized(&state, finalized_schema)
     }
 }
 

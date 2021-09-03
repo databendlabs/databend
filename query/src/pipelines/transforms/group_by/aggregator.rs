@@ -23,7 +23,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
-use common_infallible::Mutex;
 use common_io::prelude::BytesMut;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -53,17 +52,16 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         &self,
         group_cols: Vec<String>,
         mut stream: SendableDataBlockStream,
-    ) -> Result<Mutex<Method::State>> {
+    ) -> Result<Method::State> {
         // This may be confusing
         // It will help us improve performance ~10% when we declare local references for them.
         let hash_method = &self.method;
         let aggregator_params = self.params.as_ref();
 
-        let aggregate_state = Mutex::new(hash_method.aggregate_state());
+        let mut state = hash_method.aggregate_state();
 
         while let Some(block) = stream.next().await {
             let block = block?;
-            let mut groups = aggregate_state.lock();
 
             // 1.1 and 1.2.
             let group_columns = Self::group_columns(&group_cols, &block)?;
@@ -73,13 +71,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             // In fact, the rust compiler will help us do this(optimize the while match to match while),
             // but we need to ensure that the match is simple enough(otherwise there will be performance degradation).
             let places: StateAddrs = match aggregator_params.aggregate_functions.is_empty() {
-                true => self.lookup_key(group_keys, &mut groups),
-                false => self.lookup_state(group_keys, &mut groups),
+                true => self.lookup_key(group_keys, &mut state),
+                false => self.lookup_state(group_keys, &mut state),
             };
 
             Self::execute(aggregator_params, &block, &places)?;
         }
-        Ok(aggregate_state)
+        Ok(state)
     }
 
     #[inline(always)]

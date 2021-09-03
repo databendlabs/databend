@@ -32,7 +32,7 @@ pub struct ValueSource<R> {
 }
 
 impl<R> ValueSource<R>
-where R: io::Read
+where R: io::Read + Send + Sync
 {
     pub fn new(reader: R, schema: DataSchemaRef, block_size: usize) -> Self {
         let reader = BufReader::new(reader);
@@ -46,7 +46,7 @@ where R: io::Read
 }
 
 impl<R> Source for ValueSource<R>
-where R: io::Read
+where R: io::Read + Send + Sync
 {
     fn read(&mut self) -> Result<Option<DataBlock>> {
         let mut reader = self.reader.write();
