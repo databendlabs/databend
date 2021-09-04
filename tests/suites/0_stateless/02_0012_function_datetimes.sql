@@ -16,3 +16,9 @@ select today() - 1 = yesterday();
 select today() - yesterday()  = 1;
 select today() + 1 = tomorrow();
 select tomorrow() - today() = 1;
+
+select toYYYYMM(toDateTime(1630320462));
+select toYYYYMM(today() - 30) = toYYYYMM(today()) - 1;
+select toYYYYMM(today() + 30) = toYYYYMM(today()) + 1;
+select toYYYYMM(today()) - toYYYYMM(today() - 30) = 1;
+select toYYYYMM(today() + 30) - toYYYYMM(today()) = 1;

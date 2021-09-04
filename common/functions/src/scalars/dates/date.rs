@@ -18,6 +18,7 @@ use super::now::NowFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
+use super::ToYYYYFunction;
 use crate::scalars::FactoryFuncRef;
 
 #[derive(Clone)]
@@ -30,6 +31,7 @@ impl DateFunction {
         map.insert("yesterday".into(), YesterdayFunction::try_create);
         map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
+        map.insert("toYYYYMM".into(), ToYYYYFunction::try_create);
 
         Ok(())
     }
