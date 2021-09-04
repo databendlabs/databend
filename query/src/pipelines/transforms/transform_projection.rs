@@ -29,7 +29,7 @@ use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub struct ProjectionTransform {
-    executor: Arc<ExpressionExecutor>,
+    executor: ExpressionExecutor,
     input: Arc<dyn Processor>,
 }
 
@@ -48,7 +48,7 @@ impl ProjectionTransform {
         )?;
 
         Ok(ProjectionTransform {
-            executor: Arc::new(executor),
+            executor,
             input: Arc::new(EmptyProcessor::create()),
         })
     }
@@ -80,17 +80,18 @@ impl Processor for ProjectionTransform {
         let input_stream = self.input.execute().await?;
 
         let executor_fn =
-            |executor: Arc<ExpressionExecutor>, block: Result<DataBlock>| -> Result<DataBlock> {
+            |executor: &ExpressionExecutor, block: Result<DataBlock>| -> Result<DataBlock> {
                 let block = block?;
                 let start = Instant::now();
+
                 let r = executor.execute(&block);
                 let delta = start.elapsed();
                 tracing::debug!("Projection cost: {:?}", delta);
                 r
             };
 
-        let stream = input_stream
-            .filter_map(move |v| executor_fn(executor.clone(), v).map(Some).transpose());
+        let stream =
+            input_stream.filter_map(move |v| executor_fn(&executor, v).map(Some).transpose());
 
         Ok(Box::pin(stream))
     }

@@ -20,6 +20,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,7 +29,7 @@ use common_io::prelude::*;
 use crate::arrays::ListBooleanArrayBuilder;
 use crate::arrays::ListBuilderTrait;
 use crate::arrays::ListPrimitiveArrayBuilder;
-use crate::arrays::ListUtf8ArrayBuilder;
+use crate::arrays::ListStringArrayBuilder;
 use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
@@ -50,8 +51,7 @@ pub enum DataValue {
     UInt64(Option<u64>),
     Float32(Option<f32>),
     Float64(Option<f64>),
-    Binary(Option<Vec<u8>>),
-    Utf8(Option<String>),
+    String(Option<Vec<u8>>),
 
     // Container struct.
     List(Option<Vec<DataValue>>, DataType),
@@ -75,8 +75,7 @@ impl DataValue {
                 | DataValue::UInt64(None)
                 | DataValue::Float32(None)
                 | DataValue::Float64(None)
-                | DataValue::Binary(None)
-                | DataValue::Utf8(None)
+                | DataValue::String(None)
                 | DataValue::Null
                 | DataValue::List(None, _)
         )
@@ -96,7 +95,6 @@ impl DataValue {
             DataValue::UInt64(_) => DataType::UInt64,
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
-            DataValue::Utf8(_) => DataType::Utf8,
             DataValue::List(_, data_type) => {
                 DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
             }
@@ -111,7 +109,7 @@ impl DataValue {
                     .collect::<Vec<_>>();
                 DataType::Struct(fields)
             }
-            DataValue::Binary(_) => DataType::Binary,
+            DataValue::String(_) => DataType::String,
         }
     }
 
@@ -122,7 +120,7 @@ impl DataValue {
     pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
         match self {
             DataValue::Null => {
-                let array = NullArray::new_null(size);
+                let array = NullArray::new_null(ArrowType::Null, size);
                 let array: DFNullArray = array.into();
                 Ok(array.into_series())
             }
@@ -137,17 +135,10 @@ impl DataValue {
             DataValue::UInt64(values) => Ok(build_constant_series! {DFUInt64Array, values, size}),
             DataValue::Float32(values) => Ok(build_constant_series! {DFFloat32Array, values, size}),
             DataValue::Float64(values) => Ok(build_constant_series! {DFFloat64Array, values, size}),
-
-            DataValue::Utf8(values) => match values {
-                None => Ok(DFUtf8Array::full_null(size).into_series()),
-                Some(v) => Ok(DFUtf8Array::full(v.deref(), size).into_series()),
+            DataValue::String(values) => match values {
+                None => Ok(DFStringArray::full_null(size).into_series()),
+                Some(v) => Ok(DFStringArray::full(v.deref(), size).into_series()),
             },
-
-            DataValue::Binary(values) => match values {
-                None => Ok(DFBinaryArray::full_null(size).into_series()),
-                Some(v) => Ok(DFBinaryArray::full(v.deref(), size).into_series()),
-            },
-
             DataValue::List(values, data_type) => match data_type {
                 DataType::Int8 => build_list_series! {i8, values, size, data_type },
                 DataType::Int16 => build_list_series! {i16, values, size, data_type },
@@ -177,8 +168,8 @@ impl DataValue {
                     }
                     Ok(builder.finish().into_series())
                 }
-                DataType::Utf8 => {
-                    let mut builder = ListUtf8ArrayBuilder::with_capacity(0, size);
+                DataType::String => {
+                    let mut builder = ListStringArrayBuilder::with_capacity(0, size);
                     match values {
                         Some(v) => {
                             let series = DataValue::try_into_data_array(v, data_type)?;
@@ -212,7 +203,8 @@ impl DataValue {
 
                     arrays.push(val_array);
                 }
-                let r: DFStructArray = StructArray::from_data(fields, arrays, None).into();
+                let r: DFStructArray =
+                    StructArray::from_data(ArrowType::Struct(fields), arrays, None).into();
                 Ok(r.into_series())
             }
         }
@@ -274,7 +266,19 @@ typed_cast_from_data_value_to_std!(UInt64, u64);
 typed_cast_from_data_value_to_std!(Float32, f32);
 typed_cast_from_data_value_to_std!(Float64, f64);
 typed_cast_from_data_value_to_std!(Boolean, bool);
-typed_cast_from_data_value_to_std!(Utf8, String);
+
+impl DFTryFrom<DataValue> for Vec<u8> {
+    fn try_from(value: DataValue) -> Result<Self> {
+        match value {
+            DataValue::String(Some(inner_value)) => Ok(inner_value),
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error:  Cannot convert {:?} to {}",
+                value,
+                std::any::type_name::<Self>()
+            ))),
+        }
+    }
+}
 
 std_to_data_value!(Int8, i8);
 std_to_data_value!(Int16, i16);
@@ -288,40 +292,28 @@ std_to_data_value!(Float32, f32);
 std_to_data_value!(Float64, f64);
 std_to_data_value!(Boolean, bool);
 
-impl From<&str> for DataValue {
-    fn from(x: &str) -> Self {
-        DataValue::Utf8(Some(x.to_string()))
+impl From<&[u8]> for DataValue {
+    fn from(x: &[u8]) -> Self {
+        DataValue::String(Some(x.to_vec()))
     }
 }
 
-impl From<Option<&str>> for DataValue {
-    fn from(x: Option<&str>) -> Self {
-        let x = x.map(|c| c.to_string());
+impl From<Option<&[u8]>> for DataValue {
+    fn from(x: Option<&[u8]>) -> Self {
+        let x = x.map(|c| c.to_vec());
         DataValue::from(x)
-    }
-}
-
-impl From<String> for DataValue {
-    fn from(x: String) -> Self {
-        DataValue::Utf8(Some(x))
-    }
-}
-
-impl From<Option<String>> for DataValue {
-    fn from(x: Option<String>) -> Self {
-        DataValue::Utf8(x)
     }
 }
 
 impl From<Vec<u8>> for DataValue {
     fn from(x: Vec<u8>) -> Self {
-        DataValue::Binary(Some(x))
+        DataValue::String(Some(x))
     }
 }
 
 impl From<Option<Vec<u8>>> for DataValue {
     fn from(x: Option<Vec<u8>>) -> Self {
-        DataValue::Binary(x)
+        DataValue::String(x)
     }
 }
 
@@ -340,13 +332,12 @@ impl From<&DataType> for DataValue {
             DataType::UInt64 => DataValue::UInt64(None),
             DataType::Float32 => DataValue::Float32(None),
             DataType::Float64 => DataValue::Float64(None),
-            DataType::Utf8 => DataValue::Utf8(None),
             DataType::Date16 => DataValue::UInt16(None),
             DataType::Date32 => DataValue::UInt32(None),
             DataType::DateTime32 => DataValue::UInt32(None),
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
-            DataType::Binary => DataValue::Binary(None),
+            DataType::String => DataValue::String(None),
         }
     }
 }
@@ -375,15 +366,16 @@ impl fmt::Display for DataValue {
             DataValue::UInt16(v) => format_data_value_with_option!(f, v),
             DataValue::UInt32(v) => format_data_value_with_option!(f, v),
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
-            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
-            DataValue::Binary(None) => write!(f, "NULL"),
-            DataValue::Binary(Some(v)) => {
-                for c in v {
-                    write!(f, "{:02x}", c)?;
+            DataValue::String(None) => write!(f, "NULL"),
+            DataValue::String(Some(v)) => match std::str::from_utf8(v) {
+                Ok(v) => write!(f, "{}", v),
+                Err(_e) => {
+                    for c in v {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
-
+            },
             DataValue::List(None, ..) => write!(f, "NULL"),
             DataValue::List(Some(v), ..) => {
                 write!(
@@ -418,9 +410,8 @@ impl fmt::Debug for DataValue {
             DataValue::UInt64(v) => format_data_value_with_option!(f, v),
             DataValue::Float32(v) => format_data_value_with_option!(f, v),
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
-            DataValue::Utf8(v) => format_data_value_with_option!(f, v),
-            DataValue::Binary(None) => write!(f, "{}", self),
-            DataValue::Binary(Some(_)) => write!(f, "\"{}\"", self),
+            DataValue::String(None) => write!(f, "{}", self),
+            DataValue::String(Some(_)) => write!(f, "{}", self),
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }

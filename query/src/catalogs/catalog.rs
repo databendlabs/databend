@@ -21,13 +21,30 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
-#[async_trait::async_trait]
+/// Catalog is the global view of all the databases of the user.
+/// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
+/// or others(like MySQL-Database, engine=MySQL)
+/// When we create a new database, we first to get the engine from the registered engines,
+/// and use the engine to create them.
 pub trait Catalog {
+    fn register_db_engine(
+        &self,
+        engine_type: &str,
+        database_engine: Arc<dyn DatabaseEngine>,
+    ) -> Result<()>;
+
+    // Get all the databases.
+    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+    // Get the database by name.
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
-    fn get_databases(&self) -> Result<Vec<String>>;
+    // Check the database exists or not.
+    fn exists_database(&self, db_name: &str) -> Result<bool>;
+
+    // Get one table by db and table name.
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
     fn get_table_by_id(
         &self,
@@ -35,9 +52,10 @@ pub trait Catalog {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
-    fn get_all_tables(&self) -> Result<Vec<(String, Arc<TableMeta>)>>;
-    fn get_table_function(&self, name: &str) -> Result<Arc<TableFunctionMeta>>;
+    // Get function by name.
+    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>>;
 
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+    // Operation with database.
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }

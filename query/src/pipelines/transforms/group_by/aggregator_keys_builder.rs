@@ -15,17 +15,17 @@
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::arrays::ArrayBuilder;
-use common_datavalues::arrays::BinaryArrayBuilder;
 use common_datavalues::arrays::PrimitiveArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::prelude::*;
 use common_datavalues::DFPrimitiveType;
 
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 /// Remove the group by key from the state and rebuild it into a column
-pub trait KeysArrayBuilder<Value> {
+pub trait KeysArrayBuilder<Key> {
     fn finish(self) -> Series;
-    fn append_value(&mut self, v: &Value);
+    fn append_value(&mut self, v: &Key);
 }
 
 pub struct FixedKeysArrayBuilder<T>
@@ -52,7 +52,7 @@ where
 }
 
 pub struct SerializedKeysArrayBuilder {
-    pub inner_builder: BinaryArrayBuilder,
+    pub inner_builder: StringArrayBuilder,
 }
 
 impl KeysArrayBuilder<KeysRef> for SerializedKeysArrayBuilder {

@@ -39,9 +39,9 @@ mod tests {
             table_id: 0,
             table_version: None,
             schema: DataSchemaRefExt::create(vec![
-                DataField::new("a", DataType::Utf8, false),
-                DataField::new("b", DataType::Utf8, false),
-                DataField::new("c", DataType::Utf8, false),
+                DataField::new("a", DataType::String, false),
+                DataField::new("b", DataType::String, false),
+                DataField::new("c", DataType::String, false),
             ]),
             parts: generate_partitions(8, total as u64),
             statistics: statistics.clone(),
@@ -78,8 +78,8 @@ mod tests {
         let expect = "\
         Projection: count(0):UInt64\
         \n  AggregatorFinal: groupBy=[[]], aggr=[[count(0)]]\
-        \n    Projection: 904e as count(0):Binary\
-        \n      Expression: 904e:Binary (Exact Statistics)\
+        \n    Projection: 904e as count(0):String\
+        \n      Expression: 904e:String (Exact Statistics)\
         \n        ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]";
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);

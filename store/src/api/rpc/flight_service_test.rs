@@ -29,11 +29,9 @@ use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
-use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
-use common_planners::TableEngineType;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
@@ -61,7 +59,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -93,7 +91,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
             table: table_name.to_string(),
             schema: schema.clone(),
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            engine: TableEngineType::JSONEachRow,
+            engine: "JSON".to_string(),
         };
 
         {
@@ -182,7 +180,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
             // TODO test if_not_exists
             if_not_exists: false,
             db: "db1".to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -196,7 +194,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: "db2".to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -241,8 +239,6 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
-    use common_planners::TableEngineType;
 
     tracing::info!("init logging");
 
@@ -259,7 +255,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -289,7 +285,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             // TODO check get_table
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             // TODO
-            engine: TableEngineType::JSONEachRow,
+            engine: "JSON".to_string(),
         };
 
         {
@@ -369,8 +365,6 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
-    use common_planners::TableEngineType;
 
     tracing::info!("init logging");
 
@@ -387,7 +381,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
 
@@ -417,7 +411,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
             // TODO check get_table
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
             // TODO
-            engine: TableEngineType::JSONEachRow,
+            engine: "JSON".to_string(),
         };
 
         {
@@ -475,14 +469,12 @@ async fn test_do_append() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
-    use common_planners::TableEngineType;
 
     let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
-        DataField::new("col_s", DataType::Utf8, false),
+        DataField::new("col_s", DataType::String, false),
     ]));
     let db_name = "test_db";
     let tbl_name = "test_tbl";
@@ -503,7 +495,7 @@ async fn test_do_append() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
         let res = client.create_database(plan.clone()).await;
@@ -515,7 +507,7 @@ async fn test_do_append() -> anyhow::Result<()> {
             table: tbl_name.to_string(),
             schema: schema.clone(),
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            engine: TableEngineType::Parquet,
+            engine: "PARQUET".to_string(),
         };
         client.create_table(plan.clone()).await.unwrap();
     }
@@ -549,14 +541,12 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
-    use common_planners::DatabaseEngineType;
-    use common_planners::TableEngineType;
 
     let (_tc, addr) = crate::tests::start_store_server().await?;
 
     let schema = Arc::new(DataSchema::new(vec![
         DataField::new("col_i", DataType::Int64, false),
-        DataField::new("col_s", DataType::Utf8, false),
+        DataField::new("col_s", DataType::String, false),
     ]));
     let db_name = "test_db";
     let tbl_name = "test_tbl";
@@ -582,7 +572,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
         client.create_database(plan.clone()).await?;
@@ -592,7 +582,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
             table: tbl_name.to_string(),
             schema: schema.clone(),
             options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            engine: TableEngineType::Parquet,
+            engine: "PARQUET".to_string(),
         };
         client.create_table(plan.clone()).await?;
     }
@@ -1121,7 +1111,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let plan = CreateDatabasePlan {
         if_not_exists: false,
         db: "db1".to_string(),
-        engine: DatabaseEngineType::Local,
+        engine: "Local".to_string(),
         options: Default::default(),
     };
     client.create_database(plan).await?;
@@ -1147,7 +1137,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let plan = CreateDatabasePlan {
         if_not_exists: true, // <<--
         db: "db1".to_string(),
-        engine: DatabaseEngineType::Local, // accepts a Local engine?
+        engine: "Local".to_string(),
         options: Default::default(),
     };
 
@@ -1183,7 +1173,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     let plan = CreateDatabasePlan {
         if_not_exists: false,
         db: test_db.to_string(),
-        engine: DatabaseEngineType::Local,
+        engine: "Local".to_string(),
         options: Default::default(),
     };
     client.create_database(plan).await?;
@@ -1203,7 +1193,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
         table: "tbl1".to_string(),
         schema: schema.clone(),
         options: Default::default(),
-        engine: TableEngineType::JSONEachRow,
+        engine: "JSON".to_string(),
     };
 
     client.create_table(plan.clone()).await?;

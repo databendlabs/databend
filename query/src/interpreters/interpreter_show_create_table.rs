@@ -55,7 +55,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         let datasource = self.ctx.get_catalog();
         let database = datasource.get_database(self.plan.db.as_str())?;
         let table_meta = database.get_table(self.plan.table.as_str())?;
-        let table = table_meta.datasource();
+        let table = table_meta.raw();
 
         let name = table.name();
         let engine = table.engine();
@@ -70,14 +70,14 @@ impl Interpreter for ShowCreateTableInterpreter {
         table_info.push_str(table_engine.as_str());
 
         let show_fields = vec![
-            DataField::new("Table", DataType::Utf8, false),
-            DataField::new("Create Table", DataType::Utf8, false),
+            DataField::new("Table", DataType::String, false),
+            DataField::new("Create Table", DataType::String, false),
         ];
         let show_schema = DataSchemaRefExt::create(show_fields);
 
         let block = DataBlock::create_by_array(show_schema.clone(), vec![
-            Series::new(vec![name]),
-            Series::new(vec![table_info]),
+            Series::new(vec![name.as_bytes()]),
+            Series::new(vec![table_info.into_bytes()]),
         ]);
         debug!("Show create table executor result: {:?}", block);
 

@@ -46,8 +46,8 @@ fn new_test_boolean_array(cap: usize, begin: i32, end: i32) -> DFBooleanArray {
     builder.finish()
 }
 
-fn new_test_utf8_array(cap: usize, begin: i32, end: i32) -> DFUtf8Array {
-    let mut builder = Utf8ArrayBuilder::with_capacity(cap);
+fn new_test_string_array(cap: usize, begin: i32, end: i32) -> DFStringArray {
+    let mut builder = StringArrayBuilder::with_capacity(cap);
     let s = vec!["ax", "by", "cz", "dm", "13"];
 
     (begin..end).for_each(|index| {
@@ -164,15 +164,15 @@ fn test_boolean_array_apply() -> Result<()> {
 }
 
 #[test]
-fn test_utf8_array_apply() -> Result<()> {
+fn test_string_array_apply() -> Result<()> {
     // array=[null, "by", "cz", null, "13"]
-    let array = new_test_utf8_array(5, 0, 5);
+    let array = new_test_string_array(5, 0, 5);
     let arrays = vec![
         array.apply(|arr| Cow::from(&arr[1..])),
         array.apply_with_idx(|(_, arr)| Cow::from(&arr[..1])),
         array.apply_with_idx_on_opt(|(_, arr)| match arr {
             Some(v) => Some(Cow::from(&v[0..])),
-            None => Some(Cow::from("ff")),
+            None => Some(Cow::from("ff".as_bytes())),
         }),
     ];
 
@@ -190,26 +190,26 @@ fn test_utf8_array_apply() -> Result<()> {
 
     assert_eq!(2, values[0].null_count());
     assert_eq!(true, values[0].is_null(0));
-    assert_eq!("y", values[0].value(1));
-    assert_eq!("z", values[0].value(2));
+    assert_eq!(b"y", values[0].value(1));
+    assert_eq!(b"z", values[0].value(2));
     assert_eq!(true, values[0].is_null(3));
-    assert_eq!("3", values[0].value(4));
+    assert_eq!(b"3", values[0].value(4));
     assert_eq!(true, values[0].is_null(3));
 
     assert_eq!(2, values[1].null_count());
     assert_eq!(true, values[1].is_null(0));
-    assert_eq!("b", values[1].value(1));
-    assert_eq!("c", values[1].value(2));
+    assert_eq!(b"b", values[1].value(1));
+    assert_eq!(b"c", values[1].value(2));
     assert_eq!(true, values[1].is_null(3));
-    assert_eq!("1", values[1].value(4));
+    assert_eq!(b"1", values[1].value(4));
     assert_eq!(true, values[1].is_null(3));
 
     assert_eq!(0, values[2].null_count());
-    assert_eq!("ff", values[2].value(0));
-    assert_eq!("by", values[2].value(1));
-    assert_eq!("cz", values[2].value(2));
-    assert_eq!("ff", values[2].value(3));
-    assert_eq!("13", values[2].value(4));
+    assert_eq!(b"ff", values[2].value(0));
+    assert_eq!(b"by", values[2].value(1));
+    assert_eq!(b"cz", values[2].value(2));
+    assert_eq!(b"ff", values[2].value(3));
+    assert_eq!(b"13", values[2].value(4));
 
     assert_eq!(2, cast_values[0].null_count());
     assert_eq!(true, cast_values[0].is_null(0));

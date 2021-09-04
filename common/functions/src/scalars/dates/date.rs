@@ -15,7 +15,9 @@
 use common_exception::Result;
 
 use super::now::NowFunction;
-use super::today::TodayFunction;
+use super::TodayFunction;
+use super::TomorrowFunction;
+use super::YesterdayFunction;
 use crate::scalars::FactoryFuncRef;
 
 #[derive(Clone)]
@@ -25,6 +27,8 @@ impl DateFunction {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
         map.insert("today".into(), TodayFunction::try_create);
+        map.insert("yesterday".into(), YesterdayFunction::try_create);
+        map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
 
         Ok(())

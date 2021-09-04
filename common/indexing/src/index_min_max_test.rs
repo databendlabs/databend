@@ -31,7 +31,7 @@ use crate::MinMaxIndex;
 #[test]
 fn test_min_max_index() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", DataType::Utf8, true),
+        DataField::new("name", DataType::String, true),
         DataField::new("age", DataType::Int32, false),
     ]);
 
@@ -48,8 +48,8 @@ fn test_min_max_index() -> Result<()> {
     let idx_slice = vec![
         MinMaxIndex {
             col: "name".to_string(),
-            min: DataValue::Utf8(Some("jack".to_string())),
-            max: DataValue::Utf8(Some("xbohu".to_string())),
+            min: DataValue::String(Some("jack".as_bytes().to_vec())),
+            max: DataValue::String(Some("xbohu".as_bytes().to_vec())),
             version: IndexSchemaVersion::V1,
         },
         MinMaxIndex {

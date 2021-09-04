@@ -14,9 +14,9 @@
 //
 
 use common_exception::Result;
+use futures::stream::Stream;
 use futures::AsyncRead;
 use futures::AsyncSeek;
-
 pub type Bytes = Vec<u8>;
 
 #[async_trait::async_trait]
@@ -32,4 +32,13 @@ pub trait DataAccessor {
     async fn get(&self, path: &str) -> Result<Bytes>;
 
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()>;
+
+    async fn put_stream<S>(
+        &self,
+        path: &str,
+        input_stream: S,
+        stream_len: usize,
+    ) -> common_exception::Result<()>
+    where
+        S: Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + 'static;
 }

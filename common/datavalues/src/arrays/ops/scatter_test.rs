@@ -33,16 +33,16 @@ fn test_scatter() -> Result<()> {
     assert_eq!(&[2u16, 6], array_vec[2].inner().values().as_slice());
     assert_eq!(&[3u16, 5, 8], array_vec[3].inner().values().as_slice());
 
-    // Test DFUint16Array
-    let df_utf8_array = DFUtf8Array::new_from_slice(&["a", "b", "c", "d"]);
+    // Test DFStringArray
+    let df_string_array = DFStringArray::new_from_slice(&["a", "b", "c", "d"]);
     let indices = vec![1, 0, 1, 1];
-    assert_eq!(df_utf8_array.len(), indices.len());
+    assert_eq!(df_string_array.len(), indices.len());
 
-    let array_vec = unsafe { df_utf8_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
-    let v1: Vec<&str> = array_vec[0].into_no_null_iter().collect();
-    let v2: Vec<&str> = array_vec[1].into_no_null_iter().collect();
-    assert_eq!(vec!["b"], v1);
-    assert_eq!(vec!["a", "c", "d"], v2);
+    let array_vec = unsafe { df_string_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
+    let v1: Vec<&[u8]> = array_vec[0].into_no_null_iter().collect();
+    let v2: Vec<&[u8]> = array_vec[1].into_no_null_iter().collect();
+    assert_eq!(vec![b"b"], v1);
+    assert_eq!(vec![b"a", b"c", b"d"], v2);
 
     // Test BooleanArray
     let df_bool_array = DFBooleanArray::new_from_slice(&[true, false, true, false]);
@@ -59,15 +59,15 @@ fn test_scatter() -> Result<()> {
         array_vec[1].into_no_null_iter().collect::<Vec<bool>>()
     );
 
-    // Test BinaryArray
-    let mut binary_builder = BinaryArrayBuilder::with_capacity(8);
-    binary_builder.append_value(&"12");
-    binary_builder.append_value(&"ab");
-    binary_builder.append_value(&"c1");
-    binary_builder.append_value(&"32");
-    let df_binary_array = binary_builder.finish();
+    // Test StringArray
+    let mut string_builder = StringArrayBuilder::with_capacity(8);
+    string_builder.append_value(&"12");
+    string_builder.append_value(&"ab");
+    string_builder.append_value(&"c1");
+    string_builder.append_value(&"32");
+    let df_string_array = string_builder.finish();
     let indices = vec![1, 0, 0, 1];
-    let array_vec = unsafe { df_binary_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
+    let array_vec = unsafe { df_string_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
 
     let values: Vec<Vec<u8>> = (0..array_vec[0].len())
         .map(|idx| array_vec[0].inner().value(idx).to_vec())

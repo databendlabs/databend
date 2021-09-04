@@ -221,7 +221,7 @@ impl PlanParser {
         Ok(PlanNode::CreateDatabase(CreateDatabasePlan {
             if_not_exists: create.if_not_exists,
             db: name,
-            engine: create.engine,
+            engine: create.engine.clone(),
             options,
         }))
     }
@@ -319,7 +319,7 @@ impl PlanParser {
             db,
             table,
             schema,
-            engine: create.engine,
+            engine: create.engine.clone(),
             options,
         }))
     }
@@ -342,8 +342,8 @@ impl PlanParser {
         }
 
         let fields = vec![
-            DataField::new("Table", DataType::Utf8, false),
-            DataField::new("Create Table", DataType::Utf8, false),
+            DataField::new("Table", DataType::String, false),
+            DataField::new("Create Table", DataType::String, false),
         ];
 
         let schema = DataSchemaRefExt::create(fields);
@@ -368,9 +368,9 @@ impl PlanParser {
         }
 
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Field", DataType::Utf8, false),
-            DataField::new("Type", DataType::Utf8, false),
-            DataField::new("Null", DataType::Utf8, false),
+            DataField::new("Field", DataType::String, false),
+            DataField::new("Type", DataType::String, false),
+            DataField::new("Null", DataType::String, false),
         ]);
 
         Ok(PlanNode::DescribeTable(DescribeTablePlan {
@@ -434,7 +434,7 @@ impl PlanParser {
         }
         let table = self.ctx.get_catalog().get_table(&db_name, &tbl_name)?;
 
-        let mut schema = table.datasource().schema()?;
+        let mut schema = table.raw().schema()?;
 
         if !columns.is_empty() {
             let fields = columns
@@ -702,7 +702,7 @@ impl PlanParser {
         self.ctx
             .get_table(db_name, table_name)
             .and_then(|table_meta| {
-                let table = table_meta.datasource();
+                let table = table_meta.raw();
                 let table_id = table_meta.meta_id();
                 let table_version = table_meta.meta_ver();
                 table
@@ -770,14 +770,14 @@ impl PlanParser {
                     let func_meta = self.ctx.get_table_function(&table_name)?;
                     meta_id = func_meta.meta_id();
                     meta_version = func_meta.meta_ver();
-                    let table_function = func_meta.datasource().clone();
+                    let table_function = func_meta.raw().clone();
                     table_name = table_function.name().to_string();
                     table = table_function.as_table();
                 } else {
                     let table_meta = self.ctx.get_table(&db_name, &table_name)?;
                     meta_id = table_meta.meta_id();
                     meta_version = table_meta.meta_ver();
-                    table = table_meta.datasource().clone();
+                    table = table_meta.raw().clone();
                 }
 
                 let scan = {
@@ -895,7 +895,7 @@ impl PlanParser {
                 DataValue::try_from_literal(n).map(Expression::create_literal)
             }
             sqlparser::ast::Value::SingleQuotedString(ref value) => Ok(Expression::create_literal(
-                DataValue::Utf8(Some(value.clone())),
+                DataValue::String(Some(value.clone().into_bytes())),
             )),
             sqlparser::ast::Value::Boolean(b) => {
                 Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
@@ -1005,8 +1005,8 @@ impl PlanParser {
             sqlparser::ast::Expr::Wildcard => Ok(Expression::Wildcard),
             sqlparser::ast::Expr::TypedString { data_type, value } => {
                 SQLCommon::make_data_type(data_type).map(|data_type| Expression::Cast {
-                    expr: Box::new(Expression::create_literal(DataValue::Utf8(Some(
-                        value.clone(),
+                    expr: Box::new(Expression::create_literal(DataValue::String(Some(
+                        value.clone().into_bytes(),
                     )))),
                     data_type,
                 })

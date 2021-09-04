@@ -21,7 +21,7 @@ use crate::*;
 fn test_data_block_take() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Utf8, false),
+        DataField::new("b", DataType::String, false),
     ]);
 
     let raw = DataBlock::create_by_array(schema.clone(), vec![

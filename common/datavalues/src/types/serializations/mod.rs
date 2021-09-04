@@ -17,21 +17,19 @@ use common_exception::Result;
 use crate::prelude::DataColumn;
 use crate::DataType;
 
-mod binary;
 mod boolean;
 mod date;
 mod date_time;
 mod null;
 mod number;
-mod utf8;
+mod string;
 
-pub use binary::*;
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;
 pub use null::*;
 pub use number::*;
-pub use utf8::*;
+pub use string::*;
 
 pub trait TypeSerializer {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>>;
@@ -52,11 +50,10 @@ impl DataType {
             DataType::Int64 => Box::new(NumberSerializer::<i64>::default()),
             DataType::Float32 => Box::new(NumberSerializer::<f32>::default()),
             DataType::Float64 => Box::new(NumberSerializer::<f64>::default()),
-            DataType::Utf8 => Box::new(Utf8Serializer {}),
             DataType::Date16 => Box::new(DateSerializer::<u16>::default()),
             DataType::Date32 => Box::new(DateSerializer::<u32>::default()),
             DataType::DateTime32 => Box::new(DateTimeSerializer::<u32>::default()),
-            DataType::Binary => Box::new(BinarySerializer {}),
+            DataType::String => Box::new(StringSerializer {}),
             DataType::List(_) => todo!(),
             DataType::Struct(_) => todo!(),
         }

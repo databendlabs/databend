@@ -37,10 +37,8 @@ use common_flights::storage_api_impl::TruncateTableAction;
 use common_flights::storage_api_impl::TruncateTableResult;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
-use common_planners::DatabaseEngineType;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_planners::TableEngineType;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use common_runtime::tokio::sync::mpsc::Sender;
@@ -108,7 +106,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             db: db_name.to_string(),
             if_not_exists,
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
         let want = match want {
@@ -194,7 +192,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
             let plan = CreateDatabasePlan {
                 db: "foo".to_string(),
                 if_not_exists: false,
-                engine: DatabaseEngineType::Local,
+                engine: "Local".to_string(),
                 options: Default::default(),
             };
             let cba = CreateDatabaseAction { plan };
@@ -272,7 +270,7 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
             let plan = CreateDatabasePlan {
                 db: "foo".to_string(),
                 if_not_exists: false,
-                engine: DatabaseEngineType::Local,
+                engine: "Local".to_string(),
                 options: Default::default(),
             };
             let cba = CreateDatabaseAction { plan };
@@ -327,7 +325,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
         let plan = CreateDatabasePlan {
             db: db_name.to_string(),
             if_not_exists,
-            engine: DatabaseEngineType::Local,
+            engine: "Local".to_string(),
             options: Default::default(),
         };
         let want = match want {
@@ -362,7 +360,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
             db: db_name.to_string(),
             table: table_name.to_string(),
             schema: schema.clone(),
-            engine: TableEngineType::JSONEachRow,
+            engine: "JSON".to_string(),
             options: Default::default(),
         };
         let want = match want {
@@ -484,7 +482,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
             let plan = CreateDatabasePlan {
                 db: "foo".to_string(),
                 if_not_exists: false,
-                engine: DatabaseEngineType::Local,
+                engine: "Local".to_string(),
                 options: Default::default(),
             };
             let cba = CreateDatabaseAction { plan };
@@ -504,7 +502,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
                 db: "foo".to_string(),
                 table: "foo_t1".to_string(),
                 schema: schema.clone(),
-                engine: TableEngineType::JSONEachRow,
+                engine: "JSON".to_string(),
                 options: Default::default(),
             };
             let cta = CreateTableAction { plan };
@@ -593,7 +591,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
             let plan = CreateDatabasePlan {
                 db: "foo".to_string(),
                 if_not_exists: false,
-                engine: DatabaseEngineType::Local,
+                engine: "Local".to_string(),
                 options: Default::default(),
             };
             let cba = CreateDatabaseAction { plan };
@@ -613,7 +611,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
                 db: "foo".to_string(),
                 table: "foo_t1".to_string(),
                 schema: schema.clone(),
-                engine: TableEngineType::JSONEachRow,
+                engine: "JSON".to_string(),
                 options: Default::default(),
             };
             let cta = CreateTableAction { plan };
@@ -697,7 +695,7 @@ async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
             let plan = CreateDatabasePlan {
                 db: "foo".to_string(),
                 if_not_exists: false,
-                engine: DatabaseEngineType::Local,
+                engine: "Local".to_string(),
                 options: Default::default(),
             };
             let cba = CreateDatabaseAction { plan };
@@ -717,7 +715,7 @@ async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
                 db: "foo".to_string(),
                 table: "foo_t1".to_string(),
                 schema: schema.clone(),
-                engine: TableEngineType::JSONEachRow,
+                engine: "JSON".to_string(),
                 options: Default::default(),
             };
             let cta = CreateTableAction { plan };

@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer;
-use common_exception::ErrorCode;
-use common_exception::Result;
-
-use crate::prelude::*;
-
 mod builder;
 mod iterator;
 
@@ -28,7 +19,19 @@ mod iterator;
 mod builder_test;
 
 pub use builder::*;
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::compute::arity::unary;
+use common_arrow::arrow::compute::cast;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::TimeUnit;
+use common_exception::ErrorCode;
+use common_exception::Result;
 pub use iterator::*;
+
+use crate::prelude::*;
 
 /// DFPrimitiveArray is generic struct which wrapped arrow's PrimitiveArray
 #[derive(Debug, Clone)]
@@ -43,6 +46,15 @@ impl<T: DFPrimitiveType> From<PrimitiveArray<T>> for DFPrimitiveArray<T> {
     }
 }
 
+fn precision(x: &TimeUnit) -> usize {
+    match x {
+        TimeUnit::Second => 1,
+        TimeUnit::Millisecond => 1_000,
+        TimeUnit::Microsecond => 1_000_000,
+        TimeUnit::Nanosecond => 1_000_000_000,
+    }
+}
+
 impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     pub fn new(array: PrimitiveArray<T>) -> Self {
         let data_type: DataType = array.data_type().into();
@@ -50,13 +62,65 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
-        Self::new(
-            array
-                .as_any()
-                .downcast_ref::<PrimitiveArray<T>>()
-                .unwrap()
-                .clone(),
-        )
+        let expected_arrow_type = T::data_type().to_arrow();
+        if &expected_arrow_type != array.data_type() {
+            match array.data_type() {
+                // u32
+                ArrowDataType::Timestamp(x, _) => {
+                    let p = precision(x);
+                    let array = array
+                        .as_any()
+                        .downcast_ref::<PrimitiveArray<i64>>()
+                        .expect("primitive cast should be ok");
+
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
+
+                    Self::from_arrow_array(&array)
+                }
+                ArrowDataType::Date32 => {
+                    let array = cast::cast(array, &ArrowDataType::Int32)
+                        .expect("primitive cast should be ok");
+                    let array = cast::cast(array.as_ref(), &expected_arrow_type)
+                        .expect("primitive cast should be ok");
+
+                    Self::from_arrow_array(array.as_ref())
+                }
+                ArrowDataType::Date64 => {
+                    let array = cast::cast(array, &ArrowDataType::Int64)
+                        .expect("primitive cast should be ok");
+                    let array = cast::cast(array.as_ref(), &expected_arrow_type)
+                        .expect("primitive cast should be ok");
+
+                    Self::from_arrow_array(array.as_ref())
+                }
+                ArrowDataType::Time32(x) => {
+                    let p = precision(x);
+                    let array = array
+                        .as_any()
+                        .downcast_ref::<PrimitiveArray<i32>>()
+                        .expect("primitive cast should be ok");
+
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
+
+                    Self::from_arrow_array(&array)
+                }
+                ArrowDataType::Time64(x) => {
+                    let p = precision(x);
+                    let array = array
+                        .as_any()
+                        .downcast_ref::<PrimitiveArray<i64>>()
+                        .expect("primitive cast should be ok");
+
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
+
+                    Self::from_arrow_array(&array)
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            let array = array.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+            Self::new(array.clone())
+        }
     }
 
     pub fn data_type(&self) -> &DataType {

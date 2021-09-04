@@ -10,7 +10,7 @@ killall datafuse-store
 sleep 1
 
 echo 'Start one DatafuseStore...'
-nohup target/debug/datafuse-store --single true &
+nohup target/debug/datafuse-store  --single=true --log-level=ERROR &
 echo "Waiting on datafuse-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 

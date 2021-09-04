@@ -49,7 +49,7 @@ impl Interpreter for InsertIntoInterpreter {
         let database = datasource.get_database(self.plan.db_name.as_str())?;
         let table = database.get_table(self.plan.tbl_name.as_str())?;
         table
-            .datasource()
+            .raw()
             .append_data(self.ctx.clone(), self.plan.clone())
             .await?;
         Ok(Box::pin(DataBlockStream::create(

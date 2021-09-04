@@ -15,8 +15,6 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::IntervalUnit as ArrowIntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit as ArrowTimeUnit;
 
 use crate::DataField;
 
@@ -36,7 +34,6 @@ pub enum DataType {
     Int64,
     Float32,
     Float64,
-    Utf8,
     /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
     /// in days (16 bits), it's physical type is UInt16
     Date16,
@@ -50,53 +47,7 @@ pub enum DataType {
 
     List(Box<DataField>),
     Struct(Vec<DataField>),
-    Binary,
-}
-
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
-pub enum TimeUnit {
-    /// Time in seconds.
-    Second,
-    /// Time in milliseconds.
-    Millisecond,
-    /// Time in microseconds.
-    Microsecond,
-    /// Time in nanoseconds.
-    Nanosecond,
-}
-
-impl TimeUnit {
-    pub fn to_arrow(&self) -> ArrowTimeUnit {
-        unsafe { std::mem::transmute(self.clone()) }
-    }
-
-    pub fn from_arrow(iu: &ArrowTimeUnit) -> Self {
-        unsafe { std::mem::transmute(iu.clone()) }
-    }
-}
-
-/// YEAR_MONTH or DAY_TIME interval in SQL style.
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
-pub enum IntervalUnit {
-    /// Indicates the number of elapsed whole months, stored as 4-byte integers.
-    YearMonth,
-    /// Indicates the number of elapsed days and milliseconds,
-    /// stored as 2 contiguous 32-bit integers (8-bytes in total).
-    DayTime,
-}
-
-impl IntervalUnit {
-    pub fn to_arrow(&self) -> ArrowIntervalUnit {
-        unsafe { std::mem::transmute(self.clone()) }
-    }
-
-    pub fn from_arrow(iu: &ArrowIntervalUnit) -> Self {
-        unsafe { std::mem::transmute(iu.clone()) }
-    }
+    String,
 }
 
 impl DataType {
@@ -115,7 +66,6 @@ impl DataType {
             Int64 => ArrowDataType::Int64,
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
-            Utf8 => ArrowDataType::LargeUtf8,
             Date16 => ArrowDataType::UInt16,
             Date32 => ArrowDataType::UInt32,
             DateTime32 => ArrowDataType::UInt32,
@@ -124,7 +74,7 @@ impl DataType {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
                 ArrowDataType::Struct(arrows_fields)
             }
-            Binary => ArrowDataType::LargeBinary,
+            String => ArrowDataType::LargeBinary,
         }
     }
 }
@@ -155,12 +105,16 @@ impl From<&ArrowDataType> for DataType {
                 let f: DataField = (f.as_ref()).into();
                 DataType::List(Box::new(f))
             }
-            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::Utf8,
-            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::Binary,
+            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::String,
+            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
+
+            ArrowDataType::Timestamp(_, _) => DataType::DateTime32,
+            ArrowDataType::Date32 => DataType::Date16,
+            ArrowDataType::Date64 => DataType::Date32,
 
             // this is safe, because we define the datatype firstly
             _ => {
-                unimplemented!()
+                unimplemented!("data_type: {}", dt)
             }
         }
     }

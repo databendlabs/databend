@@ -103,7 +103,6 @@ impl SystemDatabase {
     }
 }
 
-#[async_trait::async_trait]
 impl Database for SystemDatabase {
     fn name(&self) -> &str {
         "system"
@@ -123,6 +122,10 @@ impl Database for SystemDatabase {
                 ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
             })?;
         Ok(table.clone())
+    }
+
+    fn exists_table(&self, table_name: &str) -> Result<bool> {
+        Ok(self.tables.name2meta.get(table_name).is_some())
     }
 
     fn get_table_by_id(
@@ -145,13 +148,13 @@ impl Database for SystemDatabase {
         Ok(self.table_functions.values().cloned().collect())
     }
 
-    async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
         Result::Err(ErrorCode::UnImplement(
             "Cannot create table for system database",
         ))
     }
 
-    async fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
         Result::Err(ErrorCode::UnImplement(
             "Cannot drop table for system database",
         ))

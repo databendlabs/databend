@@ -21,6 +21,9 @@ mod stream_progress_test;
 #[cfg(test)]
 mod stream_skip_test;
 
+#[cfg(test)]
+mod stream_limit_by_test;
+
 mod sources;
 mod stream;
 mod stream_abort;

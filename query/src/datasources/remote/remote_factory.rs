@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 use std::sync::Arc;
 
@@ -19,8 +20,8 @@ use common_exception::Result;
 use common_flights::StoreClient;
 
 use crate::configs::Config;
-use crate::datasources::remote::store_client_provider::StoreClientProvider;
-use crate::datasources::remote::store_client_provider::TryGetStoreClient;
+use crate::datasources::remote::StoreClientProvider;
+use crate::datasources::remote::TryGetStoreClient;
 
 pub struct RemoteFactory {
     store_client_provider: StoreClientProvider,
@@ -37,6 +38,7 @@ impl RemoteFactory {
         self.store_client_provider.clone()
     }
 }
+
 struct ClientProvider {
     conf: Config,
 }

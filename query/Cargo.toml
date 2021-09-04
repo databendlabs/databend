@@ -24,6 +24,7 @@ simd = ["common-arrow/simd"]
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
+common-cache = { path = "../common/cache"}
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
@@ -43,7 +44,7 @@ common-metatypes = { path = "../common/metatypes" }
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "cc53408" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "2535347" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "77f6ae5" }
 
 # Crates.io dependencies
 clickhouse-srv = "0.3.1"
@@ -79,10 +80,13 @@ tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.5.2"
 walkdir = "2.3.2"
-warp = { version = "0.3.1", features = ["tls"] }
+axum = {version = "0.2.3", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
-lru = "0.6.6"
 byteorder = "1"
+hyper = { version = "0.14", features = ["full"] }
+tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
+headers = "0.3.4"
+tokio-rustls = "0.22.0"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
@@ -90,6 +94,7 @@ criterion = "0.3"
 mysql = "21.0.1"
 reqwest = { version = "0.11", features = ["json"] }
 flaky_test = "0.1"
+tempfile = "3.2.0"
 
 [build-dependencies]
 common-building = {path = "../common/building"}

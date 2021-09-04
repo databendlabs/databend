@@ -49,16 +49,12 @@ impl ToCastFunction {
                 Int64,
                 Float32,
                 Float64,
-                Utf8,
                 Date16,
                 Date32,
                 DateTime32,
-                Binary
+                String
             }
             // aliases
-            map.insert("toString".into(), |display_name| {
-                CastFunction::create(display_name.to_string(), DataType::Utf8)
-            });
             map.insert("toDate".into(), |display_name| {
                 CastFunction::create(display_name.to_string(), DataType::Date16)
             });

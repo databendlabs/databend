@@ -167,18 +167,10 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
         )))
     }
 
-    /// Unpack to DFArray of data_type utf8
-    fn utf8(&self) -> Result<&DFUtf8Array> {
+    /// Unpack to DFArray of data_type string
+    fn string(&self) -> Result<&DFStringArray> {
         Err(ErrorCode::IllegalDataType(format!(
-            "{:?} != utf8",
-            self.data_type()
-        )))
-    }
-
-    /// Unpack to DFArray of data_type binary
-    fn binary(&self) -> Result<&DFBinaryArray> {
-        Err(ErrorCode::IllegalDataType(format!(
-            "{:?} != binary",
+            "{:?} != string",
             self.data_type()
         )))
     }
@@ -224,17 +216,28 @@ macro_rules! impl_from {
 
 impl<'a, T: AsRef<[&'a str]>> SeriesFrom<T, [&'a str]> for Series {
     fn new(v: T) -> Self {
-        DFUtf8Array::new_from_slice(v.as_ref()).into_series()
+        DFStringArray::new_from_slice(v.as_ref()).into_series()
     }
 }
 
 impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Series {
     fn new(v: T) -> Self {
-        DFUtf8Array::new_from_opt_slice(v.as_ref()).into_series()
+        DFStringArray::new_from_opt_slice(v.as_ref()).into_series()
     }
 }
 
-impl_from!([String], DFUtf8Array, new_from_slice);
+impl<'a, T: AsRef<[&'a [u8]]>> SeriesFrom<T, [&'a [u8]]> for Series {
+    fn new(v: T) -> Self {
+        DFStringArray::new_from_slice(v.as_ref()).into_series()
+    }
+}
+
+impl<'a, T: AsRef<[Option<&'a [u8]>]>> SeriesFrom<T, [Option<&'a [u8]>]> for Series {
+    fn new(v: T) -> Self {
+        DFStringArray::new_from_opt_slice(v.as_ref()).into_series()
+    }
+}
+
 impl_from!([bool], DFBooleanArray, new_from_slice);
 impl_from!([u8], DFUInt8Array, new_from_slice);
 impl_from!([u16], DFUInt16Array, new_from_slice);
@@ -246,8 +249,8 @@ impl_from!([i32], DFInt32Array, new_from_slice);
 impl_from!([i64], DFInt64Array, new_from_slice);
 impl_from!([f32], DFFloat32Array, new_from_slice);
 impl_from!([f64], DFFloat64Array, new_from_slice);
+impl_from!([Vec<u8>], DFStringArray, new_from_slice);
 
-impl_from!([Option<String>], DFUtf8Array, new_from_opt_slice);
 impl_from!([Option<bool>], DFBooleanArray, new_from_opt_slice);
 impl_from!([Option<u8>], DFUInt8Array, new_from_opt_slice);
 impl_from!([Option<u16>], DFUInt16Array, new_from_opt_slice);
@@ -259,6 +262,7 @@ impl_from!([Option<i32>], DFInt32Array, new_from_opt_slice);
 impl_from!([Option<i64>], DFInt64Array, new_from_opt_slice);
 impl_from!([Option<f32>], DFFloat32Array, new_from_opt_slice);
 impl_from!([Option<f64>], DFFloat64Array, new_from_opt_slice);
+impl_from!([Option<Vec<u8>>], DFStringArray, new_from_opt_slice);
 
 impl Series {
     /// Check if series are equal. Note that `None == None` evaluates to `false`
@@ -304,28 +308,28 @@ impl Series {
 impl IntoSeries for ArrayRef {
     fn into_series(self) -> Series {
         let data_type = DataType::try_from(self.data_type()).unwrap();
-        match data_type {
-            DataType::Null => DFNullArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Boolean => DFBooleanArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt8 => DFUInt8Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt16 => DFUInt16Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt32 => DFUInt32Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt64 => DFUInt64Array::from_arrow_array(self.as_ref()).into_series(),
+        let physical_type: PhysicalDataType = data_type.into();
 
-            DataType::Int8 => DFInt8Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Int16 => DFInt16Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Int32 => DFInt32Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Int64 => DFInt64Array::from_arrow_array(self.as_ref()).into_series(),
+        use PhysicalDataType::*;
+        match physical_type {
+            Null => DFNullArray::from_arrow_array(self.as_ref()).into_series(),
+            Boolean => DFBooleanArray::from_arrow_array(self.as_ref()).into_series(),
+            UInt8 => DFUInt8Array::from_arrow_array(self.as_ref()).into_series(),
+            UInt16 => DFUInt16Array::from_arrow_array(self.as_ref()).into_series(),
+            UInt32 => DFUInt32Array::from_arrow_array(self.as_ref()).into_series(),
+            UInt64 => DFUInt64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            DataType::Float32 => DFFloat32Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Float64 => DFFloat64Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Utf8 => DFUtf8Array::from_arrow_array(self.as_ref()).into_series(),
+            Int8 => DFInt8Array::from_arrow_array(self.as_ref()).into_series(),
+            Int16 => DFInt16Array::from_arrow_array(self.as_ref()).into_series(),
+            Int32 => DFInt32Array::from_arrow_array(self.as_ref()).into_series(),
+            Int64 => DFInt64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            DataType::List(_) => DFListArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Struct(_) => DFStructArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Binary => DFBinaryArray::from_arrow_array(self.as_ref()).into_series(),
+            Float32 => DFFloat32Array::from_arrow_array(self.as_ref()).into_series(),
+            Float64 => DFFloat64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            _ => unreachable!(),
+            List(_) => DFListArray::from_arrow_array(self.as_ref()).into_series(),
+            Struct(_) => DFStructArray::from_arrow_array(self.as_ref()).into_series(),
+            String => DFStringArray::from_arrow_array(self.as_ref()).into_series(),
         }
     }
 }

@@ -50,6 +50,5 @@ pub use crate::DataValueLogicOperator;
 pub use crate::DataValueLogicOperator::*;
 
 pub type AlignedVec<T> = common_arrow::arrow::buffer::MutableBuffer<T>;
-pub type LargeUtf8Array = common_arrow::arrow::array::Utf8Array<i64>;
 pub type LargeBinaryArray = common_arrow::arrow::array::BinaryArray<i64>;
 pub type LargeListArray = common_arrow::arrow::array::ListArray<i64>;

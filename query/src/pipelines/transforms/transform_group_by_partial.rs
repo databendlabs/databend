@@ -28,6 +28,7 @@ use common_tracing::tracing;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::group_by::Aggregator;
+use crate::pipelines::transforms::group_by::AggregatorParams;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 
 pub struct GroupByPartialTransform {
@@ -73,15 +74,16 @@ impl GroupByPartialTransform {
         let stream = self.input.execute().await?;
         let aggr_exprs = &self.aggr_exprs;
         let schema = self.schema_before_group_by.clone();
-        let aggregator = Aggregator::create(method, aggr_exprs, schema)?;
-        let groups_locker = aggregator.aggregate(group_cols, stream).await?;
+        let aggregator_params = AggregatorParams::try_create(schema, aggr_exprs)?;
+
+        let aggregator = Aggregator::create(method, aggregator_params);
+        let state = aggregator.aggregate(group_cols, stream).await?;
 
         let delta = start.elapsed();
         tracing::debug!("Group by partial cost: {:?}", delta);
 
-        let groups = groups_locker.lock();
         let finalized_schema = self.schema.clone();
-        aggregator.aggregate_finalized(&groups, finalized_schema)
+        aggregator.aggregate_finalized(&state, finalized_schema)
     }
 }
 

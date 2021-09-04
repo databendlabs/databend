@@ -23,9 +23,9 @@ use crate::*;
 #[test]
 fn test_describe_table_plan() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("Field", DataType::Utf8, false),
-        DataField::new("Type", DataType::Utf8, false),
-        DataField::new("Null", DataType::Utf8, false),
+        DataField::new("Field", DataType::String, false),
+        DataField::new("Type", DataType::String, false),
+        DataField::new("Null", DataType::String, false),
     ]);
 
     let describe = PlanNode::DescribeTable(DescribeTablePlan {
@@ -36,9 +36,9 @@ fn test_describe_table_plan() -> Result<()> {
 
     let expect = "\
     DataSchema { fields: [\
-        DataField { name: \"Field\", data_type: Utf8, nullable: false }, \
-        DataField { name: \"Type\", data_type: Utf8, nullable: false }, \
-        DataField { name: \"Null\", data_type: Utf8, nullable: false }\
+        DataField { name: \"Field\", data_type: String, nullable: false }, \
+        DataField { name: \"Type\", data_type: String, nullable: false }, \
+        DataField { name: \"Null\", data_type: String, nullable: false }\
     ] }";
     let actual = format!("{:?}", describe.schema());
     assert_eq!(expect, actual);

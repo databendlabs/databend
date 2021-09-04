@@ -21,7 +21,7 @@ use crate::*;
 fn test_data_block_group_by() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::Utf8, false),
+        DataField::new("b", DataType::String, false),
     ]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![

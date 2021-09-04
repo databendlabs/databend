@@ -23,22 +23,28 @@ use crate::*;
 async fn test_skipstream() {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("id", DataType::Int32, false),
-        DataField::new("name", DataType::Utf8, false),
+        DataField::new("name", DataType::String, false),
     ]);
 
     // create a data block with 'id' from 0 to 20
     let ids = (0..20).collect::<Vec<i32>>();
     let names = (0..20)
-        .map(|n| format!("Alice-{}", n))
-        .collect::<Vec<String>>();
+        .map(|n| {
+            let str = format!("Alice-{}", n);
+            str.into_bytes()
+        })
+        .collect::<Vec<Vec<u8>>>();
     let block0 =
         DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
 
     // create a data block with 'id' from 20 to 40
     let ids = (20..40).collect::<Vec<i32>>();
     let names = (20..40)
-        .map(|n| format!("Bob-{}", n))
-        .collect::<Vec<String>>();
+        .map(|n| {
+            let str = format!("Bob-{}", n);
+            str.into_bytes()
+        })
+        .collect::<Vec<Vec<u8>>>();
     let block1 =
         DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
 

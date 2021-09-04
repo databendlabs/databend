@@ -23,15 +23,16 @@ use common_planners::DropTablePlan;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
-#[async_trait::async_trait]
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
     fn engine(&self) -> &str;
     fn is_local(&self) -> bool;
 
-    /// Get one table by name.
+    /// Get the table by name.
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>>;
+    /// Check the table exists or not.
+    fn exists_table(&self, table_name: &str) -> Result<bool>;
 
     /// Get table by meta id
     fn get_table_by_id(
@@ -47,6 +48,6 @@ pub trait Database: Sync + Send {
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>>;
 
     /// DDL
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 }

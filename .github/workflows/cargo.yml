@@ -35,13 +35,13 @@ jobs:
         with:
           command: clippy
           args:  -- -D warnings
-          env:
-            CARGO_INCREMENTAL: '0'
+        env:
+          CARGO_INCREMENTAL: '0'
 
       - name: Check formating
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-          env:
-            CARGO_INCREMENTAL: '0'
+        env:
+          CARGO_INCREMENTAL: '0'

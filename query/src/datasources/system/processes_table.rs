@@ -42,23 +42,26 @@ impl ProcessesTable {
     pub fn create() -> Self {
         ProcessesTable {
             schema: DataSchemaRefExt::create(vec![
-                DataField::new("id", DataType::Utf8, false),
-                DataField::new("type", DataType::Utf8, false),
-                DataField::new("host", DataType::Utf8, true),
-                DataField::new("state", DataType::Utf8, false),
-                DataField::new("database", DataType::Utf8, false),
-                DataField::new("extra_info", DataType::Utf8, true),
+                DataField::new("id", DataType::String, false),
+                DataField::new("type", DataType::String, false),
+                DataField::new("host", DataType::String, true),
+                DataField::new("state", DataType::String, false),
+                DataField::new("database", DataType::String, false),
+                DataField::new("extra_info", DataType::String, true),
             ]),
         }
     }
 
-    fn process_host(process_info: &ProcessInfo) -> Option<String> {
+    fn process_host(process_info: &ProcessInfo) -> Option<Vec<u8>> {
         let client_address = process_info.client_address;
-        client_address.as_ref().map(ToString::to_string)
+        client_address.as_ref().map(|s| s.to_string().into_bytes())
     }
 
-    fn process_extra_info(process_info: &ProcessInfo) -> Option<String> {
-        process_info.session_extra_info.clone()
+    fn process_extra_info(process_info: &ProcessInfo) -> Option<Vec<u8>> {
+        process_info
+            .session_extra_info
+            .clone()
+            .map(|s| s.into_bytes())
     }
 }
 
@@ -123,10 +126,10 @@ impl Table for ProcessesTable {
         let mut processes_extra_info = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
-            processes_id.push(process_info.id.clone());
-            processes_type.push(process_info.typ.clone());
-            processes_state.push(process_info.state.clone());
-            processes_database.push(process_info.database.clone());
+            processes_id.push(process_info.id.clone().into_bytes());
+            processes_type.push(process_info.typ.clone().into_bytes());
+            processes_state.push(process_info.state.clone().into_bytes());
+            processes_database.push(process_info.database.clone().into_bytes());
             processes_host.push(ProcessesTable::process_host(process_info));
             processes_extra_info.push(ProcessesTable::process_extra_info(process_info));
         }

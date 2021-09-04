@@ -48,15 +48,13 @@ impl_df_datatype!(f32, Float32);
 impl_df_datatype!(f64, Float64);
 impl_df_datatype!(bool, Boolean);
 
-impl_df_datatype!(String, Utf8);
-
 #[derive(Debug)]
 pub struct Null;
 impl_df_datatype!(Null, Null);
 
 impl DFDataType for Vec<u8> {
     fn data_type() -> DataType {
-        DataType::Binary
+        DataType::String
     }
 }
 

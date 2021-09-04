@@ -25,8 +25,8 @@ use crate::PartitionIndex;
 fn test_partition_index() -> Result<()> {
     // Apply index.
     {
-        let partition_value = DataValue::Utf8(Some("datafuse".to_string()));
-        let expr = col("name").eq(lit("bohu"));
+        let partition_value = DataValue::String(Some("datafuse".as_bytes().to_vec()));
+        let expr = col("name").eq(lit("bohu".as_bytes()));
         let actual = PartitionIndex::apply_index(partition_value, &expr)?;
         let expected = true;
         assert_eq!(actual, expected);

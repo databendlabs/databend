@@ -30,7 +30,7 @@ fn test_database_function() -> Result<()> {
         error: &'static str,
         func: Box<dyn Function>,
     }
-    let dummy = DataField::new("dummy", DataType::Utf8, false);
+    let dummy = DataField::new("dummy", DataType::String, false);
 
     let tests = vec![Test {
         name: "database-function-passed",

@@ -50,7 +50,7 @@ impl Interpreter for DescribeTableInterpreter {
         let table = self
             .ctx
             .get_table(self.plan.db.as_str(), self.plan.table.as_str())?;
-        let schema = table.datasource().schema()?;
+        let schema = table.raw().schema()?;
 
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
@@ -64,9 +64,9 @@ impl Interpreter for DescribeTableInterpreter {
                 "NO".to_string()
             });
         }
-        let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();
-        let types: Vec<&str> = types.iter().map(|x| x.as_str()).collect();
-        let nulls: Vec<&str> = nulls.iter().map(|x| x.as_str()).collect();
+        let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
+        let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
+        let nulls: Vec<&[u8]> = nulls.iter().map(|x| x.as_bytes()).collect();
 
         let desc_schema = self.plan.schema();
 

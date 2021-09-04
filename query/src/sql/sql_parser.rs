@@ -18,9 +18,7 @@
 use std::time::Instant;
 
 use common_exception::ErrorCode;
-use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
-use common_planners::TableEngineType;
 use metrics::histogram;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
@@ -478,22 +476,14 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_database_engine(&mut self) -> Result<DatabaseEngineType, ParserError> {
+    fn parse_database_engine(&mut self) -> Result<String, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok(DatabaseEngineType::Remote);
+            return Ok("Remote".to_string());
         }
 
         self.parser.expect_token(&Token::Eq)?;
-
-        match self.parser.next_token() {
-            Token::Word(w) => match &*w.value {
-                "Local" => Ok(DatabaseEngineType::Local),
-                "Remote" => Ok(DatabaseEngineType::Remote),
-                _ => self.expected("Engine must one of Local, Remote", Token::Word(w)),
-            },
-            unexpected => self.expected("Engine must one of Local, Remote", unexpected),
-        }
+        Ok(self.parser.next_token().to_string())
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {
@@ -528,31 +518,14 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parses the set of valid formats
-    fn parse_table_engine(&mut self) -> Result<TableEngineType, ParserError> {
+    fn parse_table_engine(&mut self) -> Result<String, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok(TableEngineType::Null);
+            return Ok("NULL".to_string());
         }
 
         self.parser.expect_token(&Token::Eq)?;
-
-        match self.parser.next_token() {
-            Token::Word(w) => match &*w.value {
-                "Parquet" => Ok(TableEngineType::Parquet),
-                "JSONEachRow" => Ok(TableEngineType::JSONEachRow),
-                "CSV" => Ok(TableEngineType::Csv),
-                "Null" => Ok(TableEngineType::Null),
-                "Memory" => Ok(TableEngineType::Memory),
-                _ => self.expected(
-                    "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
-                    Token::Word(w),
-                ),
-            },
-            unexpected => self.expected(
-                "Engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
-                unexpected,
-            ),
-        }
+        Ok(self.parser.next_token().to_string())
     }
 
     fn parse_show_create(&mut self) -> Result<DfStatement, ParserError> {

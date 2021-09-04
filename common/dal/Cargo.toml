@@ -26,7 +26,7 @@ hyper = { version = "0.14.12", features = ["stream"] }
 log = "0.4"
 rusoto_s3 = "0.47.0"
 rusoto_core = "0.47.0"
-tokio = { version = "1.10.1", features = ["macros", "rt","rt-multi-thread", "sync", "fs"] }
+tokio = { version = "1.11.0", features = ["macros", "rt","rt-multi-thread", "sync", "fs"] }
 
 [dev-dependencies]
 rand = "0.8.0"

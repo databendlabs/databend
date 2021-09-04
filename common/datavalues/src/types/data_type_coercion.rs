@@ -111,20 +111,6 @@ pub fn construct_numeric_type(
     }
 }
 
-/// Coercion rules for dictionary values (aka the type of the  dictionary itself)
-
-/// Coercion rules for Strings: the type that both lhs and rhs can be
-/// casted to for the purpose of a string computation
-pub fn string_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    match (lhs_type, rhs_type) {
-        (DataType::Utf8, DataType::Utf8) => Ok(DataType::Utf8),
-        _ => Result::Err(ErrorCode::BadDataValueType(format!(
-            "Can't construct type from {} and {}",
-            lhs_type, rhs_type
-        ))),
-    }
-}
-
 /// Coercion rule for numerical types: The type that both lhs and rhs
 /// can be casted to for numerical calculation, while maintaining
 /// maximum precision
@@ -278,7 +264,7 @@ pub fn datetime_arithmetic_coercion(
 
     let mut a = lhs_type.clone();
     let mut b = rhs_type.clone();
-    if !is_numeric(lhs_type) {
+    if !is_date_or_date_time(&a) {
         a = rhs_type.clone();
         b = lhs_type.clone();
     }
@@ -290,16 +276,8 @@ pub fn datetime_arithmetic_coercion(
             if is_numeric(&b) {
                 Ok(a)
             } else {
-                if a != b {
-                    return e;
-                }
-
-                match a {
-                    DataType::Date16 => Ok(DataType::UInt16),
-                    DataType::Date32 => Ok(DataType::UInt32),
-                    DataType::DateTime32 => Ok(DataType::UInt32),
-                    _ => e,
-                }
+                // Date minus Date or DateTime minus DateTime
+                Ok(DataType::Int32)
             }
         }
         _ => e,

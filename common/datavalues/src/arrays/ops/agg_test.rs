@@ -76,8 +76,8 @@ fn test_boolean_array_agg() -> Result<()> {
 }
 
 #[test]
-fn test_utf8_array_agg() -> Result<()> {
-    let array = DFUtf8Array::new_from_slice(&vec!["h", "e", "l", "o"]);
+fn test_string_array_agg() -> Result<()> {
+    let array = DFStringArray::new_from_slice(&vec!["h", "e", "l", "o"]);
 
     let value = [
         array.max()?,
@@ -87,15 +87,15 @@ fn test_utf8_array_agg() -> Result<()> {
     ];
 
     let expected = [
-        DataValue::Utf8(Some("o".to_string())),
-        DataValue::Utf8(Some("e".to_string())),
+        DataValue::String(Some("o".as_bytes().to_vec())),
+        DataValue::String(Some("e".as_bytes().to_vec())),
         DataValue::Struct(vec![
             DataValue::UInt64(Some(1)),
-            DataValue::Utf8(Some("e".to_string())),
+            DataValue::String(Some("e".as_bytes().to_vec())),
         ]),
         DataValue::Struct(vec![
             DataValue::UInt64(Some(3)),
-            DataValue::Utf8(Some("o".to_string())),
+            DataValue::String(Some("o".as_bytes().to_vec())),
         ]),
     ];
     let len = value.len();

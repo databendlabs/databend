@@ -13,27 +13,40 @@
 // limitations under the License.
 
 #[macro_export]
-macro_rules! dispatch_numeric_types {
-    ($dispatch: ident, $data_type: expr, $($args:expr),*) => {
-        $dispatch! { u8, $data_type, $($args),* }
-        $dispatch! { u16, $data_type, $($args),* }
-        $dispatch! { u32, $data_type, $($args),* }
-        $dispatch! { u64, $data_type, $($args),* }
-        $dispatch! { i8, $data_type, $($args),* }
-        $dispatch! { i16, $data_type, $($args),* }
-        $dispatch! { i32, $data_type, $($args),* }
-        $dispatch! { i64, $data_type, $($args),* }
-        $dispatch! { f32, $data_type, $($args),* }
-        $dispatch! { f64, $data_type, $($args),* }
-    };
+macro_rules! with_match_primitive_type {
+    (
+    $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
+) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+        use crate::prelude::DataType::*;
+
+        match $key_type {
+            Int8 => __with_ty__! { i8 },
+            Int16 => __with_ty__! { i16 },
+            Int32 => __with_ty__! { i32 },
+            Int64 => __with_ty__! { i64 },
+            UInt8 => __with_ty__! { u8 },
+            UInt16 => __with_ty__! { u16 },
+            UInt32 => __with_ty__! { u32 },
+            UInt64 => __with_ty__! { u64 },
+            Float32 => __with_ty__! { f32 },
+            Float64 => __with_ty__! { f64 },
+
+            _ => $nbody,
+        }
+    }};
 }
 
 #[macro_export]
 macro_rules! match_data_type_apply_macro_ca {
-    ($self:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
+    ($self:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
 
         match $self.data_type() {
-            DataType::Utf8 => $macro_utf8!($self.utf8().unwrap() $(, $opt_args)*),
+            DataType::String => $macro_string!($self.string().unwrap() $(, $opt_args)*),
             DataType::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
             DataType::UInt8 => $macro!($self.u8().unwrap() $(, $opt_args)*),
             DataType::UInt16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
@@ -52,7 +65,7 @@ macro_rules! match_data_type_apply_macro_ca {
     }};
 }
 
-// doesn't include Bool and Utf8
+// doesn't include Bool and String
 #[macro_export]
 macro_rules! apply_method_numeric_series {
     ($self:ident, $method:ident, $($args:expr),*) => {
@@ -77,9 +90,9 @@ macro_rules! apply_method_numeric_series {
 
 #[macro_export]
 macro_rules! match_data_type_apply_macro {
-    ($obj:expr, $macro:ident, $macro_utf8:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
+    ($obj:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
         match $obj {
-            DataType::Utf8 => $macro_utf8!($($opt_args)*),
+            DataType::String => $macro_string!($($opt_args)*),
             DataType::Boolean => $macro_bool!($($opt_args)*),
             DataType::UInt8 => $macro!(u8 $(, $opt_args)*),
             DataType::UInt16 => $macro!(u16 $(, $opt_args)*),
@@ -192,13 +205,13 @@ macro_rules! try_build_array {
         Ok(builder.finish().into_series())
     }};
 
-    // utf8
-    ($utf8:ident, $VALUES:expr) => {{
-        let mut builder = Utf8ArrayBuilder::with_capacity($VALUES.len());
+    // String
+    ($string:ident, $VALUES:expr) => {{
+        let mut builder = StringArrayBuilder::with_capacity($VALUES.len());
         for value in $VALUES.iter() {
             match value {
-                DataValue::Utf8(Some(v)) => builder.append_value(v),
-                DataValue::Utf8(None) => builder.append_null(),
+                DataValue::String(Some(v)) => builder.append_value(v),
+                DataValue::String(None) => builder.append_null(),
                 _ => unreachable!(),
             }
         }

@@ -17,3 +17,5 @@ ignore:
   - "*/profiling/*"
   - "*/tracing/*"
   - "*/api/http/debug/*"
+  - "*/datasources/example/*"
+  - "*/cli/*"

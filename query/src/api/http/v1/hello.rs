@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use warp::Filter;
+use axum::extract::Extension;
 
 use crate::configs::Config;
 
-pub fn hello_handler(
-    cfg: Config,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "hello").map(move || format!("{:?}", cfg))
+pub async fn hello_handler(cfg: Extension<Config>) -> String {
+    format!("{:?}", cfg.0)
 }
