@@ -76,14 +76,7 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        println!(
-            "_columns len:{:?}, dataColumn:{:?}, field:{:?}",
-            _columns.len(),
-            _columns[0].column(),
-            _columns[0].field()
-        );
-
-        if _columns.len() == 0 {
+        if _columns.is_empty() {
             return Result::Err(ErrorCode::UnknownFunction(
                 "Number of arguments for function toYYYYMM doesn't match: passed 0, should be 1 or 2")
             );
@@ -92,7 +85,7 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
         let data_type = _columns[0].data_type();
         let number_vec = match data_type {
             DataType::Date16 | DataType::Date32 => {
-                let seconds_array: Vec<Option<u32>> = _columns[0]
+                let number_vec_result: Vec<Option<u32>> = _columns[0]
                     .column()
                     .to_values()?
                     .iter()
@@ -108,10 +101,10 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                         _ => None,
                     })
                     .collect();
-                Ok(seconds_array)
+                Ok(number_vec_result)
             },
             DataType::DateTime32 => {
-                let seconds_array: Vec<Option<u32>> = _columns[0].column().to_values()?
+                let number_vec_result: Vec<Option<u32>> = _columns[0].column().to_values()?
                     .iter()
                     .map(|value| {
                         match value {
@@ -123,7 +116,7 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                     }
                     }).collect();
 
-                Ok(seconds_array)    
+                Ok(number_vec_result)
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                "Illegal type {:?} of argument of function toYYYYMM.Should be a date16/data32 or a dateTime32",

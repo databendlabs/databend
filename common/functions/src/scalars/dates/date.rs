@@ -15,10 +15,10 @@
 use common_exception::Result;
 
 use super::now::NowFunction;
+use super::ToYYYYFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
-use super::ToYYYYFunction;
 use crate::scalars::FactoryFuncRef;
 
 #[derive(Clone)]

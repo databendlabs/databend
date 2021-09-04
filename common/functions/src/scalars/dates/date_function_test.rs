@@ -20,7 +20,7 @@ use common_exception::Result;
 use crate::scalars::ToYYYYMMFunction;
 
 #[test]
-fn test_toyyyymm_function() -> Result<()> {
+fn test_toyyyymm_date16_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u32])]);
 
@@ -82,7 +82,6 @@ fn test_toyyyymm_date32_function() -> Result<()> {
             schema.field_with_name("a")?.clone(),
         )];
         let result = col.eval(&columns, block.num_rows())?;
-        // println!("result:{:?}", result.);
         assert_eq!(result.len(), 1);
         assert_eq!(result.data_type(), DataType::UInt32);
 
@@ -134,7 +133,6 @@ fn test_toyyyymm_date_time_function() -> Result<()> {
             schema.field_with_name("a")?.clone(),
         )];
         let result = col.eval(&columns, block.num_rows())?;
-        // println!("result:{:?}", result.);
         assert_eq!(result.len(), 1);
         assert_eq!(result.data_type(), DataType::UInt32);
 
