@@ -12,41 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use axum::handler::get;
+use axum::AddExtensionLayer;
+use axum::Router;
 use common_exception::Result;
 
-use crate::api::http::router::Router;
+// use crate::api::http::router::Router;
 use crate::configs::Config;
 
 pub struct HttpService {
     cfg: Config,
 }
 
+// build axum router
+macro_rules! build_router {
+    ($cfg: expr) => {
+        Router::new()
+            .route("/v1/config", get(super::http::v1::config::config_handler))
+            .route(
+                "/debug/home",
+                get(super::http::debug::home::debug_home_handler),
+            )
+            .route(
+                "/debug/pprof/profile",
+                get(super::http::debug::pprof::debug_pprof_handler),
+            )
+            .layer(AddExtensionLayer::new($cfg.clone()))
+    };
+}
+
 impl HttpService {
-    pub fn create(cfg: Config) -> Self {
-        HttpService { cfg }
+    pub fn create(cfg: Config) -> Box<Self> {
+        Box::new(HttpService { cfg })
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        let router = Router::create(self.cfg.clone());
-        let server = warp::serve(router.router()?);
+        let app = build_router!(self.cfg.clone());
 
         let conf = self.cfg.clone();
         let tls_cert = conf.tls_server_cert;
         let tls_key = conf.tls_server_key;
 
-        let address = conf.http_api_address.parse::<std::net::SocketAddr>()?;
+        let address = conf.http_api_address;
 
         if !tls_cert.is_empty() && !tls_key.is_empty() {
             log::info!("Http API TLS enabled");
-            server
-                .tls()
-                .cert_path(tls_cert)
-                .key_path(tls_key)
-                .run(address)
-                .await;
+            axum_server::bind_rustls(address)
+                .private_key_file(tls_key)
+                .certificate_file(tls_cert)
+                .serve(app)
+                .await?;
         } else {
             log::warn!("Http API TLS not set");
-            server.run(address).await;
+            axum_server::bind(address).serve(app).await?;
         }
         Ok(())
     }
