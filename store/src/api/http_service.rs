@@ -61,11 +61,10 @@ impl HttpService {
                 .private_key_file(tls_key)
                 .certificate_file(tls_cert)
                 .serve(app)
-                .await
-                .unwrap();
+                .await?;
         } else {
             log::warn!("Http API TLS not set");
-            axum_server::bind(address).serve(app).await.unwrap();
+            axum_server::bind(address).serve(app).await?;
         }
         Ok(())
     }
