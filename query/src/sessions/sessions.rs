@@ -63,9 +63,10 @@ impl SessionManager {
         let system = SystemFactory::create().load_databases()?;
         catalog.register_databases(system)?;
         // Register local databases(including default database).
-        let local = LocalFactory::create().load_databases()?;
-        catalog.register_databases(local)?;
-
+        if conf.store.disable_local_database_engine == "0" {
+            let local = LocalFactory::create().load_databases()?;
+            catalog.register_databases(local)?;
+        }
         Ok(Arc::new(SessionManager {
             catalog,
             conf,

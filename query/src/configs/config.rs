@@ -72,6 +72,7 @@ const METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 const STORE_ADDRESS: &str = "STORE_ADDRESS";
 const STORE_USERNAME: &str = "STORE_USERNAME";
 const STORE_PASSWORD: &str = "STORE_PASSWORD";
+const DISABLE_LOCAL_DATABASE_ENGINE: &str = "DISABLE_LOCAL_DATABASE_ENGINE";
 
 const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
 const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
@@ -139,6 +140,10 @@ pub struct StoreConfig {
     )]
     #[serde(default)]
     pub rpc_tls_store_service_domain_name: String,
+
+    #[structopt(long, env = "DISABLE_LOCAL_DATABASE_ENGINE", default_value = "0")]
+    #[serde(default)]
+    pub disable_local_database_engine: String,
 }
 
 impl StoreConfig {
@@ -149,6 +154,7 @@ impl StoreConfig {
             store_password: "".to_string(),
             rpc_tls_store_server_root_ca_cert: "".to_string(),
             rpc_tls_store_service_domain_name: "localhost".to_string(),
+            disable_local_database_engine: "0".to_string(),
         }
     }
 }
@@ -362,6 +368,13 @@ impl Config {
         env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
         env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
         env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
+        env_helper!(
+            mut_config,
+            store,
+            disable_local_database_engine,
+            String,
+            DISABLE_LOCAL_DATABASE_ENGINE
+        );
         // for store rpc client
         env_helper!(
             mut_config,

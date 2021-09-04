@@ -50,6 +50,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("STORE_USERNAME", "admin");
     std::env::set_var("STORE_PASSWORD", "password!");
     std::env::set_var("DISABLE_REMOTE_CATALOG", "0");
+    std::env::set_var("DISABLE_LOCAL_DATABASE_ENGINE", "0");
     std::env::remove_var("CONFIG_FILE");
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
@@ -68,6 +69,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:1234", configured.store.store_address);
     assert_eq!("admin", configured.store.store_username.to_string());
     assert_eq!("password!", configured.store.store_password.to_string());
+    assert_eq!("0", configured.store.disable_local_database_engine);
 
     // clean up
     std::env::remove_var("QUERY_LOG_LEVEL");
@@ -83,6 +85,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("STORE_ADDRESS");
     std::env::remove_var("STORE_USERNAME");
     std::env::remove_var("STORE_PASSWORD");
+    std::env::remove_var("DISABLE_LOCAL_DATABASE_ENGINE");
     Ok(())
 }
 

@@ -30,11 +30,12 @@ pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     let cli = Arc::new(RemoteMetaStoreClient::create(Arc::new(
         store_client_provider,
     )));
-    let catalog = DatabaseCatalog::try_create_with_config(conf, cli)?;
+    let catalog = DatabaseCatalog::try_create_with_config(conf.clone(), cli)?;
     let system = SystemFactory::create().load_databases()?;
     catalog.register_databases(system)?;
-    let local = LocalFactory::create().load_databases()?;
-    catalog.register_databases(local)?;
-
+    if conf.store.disable_local_database_engine == "0" {
+        let local = LocalFactory::create().load_databases()?;
+        catalog.register_databases(local)?;
+    }
     Ok(catalog)
 }

@@ -11,6 +11,7 @@ log_dir = "./_logs"
 store_address = "0.0.0.0:9191"
 store_username = "root"
 store_password = "root"
+disable_local_database_engine = "0"
 
 # Query
 [query]
