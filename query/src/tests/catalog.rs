@@ -28,7 +28,7 @@ pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     let catalog = DatabaseCatalog::try_create_with_config(conf.clone())?;
     // Register local/system and remote database engine.
     if conf.store.disable_local_database_engine == "0" {
-      catalog.register_db_engine("local", Arc::new(LocalDatabases::create(conf.clone())))?;
+        catalog.register_db_engine("local", Arc::new(LocalDatabases::create(conf.clone())))?;
     }
     catalog.register_db_engine("system", Arc::new(SystemDatabases::create(conf.clone())))?;
     catalog.register_db_engine("remote", Arc::new(RemoteDatabases::create(conf.clone())))?;

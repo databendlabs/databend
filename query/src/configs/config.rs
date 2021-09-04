@@ -68,12 +68,6 @@ const FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 const HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 const METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 
-// Store env.
-const STORE_ADDRESS: &str = "STORE_ADDRESS";
-const STORE_USERNAME: &str = "STORE_USERNAME";
-const STORE_PASSWORD: &str = "STORE_PASSWORD";
-const DISABLE_LOCAL_DATABASE_ENGINE: &str = "DISABLE_LOCAL_DATABASE_ENGINE";
-
 // Query env.
 const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
 const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
@@ -98,6 +92,7 @@ const STORE_USERNAME: &str = "STORE_USERNAME";
 const STORE_PASSWORD: &str = "STORE_PASSWORD";
 const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
 const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
+const DISABLE_LOCAL_DATABASE_ENGINE: &str = "DISABLE_LOCAL_DATABASE_ENGINE";
 
 /// Log config group.
 /// serde(default) make the toml de to default working.
@@ -471,7 +466,7 @@ impl Config {
             String,
             DISABLE_LOCAL_DATABASE_ENGINE
         );
-      
+
         // for store rpc client
         env_helper!(
             mut_config,

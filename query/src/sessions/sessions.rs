@@ -54,7 +54,7 @@ impl SessionManager {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
         // Register local/system and remote database engine.
         if conf.store.disable_local_database_engine == "0" {
-          catalog.register_db_engine("LOCAL", Arc::new(LocalDatabases::create(conf.clone())))?;
+            catalog.register_db_engine("LOCAL", Arc::new(LocalDatabases::create(conf.clone())))?;
         }
         catalog.register_db_engine("SYSTEM", Arc::new(SystemDatabases::create(conf.clone())))?;
         catalog.register_db_engine("REMOTE", Arc::new(RemoteDatabases::create(conf.clone())))?;
