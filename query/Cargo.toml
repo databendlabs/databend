@@ -83,7 +83,7 @@ walkdir = "2.3.2"
 axum = {version = "0.2.3", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
-hyper = { version = "0.14", features = ["full"] }
+hyper = "0.14.12"
 tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 headers = "0.3.4"
 tokio-rustls = "0.22.0"
