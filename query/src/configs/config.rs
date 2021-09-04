@@ -73,6 +73,7 @@ const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
 const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
 
 const CONFIG_FILE: &str = "CONFIG_FILE";
+const DISABLE_LOCAL_DATABASE_ENGINE: &str = "DISABLE_LOCAL_DATABASE_ENGINE";
 
 const RPC_TLS_SERVER_CERT: &str = "RPC_TLS_SERVER_CERT";
 const RPC_TLS_SERVER_KEY: &str = "RPC_TLS_SERVER_KEY";
@@ -92,7 +93,6 @@ const STORE_USERNAME: &str = "STORE_USERNAME";
 const STORE_PASSWORD: &str = "STORE_PASSWORD";
 const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
 const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
-const DISABLE_LOCAL_DATABASE_ENGINE: &str = "DISABLE_LOCAL_DATABASE_ENGINE";
 
 /// Log config group.
 /// serde(default) make the toml de to default working.
@@ -148,10 +148,6 @@ pub struct StoreConfig {
     )]
     #[serde(default)]
     pub rpc_tls_store_service_domain_name: String,
-
-    #[structopt(long, env = "DISABLE_LOCAL_DATABASE_ENGINE", default_value = "0")]
-    #[serde(default)]
-    pub disable_local_database_engine: String,
 }
 
 impl StoreConfig {
@@ -162,7 +158,6 @@ impl StoreConfig {
             store_password: "".to_string(),
             rpc_tls_store_server_root_ca_cert: "".to_string(),
             rpc_tls_store_service_domain_name: "localhost".to_string(),
-            disable_local_database_engine: "0".to_string(),
         }
     }
 }
@@ -342,6 +337,10 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
+
+    #[structopt(long, env = "DISABLE_LOCAL_DATABASE_ENGINE", default_value = "0")]
+    #[serde(default)]
+    pub disable_local_database_engine: String,
 }
 
 impl QueryConfig {
@@ -362,6 +361,7 @@ impl QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
+            disable_local_database_engine: "0".to_string(),
         }
     }
 }
