@@ -13,9 +13,8 @@
 // limitations under the License.
 //
 
-mod namespace;
-mod user;
+mod namespace_api;
+mod namespace_mgr;
 
-pub use user::user_api::UserInfo;
-pub use user::user_api::UserMgrApi;
-pub use user::user_mgr::UserMgr;
+pub use namespace_api::Namespace;
+pub use namespace_api::NamespaceApi;
