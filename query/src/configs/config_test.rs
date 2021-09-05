@@ -39,7 +39,7 @@ fn test_default_config() -> Result<()> {
 // From env, defaulting.
 #[test]
 fn test_env_config() -> Result<()> {
-    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
+    std::env::set_var("LOG_LEVEL", "DEBUG");
     std::env::set_var("QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
     std::env::set_var("QUERY_MYSQL_HANDLER_PORT", "3306");
     std::env::set_var("QUERY_MAX_ACTIVE_SESSIONS", "255");
@@ -51,7 +51,6 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("STORE_ADDRESS", "1.2.3.4:1234");
     std::env::set_var("STORE_USERNAME", "admin");
     std::env::set_var("STORE_PASSWORD", "password!");
-    std::env::set_var("DISABLE_REMOTE_CATALOG", "0");
     std::env::remove_var("CONFIG_FILE");
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
@@ -72,7 +71,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!("password!", configured.store.store_password.to_string());
 
     // clean up
-    std::env::remove_var("QUERY_LOG_LEVEL");
+    std::env::remove_var("LOG_LEVEL");
     std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
     std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
     std::env::remove_var("QUERY_MAX_ACTIVE_SESSIONS");
