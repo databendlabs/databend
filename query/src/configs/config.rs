@@ -459,13 +459,6 @@ impl Config {
         env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
         env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
         env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
-        env_helper!(
-            mut_config,
-            store,
-            disable_local_database_engine,
-            String,
-            DISABLE_LOCAL_DATABASE_ENGINE
-        );
 
         // for store rpc client
         env_helper!(
@@ -540,6 +533,13 @@ impl Config {
             metric_api_address,
             String,
             METRICS_API_ADDRESS
+        );
+        env_helper!(
+            mut_config,
+            query,
+            disable_local_database_engine,
+            String,
+            DISABLE_LOCAL_DATABASE_ENGINE
         );
 
         // for api http service
