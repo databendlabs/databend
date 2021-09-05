@@ -59,6 +59,7 @@ const LOG_DIR: &str = "LOG_DIR";
 
 // Query env.
 const QUERY_TENANT: &str = "QUERY_TENANT";
+const QUERY_NAMESPACE: &str = "QUERY_NAMESPACE";
 const QUERY_NUM_CPUS: &str = "QUERY_NUM_CPUS";
 const QUERY_MYSQL_HANDLER_HOST: &str = "QUERY_MYSQL_HANDLER_HOST";
 const QUERY_MYSQL_HANDLER_PORT: &str = "QUERY_MYSQL_HANDLER_PORT";
@@ -230,9 +231,13 @@ impl fmt::Debug for MetaConfig {
 /// serde(default) make the toml de to default working.
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct QueryConfig {
-    #[structopt(long, env = QUERY_TENANT, default_value = "", help = "tenant id")]
+    #[structopt(long, env = QUERY_TENANT, default_value = "", help = "Tenant id for get the information from the MetaStore")]
     #[serde(default)]
     pub tenant: String,
+
+    #[structopt(long, env = QUERY_NAMESPACE, default_value = "", help = "Namespace for construct the cluster")]
+    #[serde(default)]
+    pub namespace: String,
 
     #[structopt(long, env = QUERY_NUM_CPUS, default_value = "0")]
     #[serde(default)]
@@ -345,6 +350,7 @@ impl QueryConfig {
     pub fn default() -> Self {
         QueryConfig {
             tenant: "".to_string(),
+            namespace: "".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -473,6 +479,8 @@ impl Config {
         );
 
         // Query.
+        env_helper!(mut_config, query, tenant, String, QUERY_TENANT);
+        env_helper!(mut_config, query, namespace, String, QUERY_NAMESPACE);
         env_helper!(mut_config, query, num_cpus, u64, QUERY_NUM_CPUS);
         env_helper!(
             mut_config,
