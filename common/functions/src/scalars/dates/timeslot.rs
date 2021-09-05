@@ -48,7 +48,8 @@ impl Function for TimeSlotFunction {
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         let mut timestamp = Utc::now().timestamp_millis() / 1000;
-        if columns.len() > 0 {
+        let len = columns.len();
+        if len > 0 {
             let args = columns[0].column().clone().to_values()?;
             timestamp = args[0].as_i64()?;
         }
@@ -67,7 +68,6 @@ impl Function for TimeSlotFunction {
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
         Some((0, 1))
     }
-
 }
 
 impl fmt::Display for TimeSlotFunction {

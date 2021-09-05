@@ -62,23 +62,26 @@ fn test_timeslot_now_function() -> Result<()> {
     let check_timestamp = new_date.timestamp_millis() / 1000;
     let empty: Vec<i32> = Vec::new();
 
-    let tests = vec![Test {
-        name: "test-timeSlot",
-        display: "timeSlot",
-        nullable: false,
-        columns: vec![Series::new(vec![now_timestamp]).into()],
-        func: TimeSlotFunction::try_create("timeSlot"),
-        expect: Series::new(vec![check_timestamp]),
-        error: "",
-    }, Test {
-        name: "test-timeSlot-now",
-        display: "timeSlot",
-        nullable: false,
-        columns: vec![Series::new(empty).into()],
-        func: TimeSlotFunction::try_create("timeSlot"),
-        expect: Series::new(vec![check_timestamp]),
-        error: "",
-    }];
+    let tests = vec![
+        Test {
+            name: "test-timeSlot",
+            display: "timeSlot",
+            nullable: false,
+            columns: vec![Series::new(vec![now_timestamp]).into()],
+            func: TimeSlotFunction::try_create("timeSlot"),
+            expect: Series::new(vec![check_timestamp]),
+            error: "",
+        },
+        Test {
+            name: "test-timeSlot-now",
+            display: "timeSlot",
+            nullable: false,
+            columns: vec![Series::new(empty).into()],
+            func: TimeSlotFunction::try_create("timeSlot"),
+            expect: Series::new(vec![check_timestamp]),
+            error: "",
+        },
+    ];
 
     for t in tests {
         do_test(t);
