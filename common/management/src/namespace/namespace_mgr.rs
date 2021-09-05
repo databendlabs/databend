@@ -20,8 +20,8 @@ use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_store_api::KVApi;
 
-use crate::namespace::Namespace;
 use crate::namespace::NamespaceApi;
+use crate::namespace::NodeInfo;
 
 #[allow(dead_code)]
 pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";
@@ -51,13 +51,17 @@ where T: KVApi
 
 #[async_trait]
 impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
-    async fn add_namespace(&mut self, tenant: String, namespace: Namespace) -> Result<u64> {
-        let id = namespace.id.clone();
-        let key = self.key_prefix(&[tenant, id]);
-        let value = serde_json::to_vec(&namespace)?;
-
+    async fn add_node(
+        &mut self,
+        tenant_id: String,
+        namespace_id: String,
+        node: NodeInfo,
+    ) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
         let match_seq = MatchSeq::Exact(0);
+
+        let key = self.key_prefix(&[tenant_id, namespace_id, node.id.clone()]);
+        let value = serde_json::to_vec(&node)?;
 
         let res = self
             .kv_api
@@ -66,7 +70,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
 
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
-            (Some((s, _)), None) => Err(ErrorCode::UserAlreadyExists(format!(
+            (Some((s, _)), None) => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
                 "Namespace already exists, seq [{}]",
                 s
             ))),
@@ -77,45 +81,30 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
         }
     }
 
-    async fn get_namespace(
+    async fn get_nodes(
         &mut self,
         _tenant: String,
         _namespace_id: String,
         _seq: Option<u64>,
-    ) -> Result<SeqValue<Namespace>> {
+    ) -> Result<Vec<SeqValue<NodeInfo>>> {
         todo!()
     }
 
-    async fn get_all_namespaces(
-        &mut self,
-        _tenant: String,
-        _seq: Option<u64>,
-    ) -> Result<Vec<SeqValue<Namespace>>> {
-        todo!()
-    }
-
-    async fn exists_namespace(
+    async fn update_node(
         &mut self,
         _tenant: String,
         _namespace_id: String,
-        _seq: Option<u64>,
-    ) -> Result<bool> {
-        todo!()
-    }
-
-    async fn update_namespace(
-        &mut self,
-        _tenant: String,
-        _namespace: Namespace,
+        _namespace: NodeInfo,
         _seq: Option<u64>,
     ) -> Result<Option<u64>> {
         todo!()
     }
 
-    async fn drop_namespace(
+    async fn drop_node(
         &mut self,
         _tenant: String,
         _namespace_id: String,
+        _node: NodeInfo,
         _seq: Option<u64>,
     ) -> Result<()> {
         todo!()

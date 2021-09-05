@@ -21,63 +21,20 @@ use common_exception::Result;
 use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Namespace {
+pub struct NodeInfo {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
+    pub cpu_nums: u32,
+    #[serde(default)]
+    pub version: u32,
+    #[serde(default)]
+    pub ip: String,
+    #[serde(default)]
+    pub port: u32,
 }
 
-impl Namespace {
-    #[allow(dead_code)]
-    pub fn new(id: String) -> Self {
-        Namespace { id }
-    }
-}
-
-#[async_trait]
-pub trait NamespaceApi {
-    // Create a new tenant's namespace.
-    async fn add_namespace(&mut self, tenant: String, namespace: Namespace) -> Result<u64>;
-
-    // Get the tenant's namespace.
-    async fn get_namespace(
-        &mut self,
-        tenant: String,
-        namespace_id: String,
-        seq: Option<u64>,
-    ) -> Result<SeqValue<Namespace>>;
-
-    // Get the tenant's all namespaces.
-    async fn get_all_namespaces(
-        &mut self,
-        tenant: String,
-        seq: Option<u64>,
-    ) -> Result<Vec<SeqValue<Namespace>>>;
-
-    // Check tenant's namespace exists or not.
-    async fn exists_namespace(
-        &mut self,
-        tenant: String,
-        namespace_id: String,
-        seq: Option<u64>,
-    ) -> Result<bool>;
-
-    // Update the tenant's namespace.
-    async fn update_namespace(
-        &mut self,
-        tenant: String,
-        namespace: Namespace,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>>;
-
-    // Drop the tenant's one namespace by id.
-    async fn drop_namespace(
-        &mut self,
-        tenant: String,
-        namespace_id: String,
-        seq: Option<u64>,
-    ) -> Result<()>;
-}
-
-impl TryFrom<Vec<u8>> for Namespace {
+impl TryFrom<Vec<u8>> for NodeInfo {
     type Error = ErrorCode;
 
     fn try_from(value: Vec<u8>) -> Result<Self> {
@@ -89,4 +46,41 @@ impl TryFrom<Vec<u8>> for Namespace {
             ))),
         }
     }
+}
+
+#[async_trait]
+pub trait NamespaceApi {
+    // Add a new node info to /tenant/namespace/node-name.
+    async fn add_node(
+        &mut self,
+        tenant_id: String,
+        namespace_id: String,
+        node: NodeInfo,
+    ) -> Result<u64>;
+
+    // Get the tenant's namespace all nodes.
+    async fn get_nodes(
+        &mut self,
+        tenant_id: String,
+        namespace_id: String,
+        seq: Option<u64>,
+    ) -> Result<Vec<SeqValue<NodeInfo>>>;
+
+    // Update the tenant's namespace node.
+    async fn update_node(
+        &mut self,
+        tenant_id: String,
+        namespace_id: String,
+        node: NodeInfo,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>>;
+
+    // Drop the tenant's namespace one node by node.id.
+    async fn drop_node(
+        &mut self,
+        tenant_id: String,
+        namespace_id: String,
+        node: NodeInfo,
+        seq: Option<u64>,
+    ) -> Result<()>;
 }

@@ -19,5 +19,5 @@ mod namespace_mgr_test;
 mod namespace_api;
 mod namespace_mgr;
 
-pub use namespace_api::Namespace;
 pub use namespace_api::NamespaceApi;
+pub use namespace_api::NodeInfo;

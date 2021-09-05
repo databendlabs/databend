@@ -53,12 +53,22 @@ mock! {
 }
 
 #[tokio::test]
-async fn test_add_user() -> Result<()> {
-    let id = "cluster1";
-    let tenant = "tenant1";
-    let key = format!("{}/{}/{}", NAMESPACE_API_KEY_PREFIX, tenant, id);
-    let namespace = Namespace::new(id.to_string());
-    let value = Some(serde_json::to_vec(&namespace)?);
+async fn test_add_node() -> Result<()> {
+    let tenant_id = "tenant1";
+    let namespace_id = "cluster1";
+    let node_id = "node1";
+    let key = format!(
+        "{}/{}/{}/{}",
+        NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id, node_id
+    );
+    let node = NodeInfo {
+        id: node_id.to_string(),
+        cpu_nums: 0,
+        version: 0,
+        ip: "".to_string(),
+        port: 0,
+    };
+    let value = Some(serde_json::to_vec(&node)?);
     let seq = MatchSeq::Exact(0);
 
     // normal
@@ -73,7 +83,7 @@ async fn test_add_user() -> Result<()> {
                 predicate::eq(None),
             )
             .times(1)
-            .return_once(|_u, _s, _, _| {
+            .return_once(|_, _, _, _| {
                 Ok(UpsertKVActionResult {
                     prev: None,
                     result: None,
@@ -81,7 +91,9 @@ async fn test_add_user() -> Result<()> {
             });
 
         let mut mgr = NamespaceMgr::new(api);
-        let res = mgr.add_namespace(tenant.to_string(), namespace).await;
+        let res = mgr
+            .add_node(tenant_id.to_string(), namespace_id.to_string(), node)
+            .await;
 
         assert_eq!(
             res.unwrap_err().code(),
