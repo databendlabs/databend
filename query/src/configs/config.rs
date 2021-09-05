@@ -96,7 +96,9 @@ const CONFIG_FILE: &str = "CONFIG_FILE";
 
 /// Log config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 pub struct LogConfig {
     #[structopt(long, env = LOG_LEVEL, default_value = "INFO" , help = "Log level <DEBUG|INFO|ERROR>")]
     #[serde(default)]
@@ -118,7 +120,7 @@ impl LogConfig {
 
 /// Store config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct StoreConfig {
     #[structopt(long, env = STORE_ADDRESS, default_value = "", help = "Store backend address")]
     #[serde(default)]
@@ -174,7 +176,7 @@ impl fmt::Debug for StoreConfig {
 
 /// Meta config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct MetaConfig {
     #[structopt(long, env = META_ADDRESS, default_value = "", help = "MetaStore backend address")]
     #[serde(default)]
@@ -230,7 +232,9 @@ impl fmt::Debug for MetaConfig {
 
 /// Query config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 pub struct QueryConfig {
     #[structopt(long, env = QUERY_TENANT, default_value = "", help = "Tenant id for get the information from the MetaStore")]
     #[serde(default)]
