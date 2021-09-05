@@ -83,39 +83,41 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
         }
 
         let data_type = columns[0].data_type();
-        let number_vec = match data_type {
-            DataType::Date16 | DataType::Date32 => {
-                let number_vec_result: Vec<Option<u32>> = columns[0]
-                    .column()
-                    .to_values()?
-                    .iter()
-                    .map(|value| match value {
-                        DataValue::UInt16(Some(v)) => {
+        let number_vec: Vec<Option<u32>> = match data_type {
+            DataType::Date16 => {
+                let number_vec_result = columns[0].column().to_array()?.u16()?.iter().map(|value|{
+                    match value {
+                        Some(v) => {
                             let date_time = Utc.timestamp(*v as i64 * 24 * 3600, 0_u32);
                             Some(T::execute(date_time))
-                        }
-                        DataValue::UInt32(Some(v)) => {
+                        },
+                        None => None,
+                    }
+                }).collect();
+                Ok(number_vec_result)
+            },
+            DataType::Date32 => {
+                let number_vec_result = columns[0].column().to_array()?.u32()?.iter().map(|value|{
+                    match value {
+                        Some(v) => {
                             let date_time = Utc.timestamp(*v as i64 * 24 * 3600, 0_u32);
                             Some(T::execute(date_time))
-                        }
-                        _ => None,
-                    })
-                    .collect();
+                        },
+                        None => None,
+                    }
+                }).collect();
                 Ok(number_vec_result)
             },
             DataType::DateTime32 => {
-                let number_vec_result: Vec<Option<u32>> = columns[0].column().to_values()?
-                    .iter()
-                    .map(|value| {
-                        match value {
-                        DataValue::UInt32(Some(v)) => {
+                let number_vec_result = columns[0].column().to_array()?.u32()?.iter().map(|value|{
+                    match value {
+                        Some(v) => {
                             let date_time = Utc.timestamp(*v as i64, 0_u32);
                             Some(T::execute(date_time))
                         },
-                        _ => None,
+                        None => None,
                     }
-                    }).collect();
-
+                }).collect();
                 Ok(number_vec_result)
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(

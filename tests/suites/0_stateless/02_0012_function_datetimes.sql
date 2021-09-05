@@ -17,8 +17,8 @@ select today() - yesterday()  = 1;
 select today() + 1 = tomorrow();
 select tomorrow() - today() = 1;
 
-select toYYYYMM(toDateTime(1630320462));
-select toYYYYMM(today() - 31) = toYYYYMM(today()) - 1;
-select toYYYYMM(today() + 31) = toYYYYMM(today()) + 1;
-select toYYYYMM(today()) - toYYYYMM(today() - 31) = 1;
-select toYYYYMM(today() + 31) - toYYYYMM(today()) = 1;
+select toYYYYMM(toDateTime(1630833797));
+select toYYYYMM(toDate(18875));
+select toYYYYMM(toDateTime(1630833797))  =  202109;
+select toYYYYMM(toDate(18875)  )  =  202109;
+
