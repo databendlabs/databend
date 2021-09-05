@@ -16,6 +16,7 @@
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_store_api::KVApi;
@@ -83,11 +84,20 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
 
     async fn get_nodes(
         &mut self,
-        _tenant: String,
-        _namespace_id: String,
+        tenant_id: String,
+        namespace_id: String,
         _seq: Option<u64>,
     ) -> Result<Vec<SeqValue<NodeInfo>>> {
-        todo!()
+        let key = self.key_prefix(&[tenant_id, namespace_id]);
+        let values = self.kv_api.prefix_list_kv(key.as_str()).await?;
+        let mut r = vec![];
+        for (_key, (s, val)) in values {
+            let u = serde_json::from_slice::<NodeInfo>(&val.value)
+                .map_err_to_code(ErrorCode::NamespaceIllegalNodeInfoFormat, || "")?;
+
+            r.push((s, u));
+        }
+        Ok(r)
     }
 
     async fn update_node(

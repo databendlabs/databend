@@ -238,6 +238,7 @@ build_exceptions! {
 
     // namespace error.
     NamespaceNodeAlreadyExists(4008),
+    NamespaceIllegalNodeInfoFormat(4009),
 
     // storage-api error codes
     IllegalScanPlan(5000),

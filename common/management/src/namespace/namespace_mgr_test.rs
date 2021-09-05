@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
+use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use common_store_api::kv_api::MGetKVActionResult;
 use common_store_api::kv_api::PrefixListReply;
@@ -51,6 +52,38 @@ mock! {
 
     async fn prefix_list_kv(&mut self, prefix: &str) -> Result<PrefixListReply>;
     }
+}
+
+type NodeInfos = Vec<(u64, NodeInfo)>;
+fn prepare() -> common_exception::Result<(Vec<(String, SeqValue<KVValue>)>, NodeInfos)> {
+    let tenant_id = "tenant_1";
+    let namespace_id = "namespace_1";
+
+    let mut res = vec![];
+    let mut node_infos = vec![];
+    for i in 0..9 {
+        let node_id = format!("test_node_{}", i);
+        let key = format!(
+            "{}/{}/{}",
+            NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id
+        );
+        let node_info = NodeInfo {
+            id: node_id,
+            cpu_nums: 0,
+            version: 0,
+            ip: "".to_string(),
+            port: 0,
+        };
+        res.push((
+            key,
+            (i, KVValue {
+                meta: None,
+                value: serde_json::to_vec(&node_info)?,
+            }),
+        ));
+        node_infos.push((i, node_info));
+    }
+    Ok((res, node_infos))
 }
 
 #[tokio::test]
@@ -172,6 +205,74 @@ async fn test_add_node() -> Result<()> {
             ErrorCode::UnknownException("").code()
         );
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_nodes_normal() -> Result<()> {
+    let (res, _infos) = prepare()?;
+
+    let tenant_id = "tenant_1";
+    let namespace_id = "namespace_1";
+    let mut api = MockKV::new();
+    {
+        let test_key = format!(
+            "{}/{}/{}",
+            NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id
+        );
+        api.expect_prefix_list_kv()
+            .with(predicate::function(move |v| v == test_key.as_str()))
+            .times(1)
+            .return_once(|_p| Ok(res));
+    }
+
+    let mut mgr = NamespaceMgr::new(api);
+    let actual = mgr
+        .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
+        .await?;
+    let expect = res.clone();
+    assert_eq!(actual, expect);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_nodes_invalid_encoding() -> Result<()> {
+    let (mut res, _infos) = prepare()?;
+    res.insert(
+        8,
+        (
+            "fake_key".to_string(),
+            (0, KVValue {
+                meta: None,
+                value: b"some arbitrary str".to_vec(),
+            }),
+        ),
+    );
+
+    let tenant_id = "tenant_1";
+    let namespace_id = "namespace_1";
+    let mut api = MockKV::new();
+    {
+        let test_key = format!(
+            "{}/{}/{}",
+            NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id
+        );
+        api.expect_prefix_list_kv()
+            .with(predicate::function(move |v| v == test_key.as_str()))
+            .times(1)
+            .return_once(|_p| Ok(res));
+    }
+
+    let mut mgr = NamespaceMgr::new(api);
+    let res = mgr
+        .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
+        .await;
+
+    let actual = res.unwrap_err().code();
+    let expect = ErrorCode::NamespaceIllegalNodeInfoFormat("").code();
+    assert_eq!(actual, expect);
 
     Ok(())
 }
