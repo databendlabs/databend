@@ -80,7 +80,7 @@ pub trait NamespaceApi {
         &mut self,
         tenant_id: String,
         namespace_id: String,
-        node: NodeInfo,
+        node_id: String,
         seq: Option<u64>,
     ) -> Result<()>;
 }

@@ -211,7 +211,7 @@ async fn test_add_node() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_nodes_normal() -> Result<()> {
-    let (res, _infos) = prepare()?;
+    let (res, infos) = prepare()?;
 
     let tenant_id = "tenant_1";
     let namespace_id = "namespace_1";
@@ -231,7 +231,7 @@ async fn test_get_nodes_normal() -> Result<()> {
     let actual = mgr
         .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
         .await?;
-    let expect = res.clone();
+    let expect = infos;
     assert_eq!(actual, expect);
 
     Ok(())
@@ -271,8 +271,94 @@ async fn test_get_nodes_invalid_encoding() -> Result<()> {
         .await;
 
     let actual = res.unwrap_err().code();
-    let expect = ErrorCode::NamespaceIllegalNodeInfoFormat("").code();
+    let expect = ErrorCode::NamespaceIllegalNodeFormat("").code();
     assert_eq!(actual, expect);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_drop_node_normal() -> common_exception::Result<()> {
+    let tenant_id = "tenant1";
+    let namespace_id = "cluster1";
+    let node_id = "node1";
+    let key = format!(
+        "{}/{}/{}/{}",
+        NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id, node_id
+    );
+
+    let mut api = MockKV::new();
+    api.expect_upsert_kv()
+        .with(
+            predicate::function(move |v| v == key.as_str()),
+            predicate::eq(MatchSeq::Any),
+            predicate::eq(None),
+            predicate::eq(None),
+        )
+        .times(1)
+        .returning(|_, _, _, _| {
+            Ok(UpsertKVActionResult {
+                prev: Some((1, KVValue {
+                    meta: None,
+                    value: vec![],
+                })),
+                result: None,
+            })
+        });
+
+    let mut mgr = NamespaceMgr::new(api);
+    let res = mgr
+        .drop_node(
+            tenant_id.to_string(),
+            namespace_id.to_string(),
+            node_id.to_string(),
+            None,
+        )
+        .await;
+
+    assert!(res.is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_drop_node_error() -> common_exception::Result<()> {
+    let tenant_id = "tenant1";
+    let namespace_id = "cluster1";
+    let node_id = "node1";
+    let key = format!(
+        "{}/{}/{}/{}",
+        NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id, node_id
+    );
+
+    let mut api = MockKV::new();
+    api.expect_upsert_kv()
+        .with(
+            predicate::function(move |v| v == key.as_str()),
+            predicate::eq(MatchSeq::Any),
+            predicate::eq(None),
+            predicate::eq(None),
+        )
+        .times(1)
+        .returning(|_k, _seq, _none, _meta| {
+            Ok(UpsertKVActionResult {
+                prev: None,
+                result: None,
+            })
+        });
+    let mut mgr = NamespaceMgr::new(api);
+    let res = mgr
+        .drop_node(
+            tenant_id.to_string(),
+            namespace_id.to_string(),
+            "node1".to_string(),
+            None,
+        )
+        .await;
+
+    assert_eq!(
+        res.unwrap_err().code(),
+        ErrorCode::NamespaceUnknownNode("").code()
+    );
     Ok(())
 }

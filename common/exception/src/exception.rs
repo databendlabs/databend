@@ -237,8 +237,9 @@ build_exceptions! {
     TrancateTableFailedError(4007),
 
     // namespace error.
-    NamespaceNodeAlreadyExists(4008),
-    NamespaceIllegalNodeInfoFormat(4009),
+    NamespaceUnknownNode(4008),
+    NamespaceNodeAlreadyExists(4009),
+    NamespaceIllegalNodeFormat(4010),
 
     // storage-api error codes
     IllegalScanPlan(5000),

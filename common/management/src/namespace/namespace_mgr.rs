@@ -93,7 +93,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
         let mut r = vec![];
         for (_key, (s, val)) in values {
             let u = serde_json::from_slice::<NodeInfo>(&val.value)
-                .map_err_to_code(ErrorCode::NamespaceIllegalNodeInfoFormat, || "")?;
+                .map_err_to_code(ErrorCode::NamespaceIllegalNodeFormat, || "")?;
 
             r.push((s, u));
         }
@@ -112,11 +112,20 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
 
     async fn drop_node(
         &mut self,
-        _tenant: String,
-        _namespace_id: String,
-        _node: NodeInfo,
-        _seq: Option<u64>,
+        tenant_id: String,
+        namespace_id: String,
+        node_id: String,
+        seq: Option<u64>,
     ) -> Result<()> {
-        todo!()
+        let key = self.key_prefix(&[tenant_id, namespace_id, node_id.clone()]);
+        let r = self.kv_api.upsert_kv(&key, seq.into(), None, None).await?;
+        if r.prev.is_some() && r.result.is_none() {
+            Ok(())
+        } else {
+            Err(ErrorCode::NamespaceUnknownNode(format!(
+                "unknown node {:?}",
+                node_id
+            )))
+        }
     }
 }
