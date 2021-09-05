@@ -67,11 +67,11 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
     assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+    assert_eq!("0", configured.query.disable_local_database_engine);
 
     assert_eq!("1.2.3.4:1234", configured.store.store_address);
     assert_eq!("admin", configured.store.store_username.to_string());
     assert_eq!("password!", configured.store.store_password.to_string());
-    assert_eq!("0", configured.store.disable_local_database_engine);
 
     // clean up
     std::env::remove_var("QUERY_LOG_LEVEL");
