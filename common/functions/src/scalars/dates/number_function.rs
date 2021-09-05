@@ -40,8 +40,8 @@ pub trait NumberResultFunction {
 pub struct ToYYYYMM;
 
 impl NumberResultFunction for ToYYYYMM {
-    fn execute(_value: DateTime<Utc>) -> u32 {
-        _value.year() as u32 * 100 + _value.month()
+    fn execute(value: DateTime<Utc>) -> u32 {
+        value.year() as u32 * 100 + value.month()
     }
 }
 
@@ -75,17 +75,17 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
         Ok(false)
     }
 
-    fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        if _columns.is_empty() {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        if columns.is_empty() {
             return Result::Err(ErrorCode::UnknownFunction(
                 "Number of arguments for function toYYYYMM doesn't match: passed 0, should be 1 or 2")
             );
         }
 
-        let data_type = _columns[0].data_type();
+        let data_type = columns[0].data_type();
         let number_vec = match data_type {
             DataType::Date16 | DataType::Date32 => {
-                let number_vec_result: Vec<Option<u32>> = _columns[0]
+                let number_vec_result: Vec<Option<u32>> = columns[0]
                     .column()
                     .to_values()?
                     .iter()
@@ -104,7 +104,7 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                 Ok(number_vec_result)
             },
             DataType::DateTime32 => {
-                let number_vec_result: Vec<Option<u32>> = _columns[0].column().to_values()?
+                let number_vec_result: Vec<Option<u32>> = columns[0].column().to_values()?
                     .iter()
                     .map(|value| {
                         match value {
