@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+pub mod cluster;
 mod user;
 
 pub use user::user_api::UserInfo;

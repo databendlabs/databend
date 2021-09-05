@@ -787,6 +787,7 @@ dependencies = [
  "sqlparser",
  "thiserror",
  "tonic",
+ "ureq",
 ]
 
 [[package]]
@@ -862,12 +863,29 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "common-io"
 version = "0.1.0"
 dependencies = [
  "bytes",
  "common-exception",
  "rand",
+=======
+name = "common-kvs"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-flights",
+ "common-runtime",
+ "common-store-api",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sled",
+ "ureq",
+ "url",
+>>>>>>> cluster_manager
 ]
 
 [[package]]
@@ -876,10 +894,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-exception",
+ "common-flights",
+ "common-kvs",
  "common-metatypes",
  "common-runtime",
  "common-store-api",
  "mockall",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "sha2",
@@ -2012,6 +2033,125 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1847abb9cb65d566acd5942e94aea9c8f547ad02c98e1649326fc0e8910b8b1e"
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "fuse-query"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.7.4",
+ "async-trait",
+ "bumpalo",
+ "clickhouse-rs",
+ "clickhouse-srv",
+ "common-allocators",
+ "common-arrow",
+ "common-building",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-flights",
+ "common-functions",
+ "common-infallible",
+ "common-kvs",
+ "common-management",
+ "common-metatypes",
+ "common-planners",
+ "common-profling",
+ "common-progress",
+ "common-runtime",
+ "common-store-api",
+ "common-streams",
+ "common-tracing",
+ "criterion",
+ "crossbeam 0.8.1",
+ "crossbeam-queue 0.3.2",
+ "ctrlc",
+ "env_logger 0.9.0",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "log",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "msql-srv",
+ "mysql",
+ "nom 7.0.0-alpha1",
+ "num",
+ "num_cpus",
+ "paste",
+ "pnet",
+ "pretty_assertions",
+ "prost 0.7.0",
+ "quantiles",
+ "rand 0.8.4",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "structopt",
+ "structopt-toml",
+ "threadpool",
+ "tokio-stream",
+ "toml",
+ "tonic",
+ "uuid",
+ "walkdir",
+ "warp",
+]
+
+[[package]]
+name = "fuse-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "byteorder",
+ "common-arrow",
+ "common-building",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-flights",
+ "common-functions",
+ "common-infallible",
+ "common-metatypes",
+ "common-planners",
+ "common-profling",
+ "common-runtime",
+ "common-tracing",
+ "env_logger 0.9.0",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "log",
+ "maplit",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "num",
+ "num_cpus",
+ "paste",
+ "pretty_assertions",
+ "prost 0.7.0",
+ "rand 0.8.4",
+ "serde",
+ "serde_json",
+ "sha2 0.9.5",
+ "sled",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+ "test-env-log",
+ "thiserror",
+ "threadpool",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "uuid",
+ "warp",
+]
+
+[[package]]
+>>>>>>> cluster_manager
 name = "futures"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5821,11 +5961,19 @@ checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
 name = "ureq"
+<<<<<<< HEAD
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3131cd6cb18488da91da1d10ed31e966f453c06b65bf010d35638456976a3fd7"
 dependencies = [
  "base64",
+=======
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2475a6781e9bc546e7b64f4013d2f4032c8c6a40fcffd7c6f4ee734a890972ab"
+dependencies = [
+ "base64 0.13.0",
+>>>>>>> cluster_manager
  "chunked_transfer",
  "log",
  "once_cell",

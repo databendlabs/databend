@@ -15,16 +15,24 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+<<<<<<< HEAD:query/src/sessions/context_shared.rs
 use common_planners::PlanNode;
+=======
+use common_management::cluster::ClusterExecutor;
+>>>>>>> cluster_manager:fusequery/query/src/sessions/context_shared.rs
 use common_progress::Progress;
 use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
+<<<<<<< HEAD:query/src/sessions/context_shared.rs
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterRef;
+=======
+>>>>>>> cluster_manager:fusequery/query/src/sessions/context_shared.rs
 use crate::configs::Config;
 use crate::sessions::Session;
 use crate::sessions::Settings;
@@ -44,7 +52,7 @@ pub struct DatafuseQueryContextShared {
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
+    pub(in crate::sessions) executors_cache: Arc<RwLock<Vec<Arc<ClusterExecutor>>>>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
@@ -60,7 +68,7 @@ impl DatafuseQueryContextShared {
             progress: Arc::new(Progress::create()),
             session,
             runtime: Arc::new(RwLock::new(None)),
-            cluster_cache: Arc::new(RwLock::new(None)),
+            executors_cache: Arc::new(RwLock::new(Vec::new())),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
@@ -79,18 +87,28 @@ impl DatafuseQueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
+    pub fn try_get_executors(&self) -> Result<Vec<Arc<ClusterExecutor>>> {
         // We only get the cluster once during the query.
-        let mut cluster_cache = self.cluster_cache.write();
+        let mut executors_cache = self.executors_cache.write();
 
-        match &*cluster_cache {
-            Some(cached) => Ok(cached.clone()),
-            None => {
-                let cluster = self.session.try_get_cluster()?;
-                *cluster_cache = Some(cluster.clone());
-                Ok(cluster)
+        if executors_cache.is_empty() {
+            *executors_cache = self.session.try_get_executors()?;
+        }
+
+        Ok(executors_cache.clone())
+    }
+
+    pub fn try_get_executor_by_name(&self, name: &str) -> Result<Arc<ClusterExecutor>> {
+        for executor in &self.try_get_executors()? {
+            if name == &executor.name {
+                return Ok(executor.clone());
             }
         }
+
+        Err(ErrorCode::UnknownQueryClusterNode(format!(
+            "Unknown FuseQuery node name {}",
+            name
+        )))
     }
 
     pub fn get_current_database(&self) -> String {

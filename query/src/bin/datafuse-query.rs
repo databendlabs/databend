@@ -14,8 +14,10 @@
 
 use std::net::SocketAddr;
 
+use common_management::cluster::ClusterManager;
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
+<<<<<<< HEAD:query/src/bin/datafuse-query.rs
 use datafuse_query::api::HttpService;
 use datafuse_query::api::RpcService;
 use datafuse_query::clusters::Cluster;
@@ -26,6 +28,16 @@ use datafuse_query::servers::MySQLHandler;
 use datafuse_query::servers::Server;
 use datafuse_query::servers::ShutdownHandle;
 use datafuse_query::sessions::SessionManager;
+=======
+use fuse_query::api::HttpService;
+use fuse_query::api::RpcService;
+use fuse_query::configs::Config;
+use fuse_query::metrics::MetricService;
+use fuse_query::servers::ClickHouseHandler;
+use fuse_query::servers::MySQLHandler;
+use fuse_query::servers::ShutdownHandle;
+use fuse_query::sessions::SessionManager;
+>>>>>>> cluster_manager:fusequery/query/src/bin/fuse-query.rs
 use log::info;
 
 #[tokio::main]
@@ -60,17 +72,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         *datafuse_query::configs::config::FUSE_COMMIT_VERSION,
     );
 
-    let cluster = Cluster::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
+    let session_manager = SessionManager::from_conf(conf.clone())?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.
     {
+<<<<<<< HEAD:query/src/bin/datafuse-query.rs
         let listening = format!(
             "{}:{}",
             conf.query.mysql_handler_host.clone(),
             conf.query.mysql_handler_port
         );
+=======
+        let hostname = conf.mysql_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.mysql_handler_port);
+>>>>>>> cluster_manager:fusequery/query/src/bin/fuse-query.rs
         let listening = listening.parse::<SocketAddr>()?;
 
         let mut handler = MySQLHandler::create(session_manager.clone());
@@ -117,11 +133,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // HTTP API service.
     {
+<<<<<<< HEAD:query/src/bin/datafuse-query.rs
         let listening = conf
             .query
             .http_api_address
             .parse::<std::net::SocketAddr>()?;
         let mut srv = HttpService::create(conf.clone(), cluster.clone());
+=======
+        let listening = conf.http_api_address.parse::<std::net::SocketAddr>()?;
+        let mut srv = HttpService::create(session_manager.clone());
+>>>>>>> cluster_manager:fusequery/query/src/bin/fuse-query.rs
         let listening = srv.start(listening).await?;
         shutdown_handle.add_service(srv);
         info!("HTTP API server listening on {}", listening);

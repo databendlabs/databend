@@ -163,11 +163,16 @@ build_exceptions! {
     BadBytes(46),
     InitPrometheusFailure(47),
     ScalarSubqueryBadRows(48),
+<<<<<<< HEAD
     Overflow(49),
     InvalidMetaBinaryFormat(50),
     AuthenticateFailure(51),
     TLSConfigurationFailure(52),
     UnknownSession(53),
+=======
+    UnknownQueryClusterNode(49),
+
+>>>>>>> cluster_manager
 
     // uncategorized
     UnexpectedResponseType(600),
@@ -359,6 +364,12 @@ impl From<sqlparser::parser::ParserError> for ErrorCode {
 
 impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<ureq::Error> for ErrorCode {
+    fn from(error: ureq::Error) -> Self {
         ErrorCode::from_std_error(error)
     }
 }

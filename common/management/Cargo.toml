@@ -12,7 +12,10 @@ edition = "2021"
 
 [dependencies]
 common-exception= {path = "../exception"}
+common-flights= {path = "../flights"}
+common-kvs= {path = "../kvs"}
 common-metatypes= {path = "../metatypes"}
+common-runtime= {path = "../runtime"}
 common-store-api= {path = "../store-api"}
 
 async-trait = "0.1"
@@ -21,6 +24,11 @@ serde_json = "1.0"
 sha2 = "0.9.6"
 
 [dev-dependencies]
+<<<<<<< HEAD
 common-runtime = { path = "../runtime"}
+=======
+pretty_assertions = "0.7"
+tokio = { version = "1.8.2", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+>>>>>>> cluster_manager
 mockall = "0.10.2"
-common-metatypes = {path = "../metatypes"}
+common-metatypes = { path = "../metatypes" }

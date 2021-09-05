@@ -84,6 +84,7 @@ impl Processor for RemoteTransform {
             self.fetch_node_name
         );
 
+<<<<<<< HEAD:query/src/pipelines/transforms/transform_remote.rs
         let data_schema = self.schema.clone();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
 
@@ -93,5 +94,18 @@ impl Processor for RemoteTransform {
         Ok(Box::pin(
             self.ctx.try_create_abortable(fetch_stream.await?)?,
         ))
+=======
+        let context = self.ctx.clone();
+        let executor = context.try_get_executor_by_name(&self.fetch_node_name)?;
+
+        let address = executor.address.clone();
+        let data_schema = self.schema.clone();
+        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
+        let mut flight_client = context.get_flight_client(address).await?;
+
+        let ticket = FlightTicket::stream(&self.query_id, &self.stage_id, &self.stream_id);
+        let fetch_stream = flight_client.fetch_stream(ticket, data_schema, timeout);
+        fetch_stream.await
+>>>>>>> cluster_manager:fusequery/query/src/pipelines/transforms/transform_remote.rs
     }
 }

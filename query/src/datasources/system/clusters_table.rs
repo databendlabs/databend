@@ -95,6 +95,7 @@ impl Table for ClustersTable {
         ctx: DatafuseQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+<<<<<<< HEAD:query/src/datasources/system/clusters_table.rs
         let nodes = ctx.try_get_cluster()?.get_nodes()?;
         let names: Vec<&[u8]> = nodes.iter().map(|x| x.name.as_bytes()).collect();
         let hosts = nodes
@@ -104,6 +105,17 @@ impl Table for ClustersTable {
         let hostnames = hosts.iter().map(|x| x.as_bytes()).collect::<Vec<&[u8]>>();
         let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
         let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
+=======
+        let executors = ctx.try_get_executors()?;
+        let names: Vec<&str> = executors.iter().map(|x| x.name.as_str()).collect();
+        let hosts = executors
+            .iter()
+            .map(|x| x.address.hostname())
+            .collect::<Vec<_>>();
+        let hostnames = hosts.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
+        let ports: Vec<u16> = executors.iter().map(|x| x.address.port()).collect();
+        let priorities: Vec<u8> = executors.iter().map(|x| x.priority).collect();
+>>>>>>> cluster_manager:fusequery/query/src/datasources/system/clusters_table.rs
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Series::new(names),
             Series::new(hostnames),

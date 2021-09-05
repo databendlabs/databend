@@ -28,8 +28,13 @@ use mysql::Conn;
 use mysql::FromRowError;
 use mysql::Row;
 
+use crate::configs::Config;
 use crate::servers::MySQLHandler;
+<<<<<<< HEAD:query/src/servers/mysql/mysql_handler_test.rs
 use crate::tests::try_create_session_mgr;
+=======
+use crate::sessions::SessionMgr;
+>>>>>>> cluster_manager:fusequery/query/src/servers/mysql/mysql_handler_test.rs
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {

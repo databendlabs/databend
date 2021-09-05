@@ -305,7 +305,7 @@ impl Optimizer for ScattersOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        if self.ctx.try_get_cluster()?.is_empty()? {
+        if self.ctx.try_get_executors()?.len() < 2 {
             // Standalone mode.
             return Ok(plan.clone());
         }

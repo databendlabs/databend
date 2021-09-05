@@ -17,12 +17,22 @@ use std::future::Future;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
+use std::time::Duration;
 
+use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flights::Address;
+use common_flights::ConnectionFactory;
 use common_infallible::RwLock;
+<<<<<<< HEAD:query/src/sessions/context.rs
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
+=======
+use common_management::cluster::ClusterExecutor;
+use common_management::cluster::ClusterManager;
+use common_management::cluster::ClusterManagerRef;
+>>>>>>> cluster_manager:fusequery/query/src/sessions/context.rs
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -33,11 +43,17 @@ use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
+<<<<<<< HEAD:query/src/sessions/context.rs
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
+=======
+use crate::api::FlightClient;
+use crate::catalog::utils::TableFunctionMeta;
+use crate::catalog::utils::TableMeta;
+>>>>>>> cluster_manager:fusequery/query/src/sessions/context.rs
 use crate::configs::Config;
 use crate::sessions::context_shared::DatafuseQueryContextShared;
 use crate::sessions::SessionManagerRef;
@@ -142,8 +158,19 @@ impl DatafuseQueryContext {
         Ok(())
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        self.shared.try_get_cluster()
+    pub fn try_get_executors(&self) -> Result<Vec<Arc<ClusterExecutor>>> {
+        self.shared.try_get_executors()
+    }
+
+    pub fn try_get_executor_by_name(&self, name: &str) -> Result<Arc<ClusterExecutor>> {
+        self.shared.try_get_executor_by_name(name)
+    }
+
+    /// Get the flight client from address.
+    pub async fn get_flight_client(&self, address: Address) -> Result<FlightClient> {
+        let address = address.to_string().clone();
+        let channel = ConnectionFactory::create_flight_channel(address, None).await;
+        channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 
     pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {

@@ -37,9 +37,15 @@ use crate::tests::try_create_session_mgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_shared_session() -> Result<()> {
+<<<<<<< HEAD:query/src/api/rpc/flight_service_test.rs
     let sessions = try_create_session_mgr(None)?;
     let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
     let service = DatafuseQueryFlightService::create(dispatcher, sessions);
+=======
+    let sessions = with_max_connections_sessions()?;
+    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
+    let service = FuseQueryFlightService::create(dispatcher, sessions);
+>>>>>>> cluster_manager:fusequery/query/src/api/rpc/flight_service_test.rs
 
     for index in 0..2 {
         let query_id = "query_id";
@@ -60,9 +66,15 @@ async fn test_do_flight_action_with_shared_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_different_session() -> Result<()> {
+<<<<<<< HEAD:query/src/api/rpc/flight_service_test.rs
     let sessions = try_create_session_mgr(None)?;
     let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
     let service = DatafuseQueryFlightService::create(dispatcher, sessions);
+=======
+    let sessions = with_max_connections_sessions()?;
+    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
+    let service = FuseQueryFlightService::create(dispatcher, sessions);
+>>>>>>> cluster_manager:fusequery/query/src/api/rpc/flight_service_test.rs
 
     for index in 0..2 {
         let query_id = format!("query_id_{}", index);
@@ -83,9 +95,15 @@ async fn test_do_flight_action_with_different_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_session() -> Result<()> {
+<<<<<<< HEAD:query/src/api/rpc/flight_service_test.rs
     let sessions = try_create_session_mgr(None)?;
     let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
     let service = DatafuseQueryFlightService::create(dispatcher.clone(), sessions);
+=======
+    let sessions = with_max_connections_sessions()?;
+    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
+    let service = FuseQueryFlightService::create(dispatcher.clone(), sessions);
+>>>>>>> cluster_manager:fusequery/query/src/api/rpc/flight_service_test.rs
 
     for index in 0..2 {
         let query_id = "query_id_1";
@@ -115,9 +133,15 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
+<<<<<<< HEAD:query/src/api/rpc/flight_service_test.rs
     let sessions = try_create_session_mgr(None)?;
     let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
     let service = DatafuseQueryFlightService::create(dispatcher.clone(), sessions);
+=======
+    let sessions = with_max_connections_sessions()?;
+    let dispatcher = Arc::new(FuseQueryFlightDispatcher::create());
+    let service = FuseQueryFlightService::create(dispatcher.clone(), sessions);
+>>>>>>> cluster_manager:fusequery/query/src/api/rpc/flight_service_test.rs
 
     for index in 0..2 {
         let query_id = "query_id_1";

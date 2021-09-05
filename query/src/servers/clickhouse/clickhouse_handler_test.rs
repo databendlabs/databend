@@ -24,11 +24,20 @@ use common_exception::Result;
 use common_runtime::tokio;
 
 use crate::servers::ClickHouseHandler;
+<<<<<<< HEAD:query/src/servers/clickhouse/clickhouse_handler_test.rs
 use crate::tests::try_create_session_mgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
     let sessions = try_create_session_mgr(Some(1))?;
+=======
+use crate::sessions::SessionManager;
+use crate::tests::with_max_connections_sessions;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_clickhouse_handler_query() -> Result<()> {
+    let sessions = with_max_connections_sessions(1)?;
+>>>>>>> cluster_manager:fusequery/query/src/servers/clickhouse/clickhouse_handler_test.rs
     let mut handler = ClickHouseHandler::create(sessions);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
@@ -68,7 +77,11 @@ async fn test_clickhouse_insert_data() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reject_clickhouse_connection() -> Result<()> {
+<<<<<<< HEAD:query/src/servers/clickhouse/clickhouse_handler_test.rs
     let sessions = try_create_session_mgr(Some(1))?;
+=======
+    let sessions = with_max_connections_sessions(1)?;
+>>>>>>> cluster_manager:fusequery/query/src/servers/clickhouse/clickhouse_handler_test.rs
     let mut handler = ClickHouseHandler::create(sessions);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
@@ -97,7 +110,11 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_abort_clickhouse_server() -> Result<()> {
+<<<<<<< HEAD:query/src/servers/clickhouse/clickhouse_handler_test.rs
     let sessions = try_create_session_mgr(Some(3))?;
+=======
+    let sessions = with_max_connections_sessions(3)?;
+>>>>>>> cluster_manager:fusequery/query/src/servers/clickhouse/clickhouse_handler_test.rs
     let mut handler = ClickHouseHandler::create(sessions);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
