@@ -60,4 +60,8 @@ impl DatabaseEngine for ExampleDatabases {
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         self.meta_backend.drop_database(plan)
     }
+
+    fn engine_desc(&self) -> &str {
+        "The example engine is used by example databases and tables."
+    }
 }

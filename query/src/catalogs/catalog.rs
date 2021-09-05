@@ -58,4 +58,7 @@ pub trait Catalog {
     // Operation with database.
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+
+    // Get all db engines.
+    fn get_db_engines(&self) -> Result<Vec<Arc<dyn DatabaseEngine>>>;
 }
