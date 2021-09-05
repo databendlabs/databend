@@ -50,10 +50,12 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
+    std::env::set_var("QUERY_DISABLE_LOCAL_DATABASE_ENGINE", "1");
     std::env::set_var("STORE_ADDRESS", "1.2.3.4:1234");
     std::env::set_var("STORE_USERNAME", "admin");
     std::env::set_var("STORE_PASSWORD", "password!");
     std::env::remove_var("CONFIG_FILE");
+
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
     assert_eq!("DEBUG", configured.log.log_level);
@@ -69,6 +71,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
     assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+    assert_eq!("1", configured.query.disable_local_database_engine);
 
     assert_eq!("1.2.3.4:1234", configured.store.store_address);
     assert_eq!("admin", configured.store.store_username.to_string());
@@ -87,6 +90,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
+    std::env::remove_var("QUERY_DISABLE_LOCAL_DATABASE_ENGINE");
     std::env::remove_var("STORE_ADDRESS");
     std::env::remove_var("STORE_USERNAME");
     std::env::remove_var("STORE_PASSWORD");
