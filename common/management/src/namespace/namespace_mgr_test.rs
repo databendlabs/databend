@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metatypes::KVMeta;
+use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_runtime::tokio;
 use common_store_api::kv_api::MGetKVActionResult;
@@ -84,6 +85,77 @@ async fn test_add_node() -> Result<()> {
             )
             .times(1)
             .return_once(|_, _, _, _| {
+                Ok(UpsertKVActionResult {
+                    prev: None,
+                    result: None,
+                })
+            });
+
+        let mut mgr = NamespaceMgr::new(api);
+        let res = mgr
+            .add_node(
+                tenant_id.to_string(),
+                namespace_id.to_string(),
+                node.clone(),
+            )
+            .await;
+
+        assert_eq!(
+            res.unwrap_err().code(),
+            ErrorCode::UnknownException("").code()
+        );
+    }
+
+    // already exists
+    {
+        let test_key = key.clone();
+        let mut api = MockKV::new();
+        api.expect_upsert_kv()
+            .with(
+                predicate::function(move |v| v == test_key.as_str()),
+                predicate::eq(seq),
+                predicate::eq(value.clone()),
+                predicate::eq(None),
+            )
+            .times(1)
+            .returning(|_, _, _, _| {
+                Ok(UpsertKVActionResult {
+                    prev: Some((1, KVValue {
+                        meta: None,
+                        value: vec![],
+                    })),
+                    result: None,
+                })
+            });
+
+        let mut mgr = NamespaceMgr::new(api);
+        let res = mgr
+            .add_node(
+                tenant_id.to_string(),
+                namespace_id.to_string(),
+                node.clone(),
+            )
+            .await;
+
+        assert_eq!(
+            res.unwrap_err().code(),
+            ErrorCode::NamespaceNodeAlreadyExists("").code()
+        );
+    }
+
+    // unknown exception
+    {
+        let test_key = key.clone();
+        let mut api = MockKV::new();
+        api.expect_upsert_kv()
+            .with(
+                predicate::function(move |v| v == test_key.as_str()),
+                predicate::eq(seq),
+                predicate::eq(value.clone()),
+                predicate::eq(None),
+            )
+            .times(1)
+            .returning(|_u, _s, _salt, _meta| {
                 Ok(UpsertKVActionResult {
                     prev: None,
                     result: None,
