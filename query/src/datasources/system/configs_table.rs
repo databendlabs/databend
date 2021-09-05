@@ -24,7 +24,7 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use mysql::serde_json::Value;
+use serde_json::Value;
 
 use crate::catalogs::Table;
 use crate::sessions::DatafuseQueryContextRef;
@@ -37,10 +37,10 @@ impl ConfigsTable {
     pub fn create() -> Self {
         ConfigsTable {
             schema: DataSchemaRefExt::create(vec![
-                DataField::new("name", DataType::Utf8, false),
-                DataField::new("value", DataType::Utf8, false),
-                DataField::new("group", DataType::Utf8, false),
-                DataField::new("description", DataType::Utf8, false),
+                DataField::new("name", DataType::String, false),
+                DataField::new("value", DataType::String, false),
+                DataField::new("group", DataType::String, false),
+                DataField::new("description", DataType::String, false),
             ]),
         }
     }
