@@ -47,27 +47,32 @@ impl Function for TimeSlotFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let mut timestamp = Utc::now().timestamp_millis() / 1000;
+        let timestamp = Utc::now().timestamp_millis() / 1000;
+        let mut times = vec![DataValue::Int64(Some(timestamp))];
         let len = columns.len();
         if len > 0 {
-            let args = columns[0].column().clone().to_values()?;
-            timestamp = args[0].as_i64()?;
+            times = columns[0].column().to_values()?;
         }
 
-        //get the minute where this timestamp
-        let mut minutes = ((timestamp / 60) % (60 * 24)) % 60;
-        if minutes > 30 {
-            minutes -= 30;
+        let mut result: Vec<u32> = Vec::new();
+        for val in times {
+            let re_val = slot_time(val.as_i64()?) as u32;
+            result.push(re_val);
         }
-
-        let result = timestamp - minutes * 60;
-        let value = DataValue::UInt32(Some(result as u32));
-        Ok(DataColumn::Constant(value, 1))
+        Ok(DataColumn::Array(Series::new(result)))
     }
 
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
         Some((0, 1))
     }
+}
+
+fn slot_time(timestamp: i64) -> i64 {
+    let mut minutes = ((timestamp / 60) % (60 * 24)) % 60;
+    if minutes > 30 {
+        minutes -= 30;
+    }
+    timestamp - minutes * 60
 }
 
 impl fmt::Display for TimeSlotFunction {
