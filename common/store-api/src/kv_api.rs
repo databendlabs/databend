@@ -49,6 +49,13 @@ pub trait KVApi {
         value_meta: Option<KVMeta>,
     ) -> common_exception::Result<UpsertKVActionResult>;
 
+    async fn update_kv_meta(
+        &mut self,
+        key: &str,
+        seq: MatchSeq,
+        value_meta: Option<KVMeta>,
+    ) -> common_exception::Result<UpsertKVActionResult>;
+
     async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
 
     // mockall complains about AsRef... so we use String here

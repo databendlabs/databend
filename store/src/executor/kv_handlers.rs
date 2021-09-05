@@ -16,12 +16,14 @@
 use common_exception::ErrorCode;
 use common_flights::kv_api_impl::GetKVAction;
 use common_flights::kv_api_impl::GetKVActionResult;
+use common_flights::kv_api_impl::KVMetaAction;
 use common_flights::kv_api_impl::MGetKVAction;
 use common_flights::kv_api_impl::MGetKVActionResult;
 use common_flights::kv_api_impl::PrefixListReply;
 use common_flights::kv_api_impl::PrefixListReq;
 use common_flights::kv_api_impl::UpsertKVAction;
 use common_flights::kv_api_impl::UpsertKVActionResult;
+use common_metatypes::Operation;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
@@ -37,7 +39,32 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
             cmd: Cmd::UpsertKV {
                 key: act.key,
                 seq: act.seq,
-                value: act.value,
+                value: act.value.into(),
+                value_meta: act.value_meta,
+            },
+        };
+        let rst = self
+            .meta_node
+            .write(cr)
+            .await
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
+
+        match rst {
+            AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
+            _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<KVMetaAction> for ActionHandler {
+    async fn handle(&self, act: KVMetaAction) -> common_exception::Result<UpsertKVActionResult> {
+        let cr = LogEntry {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: act.key,
+                seq: act.seq,
+                value: Operation::AsIs,
                 value_meta: act.value_meta,
             },
         };

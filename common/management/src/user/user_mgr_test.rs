@@ -47,15 +47,22 @@ mock! {
             value_meta: Option<KVMeta>
         ) -> common_exception::Result<UpsertKVActionResult>;
 
-    async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
+        async fn update_kv_meta(
+            &mut self,
+            key: &str,
+            seq: MatchSeq,
+            value_meta: Option<KVMeta>
+        ) -> common_exception::Result<UpsertKVActionResult>;
 
-    async fn mget_kv(
-        &mut self,
-        key: &[String],
-    ) -> common_exception::Result<MGetKVActionResult>;
+        async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
 
-    async fn prefix_list_kv(&mut self, prefix: &str) -> common_exception::Result<PrefixListReply>;
-    }
+        async fn mget_kv(
+            &mut self,
+            key: &[String],
+        ) -> common_exception::Result<MGetKVActionResult>;
+
+        async fn prefix_list_kv(&mut self, prefix: &str) -> common_exception::Result<PrefixListReply>;
+        }
 }
 #[test]
 fn test_user_info_converter() {
