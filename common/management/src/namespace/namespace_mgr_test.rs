@@ -46,11 +46,18 @@ mock! {
             value_meta: Option<KVMeta>
         ) -> Result<UpsertKVActionResult>;
 
-    async fn get_kv(&mut self, key: &str) -> Result<GetKVActionResult>;
+        async fn update_kv_meta(
+            &mut self,
+            key: &str,
+            seq: MatchSeq,
+            value_meta: Option<KVMeta>
+        ) -> Result<UpsertKVActionResult>;
 
-    async fn mget_kv(&mut self,key: &[String],) -> Result<MGetKVActionResult>;
+        async fn get_kv(&mut self, key: &str) -> Result<GetKVActionResult>;
 
-    async fn prefix_list_kv(&mut self, prefix: &str) -> Result<PrefixListReply>;
+        async fn mget_kv(&mut self,key: &[String],) -> Result<MGetKVActionResult>;
+
+        async fn prefix_list_kv(&mut self, prefix: &str) -> Result<PrefixListReply>;
     }
 }
 

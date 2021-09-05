@@ -424,7 +424,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
             cmd: Cmd::UpsertKV {
                 key: key.clone(),
                 seq: MatchSeq::Any,
-                value: Some(b"v".to_vec()),
+                value: Some(b"v".to_vec()).into(),
                 value_meta: None,
             },
         })
