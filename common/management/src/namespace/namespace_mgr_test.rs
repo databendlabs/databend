@@ -278,6 +278,98 @@ async fn test_get_nodes_invalid_encoding() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_update_node_normal() -> Result<()> {
+    let tenant_id = "tenant1";
+    let namespace_id = "cluster1";
+    let node_id = "node1";
+    let key = format!(
+        "{}/{}/{}/{}",
+        NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id, node_id
+    );
+    let node = NodeInfo {
+        id: node_id.to_string(),
+        cpu_nums: 0,
+        version: 0,
+        ip: "".to_string(),
+        port: 0,
+    };
+    let new_value = serde_json::to_vec(&node)?;
+
+    let mut api = MockKV::new();
+    api.expect_upsert_kv()
+        .with(
+            predicate::function(move |v| v == key.as_str()),
+            predicate::eq(MatchSeq::GE(1)),
+            predicate::eq(Some(new_value)),
+            predicate::eq(None),
+        )
+        .times(1)
+        .return_once(|_, _, _, _meta| {
+            Ok(UpsertKVActionResult {
+                prev: None,
+                result: Some((0, KVValue {
+                    meta: None,
+                    value: vec![],
+                })),
+            })
+        });
+
+    let mut mgr = NamespaceMgr::new(api);
+    let res = mgr
+        .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
+        .await;
+
+    assert!(res.is_ok());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_update_node_error() -> Result<()> {
+    let tenant_id = "tenant1";
+    let namespace_id = "cluster1";
+    let node_id = "node1";
+    let key = format!(
+        "{}/{}/{}/{}",
+        NAMESPACE_API_KEY_PREFIX, tenant_id, namespace_id, node_id
+    );
+    let node = NodeInfo {
+        id: node_id.to_string(),
+        cpu_nums: 0,
+        version: 0,
+        ip: "".to_string(),
+        port: 0,
+    };
+    let new_value = serde_json::to_vec(&node)?;
+
+    let mut api = MockKV::new();
+    api.expect_upsert_kv()
+        .with(
+            predicate::function(move |v| v == key.as_str()),
+            predicate::eq(MatchSeq::GE(1)),
+            predicate::eq(Some(new_value)),
+            predicate::eq(None),
+        )
+        .times(1)
+        .return_once(|_, _, _, _meta| {
+            Ok(UpsertKVActionResult {
+                prev: None,
+                result: None,
+            })
+        });
+
+    let mut mgr = NamespaceMgr::new(api);
+    let res = mgr
+        .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
+        .await;
+
+    let actual = res.unwrap_err().code();
+    let expect = ErrorCode::NamespaceUnknownNode("").code();
+    assert_eq!(actual, expect);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_drop_node_normal() -> common_exception::Result<()> {
     let tenant_id = "tenant1";
     let namespace_id = "cluster1";
@@ -346,6 +438,7 @@ async fn test_drop_node_error() -> common_exception::Result<()> {
                 result: None,
             })
         });
+
     let mut mgr = NamespaceMgr::new(api);
     let res = mgr
         .drop_node(
@@ -356,9 +449,8 @@ async fn test_drop_node_error() -> common_exception::Result<()> {
         )
         .await;
 
-    assert_eq!(
-        res.unwrap_err().code(),
-        ErrorCode::NamespaceUnknownNode("").code()
-    );
+    let actual = res.unwrap_err().code();
+    let expect = ErrorCode::NamespaceUnknownNode("").code();
+    assert_eq!(actual, expect);
     Ok(())
 }

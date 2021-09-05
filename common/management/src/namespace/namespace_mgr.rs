@@ -102,12 +102,29 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
 
     async fn update_node(
         &mut self,
-        _tenant: String,
-        _namespace_id: String,
-        _namespace: NodeInfo,
-        _seq: Option<u64>,
+        tenant_id: String,
+        namespace_id: String,
+        node: NodeInfo,
+        seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        todo!()
+        let key = self.key_prefix(&[tenant_id, namespace_id, node.id.clone()]);
+        let value = serde_json::to_vec(&node)?;
+
+        let match_seq = match seq {
+            None => MatchSeq::GE(1),
+            Some(s) => MatchSeq::Exact(s),
+        };
+        let res = self
+            .kv_api
+            .upsert_kv(&key, match_seq, Some(value), None)
+            .await?;
+        match res.result {
+            Some((s, _)) => Ok(Some(s)),
+            None => Err(ErrorCode::NamespaceUnknownNode(format!(
+                "unknown node, or seq not match {:?}",
+                node
+            ))),
+        }
     }
 
     async fn drop_node(
