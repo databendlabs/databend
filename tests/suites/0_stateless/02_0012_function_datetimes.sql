@@ -17,5 +17,8 @@ select today() - yesterday()  = 1;
 select today() + 1 = tomorrow();
 select tomorrow() - today() = 1;
 
-select timeSlot('2012-12-12 21:12:31');
-select timeSlot('2012-12-12 21:35:31');
+select timeSlot(toDateTime(1630320462));
+select timeSlot(toDateTime(1630809521));
+select timeSlot(toDateTime(1630808044));
+select timeSlot(now()) <= now();
+select timeSlot() <= now();

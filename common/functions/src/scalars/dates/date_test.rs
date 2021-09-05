@@ -11,6 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Timelike;
+use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -32,12 +35,48 @@ struct Test {
 #[test]
 fn test_date_function() -> Result<()> {
     let tests = vec![Test {
+        name: "test-timeSlot-now",
+        display: "timeSlot",
+        nullable: false,
+        columns: vec![Series::new(vec![1630812366u32]).into()],
+        func: TimeSlotFunction::try_create("timeSlot"),
+        expect: Series::new(vec![1630810806u32]),
+        error: "",
+    }];
+    for t in tests {
+        do_test(t);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_timeslot_now_function() -> Result<()> {
+    let now = Utc::now();
+    let now_timestamp = now.timestamp_millis() / 1000;
+    let mut minute = 0;
+    if now.minute() > 30 {
+        minute = 30;
+    }
+    let new_date = now.with_minute(minute).unwrap();
+    let check_timestamp = new_date.timestamp_millis() / 1000;
+    let empty: Vec<i32> = Vec::new();
+
+    let tests = vec![Test {
         name: "test-timeSlot",
         display: "timeSlot",
         nullable: false,
-        columns: vec![Series::new(vec!["2021-12-21 12:13:15"]).into()],
+        columns: vec![Series::new(vec![now_timestamp]).into()],
         func: TimeSlotFunction::try_create("timeSlot"),
-        expect: Series::new(vec![1213321231u32]),
+        expect: Series::new(vec![check_timestamp]),
+        error: "",
+    }, Test {
+        name: "test-timeSlot-now",
+        display: "timeSlot",
+        nullable: false,
+        columns: vec![Series::new(empty).into()],
+        func: TimeSlotFunction::try_create("timeSlot"),
+        expect: Series::new(vec![check_timestamp]),
         error: "",
     }];
 
@@ -71,5 +110,17 @@ fn do_test(t: Test) -> Result<()> {
     let actual_null = func.nullable(&DataSchema::empty())?;
     assert_eq!(expect_null, actual_null);
 
+    let ref v = func.eval(&columns, rows)?;
+    let mut eval_result = v.to_values()?;
+    let c: DataColumn = t.expect.into();
+    let check_result = c.to_values()?;
+    assert_eq!(v.len(), c.len());
+    for i in 0..v.len() {
+        let eval_val = eval_result.get(i).unwrap();
+        let check_val = check_result.get(i).unwrap();
+        let eval_str = format!("{}", eval_val);
+        let check_str = format!("{}", check_val);
+        assert_eq!(eval_str, check_str);
+    }
     Ok(())
 }

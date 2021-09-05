@@ -14,8 +14,7 @@
 
 use std::fmt;
 
-use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::Timelike;
+use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -47,25 +46,28 @@ impl Function for TimeSlotFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let fmt = "%Y-%m-%d %H:%M:%S";
-        let time_str: DataValue = columns[0].column().clone().to_values()?[0].clone();
-        let parse_result = NaiveDateTime::parse_from_str(time_str.to_string().as_str(), fmt);
-        let date = parse_result.unwrap();
-        let minute = date.minute();
-        let mut new_minute: u32 = 0;
-        if minute >= 30 {
-            new_minute = 30;
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let mut timestamp = Utc::now().timestamp_millis() / 1000;
+        if columns.len() > 0 {
+            let args = columns[0].column().clone().to_values()?;
+            timestamp = args[0].as_i64()?;
         }
-        let result = date.with_minute(new_minute);
-        let new_date = result.unwrap();
-        let value = DataValue::UInt32(Some(new_date.timestamp() as u32));
-        Ok(DataColumn::Constant(value, input_rows))
+
+        //get the minute where this timestamp
+        let mut minutes = ((timestamp / 60) % (60 * 24)) % 60;
+        if minutes > 30 {
+            minutes -= 30;
+        }
+
+        let result = timestamp - minutes * 60;
+        let value = DataValue::UInt32(Some(result as u32));
+        Ok(DataColumn::Constant(value, 1))
     }
 
-    fn num_arguments(&self) -> usize {
-        1
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        Some((0, 1))
     }
+
 }
 
 impl fmt::Display for TimeSlotFunction {
