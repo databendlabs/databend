@@ -48,6 +48,7 @@ mod tracing_table;
 mod tracing_table_stream;
 
 pub use clusters_table::ClustersTable;
+pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use databases_table::DatabasesTable;
 pub use functions_table::FunctionsTable;
