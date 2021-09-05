@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use clickhouse_srv::connection::Connection;
-use clickhouse_srv::error_codes::NO_FREE_CONNECTION;
-use clickhouse_srv::errors::Error;
-use clickhouse_srv::errors::Result as CHResult;
-use clickhouse_srv::errors::ServerError;
-use clickhouse_srv::protocols::Packet;
-use clickhouse_srv::CHContext;
-use clickhouse_srv::ClickHouseSession;
-use clickhouse_srv::QueryState;
+use common_clickhouse_srv::connection::Connection;
+use common_clickhouse_srv::error_codes::NO_FREE_CONNECTION;
+use common_clickhouse_srv::errors::Error;
+use common_clickhouse_srv::errors::Result as CHResult;
+use common_clickhouse_srv::errors::ServerError;
+use common_clickhouse_srv::protocols::Packet;
+use common_clickhouse_srv::CHContext;
+use common_clickhouse_srv::ClickHouseSession;
+use common_clickhouse_srv::QueryState;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_runtime::tokio::net::TcpStream;

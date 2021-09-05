@@ -15,9 +15,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use clickhouse_srv::connection::Connection;
-use clickhouse_srv::CHContext;
-use clickhouse_srv::ClickHouseSession;
+use common_clickhouse_srv::connection::Connection;
+use common_clickhouse_srv::CHContext;
+use common_clickhouse_srv::ClickHouseSession;
 use metrics::histogram;
 
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
@@ -41,7 +41,7 @@ impl ClickHouseSession for InteractiveWorker {
         &self,
         ctx: &mut CHContext,
         conn: &mut Connection,
-    ) -> clickhouse_srv::errors::Result<()> {
+    ) -> common_clickhouse_srv::errors::Result<()> {
         let start = Instant::now();
 
         let context = self.session.create_context();
@@ -98,7 +98,7 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     // TODO: remove it
-    fn get_progress(&self) -> clickhouse_srv::types::Progress {
+    fn get_progress(&self) -> common_clickhouse_srv::types::Progress {
         unimplemented!()
     }
 }
