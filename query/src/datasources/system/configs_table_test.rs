@@ -45,7 +45,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 28);
+    assert_eq!(block.num_rows(), 30);
 
     let expected = vec![
         "+-----------------------------------+----------------+-------+-------------+",
@@ -67,6 +67,7 @@ async fn test_configs_table() -> Result<()> {
         "| metric_api_address                | 127.0.0.1:7070 | query |             |",
         "| mysql_handler_host                | 127.0.0.1      | query |             |",
         "| mysql_handler_port                | 3307           | query |             |",
+        "| namespace                         |                | query |             |",
         "| num_cpus                          | 8              | query |             |",
         "| rpc_tls_meta_server_root_ca_cert  |                | meta  |             |",
         "| rpc_tls_meta_service_domain_name  | localhost      | meta  |             |",
@@ -79,6 +80,7 @@ async fn test_configs_table() -> Result<()> {
         "| store_address                     |                | store |             |",
         "| store_password                    |                | store |             |",
         "| store_username                    | root           | store |             |",
+        "| tenant                            |                | query |             |",
         "+-----------------------------------+----------------+-------+-------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
