@@ -40,10 +40,7 @@ impl Address {
             Some(index) => {
                 let (address, port) = address.split_at(index);
                 let port = port.trim_start_matches(':').parse::<u16>().map_err(|_| {
-                    ErrorCode::BadAddressFormat(format!(
-                        "The address '{}' port must between 0 and 65535",
-                        address
-                    ))
+                    ErrorCode::BadAddressFormat("The address port must between 0 and 65535")
                 })?;
 
                 Ok(Address::Named((address.to_string(), port)))

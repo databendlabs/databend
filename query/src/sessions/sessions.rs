@@ -22,15 +22,11 @@ use std::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_management::cluster::ClusterExecutor;
-use common_management::cluster::ClusterManager;
-use common_management::cluster::ClusterManagerRef;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::future::Either;
 use metrics::counter;
 
-<<<<<<< HEAD:query/src/sessions/sessions.rs
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::clusters::ClusterRef;
@@ -39,23 +35,13 @@ use crate::datasources::example::ExampleDatabases;
 use crate::datasources::local::LocalDatabases;
 use crate::datasources::remote::RemoteDatabases;
 use crate::datasources::system::SystemDatabases;
-=======
-use crate::configs::Config;
-use crate::configs::ConfigExtractor;
-use crate::datasources::DatabaseCatalog;
->>>>>>> cluster_manager:fusequery/query/src/sessions/sessions.rs
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
-<<<<<<< HEAD:query/src/sessions/sessions.rs
     pub(in crate::sessions) cluster: ClusterRef,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
-=======
-    pub(in crate::sessions) datasource: Arc<DatabaseCatalog>,
-    pub(in crate::sessions) cluster_manager: ClusterManagerRef,
->>>>>>> cluster_manager:fusequery/query/src/sessions/sessions.rs
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -64,7 +50,6 @@ pub struct SessionManager {
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-<<<<<<< HEAD:query/src/sessions/sessions.rs
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
         // Register local/system and remote database engine.
@@ -79,20 +64,11 @@ impl SessionManager {
             catalog,
             conf,
             cluster,
-=======
-    pub fn from_conf(conf: Config) -> Result<SessionManagerRef> {
-        let max_active_sessions = conf.max_active_sessions as usize;
-        Ok(Arc::new(SessionManager {
-            conf: conf.clone(),
->>>>>>> cluster_manager:fusequery/query/src/sessions/sessions.rs
             max_sessions: max_active_sessions,
-            datasource: Arc::new(DatabaseCatalog::try_create()?),
-            cluster_manager: ClusterManager::from_conf(conf.extract_cluster()),
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
     }
 
-<<<<<<< HEAD:query/src/sessions/sessions.rs
     pub fn get_conf(&self) -> &Config {
         &self.conf
     }
@@ -103,10 +79,6 @@ impl SessionManager {
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.catalog.clone()
-=======
-    pub fn get_datasource(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.datasource.clone()
->>>>>>> cluster_manager:fusequery/query/src/sessions/sessions.rs
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
@@ -214,25 +186,5 @@ impl SessionManager {
                 false
             }
         }
-    }
-
-    pub fn get_conf(self: &Arc<Self>) -> Config {
-        self.conf.clone()
-    }
-
-    pub fn get_cluster_manager(self: &Arc<Self>) -> ClusterManagerRef {
-        self.cluster_manager.clone()
-    }
-
-    pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
-        Err(ErrorCode::UnImplement(""))
-    }
-
-    pub fn register_executor(self: &Arc<Self>) -> Result<()> {
-        Err(ErrorCode::UnImplement(""))
-    }
-
-    pub fn unregister_executor(self: &Arc<Self>) -> Result<()> {
-        Err(ErrorCode::UnImplement(""))
     }
 }

@@ -33,17 +33,12 @@ pub fn try_create_context_with_conf(mut config: Config) -> Result<DatafuseQueryC
     let cluster = Cluster::empty();
 
     // Setup log dir to the tests directory.
-<<<<<<< HEAD:query/src/tests/context.rs
     config.log.log_dir = env::current_dir()?
         .join("../tests/data/logs")
-=======
-    conf.log_dir = env::current_dir()?
-        .join("../../tests/data/logs")
->>>>>>> cluster_manager:fusequery/query/src/tests/context.rs
         .display()
         .to_string();
 
-    let sessions = SessionManager::from_conf(config, cluster, ClusterClient::create("local"))?;
+    let sessions = SessionManager::from_conf(config, cluster)?;
     let test_session = sessions.create_session("TestSession")?;
     let test_context = test_session.create_context();
     test_context.get_settings().set_max_threads(8)?;
@@ -84,7 +79,7 @@ pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<DatafuseQuery
         .unwrap()?;
     }
 
-    let sessions = SessionManager::from_conf(config, cluster, ClusterClient::create("local"))?;
+    let sessions = SessionManager::from_conf(config, cluster)?;
     let test_session = sessions.create_session("TestSession")?;
     let test_context = test_session.create_context();
     test_context.get_settings().set_max_threads(8)?;

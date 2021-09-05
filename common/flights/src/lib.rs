@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-<<<<<<< HEAD
 pub use common::flight_result_to_str;
 pub use common::RpcClientTlsConfig;
 pub use common_store_api::KVApi;
@@ -29,12 +28,6 @@ pub use store_client::StoreClient;
 pub use store_do_action::RequestFor;
 pub use store_do_action::StoreDoAction;
 pub use store_do_get::StoreDoGet;
-=======
-#[cfg(test)]
-mod address_test;
-#[cfg(test)]
-mod dns_resolver_test;
->>>>>>> cluster_manager
 
 mod common;
 mod dns_resolver;
@@ -43,7 +36,6 @@ mod impls;
 mod store_client;
 #[macro_use]
 mod store_do_action;
-mod address;
 mod store_do_get;
 
 // ProtoBuf generated files.
@@ -53,20 +45,5 @@ pub mod protobuf {
     tonic::include_proto!("storeflight");
 }
 
-pub use address::Address;
-pub use common::flight_result_to_str;
-pub use common::status_err;
-pub use common_store_api::KVApi;
-pub use common_store_api::MetaApi;
-pub use common_store_api::StorageApi;
-pub use dns_resolver::ConnectionFactory;
-pub use dns_resolver::DNSResolver;
-pub use flight_token::FlightClaim;
-pub use flight_token::FlightToken;
-pub use impls::kv_api_impl;
-pub use impls::meta_api_impl;
-pub use impls::storage_api_impl;
-pub use store_client::StoreClient;
-pub use store_do_action::RequestFor;
-pub use store_do_action::StoreDoAction;
-pub use store_do_get::StoreDoGet;
+#[cfg(test)]
+mod dns_resolver_test;

@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_flights::Address;
-use common_management::cluster::ClusterExecutor;
 use common_planners::*;
 use common_runtime::tokio;
 

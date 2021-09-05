@@ -24,7 +24,7 @@ use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::sessions::DatafuseQueryContextRef;
 
-pub trait Optimizer: Send + Sync {
+pub trait Optimizer {
     fn name(&self) -> &str;
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode>;
 }

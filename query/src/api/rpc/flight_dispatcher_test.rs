@@ -53,11 +53,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
         let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
 
-<<<<<<< HEAD:query/src/api/rpc/flight_dispatcher_test.rs
         let sessions = try_create_session_mgr(None)?;
-=======
-        let sessions = with_max_connections_sessions()?;
->>>>>>> cluster_manager:fusequery/query/src/api/rpc/flight_dispatcher_test.rs
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
         flight_dispatcher.shuffle_action(
@@ -99,11 +95,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
         let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
 
-<<<<<<< HEAD:query/src/api/rpc/flight_dispatcher_test.rs
         let sessions = try_create_session_mgr(None)?;
-=======
-        let sessions = with_max_connections_sessions()?;
->>>>>>> cluster_manager:fusequery/query/src/api/rpc/flight_dispatcher_test.rs
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
         flight_dispatcher.shuffle_action(

@@ -16,16 +16,9 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_runtime::tokio;
 use criterion::Criterion;
-<<<<<<< HEAD:query/benches/suites/mod.rs
 use datafuse_query::interpreters::SelectInterpreter;
 use datafuse_query::sql::PlanParser;
 use datafuse_query::tests::try_create_session_mgr;
-=======
-use fuse_query::interpreters::SelectInterpreter;
-use fuse_query::sessions::SessionManager;
-use fuse_query::sql::PlanParser;
-use fuse_query::tests::with_max_connections_sessions;
->>>>>>> cluster_manager:fusequery/query/benches/suites/mod.rs
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
@@ -34,11 +27,7 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-<<<<<<< HEAD:query/benches/suites/mod.rs
     let session_manager = try_create_session_mgr(Some(1))?;
-=======
-    let session_manager = with_max_connections_sessions(1)?;
->>>>>>> cluster_manager:fusequery/query/benches/suites/mod.rs
     let executor_session = session_manager.create_session("Benches")?;
     let ctx = executor_session.create_context();
 

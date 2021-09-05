@@ -18,15 +18,11 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_management::cluster::ClusterExecutor;
 use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
-<<<<<<< HEAD:query/src/sessions/session.rs
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterRef;
-=======
->>>>>>> cluster_manager:fusequery/query/src/sessions/session.rs
 use crate::configs::Config;
 use crate::sessions::context_shared::DatafuseQueryContextShared;
 use crate::sessions::DatafuseQueryContext;
@@ -162,9 +158,8 @@ impl Session {
         self.mutable_state.lock().session_settings.clone()
     }
 
-    pub fn try_get_executors(self: &Arc<Self>) -> Result<Vec<Arc<ClusterExecutor>>> {
-        // self.sessions.get_cluster_manager().get_executors()
-        unimplemented!()
+    pub fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
+        Ok(self.sessions.get_cluster())
     }
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {

@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use common_runtime::tokio;
-use pretty_assertions::assert_eq;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;
@@ -213,7 +212,7 @@ async fn test_scatter_optimizer() -> Result<()> {
 
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
         let mut optimizer = ScattersOptimizer::create(ctx);
-        let optimized = optimizer.optimize(&plan).await?;
+        let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);
         assert_eq!(test.expect, actual, "{:#?}", test.name);
     }

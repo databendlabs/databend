@@ -20,14 +20,13 @@ mod tests {
     use common_datavalues::*;
     use common_exception::Result;
     use common_planners::*;
-    use common_runtime::tokio;
     use pretty_assertions::assert_eq;
 
     use crate::optimizers::optimizer_test::*;
     use crate::optimizers::*;
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_statistics_exact_optimizer() -> Result<()> {
+    #[test]
+    fn test_statistics_exact_optimizer() -> Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
         let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -74,7 +73,7 @@ mod tests {
             .build()?;
 
         let mut statistics_exact = StatisticsExactOptimizer::create(ctx);
-        let optimized = statistics_exact.optimize(&plan).await?;
+        let optimized = statistics_exact.optimize(&plan)?;
 
         let expect = "\
         Projection: count(0):UInt64\

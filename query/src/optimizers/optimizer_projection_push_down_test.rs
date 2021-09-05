@@ -18,15 +18,14 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
 use crate::optimizers::optimizer_test::*;
 use crate::optimizers::*;
 use crate::sql::*;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_projection_push_down_optimizer_1() -> Result<()> {
+#[test]
+fn test_projection_push_down_optimizer_1() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let schema = DataSchemaRefExt::create(vec![
@@ -51,7 +50,7 @@ async fn test_projection_push_down_optimizer_1() -> Result<()> {
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
-    let optimized = projection_push_down.optimize(&plan).await?;
+    let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
         Projection: a:String, b:String, c:String";
@@ -62,15 +61,15 @@ async fn test_projection_push_down_optimizer_1() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_projection_push_down_optimizer_group_by() -> Result<()> {
+#[test]
+fn test_projection_push_down_optimizer_group_by() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let plan = PlanParser::create(ctx.clone())
         .build_from_sql("select max(value) as c1, name as c2 from system.settings group by c2")?;
 
     let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
-    let optimized = project_push_down.optimize(&plan).await?;
+    let optimized = project_push_down.optimize(&plan)?;
 
     let expect = "\
         Projection: max(value) as c1:String, name as c2:String\
@@ -83,8 +82,8 @@ async fn test_projection_push_down_optimizer_group_by() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_projection_push_down_optimizer_2() -> Result<()> {
+#[test]
+fn test_projection_push_down_optimizer_2() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -124,7 +123,7 @@ async fn test_projection_push_down_optimizer_2() -> Result<()> {
     });
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
-    let optimized = projection_push_down.optimize(&plan).await?;
+    let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
         Projection: a:String\
@@ -136,8 +135,8 @@ async fn test_projection_push_down_optimizer_2() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_projection_push_down_optimizer_3() -> Result<()> {
+#[test]
+fn test_projection_push_down_optimizer_3() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
@@ -184,7 +183,7 @@ async fn test_projection_push_down_optimizer_3() -> Result<()> {
         .build()?;
 
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
-    let optimized = projection_push_down.optimize(&plan).await?;
+    let optimized = projection_push_down.optimize(&plan)?;
 
     let expect = "\
     Projection: a:String\

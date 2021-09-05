@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_management::cluster::ClusterExecutor;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::BroadcastPlan;
@@ -47,16 +46,10 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
-<<<<<<< HEAD:query/src/interpreters/plan_scheduler.rs
 use crate::catalogs::TablePtr;
 use crate::clusters::Node;
 use crate::sessions::DatafuseQueryContext;
 use crate::sessions::DatafuseQueryContextRef;
-=======
-use crate::datasources::TablePtr;
-use crate::sessions::FuseQueryContext;
-use crate::sessions::FuseQueryContextRef;
->>>>>>> cluster_manager:fusequery/query/src/interpreters/plan_scheduler.rs
 
 enum RunningMode {
     Cluster,
@@ -81,25 +74,20 @@ pub struct PlanScheduler {
 }
 
 impl PlanScheduler {
-<<<<<<< HEAD:query/src/interpreters/plan_scheduler.rs
     pub fn try_create(context: DatafuseQueryContextRef) -> Result<PlanScheduler> {
         let cluster = context.try_get_cluster()?;
         let cluster_nodes = cluster.get_nodes()?;
-=======
-    pub fn try_create(context: FuseQueryContextRef) -> Result<PlanScheduler> {
-        let executors = context.try_get_executors()?;
->>>>>>> cluster_manager:fusequery/query/src/interpreters/plan_scheduler.rs
 
         let mut local_pos = 0;
         let mut nodes_plan = Vec::new();
-        let mut cluster_nodes_name = Vec::with_capacity(executors.len());
-        for index in 0..executors.len() {
-            if executors[index].is_local() {
+        let mut cluster_nodes_name = Vec::with_capacity(cluster_nodes.len());
+        for index in 0..cluster_nodes.len() {
+            if cluster_nodes[index].is_local() {
                 local_pos = index;
             }
 
             nodes_plan.push(PlanNode::Empty(EmptyPlan::create()));
-            cluster_nodes_name.push(executors[index].name.clone());
+            cluster_nodes_name.push(cluster_nodes[index].name.clone());
         }
 
         Ok(PlanScheduler {
@@ -117,11 +105,12 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
-        let mut tasks = Tasks::create(context.clone());
+        let cluster = context.try_get_cluster()?;
+        let mut tasks = Tasks::create(context);
 
-        match context.try_get_executors()?.len() {
-            size if size < 2 => tasks.finalize(plan),
-            _ => {
+        match cluster.is_empty()? {
+            true => tasks.finalize(plan),
+            false => {
                 self.visit_plan_node(plan, &mut tasks)?;
                 tasks.finalize(&self.nodes_plan[self.local_pos])
             }
@@ -147,12 +136,14 @@ impl Tasks {
         Ok(self)
     }
 
-    pub fn get_tasks(&self) -> Result<Vec<(Arc<ClusterExecutor>, FlightAction)>> {
+    pub fn get_tasks(&self) -> Result<Vec<(Arc<Node>, FlightAction)>> {
+        let cluster = self.context.try_get_cluster()?;
+
         let mut tasks = Vec::new();
-        for executor in &self.context.try_get_executors()? {
-            if let Some(actions) = self.actions.get(&executor.name) {
+        for cluster_node in &cluster.get_nodes()? {
+            if let Some(actions) = self.actions.get(&cluster_node.name) {
                 for action in actions {
-                    tasks.push((executor.clone(), action.clone()));
+                    tasks.push((cluster_node.clone(), action.clone()));
                 }
             }
         }
