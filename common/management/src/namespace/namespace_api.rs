@@ -25,6 +25,13 @@ pub struct Namespace {
     pub id: String,
 }
 
+impl Namespace {
+    #[allow(dead_code)]
+    pub fn new(id: String) -> Self {
+        Namespace { id }
+    }
+}
+
 #[async_trait]
 pub trait NamespaceApi {
     // Create a new tenant's namespace.

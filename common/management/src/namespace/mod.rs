@@ -13,6 +13,9 @@
 // limitations under the License.
 //
 
+#[cfg(test)]
+mod namespace_mgr_test;
+
 mod namespace_api;
 mod namespace_mgr;
 
