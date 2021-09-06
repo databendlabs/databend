@@ -201,7 +201,7 @@ impl<K: ColumnType> Column<K> {
     /// # });
     /// # ret.unwrap()
     /// ```
-    */
+     */
     pub fn iter<'a, T: Iterable<'a, K>>(&'a self) -> Result<T::Iter> {
         <T as Iterable<'a, K>>::iter(self, self.sql_type())
     }

@@ -234,7 +234,7 @@ impl Decimal {
     /// # });
     /// # ret.unwrap()
     /// ```
-    */
+     */
     #[inline(always)]
     pub fn internal<I: InternalResult>(&self) -> I {
         InternalResult::get(self.underlying)
