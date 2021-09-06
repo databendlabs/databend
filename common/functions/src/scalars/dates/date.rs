@@ -16,7 +16,6 @@ use common_exception::Result;
 
 use super::now::NowFunction;
 use super::timeslot::TimeSlotFunction;
-use super::ToYYYYFunction;
 use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
@@ -34,7 +33,6 @@ impl DateFunction {
         map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
         map.insert("timeSlot".into(), TimeSlotFunction::try_create);
-        map.insert("toYYYYMM".into(), ToYYYYFunction::try_create);
         map.insert("toYYYYMM".into(), ToYYYYMMFunction::try_create);
 
         Ok(())

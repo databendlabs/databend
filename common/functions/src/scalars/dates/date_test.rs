@@ -60,14 +60,14 @@ fn test_timeslot_now_function() -> Result<()> {
     }
     let new_date = now.with_minute(minute).unwrap();
     let check_timestamp = new_date.timestamp_millis() / 1000;
-    let empty: Vec<i32> = Vec::new();
+    let empty: Vec<u32> = Vec::new();
 
     let tests = vec![
         Test {
             name: "test-timeSlot",
             display: "timeSlot",
             nullable: false,
-            columns: vec![Series::new(vec![now_timestamp]).into()],
+            columns: vec![Series::new(vec![now_timestamp as u32]).into()],
             func: TimeSlotFunction::try_create("timeSlot"),
             expect: Series::new(vec![check_timestamp]),
             error: "",
@@ -91,7 +91,7 @@ fn test_timeslot_now_function() -> Result<()> {
 }
 
 fn do_test(t: Test) -> Result<()> {
-    let dummy = DataField::new("dummy", DataType::UInt32, false);
+    let dummy = DataField::new("dummy", DataType::DateTime32, false);
     let rows = t.columns[0].len();
     let columns: Vec<DataColumnWithField> = t
         .columns
