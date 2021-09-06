@@ -15,7 +15,7 @@
 use common_exception::Result;
 
 use super::now::NowFunction;
-use super::ToYYYYFunction;
+use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
@@ -31,7 +31,7 @@ impl DateFunction {
         map.insert("yesterday".into(), YesterdayFunction::try_create);
         map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
-        map.insert("toYYYYMM".into(), ToYYYYFunction::try_create);
+        map.insert("toYYYYMM".into(), ToYYYYMMFunction::try_create);
 
         Ok(())
     }
