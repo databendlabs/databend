@@ -16,7 +16,7 @@ tokio_io = ["tokio"]
 
 [dependencies]
 lazy_static = "1.4.0"
-thiserror = "1.0.20"
+thiserror = "1.0.29"
 chrono-tz = "0.5"
 futures = "0.3"
 futures-core = "0.3.5"
