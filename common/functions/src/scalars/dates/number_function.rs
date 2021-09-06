@@ -85,7 +85,11 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
         let data_type = columns[0].data_type();
         let number_vec: Vec<Option<u32>> = match data_type {
             DataType::Date16 => {
-                let number_vec_result = columns[0].column().to_array()?.u16()?.iter().map(|value|{
+                let number_vec_result = columns[0].column()
+                .to_array()?
+                .u16()?
+                .iter()
+                .map(|value|{
                     match value {
                         Some(v) => {
                             let date_time = Utc.timestamp(*v as i64 * 24 * 3600, 0_u32);
@@ -97,7 +101,11 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                 Ok(number_vec_result)
             },
             DataType::Date32 => {
-                let number_vec_result = columns[0].column().to_array()?.u32()?.iter().map(|value|{
+                let number_vec_result = columns[0].column()
+                .to_array()?
+                .u32()?
+                .iter()
+                .map(|value|{
                     match value {
                         Some(v) => {
                             let date_time = Utc.timestamp(*v as i64 * 24 * 3600, 0_u32);
@@ -109,7 +117,11 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                 Ok(number_vec_result)
             },
             DataType::DateTime32 => {
-                let number_vec_result = columns[0].column().to_array()?.u32()?.iter().map(|value|{
+                let number_vec_result = columns[0].column()
+                .to_array()?
+                .u32()?
+                .iter()
+                .map(|value|{
                     match value {
                         Some(v) => {
                             let date_time = Utc.timestamp(*v as i64, 0_u32);
@@ -134,4 +146,4 @@ impl<T> fmt::Display for NumberFunction<T> {
     }
 }
 
-pub type ToYYYYFunction = NumberFunction<ToYYYYMM>;
+pub type ToYYYYMMFunction = NumberFunction<ToYYYYMM>;
