@@ -15,7 +15,6 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_datavalues::arrays::DFUInt32Array;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::TimeZone;
@@ -77,12 +76,12 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let data_type = columns[0].data_type();
-        let number_array: DFUInt32Array = match data_type {
+        let number_array: DataColumn = match data_type {
             DataType::Date16 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
-                    let number_result = Some(T::execute(date_time));
-                    Ok(DFUInt32Array::from_iter(vec![number_result; input_rows]))
+                    let constant_result = Some(T::execute(date_time));
+                    Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
                 }else {
                     let result = columns[0].column()
                         .to_array()?
@@ -92,14 +91,14 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                             T::execute(date_time)
                         }
                     );
-                    Ok(result)
+                    Ok(result.into())
                 }
             },
             DataType::Date32 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
-                    let number_result = Some(T::execute(date_time));
-                    Ok(DFUInt32Array::from_iter(vec![number_result; input_rows]))
+                    let constant_result = Some(T::execute(date_time));
+                    Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
                 }else {
                     let result = columns[0].column()
                         .to_array()?
@@ -109,14 +108,14 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                             T::execute(date_time)
                         }
                     );
-                    Ok(result)
+                    Ok(result.into())
                 }
             },
             DataType::DateTime32 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64, 0_u32);
-                    let number_result = Some(T::execute(date_time));
-                    Ok(DFUInt32Array::from_iter(vec![number_result; input_rows]))
+                    let constant_result = Some(T::execute(date_time));
+                    Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
                 }else {
                     let result = columns[0].column()
                         .to_array()?
@@ -126,14 +125,14 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                             T::execute(date_time)
                         }
                     );
-                    Ok(result)
+                    Ok(result.into())
                 }
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                "Illegal type {:?} of argument of function toYYYYMM.Should be a date16/data32 or a dateTime32",
                 other))),
         }?;
-        Ok(number_array.into())
+        Ok(number_array)
     }
 }
 
