@@ -151,7 +151,7 @@ impl Column<Simple> {
         let chunks: Vec<_> = items_vec.iter().map(|column| column.data.clone()).collect();
         match items_vec.first() {
             None => unreachable!(),
-            Some(ref first_column) => {
+            Some(first_column) => {
                 let name: String = first_column.name().to_string();
                 let data = ConcatColumnData::concat(chunks);
                 Column {

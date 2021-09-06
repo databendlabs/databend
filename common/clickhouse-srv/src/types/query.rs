@@ -18,6 +18,7 @@ pub struct Query {
     id: String,
 }
 
+#[allow(dead_code)]
 impl Query {
     pub fn new(sql: impl AsRef<str>) -> Self {
         Self {

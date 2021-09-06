@@ -53,7 +53,7 @@ impl Cmd {
                     .session
                     .dbms_tcp_protocol_version()
                     .min(hello.client_revision);
-                ctx.hello = Some(hello.clone());
+                ctx.hello = Some(hello);
 
                 response.encode(&mut encoder, ctx.client_revision)?;
             }
@@ -64,7 +64,7 @@ impl Cmd {
                 let session = connection.session.clone();
                 session.execute_query(ctx, connection).await?;
 
-                if let Some(_) = &ctx.state.out {
+                if ctx.state.out.is_some() {
                     ctx.state.stage = Stage::InsertPrepare;
                 } else {
                     connection.write_end_of_stream().await?;
@@ -87,11 +87,9 @@ impl Cmd {
                         }
                         _ => {}
                     }
-                } else {
-                    if let Some(out) = &ctx.state.out {
-                        // out.block_stream.
-                        out.send(block).await.unwrap();
-                    }
+                } else if let Some(out) = &ctx.state.out {
+                    // out.block_stream.
+                    out.send(block).await.unwrap();
                 }
             }
         };

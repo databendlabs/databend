@@ -285,6 +285,8 @@ impl<K: ColumnType> Block<K> {
     }
 }
 
+
+#[allow(dead_code)]
 impl Block<Simple> {
     pub(crate) fn concat(blocks: &[Self]) -> Block<Complex> {
         let first = blocks.first().expect("blocks should not be empty.");
@@ -312,6 +314,7 @@ impl Block<Simple> {
     }
 }
 
+#[allow(dead_code)]
 impl<K: ColumnType> Block<K> {
     pub(crate) fn cast_to(&self, header: &Block<K>) -> Result<Self> {
         let info = self.info;
@@ -404,7 +407,7 @@ impl<K: ColumnType> fmt::Debug for Block<K> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let titles: Vec<&str> = self.columns.iter().map(|column| column.name()).collect();
 
-        let cells: Vec<_> = self.columns.iter().map(|col| text_cells(&col)).collect();
+        let cells: Vec<_> = self.columns.iter().map(|col| text_cells(col)).collect();
 
         let titles_len: Vec<_> = titles
             .iter()

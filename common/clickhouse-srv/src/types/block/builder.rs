@@ -132,7 +132,7 @@ fn extract_timezone(value: &Value) -> Tz {
     match value {
         Value::Date(_, tz) => *tz,
         Value::DateTime(_, tz) => *tz,
-        Value::Nullable(Either::Right(d)) => extract_timezone(&&d),
+        Value::Nullable(Either::Right(d)) => extract_timezone(d),
         Value::Array(_, data) => {
             if let Some(v) = data.first() {
                 extract_timezone(v)

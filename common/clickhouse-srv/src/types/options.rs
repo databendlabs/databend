@@ -57,6 +57,7 @@ impl fmt::Debug for OptionsSource {
     }
 }
 
+#[allow(dead_code)]
 impl OptionsSource {
     pub(crate) fn get(&self) -> Result<Cow<Options>> {
         let mut state = self.state.lock().unwrap();
@@ -68,7 +69,7 @@ impl OptionsSource {
                     return unsafe { Ok(Cow::Borrowed(ptr.as_ref().unwrap())) };
                 }
                 State::Url(url) => {
-                    let options = from_url(&url)?;
+                    let options = from_url(url)?;
                     new_state = State::Raw(options);
                 }
             }

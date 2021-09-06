@@ -129,7 +129,7 @@ impl ClickHouseServer {
         session: Arc<dyn ClickHouseSession>,
         stream: TcpStream,
     ) -> Result<()> {
-        ClickHouseServer::run_on(session, stream.into()).await
+        ClickHouseServer::run_on(session, stream).await
     }
 }
 

@@ -136,10 +136,7 @@ impl Connection {
 
         match packet {
             Ok(packet) => {
-                match &packet {
-                    Packet::Query(ref query) => self.compress = query.compression > 0,
-                    _ => {}
-                }
+                if let Packet::Query(ref query) = &packet { self.compress = query.compression > 0 }
                 // The `check` function will have advanced the cursor until the
                 // end of the frame. Since the cursor had position set to zero
                 // before `Packet::check` was called, we obtain the length of the
@@ -161,7 +158,7 @@ impl Connection {
             // An error was encountered while parsing the frame. The connection
             // is now in an invalid state. Returning `Err` from here will result
             // in the connection being closed.
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 
@@ -190,7 +187,7 @@ impl Connection {
 
     pub async fn write_error(&mut self, err: &Error) -> Result<()> {
         let mut encoder = Encoder::new();
-        ExceptionResponse::write(&mut encoder, &err, self.with_stack_trace);
+        ExceptionResponse::write(&mut encoder, err, self.with_stack_trace);
 
         self.stream.write_all(&encoder.get_buffer()).await?;
         self.stream.flush().await?;
