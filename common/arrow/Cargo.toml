@@ -9,15 +9,18 @@ publish = false
 edition = "2021"
 
 [features]
+default = ["arrow-default", "parquet-default"]
+arrow-default = ["arrow/compute", "arrow/regex", "arrow/merge_sort", "arrow/io_csv", "arrow/io_parquet", "arrow/io_json"]
+parquet-default = ["parquet/stream"]
 simd = ["arrow/simd"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
 
 # Github dependencies
-arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", rev = "d6879ba" }
-arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "d6879ba" }
-parquet = {package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", rev = "d28330f"}
+arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", default-features = false, rev = "b16d6b9" }
+arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "b16d6b9" }
+parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "1d310ee" }
 # Crates.io dependencies
 
 [dev-dependencies]

@@ -236,6 +236,11 @@ build_exceptions! {
     MetaNodeInternalError(4006),
     TrancateTableFailedError(4007),
 
+    // namespace error.
+    NamespaceUnknownNode(4008),
+    NamespaceNodeAlreadyExists(4009),
+    NamespaceIllegalNodeFormat(4010),
+
     // storage-api error codes
     IllegalScanPlan(5000),
     ReadFileError(5001),

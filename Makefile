@@ -95,6 +95,8 @@ profile:
 
 clean:
 	cargo clean
+	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
+	rm -rf ./_local_fs/ ./_meta/ ./_logs/ ./common/stoppable/_logs/ ./query/_logs/ ./store/_logs/
 
 docker_release:
 	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/datafuse:${TAG} --build-arg version=$VERSION --push

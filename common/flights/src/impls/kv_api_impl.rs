@@ -46,6 +46,20 @@ impl KVApi for StoreClient {
         .await
     }
 
+    async fn update_kv_meta(
+        &mut self,
+        key: &str,
+        seq: MatchSeq,
+        value_meta: Option<KVMeta>,
+    ) -> Result<UpsertKVActionResult> {
+        self.do_action(KVMetaAction {
+            key: key.to_string(),
+            seq,
+            value_meta,
+        })
+        .await
+    }
+
     #[tracing::instrument(level = "debug", skip(self))]
     async fn get_kv(&mut self, key: &str) -> Result<GetKVActionResult> {
         self.do_action(GetKVAction {
@@ -128,4 +142,17 @@ action_declare!(
     UpsertKVAction,
     UpsertKVActionResult,
     StoreDoAction::UpsertKV
+);
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct KVMetaAction {
+    pub key: String,
+    pub seq: MatchSeq,
+    pub value_meta: Option<KVMeta>,
+}
+
+action_declare!(
+    KVMetaAction,
+    UpsertKVActionResult,
+    StoreDoAction::UpdateKVMeta
 );

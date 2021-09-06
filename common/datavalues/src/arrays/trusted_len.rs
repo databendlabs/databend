@@ -110,3 +110,11 @@ where Ptr: DFAsRef<[u8]>
         iter.collect()
     }
 }
+
+impl<Ptr> FromTrustedLenIterator<Option<Ptr>> for DFStringArray
+where Ptr: DFAsRef<[u8]>
+{
+    fn from_iter_trusted_length<I: TrustedLen<Item = Option<Ptr>>>(iter: I) -> Self {
+        iter.collect()
+    }
+}

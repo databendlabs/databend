@@ -18,6 +18,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Debug;
 use std::fmt::Formatter;
 
 pub use errors::ConflictSeq;
@@ -105,3 +106,22 @@ impl fmt::Display for Table {
 
 pub type MetaVersion = u64;
 pub type MetaId = u64;
+
+/// An operation that updates a field, delete it, or leave it as is.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Operation<T> {
+    Update(T),
+    Delete,
+    AsIs,
+}
+
+impl<T> From<Option<T>> for Operation<T>
+where for<'x> T: Serialize + Deserialize<'x> + Debug + Clone
+{
+    fn from(v: Option<T>) -> Self {
+        match v {
+            None => Operation::Delete,
+            Some(x) => Operation::Update(x),
+        }
+    }
+}

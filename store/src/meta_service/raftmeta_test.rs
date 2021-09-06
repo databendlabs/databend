@@ -159,7 +159,7 @@ pub fn cases_set_file() -> Vec<(
     ]
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
@@ -178,7 +178,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
@@ -207,7 +207,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
@@ -231,7 +231,7 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.
@@ -282,7 +282,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_set_file() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and 2 non-voter;
     // - Write to the raft node on every node, expect Ok.
@@ -314,7 +314,7 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_add_database() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;
     // - Assert that every node handles AddDatabase request correctly.
@@ -382,7 +382,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // - Bring up a cluster of 3.
     // - Write just enough logs to trigger a snapshot.
@@ -424,7 +424,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
             cmd: Cmd::UpsertKV {
                 key: key.clone(),
                 seq: MatchSeq::Any,
-                value: Some(b"v".to_vec()),
+                value: Some(b"v".to_vec()).into(),
                 value_meta: None,
             },
         })
@@ -485,7 +485,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
     // - Bring up a cluster with 1 leader, 2 followers and 2 non-voters.
     // - Write to leader, check data is replicated.
@@ -504,7 +504,7 @@ async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // TODO check restarted follower.
     // - Start a leader and a non-voter;
@@ -565,7 +565,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     // TODO(xp): This function will replace `test_meta_node_restart` after disk backed state machine is ready.
 
@@ -888,7 +888,7 @@ where T: Fn(&RaftMetrics) -> bool + Send {
 
 /// Make a default timeout for wait() for test.
 fn timeout() -> Option<Duration> {
-    Some(Duration::from_millis(5000))
+    Some(Duration::from_millis(10000))
 }
 
 fn test_context_nodes(tcs: &Vec<StoreTestContext>) -> Vec<Arc<MetaNode>> {

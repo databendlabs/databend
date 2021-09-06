@@ -39,7 +39,9 @@ fn test_default_config() -> Result<()> {
 // From env, defaulting.
 #[test]
 fn test_env_config() -> Result<()> {
-    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
+    std::env::set_var("LOG_LEVEL", "DEBUG");
+    std::env::set_var("QUERY_TENANT", "tenant-1");
+    std::env::set_var("QUERY_NAMESPACE", "cluster-1");
     std::env::set_var("QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
     std::env::set_var("QUERY_MYSQL_HANDLER_PORT", "3306");
     std::env::set_var("QUERY_MAX_ACTIVE_SESSIONS", "255");
@@ -48,15 +50,18 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
+    std::env::set_var("QUERY_DISABLE_LOCAL_DATABASE_ENGINE", "1");
     std::env::set_var("STORE_ADDRESS", "1.2.3.4:1234");
     std::env::set_var("STORE_USERNAME", "admin");
     std::env::set_var("STORE_PASSWORD", "password!");
-    std::env::set_var("DISABLE_REMOTE_CATALOG", "0");
     std::env::remove_var("CONFIG_FILE");
+
     let default = Config::default();
     let configured = Config::load_from_env(&default)?;
     assert_eq!("DEBUG", configured.log.log_level);
 
+    assert_eq!("tenant-1", configured.query.tenant);
+    assert_eq!("cluster-1", configured.query.namespace);
     assert_eq!("0.0.0.0", configured.query.mysql_handler_host);
     assert_eq!(3306, configured.query.mysql_handler_port);
     assert_eq!(255, configured.query.max_active_sessions);
@@ -66,13 +71,16 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
     assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+    assert_eq!("1", configured.query.disable_local_database_engine);
 
     assert_eq!("1.2.3.4:1234", configured.store.store_address);
     assert_eq!("admin", configured.store.store_username.to_string());
     assert_eq!("password!", configured.store.store_password.to_string());
 
     // clean up
-    std::env::remove_var("QUERY_LOG_LEVEL");
+    std::env::remove_var("LOG_LEVEL");
+    std::env::remove_var("QUERY_TENANT");
+    std::env::remove_var("QUERY_NAMESPACE");
     std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
     std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
     std::env::remove_var("QUERY_MAX_ACTIVE_SESSIONS");
@@ -82,6 +90,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
+    std::env::remove_var("QUERY_DISABLE_LOCAL_DATABASE_ENGINE");
     std::env::remove_var("STORE_ADDRESS");
     std::env::remove_var("STORE_USERNAME");
     std::env::remove_var("STORE_PASSWORD");

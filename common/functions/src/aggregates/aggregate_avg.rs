@@ -29,7 +29,7 @@ use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::dispatch_numeric_types;
+use crate::with_match_primitive_type;
 
 // count = 0 means it's all nullable
 // so we do not need option like sum
@@ -177,17 +177,6 @@ where
     }
 }
 
-macro_rules! creator {
-    ($T: ident, $data_type: expr, $display_name: expr, $arguments: expr) => {
-        if $T::data_type() == $data_type {
-            return AggregateAvgFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
-                $display_name,
-                $arguments,
-            );
-        }
-    };
-}
-
 pub fn try_create_aggregate_avg_function(
     display_name: &str,
     _params: Vec<DataValue>,
@@ -196,10 +185,17 @@ pub fn try_create_aggregate_avg_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
-    dispatch_numeric_types! {creator, data_type.clone(), display_name, arguments}
+    with_match_primitive_type!(data_type, |$T| {
+        AggregateAvgFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
+            display_name,
+            arguments,
+        )
+    },
 
-    Err(ErrorCode::BadDataValueType(format!(
-        "AggregateSumFunction does not support type '{:?}'",
-        data_type
-    )))
+    {
+        Err(ErrorCode::BadDataValueType(format!(
+            "AggregateSumFunction does not support type '{:?}'",
+            data_type
+        )))
+    })
 }

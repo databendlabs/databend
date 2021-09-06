@@ -308,27 +308,28 @@ impl Series {
 impl IntoSeries for ArrayRef {
     fn into_series(self) -> Series {
         let data_type = DataType::try_from(self.data_type()).unwrap();
-        match data_type {
-            DataType::Null => DFNullArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Boolean => DFBooleanArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt8 => DFUInt8Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt16 => DFUInt16Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt32 => DFUInt32Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::UInt64 => DFUInt64Array::from_arrow_array(self.as_ref()).into_series(),
+        let physical_type: PhysicalDataType = data_type.into();
 
-            DataType::Int8 => DFInt8Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Int16 => DFInt16Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Int32 => DFInt32Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Int64 => DFInt64Array::from_arrow_array(self.as_ref()).into_series(),
+        use PhysicalDataType::*;
+        match physical_type {
+            Null => DFNullArray::from_arrow_array(self.as_ref()).into_series(),
+            Boolean => DFBooleanArray::from_arrow_array(self.as_ref()).into_series(),
+            UInt8 => DFUInt8Array::from_arrow_array(self.as_ref()).into_series(),
+            UInt16 => DFUInt16Array::from_arrow_array(self.as_ref()).into_series(),
+            UInt32 => DFUInt32Array::from_arrow_array(self.as_ref()).into_series(),
+            UInt64 => DFUInt64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            DataType::Float32 => DFFloat32Array::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Float64 => DFFloat64Array::from_arrow_array(self.as_ref()).into_series(),
+            Int8 => DFInt8Array::from_arrow_array(self.as_ref()).into_series(),
+            Int16 => DFInt16Array::from_arrow_array(self.as_ref()).into_series(),
+            Int32 => DFInt32Array::from_arrow_array(self.as_ref()).into_series(),
+            Int64 => DFInt64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            DataType::List(_) => DFListArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::Struct(_) => DFStructArray::from_arrow_array(self.as_ref()).into_series(),
-            DataType::String => DFStringArray::from_arrow_array(self.as_ref()).into_series(),
+            Float32 => DFFloat32Array::from_arrow_array(self.as_ref()).into_series(),
+            Float64 => DFFloat64Array::from_arrow_array(self.as_ref()).into_series(),
 
-            _ => unreachable!(),
+            List(_) => DFListArray::from_arrow_array(self.as_ref()).into_series(),
+            Struct(_) => DFStructArray::from_arrow_array(self.as_ref()).into_series(),
+            String => DFStringArray::from_arrow_array(self.as_ref()).into_series(),
         }
     }
 }

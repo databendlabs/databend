@@ -27,7 +27,7 @@ serde_json = "1.0"
 bytes = "1.1.0"
 unicase = "2.6.0"
 num = "^0.4"
-ordered-float = "2.7"
+ordered-float = "2.8"
 
 [dev-dependencies]
 bumpalo = "3.7.0"

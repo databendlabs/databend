@@ -17,10 +17,12 @@ mod date_test;
 
 mod date;
 mod now;
+mod number_function;
 mod simple_date;
 mod timeslot;
 
 pub use date::DateFunction;
+pub use number_function::ToYYYYFunction;
 pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
 pub use simple_date::YesterdayFunction;
