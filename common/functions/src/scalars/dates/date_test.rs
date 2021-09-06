@@ -91,7 +91,7 @@ fn test_timeslot_now_function() -> Result<()> {
 }
 
 fn do_test(t: Test) -> Result<()> {
-    let dummy = DataField::new("dummy", DataType::String, false);
+    let dummy = DataField::new("dummy", DataType::UInt32, false);
     let rows = t.columns[0].len();
     let columns: Vec<DataColumnWithField> = t
         .columns
