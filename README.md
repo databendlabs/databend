@@ -47,6 +47,11 @@ Datafuse design principles:
 3. **User-friendly** Datafuse is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
 4. **Cost-efficient** Datafuse processes queries with high performance, and the user only pays for what is actually used.
 
+
+## Status
+
+**This project is at an early stage and in active development. It's not ready for a production.**
+
 ## Design Overview
 
 ![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
