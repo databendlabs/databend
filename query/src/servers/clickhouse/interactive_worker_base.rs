@@ -18,8 +18,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use clickhouse_srv::types::Block as ClickHouseBlock;
-use clickhouse_srv::CHContext;
+use common_clickhouse_srv::types::Block as ClickHouseBlock;
+use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;

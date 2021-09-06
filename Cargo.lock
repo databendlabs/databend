@@ -602,36 +602,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clickhouse-srv"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f9d602b512c468ab39d777639be84da96e55b126ece26d0055e2b05a33daef2"
-dependencies = [
- "async-trait",
- "byteorder",
- "bytes",
- "chrono",
- "chrono-tz",
- "clickhouse-rs-cityhash-sys",
- "combine",
- "futures",
- "futures-core",
- "futures-sink",
- "futures-util",
- "hostname",
- "lazy_static",
- "log",
- "lz4",
- "pin-project",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "clipboard-win"
 version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -723,6 +693,38 @@ dependencies = [
  "ritelinked",
  "tempfile",
  "walkdir",
+]
+
+[[package]]
+name = "common-clickhouse-srv"
+version = "0.3.2"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "clickhouse-rs-cityhash-sys",
+ "combine",
+ "env_logger 0.8.4",
+ "futures",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "hostname",
+ "lazy_static",
+ "log",
+ "lz4",
+ "native-tls",
+ "pin-project",
+ "rand",
+ "thiserror",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-stream",
+ "tokio-util",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -1403,10 +1405,10 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clickhouse-rs",
- "clickhouse-srv",
  "common-arrow",
  "common-building",
  "common-cache",
+ "common-clickhouse-srv",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
