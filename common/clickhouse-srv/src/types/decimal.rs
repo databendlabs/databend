@@ -212,6 +212,7 @@ impl Decimal {
         }
     }
 
+    /*
     /// Get the internal representation of decimal as [`i32`] or [`i64`].
     ///
     /// example:
@@ -233,6 +234,7 @@ impl Decimal {
     /// # });
     /// # ret.unwrap()
     /// ```
+    */
     #[inline(always)]
     pub fn internal<I: InternalResult>(&self) -> I {
         InternalResult::get(self.underlying)
