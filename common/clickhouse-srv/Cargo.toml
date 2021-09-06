@@ -47,7 +47,7 @@ features = ["io-util", "net", "sync", "rt-multi-thread", "macros"]
 optional = true
 
 [dependencies.tokio-util]
-version = "0.6.6"
+version = "0.6.8"
 features = ["full"]
 
 [dependencies.futures-util]
