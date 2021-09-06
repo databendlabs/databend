@@ -76,67 +76,43 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        if columns.is_empty() {
-            return Result::Err(ErrorCode::UnknownFunction(
-                "Number of arguments for function toYYYYMM doesn't match: passed 0, should be 1 or 2")
-            );
-        }
-
         let data_type = columns[0].data_type();
-        let number_vec: Vec<Option<u32>> = match data_type {
+        let number_array: DFUInt32Array= match data_type {
             DataType::Date16 => {
-                let number_vec_result = columns[0].column()
+                let number_array_result = columns[0].column()
                 .to_array()?
                 .u16()?
-                .iter()
-                .map(|value|{
-                    match value {
-                        Some(v) => {
-                            let date_time = Utc.timestamp(*v as i64 * 24 * 3600, 0_u32);
-                            Some(T::execute(date_time))
-                        },
-                        None => None,
-                    }
-                }).collect();
-                Ok(number_vec_result)
+                .apply_cast_numeric(|v| {
+                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
+                            T::execute(date_time)
+                });
+                Ok(number_array_result)
             },
             DataType::Date32 => {
-                let number_vec_result = columns[0].column()
+                let number_array_result = columns[0].column()
                 .to_array()?
                 .u32()?
-                .iter()
-                .map(|value|{
-                    match value {
-                        Some(v) => {
-                            let date_time = Utc.timestamp(*v as i64 * 24 * 3600, 0_u32);
-                            Some(T::execute(date_time))
-                        },
-                        None => None,
-                    }
-                }).collect();
-                Ok(number_vec_result)
+                .apply_cast_numeric(|v| {
+                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
+                           T::execute(date_time)
+                });
+                Ok(number_array_result)
             },
             DataType::DateTime32 => {
-                let number_vec_result = columns[0].column()
+                let number_array_result = columns[0].column()
                 .to_array()?
                 .u32()?
-                .iter()
-                .map(|value|{
-                    match value {
-                        Some(v) => {
-                            let date_time = Utc.timestamp(*v as i64, 0_u32);
-                            Some(T::execute(date_time))
-                        },
-                        None => None,
-                    }
-                }).collect();
-                Ok(number_vec_result)
+                .apply_cast_numeric(|v| {
+                    let date_time = Utc.timestamp(v as i64, 0_u32);
+                    T::execute(date_time)
+                });
+                Ok(number_array_result)
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                "Illegal type {:?} of argument of function toYYYYMM.Should be a date16/data32 or a dateTime32",
                 other))),
         }?;
-        Ok(DFUInt32Array::from_iter(number_vec).into())
+        Ok(number_array.into())
     }
 }
 
