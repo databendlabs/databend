@@ -1,9 +1,11 @@
+cargo-features = ["edition2021"]
+
 [package]
 name = "common-clickhouse-srv"
 version = "0.3.2"
 authors = ["sundyli <543950155@qq.com>"]
-edition = "2018"
-license = "MIT/Apache-2.0"
+edition = "2021"
+license = "Apache-2.0"
 description = "Bindings for emulating a ClickHouse server."
 readme = "README.md"
 
