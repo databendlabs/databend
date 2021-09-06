@@ -17,13 +17,13 @@ use std::borrow::Cow;
 use chrono::Date;
 use chrono::DateTime;
 use chrono_tz::Tz;
-use clickhouse_srv::connection::Connection;
-use clickhouse_srv::errors::Error as CHError;
-use clickhouse_srv::errors::Result as CHResult;
-use clickhouse_srv::errors::ServerError;
-use clickhouse_srv::types::Block;
-use clickhouse_srv::types::DateTimeType;
-use clickhouse_srv::types::SqlType;
+use common_clickhouse_srv::connection::Connection;
+use common_clickhouse_srv::errors::Error as CHError;
+use common_clickhouse_srv::errors::Result as CHResult;
+use common_clickhouse_srv::errors::ServerError;
+use common_clickhouse_srv::types::Block;
+use common_clickhouse_srv::types::DateTimeType;
+use common_clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -65,7 +65,7 @@ impl<'a> QueryWriter<'a> {
 
     async fn write_progress(&mut self) -> Result<()> {
         let values = self.ctx.get_and_reset_progress_value();
-        let progress = clickhouse_srv::types::Progress {
+        let progress = common_clickhouse_srv::types::Progress {
             rows: values.read_rows as u64,
             bytes: values.read_bytes as u64,
             total_rows: 0,
@@ -146,8 +146,8 @@ impl<'a> QueryWriter<'a> {
     }
 }
 
-pub fn to_clickhouse_err(res: ErrorCode) -> clickhouse_srv::errors::Error {
-    clickhouse_srv::errors::Error::Server(ServerError {
+pub fn to_clickhouse_err(res: ErrorCode) -> common_clickhouse_srv::errors::Error {
+    common_clickhouse_srv::errors::Error::Server(ServerError {
         code: res.code() as u32,
         name: "DB:Exception".to_string(),
         message: res.message(),
@@ -155,7 +155,7 @@ pub fn to_clickhouse_err(res: ErrorCode) -> clickhouse_srv::errors::Error {
     })
 }
 
-pub fn from_clickhouse_err(res: clickhouse_srv::errors::Error) -> ErrorCode {
+pub fn from_clickhouse_err(res: common_clickhouse_srv::errors::Error) -> ErrorCode {
     ErrorCode::LogicalError(format!("clickhouse-srv expception: {:?}", res))
 }
 
