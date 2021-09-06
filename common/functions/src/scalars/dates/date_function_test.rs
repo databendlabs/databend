@@ -177,7 +177,7 @@ fn test_toyyyymm_constant_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
     let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
         DataValue::UInt16(Some(0u16)),
-        1,
+        5,
     )]);
     {
         let col = ToYYYYMMFunction::try_create("a")?;
@@ -186,12 +186,12 @@ fn test_toyyyymm_constant_function() -> Result<()> {
             schema.field_with_name("a")?.clone(),
         )];
         let result = col.eval(&columns, block.num_rows())?;
-        assert_eq!(result.len(), 1);
+        assert_eq!(result.len(), 5);
         assert_eq!(result.data_type(), DataType::UInt32);
 
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
-        let expected = UInt32Array::from_slice([197001; 1]);
+        let expected = UInt32Array::from_slice([197001; 5]);
 
         assert_eq!(actual, &expected);
     }
@@ -200,7 +200,7 @@ fn test_toyyyymm_constant_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
     let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
         DataValue::UInt32(Some(0u32)),
-        1,
+        10,
     )]);
     {
         let col = ToYYYYMMFunction::try_create("a")?;
@@ -209,12 +209,12 @@ fn test_toyyyymm_constant_function() -> Result<()> {
             schema.field_with_name("a")?.clone(),
         )];
         let result = col.eval(&columns, block.num_rows())?;
-        assert_eq!(result.len(), 1);
+        assert_eq!(result.len(), 10);
         assert_eq!(result.data_type(), DataType::UInt32);
 
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
-        let expected = UInt32Array::from_slice([197001; 1]);
+        let expected = UInt32Array::from_slice([197001; 10]);
 
         assert_eq!(actual, &expected);
     }
@@ -223,7 +223,7 @@ fn test_toyyyymm_constant_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32, false)]);
     let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
         DataValue::UInt32(Some(0u32)),
-        1,
+        15,
     )]);
     {
         let col = ToYYYYMMFunction::try_create("a")?;
@@ -232,12 +232,12 @@ fn test_toyyyymm_constant_function() -> Result<()> {
             schema.field_with_name("a")?.clone(),
         )];
         let result = col.eval(&columns, block.num_rows())?;
-        assert_eq!(result.len(), 1);
+        assert_eq!(result.len(), 15);
         assert_eq!(result.data_type(), DataType::UInt32);
 
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
-        let expected = UInt32Array::from_slice([197001; 1]);
+        let expected = UInt32Array::from_slice([197001; 15]);
 
         assert_eq!(actual, &expected);
     }
