@@ -35,14 +35,14 @@ pub trait ArrayAgg: Debug {
     /// Returns `DataValue::Null` if the array is empty or only contains null values.
     fn sum(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported aggregate operation: sum for {:?}",
+            "Sum operation not supported for {:?}",
             self,
         )))
     }
 
     fn min(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported aggregate operation: sum for {:?}",
+            "Min operation not supported for {:?}",
             self,
         )))
     }
@@ -50,7 +50,7 @@ pub trait ArrayAgg: Debug {
     /// Returns `DataValue::Null` if the array is empty or only contains null values.
     fn max(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
-            "max operation not supported for {:?}",
+            "Max operation not supported for {:?}",
             self,
         )))
     }
@@ -58,14 +58,14 @@ pub trait ArrayAgg: Debug {
     // DataValue::Struct(index, value)
     fn arg_max(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
-            "Sum operation not supported for {:?}",
+            "Argmax operation not supported for {:?}",
             self,
         )))
     }
 
     fn arg_min(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
-            "Sum operation not supported for {:?}",
+            "Argmin operation not supported for {:?}",
             self,
         )))
     }
