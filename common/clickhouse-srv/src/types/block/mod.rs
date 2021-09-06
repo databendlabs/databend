@@ -285,7 +285,6 @@ impl<K: ColumnType> Block<K> {
     }
 }
 
-
 #[allow(dead_code)]
 impl Block<Simple> {
     pub(crate) fn concat(blocks: &[Self]) -> Block<Complex> {

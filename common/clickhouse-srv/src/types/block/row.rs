@@ -61,7 +61,6 @@ impl<'a, K: ColumnType> Row<'a, K> {
     }
 }
 
-
 #[allow(dead_code)]
 pub(crate) enum BlockRef<'a, K: ColumnType> {
     Borrowed(&'a Block<K>),

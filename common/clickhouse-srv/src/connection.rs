@@ -136,7 +136,9 @@ impl Connection {
 
         match packet {
             Ok(packet) => {
-                if let Packet::Query(ref query) = &packet { self.compress = query.compression > 0 }
+                if let Packet::Query(ref query) = &packet {
+                    self.compress = query.compression > 0
+                }
                 // The `check` function will have advanced the cursor until the
                 // end of the frame. Since the cursor had position set to zero
                 // before `Packet::check` was called, we obtain the length of the
