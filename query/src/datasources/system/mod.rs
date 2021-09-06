@@ -15,6 +15,8 @@
 #[cfg(test)]
 mod clusters_table_test;
 #[cfg(test)]
+mod configs_table_test;
+#[cfg(test)]
 mod contributors_table_test;
 #[cfg(test)]
 mod databases_table_test;
@@ -30,6 +32,7 @@ mod tables_table_test;
 mod tracing_table_test;
 
 mod clusters_table;
+mod configs_table;
 mod contributors_table;
 mod databases_table;
 mod functions_table;
@@ -45,6 +48,7 @@ mod tracing_table;
 mod tracing_table_stream;
 
 pub use clusters_table::ClustersTable;
+pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use databases_table::DatabasesTable;
 pub use functions_table::FunctionsTable;
