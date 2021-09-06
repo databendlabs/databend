@@ -65,6 +65,7 @@ impl SystemDatabase {
             Arc::new(system::DatabasesTable::create()),
             Arc::new(system::TracingTable::create()),
             Arc::new(system::ProcessesTable::create()),
+            Arc::new(system::ConfigsTable::create()),
         ];
         let tbl_meta_list = table_list
             .iter()
