@@ -22,7 +22,6 @@ mod number_function;
 mod simple_date;
 mod timeslot;
 
-
 pub use date::DateFunction;
 pub use number_function::ToYYYYMMFunction;
 pub use simple_date::TodayFunction;
