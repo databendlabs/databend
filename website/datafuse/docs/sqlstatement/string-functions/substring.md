@@ -10,6 +10,10 @@ SUBSTRING function is used to extract a string containing a specific number of c
 ```sql
 SUBSTRING(expression [FROM position_expr] [FOR length_expr])
 ```
+or 
+```sql
+SUBSTRING(expression, position_expr, [length_expr])
+```
 
 ## Arguments
 
@@ -47,6 +51,13 @@ mysql> SELECT SUBSTRING('1234567890' FROM 3 FOR 3);
 | 345                       |
 +---------------------------+
 
+mysql> SELECT SUBSTRING('1234567890', 3, 3);
++-------------------------------+
+| substring('1234567890', 3, 3) |
++-------------------------------+
+| 345                           |
++-------------------------------+
+
 mysql> SELECT SUBSTRING('1234567890' FROM 3);
 +------------------------------+
 | SUBSTRING(1234567890,3,NULL) |
@@ -55,6 +66,13 @@ mysql> SELECT SUBSTRING('1234567890' FROM 3);
 +------------------------------+
 1 row in set (0.01 sec)
 
+mysql> SELECT SUBSTRING('1234567890', 3);
++----------------------------+
+| substring('1234567890', 3) |
++----------------------------+
+| 34567890                   |
++----------------------------+
+
 mysql> SELECT SUBSTRING('1234567890' FOR 3);
 +---------------------------+
 | SUBSTRING(1234567890,1,3) |
@@ -62,5 +80,12 @@ mysql> SELECT SUBSTRING('1234567890' FOR 3);
 | 123                       |
 +---------------------------+
 1 row in set (0.01 sec)
+
+mysql> SELECT SUBSTRING('1234567890',1, 3);
++-------------------------------+
+| substring('1234567890', 1, 3) |
++-------------------------------+
+| 123                           |
++-------------------------------+
 
 ```
