@@ -73,6 +73,7 @@ pretty_assertions = "0.7"
 test-env-log = "0.2.7"
 flaky_test = "0.1"
 maplit = "1.0.2"
+tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 
 [build-dependencies]
 common-building = {path = "../common/building"}

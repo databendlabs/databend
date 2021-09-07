@@ -1516,6 +1516,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
+ "tower",
  "tracing-appender",
  "uuid",
 ]

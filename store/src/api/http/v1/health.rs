@@ -12,9 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod config;
-#[cfg(test)]
-mod config_test;
-pub mod health;
-#[cfg(test)]
-mod health_test;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::response::Json;
+
+#[derive(serde::Serialize)]
+pub struct HealthCheckResponse {
+    pub status: HealthCheckStatus,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HealthCheckStatus {
+    Pass,
+}
+
+pub async fn health_handler() -> impl IntoResponse {
+    let check = HealthCheckResponse {
+        status: HealthCheckStatus::Pass,
+    };
+
+    (StatusCode::OK, Json(check))
+}
