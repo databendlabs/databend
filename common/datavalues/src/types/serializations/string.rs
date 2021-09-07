@@ -19,7 +19,9 @@ use common_io::prelude::BinaryRead;
 
 use crate::prelude::*;
 
-pub struct StringSerializer {}
+pub struct StringSerializer {
+    pub builder: StringArrayBuilder,
+}
 
 impl TypeSerializer for StringSerializer {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
@@ -35,13 +37,7 @@ impl TypeSerializer for StringSerializer {
             .collect();
         Ok(result)
     }
-}
 
-pub struct StringDeserializer {
-    pub builder: StringArrayBuilder,
-}
-
-impl TypeDeserializer for StringDeserializer {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
         let mut values: Vec<u8> = Vec::with_capacity(offset as usize);

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -24,18 +22,15 @@ use crate::DFPrimitiveType;
 use crate::TypeSerializer;
 
 pub struct NumberSerializer<T: DFPrimitiveType> {
-    t: PhantomData<T>,
+    pub builder: PrimitiveArrayBuilder<T>,
 }
 
-impl<T: DFPrimitiveType> Default for NumberSerializer<T> {
-    fn default() -> Self {
-        Self {
-            t: Default::default(),
-        }
-    }
-}
-
-impl<T: DFPrimitiveType> TypeSerializer for NumberSerializer<T> {
+impl<T> TypeSerializer for NumberSerializer<T>
+where
+    T: DFPrimitiveType,
+    T: Unmarshal<T> + StatBuffer + FromLexical,
+    DFPrimitiveArray<T>: IntoSeries,
+{
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
         let array = column.to_array()?;
         let array: &DFPrimitiveArray<T> = array.static_cast();
@@ -49,18 +44,7 @@ impl<T: DFPrimitiveType> TypeSerializer for NumberSerializer<T> {
             .collect();
         Ok(result)
     }
-}
 
-pub struct NumberDeserializer<T: DFPrimitiveType> {
-    pub builder: PrimitiveArrayBuilder<T>,
-}
-
-impl<T> TypeDeserializer for NumberDeserializer<T>
-where
-    T: DFPrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
-    DFPrimitiveArray<T>: IntoSeries,
-{
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.append_value(value);

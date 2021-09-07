@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::ops::AddAssign;
 use std::ops::Sub;
 
@@ -30,18 +29,16 @@ use num::cast::AsPrimitive;
 use crate::prelude::*;
 
 pub struct DateSerializer<T: DFPrimitiveType> {
-    t: PhantomData<T>,
+    pub builder: PrimitiveArrayBuilder<T>,
 }
 
-impl<T: DFPrimitiveType> Default for DateSerializer<T> {
-    fn default() -> Self {
-        Self {
-            t: Default::default(),
-        }
-    }
-}
-
-impl<T: DFPrimitiveType> TypeSerializer for DateSerializer<T> {
+impl<T> TypeSerializer for DateSerializer<T>
+where
+    i64: AsPrimitive<T>,
+    T: DFPrimitiveType,
+    T: Unmarshal<T> + StatBuffer + FromLexical,
+    DFPrimitiveArray<T>: IntoSeries,
+{
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
         let array = column.to_array()?;
         let array: &DFPrimitiveArray<T> = array.static_cast();
@@ -60,19 +57,7 @@ impl<T: DFPrimitiveType> TypeSerializer for DateSerializer<T> {
             .collect();
         Ok(result)
     }
-}
 
-pub struct DateDeserializer<T: DFPrimitiveType> {
-    pub builder: PrimitiveArrayBuilder<T>,
-}
-
-impl<T> TypeDeserializer for DateDeserializer<T>
-where
-    i64: AsPrimitive<T>,
-    T: DFPrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
-    DFPrimitiveArray<T>: IntoSeries,
-{
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.append_value(value);

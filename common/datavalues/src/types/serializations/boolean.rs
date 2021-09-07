@@ -17,11 +17,11 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use crate::prelude::*;
-use crate::TypeDeserializer;
 use crate::TypeSerializer;
 
-// builder.
-pub struct BooleanSerializer {}
+pub struct BooleanSerializer {
+    pub builder: BooleanArrayBuilder,
+}
 
 impl TypeSerializer for BooleanSerializer {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
@@ -43,13 +43,7 @@ impl TypeSerializer for BooleanSerializer {
             .collect();
         Ok(result)
     }
-}
 
-pub struct BoolDeserializer {
-    pub builder: BooleanArrayBuilder,
-}
-
-impl TypeDeserializer for BoolDeserializer {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.builder.append_value(value);

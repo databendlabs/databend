@@ -55,7 +55,7 @@ where R: io::Read + Send + Sync
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().get_deserializer(self.block_size))
+            .map(|f| f.data_type().create_serializer(self.block_size))
             .collect::<Result<Vec<_>>>()?;
 
         let col_size = desers.len();

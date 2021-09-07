@@ -171,7 +171,7 @@ impl HashMethodSerializer {
         let mut res = Vec::with_capacity(group_fields.len());
         for f in group_fields.iter() {
             let data_type = f.data_type();
-            let mut deserializer = data_type.get_deserializer(rows)?;
+            let mut deserializer = data_type.create_serializer(rows)?;
 
             for (_row, key) in keys.iter_mut().enumerate() {
                 deserializer.de(key)?;
@@ -249,7 +249,7 @@ where T: DFPrimitiveType
         let mut offsize = 0;
         for f in group_fields.iter() {
             let data_type = f.data_type();
-            let mut deserializer = data_type.get_deserializer(rows)?;
+            let mut deserializer = data_type.create_serializer(rows)?;
             let reader = vec8.as_slice();
             deserializer.de_batch(&reader[offsize..], step, rows)?;
             res.push(deserializer.finish_to_series());

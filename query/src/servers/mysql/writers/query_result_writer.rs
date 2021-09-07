@@ -109,7 +109,9 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                             match val {
                                 DataValue::Float32(Some(v)) => row_writer.write_col(v)?,
                                 DataValue::Float64(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::Boolean(Some(v)) => row_writer.write_col(v as u8)?,
+                                DataValue::Boolean(Some(v)) => {
+                                    row_writer.write_col(if v { "true" } else { "false" })?
+                                }
                                 DataValue::Int8(Some(v)) => row_writer.write_col(v)?,
                                 DataValue::Int16(Some(v)) => row_writer.write_col(v)?,
                                 DataValue::Int32(Some(v)) => row_writer.write_col(v)?,

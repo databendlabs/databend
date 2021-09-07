@@ -22,23 +22,19 @@ use crate::DataType;
 mod boolean;
 mod date;
 mod date_time;
-mod null;
 mod number;
 mod string;
 
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;
-pub use null::*;
 pub use number::*;
 pub use string::*;
 
 // capacity.
 pub trait TypeSerializer {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>>;
-}
 
-pub trait TypeDeserializer {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
     /// If error occurrs, append a null by default
@@ -48,60 +44,37 @@ pub trait TypeDeserializer {
 }
 
 impl DataType {
-    pub fn get_serializer(&self) -> Box<dyn TypeSerializer> {
-        match self {
-            DataType::Null => Box::new(NullSerializer {}),
-            DataType::Boolean => Box::new(BooleanSerializer {}),
-            DataType::UInt8 => Box::new(NumberSerializer::<u8>::default()),
-            DataType::UInt16 => Box::new(NumberSerializer::<u16>::default()),
-            DataType::UInt32 => Box::new(NumberSerializer::<u32>::default()),
-            DataType::UInt64 => Box::new(NumberSerializer::<u64>::default()),
-            DataType::Int8 => Box::new(NumberSerializer::<i8>::default()),
-            DataType::Int16 => Box::new(NumberSerializer::<i16>::default()),
-            DataType::Int32 => Box::new(NumberSerializer::<i32>::default()),
-            DataType::Int64 => Box::new(NumberSerializer::<i64>::default()),
-            DataType::Float32 => Box::new(NumberSerializer::<f32>::default()),
-            DataType::Float64 => Box::new(NumberSerializer::<f64>::default()),
-            DataType::Date16 => Box::new(DateSerializer::<u16>::default()),
-            DataType::Date32 => Box::new(DateSerializer::<u32>::default()),
-            DataType::DateTime32(_) => Box::new(DateTimeSerializer::<u32>::default()),
-            DataType::String => Box::new(StringSerializer {}),
-            DataType::List(_) => todo!(),
-            DataType::Struct(_) => todo!(),
-        }
-    }
-
-    pub fn get_deserializer(&self, capacity: usize) -> Result<Box<dyn TypeDeserializer>> {
+    pub fn create_serializer(&self, capacity: usize) -> Result<Box<dyn TypeSerializer>> {
         let data_type = self.clone();
 
         with_match_primitive_type!(data_type, |$T| {
-                Ok(Box::new(NumberDeserializer::<$T> {
+                Ok(Box::new(NumberSerializer::<$T> {
                     builder: PrimitiveArrayBuilder::<$T>::with_capacity( capacity ),
                 }))
             },
 
             {match data_type {
-                DataType::Boolean => Ok(Box::new(BoolDeserializer {
+                DataType::Boolean => Ok(Box::new(BooleanSerializer {
                     builder: BooleanArrayBuilder::with_capacity(capacity),
                 })),
-                DataType::Date16 => Ok(Box::new(DateDeserializer::<u16> {
+                DataType::Date16 => Ok(Box::new(DateSerializer::<u16> {
                     builder: PrimitiveArrayBuilder::<u16>::with_capacity(capacity),
                 })),
-                DataType::Date32 => Ok(Box::new(DateDeserializer::<u32> {
+                DataType::Date32 => Ok(Box::new(DateSerializer::<u32> {
                     builder: PrimitiveArrayBuilder::<u32>::with_capacity(capacity),
                 })),
                 DataType::DateTime32(tz) => {
                     let tz = tz.unwrap_or_else(|| "UTC".to_string());
-                    Ok(Box::new(DateTimeDeserializer::<u32> {
+                    Ok(Box::new(DateTimeSerializer::<u32> {
                         builder: PrimitiveArrayBuilder::<u32>::with_capacity(capacity),
                         tz: tz.parse::<Tz>().unwrap(),
                     }))
                 }
-                DataType::String => Ok(Box::new(StringDeserializer {
+                DataType::String => Ok(Box::new(StringSerializer {
                     builder: StringArrayBuilder::with_capacity(capacity),
                 })),
                 other => Err(ErrorCode::BadDataValueType(format!(
-                    "get_deserializer does not support type '{:?}'",
+                    "create_serializer does not support type '{:?}'",
                     other
                 ))),
             }
