@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Read;
+
 use common_exception::Result;
+use common_io::prelude::BinaryRead;
 
 use crate::prelude::*;
 
@@ -31,5 +34,40 @@ impl TypeSerializer for StringSerializer {
             })
             .collect();
         Ok(result)
+    }
+}
+
+pub struct StringDeserializer {
+    pub builder: StringArrayBuilder,
+}
+
+impl TypeDeserializer for StringDeserializer {
+    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let offset: u64 = reader.read_uvarint()?;
+        let mut values: Vec<u8> = Vec::with_capacity(offset as usize);
+        reader.read_exact(&mut values)?;
+        self.builder.append_value(reader);
+        Ok(())
+    }
+
+    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+        for row in 0..rows {
+            let reader = &reader[step * row..];
+            self.builder.append_value(reader);
+        }
+        Ok(())
+    }
+
+    fn finish_to_series(&mut self) -> Series {
+        self.builder.finish().into_series()
+    }
+
+    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
+        self.builder.append_value(reader);
+        Ok(())
+    }
+
+    fn de_null(&mut self) {
+        self.builder.append_null()
     }
 }

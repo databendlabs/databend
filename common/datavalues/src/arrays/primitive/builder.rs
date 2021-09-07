@@ -13,9 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
-use common_exception::Result;
-use common_io::prelude::*;
-use lexical_core::FromLexical;
 
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
@@ -56,43 +53,6 @@ where T: DFPrimitiveType
     fn finish(&mut self) -> DFPrimitiveArray<T> {
         let array = self.builder.as_arc();
         DFPrimitiveArray::<T>::from_arrow_array(array.as_ref())
-    }
-}
-
-impl<T> ArrayDeserializer for PrimitiveArrayBuilder<T>
-where
-    T: DFPrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
-    DFPrimitiveArray<T>: IntoSeries,
-{
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let value: T = reader.read_scalar()?;
-        self.append_value(value);
-        Ok(())
-    }
-
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
-        for row in 0..rows {
-            let mut reader = &reader[step * row..];
-            let value: T = reader.read_scalar()?;
-            self.append_value(value);
-        }
-        Ok(())
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.finish().into_series()
-    }
-
-    fn de_text(&mut self, reader: &[u8]) {
-        match lexical_core::parse::<T>(reader) {
-            Ok(v) => self.append_value(v),
-            Err(_) => self.append_null(),
-        }
-    }
-
-    fn de_null(&mut self) {
-        self.append_null()
     }
 }
 

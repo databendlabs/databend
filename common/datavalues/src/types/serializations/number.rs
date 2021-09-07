@@ -14,10 +14,12 @@
 
 use std::marker::PhantomData;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::*;
+use lexical_core::FromLexical;
 
-use crate::prelude::DFPrimitiveArray;
-use crate::prelude::DataColumn;
+use crate::prelude::*;
 use crate::DFPrimitiveType;
 use crate::TypeSerializer;
 
@@ -46,5 +48,57 @@ impl<T: DFPrimitiveType> TypeSerializer for NumberSerializer<T> {
             })
             .collect();
         Ok(result)
+    }
+}
+
+pub struct NumberDeserializer<T: DFPrimitiveType> {
+    pub builder: PrimitiveArrayBuilder<T>,
+}
+
+impl<T> TypeDeserializer for NumberDeserializer<T>
+where
+    T: DFPrimitiveType,
+    T: Unmarshal<T> + StatBuffer + FromLexical,
+    DFPrimitiveArray<T>: IntoSeries,
+{
+    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let value: T = reader.read_scalar()?;
+        self.builder.append_value(value);
+        Ok(())
+    }
+
+    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+        for row in 0..rows {
+            let mut reader = &reader[step * row..];
+            let value: T = reader.read_scalar()?;
+            self.builder.append_value(value);
+        }
+        Ok(())
+    }
+
+    fn finish_to_series(&mut self) -> Series {
+        self.builder.finish().into_series()
+    }
+
+    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
+        if reader.eq_ignore_ascii_case(b"null") {
+            self.builder.append_null();
+            return Ok(());
+        }
+
+        match lexical_core::parse::<T>(reader) {
+            Ok(v) => {
+                self.builder.append_value(v);
+                Ok(())
+            }
+            Err(e) => Err(ErrorCode::BadBytes(format!(
+                "Incorrect number value: {}",
+                e
+            ))),
+        }
+    }
+
+    fn de_null(&mut self) {
+        self.builder.append_null()
     }
 }

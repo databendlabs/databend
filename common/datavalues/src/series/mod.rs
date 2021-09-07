@@ -13,7 +13,6 @@
 // limitations under the License.
 mod arithmetic;
 mod comparison;
-mod de;
 mod series_debug;
 mod series_impl;
 mod wrap;

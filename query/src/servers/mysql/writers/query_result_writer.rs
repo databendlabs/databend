@@ -89,7 +89,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
-        let tz: Tz = "UTC".parse().unwrap();
+        let utc: Tz = "UTC".parse().unwrap();
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
@@ -117,15 +117,18 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 DataValue::UInt8(Some(v)) => row_writer.write_col(v)?,
                                 DataValue::UInt16(Some(v)) => match data_type {
                                     DataType::Date16 => {
-                                        row_writer.write_col(v.to_date(&tz).naive_local())?
+                                        row_writer.write_col(v.to_date(&utc).naive_local())?
                                     }
                                     _ => row_writer.write_col(v)?,
                                 },
                                 DataValue::UInt32(Some(v)) => match data_type {
                                     DataType::Date32 => {
-                                        row_writer.write_col(v.to_date(&tz).naive_local())?
+                                        row_writer.write_col(v.to_date(&utc).naive_local())?
                                     }
-                                    DataType::DateTime32 => {
+                                    DataType::DateTime32(tz) => {
+                                        let tz = tz.clone();
+                                        let tz = tz.unwrap_or_else(|| "UTC".to_string());
+                                        let tz: Tz = tz.parse().unwrap();
                                         row_writer.write_col(v.to_date_time(&tz).naive_local())?
                                     }
                                     _ => row_writer.write_col(v)?,
