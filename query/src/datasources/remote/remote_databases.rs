@@ -70,4 +70,8 @@ impl DatabaseEngine for RemoteDatabases {
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         self.meta_backend.drop_database(plan)
     }
+
+    fn engine_desc(&self) -> &str {
+        "The remote engine stores data in remote DatafuseStore cluster."
+    }
 }

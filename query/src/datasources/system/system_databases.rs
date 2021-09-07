@@ -59,4 +59,8 @@ impl DatabaseEngine for SystemDatabases {
     fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
     }
+
+    fn engine_desc(&self) -> &str {
+        "The system engine is used by tables in the system database, which store Datafuse information."
+    }
 }

@@ -34,4 +34,7 @@ pub trait DatabaseEngine: Send + Sync {
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+
+    // A description for this engine.
+    fn engine_desc(&self) -> &str;
 }
