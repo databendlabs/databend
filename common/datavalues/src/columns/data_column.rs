@@ -60,6 +60,11 @@ impl DataColumn {
     }
 
     #[inline]
+    pub fn physical_type(&self) -> PhysicalDataType {
+        self.data_type().to_physical_type()
+    }
+
+    #[inline]
     pub fn to_array(&self) -> Result<Series> {
         match self {
             DataColumn::Array(array) => Ok(array.clone()),

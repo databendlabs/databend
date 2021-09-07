@@ -17,6 +17,7 @@ use core::fmt;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::DataField;
+use crate::PhysicalDataType;
 
 #[derive(
     serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
@@ -51,6 +52,10 @@ pub enum DataType {
 }
 
 impl DataType {
+    pub fn to_physical_type(&self) -> PhysicalDataType {
+        self.clone().into()
+    }
+
     pub fn to_arrow(&self) -> ArrowDataType {
         use DataType::*;
         match self {
