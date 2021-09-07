@@ -11,14 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Timelike;
-use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use super::timeslot::TimeSlotFunction;
+use super::RoundFunction;
 use crate::scalars::*;
 
 #[allow(dead_code)]
@@ -33,65 +30,29 @@ struct Test {
 }
 
 #[test]
-fn test_date_function() -> Result<()> {
-    let tests = vec![Test {
-        name: "test-timeSlot-now",
-        display: "timeSlot",
-        nullable: false,
-        columns: vec![Series::new(vec![1630812366u32, 1630839682u32]).into()],
-        func: TimeSlotFunction::try_create("timeSlot"),
-        expect: Series::new(vec![1630810806u32, 1630839622u32]),
-        error: "",
-    }];
-    for t in tests {
-        do_test(t);
-    }
+fn test_round_function() -> Result<()> {
+    let mut tests = vec![];
 
-    Ok(())
-}
-
-#[test]
-fn test_timeslot_now_function() -> Result<()> {
-    let now = Utc::now();
-    let now_timestamp = now.timestamp_millis() / 1000;
-    let mut minute = 0;
-    if now.minute() > 30 {
-        minute = 30;
-    }
-    let new_date = now.with_minute(minute).unwrap();
-    let check_timestamp = new_date.timestamp_millis() / 1000;
-    let empty: Vec<u32> = Vec::new();
-
-    let tests = vec![
-        Test {
-            name: "test-timeSlot",
-            display: "timeSlot",
-            nullable: false,
-            columns: vec![Series::new(vec![now_timestamp as u32]).into()],
-            func: TimeSlotFunction::try_create("timeSlot"),
-            expect: Series::new(vec![check_timestamp]),
-            error: "",
-        },
-        Test {
+    for r in &[1, 60, 60 * 10, 60 * 15, 60 * 30, 60 * 60, 60 * 60 * 24] {
+        tests.push(Test {
             name: "test-timeSlot-now",
-            display: "timeSlot",
+            display: "toStartOfCustom",
             nullable: false,
-            columns: vec![Series::new(empty).into()],
-            func: TimeSlotFunction::try_create("timeSlot"),
-            expect: Series::new(vec![check_timestamp]),
+            columns: vec![Series::new(vec![1630812366u32, 1630839682u32]).into()],
+            func: RoundFunction::try_create("toStartOfCustom", *r),
+            expect: Series::new(vec![1630812366u32 / r * r, 1630839682u32 / r * r]),
             error: "",
-        },
-    ];
-
-    for t in tests {
-        do_test(t);
+        })
     }
 
+    for t in tests {
+        do_test(t)?;
+    }
     Ok(())
 }
 
 fn do_test(t: Test) -> Result<()> {
-    let dummy = DataField::new("dummy", DataType::DateTime32, false);
+    let dummy = DataField::new("dummy", DataType::DateTime32(None), false);
     let rows = t.columns[0].len();
     let columns: Vec<DataColumnWithField> = t
         .columns
@@ -113,17 +74,9 @@ fn do_test(t: Test) -> Result<()> {
     let actual_null = func.nullable(&DataSchema::empty())?;
     assert_eq!(expect_null, actual_null);
 
-    let ref v = func.eval(&columns, rows)?;
-    let mut eval_result = v.to_values()?;
-    let c: DataColumn = t.expect.into();
-    let check_result = c.to_values()?;
-    // assert_eq!(v.len(), c.len());
-    for i in 0..v.len() {
-        let eval_val = eval_result.get(i).unwrap();
-        let check_val = check_result.get(i).unwrap();
-        let eval_str = format!("{}", eval_val);
-        let check_str = format!("{}", check_val);
-        assert_eq!(eval_str, check_str);
-    }
+    let v = func.eval(&columns, rows)?;
+    let expect: DataColumn = t.expect.into();
+
+    assert_eq!(&expect, &v);
     Ok(())
 }

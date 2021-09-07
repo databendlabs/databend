@@ -19,11 +19,12 @@ mod date_function_test;
 mod date_test;
 mod now;
 mod number_function;
+mod round_function;
 mod simple_date;
-mod timeslot;
 
 pub use date::DateFunction;
 pub use number_function::ToYYYYMMFunction;
+pub use round_function::RoundFunction;
 pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
 pub use simple_date::YesterdayFunction;
