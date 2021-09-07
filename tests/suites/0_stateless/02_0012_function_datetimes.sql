@@ -22,3 +22,12 @@ select toYYYYMM(toDate(18875));
 select toYYYYMM(toDateTime(1630833797))  =  202109;
 select toYYYYMM(toDate(18875)  )  =  202109;
 
+select '===round===';
+select timeSlot(toDateTime(1630320462));
+select toStartOfHour(toDateTime(1630320462));
+select toStartOfFifteenMinutes(toDateTime(1630320462));
+select toStartOfMinute(toDateTime(1630320462));
+select toStartOfFiveMinutes(toDateTime(1630320462));
+select toStartOfTenMinutes(toDateTime(1630320462));
+select timeSlot(now()) <= now();
+select '===round-end===';

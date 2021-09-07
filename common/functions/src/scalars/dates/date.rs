@@ -15,6 +15,7 @@
 use common_exception::Result;
 
 use super::now::NowFunction;
+use super::RoundFunction;
 use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
@@ -32,6 +33,39 @@ impl DateFunction {
         map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
         map.insert("toYYYYMM".into(), ToYYYYMMFunction::try_create);
+
+        // rounders
+        {
+            map.insert("toStartOfSecond".into(), |display_name| {
+                RoundFunction::try_create(display_name, 1)
+            });
+
+            map.insert("toStartOfMinute".into(), |display_name| {
+                RoundFunction::try_create(display_name, 60)
+            });
+
+            map.insert("toStartOfFiveMinutes".into(), |display_name| {
+                RoundFunction::try_create(display_name, 5 * 60)
+            });
+
+            map.insert("toStartOfTenMinutes".into(), |display_name| {
+                RoundFunction::try_create(display_name, 10 * 60)
+            });
+
+            map.insert("toStartOfFifteenMinutes".into(), |display_name| {
+                RoundFunction::try_create(display_name, 15 * 60)
+            });
+
+            map.insert("timeSlot".into(), |display_name| {
+                RoundFunction::try_create(display_name, 30 * 60)
+            });
+            map.insert("toStartOfHour".into(), |display_name| {
+                RoundFunction::try_create(display_name, 60 * 60)
+            });
+            map.insert("toStartOfDay".into(), |display_name| {
+                RoundFunction::try_create(display_name, 60 * 60 * 24)
+            });
+        }
 
         Ok(())
     }
