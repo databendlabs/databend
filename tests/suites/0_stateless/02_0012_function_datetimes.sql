@@ -17,8 +17,13 @@ select today() - yesterday()  = 1;
 select today() + 1 = tomorrow();
 select tomorrow() - today() = 1;
 
+select timeSlot(toDateTime(1630320462));
+select timeSlot(toDateTime(1630809521));
+select timeSlot(toDateTime(1630808044));
+select timeSlot(now()) <= now();
+select timeSlot() <= now();
+
 select toYYYYMM(toDateTime(1630833797));
 select toYYYYMM(toDate(18875));
 select toYYYYMM(toDateTime(1630833797))  =  202109;
 select toYYYYMM(toDate(18875)  )  =  202109;
-

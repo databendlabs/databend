@@ -1,0 +1,88 @@
+// Copyright 2020 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::fmt;
+
+use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
+use common_exception::Result;
+
+use crate::scalars::Function;
+
+#[derive(Clone)]
+pub struct TimeSlotFunction {
+    display_name: String,
+}
+
+impl TimeSlotFunction {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        Ok(Box::new(TimeSlotFunction {
+            display_name: display_name.to_string(),
+        }))
+    }
+}
+
+impl Function for TimeSlotFunction {
+    fn name(&self) -> &str {
+        self.display_name.as_str()
+    }
+
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+        Ok(DataType::DateTime32)
+    }
+
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+        Ok(false)
+    }
+
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        if columns.is_empty() {
+            let timestamp = Utc::now().timestamp_millis() / 1000;
+            let result = vec![slot_time(timestamp as u32)];
+            return Ok(DataColumn::Array(Series::new(result)));
+        };
+        let result: Vec<Option<u32>> = columns[0]
+            .column()
+            .to_array()?
+            .u32()?
+            .iter()
+            .map(|value| match value {
+                Some(v) => {
+                    let res_num = slot_time(*v);
+                    Some(res_num)
+                }
+                None => None,
+            })
+            .collect();
+        Ok(DataColumn::Array(Series::new(result)))
+    }
+
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        Some((0, 1))
+    }
+}
+
+fn slot_time(timestamp: u32) -> u32 {
+    let mut minutes = ((timestamp / 60) % (60 * 24)) % 60;
+    if minutes > 30 {
+        minutes -= 30;
+    }
+    timestamp - minutes * 60
+}
+
+impl fmt::Display for TimeSlotFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "timeSlot")
+    }
+}
