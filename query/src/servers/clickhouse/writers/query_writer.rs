@@ -307,6 +307,15 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                         .collect();
                     result.column(name, vs)
                 }
+                DataType::Interval(unit) => {
+                    let seconds = IntervalUnit::avg_seconds(unit.clone()) as f64;
+                    let vs: Vec<f64> = column
+                        .f64()?
+                        .into_no_null_iter()
+                        .map(|c| *c / seconds)
+                        .collect();
+                    result.column(name, vs)
+                }
                 _ => {
                     return Err(ErrorCode::BadDataValueType(format!(
                         "Unsupported column type:{:?}",

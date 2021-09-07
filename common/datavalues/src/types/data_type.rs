@@ -45,6 +45,9 @@ pub enum DataType {
     /// Option<String> indicates the timezone, if it's None, it's UTC
     DateTime32(Option<String>),
 
+    /// Representing the elapsed time or duration in seconds. You can use Interval-type values in arithmetical operations with DateTime, but not Date, which represents elapsed time in days.
+    Interval(IntervalUnit),
+
     List(Box<DataField>),
     Struct(Vec<DataField>),
     String,
@@ -80,6 +83,7 @@ impl DataType {
                 ArrowDataType::Struct(arrows_fields)
             }
             String => ArrowDataType::LargeBinary,
+            Interval(_) => ArrowDataType::Float64,
         }
     }
 }
@@ -165,5 +169,31 @@ impl fmt::Debug for DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
+pub enum IntervalUnit {
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+}
+
+impl IntervalUnit {
+    pub fn avg_seconds(unit: IntervalUnit) -> i32 {
+        // the average seconds number is from clickhouse: https://github.com/ClickHouse/ClickHouse/blob/9f5cd35a6963cc556a51218b46b0754dcac7306a/src/Common/IntervalKind.cpp
+        match unit {
+            IntervalUnit::Second => 1,
+            IntervalUnit::Minute => 60,
+            IntervalUnit::Hour => 3600,
+            IntervalUnit::Day => 86400,
+            IntervalUnit::Month => 2629746, // Exactly 1/12 of a year.
+            IntervalUnit::Year => 31556952, // The average length of a Gregorian year is equal to 365.2425 days,
+        }
     }
 }

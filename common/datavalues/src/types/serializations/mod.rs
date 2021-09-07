@@ -22,12 +22,14 @@ use crate::DataType;
 mod boolean;
 mod date;
 mod date_time;
+mod null;
 mod number;
 mod string;
 
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;
+pub use null::*;
 pub use number::*;
 pub use string::*;
 
@@ -72,6 +74,9 @@ impl DataType {
                 }
                 DataType::String => Ok(Box::new(StringSerializer {
                     builder: StringArrayBuilder::with_capacity(capacity),
+                })),
+                DataType::Interval(_) => Ok(Box::new(DateSerializer::<i64> {
+                    builder: PrimitiveArrayBuilder::<i64>::with_capacity(capacity),
                 })),
                 other => Err(ErrorCode::BadDataValueType(format!(
                     "create_serializer does not support type '{:?}'",

@@ -889,6 +889,41 @@ impl PlanParser {
         }
     }
 
+    fn interval_to_rex(
+        value: &str,
+        interval_kind: sqlparser::ast::DateTimeField,
+    ) -> Result<Expression> {
+        let mut args = Vec::with_capacity(1);
+        let num = DataValue::try_from_literal(value).map(Expression::create_literal)?;
+        args.push(num);
+        match interval_kind {
+            sqlparser::ast::DateTimeField::Year => Ok(Expression::ScalarFunction {
+                op: "toIntervalYear".into(),
+                args,
+            }),
+            sqlparser::ast::DateTimeField::Month => Ok(Expression::ScalarFunction {
+                op: "toIntervalMonth".into(),
+                args,
+            }),
+            sqlparser::ast::DateTimeField::Day => Ok(Expression::ScalarFunction {
+                op: "toIntervalDay".into(),
+                args,
+            }),
+            sqlparser::ast::DateTimeField::Hour => Ok(Expression::ScalarFunction {
+                op: "toIntervalHour".into(),
+                args,
+            }),
+            sqlparser::ast::DateTimeField::Minute => Ok(Expression::ScalarFunction {
+                op: "toIntervalMinute".into(),
+                args,
+            }),
+            sqlparser::ast::DateTimeField::Second => Ok(Expression::ScalarFunction {
+                op: "toIntervalSecond".into(),
+                args,
+            }),
+        }
+    }
+
     fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
         match value {
             sqlparser::ast::Value::Number(ref n, _) => {
@@ -899,6 +934,35 @@ impl PlanParser {
             )),
             sqlparser::ast::Value::Boolean(b) => {
                 Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
+            }
+            sqlparser::ast::Value::Interval {
+                value: value_expr,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            } => {
+                // We don't support full interval expression like 'Interval ..To.. '. Currently only partial interval expression like "interval [num] [unit]" is supported.
+                if leading_precision.is_some()
+                    || last_field.is_some()
+                    || fractional_seconds_precision.is_some()
+                {
+                    return Result::Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported interval expression: {}.",
+                        value
+                    )));
+                }
+
+                // when the input is Interval '1 hour', leading_field will be None and value_expr will be '1 hour'.
+                // we may want to support this pattern in native paser (sqlparser-rs).
+                if leading_field.is_none() {
+                    //TODO: support parsing literal interval like '1 hour'
+                    return Result::Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported interval expression: {}.",
+                        value
+                    )));
+                }
+                Self::interval_to_rex(value_expr, leading_field.clone().unwrap())
             }
             sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
             other => Result::Err(ErrorCode::SyntaxException(format!(

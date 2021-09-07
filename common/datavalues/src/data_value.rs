@@ -338,6 +338,7 @@ impl From<&DataType> for DataValue {
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::String => DataValue::String(None),
+            DataType::Interval(_) => DataValue::Float64(None),
         }
     }
 }
