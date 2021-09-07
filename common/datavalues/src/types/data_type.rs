@@ -144,7 +144,7 @@ pub fn get_physical_arrow_type(data_type: &ArrowDataType) -> &ArrowDataType {
         return get_physical_arrow_type(arrow_type.as_ref());
     }
 
-    return data_type;
+    data_type
 }
 
 impl fmt::Display for DataType {

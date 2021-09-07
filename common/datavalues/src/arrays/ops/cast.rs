@@ -38,7 +38,7 @@ fn cast_ca(ca: &dyn Array, data_type: &DataType) -> Result<Series> {
     let arrow_type = data_type.to_arrow();
     let arrow_type = get_physical_arrow_type(&arrow_type);
     // we enable ignore_overflow by default
-    let array = cast::wrapping_cast(ca, &arrow_type)?;
+    let array = cast::wrapping_cast(ca, arrow_type)?;
     let array: ArrayRef = Arc::from(array);
     Ok(array.into_series())
 }
