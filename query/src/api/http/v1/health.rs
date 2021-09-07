@@ -12,10 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::extract::Extension;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::response::Json;
 
-use crate::configs::Config;
+#[derive(serde::Serialize)]
+pub struct HealthCheckResponse {
+    pub status: HealthCheckStatus,
+}
 
-pub async fn hello_handler(cfg: Extension<Config>) -> String {
-    format!("{:?}", cfg.0)
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HealthCheckStatus {
+    Pass,
+}
+
+pub async fn health_handler() -> impl IntoResponse {
+    let check = HealthCheckResponse {
+        status: HealthCheckStatus::Pass,
+    };
+
+    (StatusCode::OK, Json(check))
 }
