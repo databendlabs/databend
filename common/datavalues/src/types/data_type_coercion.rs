@@ -57,7 +57,7 @@ pub fn is_floating(dt: &DataType) -> bool {
 pub fn is_date_or_date_time(dt: &DataType) -> bool {
     matches!(
         dt,
-        DataType::Date16 | DataType::Date32 | DataType::DateTime32
+        DataType::Date16 | DataType::Date32 | DataType::DateTime32(_)
     )
 }
 

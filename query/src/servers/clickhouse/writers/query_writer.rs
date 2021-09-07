@@ -165,7 +165,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
         return Ok(result);
     }
 
-    let tz: Tz = "UTC".parse().unwrap();
+    let utc: Tz = "UTC".parse().unwrap();
     for column_index in 0..block.num_columns() {
         let column = block.column(column_index).to_array()?;
         let field = block.schema().field(column_index);
@@ -184,7 +184,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                     let c: Vec<Option<Date<Tz>>> = column
                         .u16()?
                         .into_iter()
-                        .map(|x| x.map(|v| v.to_date(&tz)))
+                        .map(|x| x.map(|v| v.to_date(&utc)))
                         .collect();
                     result.column(name, c)
                 }
@@ -193,11 +193,15 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                     let c: Vec<Option<Date<Tz>>> = column
                         .u32()?
                         .into_iter()
-                        .map(|x| x.map(|v| v.to_date(&tz)))
+                        .map(|x| x.map(|v| v.to_date(&utc)))
                         .collect();
                     result.column(name, c)
                 }
-                DataType::DateTime32 => {
+                DataType::DateTime32(tz) => {
+                    let tz = tz.clone();
+                    let tz = tz.unwrap_or_else(|| "UTC".to_string());
+                    let tz: Tz = tz.parse().unwrap();
+
                     let c: Vec<Option<DateTime<Tz>>> = column
                         .u32()?
                         .into_iter()
@@ -250,7 +254,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                     let c: Vec<Date<Tz>> = column
                         .u16()?
                         .into_no_null_iter()
-                        .map(|v| v.to_date(&tz))
+                        .map(|v| v.to_date(&utc))
                         .collect();
 
                     result.column(name, c)
@@ -262,13 +266,17 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                     let c: Vec<Date<Tz>> = column
                         .u32()?
                         .into_no_null_iter()
-                        .map(|v| v.to_date(&tz))
+                        .map(|v| v.to_date(&utc))
                         .collect();
 
                     result.column(name, c)
                 }
 
-                DataType::DateTime32 => {
+                DataType::DateTime32(tz) => {
+                    let tz = tz.clone();
+                    let tz = tz.unwrap_or_else(|| "UTC".to_string());
+                    let tz: Tz = tz.parse().unwrap();
+
                     let c: Vec<DateTime<Tz>> = column
                         .u32()?
                         .into_no_null_iter()

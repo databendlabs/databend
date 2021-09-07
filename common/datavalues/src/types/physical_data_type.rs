@@ -44,7 +44,7 @@ impl From<DataType> for PhysicalDataType {
             DataType::Boolean => Boolean,
             DataType::UInt8 => UInt8,
             DataType::UInt16 | DataType::Date16 => UInt16,
-            DataType::UInt32 | DataType::Date32 | DataType::DateTime32 => UInt32,
+            DataType::UInt32 | DataType::Date32 | DataType::DateTime32(_) => UInt32,
             DataType::UInt64 => UInt64,
             DataType::Int8 => Int8,
             DataType::Int16 => Int16,

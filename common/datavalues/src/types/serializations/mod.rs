@@ -52,7 +52,7 @@ impl DataType {
             DataType::Float64 => Box::new(NumberSerializer::<f64>::default()),
             DataType::Date16 => Box::new(DateSerializer::<u16>::default()),
             DataType::Date32 => Box::new(DateSerializer::<u32>::default()),
-            DataType::DateTime32 => Box::new(DateTimeSerializer::<u32>::default()),
+            DataType::DateTime32(_) => Box::new(DateTimeSerializer::<u32>::default()),
             DataType::String => Box::new(StringSerializer {}),
             DataType::List(_) => todo!(),
             DataType::Struct(_) => todo!(),

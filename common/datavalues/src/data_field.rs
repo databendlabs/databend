@@ -68,17 +68,7 @@ impl DataField {
 
 impl From<&ArrowField> for DataField {
     fn from(f: &ArrowField) -> Self {
-        let mut dt: DataType = f.data_type().into();
-        if let Some(m) = f.metadata() {
-            if let Some(custom_name) = m.get("ARROW:extension:datafuse_name") {
-                match custom_name.as_str() {
-                    "Date16" => dt = DataType::Date16,
-                    "Date32" => dt = DataType::Date32,
-                    "DateTime32" => dt = DataType::DateTime32,
-                    _ => {}
-                }
-            }
-        }
+        let dt: DataType = f.data_type().into();
         DataField::new(f.name(), dt, f.is_nullable())
     }
 }

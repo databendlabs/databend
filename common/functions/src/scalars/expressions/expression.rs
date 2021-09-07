@@ -51,7 +51,6 @@ impl ToCastFunction {
                 Float64,
                 Date16,
                 Date32,
-                DateTime32,
                 String
             }
             // aliases
@@ -59,7 +58,10 @@ impl ToCastFunction {
                 CastFunction::create(display_name.to_string(), DataType::Date16)
             });
             map.insert("toDateTime".into(), |display_name| {
-                CastFunction::create(display_name.to_string(), DataType::DateTime32)
+                CastFunction::create(display_name.to_string(), DataType::DateTime32(None))
+            });
+            map.insert("toDateTime32".into(), |display_name| {
+                CastFunction::create(display_name.to_string(), DataType::DateTime32(None))
             });
         }
 
