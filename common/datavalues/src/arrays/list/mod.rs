@@ -34,7 +34,7 @@ pub struct DFListArray {
 impl DFListArray {
     pub fn new(array: LargeListArray) -> Self {
         let data_type = array.data_type().into();
-
+        let data_type: DataType = data_type_physical(data_type);
         Self { array, data_type }
     }
 

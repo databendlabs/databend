@@ -139,6 +139,14 @@ impl From<&ArrowDataType> for DataType {
     }
 }
 
+pub fn get_physical_arrow_type(data_type: &ArrowDataType) -> &ArrowDataType {
+    if let ArrowDataType::Extension(_name, arrow_type, _extra) = data_type {
+        return get_physical_arrow_type(arrow_type.as_ref());
+    }
+
+    return data_type;
+}
+
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)

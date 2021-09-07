@@ -81,3 +81,9 @@ impl From<PhysicalDataType> for DataType {
         }
     }
 }
+
+// convert from DataType to PhysicalDataType then convert from PhysicalDataType to DataType
+pub fn data_type_physical(data_type: DataType) -> DataType {
+    let t: PhysicalDataType = data_type.into();
+    t.into()
+}

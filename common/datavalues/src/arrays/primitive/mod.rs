@@ -58,12 +58,15 @@ fn precision(x: &TimeUnit) -> usize {
 impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     pub fn new(array: PrimitiveArray<T>) -> Self {
         let data_type: DataType = array.data_type().into();
+        let data_type: DataType = data_type_physical(data_type);
         Self { array, data_type }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
         let expected_arrow_type = T::data_type().to_arrow();
-        if &expected_arrow_type != array.data_type() {
+        let arrow_type = get_physical_arrow_type(array.data_type());
+
+        if &expected_arrow_type != arrow_type {
             match array.data_type() {
                 // u32
                 ArrowDataType::Timestamp(x, _) => {
