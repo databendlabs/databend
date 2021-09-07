@@ -61,14 +61,15 @@ macro_rules! impl_function {
             ) -> Result<DataColumn> {
                 let interval_num = columns[0].column();
                 let seconds_per_unit = IntervalUnit::avg_seconds($interval_unit);
-                let seconds = DataColumn::Constant(
-                    DataValue::Float64(Some(seconds_per_unit as f64)),
-                    input_rows,
-                );
+                let seconds =
+                    DataColumn::Constant(DataValue::Int32(Some(seconds_per_unit)), input_rows);
                 let total_seconds =
-                    interval_num.arithmetic(DataValueArithmeticOperator::Mul, &seconds);
-                println!("total seconds: {:?}", total_seconds);
-                total_seconds
+                    interval_num.arithmetic(DataValueArithmeticOperator::Mul, &seconds)?;
+
+                // convert to Int64 type
+                let series = total_seconds.to_minimal_array()?;
+                let column: DataColumn = series.cast_with_type(&DataType::Int64)?.into();
+                Ok(column.resize_constant(input_rows))
             }
         }
     };

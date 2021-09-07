@@ -83,7 +83,7 @@ impl DataType {
                 ArrowDataType::Struct(arrows_fields)
             }
             String => ArrowDataType::LargeBinary,
-            Interval(_) => ArrowDataType::Float64,
+            Interval(_unit) => ArrowDataType::Int64,
         }
     }
 }

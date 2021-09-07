@@ -34,7 +34,7 @@ impl IntervalSerializer {
 impl TypeSerializer for IntervalSerializer {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
         let seconds_per_unit = IntervalUnit::avg_seconds(self.unit.clone());
-        let seconds = DataColumn::Constant(DataValue::Int32(Some(seconds_per_unit)), 1);
+        let seconds = DataColumn::Constant(DataValue::Float64(Some(seconds_per_unit as f64)), 1);
         let interval = column.arithmetic(DataValueArithmeticOperator::Div, &seconds)?;
         NumberSerializer::<f64>::default().serialize_strings(&interval)
     }
