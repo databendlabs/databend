@@ -123,7 +123,8 @@ fn test_toyyyymm_date32_function() -> Result<()> {
 
 #[test]
 fn test_toyyyymm_date_time_function() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32, false)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u32])]);
 
     {
@@ -143,7 +144,8 @@ fn test_toyyyymm_date_time_function() -> Result<()> {
         assert_eq!(actual, &expected);
     }
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32, false)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
         0u32, 1u32, 2u32, 3u32,
     ])]);
@@ -220,7 +222,8 @@ fn test_toyyyymm_constant_function() -> Result<()> {
     }
 
     // datetime
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32, false)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
     let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
         DataValue::UInt32(Some(0u32)),
         15,

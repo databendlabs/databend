@@ -111,7 +111,7 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
                     Ok(result.into())
                 }
             },
-            DataType::DateTime32 => {
+            DataType::DateTime32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64, 0_u32);
                     let constant_result = Some(T::execute(date_time));
