@@ -54,7 +54,7 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /v1/hello
+              path: /v1/health
               port: http
           readinessProbe:
             httpGet:

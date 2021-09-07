@@ -16,6 +16,8 @@
 
 mod http;
 mod http_service;
+#[cfg(test)]
+mod http_service_test;
 pub mod rpc;
 mod rpc_service;
 

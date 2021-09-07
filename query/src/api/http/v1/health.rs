@@ -12,13 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-pub mod service;
-pub mod seq;
-pub(crate) mod tls_constants;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::response::Json;
 
-pub use seq::Seq;
-pub use service::assert_meta_connection;
-pub use service::next_port;
-pub use service::start_store_server;
-pub use service::start_store_server_with_context;
+#[derive(serde::Serialize)]
+pub struct HealthCheckResponse {
+    pub status: HealthCheckStatus,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HealthCheckStatus {
+    Pass,
+}
+
+pub async fn health_handler() -> impl IntoResponse {
+    let check = HealthCheckResponse {
+        status: HealthCheckStatus::Pass,
+    };
+
+    (StatusCode::OK, Json(check))
+}

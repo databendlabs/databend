@@ -13,3 +13,8 @@
 // limitations under the License.
 
 pub mod config;
+#[cfg(test)]
+mod config_test;
+pub mod health;
+#[cfg(test)]
+mod health_test;

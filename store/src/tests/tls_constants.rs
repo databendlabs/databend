@@ -11,11 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-use axum::extract::Extension;
-
-use crate::configs::Config;
-
-pub async fn hello_handler(cfg: Extension<Config>) -> String {
-    format!("{:?}", cfg.0)
-}
+pub const TEST_CA_CERT: &'static str = "../tests/certs/ca.pem";
+pub const TEST_SERVER_CERT: &'static str = "../tests/certs/server.pem";
+pub const TEST_SERVER_KEY: &'static str = "../tests/certs/server.key";
+pub const TEST_CN_NAME: &'static str = "localhost";
