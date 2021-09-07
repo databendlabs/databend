@@ -175,6 +175,7 @@ nav:
           - NOW: sqlstatement/datetime-functions/now.md
           - TODAY: sqlstatement/datetime-functions/today.md
           - TOMORROW: sqlstatement/datetime-functions/tomorrow.md
+          - toYYYYMM: sqlstatement/datetime-functions/toyyyymm.md
           - YESTERDAY: sqlstatement/datetime-functions/yesterday.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md

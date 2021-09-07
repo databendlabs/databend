@@ -39,7 +39,7 @@
 
 ## What is Datafuse?
 
-Datafuse is an open source **elastic** and **scalable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
+Datafuse is an open source **elastic** and **reliable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
 
 Datafuse design principles:
 1. **Elastic**  In Datafuse, storage and compute resources can dynamically scale up and down on demand.
