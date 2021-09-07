@@ -169,8 +169,8 @@ impl fmt::Debug for DataType {
             Self::Date16 => write!(f, "Date16"),
             Self::Date32 => write!(f, "Date32"),
             Self::DateTime32(arg0) => {
-                if let Some(_tz) = arg0 {
-                    f.debug_tuple("DateTime32").field(arg0).finish()
+                if let Some(tz) = arg0 {
+                    write!(f, "DateTime32({:?})", tz)
                 } else {
                     write!(f, "DateTime32")
                 }
