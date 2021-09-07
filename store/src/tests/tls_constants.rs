@@ -11,14 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-#[macro_use]
-pub mod service;
-pub mod seq;
-pub(crate) mod tls_constants;
-
-pub use seq::Seq;
-pub use service::assert_meta_connection;
-pub use service::next_port;
-pub use service::start_store_server;
-pub use service::start_store_server_with_context;
+pub const TEST_CA_CERT: &'static str = "../tests/certs/ca.pem";
+pub const TEST_SERVER_CERT: &'static str = "../tests/certs/server.pem";
+pub const TEST_SERVER_KEY: &'static str = "../tests/certs/server.key";
+pub const TEST_CN_NAME: &'static str = "localhost";

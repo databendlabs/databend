@@ -1503,6 +1503,7 @@ dependencies = [
  "pretty_assertions",
  "prost",
  "rand",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",

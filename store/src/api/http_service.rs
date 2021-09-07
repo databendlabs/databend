@@ -28,8 +28,8 @@ pub struct HttpService {
 macro_rules! build_router {
     ($cfg: expr) => {
         Router::new()
+            .route("/v1/health", get(super::http::v1::health::health_handler))
             .route("/v1/config", get(super::http::v1::config::config_handler))
-            .route("/v1/heath", get(super::http::v1::health::health_handler))
             .route(
                 "/debug/home",
                 get(super::http::debug::home::debug_home_handler),
