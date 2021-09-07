@@ -39,7 +39,7 @@ ureq = { version = "2.2.0", features = ["json"] }
 [dev-dependencies]
 pretty_assertions = "0.7"
 tempfile = "3.2.0"
-assert_cmd = "2.0.0"
+assert_cmd = "2.0.1"
 predicates = "2.0.2"
 
 [build-dependencies]
