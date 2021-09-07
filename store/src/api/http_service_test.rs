@@ -44,7 +44,7 @@ async fn test_http_service_tls_server() -> Result<()> {
     let mut buf = Vec::new();
     File::open(TEST_CA_CERT)?.read_to_end(&mut buf)?;
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();
-    
+
     tokio::spawn(async move {
         srv.start().await.expect("HTTP: admin api error");
         // kick off
