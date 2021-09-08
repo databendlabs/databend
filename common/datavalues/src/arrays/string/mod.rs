@@ -18,6 +18,8 @@ mod iterator;
 #[cfg(test)]
 mod builder_test;
 
+use std::sync::Arc;
+
 pub use builder::*;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
@@ -79,6 +81,19 @@ impl DFStringArray {
 
     pub fn inner(&self) -> &LargeBinaryArray {
         &self.array
+    }
+
+    #[inline]
+    pub fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
+        let arrow_type = data_type.to_arrow();
+        let array = LargeBinaryArray::from_data(
+            arrow_type,
+            self.array.offsets().clone(),
+            self.array.values().clone(),
+            self.array.validity().clone(),
+        );
+
+        Arc::new(array) as ArrayRef
     }
 
     pub fn data_type(&self) -> &DataType {

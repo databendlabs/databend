@@ -81,6 +81,10 @@ macro_rules! impl_dyn_array {
                 Arc::new(self.0.array.clone()) as ArrayRef
             }
 
+            fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
+                self.0.to_array_ref(data_type)
+            }
+
             fn to_values(&self) -> Result<Vec<DataValue>> {
                 self.0.to_values()
             }
@@ -278,9 +282,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn bool(&self) -> Result<&DFBooleanArray> {
-                if matches!(self.0.data_type(), &DataType::Boolean)
-                    || matches!(self.0.data_type(), &DataType::Null)
-                {
+                if matches!(self.0.data_type(), &DataType::Boolean) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBooleanArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
