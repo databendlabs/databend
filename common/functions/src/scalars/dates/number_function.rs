@@ -34,6 +34,7 @@ pub struct NumberFunction<T, R> {
 }
 
 pub trait NumberResultFunction<R> {
+    fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>) -> R;
     fn to_constant_value(_value: DateTime<Utc>) -> DataValue;
 }
@@ -42,6 +43,9 @@ pub trait NumberResultFunction<R> {
 pub struct ToYYYYMM;
 
 impl NumberResultFunction<u32> for ToYYYYMM {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt32)
+    }
     fn to_number(value: DateTime<Utc>) -> u32 {
         value.year() as u32 * 100 + value.month()
     }
@@ -55,6 +59,10 @@ impl NumberResultFunction<u32> for ToYYYYMM {
 pub struct ToYYYYMMDDhhmmss;
 
 impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt64)
+    }
+
     fn to_number(value: DateTime<Utc>) -> u64 {
         value.year() as u64 * 10000000000
             + value.month() as u64 * 100000000
@@ -95,7 +103,7 @@ where
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::UInt32)
+        T::return_type()
     }
 
     fn num_arguments(&self) -> usize {
@@ -112,9 +120,7 @@ where
             DataType::Date16 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
-                    // let constant_result = Some(T::execute(date_time));
                     let constant_result = T::to_constant_value(date_time);
-                    // Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
                     Ok(DataColumn::Constant(constant_result, input_rows))
                 }else {
                     let result: DFPrimitiveArray<R> = columns[0].column()
@@ -131,8 +137,6 @@ where
             DataType::Date32 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
-                    // let constant_result = Some(T::execute(date_time));
-                    // Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
                     let constant_result = T::to_constant_value(date_time);
                     Ok(DataColumn::Constant(constant_result, input_rows))
                 }else {
@@ -150,8 +154,6 @@ where
             DataType::DateTime32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64, 0_u32);
-                    // let constant_result = Some(T::execute(date_time));
-                    // Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
                     let constant_result = T::to_constant_value(date_time);
                     Ok(DataColumn::Constant(constant_result, input_rows))
                 }else {
@@ -167,8 +169,9 @@ where
                 }
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
-               "Illegal type {:?} of argument of function toYYYYMM.Should be a date16/data32 or a dateTime32",
-                other))),
+               "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                other,
+                 self.name()))),
         }?;
         Ok(number_array)
     }

@@ -18,8 +18,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::ToYYYYMMFunction;
 use crate::scalars::ToYYYYMMDDhhmmssFunction;
+use crate::scalars::ToYYYYMMFunction;
 
 #[test]
 fn test_toyyyymm_date16_function() -> Result<()> {
@@ -293,7 +293,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
         assert_eq!(actual, &expected);
     }
 
-    // dateTime 
+    // dateTime
     // 2021-09-05 09:23:17 --- 1630833797
     let schema =
         DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);

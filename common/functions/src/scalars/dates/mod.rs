@@ -23,8 +23,8 @@ mod round_function;
 mod simple_date;
 
 pub use date::DateFunction;
-pub use number_function::ToYYYYMMFunction;
 pub use number_function::ToYYYYMMDDhhmmssFunction;
+pub use number_function::ToYYYYMMFunction;
 pub use round_function::RoundFunction;
 pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
