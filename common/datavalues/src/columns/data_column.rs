@@ -60,6 +60,11 @@ impl DataColumn {
     }
 
     #[inline]
+    pub fn physical_type(&self) -> PhysicalDataType {
+        self.data_type().to_physical_type()
+    }
+
+    #[inline]
     pub fn to_array(&self) -> Result<Series> {
         match self {
             DataColumn::Array(array) => Ok(array.clone()),
@@ -81,6 +86,16 @@ impl DataColumn {
             DataColumn::Array(array) => Ok(array.get_array_ref()),
             DataColumn::Constant(scalar, size) => {
                 Ok(scalar.to_series_with_size(*size)?.get_array_ref())
+            }
+        }
+    }
+
+    #[inline]
+    pub fn to_array_ref(&self, data_type: &DataType) -> Result<ArrayRef> {
+        match self {
+            DataColumn::Array(array) => Ok(array.to_array_ref(data_type)),
+            DataColumn::Constant(scalar, size) => {
+                Ok(scalar.to_series_with_size(*size)?.to_array_ref(data_type))
             }
         }
     }

@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+mod namespace;
 mod user;
 
 pub use user::user_api::UserInfo;

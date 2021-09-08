@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::array::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -46,6 +48,11 @@ impl DFNullArray {
 
     pub fn inner(&self) -> &NullArray {
         &self.array
+    }
+
+    #[inline]
+    pub fn to_array_ref(&self, _data_type: &DataType) -> ArrayRef {
+        Arc::new(self.array.clone()) as ArrayRef
     }
 
     /// # Safety

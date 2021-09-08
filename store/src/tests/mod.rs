@@ -15,6 +15,7 @@
 #[macro_use]
 pub mod service;
 pub mod seq;
+pub(crate) mod tls_constants;
 
 pub use seq::Seq;
 pub use service::assert_meta_connection;

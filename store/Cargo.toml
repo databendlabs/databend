@@ -56,7 +56,7 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 structopt = "0.3"
 structopt-toml = "0.5.0"
 tempfile = "3.2.0"
-thiserror = "1.0.28"
+thiserror = "1.0.29"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
 tracing-appender = "0.1.2"
@@ -73,6 +73,8 @@ pretty_assertions = "0.7"
 test-env-log = "0.2.7"
 flaky_test = "0.1"
 maplit = "1.0.2"
+tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
+reqwest = { version = "0.11", features = ["json"] }
 
 [build-dependencies]
 common-building = {path = "../common/building"}

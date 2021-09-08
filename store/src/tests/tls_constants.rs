@@ -11,17 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-use common_exception::Result;
-
-use crate::prelude::DataColumn;
-use crate::TypeSerializer;
-
-pub struct NullSerializer {}
-
-impl TypeSerializer for NullSerializer {
-    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
-        let result: Vec<String> = vec!["NULL".to_owned(); column.len()];
-        Ok(result)
-    }
-}
+pub const TEST_CA_CERT: &'static str = "../tests/certs/ca.pem";
+pub const TEST_SERVER_CERT: &'static str = "../tests/certs/server.pem";
+pub const TEST_SERVER_KEY: &'static str = "../tests/certs/server.key";
+pub const TEST_CN_NAME: &'static str = "localhost";

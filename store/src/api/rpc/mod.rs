@@ -18,7 +18,6 @@ mod flight_service_test;
 mod tls_flight_service_test;
 
 mod flight_service;
-mod metrics;
 
 pub use flight_service::FlightStream;
 pub use flight_service::StoreFlightImpl;

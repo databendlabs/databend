@@ -21,6 +21,7 @@ use prost::Message;
 use tonic::Request;
 
 use crate::impls::kv_api_impl::GetKVAction;
+use crate::impls::kv_api_impl::KVMetaAction;
 use crate::impls::kv_api_impl::MGetKVAction;
 use crate::impls::kv_api_impl::PrefixListReq;
 use crate::impls::kv_api_impl::UpsertKVAction;
@@ -72,6 +73,7 @@ pub enum StoreDoAction {
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
+    UpdateKVMeta(KVMetaAction),
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),

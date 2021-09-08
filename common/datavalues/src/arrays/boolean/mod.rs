@@ -135,6 +135,12 @@ impl DFBooleanArray {
         Arc::new(self.array.clone()) as ArrayRef
     }
 
+    // Currently we do not have logical datatypes except Boolean base on Boolean
+    #[inline]
+    pub fn to_array_ref(&self, _data_type: &DataType) -> ArrayRef {
+        Arc::new(self.array.clone()) as ArrayRef
+    }
+
     #[inline]
     /// Get the null count and the buffer of bits representing null values
     pub fn null_bits(&self) -> (usize, &Option<Bitmap>) {

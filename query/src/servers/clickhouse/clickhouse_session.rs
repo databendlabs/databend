@@ -14,7 +14,7 @@
 
 use std::net::Shutdown;
 
-use clickhouse_srv::ClickHouseServer;
+use common_clickhouse_srv::ClickHouseServer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;

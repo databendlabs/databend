@@ -60,7 +60,7 @@ impl Function for SipHashFunction {
             | DataType::Float64
             | DataType::Date16
             | DataType::Date32
-            | DataType::DateTime32
+            | DataType::DateTime32(_)
             | DataType::String => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function Error: {} does not support {} type parameters",

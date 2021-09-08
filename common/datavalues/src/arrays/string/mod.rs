@@ -18,6 +18,8 @@ mod iterator;
 #[cfg(test)]
 mod builder_test;
 
+use std::sync::Arc;
+
 pub use builder::*;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
@@ -46,20 +48,22 @@ impl DFStringArray {
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
-        if array.data_type() == &ArrowDataType::Binary {
+        let arrow_type = get_physical_arrow_type(array.data_type());
+
+        if arrow_type == &ArrowDataType::Binary {
             let arr = array.as_any().downcast_ref::<BinaryArray<i32>>().unwrap();
             let arr = binary_to_large_binary(arr, ArrowDataType::LargeBinary);
             return Self::new(arr);
         }
 
-        if array.data_type() == &ArrowDataType::Utf8 {
+        if arrow_type == &ArrowDataType::Utf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
 
             let iter = arr.iter().map(|x| x.map(|x| x.as_bytes()));
             return Self::from_iter_trusted_length(iter);
         }
 
-        if array.data_type() == &ArrowDataType::LargeUtf8 {
+        if arrow_type == &ArrowDataType::LargeUtf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i64>>().unwrap();
 
             let iter = arr.iter().map(|x| x.map(|x| x.as_bytes()));
@@ -77,6 +81,19 @@ impl DFStringArray {
 
     pub fn inner(&self) -> &LargeBinaryArray {
         &self.array
+    }
+
+    #[inline]
+    pub fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
+        let arrow_type = data_type.to_arrow();
+        let array = LargeBinaryArray::from_data(
+            arrow_type,
+            self.array.offsets().clone(),
+            self.array.values().clone(),
+            self.array.validity().clone(),
+        );
+
+        Arc::new(array) as ArrayRef
     }
 
     pub fn data_type(&self) -> &DataType {

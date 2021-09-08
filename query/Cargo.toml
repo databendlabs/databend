@@ -40,6 +40,7 @@ common-profling = { path = "../common/profiling" }
 common-store-api = { path = "../common/store-api" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
+common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "cc53408" }
@@ -47,7 +48,6 @@ clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev 
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "77f6ae5" }
 
 # Crates.io dependencies
-clickhouse-srv = "0.3.1"
 bumpalo = "3.7.0"
 ahash = "0.7.4"
 async-trait = "0.1"
@@ -84,7 +84,6 @@ axum = {version = "0.2.3", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
 hyper = "0.14.12"
-tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 headers = "0.3.4"
 tokio-rustls = "0.22.0"
 
@@ -95,6 +94,7 @@ mysql = "21.0.1"
 reqwest = { version = "0.11", features = ["json"] }
 flaky_test = "0.1"
 tempfile = "3.2.0"
+tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 
 [build-dependencies]
 common-building = {path = "../common/building"}

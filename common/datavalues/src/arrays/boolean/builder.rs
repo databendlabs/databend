@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
-use common_exception::Result;
-use common_io::prelude::*;
 
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
@@ -39,43 +37,6 @@ impl ArrayBuilder<bool, DFBooleanArray> for BooleanArrayBuilder {
     fn finish(&mut self) -> DFBooleanArray {
         let array = self.builder.as_arc();
         DFBooleanArray::from_arrow_array(array.as_ref())
-    }
-}
-
-impl ArrayDeserializer for BooleanArrayBuilder {
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let value: bool = reader.read_scalar()?;
-        self.append_value(value);
-        Ok(())
-    }
-
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
-        for row in 0..rows {
-            let mut reader = &reader[step * row..];
-            let value: bool = reader.read_scalar()?;
-            self.append_value(value);
-        }
-
-        Ok(())
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.finish().into_series()
-    }
-
-    fn de_text(&mut self, reader: &[u8]) {
-        let v = if reader.eq_ignore_ascii_case(b"false") {
-            Some(false)
-        } else if reader.eq_ignore_ascii_case(b"true") {
-            Some(true)
-        } else {
-            None
-        };
-        self.append_option(v);
-    }
-
-    fn de_null(&mut self) {
-        self.append_null()
     }
 }
 

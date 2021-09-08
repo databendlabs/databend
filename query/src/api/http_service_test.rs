@@ -44,7 +44,7 @@ async fn test_http_service_tls_server() -> Result<()> {
     let port = listening.port();
 
     // test cert is issued for "localhost"
-    let url = format!("https://{}:{}/v1/hello", TEST_CN_NAME, port);
+    let url = format!("https://{}:{}/v1/health", TEST_CN_NAME, port);
 
     // load cert
     let mut buf = Vec::new();
@@ -60,7 +60,7 @@ async fn test_http_service_tls_server() -> Result<()> {
     assert!(resp.is_ok());
     let resp = resp.unwrap();
     assert!(resp.status().is_success());
-    assert_eq!("/v1/hello", resp.url().path());
+    assert_eq!("/v1/health", resp.url().path());
 
     Ok(())
 }

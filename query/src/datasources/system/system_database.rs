@@ -56,6 +56,7 @@ impl SystemDatabase {
             Arc::new(system::OneTable::create()),
             Arc::new(system::FunctionsTable::create()),
             Arc::new(system::ContributorsTable::create()),
+            Arc::new(system::EnginesTable::create()),
             Arc::new(system::SettingsTable::create()),
             Arc::new(system::NumbersTable::create("numbers")),
             Arc::new(system::NumbersTable::create("numbers_mt")),
@@ -65,6 +66,7 @@ impl SystemDatabase {
             Arc::new(system::DatabasesTable::create()),
             Arc::new(system::TracingTable::create()),
             Arc::new(system::ProcessesTable::create()),
+            Arc::new(system::ConfigsTable::create()),
         ];
         let tbl_meta_list = table_list
             .iter()

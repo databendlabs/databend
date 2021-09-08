@@ -34,7 +34,7 @@ pub struct DFListArray {
 impl DFListArray {
     pub fn new(array: LargeListArray) -> Self {
         let data_type = array.data_type().into();
-
+        let data_type: DataType = data_type_physical(data_type);
         Self { array, data_type }
     }
 
@@ -54,6 +54,19 @@ impl DFListArray {
 
     pub fn inner(&self) -> &LargeListArray {
         &self.array
+    }
+
+    #[inline]
+    pub fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
+        let arrow_type = data_type.to_arrow();
+        let array = LargeListArray::from_data(
+            arrow_type,
+            self.array.offsets().clone(),
+            self.array.values().clone(),
+            self.array.validity().clone(),
+        );
+
+        Arc::new(array) as ArrayRef
     }
 
     /// # Safety

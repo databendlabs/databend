@@ -53,49 +53,52 @@ macro_rules! env_helper {
     };
 }
 
-const LOG_LEVEL: &str = "QUERY_LOG_LEVEL";
-const LOG_DIR: &str = "QUERY_LOG_DIR";
-const NUM_CPUS: &str = "QUERY_NUM_CPUS";
-
-const MYSQL_HANDLER_HOST: &str = "QUERY_MYSQL_HANDLER_HOST";
-const MYSQL_HANDLER_PORT: &str = "QUERY_MYSQL_HANDLER_PORT";
-const MAX_ACTIVE_SESSIONS: &str = "QUERY_MAX_ACTIVE_SESSIONS";
-
-const CLICKHOUSE_HANDLER_HOST: &str = "QUERY_CLICKHOUSE_HANDLER_HOST";
-const CLICKHOUSE_HANDLER_PORT: &str = "QUERY_CLICKHOUSE_HANDLER_PORT";
-
-const FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
-const HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
-const METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
+// Log env.
+const LOG_LEVEL: &str = "LOG_LEVEL";
+const LOG_DIR: &str = "LOG_DIR";
 
 // Query env.
-const API_TLS_SERVER_CERT: &str = "API_TLS_SERVER_CERT";
-const API_TLS_SERVER_KEY: &str = "API_TLS_SERVER_KEY";
-
-const CONFIG_FILE: &str = "CONFIG_FILE";
-
-const RPC_TLS_SERVER_CERT: &str = "RPC_TLS_SERVER_CERT";
-const RPC_TLS_SERVER_KEY: &str = "RPC_TLS_SERVER_KEY";
-const RPC_TLS_QUERY_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_QUERY_SERVER_ROOT_CA_CERT";
-const RPC_TLS_QUERY_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_QUERY_SERVICE_DOMAIN_NAME";
+const QUERY_TENANT: &str = "QUERY_TENANT";
+const QUERY_NAMESPACE: &str = "QUERY_NAMESPACE";
+const QUERY_NUM_CPUS: &str = "QUERY_NUM_CPUS";
+const QUERY_MYSQL_HANDLER_HOST: &str = "QUERY_MYSQL_HANDLER_HOST";
+const QUERY_MYSQL_HANDLER_PORT: &str = "QUERY_MYSQL_HANDLER_PORT";
+const QUERY_MAX_ACTIVE_SESSIONS: &str = "QUERY_MAX_ACTIVE_SESSIONS";
+const QUERY_CLICKHOUSE_HANDLER_HOST: &str = "QUERY_CLICKHOUSE_HANDLER_HOST";
+const QUERY_CLICKHOUSE_HANDLER_PORT: &str = "QUERY_CLICKHOUSE_HANDLER_PORT";
+const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
+const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
+const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
+const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
+const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
+const QUERY_RPC_TLS_SERVER_CERT: &str = "QUERY_RPC_TLS_SERVER_CERT";
+const QUERY_RPC_TLS_SERVER_KEY: &str = "QUERY_RPC_TLS_SERVER_KEY";
+const QUERY_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT";
+const QUERY_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "QUERY_RPC_TLS_SERVICE_DOMAIN_NAME";
+const QUERY_DISABLE_LOCAL_DATABASE_ENGINE: &str = "QUERY_DISABLE_LOCAL_DATABASE_ENGINE";
 
 // Meta env.
 const META_ADDRESS: &str = "META_ADDRESS";
 const META_USERNAME: &str = "META_USERNAME";
 const META_PASSWORD: &str = "META_PASSWORD";
-const RPC_TLS_META_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_META_SERVER_ROOT_CA_CERT";
-const RPC_TLS_META_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_META_SERVICE_DOMAIN_NAME";
+const META_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "META_RPC_TLS_SERVER_ROOT_CA_CERT";
+const META_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "META_RPC_TLS_SERVICE_DOMAIN_NAME";
 
 // Store env.
 const STORE_ADDRESS: &str = "STORE_ADDRESS";
 const STORE_USERNAME: &str = "STORE_USERNAME";
 const STORE_PASSWORD: &str = "STORE_PASSWORD";
-const RPC_TLS_STORE_SERVER_ROOT_CA_CERT: &str = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT";
-const RPC_TLS_STORE_SERVICE_DOMAIN_NAME: &str = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME";
+const STORE_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "STORE_RPC_TLS_SERVER_ROOT_CA_CERT";
+const STORE_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "STORE_RPC_TLS_SERVICE_DOMAIN_NAME";
+
+// Config file.
+const CONFIG_FILE: &str = "CONFIG_FILE";
 
 /// Log config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 pub struct LogConfig {
     #[structopt(long, env = LOG_LEVEL, default_value = "INFO" , help = "Log level <DEBUG|INFO|ERROR>")]
     #[serde(default)]
@@ -117,7 +120,7 @@ impl LogConfig {
 
 /// Store config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct StoreConfig {
     #[structopt(long, env = STORE_ADDRESS, default_value = "", help = "Store backend address")]
     #[serde(default)]
@@ -133,7 +136,7 @@ pub struct StoreConfig {
 
     #[structopt(
         long,
-        env = "RPC_TLS_STORE_SERVER_ROOT_CA_CERT",
+        env = "STORE_RPC_TLS_SERVER_ROOT_CA_CERT",
         default_value = "",
         help = "Certificate for client to identify store rpc server"
     )]
@@ -142,7 +145,7 @@ pub struct StoreConfig {
 
     #[structopt(
         long,
-        env = "RPC_TLS_STORE_SERVICE_DOMAIN_NAME",
+        env = "STORE_RPC_TLS_SERVICE_DOMAIN_NAME",
         default_value = "localhost"
     )]
     #[serde(default)]
@@ -173,23 +176,23 @@ impl fmt::Debug for StoreConfig {
 
 /// Meta config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct MetaConfig {
-    #[structopt(long, env = META_ADDRESS, default_value = "", help = "Store backend address")]
+    #[structopt(long, env = META_ADDRESS, default_value = "", help = "MetaStore backend address")]
     #[serde(default)]
     pub meta_address: String,
 
-    #[structopt(long, env = META_USERNAME, default_value = "", help = "Store backend user name")]
+    #[structopt(long, env = META_USERNAME, default_value = "", help = "MetaStore backend user name")]
     #[serde(default)]
     pub meta_username: String,
 
-    #[structopt(long, env = META_PASSWORD, default_value = "", help = "Store backend user password")]
+    #[structopt(long, env = META_PASSWORD, default_value = "", help = "MetaStore backend user password")]
     #[serde(default)]
     pub meta_password: String,
 
     #[structopt(
         long,
-        env = "RPC_TLS_META_SERVER_ROOT_CA_CERT",
+        env = "META_RPC_TLS_SERVER_ROOT_CA_CERT",
         default_value = "",
         help = "Certificate for client to identify meta rpc server"
     )]
@@ -198,7 +201,7 @@ pub struct MetaConfig {
 
     #[structopt(
         long,
-        env = "RPC_TLS_META_SERVICE_DOMAIN_NAME",
+        env = "META_RPC_TLS_SERVICE_DOMAIN_NAME",
         default_value = "localhost"
     )]
     #[serde(default)]
@@ -229,27 +232,37 @@ impl fmt::Debug for MetaConfig {
 
 /// Query config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 pub struct QueryConfig {
-    #[structopt(long, env = NUM_CPUS, default_value = "0")]
+    #[structopt(long, env = QUERY_TENANT, default_value = "", help = "Tenant id for get the information from the MetaStore")]
+    #[serde(default)]
+    pub tenant: String,
+
+    #[structopt(long, env = QUERY_NAMESPACE, default_value = "", help = "Namespace for construct the cluster")]
+    #[serde(default)]
+    pub namespace: String,
+
+    #[structopt(long, env = QUERY_NUM_CPUS, default_value = "0")]
     #[serde(default)]
     pub num_cpus: u64,
 
     #[structopt(
     long,
-    env = MYSQL_HANDLER_HOST,
+    env = QUERY_MYSQL_HANDLER_HOST,
     default_value = "127.0.0.1"
     )]
     #[serde(default)]
     pub mysql_handler_host: String,
 
-    #[structopt(long, env = MYSQL_HANDLER_PORT, default_value = "3307")]
+    #[structopt(long, env = QUERY_MYSQL_HANDLER_PORT, default_value = "3307")]
     #[serde(default)]
     pub mysql_handler_port: u16,
 
     #[structopt(
     long,
-    env = MAX_ACTIVE_SESSIONS,
+    env = QUERY_MAX_ACTIVE_SESSIONS,
     default_value = "256"
     )]
     #[serde(default)]
@@ -257,7 +270,7 @@ pub struct QueryConfig {
 
     #[structopt(
     long,
-    env = CLICKHOUSE_HANDLER_HOST,
+    env = QUERY_CLICKHOUSE_HANDLER_HOST,
     default_value = "127.0.0.1"
     )]
     #[serde(default)]
@@ -265,7 +278,7 @@ pub struct QueryConfig {
 
     #[structopt(
     long,
-    env = CLICKHOUSE_HANDLER_PORT,
+    env = QUERY_CLICKHOUSE_HANDLER_PORT,
     default_value = "9000"
     )]
     #[serde(default)]
@@ -273,7 +286,7 @@ pub struct QueryConfig {
 
     #[structopt(
     long,
-    env = FLIGHT_API_ADDRESS,
+    env = QUERY_FLIGHT_API_ADDRESS,
     default_value = "127.0.0.1:9090"
     )]
     #[serde(default)]
@@ -281,7 +294,7 @@ pub struct QueryConfig {
 
     #[structopt(
     long,
-    env = HTTP_API_ADDRESS,
+    env = QUERY_HTTP_API_ADDRESS,
     default_value = "127.0.0.1:8080"
     )]
     #[serde(default)]
@@ -289,23 +302,23 @@ pub struct QueryConfig {
 
     #[structopt(
     long,
-    env = METRICS_API_ADDRESS,
+    env = QUERY_METRICS_API_ADDRESS,
     default_value = "127.0.0.1:7070"
     )]
     #[serde(default)]
     pub metric_api_address: String,
 
-    #[structopt(long, env = API_TLS_SERVER_CERT, default_value = "")]
+    #[structopt(long, env = QUERY_API_TLS_SERVER_CERT, default_value = "")]
     #[serde(default)]
     pub api_tls_server_cert: String,
 
-    #[structopt(long, env = API_TLS_SERVER_KEY, default_value = "")]
+    #[structopt(long, env = QUERY_API_TLS_SERVER_KEY, default_value = "")]
     #[serde(default)]
     pub api_tls_server_key: String,
 
     #[structopt(
         long,
-        env = "RPC_TLS_SERVER_CERT",
+        env = "QUERY_RPC_TLS_SERVER_CERT",
         default_value = "",
         help = "rpc server cert"
     )]
@@ -314,7 +327,7 @@ pub struct QueryConfig {
 
     #[structopt(
         long,
-        env = "RPC_TLS_SERVER_KEY",
+        env = "QUERY_RPC_TLS_SERVER_KEY",
         default_value = "key for rpc server cert"
     )]
     #[serde(default)]
@@ -322,7 +335,7 @@ pub struct QueryConfig {
 
     #[structopt(
         long,
-        env = "RPC_TLS_QUERY_SERVER_ROOT_CA_CERT",
+        env = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT",
         default_value = "",
         help = "Certificate for client to identify query rpc server"
     )]
@@ -331,16 +344,22 @@ pub struct QueryConfig {
 
     #[structopt(
         long,
-        env = "RPC_TLS_QUERY_SERVICE_DOMAIN_NAME",
+        env = "QUERY_RPC_TLS_SERVICE_DOMAIN_NAME",
         default_value = "localhost"
     )]
     #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
+
+    #[structopt(long, env = "QUERY_DISABLE_LOCAL_DATABASE_ENGINE", default_value = "0")]
+    #[serde(default)]
+    pub disable_local_database_engine: String,
 }
 
 impl QueryConfig {
     pub fn default() -> Self {
         QueryConfig {
+            tenant: "".to_string(),
+            namespace: "".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -356,6 +375,7 @@ impl QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
+            disable_local_database_engine: "0".to_string(),
         }
     }
 }
@@ -439,92 +459,103 @@ impl Config {
             meta,
             rpc_tls_meta_server_root_ca_cert,
             String,
-            RPC_TLS_META_SERVER_ROOT_CA_CERT
+            META_RPC_TLS_SERVER_ROOT_CA_CERT
         );
         env_helper!(
             mut_config,
             meta,
             rpc_tls_meta_service_domain_name,
             String,
-            RPC_TLS_META_SERVICE_DOMAIN_NAME
+            META_RPC_TLS_SERVICE_DOMAIN_NAME
         );
 
         // Store.
         env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
         env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
         env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
+
+        // for store rpc client
         env_helper!(
             mut_config,
             store,
             rpc_tls_store_server_root_ca_cert,
             String,
-            RPC_TLS_STORE_SERVER_ROOT_CA_CERT
+            STORE_RPC_TLS_SERVER_ROOT_CA_CERT
         );
         env_helper!(
             mut_config,
             store,
             rpc_tls_store_service_domain_name,
             String,
-            RPC_TLS_STORE_SERVICE_DOMAIN_NAME
+            STORE_RPC_TLS_SERVICE_DOMAIN_NAME
         );
 
         // Query.
-        env_helper!(mut_config, query, num_cpus, u64, NUM_CPUS);
+        env_helper!(mut_config, query, tenant, String, QUERY_TENANT);
+        env_helper!(mut_config, query, namespace, String, QUERY_NAMESPACE);
+        env_helper!(mut_config, query, num_cpus, u64, QUERY_NUM_CPUS);
         env_helper!(
             mut_config,
             query,
             mysql_handler_host,
             String,
-            MYSQL_HANDLER_HOST
+            QUERY_MYSQL_HANDLER_HOST
         );
         env_helper!(
             mut_config,
             query,
             mysql_handler_port,
             u16,
-            MYSQL_HANDLER_PORT
+            QUERY_MYSQL_HANDLER_PORT
         );
         env_helper!(
             mut_config,
             query,
             max_active_sessions,
             u64,
-            MAX_ACTIVE_SESSIONS
+            QUERY_MAX_ACTIVE_SESSIONS
         );
         env_helper!(
             mut_config,
             query,
             clickhouse_handler_host,
             String,
-            CLICKHOUSE_HANDLER_HOST
+            QUERY_CLICKHOUSE_HANDLER_HOST
         );
         env_helper!(
             mut_config,
             query,
             clickhouse_handler_port,
             u16,
-            CLICKHOUSE_HANDLER_PORT
+            QUERY_CLICKHOUSE_HANDLER_PORT
         );
         env_helper!(
             mut_config,
             query,
             flight_api_address,
             String,
-            FLIGHT_API_ADDRESS
+            QUERY_FLIGHT_API_ADDRESS
         );
         env_helper!(
             mut_config,
             query,
             http_api_address,
             String,
-            HTTP_API_ADDRESS
+            QUERY_HTTP_API_ADDRESS
         );
         env_helper!(
             mut_config,
             query,
             metric_api_address,
             String,
-            METRICS_API_ADDRESS
+            QUERY_METRICS_API_ADDRESS
+        );
+        env_helper!(
+            mut_config,
+            query,
+            disable_local_database_engine,
+            String,
+            QUERY_DISABLE_LOCAL_DATABASE_ENGINE
         );
 
         // for api http service
@@ -533,7 +564,7 @@ impl Config {
             query,
             api_tls_server_cert,
             String,
-            API_TLS_SERVER_CERT
+            QUERY_API_TLS_SERVER_CERT
         );
 
         env_helper!(
@@ -541,7 +572,7 @@ impl Config {
             query,
             api_tls_server_key,
             String,
-            API_TLS_SERVER_KEY
+            QUERY_API_TLS_SERVER_KEY
         );
 
         // for query rpc server
@@ -550,7 +581,7 @@ impl Config {
             query,
             rpc_tls_server_cert,
             String,
-            RPC_TLS_SERVER_CERT
+            QUERY_RPC_TLS_SERVER_CERT
         );
 
         env_helper!(
@@ -558,7 +589,7 @@ impl Config {
             query,
             rpc_tls_server_key,
             String,
-            RPC_TLS_SERVER_KEY
+            QUERY_RPC_TLS_SERVER_KEY
         );
 
         // for query rpc client
@@ -567,14 +598,14 @@ impl Config {
             query,
             rpc_tls_query_server_root_ca_cert,
             String,
-            RPC_TLS_QUERY_SERVER_ROOT_CA_CERT
+            QUERY_RPC_TLS_SERVER_ROOT_CA_CERT
         );
         env_helper!(
             mut_config,
             query,
             rpc_tls_query_service_domain_name,
             String,
-            RPC_TLS_QUERY_SERVICE_DOMAIN_NAME
+            QUERY_RPC_TLS_SERVICE_DOMAIN_NAME
         );
 
         Ok(mut_config)

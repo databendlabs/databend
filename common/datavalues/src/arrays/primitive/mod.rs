@@ -18,8 +18,11 @@ mod iterator;
 #[cfg(test)]
 mod builder_test;
 
+use std::sync::Arc;
+
 pub use builder::*;
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
@@ -58,12 +61,15 @@ fn precision(x: &TimeUnit) -> usize {
 impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     pub fn new(array: PrimitiveArray<T>) -> Self {
         let data_type: DataType = array.data_type().into();
+        let data_type: DataType = data_type_physical(data_type);
         Self { array, data_type }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
         let expected_arrow_type = T::data_type().to_arrow();
-        if &expected_arrow_type != array.data_type() {
+        let arrow_type = get_physical_arrow_type(array.data_type());
+
+        if &expected_arrow_type != arrow_type {
             match array.data_type() {
                 // u32
                 ArrowDataType::Timestamp(x, _) => {
@@ -129,6 +135,13 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
 
     pub fn inner(&self) -> &PrimitiveArray<T> {
         &self.array
+    }
+
+    #[inline]
+    pub fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
+        let arrow_type = data_type.to_arrow();
+        let array = self.array.clone().to(arrow_type);
+        Arc::new(array) as ArrayRef
     }
 
     /// # Safety

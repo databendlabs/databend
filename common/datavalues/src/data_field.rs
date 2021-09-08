@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common_arrow::arrow::datatypes::Field as ArrowField;
 
 use crate::DataType;
@@ -64,40 +62,13 @@ impl DataField {
     }
 
     pub fn to_arrow(&self) -> ArrowField {
-        let custom_name = match self.data_type() {
-            DataType::Date16 => Some("Date16"),
-            DataType::Date32 => Some("Date32"),
-            DataType::DateTime32 => Some("DateTime32"),
-            _ => None,
-        };
-
-        let mut f = ArrowField::new(&self.name, self.data_type.to_arrow(), self.nullable);
-        if let Some(custom_name) = custom_name {
-            let mut mp = BTreeMap::new();
-            mp.insert(
-                "ARROW:extension:datafuse_name".to_string(),
-                custom_name.to_string(),
-            );
-            f = f.with_metadata(mp);
-        }
-
-        f
+        ArrowField::new(&self.name, self.data_type.to_arrow(), self.nullable)
     }
 }
 
 impl From<&ArrowField> for DataField {
     fn from(f: &ArrowField) -> Self {
-        let mut dt: DataType = f.data_type().into();
-        if let Some(m) = f.metadata() {
-            if let Some(custom_name) = m.get("ARROW:extension:datafuse_name") {
-                match custom_name.as_str() {
-                    "Date16" => dt = DataType::Date16,
-                    "Date32" => dt = DataType::Date32,
-                    "DateTime32" => dt = DataType::DateTime32,
-                    _ => {}
-                }
-            }
-        }
+        let dt: DataType = f.data_type().into();
         DataField::new(f.name(), dt, f.is_nullable())
     }
 }

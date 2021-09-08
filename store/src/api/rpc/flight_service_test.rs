@@ -893,6 +893,109 @@ async fn test_flight_generic_kv_update() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_generic_kv_update_meta() -> anyhow::Result<()> {
+    // Only update meta, do not touch the value part.
+
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
+    {
+        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_update_meta");
+        let _ent = span.enter();
+
+        let (_tc, addr) = crate::tests::start_store_server().await?;
+
+        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+        let test_key = "test_key_for_update_meta";
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let r = client
+            .upsert_kv(test_key, MatchSeq::Any, Some(b"v1".to_vec()), None)
+            .await?;
+        assert_eq!(
+            Some((1, KVValue {
+                meta: None,
+                value: b"v1".to_vec()
+            })),
+            r.result
+        );
+        let seq = r.result.unwrap().0;
+
+        tracing::info!("--- mismatching seq does nothing");
+
+        let r = client
+            .update_kv_meta(
+                test_key,
+                MatchSeq::Exact(seq + 1),
+                Some(KVMeta {
+                    expire_at: Some(now + 20),
+                }),
+            )
+            .await?;
+        assert_eq!(
+            Some((1, KVValue {
+                meta: None,
+                value: b"v1".to_vec()
+            })),
+            r.prev
+        );
+        assert_eq!(
+            Some((1, KVValue {
+                meta: None,
+                value: b"v1".to_vec()
+            })),
+            r.result
+        );
+
+        tracing::info!("--- matching seq only update meta");
+
+        let r = client
+            .update_kv_meta(
+                test_key,
+                MatchSeq::Exact(seq),
+                Some(KVMeta {
+                    expire_at: Some(now + 20),
+                }),
+            )
+            .await?;
+        assert_eq!(
+            Some((1, KVValue {
+                meta: None,
+                value: b"v1".to_vec()
+            })),
+            r.prev
+        );
+        assert_eq!(
+            Some((2, KVValue {
+                meta: Some(KVMeta {
+                    expire_at: Some(now + 20)
+                }),
+                value: b"v1".to_vec()
+            })),
+            r.result
+        );
+
+        tracing::info!("--- get returns the value with meta and seq updated");
+        let kv = client.get_kv(test_key).await?;
+        assert!(kv.result.is_some());
+        assert_eq!(
+            (seq + 1, KVValue {
+                meta: Some(KVMeta {
+                    expire_at: Some(now + 20)
+                }),
+                value: b"v1".to_vec()
+            }),
+            kv.result.unwrap(),
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
     // - Test get  expired and non-expired.
     // - Test mget expired and non-expired.

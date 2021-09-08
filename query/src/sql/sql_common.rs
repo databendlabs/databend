@@ -36,7 +36,7 @@ impl SQLCommon {
             SQLDataType::Real | SQLDataType::Double => Ok(DataType::Float64),
             SQLDataType::Boolean => Ok(DataType::Boolean),
             SQLDataType::Date => Ok(DataType::Date16),
-            SQLDataType::Timestamp => Ok(DataType::DateTime32),
+            SQLDataType::Timestamp => Ok(DataType::DateTime32(None)),
 
             //custom types for datafuse
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])

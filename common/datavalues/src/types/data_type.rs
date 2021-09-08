@@ -17,10 +17,9 @@ use core::fmt;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::DataField;
+use crate::PhysicalDataType;
 
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DataType {
     Null,
     Boolean,
@@ -43,7 +42,8 @@ pub enum DataType {
 
     /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
     /// in seconds, it's physical type is UInt32
-    DateTime32,
+    /// Option<String> indicates the timezone, if it's None, it's UTC
+    DateTime32(Option<String>),
 
     List(Box<DataField>),
     Struct(Vec<DataField>),
@@ -51,6 +51,10 @@ pub enum DataType {
 }
 
 impl DataType {
+    pub fn to_physical_type(&self) -> PhysicalDataType {
+        self.clone().into()
+    }
+
     pub fn to_arrow(&self) -> ArrowDataType {
         use DataType::*;
         match self {
@@ -66,9 +70,21 @@ impl DataType {
             Int64 => ArrowDataType::Int64,
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
-            Date16 => ArrowDataType::UInt16,
-            Date32 => ArrowDataType::UInt32,
-            DateTime32 => ArrowDataType::UInt32,
+            Date16 => ArrowDataType::Extension(
+                "Date16".to_string(),
+                Box::new(ArrowDataType::UInt16),
+                None,
+            ),
+            Date32 => ArrowDataType::Extension(
+                "Date32".to_string(),
+                Box::new(ArrowDataType::UInt32),
+                None,
+            ),
+            DateTime32(tz) => ArrowDataType::Extension(
+                "DateTime32".to_string(),
+                Box::new(ArrowDataType::UInt32),
+                tz.clone(),
+            ),
             List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
@@ -108,9 +124,16 @@ impl From<&ArrowDataType> for DataType {
             ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::String,
             ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
 
-            ArrowDataType::Timestamp(_, _) => DataType::DateTime32,
+            ArrowDataType::Timestamp(_, tz) => DataType::DateTime32(tz.clone()),
             ArrowDataType::Date32 => DataType::Date16,
             ArrowDataType::Date64 => DataType::Date32,
+
+            ArrowDataType::Extension(name, _arrow_type, extra) => match name.as_str() {
+                "Date16" => DataType::Date16,
+                "Date32" => DataType::Date32,
+                "DateTime32" => DataType::DateTime32(extra.clone()),
+                _ => unimplemented!("data_type: {}", dt),
+            },
 
             // this is safe, because we define the datatype firstly
             _ => {
@@ -120,6 +143,44 @@ impl From<&ArrowDataType> for DataType {
     }
 }
 
+pub fn get_physical_arrow_type(data_type: &ArrowDataType) -> &ArrowDataType {
+    if let ArrowDataType::Extension(_name, arrow_type, _extra) = data_type {
+        return get_physical_arrow_type(arrow_type.as_ref());
+    }
+
+    data_type
+}
+
+impl fmt::Debug for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => write!(f, "Null"),
+            Self::Boolean => write!(f, "Boolean"),
+            Self::UInt8 => write!(f, "UInt8"),
+            Self::UInt16 => write!(f, "UInt16"),
+            Self::UInt32 => write!(f, "UInt32"),
+            Self::UInt64 => write!(f, "UInt64"),
+            Self::Int8 => write!(f, "Int8"),
+            Self::Int16 => write!(f, "Int16"),
+            Self::Int32 => write!(f, "Int32"),
+            Self::Int64 => write!(f, "Int64"),
+            Self::Float32 => write!(f, "Float32"),
+            Self::Float64 => write!(f, "Float64"),
+            Self::Date16 => write!(f, "Date16"),
+            Self::Date32 => write!(f, "Date32"),
+            Self::DateTime32(arg0) => {
+                if let Some(tz) = arg0 {
+                    write!(f, "DateTime32({:?})", tz)
+                } else {
+                    write!(f, "DateTime32")
+                }
+            }
+            Self::List(arg0) => f.debug_tuple("List").field(arg0).finish(),
+            Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
+            Self::String => write!(f, "String"),
+        }
+    }
+}
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)

@@ -29,8 +29,10 @@ use common_exception::ToErrorCode;
 use common_flights::storage_api_impl::AppendResult;
 use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
+use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeqExt;
+use common_metatypes::Operation;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_planners::Part;
@@ -516,7 +518,7 @@ impl StateMachine {
             Cmd::UpsertKV {
                 ref key,
                 ref seq,
-                ref value,
+                value: ref value_op,
                 ref value_meta,
             } => {
                 // TODO(xp): need to be done all in a tx
@@ -527,7 +529,6 @@ impl StateMachine {
                     .as_secs();
 
                 let kvs = self.kvs();
-
                 let prev = kvs.get(key)?;
 
                 // If prev is timed out, treat it as a None.
@@ -546,25 +547,30 @@ impl StateMachine {
                     return Ok((prev.clone(), prev).into());
                 }
 
-                let record_value = if let Some(v) = value {
-                    let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
+                // result is the state after applying an operation.
+                let result;
 
-                    let gv = KVValue {
-                        meta: value_meta.clone(),
-                        value: v.clone(),
-                    };
-                    let record_value = (new_seq, gv);
-                    kvs.insert(key, &record_value).await?;
+                match value_op {
+                    Operation::Update(v) => {
+                        result = self.kv_update(key, value_meta, v).await?;
+                    }
+                    Operation::Delete => {
+                        kvs.remove(key, true).await?;
+                        result = None;
+                    }
+                    Operation::AsIs => {
+                        result = match prev {
+                            None => None,
+                            Some((_, ref curr_kv_value)) => {
+                                self.kv_update(key, value_meta, &curr_kv_value.value)
+                                    .await?
+                            }
+                        };
+                    }
+                }
 
-                    Some(record_value)
-                } else {
-                    kvs.remove(key, true).await?;
-
-                    None
-                };
-
-                tracing::debug!("applied UpsertKV: {} {:?}", key, record_value);
-                Ok((prev, record_value).into())
+                tracing::debug!("applied UpsertKV: {} {:?}", key, result);
+                Ok((prev, result).into())
             }
 
             Cmd::TruncateTable {
@@ -584,6 +590,27 @@ impl StateMachine {
                 }
             }
         }
+    }
+
+    /// Update a generic-kv record, without seq checking
+    async fn kv_update(
+        &self,
+        key: &str,
+        value_meta: &Option<KVMeta>,
+        v: &[u8],
+    ) -> common_exception::Result<Option<SeqValue<KVValue>>> {
+        let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
+
+        let kv_value = KVValue {
+            meta: value_meta.clone(),
+            value: v.to_vec(),
+        };
+        let seq_kv_value = (new_seq, kv_value);
+
+        let kvs = self.kvs();
+        kvs.insert(&key.to_string(), &seq_kv_value).await?;
+
+        Ok(Some(seq_kv_value))
     }
 
     pub fn get_membership(&self) -> common_exception::Result<Option<MembershipConfig>> {

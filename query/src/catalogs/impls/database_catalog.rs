@@ -186,4 +186,10 @@ impl Catalog for DatabaseCatalog {
             )))
         }
     }
+
+    fn get_db_engines(&self) -> Result<Vec<Arc<dyn DatabaseEngine>>> {
+        let db_engines: Vec<Arc<dyn DatabaseEngine>> =
+            self.database_engines.read().values().cloned().collect();
+        Ok(db_engines)
+    }
 }
