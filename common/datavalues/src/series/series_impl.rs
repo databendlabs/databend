@@ -54,10 +54,6 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
 
     fn get_array_memory_size(&self) -> usize;
     fn get_array_ref(&self) -> ArrayRef;
-    // used when we need to convert datablock into RecordBatach
-    // because arrow will check the logic types but we only use physical types in array
-    fn to_array_ref(&self, data_type: &DataType) -> ArrayRef;
-
     fn to_values(&self) -> Result<Vec<DataValue>>;
     fn slice(&self, offset: usize, length: usize) -> Series;
 

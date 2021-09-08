@@ -81,10 +81,6 @@ macro_rules! impl_dyn_array {
                 Arc::new(self.0.array.clone()) as ArrayRef
             }
 
-            fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
-                self.0.to_array_ref(data_type)
-            }
-
             fn to_values(&self) -> Result<Vec<DataValue>> {
                 self.0.to_values()
             }

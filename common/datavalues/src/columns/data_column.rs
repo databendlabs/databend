@@ -90,16 +90,6 @@ impl DataColumn {
         }
     }
 
-    #[inline]
-    pub fn to_array_ref(&self, data_type: &DataType) -> Result<ArrayRef> {
-        match self {
-            DataColumn::Array(array) => Ok(array.to_array_ref(data_type)),
-            DataColumn::Constant(scalar, size) => {
-                Ok(scalar.to_series_with_size(*size)?.to_array_ref(data_type))
-            }
-        }
-    }
-
     /// Return the minimal series, if it's constant value, it's size is 1.
     /// This could be useful when Constant <op> Constant
     /// Since our kernel is based on Array <op> Array
