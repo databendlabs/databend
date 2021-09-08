@@ -149,7 +149,11 @@ impl TryFrom<DataBlock> for RecordBatch {
         let arrays = v
             .columns()
             .iter()
-            .map(|c| c.to_array().map(|series| series.get_array_ref()))
+            .zip(v.schema().fields().iter())
+            .map(|(c, f)| {
+                c.to_array()
+                    .map(|series| series.to_array_ref(f.data_type()))
+            })
             .collect::<Result<Vec<_>>>()?;
 
         Ok(RecordBatch::try_new(Arc::new(v.schema.to_arrow()), arrays)?)
