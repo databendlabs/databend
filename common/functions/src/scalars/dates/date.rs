@@ -17,6 +17,7 @@ use common_exception::Result;
 use super::now::NowFunction;
 use super::RoundFunction;
 use super::ToYYYYMMFunction;
+use super::ToYYYYMMDDhhmmssFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
@@ -33,6 +34,7 @@ impl DateFunction {
         map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
         map.insert("toYYYYMM".into(), ToYYYYMMFunction::try_create);
+        map.insert("ToYYYYMMDDhhmmss".into(), ToYYYYMMDDhhmmssFunction::try_create);
 
         // rounders
         {
