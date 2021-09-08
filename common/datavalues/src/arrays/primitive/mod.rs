@@ -18,11 +18,8 @@ mod iterator;
 #[cfg(test)]
 mod builder_test;
 
-use std::sync::Arc;
-
 pub use builder::*;
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
@@ -135,13 +132,6 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
 
     pub fn inner(&self) -> &PrimitiveArray<T> {
         &self.array
-    }
-
-    #[inline]
-    pub fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
-        let arrow_type = data_type.to_arrow();
-        let array = self.array.clone().to(arrow_type);
-        Arc::new(array) as ArrayRef
     }
 
     /// # Safety
