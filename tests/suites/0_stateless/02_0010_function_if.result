@@ -1,6 +1,6 @@
-false
-false
-true
+0
+0
+1
 1
 1
 2
@@ -10,7 +10,7 @@ true
 zero
 Z+
 Z+
-true
+1
 NULL
 NULL
 Int64
