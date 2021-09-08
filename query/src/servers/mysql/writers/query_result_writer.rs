@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
+use common_datavalues::DataValue;
+use common_datavalues::DateConverter;
 use common_exception::exception::ABORT_QUERY;
 use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
@@ -86,6 +89,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
+        let utc: Tz = "UTC".parse().unwrap();
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
@@ -93,26 +97,55 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 let mut row_writer = dataset_writer.start(&columns)?;
 
                 for block in &blocks {
-                    let mut datas = Vec::with_capacity(block.num_columns());
-                    for (idx, col) in block.columns().iter().enumerate() {
-                        let data_type = block.schema().fields()[idx].data_type();
-                        let serializer = data_type.get_serializer();
-                        datas.push(serializer.serialize_strings(col)?);
-                    }
-
                     let rows_size = block.column(0).len();
                     for row_index in 0..rows_size {
-                        let mut row = Vec::with_capacity(columns_size);
-                        for column_index in 0..columns_size {
-                            let e = datas
-                                .get(column_index)
-                                .unwrap()
-                                .get(row_index)
-                                .unwrap()
-                                .to_string();
-                            row.push(e);
+                        for col_index in 0..columns_size {
+                            let val = block.column(col_index).try_get(row_index)?;
+                            if val.is_null() {
+                                row_writer.write_col(None::<u8>)?;
+                                continue;
+                            }
+                            let data_type = block.schema().fields()[col_index].data_type();
+                            match val {
+                                DataValue::Float32(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::Float64(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::Boolean(Some(v)) => {
+                                    row_writer.write_col(if v { "true" } else { "false" })?
+                                }
+                                DataValue::Int8(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::Int16(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::Int32(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::Int64(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::UInt8(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::UInt16(Some(v)) => match data_type {
+                                    DataType::Date16 => {
+                                        row_writer.write_col(v.to_date(&utc).naive_local())?
+                                    }
+                                    _ => row_writer.write_col(v)?,
+                                },
+                                DataValue::UInt32(Some(v)) => match data_type {
+                                    DataType::Date32 => {
+                                        row_writer.write_col(v.to_date(&utc).naive_local())?
+                                    }
+                                    DataType::DateTime32(tz) => {
+                                        let tz = tz.clone();
+                                        let tz = tz.unwrap_or_else(|| "UTC".to_string());
+                                        let tz: Tz = tz.parse().unwrap();
+                                        row_writer.write_col(v.to_date_time(&tz).naive_local())?
+                                    }
+                                    _ => row_writer.write_col(v)?,
+                                },
+                                DataValue::UInt64(Some(v)) => row_writer.write_col(v)?,
+                                DataValue::String(Some(v)) => row_writer.write_col(v)?,
+                                v => {
+                                    return Err(ErrorCode::BadDataValueType(format!(
+                                        "Unsupported column type:{:?}",
+                                        v.data_type()
+                                    )));
+                                }
+                            }
                         }
-                        row_writer.write_row(row)?;
+                        row_writer.end_row()?;
                     }
                 }
 
