@@ -51,6 +51,8 @@ Datafuse design principles:
 
 ![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
 
+Datafuse is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and its computing model is based on [apache-arrow](https://arrow.apache.org/).
+
 Datafuse consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
 
 ### Meta Service Layer
