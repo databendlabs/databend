@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use crate::scalars::ToYYYYMMDDFunction;
 use crate::scalars::ToYYYYMMDDhhmmssFunction;
 use crate::scalars::ToYYYYMMFunction;
 
@@ -243,6 +244,151 @@ fn test_toyyyymm_constant_function() -> Result<()> {
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
         let expected = UInt32Array::from_slice([197001; 15]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_toyyyymmdd_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u16])]);
+
+    {
+        let col = ToYYYYMMDDFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt32);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
+        let expected = UInt32Array::from_slice([19700101; 1]);
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u32])]);
+
+    {
+        let col = ToYYYYMMDDFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt32);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
+        let expected = UInt32Array::from_slice([19700101; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // dateTime
+    // 2021-09-05 09:23:17 --- 1630833797
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1630833797u32])]);
+
+    {
+        let col = ToYYYYMMDDFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt32);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
+        let expected = UInt32Array::from_slice([20210905; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_toyyyymmdd_constant_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt16(Some(0u16)),
+        5,
+    )]);
+    {
+        let col = ToYYYYMMDDFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 5);
+        assert_eq!(result.data_type(), DataType::UInt32);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
+        let expected = UInt32Array::from_slice([19700101; 5]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt32(Some(0u32)),
+        10,
+    )]);
+    {
+        let col = ToYYYYMMDDFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 10);
+        assert_eq!(result.data_type(), DataType::UInt32);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
+        let expected = UInt32Array::from_slice([19700101; 10]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // datetime
+    // 2021-09-05 09:23:17 --- 1630833797
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt32(Some(1630833797u32)),
+        15,
+    )]);
+    {
+        let col = ToYYYYMMDDFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 15);
+        assert_eq!(result.data_type(), DataType::UInt32);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt32Array>().unwrap();
+        let expected = UInt32Array::from_slice([20210905; 15]);
 
         assert_eq!(actual, &expected);
     }

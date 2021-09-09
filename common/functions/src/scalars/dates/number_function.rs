@@ -56,6 +56,22 @@ impl NumberResultFunction<u32> for ToYYYYMM {
 }
 
 #[derive(Clone)]
+pub struct ToYYYYMMDD;
+
+impl NumberResultFunction<u32> for ToYYYYMMDD {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt32)
+    }
+    fn to_number(value: DateTime<Utc>) -> u32 {
+        value.year() as u32 * 10000 + value.month() * 100 + value.day()
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt32(Some(Self::to_number(value)))
+    }
+}
+
+#[derive(Clone)]
 pub struct ToYYYYMMDDhhmmss;
 
 impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
@@ -184,4 +200,5 @@ impl<T, R> fmt::Display for NumberFunction<T, R> {
 }
 
 pub type ToYYYYMMFunction = NumberFunction<ToYYYYMM, u32>;
+pub type ToYYYYMMDDFunction = NumberFunction<ToYYYYMMDD, u32>;
 pub type ToYYYYMMDDhhmmssFunction = NumberFunction<ToYYYYMMDDhhmmss, u64>;

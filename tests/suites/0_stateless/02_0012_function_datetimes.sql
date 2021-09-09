@@ -39,4 +39,11 @@ select toYYYYMMDDhhmmss(toDateTime(1630833797))  =  20210905092317;
 select toYYYYMMDDhhmmss(toDate(18875))  =  20210905000000;
 select '===toYYYYMMDDhhmmss===';
 
+select '===toYYYYMMDD===';
+select toYYYYMMDD(toDateTime(1630833797));
+select toYYYYMMDD(toDate(18875));
+select toYYYYMMDD(toDateTime(1630833797))  =  20210905;
+select toYYYYMMDD(toDate(18875))  =  20210905;
+select '===toYYYYMMDD===';
+
 
