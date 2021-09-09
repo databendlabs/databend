@@ -20,7 +20,7 @@ select tomorrow() - today() = 1;
 select toYYYYMM(toDateTime(1630833797));
 select toYYYYMM(toDate(18875));
 select toYYYYMM(toDateTime(1630833797))  =  202109;
-select toYYYYMM(toDate(18875)  )  =  202109;
+select toYYYYMM(toDate(18875))  =  202109;
 
 select '===round===';
 select timeSlot(toDateTime(1630320462));
@@ -31,3 +31,19 @@ select toStartOfFiveMinutes(toDateTime(1630320462));
 select toStartOfTenMinutes(toDateTime(1630320462));
 select timeSlot(now()) <= now();
 select '===round-end===';
+
+select '===toYYYYMMDDhhmmss===';
+select toYYYYMMDDhhmmss(toDateTime(1630833797));
+select toYYYYMMDDhhmmss(toDate(18875));
+select toYYYYMMDDhhmmss(toDateTime(1630833797))  =  20210905092317;
+select toYYYYMMDDhhmmss(toDate(18875))  =  20210905000000;
+select '===toYYYYMMDDhhmmss===';
+
+select '===toYYYYMMDD===';
+select toYYYYMMDD(toDateTime(1630833797));
+select toYYYYMMDD(toDate(18875));
+select toYYYYMMDD(toDateTime(1630833797))  =  20210905;
+select toYYYYMMDD(toDate(18875))  =  20210905;
+select '===toYYYYMMDD===';
+
+
