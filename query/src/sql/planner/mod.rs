@@ -16,6 +16,7 @@ mod binder;
 mod expression_binder;
 mod logical_plan;
 pub mod physical_plan;
+mod bind_context;
 
 pub use binder::Binder;
 pub use binder::ColumnBinding;
