@@ -106,36 +106,56 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 continue;
                             }
                             let data_type = block.schema().fields()[col_index].data_type();
-                            match val {
-                                DataValue::Float32(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::Float64(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::Boolean(Some(v)) => row_writer.write_col(v as i8)?,
-                                DataValue::Int8(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::Int16(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::Int32(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::Int64(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::UInt8(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::UInt16(Some(v)) => match data_type {
-                                    DataType::Date16 => {
-                                        row_writer.write_col(v.to_date(&utc).naive_local())?
-                                    }
-                                    _ => row_writer.write_col(v)?,
-                                },
-                                DataValue::UInt32(Some(v)) => match data_type {
-                                    DataType::Date32 => {
-                                        row_writer.write_col(v.to_date(&utc).naive_local())?
-                                    }
-                                    DataType::DateTime32(tz) => {
-                                        let tz = tz.clone();
-                                        let tz = tz.unwrap_or_else(|| "UTC".to_string());
-                                        let tz: Tz = tz.parse().unwrap();
-                                        row_writer.write_col(v.to_date_time(&tz).naive_local())?
-                                    }
-                                    _ => row_writer.write_col(v)?,
-                                },
-                                DataValue::UInt64(Some(v)) => row_writer.write_col(v)?,
-                                DataValue::String(Some(v)) => row_writer.write_col(v)?,
-                                v => {
+                            match (data_type, val) {
+                                (DataType::Boolean, DataValue::Boolean(Some(v))) => {
+                                    row_writer.write_col(v as i8)?
+                                }
+                                (DataType::Int8, DataValue::Int8(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Int16, DataValue::Int16(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Int32, DataValue::Int32(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Int64, DataValue::Int64(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt8, DataValue::UInt8(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt16, DataValue::UInt16(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt32, DataValue::UInt32(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt64, DataValue::UInt64(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Float32, DataValue::Float32(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Float64, DataValue::Float64(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Date16, DataValue::UInt16(Some(v))) => {
+                                    row_writer.write_col(v.to_date(&utc).naive_local())?
+                                }
+                                (DataType::Date32, DataValue::UInt32(Some(v))) => {
+                                    row_writer.write_col(v.to_date(&utc).naive_local())?
+                                }
+                                (DataType::DateTime32(tz), DataValue::UInt32(Some(v))) => {
+                                    let tz = tz.clone();
+                                    let tz = tz.unwrap_or_else(|| "UTC".to_string());
+                                    let tz: Tz = tz.parse().unwrap();
+                                    row_writer.write_col(v.to_date_time(&tz).naive_local())?
+                                }
+                                (DataType::String, DataValue::String(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (_, v) => {
                                     return Err(ErrorCode::BadDataValueType(format!(
                                         "Unsupported column type:{:?}",
                                         v.data_type()
