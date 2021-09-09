@@ -307,14 +307,8 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                         .collect();
                     result.column(name, vs)
                 }
-                DataType::Interval(unit) => {
-                    let seconds = IntervalUnit::avg_seconds(unit.clone()) as f64;
-                    let vs: Vec<f64> = column
-                        .i64()?
-                        .into_no_null_iter()
-                        .map(|c| (*c as f64) / seconds)
-                        .collect();
-                    result.column(name, vs)
+                DataType::Interval(_) => {
+                    result.column(name, column.i64()?.inner().values().as_slice().to_vec())
                 }
                 _ => {
                     return Err(ErrorCode::BadDataValueType(format!(

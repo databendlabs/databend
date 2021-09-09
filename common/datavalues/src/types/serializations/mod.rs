@@ -22,14 +22,12 @@ use crate::DataType;
 mod boolean;
 mod date;
 mod date_time;
-mod null;
 mod number;
 mod string;
 
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;
-pub use null::*;
 pub use number::*;
 pub use string::*;
 
