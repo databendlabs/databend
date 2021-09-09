@@ -80,7 +80,7 @@ impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
-    R: DFPrimitiveType + Clone + Sync + Send + 'static,
+    R: DFPrimitiveType + Clone,
     DFPrimitiveArray<R>: IntoSeries,
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
@@ -94,8 +94,8 @@ where
 
 impl<T, R> Function for NumberFunction<T, R>
 where
-    T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
-    R: DFPrimitiveType + Clone + Sync + Send + 'static,
+    T: NumberResultFunction<R> + Clone + Sync + Send,
+    R: DFPrimitiveType + Clone,
     DFPrimitiveArray<R>: IntoSeries,
 {
     fn name(&self) -> &str {
@@ -122,7 +122,7 @@ where
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time);
                     Ok(DataColumn::Constant(constant_result, input_rows))
-                }else {
+                } else {
                     let result: DFPrimitiveArray<R> = columns[0].column()
                         .to_array()?
                         .u16()?
@@ -139,7 +139,7 @@ where
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time);
                     Ok(DataColumn::Constant(constant_result, input_rows))
-                }else {
+                } else {
                     let result = columns[0].column()
                         .to_array()?
                         .u32()?
@@ -156,7 +156,7 @@ where
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64, 0_u32);
                     let constant_result = T::to_constant_value(date_time);
                     Ok(DataColumn::Constant(constant_result, input_rows))
-                }else {
+                } else {
                     let result = columns[0].column()
                         .to_array()?
                         .u32()?
