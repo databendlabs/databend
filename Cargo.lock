@@ -1401,6 +1401,7 @@ dependencies = [
  "ahash 0.7.4",
  "async-trait",
  "axum",
+ "axum-server",
  "bumpalo",
  "byteorder",
  "chrono",

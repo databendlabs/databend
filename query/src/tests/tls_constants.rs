@@ -17,3 +17,11 @@ pub const TEST_CA_CERT: &'static str = "../tests/certs/ca.pem";
 pub const TEST_SERVER_CERT: &'static str = "../tests/certs/server.pem";
 pub const TEST_SERVER_KEY: &'static str = "../tests/certs/server.key";
 pub const TEST_CN_NAME: &'static str = "localhost";
+
+pub const TEST_TLS_CA_CERT: &'static str = "../tools/tls/cfssl/ca/ca.pem";
+pub const TEST_TLS_SERVER_CERT: &'static str = "../tools/tls/cfssl/server/server.pem";
+pub const TEST_TLS_SERVER_KEY: &'static str = "../tools/tls/cfssl/server/pkcs8-server-key.pem";
+// pub const TEST_TLS_CLIENT_CERT: &'static str = "../tools/tls/cfssl/client/client.pem";
+// pub const TEST_TLS_CLIENT_KEY: &'static str = "../tools/tls/cfssl/client/pkcs8-client-key.pem";
+pub const TEST_TLS_CLIENT_IDENTITY: &'static str = "../tools/tls/cfssl/client/client-identity.pfx";
+pub const TEST_TLS_CLIENT_PASSWORD: &'static str = "datafuse";
