@@ -13,11 +13,5 @@
 //  limitations under the License.
 //
 
-mod blob_accessor;
-mod impls;
-
-pub use blob_accessor::Bytes;
-pub use blob_accessor::DataAccessor;
-pub use impls::Local;
-pub use impls::StorageScheme;
-pub use impls::S3;
+pub mod meta_info_reader;
+pub mod table_snapshot;

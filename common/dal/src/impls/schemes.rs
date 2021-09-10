@@ -13,11 +13,9 @@
 //  limitations under the License.
 //
 
-mod blob_accessor;
-mod impls;
-
-pub use blob_accessor::Bytes;
-pub use blob_accessor::DataAccessor;
-pub use impls::Local;
-pub use impls::StorageScheme;
-pub use impls::S3;
+#[derive(Clone, Debug)]
+pub enum StorageScheme {
+    LocalFs,
+    FuseDfs,
+    S3,
+}

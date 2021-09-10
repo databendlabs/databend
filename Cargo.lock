@@ -125,7 +125,7 @@ dependencies = [
  "multiversion",
  "num-traits",
  "packed_simd_2",
- "parquet2 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parquet2",
  "regex",
  "serde",
  "serde_json",
@@ -673,7 +673,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
- "parquet2 0.4.0 (git+https://github.com/datafuse-extras/parquet2?rev=83c3325)",
+ "parquet2",
 ]
 
 [[package]]
@@ -1415,6 +1415,7 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-clickhouse-srv",
+ "common-dal",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1449,6 +1450,7 @@ dependencies = [
  "nom 7.0.0",
  "num",
  "num_cpus",
+ "parquet-format-async-temp 0.1.1",
  "paste",
  "pnet",
  "pretty_assertions",
@@ -3611,6 +3613,19 @@ dependencies = [
 
 [[package]]
 name = "parquet-format-async-temp"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cde63e74461b2c6c31166c6bcd205096074c8972a9b46becfff0a4eb8c4fabd8"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "futures",
+ "integer-encoding 3.0.2",
+ "ordered-float 1.1.1",
+]
+
+[[package]]
+name = "parquet-format-async-temp"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03abc2f9c83fe9ceec83f47c76cc071bfd56caba33794340330f35623ab1f544"
@@ -3631,19 +3646,7 @@ dependencies = [
  "async-stream",
  "bitpacking",
  "futures",
- "parquet-format-async-temp",
- "streaming-iterator",
-]
-
-[[package]]
-name = "parquet2"
-version = "0.4.0"
-source = "git+https://github.com/datafuse-extras/parquet2?rev=83c3325#83c33258880a1ac7cfddf151a77c8e7ab744661f"
-dependencies = [
- "async-stream",
- "bitpacking",
- "futures",
- "parquet-format-async-temp",
+ "parquet-format-async-temp 0.2.0",
  "streaming-iterator",
 ]
 

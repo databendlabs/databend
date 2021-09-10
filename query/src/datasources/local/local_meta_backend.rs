@@ -17,6 +17,13 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flights::meta_api_impl::CreateDatabaseActionResult;
+use common_flights::meta_api_impl::CreateTableActionResult;
+use common_flights::meta_api_impl::DatabaseMetaReply;
+use common_flights::meta_api_impl::DropDatabaseActionResult;
+use common_flights::meta_api_impl::DropTableActionResult;
+use common_flights::meta_api_impl::GetDatabaseActionResult;
+use common_flights::meta_api_impl::GetTableActionResult;
 use common_infallible::RwLock;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
@@ -24,11 +31,14 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+use common_store_api::CommitTableReply;
+use common_store_api::MetaApi;
 
 use crate::catalogs::impls::LOCAL_TBL_ID_BEGIN;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::TableMeta;
+use crate::datasources::fuse_table::FuseTable;
 use crate::datasources::local::CsvTable;
 use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::MemoryTable;
@@ -146,6 +156,9 @@ impl MetaBackend for LocalMetaBackend {
             "CSV" => CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             "NULL" => NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             "MEMORY" => MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
+            "FUSE_LOCAL" => {
+                FuseTable::try_create(plan.db, plan.table, plan.schema, plan.options, self.clone())?
+            }
             _ => {
                 return Result::Err(ErrorCode::UnImplement(format!(
                     "Local database does not support '{:?}' table engine, table engine must be one of Parquet, JSONEachRow, Null, Memory or CSV",
@@ -290,5 +303,56 @@ impl MetaBackend for LocalMetaBackend {
         }
         self.databases.write().remove(db_name);
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl MetaApi for LocalMetaBackend {
+    async fn create_database(
+        &mut self,
+        _plan: CreateDatabasePlan,
+    ) -> Result<CreateDatabaseActionResult> {
+        todo!()
+    }
+
+    async fn get_database(&mut self, _db: &str) -> Result<GetDatabaseActionResult> {
+        todo!()
+    }
+
+    async fn drop_database(&mut self, _plan: DropDatabasePlan) -> Result<DropDatabaseActionResult> {
+        todo!()
+    }
+
+    async fn create_table(&mut self, _plan: CreateTablePlan) -> Result<CreateTableActionResult> {
+        todo!()
+    }
+
+    async fn drop_table(&mut self, _plan: DropTablePlan) -> Result<DropTableActionResult> {
+        todo!()
+    }
+
+    async fn get_table(&mut self, _db: String, _table: String) -> Result<GetTableActionResult> {
+        todo!()
+    }
+
+    async fn get_table_ext(
+        &mut self,
+        _table_id: MetaId,
+        _db_ver: Option<MetaVersion>,
+    ) -> Result<GetTableActionResult> {
+        todo!()
+    }
+
+    async fn get_database_meta(&mut self, _current_ver: Option<u64>) -> Result<DatabaseMetaReply> {
+        todo!()
+    }
+
+    async fn commit_table(
+        &self,
+        _table_id: MetaId,
+        _prev_snapshot: String,
+        _new_snapshot: String,
+    ) -> Result<CommitTableReply> {
+        todo!()
     }
 }

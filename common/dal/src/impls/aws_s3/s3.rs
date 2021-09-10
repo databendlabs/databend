@@ -13,8 +13,6 @@
 //  limitations under the License.
 //
 
-use std::io::Error;
-
 use common_exception::ErrorCode;
 use futures::Stream;
 use futures::StreamExt;
@@ -26,6 +24,8 @@ use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 use tokio::io::AsyncReadExt;
 
+use crate::blob_accessor::InputStream;
+use crate::blob_accessor::SeekableReader;
 use crate::impls::aws_s3::s3_input_stream::S3InputStream;
 use crate::Bytes;
 use crate::DataAccessor;
@@ -39,6 +39,10 @@ impl S3 {
     pub fn new(region: Region, bucket: String) -> Self {
         let client = S3Client::new(region);
         S3 { client, bucket }
+    }
+
+    pub fn fake_new() -> Self {
+        todo!()
     }
 
     async fn put_byte_stream(
@@ -62,19 +66,25 @@ impl S3 {
 
 #[async_trait::async_trait]
 impl DataAccessor for S3 {
-    type InputStream = S3InputStream;
+    fn get_reader(
+        &self,
+        _path: &str,
+        _stream_len: Option<u64>,
+    ) -> common_exception::Result<Box<dyn SeekableReader>> {
+        todo!()
+    }
 
     async fn get_input_stream(
         &self,
         path: &str,
         stream_len: Option<u64>,
-    ) -> common_exception::Result<Self::InputStream> {
-        Ok(S3InputStream::new(
+    ) -> common_exception::Result<InputStream> {
+        Ok(Box::new(S3InputStream::new(
             &self.client,
             &self.bucket,
             path,
             stream_len,
-        ))
+        )))
     }
 
     async fn get(&self, path: &str) -> common_exception::Result<Bytes> {
@@ -102,15 +112,14 @@ impl DataAccessor for S3 {
         self.put_byte_stream(path, ByteStream::from(content)).await
     }
 
-    async fn put_stream<S>(
+    async fn put_stream(
         &self,
         path: &str,
-        input_stream: S,
+        input_stream: Box<
+            dyn Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + Unpin + 'static,
+        >,
         stream_len: usize,
-    ) -> common_exception::Result<()>
-    where
-        S: Stream<Item = Result<Bytes, Error>> + Send + 'static,
-    {
+    ) -> common_exception::Result<()> {
         let s = input_stream.map(|bytes| bytes.map(|b| bytes::Bytes::copy_from_slice(&b)));
         self.put_byte_stream(path, ByteStream::new_with_size(s, stream_len))
             .await

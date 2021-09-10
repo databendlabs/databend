@@ -17,18 +17,18 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 
-use async_compat::Compat;
 use async_compat::CompatExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
-use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
 use crate::blob_accessor::Bytes;
 use crate::blob_accessor::DataAccessor;
+use crate::blob_accessor::InputStream;
+use crate::blob_accessor::SeekableReader;
 
 pub struct Local {
     root: PathBuf,
@@ -59,15 +59,13 @@ impl Local {
 
 #[async_trait::async_trait]
 impl DataAccessor for Local {
-    type InputStream = Compat<File>;
+    fn get_reader(&self, path: &str, _len: Option<u64>) -> Result<Box<dyn SeekableReader>> {
+        Ok(Box::new(std::fs::File::open(path)?))
+    }
 
-    async fn get_input_stream(
-        &self,
-        path: &str,
-        _stream_len: Option<u64>,
-    ) -> Result<Self::InputStream> {
+    async fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {
         let path = self.prefix_with_root(path)?;
-        Ok(tokio::fs::File::open(path).await?.compat())
+        Ok(Box::new(tokio::fs::File::open(path).await?.compat()))
     }
 
     async fn get(&self, path: &str) -> Result<Bytes> {
@@ -91,8 +89,14 @@ impl DataAccessor for Local {
     }
 
     // not "atomic", for test purpose only
-    async fn put_stream<S>(&self, path: &str, input_stream: S, _stream_len: usize) -> Result<()>
-    where S: Stream<Item = std::result::Result<Bytes, Error>> + Send + 'static {
+    async fn put_stream(
+        &self,
+        path: &str,
+        input_stream: Box<
+            dyn Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + Unpin + 'static,
+        >,
+        _stream_len: usize,
+    ) -> common_exception::Result<()> {
         let path = self.prefix_with_root(path)?;
         let parent = path
             .parent()

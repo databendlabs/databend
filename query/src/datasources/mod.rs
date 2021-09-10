@@ -21,6 +21,7 @@ mod common;
 mod meta_backend;
 
 pub(crate) mod example;
+mod fuse_table;
 pub(crate) mod local;
 pub(crate) mod remote;
 pub(crate) mod system;

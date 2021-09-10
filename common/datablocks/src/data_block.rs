@@ -42,10 +42,7 @@ impl DataBlock {
     }
 
     pub fn create_by_array(schema: DataSchemaRef, arrays: Vec<Series>) -> Self {
-        let columns = arrays
-            .iter()
-            .map(|array| DataColumn::Array(array.clone()))
-            .collect();
+        let columns = arrays.into_iter().map(DataColumn::Array).collect();
         DataBlock { schema, columns }
     }
 

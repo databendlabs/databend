@@ -38,8 +38,9 @@ fn test_describe_table_plan() -> Result<()> {
     DataSchema { fields: [\
         DataField { name: \"Field\", data_type: String, nullable: false }, \
         DataField { name: \"Type\", data_type: String, nullable: false }, \
-        DataField { name: \"Null\", data_type: String, nullable: false }\
-    ] }";
+        DataField { name: \"Null\", data_type: String, nullable: false }], \
+        metadata: {} \
+    }";
     let actual = format!("{:?}", describe.schema());
     assert_eq!(expect, actual);
 
