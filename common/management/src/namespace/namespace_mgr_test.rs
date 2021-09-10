@@ -78,7 +78,7 @@ fn prepare() -> common_exception::Result<(Vec<(String, SeqValue<KVValue>)>, Node
             id: node_id,
             cpu_nums: 0,
             version: 0,
-            ip: "".to_string(),
+            flight_address: "".to_string(),
             port: 0,
         };
         res.push((
@@ -106,7 +106,7 @@ async fn test_add_node() -> Result<()> {
         id: node_id.to_string(),
         cpu_nums: 0,
         version: 0,
-        ip: "".to_string(),
+        flight_address: "".to_string(),
         port: 0,
     };
     let value = Some(serde_json::to_vec(&node)?);
@@ -297,7 +297,7 @@ async fn test_update_node_normal() -> Result<()> {
         id: node_id.to_string(),
         cpu_nums: 0,
         version: 0,
-        ip: "".to_string(),
+        flight_address: "".to_string(),
         port: 0,
     };
     let new_value = serde_json::to_vec(&node)?;
@@ -343,7 +343,7 @@ async fn test_update_node_error() -> Result<()> {
         id: node_id.to_string(),
         cpu_nums: 0,
         version: 0,
-        ip: "".to_string(),
+        flight_address: "".to_string(),
         port: 0,
     };
     let new_value = serde_json::to_vec(&node)?;

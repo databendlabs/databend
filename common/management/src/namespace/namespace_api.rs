@@ -25,13 +25,11 @@ pub struct NodeInfo {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
-    pub cpu_nums: u32,
+    pub cpu_nums: u64,
     #[serde(default)]
     pub version: u32,
     #[serde(default)]
-    pub ip: String,
-    #[serde(default)]
-    pub port: u32,
+    pub flight_address: String,
 }
 
 impl TryFrom<Vec<u8>> for NodeInfo {
@@ -45,6 +43,12 @@ impl TryFrom<Vec<u8>> for NodeInfo {
                 serialize_error
             ))),
         }
+    }
+}
+
+impl NodeInfo {
+    pub fn create(id: String, cpu_nums: u64, flight_address: String) -> NodeInfo {
+        NodeInfo { id, cpu_nums, version: 1, flight_address }
     }
 }
 

@@ -1422,6 +1422,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
+ "common-management",
  "common-metatypes",
  "common-planners",
  "common-profling",

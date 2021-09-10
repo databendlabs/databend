@@ -22,6 +22,7 @@ mod node_test;
 mod address;
 mod cluster;
 mod node;
+mod metastore_cluster;
 
 pub use cluster::Cluster;
 pub use cluster::ClusterRef;

@@ -20,32 +20,62 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::DNSResolver;
+use common_flights::{DNSResolver, StoreClient};
 use common_infallible::Mutex;
 
 use crate::clusters::address::Address;
 use crate::clusters::node::Node;
 use crate::configs::Config;
+use common_management::{NamespaceApi, NamespaceMgr, LocalKVStore, NodeInfo};
 
 pub type ClusterRef = Arc<Cluster>;
 
 pub struct Cluster {
     local_port: u16,
     nodes: Mutex<HashMap<String, Arc<Node>>>,
+    provider: Mutex<Box<dyn NamespaceApi + Sync + Send>>,
 }
 
 impl Cluster {
-    pub fn create_global(cfg: Config) -> Result<ClusterRef> {
+    // TODO(Winter): this should be disabled by compile flag
+    async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterRef> {
+        let local_store = LocalKVStore::new_temp();
         Ok(Arc::new(Cluster {
-            nodes: Mutex::new(HashMap::new()),
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
+            nodes: Mutex::new(HashMap::new()),
+            provider: Mutex::new(Box::new(NamespaceMgr::<LocalKVStore>::new(local_store.await?))),
         }))
     }
 
-    pub fn empty() -> ClusterRef {
+    async fn cluster_with_metastore(cfg: &Config) -> Result<ClusterRef> {
+        let address = &cfg.meta.meta_address;
+        let username = &cfg.meta.meta_username;
+        let password = &cfg.meta.meta_password;
+        let store_client = StoreClient::try_create(address, username, password);
+
+        Ok(Arc::new(Cluster {
+            local_port: Address::create(&cfg.query.flight_api_address)?.port(),
+            nodes: Mutex::new(HashMap::new()),
+            provider: Mutex::new(Box::new(NamespaceMgr::<StoreClient>::new(store_client.await?))),
+        }))
+    }
+
+    pub async fn create_global(cfg: Config) -> Result<ClusterRef> {
+        let cluster = match cfg.meta.meta_address.is_empty() {
+            true => Self::standalone_without_metastore(&cfg).await?,
+            false => Self::cluster_with_metastore(&cfg).await?,
+        };
+
+        cluster.register_to_metastore(&cfg).await
+    }
+
+    pub async fn empty() -> ClusterRef {
+        let local_store = LocalKVStore::new_temp();
+
         Arc::new(Cluster {
             local_port: 9090,
             nodes: Mutex::new(HashMap::new()),
+            provider: Mutex::new(Box::new(NamespaceMgr::<LocalKVStore>::new(local_store.await.unwrap()))),
         })
     }
 
@@ -110,6 +140,18 @@ impl Cluster {
             .collect::<Vec<_>>();
         nodes.sort_by(|left, right| left.sequence.cmp(&right.sequence));
         Ok(nodes)
+    }
+
+    pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<ClusterRef> {
+        let tenant_id = cfg.query.tenant.clone();
+        let namespace_id = cfg.query.namespace.clone();
+        let mut api_provider = self.provider.lock();
+
+        // let cpus = cfg.query.num_cpus;
+        // let address = Address::create(&cfg.query.flight_api_address.clone())?;
+        // let node_info = NodeInfo::create(cpus, address.hostname(), address.port());
+        // api_provider.add_node(tenant_id, namespace_id, node_info)
+        Ok(self.clone())
     }
 }
 

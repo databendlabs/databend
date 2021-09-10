@@ -55,12 +55,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     info!("{:?}", conf);
-    info!(
-        "DatafuseQuery v-{}",
-        *datafuse_query::configs::config::FUSE_COMMIT_VERSION,
-    );
+    info!("DatafuseQuery v-{}", *datafuse_query::configs::config::FUSE_COMMIT_VERSION);
 
-    let cluster = Cluster::create_global(conf.clone())?;
+    let cluster = Cluster::create_global(conf.clone()).await?;
     let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 

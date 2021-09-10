@@ -44,7 +44,7 @@ async fn test_mgr_backed_with_local_kv_store() -> Result<()> {
         id: node_id.to_string(),
         cpu_nums: 0,
         version: 0,
-        ip: "".to_string(),
+        flight_address: "".to_string(),
         port: 0,
     };
 

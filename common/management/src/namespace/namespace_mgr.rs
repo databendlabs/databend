@@ -32,8 +32,7 @@ pub struct NamespaceMgr<KV> {
     kv_api: KV,
 }
 
-impl<T> NamespaceMgr<T>
-where T: KVApi
+impl<T: KVApi> NamespaceMgr<T>
 {
     #[allow(dead_code)]
     pub fn new(kv_api: T) -> Self {
