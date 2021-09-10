@@ -70,21 +70,10 @@ impl DataType {
             Int64 => ArrowDataType::Int64,
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
-            Date16 => ArrowDataType::Extension(
-                "Date16".to_string(),
-                Box::new(ArrowDataType::UInt16),
-                None,
-            ),
-            Date32 => ArrowDataType::Extension(
-                "Date32".to_string(),
-                Box::new(ArrowDataType::UInt32),
-                None,
-            ),
-            DateTime32(tz) => ArrowDataType::Extension(
-                "DateTime32".to_string(),
-                Box::new(ArrowDataType::UInt32),
-                tz.clone(),
-            ),
+            Date16 => ArrowDataType::UInt16,
+            Date32 => ArrowDataType::UInt32,
+            // we don't use DataType::Extension because extension types are not supported in parquet
+            DateTime32(_) => ArrowDataType::UInt32,
             List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
@@ -127,14 +116,6 @@ impl From<&ArrowDataType> for DataType {
             ArrowDataType::Timestamp(_, tz) => DataType::DateTime32(tz.clone()),
             ArrowDataType::Date32 => DataType::Date16,
             ArrowDataType::Date64 => DataType::Date32,
-
-            ArrowDataType::Extension(name, _arrow_type, extra) => match name.as_str() {
-                "Date16" => DataType::Date16,
-                "Date32" => DataType::Date32,
-                "DateTime32" => DataType::DateTime32(extra.clone()),
-                _ => unimplemented!("data_type: {}", dt),
-            },
-
             // this is safe, because we define the datatype firstly
             _ => {
                 unimplemented!("data_type: {}", dt)

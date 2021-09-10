@@ -56,19 +56,6 @@ impl DFListArray {
         &self.array
     }
 
-    #[inline]
-    pub fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
-        let arrow_type = data_type.to_arrow();
-        let array = LargeListArray::from_data(
-            arrow_type,
-            self.array.offsets().clone(),
-            self.array.values().clone(),
-            self.array.validity().clone(),
-        );
-
-        Arc::new(array) as ArrayRef
-    }
-
     /// # Safety
     /// Note this doesn't do any bound checking, for performance reason.
     pub unsafe fn try_get(&self, index: usize) -> Result<DataValue> {

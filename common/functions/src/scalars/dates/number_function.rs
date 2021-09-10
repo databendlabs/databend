@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -26,44 +27,99 @@ use common_exception::Result;
 use crate::scalars::Function;
 
 #[derive(Clone, Debug)]
-pub struct NumberFunction<T> {
+pub struct NumberFunction<T, R> {
     display_name: String,
     t: PhantomData<T>,
+    r: PhantomData<R>,
 }
 
-pub trait NumberResultFunction {
-    fn execute(_value: DateTime<Utc>) -> u32;
+pub trait NumberResultFunction<R> {
+    fn return_type() -> Result<DataType>;
+    fn to_number(_value: DateTime<Utc>) -> R;
+    fn to_constant_value(_value: DateTime<Utc>) -> DataValue;
 }
 
 #[derive(Clone)]
 pub struct ToYYYYMM;
 
-impl NumberResultFunction for ToYYYYMM {
-    fn execute(value: DateTime<Utc>) -> u32 {
+impl NumberResultFunction<u32> for ToYYYYMM {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt32)
+    }
+    fn to_number(value: DateTime<Utc>) -> u32 {
         value.year() as u32 * 100 + value.month()
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt32(Some(Self::to_number(value)))
     }
 }
 
-impl<T> NumberFunction<T>
-where T: NumberResultFunction + Clone + Sync + Send + 'static
+#[derive(Clone)]
+pub struct ToYYYYMMDD;
+
+impl NumberResultFunction<u32> for ToYYYYMMDD {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt32)
+    }
+    fn to_number(value: DateTime<Utc>) -> u32 {
+        value.year() as u32 * 10000 + value.month() * 100 + value.day()
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt32(Some(Self::to_number(value)))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToYYYYMMDDhhmmss;
+
+impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt64)
+    }
+
+    fn to_number(value: DateTime<Utc>) -> u64 {
+        value.year() as u64 * 10000000000
+            + value.month() as u64 * 100000000
+            + value.day() as u64 * 1000000
+            + value.hour() as u64 * 10000
+            + value.minute() as u64 * 100
+            + value.second() as u64
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt64(Some(Self::to_number(value)))
+    }
+}
+
+impl<T, R> NumberFunction<T, R>
+where
+    T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
+    R: DFPrimitiveType + Clone,
+    DFPrimitiveArray<R>: IntoSeries,
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(NumberFunction::<T> {
+        Ok(Box::new(NumberFunction::<T, R> {
             display_name: display_name.to_string(),
             t: PhantomData,
+            r: PhantomData,
         }))
     }
 }
 
-impl<T> Function for NumberFunction<T>
-where T: NumberResultFunction + Clone + Sync + Send + 'static
+impl<T, R> Function for NumberFunction<T, R>
+where
+    T: NumberResultFunction<R> + Clone + Sync + Send,
+    R: DFPrimitiveType + Clone,
+    DFPrimitiveArray<R>: IntoSeries,
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::UInt32)
+        T::return_type()
     }
 
     fn num_arguments(&self) -> usize {
@@ -80,15 +136,15 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
             DataType::Date16 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
-                    let constant_result = Some(T::execute(date_time));
-                    Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
-                }else {
-                    let result = columns[0].column()
+                    let constant_result = T::to_constant_value(date_time);
+                    Ok(DataColumn::Constant(constant_result, input_rows))
+                } else {
+                    let result: DFPrimitiveArray<R> = columns[0].column()
                         .to_array()?
                         .u16()?
                         .apply_cast_numeric(|v| {
                             let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::execute(date_time)
+                            T::to_number(date_time)
                         }
                     );
                     Ok(result.into())
@@ -97,15 +153,15 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
             DataType::Date32 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64 * 24 * 3600, 0_u32);
-                    let constant_result = Some(T::execute(date_time));
-                    Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
-                }else {
+                    let constant_result = T::to_constant_value(date_time);
+                    Ok(DataColumn::Constant(constant_result, input_rows))
+                } else {
                     let result = columns[0].column()
                         .to_array()?
                         .u32()?
                         .apply_cast_numeric(|v| {
                             let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::execute(date_time)
+                            T::to_number(date_time)
                         }
                     );
                     Ok(result.into())
@@ -114,32 +170,35 @@ where T: NumberResultFunction + Clone + Sync + Send + 'static
             DataType::DateTime32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64().unwrap() as i64, 0_u32);
-                    let constant_result = Some(T::execute(date_time));
-                    Ok(DataColumn::Constant(DataValue::UInt32(constant_result), input_rows))
-                }else {
+                    let constant_result = T::to_constant_value(date_time);
+                    Ok(DataColumn::Constant(constant_result, input_rows))
+                } else {
                     let result = columns[0].column()
                         .to_array()?
                         .u32()?
                         .apply_cast_numeric(|v| {
                             let date_time = Utc.timestamp(v as i64, 0_u32);
-                            T::execute(date_time)
+                            T::to_number(date_time)
                         }
                     );
                     Ok(result.into())
                 }
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
-               "Illegal type {:?} of argument of function toYYYYMM.Should be a date16/data32 or a dateTime32",
-                other))),
+               "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                other,
+                 self.name()))),
         }?;
         Ok(number_array)
     }
 }
 
-impl<T> fmt::Display for NumberFunction<T> {
+impl<T, R> fmt::Display for NumberFunction<T, R> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}()", self.display_name)
     }
 }
 
-pub type ToYYYYMMFunction = NumberFunction<ToYYYYMM>;
+pub type ToYYYYMMFunction = NumberFunction<ToYYYYMM, u32>;
+pub type ToYYYYMMDDFunction = NumberFunction<ToYYYYMMDD, u32>;
+pub type ToYYYYMMDDhhmmssFunction = NumberFunction<ToYYYYMMDDhhmmss, u64>;

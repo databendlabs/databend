@@ -71,6 +71,8 @@ const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
+const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
+
 const QUERY_RPC_TLS_SERVER_CERT: &str = "QUERY_RPC_TLS_SERVER_CERT";
 const QUERY_RPC_TLS_SERVER_KEY: &str = "QUERY_RPC_TLS_SERVER_KEY";
 const QUERY_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT";
@@ -316,6 +318,10 @@ pub struct QueryConfig {
     #[serde(default)]
     pub api_tls_server_key: String,
 
+    #[structopt(long, env = QUERY_API_TLS_SERVER_ROOT_CA_CERT, default_value = "")]
+    #[serde(default)]
+    pub api_tls_server_root_ca_cert: String,
+
     #[structopt(
         long,
         env = "QUERY_RPC_TLS_SERVER_CERT",
@@ -371,6 +377,7 @@ impl QueryConfig {
             metric_api_address: "127.0.0.1:7070".to_string(),
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
+            api_tls_server_root_ca_cert: "".to_string(),
             rpc_tls_server_cert: "".to_string(),
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),

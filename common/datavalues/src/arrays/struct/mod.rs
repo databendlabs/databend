@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::array::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -46,18 +44,6 @@ impl DFStructArray {
                 .unwrap()
                 .clone(),
         )
-    }
-
-    #[inline]
-    pub fn to_array_ref(&self, data_type: &DataType) -> ArrayRef {
-        let arrow_type = data_type.to_arrow();
-        let array = StructArray::from_data(
-            arrow_type,
-            self.array.values().to_vec(),
-            self.array.validity().clone(),
-        );
-
-        Arc::new(array) as ArrayRef
     }
 
     pub fn data_type(&self) -> &DataType {
