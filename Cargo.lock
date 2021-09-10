@@ -882,10 +882,14 @@ dependencies = [
  "common-metatypes",
  "common-runtime",
  "common-store-api",
+ "common-tracing",
+ "datafuse-store",
+ "lazy_static",
  "mockall",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
 ]
 
 [[package]]
