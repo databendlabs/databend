@@ -1447,7 +1447,7 @@ dependencies = [
  "bumpalo",
  "byteorder",
  "cargo-license",
- "cargo_metadata 0.9.1",
+ "cargo_metadata 0.12.3",
  "chrono",
  "chrono-tz",
  "clickhouse-rs",
@@ -5826,7 +5826,7 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "rand",
  "static_assertions",
 ]
