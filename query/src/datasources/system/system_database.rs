@@ -56,6 +56,7 @@ impl SystemDatabase {
             Arc::new(system::OneTable::create()),
             Arc::new(system::FunctionsTable::create()),
             Arc::new(system::ContributorsTable::create()),
+            Arc::new(system::CreditsTable::create()),
             Arc::new(system::EnginesTable::create()),
             Arc::new(system::SettingsTable::create()),
             Arc::new(system::NumbersTable::create("numbers")),

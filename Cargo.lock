@@ -50,6 +50,12 @@ dependencies = [
 
 [[package]]
 name = "ansi_term"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23ac7c30002a5accbf7e8987d0632fa6de155b7c3d39d0067317a391e00a2ef6"
+
+[[package]]
+name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
@@ -452,12 +458,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
+name = "cargo-license"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fa442feb356be4b9a54bada3606e7d7544ed92c99d106c043ea07cb63849d21"
+dependencies = [
+ "ansi_term 0.9.0",
+ "anyhow",
+ "atty",
+ "cargo_metadata 0.9.1",
+ "csv",
+ "getopts",
+ "semver 0.9.0",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "structopt",
+ "toml 0.4.10",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbdb825da8a5df079a43676dbe042702f1707b1109f713a01420fbb4cc71fa27"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46e3374c604fb39d1a2f35ed5e4a4e30e60d01fab49446e08f1b3e9a90aef202"
+dependencies = [
+ "semver 0.9.0",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -1408,6 +1446,8 @@ dependencies = [
  "axum-server",
  "bumpalo",
  "byteorder",
+ "cargo-license",
+ "cargo_metadata 0.9.1",
  "chrono",
  "chrono-tz",
  "clickhouse-rs",
@@ -1467,7 +1507,7 @@ dependencies = [
  "threadpool",
  "tokio-rustls",
  "tokio-stream",
- "toml",
+ "toml 0.5.8",
  "tonic",
  "tower",
  "uuid",
@@ -2143,6 +2183,15 @@ checksum = "e692e296bfac1d2533ef168d0b60ff5897b8b70a4009276834014dd8924cc028"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "getopts"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14dbbfd5c71d70241ecf9e6f13737f7b5ce823821063188d7e46c41d371eebd5"
+dependencies = [
+ "unicode-width",
 ]
 
 [[package]]
@@ -4651,6 +4700,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 dependencies = [
  "semver-parser 0.7.0",
+ "serde",
 ]
 
 [[package]]
@@ -4842,7 +4892,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "188b810342d98f23f0bb875045299f34187b559370b041eb11520c905370a888"
 dependencies = [
  "bytecount",
- "cargo_metadata",
+ "cargo_metadata 0.12.3",
  "error-chain",
  "glob",
  "pulldown-cmark",
@@ -5062,7 +5112,7 @@ dependencies = [
  "skeptic",
  "structopt",
  "structopt-toml-derive",
- "toml",
+ "toml 0.5.8",
 ]
 
 [[package]]
@@ -5473,6 +5523,15 @@ dependencies = [
  "pin-project-lite",
  "slab",
  "tokio",
+]
+
+[[package]]
+name = "toml"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "758664fc71a3a69038656bee8b6be6477d2a6c315a6b81f7081f591bffa4111f"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
