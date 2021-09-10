@@ -33,7 +33,7 @@ use common_planners::Part;
 use common_runtime::tokio::sync::mpsc::Sender;
 use futures::StreamExt;
 
-use crate::datasources::fuse_table::util::location_gen::block_info_location;
+use crate::datasources::fuse_table::util::location_gen::block_location;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct BlockMetaCacheKey {
@@ -77,7 +77,7 @@ pub(crate) async fn read_part(
     sender: Sender<Result<DataBlock>>,
     arrow_schema: &ArrowSchema,
 ) -> Result<()> {
-    let loc = block_info_location(&part.name);
+    let loc = block_location(&part.name);
     // TODO pass in parquet file len
     let mut reader = data_accessor.get_input_stream(&loc, None).await?;
     let metadata = read_metadata_async(&mut reader)

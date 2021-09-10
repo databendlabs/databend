@@ -20,8 +20,6 @@ use crate::datasources::fuse_table::meta::meta_info_reader::MetaInfoReader;
 use crate::datasources::fuse_table::meta::table_snapshot::BlockLocation;
 use crate::datasources::fuse_table::meta::table_snapshot::TableSnapshot;
 
-// Imaginary api , tobe polished (heavily)
-
 struct TableSparseIndex {}
 struct CacheMgr;
 
