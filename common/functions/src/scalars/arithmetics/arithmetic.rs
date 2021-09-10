@@ -18,6 +18,7 @@ use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValueArithmeticOperator;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::ArithmeticDivFunction;
@@ -83,7 +84,9 @@ impl Function for ArithmeticFunction {
 
         if has_date_or_date_time && has_interval {
             //TODO(Jun): implement data/datatime +/- interval
-            unimplemented!()
+            return Err(ErrorCode::UnImplement(
+                "Arithmetic operation between date and interval is not implemented yet.".to_owned(),
+            ));
         }
 
         let result = match columns.len() {

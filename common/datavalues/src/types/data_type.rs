@@ -100,11 +100,7 @@ impl DataType {
                 ArrowDataType::Struct(arrows_fields)
             }
             String => ArrowDataType::LargeBinary,
-            Interval(unit) => ArrowDataType::Extension(
-                "Interval".to_string(),
-                Box::new(ArrowDataType::Int64),
-                Some(unit.to_string()),
-            ),
+            Interval(_) => ArrowDataType::Int64,
         }
     }
 }
@@ -146,17 +142,6 @@ impl From<&ArrowDataType> for DataType {
                 "Date16" => DataType::Date16,
                 "Date32" => DataType::Date32,
                 "DateTime32" => DataType::DateTime32(extra.clone()),
-                "Interval" => {
-                    if let Some(unit) = extra {
-                        match unit.as_str() {
-                            "YearMonth" => DataType::Interval(IntervalUnit::YearMonth),
-                            "DayTime" => DataType::Interval(IntervalUnit::DayTime),
-                            _ => unreachable!(),
-                        }
-                    } else {
-                        unreachable!()
-                    }
-                }
                 _ => unimplemented!("data_type: {}", dt),
             },
 
@@ -203,9 +188,7 @@ impl fmt::Debug for DataType {
             Self::List(arg0) => f.debug_tuple("List").field(arg0).finish(),
             Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
             Self::String => write!(f, "String"),
-            Self::Interval(unit) => {
-                write!(f, "Interval({})", unit.to_string())
-            }
+            Self::Interval(unit) => write!(f, "Interval({})", unit.to_string()),
         }
     }
 }
