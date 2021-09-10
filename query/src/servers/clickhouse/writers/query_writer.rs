@@ -307,6 +307,9 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                         .collect();
                     result.column(name, vs)
                 }
+                DataType::Interval(_) => {
+                    result.column(name, column.i64()?.inner().values().as_slice().to_vec())
+                }
                 _ => {
                     return Err(ErrorCode::BadDataValueType(format!(
                         "Unsupported column type:{:?}",

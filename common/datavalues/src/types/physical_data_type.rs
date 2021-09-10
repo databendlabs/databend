@@ -55,6 +55,7 @@ impl From<DataType> for PhysicalDataType {
             DataType::List(x) => List(x),
             DataType::Struct(x) => Struct(x),
             DataType::String => String,
+            DataType::Interval(_) => Int64,
         }
     }
 }

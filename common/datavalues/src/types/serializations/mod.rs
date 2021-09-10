@@ -73,6 +73,9 @@ impl DataType {
                 DataType::String => Ok(Box::new(StringSerializer {
                     builder: StringArrayBuilder::with_capacity(capacity),
                 })),
+                DataType::Interval(_) => Ok(Box::new(DateSerializer::<i64> {
+                    builder: PrimitiveArrayBuilder::<i64>::with_capacity(capacity),
+                })),
                 other => Err(ErrorCode::BadDataValueType(format!(
                     "create_serializer does not support type '{:?}'",
                     other
