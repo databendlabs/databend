@@ -92,7 +92,7 @@ cargo-license = "0.4.1"
 cargo_metadata = "0.9.1"
 
 [dependencies.parquet-format-async-temp]
-version = "0.1.0"
+version = "0.2.0"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
