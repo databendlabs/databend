@@ -123,7 +123,7 @@ pub struct StateMachine {
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
 
-    /// table parts， table id -> data parts
+    /// table parts, table id -> data parts
     pub table_parts: HashMap<u64, Vec<DataPartInfo>>,
 }
 

@@ -21,7 +21,7 @@ IF(expr1,expr2,expr3)
 
 ## Return Type
 
-The return type is determined by expr2 and expr3， they must have the lowest common type.
+The return type is determined by expr2 and expr3, they must have the lowest common type.
 
 ## Examples
 
@@ -30,7 +30,7 @@ mysql> select if(number=0, true, false) from numbers(1);
 +-------------------------------+
 | if((number = 0), true, false) |
 +-------------------------------+
-|                          true |
+|                             1 |
 +-------------------------------+
 1 row in set (0.01 sec)
 ```
