@@ -33,6 +33,7 @@ pub type ClusterRef = Arc<Cluster>;
 pub struct Cluster {
     local_port: u16,
     nodes: Mutex<HashMap<String, Arc<Node>>>,
+    local_id: String,
     provider: Mutex<Box<dyn NamespaceApi + Sync + Send>>,
 }
 
@@ -43,6 +44,7 @@ impl Cluster {
         Ok(Arc::new(Cluster {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
             nodes: Mutex::new(HashMap::new()),
+            local_id: global_unique_id(),
             provider: Mutex::new(Box::new(NamespaceMgr::<LocalKVStore>::new(local_store.await?))),
         }))
     }
@@ -56,6 +58,7 @@ impl Cluster {
         Ok(Arc::new(Cluster {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
             nodes: Mutex::new(HashMap::new()),
+            local_id: global_unique_id(),
             provider: Mutex::new(Box::new(NamespaceMgr::<StoreClient>::new(store_client.await?))),
         }))
     }
@@ -66,7 +69,8 @@ impl Cluster {
             false => Self::cluster_with_metastore(&cfg).await?,
         };
 
-        cluster.register_to_metastore(&cfg).await
+        cluster.register_to_metastore(&cfg).await;
+        Ok(cluster)
     }
 
     pub async fn empty() -> ClusterRef {
@@ -75,6 +79,7 @@ impl Cluster {
         Arc::new(Cluster {
             local_port: 9090,
             nodes: Mutex::new(HashMap::new()),
+            local_id: global_unique_id(),
             provider: Mutex::new(Box::new(NamespaceMgr::<LocalKVStore>::new(local_store.await.unwrap()))),
         })
     }
@@ -142,16 +147,31 @@ impl Cluster {
         Ok(nodes)
     }
 
-    pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<ClusterRef> {
+    pub async fn register_to_metastore(&self, cfg: &Config) -> Result<()> {
         let tenant_id = cfg.query.tenant.clone();
         let namespace_id = cfg.query.namespace.clone();
         let mut api_provider = self.provider.lock();
 
-        // let cpus = cfg.query.num_cpus;
-        // let address = Address::create(&cfg.query.flight_api_address.clone())?;
-        // let node_info = NodeInfo::create(cpus, address.hostname(), address.port());
-        // api_provider.add_node(tenant_id, namespace_id, node_info)
-        Ok(self.clone())
+        let cpus = cfg.query.num_cpus;
+        let address = cfg.query.flight_api_address.clone();
+        let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
+        api_provider.add_node(tenant_id, namespace_id, node_info).await?;
+        Ok(())
+    }
+}
+
+fn global_unique_id() -> String {
+    let mut uuid = uuid::Uuid::new_v4().as_u128();
+    let mut unique_id = String::from("");
+
+    loop {
+        let m = uuid % 36;
+        uuid = uuid / 36;
+
+        unique_id.push(std::char::from_digit(m as u32, 36).unwrap());
+        if uuid == 0 {
+            return unique_id;
+        }
     }
 }
 

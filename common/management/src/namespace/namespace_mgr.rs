@@ -47,6 +47,24 @@ impl<T: KVApi> NamespaceMgr<T>
         }
         res
     }
+
+    pub fn escape_for_key(key: String) -> String {
+        let mut new_key = Vec::with_capacity(key.len());
+
+        for char in key.as_bytes() {
+            match char {
+                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(char.clone() as char),
+                _other => {
+                    new_key.push('%');
+                    // Unwrap is safe for here
+                    new_key.push(char::from_digit(*char as u32 / 16, 16).unwrap());
+                    new_key.push(char::from_digit(*char as u32 % 16, 16).unwrap());
+                }
+            }
+        }
+
+        return new_key.iter().collect();
+    }
 }
 
 #[async_trait]
@@ -65,7 +83,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
 
         let res = self
             .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
+            .upsert_kv(&Self::escape_for_key(key), match_seq, Some(value), None)
             .await?;
 
         match (res.prev, res.result) {
@@ -88,7 +106,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
         _seq: Option<u64>,
     ) -> Result<Vec<SeqValue<NodeInfo>>> {
         let key = self.key_prefix(&[tenant_id, namespace_id]);
-        let values = self.kv_api.prefix_list_kv(key.as_str()).await?;
+        let values = self.kv_api.prefix_list_kv(Self::escape_for_key(key).as_str()).await?;
         let mut r = vec![];
         for (_key, (s, val)) in values {
             let u = serde_json::from_slice::<NodeInfo>(&val.value)
@@ -115,7 +133,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
         };
         let res = self
             .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
+            .upsert_kv(&Self::escape_for_key(key), match_seq, Some(value), None)
             .await?;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
@@ -134,7 +152,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
         seq: Option<u64>,
     ) -> Result<()> {
         let key = self.key_prefix(&[tenant_id, namespace_id, node_id.clone()]);
-        let r = self.kv_api.upsert_kv(&key, seq.into(), None, None).await?;
+        let r = self.kv_api.upsert_kv(&Self::escape_for_key(key), seq.into(), None, None).await?;
         if r.prev.is_some() && r.result.is_none() {
             Ok(())
         } else {
