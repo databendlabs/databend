@@ -37,6 +37,7 @@ impl CreditsTable {
         CreditsTable {
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::String, false),
+                DataField::new("version", DataType::String, false),
                 DataField::new("license", DataType::String, false),
             ]),
         }
@@ -105,6 +106,8 @@ impl Table for CreditsTable {
             };
 
         let names: Vec<&[u8]> = deps.iter().map(|x| x.name.as_bytes()).collect();
+        let version_strings: Vec<String> = deps.iter().map(|x| x.version.to_string()).collect();
+        let versions: Vec<&[u8]> = version_strings.iter().map(|x| x.as_bytes()).collect();
         let licenses: Vec<&[u8]> = deps
             .iter()
             .map(|x| match &x.license {
@@ -115,6 +118,7 @@ impl Table for CreditsTable {
 
         let block = DataBlock::create_by_array(self.schema.clone(), vec![
             Series::new(names),
+            Series::new(versions),
             Series::new(licenses),
         ]);
 
