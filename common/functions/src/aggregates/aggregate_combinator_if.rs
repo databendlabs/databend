@@ -27,6 +27,7 @@ use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::FactoryFunc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
+use crate::aggregates::StateAddrs;
 
 #[derive(Clone)]
 pub struct AggregateIfCombinator {
@@ -101,54 +102,12 @@ impl AggregateFunction for AggregateIfCombinator {
             return Ok(());
         };
 
-        let boolean_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
-        let boolean_array = boolean_array.bool()?;
+        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
+        let predicate = predicate_array.bool()?;
 
-        let arrow_filter_array = boolean_array.inner();
-        let bitmap = arrow_filter_array.values();
-
-        let mut column_array = Vec::with_capacity(self.argument_len - 1);
-        let row_size = match arrays.len() - 1 {
-            0 => {
-                // if it has no args, only return the row_count
-                if boolean_array.null_count() > 0 {
-                    // this greatly simplifies subsequent filtering code
-                    // now we only have a boolean mask to deal with
-                    let boolean_bm = arrow_filter_array.validity();
-                    let res = combine_validities(&Some(bitmap.clone()), boolean_bm);
-                    match res {
-                        Some(v) => v.len() - v.null_count(),
-                        None => 0,
-                    }
-                } else {
-                    bitmap.len() - bitmap.null_count()
-                }
-            }
-            1 => {
-                // single array handle
-                let data = arrow::compute::filter::filter(
-                    arrays[0].get_array_ref().as_ref(),
-                    arrow_filter_array,
-                )?;
-                let data: ArrayRef = Arc::from(data);
-                column_array.push(data.into_series());
-                column_array[0].len()
-            }
-            _ => {
-                // multi array handle
-                let mut args_array = Vec::with_capacity(self.argument_len - 1);
-                for column in arrays.iter().take(self.argument_len - 1) {
-                    args_array.push(column.clone());
-                }
-                let data = DataArrayFilter::filter_batch_array(args_array, boolean_array)?;
-                data.into_iter()
-                    .for_each(|column| column_array.push(column));
-                column_array[0].len()
-            }
-        };
+        let (column_array, rows_size) = self.filter_array(arrays, predicate)?;
         self.nested
-            .accumulate(place, column_array.as_slice(), row_size)?;
-        Ok(())
+            .accumulate(place, column_array.as_slice(), rows_size)
     }
 
     fn accumulate_keys(
@@ -156,10 +115,23 @@ impl AggregateFunction for AggregateIfCombinator {
         places: &[StateAddr],
         offset: usize,
         arrays: &[Series],
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<()> {
+        if arrays.is_empty() {
+            // TODO: maybe is error?
+            return Ok(());
+        };
+
+        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
+        let predicate = predicate_array.bool()?;
+
+        let (column_array, row_size) = self.filter_array(arrays, predicate)?;
+        let new_places = Self::filter_place(places, predicate, row_size);
+
+        let new_places_slice = new_places.as_slice();
+        let column_array_slice = column_array.as_slice();
         self.nested
-            .accumulate_keys(places, offset, arrays, input_rows)
+            .accumulate_keys(new_places_slice, offset, column_array_slice, row_size)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
@@ -182,5 +154,72 @@ impl AggregateFunction for AggregateIfCombinator {
 impl fmt::Display for AggregateIfCombinator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.nested_name)
+    }
+}
+
+impl AggregateIfCombinator {
+    fn filter_place(places: &[StateAddr], predicate: &DFBooleanArray, rows: usize) -> StateAddrs {
+        let mut new_places = Vec::with_capacity(rows);
+        let arrow_filter_array = predicate.inner();
+
+        for (index, place) in places.iter().enumerate() {
+            if !arrow_filter_array.is_null(index) && arrow_filter_array.value(index) {
+                new_places.push(*place);
+            }
+        }
+
+        new_places
+    }
+
+    #[inline]
+    fn filter_array(
+        &self,
+        array: &[Series],
+        predicate: &DFBooleanArray,
+    ) -> Result<(Vec<Series>, usize)> {
+        let arrow_filter_array = predicate.inner();
+        let bitmap = arrow_filter_array.values();
+
+        let mut column_array = Vec::with_capacity(self.argument_len - 1);
+        let row_size = match array.len() - 1 {
+            0 => {
+                // if it has no args, only return the row_count
+                if predicate.null_count() > 0 {
+                    // this greatly simplifies subsequent filtering code
+                    // now we only have a boolean mask to deal with
+                    let boolean_bm = arrow_filter_array.validity();
+                    let res = combine_validities(&Some(bitmap.clone()), boolean_bm);
+                    match res {
+                        Some(v) => v.len() - v.null_count(),
+                        None => 0,
+                    }
+                } else {
+                    bitmap.len() - bitmap.null_count()
+                }
+            }
+            1 => {
+                // single array handle
+                let data = arrow::compute::filter::filter(
+                    array[0].get_array_ref().as_ref(),
+                    arrow_filter_array,
+                )?;
+                let data: ArrayRef = Arc::from(data);
+                column_array.push(data.into_series());
+                column_array[0].len()
+            }
+            _ => {
+                // multi array handle
+                let mut args_array = Vec::with_capacity(self.argument_len - 1);
+                for column in array.iter().take(self.argument_len - 1) {
+                    args_array.push(column.clone());
+                }
+                let data = DataArrayFilter::filter_batch_array(args_array, predicate)?;
+                data.into_iter()
+                    .for_each(|column| column_array.push(column));
+                column_array[0].len()
+            }
+        };
+
+        Ok((column_array, row_size))
     }
 }
