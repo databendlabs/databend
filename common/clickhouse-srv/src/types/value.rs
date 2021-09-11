@@ -469,7 +469,7 @@ mod test {
         Value: convert::Into<T> + convert::From<T>,
         T: PartialEq + fmt::Debug + Clone,
     {
-        test_into_t::<T>(Value::from(value.clone()), &value);
+        test_into_t::<T>(Value::from(value.clone()), value);
     }
 
     macro_rules! test_type {

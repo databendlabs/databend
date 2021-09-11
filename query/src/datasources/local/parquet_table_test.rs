@@ -39,7 +39,7 @@ async fn test_parquet_table() -> Result<()> {
     let table = ParquetTable::try_create(
         "default".into(),
         "test_parquet".into(),
-        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]).clone(),
+        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
         options,
     )?;
 

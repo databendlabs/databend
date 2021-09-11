@@ -34,7 +34,7 @@ async fn test_null_table() -> Result<()> {
     let table = NullTable::try_create(
         "default".into(),
         "a".into(),
-        DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]).into(),
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
         TableOptions::default(),
     )?;
 

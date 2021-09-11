@@ -22,10 +22,10 @@ use pretty_assertions::assert_eq;
 use crate::tests::service::new_test_context;
 use crate::tests::start_store_server_with_context;
 
-const TEST_CA_CERT: &'static str = "../tests/certs/ca.pem";
-const TEST_SERVER_CERT: &'static str = "../tests/certs/server.pem";
-const TEST_SERVER_KEY: &'static str = "../tests/certs/server.key";
-const TEST_CN_NAME: &'static str = "localhost";
+const TEST_CA_CERT: &str = "../tests/certs/ca.pem";
+const TEST_SERVER_CERT: &str = "../tests/certs/server.pem";
+const TEST_SERVER_KEY: &str = "../tests/certs/server.key";
+const TEST_CN_NAME: &str = "localhost";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_tls() -> anyhow::Result<()> {

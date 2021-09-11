@@ -50,20 +50,20 @@ async fn test_localfs_read_all() -> anyhow::Result<()> {
     }
     {
         // add long/bar.txt and read
-        f.add("long/bar.txt".into(), "456".as_bytes()).await?;
+        f.add("long/bar.txt", "456".as_bytes()).await?;
         let got = f.read_all("long/bar.txt").await?;
         assert_eq!("456", std::str::from_utf8(&got)?);
     }
 
     {
         // add long/path/file.txt and read
-        f.add("long/path/file.txt".into(), "789".as_bytes()).await?;
+        f.add("long/path/file.txt", "789".as_bytes()).await?;
         let got = f.read_all("long/path/file.txt").await?;
         assert_eq!("789", std::str::from_utf8(&got)?);
     }
     {
         // list
-        let got = f.list("long".into()).await?;
+        let got = f.list("long").await?;
         assert_eq!(
             ListResult {
                 dirs: vec!["path".into()],

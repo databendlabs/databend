@@ -67,7 +67,7 @@ fn test_meta_backend() -> Result<()> {
     }
 
     if let PlanNode::DropDatabase(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("drop database default")?
+        PlanParser::create(ctx).build_from_sql("drop database default")?
     {
         backend.drop_database(plan)?;
         let database = backend.get_database("default");

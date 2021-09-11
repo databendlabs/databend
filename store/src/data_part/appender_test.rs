@@ -40,7 +40,7 @@ mod test {
             DataField::new("col_s", DataType::String, false),
         ]));
 
-        let col0 = Series::new(vec![0 as i64, 1, 2]);
+        let col0 = Series::new(vec![0_i64, 1, 2]);
         let col1 = Series::new(vec!["str1", "str2", "str3"]);
         let block = DataBlock::create_by_array(schema.clone(), vec![col0.clone(), col1.clone()]);
 
@@ -76,7 +76,7 @@ mod test {
         let appender = Appender::new(Arc::new(fs));
 
         let default_ipc_write_opt = IpcWriteOptions::default();
-        let flight_schema = flight_data_from_arrow_schema(&schema, &default_ipc_write_opt);
+        let flight_schema = flight_data_from_arrow_schema(schema, &default_ipc_write_opt);
 
         let req = futures::stream::iter(vec![
             flight_schema,

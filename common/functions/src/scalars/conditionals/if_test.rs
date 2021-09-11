@@ -76,7 +76,7 @@ fn test_if_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&columns, t.columns[0].len())?;
+        let v = &(func.eval(&columns, t.columns[0].len())?);
         // Type check.
         let expect_type = func.return_type(&t.args)?;
         let actual_type = v.data_type();

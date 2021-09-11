@@ -159,7 +159,7 @@ fn test_arithmetic_function() -> Result<()> {
         assert_eq!(expect_null, actual_null);
 
         let expect_type = func.return_type(&args)?.clone();
-        let ref v = func.eval(&columns, rows)?;
+        let v = &(func.eval(&columns, rows)?);
         let actual_type = v.data_type().clone();
         assert_eq!(expect_type, actual_type);
 

@@ -40,7 +40,7 @@ async fn test_csv_table() -> Result<()> {
     let table = CsvTable::try_create(
         "default".into(),
         "test_csv".into(),
-        DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]).into(),
+        DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
         options,
     )?;
 
@@ -58,7 +58,7 @@ async fn test_csv_table() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let source_plan = table.read_plan(ctx.clone(), &scan_plan, partitions)?;
+    let source_plan = table.read_plan(ctx.clone(), scan_plan, partitions)?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;
@@ -114,8 +114,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
             DataField::new("column2", DataType::UInt64, false),
             DataField::new("column3", DataType::UInt64, false),
             DataField::new("column4", DataType::UInt64, false),
-        ])
-        .into(),
+        ]),
         options,
     )?;
     let scan_plan = &ScanPlan {
@@ -132,7 +131,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let source_plan = table.read_plan(ctx.clone(), &scan_plan, partitions)?;
+    let source_plan = table.read_plan(ctx.clone(), scan_plan, partitions)?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;

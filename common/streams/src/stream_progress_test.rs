@@ -27,8 +27,7 @@ use crate::*;
 async fn test_progress_stream() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
-    let block =
-        DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1i64, 2, 3]).into()]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1i64, 2, 3])]);
 
     let input = DataBlockStream::create(Arc::new(DataSchema::empty()), None, vec![
         block.clone(),

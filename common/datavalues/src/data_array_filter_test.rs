@@ -34,12 +34,12 @@ fn filter_batch_array() -> Result<()> {
     let tests = vec![
         FilterArrayTest {
             name: "normal filter",
-            filter: DFBooleanArray::new_from_slice(&vec![true, false, true, false, true]),
+            filter: DFBooleanArray::new_from_slice(&[true, false, true, false, true]),
             expect: vec![Series::new(vec![1, 3, 5]), Series::new(vec![6, 8, 10])],
         },
         FilterArrayTest {
             name: "filter contain null",
-            filter: DFBooleanArray::new_from_opt_slice(&vec![
+            filter: DFBooleanArray::new_from_opt_slice(&[
                 Some(true),
                 Some(false),
                 Some(true),

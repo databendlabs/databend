@@ -26,8 +26,7 @@ fn init_fusectl() -> Command {
 }
 
 fn raw_fusectl() -> Command {
-    let cmd = init_fusectl();
-    cmd
+    init_fusectl()
 }
 
 fn fusectl() -> assert_cmd::Command {

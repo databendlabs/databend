@@ -33,7 +33,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        Series::new(vec![4 as i64, 3, 2, 1, 3, 4]),
+        Series::new(vec![4_i64, 3, 2, 1, 3, 4]),
         Series::new(vec![true, true, false, true, true, true]),
     ];
 
@@ -165,8 +165,8 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        DFInt64Array::new_from_slice(&vec![]).into_series(),
-        DFBooleanArray::new_from_slice(&vec![]).into_series(),
+        DFInt64Array::new_from_slice(&[]).into_series(),
+        DFBooleanArray::new_from_slice(&[]).into_series(),
     ];
 
     let args = vec![

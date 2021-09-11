@@ -74,8 +74,8 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1", configured.query.disable_local_database_engine);
 
     assert_eq!("1.2.3.4:1234", configured.store.store_address);
-    assert_eq!("admin", configured.store.store_username.to_string());
-    assert_eq!("password!", configured.store.store_password.to_string());
+    assert_eq!("admin", configured.store.store_username);
+    assert_eq!("password!", configured.store.store_password);
 
     // clean up
     std::env::remove_var("LOG_LEVEL");

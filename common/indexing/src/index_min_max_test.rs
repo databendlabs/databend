@@ -40,7 +40,7 @@ fn test_min_max_index() -> Result<()> {
         Series::new(vec![11, 6, 24]),
     ]);
 
-    let block2 = DataBlock::create_by_array(schema.clone(), vec![
+    let block2 = DataBlock::create_by_array(schema, vec![
         Series::new(vec!["xjack", "xace", "xbohu"]),
         Series::new(vec![11, 6, 24]),
     ]);

@@ -25,7 +25,7 @@ fn test_rand_n_from_m() -> anyhow::Result<()> {
             let got = rand_n_from_m(total, n)?;
             assert_eq!(n, got.len());
 
-            if got.len() > 0 {
+            if !got.is_empty() {
                 let mut prev = got[0];
                 for v in got.iter().skip(1) {
                     assert_ne!(prev, *v);

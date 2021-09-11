@@ -24,7 +24,7 @@ fn test_data_block_sort() -> Result<()> {
         DataField::new("b", DataType::String, false),
     ]);
 
-    let raw = DataBlock::create_by_array(schema.clone(), vec![
+    let raw = DataBlock::create_by_array(schema, vec![
         Series::new(vec![6, 4, 3, 2, 1, 7]),
         Series::new(vec!["b1", "b2", "b3", "b4", "b5", "b6"]),
     ]);
@@ -85,7 +85,7 @@ fn test_data_block_merge_sort() -> Result<()> {
         Series::new(vec!["b1", "b2", "b3"]),
     ]);
 
-    let raw2 = DataBlock::create_by_array(schema.clone(), vec![
+    let raw2 = DataBlock::create_by_array(schema, vec![
         Series::new(vec![2, 4, 6]),
         Series::new(vec!["b4", "b5", "b6"]),
     ]);
