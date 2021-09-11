@@ -59,6 +59,14 @@ impl DFBooleanArray {
         )
     }
 
+    pub fn from_arrow_data(values: Bitmap, validity: Option<Bitmap>) -> Self {
+        Self::from_arrow_array(&BooleanArray::from_data(
+            DataType::Boolean.to_arrow(),
+            values,
+            validity,
+        ))
+    }
+
     pub fn data_type(&self) -> &DataType {
         &DataType::Boolean
     }
