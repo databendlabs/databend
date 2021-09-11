@@ -1,5 +1,5 @@
 - Start date: 2021/09/13
-- Tracking issues: https://github.com/datafuselabs/datafuse/issues/1217
+- Tracking issues: https://github.com/datafuselabs/databend/issues/1217
 
 # Sumamry
 
@@ -158,19 +158,6 @@ where t.a = 1
 ```
 
 According to semantic of SQL, we can describe the binding procedure as follows:
-<!-- 
-```rust
-let mut context_1 = BindContext::new();
-binder.bind_table("t", &mut context_1);
-
-let mut context_2 = BindContext::new();
-binder.bind_table("t", &mut context_2);
-
-let mut context_3 = BindContext::new();
-binder.bind_join(context_1, context_2, &mut context_3);
-
-binder.bind_expression(expr, &context_3);
-``` -->
 
 1. Create an empty `BindContext` context 1 for table `t`, and fill it with columns from `t`
 2. Create an empty `BindContext` context 2 for table `t`, fill it with columns from `t`, and rename the table to `t1`
@@ -302,7 +289,7 @@ pub fn optimize(plan: &PlanNode) -> Result<PlanNode> {
 
 After this refactoring, we want:
 
-- Provide naive implementation(hash join for ) for `JOIN`, including planning and execution
+- Provide naive implementation(hash join for equi-join and nested-loop join for cross join) for `JOIN`, including planning and execution
 - Support running most of the queries from TPCH benchmark(contains different types of joins and correlated subquery) with `databend`
 - Implement several simple optimization rules, e.g. outer join elimination, decorrelation, predicate pushdown and etc.
 - Migrate to the new planner framework
