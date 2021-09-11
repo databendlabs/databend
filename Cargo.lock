@@ -85,7 +85,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "arrow-flight"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=4e4ea28#4e4ea28611cea0ab7bb375f1743afca06c26453f"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=f326fed#f326fed4f3f7b428deee0d4adb46eebc8b7a3471"
 dependencies = [
  "arrow2",
  "bytes",
@@ -98,8 +98,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.4.0"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=4e4ea28#4e4ea28611cea0ab7bb375f1743afca06c26453f"
+version = "0.5.2"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=f326fed#f326fed4f3f7b428deee0d4adb46eebc8b7a3471"
 dependencies = [
  "base64",
  "chrono",
@@ -3611,9 +3611,9 @@ dependencies = [
 
 [[package]]
 name = "packed_simd_2"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e64858a2d3733fdd61adfdd6da89aa202f7ff0e741d2fc7ed1e452ba9dc99d7"
+checksum = "71c0c06716cfc81616fa8e22b721ce92fecd594508bc0eb3d04ae3ef35ac10c5"
 dependencies = [
  "cfg-if 0.1.10",
  "libm 0.1.4",
