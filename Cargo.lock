@@ -1490,7 +1490,7 @@ dependencies = [
  "nom 7.0.0",
  "num",
  "num_cpus",
- "parquet-format-async-temp 0.1.1",
+ "parquet-format-async-temp",
  "paste",
  "pnet",
  "pretty_assertions",
@@ -3662,19 +3662,6 @@ dependencies = [
 
 [[package]]
 name = "parquet-format-async-temp"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cde63e74461b2c6c31166c6bcd205096074c8972a9b46becfff0a4eb8c4fabd8"
-dependencies = [
- "async-trait",
- "byteorder",
- "futures",
- "integer-encoding 3.0.2",
- "ordered-float 1.1.1",
-]
-
-[[package]]
-name = "parquet-format-async-temp"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03abc2f9c83fe9ceec83f47c76cc071bfd56caba33794340330f35623ab1f544"
@@ -3695,7 +3682,7 @@ dependencies = [
  "async-stream",
  "bitpacking",
  "futures",
- "parquet-format-async-temp 0.2.0",
+ "parquet-format-async-temp",
  "streaming-iterator",
 ]
 
