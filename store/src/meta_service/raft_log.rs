@@ -50,7 +50,7 @@ impl RaftLog {
         config: &configs::Config,
     ) -> common_exception::Result<RaftLog> {
         let tree_name = config.tree_name(TREE_RAFT_LOG);
-        let inner = SledTree::open(db, &tree_name, config.meta_sync()).await?;
+        let inner = SledTree::open(db, &tree_name, config.meta_sync())?;
         let rl = RaftLog { inner };
         Ok(rl)
     }

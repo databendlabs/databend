@@ -221,7 +221,7 @@ impl StateMachine {
 
         let tree_name = StateMachine::tree_name(config, sm_id);
 
-        let sm_tree = SledTree::open(&db, &tree_name, config.meta_sync()).await?;
+        let sm_tree = SledTree::open(&db, &tree_name, config.meta_sync())?;
 
         let sm = StateMachine {
             config: config.clone(),
