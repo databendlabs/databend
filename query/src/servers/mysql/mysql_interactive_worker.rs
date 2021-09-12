@@ -178,10 +178,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
             let start = Instant::now();
             let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
+            let name = interpreter.name().to_string();
             let data_stream = runtime.block_on(interpreter.execute())?;
             histogram!(
                 super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
-                start.elapsed()
+                start.elapsed(),
+                "interpreter" => name
             );
             runtime.block_on(data_stream.collect::<Result<Vec<DataBlock>>>())
         };
