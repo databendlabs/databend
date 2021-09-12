@@ -15,6 +15,7 @@
 
 use std::io::Read;
 use std::io::Seek;
+use std::io::Write;
 
 use common_exception::Result;
 use futures::stream::Stream;
@@ -36,6 +37,7 @@ impl<T> SeekableReader for T where T: Read + Seek {}
 #[async_trait::async_trait]
 pub trait DataAccessor: Send + Sync {
     fn get_reader(&self, path: &str, len: Option<u64>) -> Result<Box<dyn SeekableReader>>;
+    fn get_writer(&self, path: &str) -> Result<Box<dyn Write>>;
 
     async fn get_input_stream(&self, path: &str, stream_len: Option<u64>) -> Result<InputStream>;
 

@@ -15,6 +15,7 @@
 
 use std::io::Error;
 use std::io::ErrorKind;
+use std::io::Write;
 use std::path::PathBuf;
 
 use async_compat::CompatExt;
@@ -61,6 +62,10 @@ impl Local {
 impl DataAccessor for Local {
     fn get_reader(&self, path: &str, _len: Option<u64>) -> Result<Box<dyn SeekableReader>> {
         Ok(Box::new(std::fs::File::open(path)?))
+    }
+
+    fn get_writer(&self, path: &str) -> common_exception::Result<Box<dyn Write>> {
+        Ok(Box::new(std::fs::File::create(path)?))
     }
 
     async fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {

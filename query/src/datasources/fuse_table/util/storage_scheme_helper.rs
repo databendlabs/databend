@@ -24,7 +24,7 @@ pub fn parse_storage_scheme(value: Option<&String>) -> Result<StorageScheme> {
         let v = v.to_uppercase();
         match v.as_str() {
             "LOCAL_FS" | "LOCAL" => Ok(TableStorageScheme::LocalFs),
-            "FuseDfs" => Ok(TableStorageScheme::FuseDfs),
+            "FUSE_DFS" => Ok(TableStorageScheme::FuseDfs),
             "S3" => Ok(TableStorageScheme::S3),
             _ => Err(ErrorCode::IllegalSchema(format!("unknown scheme {}", v))),
         }
