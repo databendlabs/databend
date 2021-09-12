@@ -45,29 +45,69 @@ impl<T: KVApi> NamespaceMgr<T> {
             namespace_prefix: format!(
                 "{}/{}/{}/nodes",
                 NAMESPACE_API_KEY_PREFIX,
-                Self::escape_for_key(tenant),
-                Self::escape_for_key(namespace)
+                Self::escape_for_key(tenant)?,
+                Self::escape_for_key(namespace)?
             ),
         }
     }
 
-    fn escape_for_key(key: &str) -> String {
+    fn escape_for_key(key: &str) -> Result<String> {
         let mut new_key = Vec::with_capacity(key.len());
+
+        fn hex(num: u8) -> u8 {
+            match num {
+                0..=10 => b'0' + num,
+                10..=16 => b'a' + (num - 10),
+                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
+            }
+        }
 
         for char in key.as_bytes() {
             match char {
-                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(char.clone() as char),
+                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(char.clone()),
                 _other => {
-                    new_key.push('%');
-                    // Unwrap is safe for here
-                    new_key.push(char::from_digit(*char as u32 / 16, 16).unwrap());
-                    new_key.push(char::from_digit(*char as u32 % 16, 16).unwrap());
+                    new_key.push(b'%');
+                    new_key.push(hex(*char / 16));
+                    new_key.push(hex(*char % 16));
                 }
             }
         }
 
-        return new_key.iter().collect();
+        Ok(String::from_utf8(new_key)?)
     }
+
+    fn unescape_for_key(key: &str) -> Result<String> {
+        let mut new_key = Vec::with_capacity(key.len());
+
+        fn unhex(num: u8) -> u8 {
+            match num {
+                b'0'..=b'9' => num - b'0',
+                b'a'..=b'f' => num - b'a',
+                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
+            }
+        }
+
+        let bytes = key.as_bytes();
+
+        let mut index = 0;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'%' => {
+                    let mut num = unhex(bytes[index + 1]) * 16;
+                    num += unhex(bytes[index + 2]);
+                    new_key.push(num);
+                    index += 3;
+                },
+                other => {
+                    new_key.push(other);
+                    index += 1;
+                },
+            }
+        }
+
+        Ok(String::from_utf8(new_key)?)
+    }
+
 
     fn new_lift_time(&self) -> KVMeta {
         let now = std::time::SystemTime::now();
@@ -87,7 +127,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
         let seq = MatchSeq::Exact(0);
         let meta = self.new_lift_time();
         let value = Some(serde_json::to_vec(&node)?);
-        let key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node.id));
+        let key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node.id)?);
         let upsert_node = self.kv_api.upsert_kv(&key, seq, value, Some(meta));
 
 
@@ -109,14 +149,18 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
     async fn get_nodes(&mut self) -> Result<Vec<NodeInfo>> {
         let values = self.kv_api.prefix_list_kv(&self.namespace_prefix).await?;
 
-        Ok(values
-            .iter()
-            .map(|(_key, (_seq, value))| serde_json::from_slice::<NodeInfo>(&value.value))
-            .collect::<std::result::Result<Vec<NodeInfo>, serde_json::Error>>()?)
+        let mut nodes_info = Vec::with_capacity(values.len());
+        for (node_key, value) in values {
+            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.value)?;
+            node_info.id = Self::unescape_for_key(&node_key)?;
+            nodes_info.push(node_info);
+        }
+
+        Ok(nodes_info)
     }
 
     async fn drop_node(&mut self, node_id: String, seq: Option<u64>) -> Result<()> {
-        let node_key = format!("{}/{}", self.namespace_prefix, node_id);
+        let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node_id)?);
         let upsert_node = self.kv_api.upsert_kv(&node_key, seq.into(), None, None);
 
         match upsert_node.await? {
@@ -129,7 +173,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
 
     async fn heartbeat(&mut self, node_id: String, seq: Option<u64>) -> Result<u64> {
         let meta = self.new_lift_time();
-        let node_key = format!("{}/{}", self.namespace_prefix, node_id);
+        let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node_id)?);
         match seq {
             None => {
                 let seq = MatchSeq::GE(1);
