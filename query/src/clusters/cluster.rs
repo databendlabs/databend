@@ -40,12 +40,16 @@ pub struct Cluster {
 impl Cluster {
     // TODO(Winter): this should be disabled by compile flag
     async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterRef> {
-        let local_store = LocalKVStore::new_temp();
+        let tenant = &cfg.query.tenant;
+        let namespace = &cfg.query.namespace;
+        let local_store = LocalKVStore::new_temp().await?;
+        let namespace_manager = NamespaceMgr::new(local_store, tenant, namespace);
+
         Ok(Arc::new(Cluster {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
             nodes: Mutex::new(HashMap::new()),
             local_id: global_unique_id(),
-            provider: Mutex::new(Box::new(NamespaceMgr::<LocalKVStore>::new(local_store.await?))),
+            provider: Mutex::new(Box::new(namespace_manager)),
         }))
     }
 
@@ -53,13 +57,17 @@ impl Cluster {
         let address = &cfg.meta.meta_address;
         let username = &cfg.meta.meta_username;
         let password = &cfg.meta.meta_password;
-        let store_client = StoreClient::try_create(address, username, password);
+        let store_client = StoreClient::try_create(address, username, password).await?;
+
+        let tenant = &cfg.query.tenant;
+        let namespace = &cfg.query.namespace;
+        let namespace_manager = NamespaceMgr::new(store_client, tenant, namespace);
 
         Ok(Arc::new(Cluster {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
             nodes: Mutex::new(HashMap::new()),
             local_id: global_unique_id(),
-            provider: Mutex::new(Box::new(NamespaceMgr::<StoreClient>::new(store_client.await?))),
+            provider: Mutex::new(Box::new(namespace_manager)),
         }))
     }
 
@@ -74,17 +82,21 @@ impl Cluster {
     }
 
     pub async fn empty() -> ClusterRef {
-        let local_store = LocalKVStore::new_temp();
+        let local_store = LocalKVStore::new_temp().await.unwrap();
+        let namespace_manager = NamespaceMgr::new(local_store, "temp", "temp");
 
         Arc::new(Cluster {
             local_port: 9090,
             nodes: Mutex::new(HashMap::new()),
             local_id: global_unique_id(),
-            provider: Mutex::new(Box::new(NamespaceMgr::<LocalKVStore>::new(local_store.await.unwrap()))),
+            provider: Mutex::new(Box::new(namespace_manager)),
         })
     }
 
     pub fn is_empty(&self) -> Result<bool> {
+        let mut provider = self.provider.lock();
+        let nodes = provider.get_nodes(None).await?;
+
         Ok(self.nodes.lock().len() == 0)
     }
 
@@ -162,15 +174,21 @@ impl Cluster {
 
 fn global_unique_id() -> String {
     let mut uuid = uuid::Uuid::new_v4().as_u128();
-    let mut unique_id = String::from("");
+    let mut unique_id = Vec::with_capacity(22);
 
     loop {
-        let m = uuid % 36;
-        uuid = uuid / 36;
+        let m = (uuid % 62) as u8;
+        uuid = uuid / 62;
 
-        unique_id.push(std::char::from_digit(m as u32, 36).unwrap());
+        match m as u8 {
+            0..=10 => unique_id.push((b'0' + m) as char),
+            10..=36 => unique_id.push((b'a' + (m - 10)) as char),
+            36..=62 => unique_id.push((b'A' + (m - 36)) as char),
+            unreachable => unreachable!("Unreachable branch m = {}", unreachable),
+        }
+
         if uuid == 0 {
-            return unique_id;
+            return unique_id.iter().collect();
         }
     }
 }
