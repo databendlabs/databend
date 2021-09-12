@@ -41,7 +41,7 @@ async fn test_transform_sort() -> Result<()> {
 
     pipeline.add_simple_transform(|| {
         Ok(Box::new(SortPartialTransform::try_create(
-            plan.schema().clone(),
+            plan.schema(),
             sort_expression.to_vec(),
             None,
         )?))
@@ -49,7 +49,7 @@ async fn test_transform_sort() -> Result<()> {
 
     pipeline.add_simple_transform(|| {
         Ok(Box::new(SortMergeTransform::try_create(
-            plan.schema().clone(),
+            plan.schema(),
             sort_expression.to_vec(),
             None,
         )?))
@@ -59,7 +59,7 @@ async fn test_transform_sort() -> Result<()> {
         pipeline.merge_processor()?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(SortMergeTransform::try_create(
-                plan.schema().clone(),
+                plan.schema(),
                 sort_expression.to_vec(),
                 None,
             )?))

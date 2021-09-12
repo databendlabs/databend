@@ -30,7 +30,7 @@ fn test_expression_plan_format() -> Result<()> {
     let empty_plan = EmptyPlan::create_with_schema(schema.clone());
     let expression = PlanNode::Expression(ExpressionPlan {
         exprs: vec![col("a")],
-        schema: schema.clone(),
+        schema,
         input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
         desc: "".to_string(),
     });

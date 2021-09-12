@@ -215,7 +215,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
                 }
                 Err(ref err) => {
                     let got = rst.unwrap_err();
-                    let got: ErrorCode = got.into();
+                    let got: ErrorCode = got;
                     assert_eq!(err.code(), got.code(), "{}", mes);
                     assert_eq!(err.message(), got.message(), "{}", mes);
                 }
@@ -295,7 +295,7 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
                 }
                 Err(ref err) => {
                     let got = rst.unwrap_err();
-                    let got: ErrorCode = got.into();
+                    let got: ErrorCode = got;
                     assert_eq!(err.code(), got.code(), "{}", mes);
                     assert_eq!(err.message(), got.message(), "{}", mes);
                 }
@@ -359,7 +359,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
             if_not_exists,
             db: db_name.to_string(),
             table: table_name.to_string(),
-            schema: schema.clone(),
+            schema,
             engine: "JSON".to_string(),
             options: Default::default(),
         };
@@ -457,7 +457,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
                 table_id: want_table_id,
                 db: db_name.to_string(),
                 name: table_name.to_string(),
-                schema: schema.clone(),
+                schema,
             }),
             Err(err_str) => Err(ErrorCode::UnknownTable(err_str)),
         };
@@ -529,7 +529,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
                 }
                 Err(ref err) => {
                     let got = rst.unwrap_err();
-                    let got: ErrorCode = got.into();
+                    let got: ErrorCode = got;
                     assert_eq!(err.code(), got.code(), "{}", mes);
                     assert_eq!(err.message(), got.message(), "{}", mes);
                 }
@@ -640,7 +640,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
                 }
                 Err(ref err) => {
                     let got = rst.unwrap_err();
-                    let got: ErrorCode = got.into();
+                    let got: ErrorCode = got;
                     assert_eq!(err.code(), got.code(), "{}", mes);
                     assert_eq!(err.message(), got.message(), "{}", mes);
                 }
@@ -755,7 +755,7 @@ async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
                 }
                 Err(ref err) => {
                     let got = rst.unwrap_err();
-                    let got: ErrorCode = got.into();
+                    let got: ErrorCode = got;
                     assert_eq!(err.code(), got.code(), "{}", mes);
                     assert_eq!(err.message(), got.message(), "{}", mes);
                 }
@@ -786,7 +786,7 @@ async fn bring_up_dfs_action_handler(
     let dfs = Dfs::create(fs, mn.clone());
 
     for (key, content) in files.iter() {
-        dfs.add((*key).into(), (*content).as_bytes()).await?;
+        dfs.add(*key, (*content).as_bytes()).await?;
         tracing::debug!("dfs added file: {} {:?}", *key, *content);
     }
 

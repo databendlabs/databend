@@ -75,7 +75,7 @@ async fn test_distributed_fs_single_node_read_all() -> anyhow::Result<()> {
 
     // test reading absent file
 
-    let got = dfs.read_all("absent".into()).await;
+    let got = dfs.read_all("absent").await;
     assert!(got.is_err());
     assert_eq!(
         "dfs/meta: key not found: \"absent\"",
@@ -138,7 +138,7 @@ async fn bring_up_dfs(
 
     let dfs = Dfs::create(fs, mn);
     for (key, content) in files.iter() {
-        dfs.add((*key).into(), (*content).as_bytes()).await?;
+        dfs.add(*key, (*content).as_bytes()).await?;
         tracing::debug!("dfs added file: {} {:?}", *key, *content);
     }
 

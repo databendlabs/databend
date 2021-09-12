@@ -367,7 +367,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
             assert_applied_index(all.clone(), last_applied + 1).await?;
 
             for (i, mn) in all.iter().enumerate() {
-                let got = mn.get_database(&name).await;
+                let got = mn.get_database(name).await;
 
                 assert_eq!(
                     *want_id,
@@ -830,7 +830,7 @@ async fn assert_set_file_on_specified_node_synced(
 /// Wait nodes for applied index to be upto date: applied >= at_least.
 async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> anyhow::Result<()> {
     for (_i, mn) in meta_nodes.iter().enumerate() {
-        wait_for_log(&mn, at_least).await?;
+        wait_for_log(mn, at_least).await?;
     }
     Ok(())
 }

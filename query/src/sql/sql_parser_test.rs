@@ -222,10 +222,10 @@ fn show_queries() -> Result<()> {
 
     let parse_sql_to_expr = |query_expr: &str| -> Expr {
         let dialect = GenericDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, &query_expr);
+        let mut tokenizer = Tokenizer::new(&dialect, query_expr);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens, &dialect);
-        return parser.parse_expr().unwrap();
+        parser.parse_expr().unwrap()
     };
 
     expect_parse_ok(

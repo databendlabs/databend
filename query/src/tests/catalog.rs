@@ -31,7 +31,7 @@ pub fn try_create_catalog() -> Result<DatabaseCatalog> {
         catalog.register_db_engine("local", Arc::new(LocalDatabases::create(conf.clone())))?;
     }
     catalog.register_db_engine("system", Arc::new(SystemDatabases::create(conf.clone())))?;
-    catalog.register_db_engine("remote", Arc::new(RemoteDatabases::create(conf.clone())))?;
+    catalog.register_db_engine("remote", Arc::new(RemoteDatabases::create(conf)))?;
 
     Ok(catalog)
 }

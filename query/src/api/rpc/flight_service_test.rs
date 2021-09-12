@@ -90,7 +90,7 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(&query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id);
         service.do_action(request?).await?;
     }
 
@@ -99,14 +99,14 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
     for index in 2..4 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(&query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id);
         service.do_action(request?).await?;
     }
 
     for index in 0..4 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_get_request(&query_id, &stage_id);
+        let request = do_get_request(query_id, &stage_id);
         service.do_get(request?).await?;
     }
 
@@ -122,7 +122,7 @@ async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(&query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id);
         service.do_action(request?).await?;
     }
 
@@ -146,7 +146,7 @@ async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_get_request(&query_id, &stage_id);
+        let request = do_get_request(query_id, &stage_id);
         service.do_get(request?).await?;
     }
 

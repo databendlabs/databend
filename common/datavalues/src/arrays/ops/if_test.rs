@@ -26,8 +26,8 @@ use crate::prelude::*;
 #[test]
 fn test_array_if() -> Result<()> {
     let conds: Vec<DFBooleanArray> = vec![
-        DFBooleanArray::new_from_slice(&vec![true, false, true]),
-        DFBooleanArray::new_from_slice(&vec![true]),
+        DFBooleanArray::new_from_slice(&[true, false, true]),
+        DFBooleanArray::new_from_slice(&[true]),
     ];
 
     // DFPrimitiveType.

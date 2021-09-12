@@ -82,7 +82,7 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
             Ok(_) => assert!(false, "Create clickhouse connection must be reject."),
             Err(error) => {
                 let message = error.message();
-                assert!(message.find("NO_FREE_CONNECTION").is_some());
+                assert!(message.contains("NO_FREE_CONNECTION"));
             }
         }
     }
@@ -113,7 +113,7 @@ async fn test_abort_clickhouse_server() -> Result<()> {
         Ok(_) => assert!(false, "Create clickhouse connection must be reject."),
         Err(error) => {
             let message = error.message();
-            assert!(message.find("ConnectionRefused").is_some());
+            assert!(message.contains("ConnectionRefused"));
         }
     }
 

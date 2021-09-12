@@ -1,5 +1,3 @@
-cargo-features = ["edition2021"]
-
 [package]
 name = "common-arrow"
 version = "0.1.0"
@@ -19,8 +17,8 @@ simd = ["arrow/simd"]
 # Workspace dependencies
 
 # Github dependencies
-arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", default-features = false, rev = "4e4ea28" }
-arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "4e4ea28" }
+arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", default-features = false, rev = "f326fed" }
+arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "f326fed" }
 #parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "83c3325" }
 #parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "1d310ee" }
 parquet2 = { version = "0.4", optional = false, default_features = false, features = ["stream"] }

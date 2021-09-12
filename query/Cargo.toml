@@ -1,5 +1,3 @@
-cargo-features = ["edition2021"]
-
 [package]
 name = "datafuse-query"
 version = "0.1.0"
@@ -88,8 +86,8 @@ hyper = "0.14.12"
 headers = "0.3.4"
 tokio-rustls = "0.22.0"
 axum-server = { version = "0.2", features = ["tls-rustls"] }
-cargo-license = "0.4.1"
-cargo_metadata = "0.9.1"
+cargo-license = "0.4.2"
+cargo_metadata = "0.14.0"
 
 [dependencies.parquet-format-async-temp]
 version = "0.2.0"

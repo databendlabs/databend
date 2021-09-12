@@ -35,7 +35,7 @@ async fn test_http_service_tls_server() -> Result<()> {
     conf.tls_server_cert = TEST_SERVER_CERT.to_owned();
     conf.http_api_address = addr_str.to_owned();
 
-    let mut srv = HttpService::create(conf.clone());
+    let mut srv = HttpService::create(conf);
 
     // test cert is issued for "localhost"
     let url = format!("https://{}:0/v1/health", TEST_CN_NAME);

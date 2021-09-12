@@ -644,7 +644,7 @@ async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
             .await?;
 
         let res = client
-            .mget_kv(&vec!["k1".to_string(), "k2".to_string()])
+            .mget_kv(&["k1".to_string(), "k2".to_string()])
             .await?;
         assert_eq!(res.result, vec![
             Some((1, KVValue {
@@ -659,7 +659,7 @@ async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
         ]);
 
         let res = client
-            .mget_kv(&vec!["k1".to_string(), "key_no exist".to_string()])
+            .mget_kv(&["k1".to_string(), "key_no exist".to_string()])
             .await?;
         assert_eq!(res.result, vec![
             Some((1, KVValue {
@@ -1072,7 +1072,7 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
 
             tracing::info!("--- mget should not return expired");
             let res = client
-                .mget_kv(&vec!["k1".to_string(), "k2".to_string()])
+                .mget_kv(&["k1".to_string(), "k2".to_string()])
                 .await?;
             assert_eq!(res.result, vec![
                 None,

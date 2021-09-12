@@ -75,13 +75,7 @@ fn read_file(
     projection: &[usize],
 ) -> Result<()> {
     let reader = File::open(file)?;
-    let reader = read::RecordReader::try_new(
-        reader,
-        Some(projection.to_vec()),
-        None,
-        Arc::new(|_, _| true),
-        None,
-    )?;
+    let reader = read::RecordReader::try_new(reader, Some(projection.to_vec()), None, None, None)?;
 
     for maybe_batch in reader {
         match maybe_batch {

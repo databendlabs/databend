@@ -56,7 +56,7 @@ async fn test_memorytable() -> Result<()> {
             db_name: "default".to_string(),
             tbl_name: "a".to_string(),
             tbl_id: 0,
-            schema: schema,
+            schema,
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
         table.append_data(ctx.clone(), insert_plan).await.unwrap();
