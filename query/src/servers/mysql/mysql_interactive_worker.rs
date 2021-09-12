@@ -58,8 +58,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base
-            .do_prepare(query, writer, self.session.create_context())
+        self.base.do_prepare(query, writer, self.session.create_context())
     }
 
     fn on_execute(
@@ -165,11 +164,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_close(&mut self, _: u32, _: DatafuseQueryContextRef) {}
 
-    fn do_query(
-        &mut self,
-        query: &str,
-        context: DatafuseQueryContextRef,
-    ) -> Result<Vec<DataBlock>> {
+    fn do_query(&mut self, query: &str, context: DatafuseQueryContextRef) -> Result<Vec<DataBlock>> {
         log::debug!("{}", query);
 
         let runtime = Self::build_runtime()?;

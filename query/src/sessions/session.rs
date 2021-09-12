@@ -114,7 +114,10 @@ impl Session {
         }
     }
 
-    pub fn create_context(self: &Arc<Self>) -> DatafuseQueryContextRef {
+    /// Create a query context for query.
+    /// For a query, execution environment(e.g cluster) should be immutable.
+    /// We can bind the environment to the context in create_context method.
+    pub async fn create_context(self: &Arc<Self>) -> DatafuseQueryContextRef {
         let mut state_guard = self.mutable_state.lock();
 
         if state_guard.context_shared.is_none() {

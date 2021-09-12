@@ -93,46 +93,13 @@ impl Cluster {
         })
     }
 
+    pub async fn immutable_cluster(&self) -> Result<()> {
+        // TODO: sync and create cluster
+        Ok(())
+    }
+
     pub fn is_empty(&self) -> Result<bool> {
-        let mut provider = self.provider.lock();
-        let nodes = provider.get_nodes(None).await?;
-
         Ok(self.nodes.lock().len() == 0)
-    }
-
-    pub async fn add_node(&self, name: &str, priority: u8, address: &str) -> Result<()> {
-        let address = Address::create(address)?;
-        let address_is_local = is_local(&address, self.local_port).await?;
-        let mut nodes = self.nodes.lock();
-        let new_node_sequence = nodes.len();
-
-        match nodes.entry(name.to_string()) {
-            Occupied(_) => Err(ErrorCode::DuplicateClusterNode(format!(
-                "The node \"{}\" already exists in the cluster",
-                name
-            ))),
-            Vacant(entry) => {
-                entry.insert(Arc::new(Node::create(
-                    name.to_string(),
-                    priority,
-                    address.clone(),
-                    address_is_local,
-                    new_node_sequence,
-                )?));
-
-                Ok(())
-            }
-        }
-    }
-
-    pub fn remove_node(&self, name: String) -> Result<()> {
-        match self.nodes.lock().remove(&*name) {
-            Some(_) => Ok(()),
-            None => Err(ErrorCode::NotFoundClusterNode(format!(
-                "The node \"{}\" not found in the cluster",
-                name
-            ))),
-        }
     }
 
     pub fn get_node_by_name(&self, name: String) -> Result<Arc<Node>> {
@@ -160,14 +127,12 @@ impl Cluster {
     }
 
     pub async fn register_to_metastore(&self, cfg: &Config) -> Result<()> {
-        let tenant_id = cfg.query.tenant.clone();
-        let namespace_id = cfg.query.namespace.clone();
         let mut api_provider = self.provider.lock();
 
         let cpus = cfg.query.num_cpus;
         let address = cfg.query.flight_api_address.clone();
         let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
-        api_provider.add_node(tenant_id, namespace_id, node_info).await?;
+        api_provider.add_node(node_info).await?;
         Ok(())
     }
 }
@@ -192,40 +157,40 @@ fn global_unique_id() -> String {
         }
     }
 }
-
-async fn is_local(address: &Address, expect_port: u16) -> Result<bool> {
-    if address.port() != expect_port {
-        return Result::Ok(false);
-    }
-
-    match address {
-        Address::SocketAddress(socket_addr) => is_local_impl(&socket_addr.ip()),
-        Address::Named((host, _)) => match DNSResolver::instance()?.resolve(host.as_str()).await {
-            Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
-                "DNS resolver lookup error: {}",
-                error
-            ))),
-            Ok(resolved_ips) => {
-                for resolved_ip in &resolved_ips {
-                    if is_local_impl(resolved_ip)? {
-                        return Ok(true);
-                    }
-                }
-
-                Ok(false)
-            }
-        },
-    }
-}
-
-fn is_local_impl(address: &IpAddr) -> Result<bool> {
-    for network_interface in &pnet::datalink::interfaces() {
-        for interface_ip in &network_interface.ips {
-            if address == &interface_ip.ip() {
-                return Ok(true);
-            }
-        }
-    }
-
-    Ok(false)
-}
+//
+// async fn is_local(address: &Address, expect_port: u16) -> Result<bool> {
+//     if address.port() != expect_port {
+//         return Result::Ok(false);
+//     }
+//
+//     match address {
+//         Address::SocketAddress(socket_addr) => is_local_impl(&socket_addr.ip()),
+//         Address::Named((host, _)) => match DNSResolver::instance()?.resolve(host.as_str()).await {
+//             Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
+//                 "DNS resolver lookup error: {}",
+//                 error
+//             ))),
+//             Ok(resolved_ips) => {
+//                 for resolved_ip in &resolved_ips {
+//                     if is_local_impl(resolved_ip)? {
+//                         return Ok(true);
+//                     }
+//                 }
+//
+//                 Ok(false)
+//             }
+//         },
+//     }
+// }
+//
+// fn is_local_impl(address: &IpAddr) -> Result<bool> {
+//     for network_interface in &pnet::datalink::interfaces() {
+//         for interface_ip in &network_interface.ips {
+//             if address == &interface_ip.ip() {
+//                 return Ok(true);
+//             }
+//         }
+//     }
+//
+//     Ok(false)
+// }

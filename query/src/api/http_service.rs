@@ -59,16 +59,8 @@ macro_rules! build_router {
             .route("/v1/config", get(super::http::v1::config::config_handler))
             .route("/v1/logs", get(super::http::v1::logs::logs_handler))
             .route(
-                "/v1/cluster/add",
-                post(super::http::v1::cluster::cluster_add_handler),
-            )
-            .route(
                 "/v1/cluster/list",
                 get(super::http::v1::cluster::cluster_list_handler),
-            )
-            .route(
-                "/v1/cluster/remove",
-                post(super::http::v1::cluster::cluster_remove_handler),
             )
             .route(
                 "/debug/home",

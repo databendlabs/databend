@@ -79,38 +79,38 @@ impl IntoResponse for ClusterError {
         (status, body).into_response()
     }
 }
-// POST /v1/cluster/list
-// create node depends on json context in http body
-// request: the request body contains node message(name, ip address, priority)
-// cluster_state: the shared in memory state which store all nodes known to current node
-// return: return node information when add success
-pub async fn cluster_add_handler(
-    request: Json<ClusterNodeRequest>,
-    cluster_state: Extension<ClusterRef>,
-) -> Result<Json<Value>, ClusterError> {
-    let req: ClusterNodeRequest = request.0;
-    let cluster: ClusterRef = cluster_state.0;
-    log::info!("Cluster add node: {:?}", req);
-    return match cluster
-        .add_node(&req.name.clone(), req.priority, &req.address)
-        .await
-    {
-        Ok(_) => match cluster.get_node_by_name(req.clone().name) {
-            Ok(node) => {
-                log::info!("Successfully added node: {:?}", req);
-                Ok(Json(json!(node)))
-            }
-            Err(_) => {
-                log::error!("Cannot find {:?} in current cluster configuration", req);
-                Err(ClusterError::Add)
-            }
-        },
-        Err(_) => {
-            log::error!("Cannot add {:?} in current cluster", req);
-            Err(ClusterError::Add)
-        }
-    };
-}
+// // POST /v1/cluster/list
+// // create node depends on json context in http body
+// // request: the request body contains node message(name, ip address, priority)
+// // cluster_state: the shared in memory state which store all nodes known to current node
+// // return: return node information when add success
+// pub async fn cluster_add_handler(
+//     request: Json<ClusterNodeRequest>,
+//     cluster_state: Extension<ClusterRef>,
+// ) -> Result<Json<Value>, ClusterError> {
+//     let req: ClusterNodeRequest = request.0;
+//     let cluster: ClusterRef = cluster_state.0;
+//     log::info!("Cluster add node: {:?}", req);
+//     return match cluster
+//         .add_node(&req.name.clone(), req.priority, &req.address)
+//         .await
+//     {
+//         Ok(_) => match cluster.get_node_by_name(req.clone().name) {
+//             Ok(node) => {
+//                 log::info!("Successfully added node: {:?}", req);
+//                 Ok(Json(json!(node)))
+//             }
+//             Err(_) => {
+//                 log::error!("Cannot find {:?} in current cluster configuration", req);
+//                 Err(ClusterError::Add)
+//             }
+//         },
+//         Err(_) => {
+//             log::error!("Cannot add {:?} in current cluster", req);
+//             Err(ClusterError::Add)
+//         }
+//     };
+// }
 
 // GET /v1/cluster/list
 // list all nodes in current datafuse-query cluster
@@ -133,26 +133,26 @@ pub async fn cluster_list_handler(
     };
 }
 
-// POST /v1/cluster/remove
-// remove a node based on name in current datafuse-query cluster
-// request: Node to be deleted
-// cluster_state: the shared in memory state which store all nodes known to current node
-// return: return Ok status code when delete success
-pub async fn cluster_remove_handler(
-    request: Json<ClusterNodeRequest>,
-    cluster_state: Extension<ClusterRef>,
-) -> Result<String, ClusterError> {
-    let req: ClusterNodeRequest = request.0;
-    let cluster: ClusterRef = cluster_state.0;
-    log::info!("Cluster remove node: {:?}", req);
-    return match cluster.remove_node(req.clone().name) {
-        Ok(_) => {
-            log::error!("removed node {:?}", req.name);
-            Ok(format!("removed node {:?}", req.name))
-        }
-        Err(_) => {
-            log::error!("cannot remove node {:?}", req.name);
-            Err(ClusterError::Remove)
-        }
-    };
-}
+// // POST /v1/cluster/remove
+// // remove a node based on name in current datafuse-query cluster
+// // request: Node to be deleted
+// // cluster_state: the shared in memory state which store all nodes known to current node
+// // return: return Ok status code when delete success
+// pub async fn cluster_remove_handler(
+//     request: Json<ClusterNodeRequest>,
+//     cluster_state: Extension<ClusterRef>,
+// ) -> Result<String, ClusterError> {
+//     let req: ClusterNodeRequest = request.0;
+//     let cluster: ClusterRef = cluster_state.0;
+//     log::info!("Cluster remove node: {:?}", req);
+//     return match cluster.remove_node(req.clone().name) {
+//         Ok(_) => {
+//             log::error!("removed node {:?}", req.name);
+//             Ok(format!("removed node {:?}", req.name))
+//         }
+//         Err(_) => {
+//             log::error!("cannot remove node {:?}", req.name);
+//             Err(ClusterError::Remove)
+//         }
+//     };
+// }
