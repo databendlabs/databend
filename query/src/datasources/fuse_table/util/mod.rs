@@ -13,12 +13,10 @@
 //  limitations under the License.
 //
 
-pub mod index_helpers;
-pub mod location_gen;
-pub mod projection_helper;
-
-// copied from parquet2,
-pub mod stats_aggregation;
-pub mod storage_scheme_helper;
+pub(crate) mod index_helpers;
+pub(crate) mod location_gen;
+pub(crate) mod projection_helper;
+pub(crate) mod statistic_helper;
+pub(crate) mod storage_scheme_helper;
 
 pub use projection_helper::project_col_idx;

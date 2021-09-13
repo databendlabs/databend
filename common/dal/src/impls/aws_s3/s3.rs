@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::io::Write;
+
 use common_exception::ErrorCode;
 use futures::Stream;
 use futures::StreamExt;
@@ -71,6 +73,10 @@ impl DataAccessor for S3 {
         _path: &str,
         _stream_len: Option<u64>,
     ) -> common_exception::Result<Box<dyn SeekableReader>> {
+        todo!()
+    }
+
+    fn get_writer(&self, _path: &str) -> common_exception::Result<Box<dyn Write>> {
         todo!()
     }
 

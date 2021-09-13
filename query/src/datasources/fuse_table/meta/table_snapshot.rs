@@ -17,9 +17,9 @@ use std::collections::HashMap;
 
 use common_arrow::parquet::statistics::Statistics;
 use common_datavalues::DataSchema;
+use common_datavalues::DataValue;
 use uuid::Uuid;
 
-pub type Bytes = Vec<u8>;
 pub type SnapshotId = Uuid;
 pub type ColumnId = u32;
 pub type Location = String;
@@ -78,12 +78,11 @@ pub struct BlockLocation {
     pub meta_size: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ColStats {
-    pub min: Option<Bytes>,
-    pub max: Option<Bytes>,
-    pub null_count: Option<u64>,
-    // - bloom(RF?)
+    pub min: DataValue,
+    pub max: DataValue,
+    pub null_count: usize,
 }
 
 #[allow(dead_code)]

@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-pub fn block_info_location(name: &str) -> String {
+pub fn block_location(name: &str) -> String {
     format!("_b/{}", name)
 }
 
