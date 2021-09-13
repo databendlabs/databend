@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod index;
+mod example_database;
+mod example_databases;
+mod example_meta_backend;
+mod example_table;
 
-pub(crate) mod common;
-pub(crate) mod dal;
-pub(crate) mod database;
-pub(crate) mod table;
+pub use example_database::ExampleDatabase;
+pub use example_databases::ExampleDatabases;
+pub use example_meta_backend::ExampleMetaBackend;
+pub use example_table::ExampleTable;

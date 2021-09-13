@@ -11,10 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod index;
+// consider remove these, read_util seems to be enough (type could be inferred)
+mod segment_reader;
+mod snapshot_reader;
+// end
 
-pub(crate) mod common;
-pub(crate) mod dal;
-pub(crate) mod database;
-pub(crate) mod table;
+mod block_appender;
+mod block_reader;
+mod reader_util;
+
+pub use block_appender::*;
+pub use block_reader::*;
+pub use reader_util::*;
+pub use segment_reader::*;
+pub use snapshot_reader::*;
