@@ -121,7 +121,9 @@ impl Session {
         let mut state_guard = self.mutable_state.lock();
 
         if state_guard.context_shared.is_none() {
+            // TODO: async create context
             let config = self.config.clone();
+            // let immutable_cluster = self.sessions.cluster.immutable_cluster();
             let shared = DatafuseQueryContextShared::try_create(config, self.clone());
             state_guard.context_shared = Some(shared);
         }

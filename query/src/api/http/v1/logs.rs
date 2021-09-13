@@ -61,9 +61,9 @@ pub async fn logs_handler(cfg_extension: Extension<Config>) -> LogTemplate {
 }
 
 async fn select_table(cfg: Config) -> Result<String, ErrorCode> {
-    let session_manager = SessionManager::from_conf(cfg, Cluster::empty().await)?;
+    let session_manager = SessionManager::from_conf(cfg, Cluster::empty().await?)?;
     let executor_session = session_manager.create_session("HTTP")?;
-    let ctx = executor_session.create_context();
+    let ctx = executor_session.create_context().await;
     let table_meta = ctx.get_table("system", "tracing")?;
     let table = table_meta.raw();
     let source_plan = table.read_plan(

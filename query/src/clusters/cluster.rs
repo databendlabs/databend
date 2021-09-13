@@ -27,6 +27,7 @@ use crate::clusters::address::Address;
 use crate::clusters::node::Node;
 use crate::configs::Config;
 use common_management::{NamespaceApi, NamespaceMgr, LocalKVStore, NodeInfo};
+use std::time::Duration;
 
 pub type ClusterRef = Arc<Cluster>;
 
@@ -42,8 +43,9 @@ impl Cluster {
     async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterRef> {
         let tenant = &cfg.query.tenant;
         let namespace = &cfg.query.namespace;
+        let lift_time = Duration::from_secs(60);
         let local_store = LocalKVStore::new_temp().await?;
-        let namespace_manager = NamespaceMgr::new(local_store, tenant, namespace);
+        let namespace_manager = NamespaceMgr::new(local_store, tenant, namespace, lift_time)?;
 
         Ok(Arc::new(Cluster {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
@@ -61,7 +63,8 @@ impl Cluster {
 
         let tenant = &cfg.query.tenant;
         let namespace = &cfg.query.namespace;
-        let namespace_manager = NamespaceMgr::new(store_client, tenant, namespace);
+        let lift_time = Duration::from_secs(60);
+        let namespace_manager = NamespaceMgr::new(store_client, tenant, namespace, lift_time)?;
 
         Ok(Arc::new(Cluster {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
@@ -81,16 +84,17 @@ impl Cluster {
         Ok(cluster)
     }
 
-    pub async fn empty() -> ClusterRef {
-        let local_store = LocalKVStore::new_temp().await.unwrap();
-        let namespace_manager = NamespaceMgr::new(local_store, "temp", "temp");
+    pub async fn empty() -> Result<ClusterRef> {
+        let lift_time = Duration::from_secs(60);
+        let local_store = LocalKVStore::new_temp().await?;
+        let namespace_manager = NamespaceMgr::new(local_store, "temp", "temp", lift_time)?;
 
-        Arc::new(Cluster {
+        Ok(Arc::new(Cluster {
             local_port: 9090,
             nodes: Mutex::new(HashMap::new()),
             local_id: global_unique_id(),
             provider: Mutex::new(Box::new(namespace_manager)),
-        })
+        }))
     }
 
     pub async fn immutable_cluster(&self) -> Result<()> {

@@ -80,7 +80,7 @@ impl DatafuseQueryFlightDispatcher {
         }
     }
 
-    pub fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
+    pub async fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
         let action_sinks = action.get_sinks();
@@ -89,12 +89,12 @@ impl DatafuseQueryFlightDispatcher {
 
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
-            1 => self.one_sink_action(session, &action),
-            _ => self.action_with_scatter::<BroadcastFlightScatter>(session, &action),
+            1 => self.one_sink_action(session, &action).await,
+            _ => self.action_with_scatter::<BroadcastFlightScatter>(session, &action).await,
         }
     }
 
-    pub fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
+    pub async fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
         let action_sinks = action.get_sinks();
@@ -103,13 +103,13 @@ impl DatafuseQueryFlightDispatcher {
 
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
-            1 => self.one_sink_action(session, &action),
-            _ => self.action_with_scatter::<HashFlightScatter>(session, &action),
+            1 => self.one_sink_action(session, &action).await,
+            _ => self.action_with_scatter::<HashFlightScatter>(session, &action).await,
         }
     }
 
-    fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
-        let query_context = session.create_context();
+    async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
+        let query_context = session.create_context().await;
         let action_context = DatafuseQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
@@ -153,9 +153,9 @@ impl DatafuseQueryFlightDispatcher {
         Ok(())
     }
 
-    fn action_with_scatter<T>(&self, session: SessionRef, action: &FlightAction) -> Result<()>
+    async fn action_with_scatter<T>(&self, session: SessionRef, action: &FlightAction) -> Result<()>
     where T: FlightScatter + Send + 'static {
-        let query_context = session.create_context();
+        let query_context = session.create_context().await;
         let action_context = DatafuseQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 

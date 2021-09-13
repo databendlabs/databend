@@ -41,6 +41,7 @@ use crate::api::rpc::flight_dispatcher::DatafuseQueryFlightDispatcher;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManagerRef;
+use futures::{TryFuture, Future};
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -136,38 +137,36 @@ impl FlightService for DatafuseQueryFlightService {
         let action = request.into_inner();
         let flight_action: FlightAction = action.try_into()?;
 
-        let do_flight_action = || -> common_exception::Result<FlightResult> {
-            match &flight_action {
-                FlightAction::CancelAction(action) => {
-                    // We only destroy when session is exist
-                    let session_id = action.query_id.clone();
-                    if let Some(session) = self.sessions.get_session(&session_id) {
-                        // TODO: remove streams
-                        session.force_kill_session();
-                    }
-
-                    Ok(FlightResult { body: vec![] })
+        let action_result = match &flight_action {
+            FlightAction::CancelAction(action) => {
+                // We only destroy when session is exist
+                let session_id = action.query_id.clone();
+                if let Some(session) = self.sessions.get_session(&session_id) {
+                    // TODO: remove streams
+                    session.force_kill_session();
                 }
-                FlightAction::BroadcastAction(action) => {
-                    let session_id = action.query_id.clone();
-                    let is_aborted = self.dispatcher.is_aborted();
-                    let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
 
-                    self.dispatcher.broadcast_action(session, flight_action)?;
-                    Ok(FlightResult { body: vec![] })
-                }
-                FlightAction::PrepareShuffleAction(action) => {
-                    let session_id = action.query_id.clone();
-                    let is_aborted = self.dispatcher.is_aborted();
-                    let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+                FlightResult { body: vec![] }
+            }
+            FlightAction::BroadcastAction(action) => {
+                let session_id = action.query_id.clone();
+                let is_aborted = self.dispatcher.is_aborted();
+                let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
 
-                    self.dispatcher.shuffle_action(session, flight_action)?;
-                    Ok(FlightResult { body: vec![] })
-                }
+                self.dispatcher.broadcast_action(session, flight_action).await?;
+                FlightResult { body: vec![] }
+            }
+            FlightAction::PrepareShuffleAction(action) => {
+                let session_id = action.query_id.clone();
+                let is_aborted = self.dispatcher.is_aborted();
+                let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+
+                self.dispatcher.shuffle_action(session, flight_action).await?;
+                FlightResult { body: vec![] }
             }
         };
 
-        let action_result = do_flight_action()?;
+        // let action_result = do_flight_action.await?;
         Ok(RawResponse::new(
             Box::pin(tokio_stream::once(Ok(action_result))) as FlightStream<FlightResult>,
         ))

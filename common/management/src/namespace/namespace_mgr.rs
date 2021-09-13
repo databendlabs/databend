@@ -37,18 +37,17 @@ pub struct NamespaceMgr<KV> {
 }
 
 impl<T: KVApi> NamespaceMgr<T> {
-    pub fn new(kv_api: T, tenant: &str, namespace: &str, lift_time: Duration) -> Self {
-        NamespaceMgr {
+    pub fn new(kv_api: T, tenant: &str, namespace: &str, lift_time: Duration) -> Result<Self> {
+        Ok(NamespaceMgr {
             kv_api,
             lift_time,
-            // TODO: replace 'nodes' with the query project name
             namespace_prefix: format!(
-                "{}/{}/{}/nodes",
+                "{}/{}/{}/databend_query",
                 NAMESPACE_API_KEY_PREFIX,
                 Self::escape_for_key(tenant)?,
                 Self::escape_for_key(namespace)?
             ),
-        }
+        })
     }
 
     fn escape_for_key(key: &str) -> Result<String> {
@@ -64,7 +63,7 @@ impl<T: KVApi> NamespaceMgr<T> {
 
         for char in key.as_bytes() {
             match char {
-                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(char.clone()),
+                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(*char),
                 _other => {
                     new_key.push(b'%');
                     new_key.push(hex(*char / 16));
@@ -125,10 +124,10 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
     async fn add_node(&mut self, node: NodeInfo) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
         let seq = MatchSeq::Exact(0);
-        let meta = self.new_lift_time();
+        let meta = Some(self.new_lift_time());
         let value = Some(serde_json::to_vec(&node)?);
-        let key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node.id)?);
-        let upsert_node = self.kv_api.upsert_kv(&key, seq, value, Some(meta));
+        let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node.id)?);
+        let upsert_node = self.kv_api.upsert_kv(&node_key, seq, value, meta);
 
 
         match upsert_node.await? {
@@ -150,7 +149,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
         let values = self.kv_api.prefix_list_kv(&self.namespace_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
-        for (node_key, value) in values {
+        for (node_key, (_, value)) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.value)?;
             node_info.id = Self::unescape_for_key(&node_key)?;
             nodes_info.push(node_info);
@@ -172,12 +171,12 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
     }
 
     async fn heartbeat(&mut self, node_id: String, seq: Option<u64>) -> Result<u64> {
-        let meta = self.new_lift_time();
+        let meta = Some(self.new_lift_time());
         let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node_id)?);
         match seq {
             None => {
                 let seq = MatchSeq::GE(1);
-                let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, Some(meta));
+                let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
 
                 match upsert_meta.await? {
                     UpsertKVActionResult { prev: Some(_), result: Some((s, _)) } => Ok(s),
@@ -188,7 +187,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
             }
             Some(exact) => {
                 let seq = MatchSeq::Exact(exact);
-                let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, Some(meta));
+                let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
 
                 match upsert_meta.await? {
                     UpsertKVActionResult { prev: Some(_), result: Some((s, _)) } => Ok(s),
