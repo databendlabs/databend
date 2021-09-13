@@ -24,13 +24,13 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          cd website/datafuse
+          cd website/databend
           make install
 
       - name: Deploy website
         env:
           GOOGLE_ANALYTICS_KEY: ${{ secrets.GOOGLE_ANALYTICS_KEY }}
         run: |
-          cd website/datafuse
+          cd website/databend
           make build
           make deploy
