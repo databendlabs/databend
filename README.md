@@ -39,7 +39,7 @@
 
 ## What is Databend?
 
-Databend is an open source **elastic** and **reliable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
+Databend aimed to be an open source **elastic** and **reliable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
 
 Databend design principles:
 1. **Elastic**  In Databend, storage and compute resources can dynamically scale up and down on demand.
