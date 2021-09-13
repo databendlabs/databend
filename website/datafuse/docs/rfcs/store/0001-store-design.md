@@ -1,19 +1,19 @@
 ---
-id: datafuse-store-design
-title: DatafuseStore Design Draft
+id: databend-store-design
+title: DatabendStore Design Draft
 ---
 
-DatafuseStore is the storage layer in charge of:
+DatabendStore is the storage layer in charge of:
 - meta data storage such as user, db, table and schema.
 - blocks life cycle management such as allocation, compaction etc.
 - data/metadata consistency and reliability.
 
 ```
-                  DatafuseQuery(client)
+                  DatabendQuery(client)
                       |
                       | rpc
                       v
-  DatafuseStore       | flightServer                // network, auth
+  DatabendStore       | flightServer                // network, auth
                 |     |
                 |     v
                 |  Handler                    // execution engine
@@ -24,11 +24,11 @@ DatafuseStore is the storage layer in charge of:
 
 # IFileSystem
 
-`IFileSystem` defines an abstract storage layer that DatafuseStore would runs on.
+`IFileSystem` defines an abstract storage layer that DatabendStore would runs on.
 An `IFileSystem` impl in the cluster is the only stateful component.
 
 - Local FS: impl `IFileSystem` API and use a local disk folder as storage.
-    Suitable for a single node DatafuseQuery deployment.
+    Suitable for a single node DatabendQuery deployment.
 
 - DFS: impl `IFileSystem` and setup an aws-S3 like storage service.
     A DFS organizes multiple `LocalFS` with a centralized meta data service.
@@ -46,7 +46,7 @@ An `IFileSystem` impl in the cluster is the only stateful component.
 
 # API
 
-DatafuseQuery and DatafuseStore talks arrow-flight protocol.
+DatabendQuery and DatabendStore talks arrow-flight protocol.
 
 Schema related operations such as `create table` or `create database` are wrapped with a `FlightService::do_action` RPC.
 Data operation such as reading or writing a block are done with
@@ -57,7 +57,7 @@ See `common/flights/src/store_client.rs`.
 
 # DFS
 
-The most important component in DatafuseStore is the DFS.
+The most important component in DatabendStore is the DFS.
 DFS mainly consists of two parts: the meta data cluster and block storage
 cluster.
 
@@ -82,22 +82,22 @@ meta change message from the 5 candidates.
 
 ## In-process metadata components
 
-A DatafuseStore process includes two grpc API: the flight service and the meta
+A DatabendStore process includes two grpc API: the flight service and the meta
 service.
 
 - Meta related components are wrapped into `MetaNode`, in which a `Raft` instance
     is maintained along with storage and network engines.
 
-    `MetaNode` is the only entry for other DatafuseStore components to access meta data.
+    `MetaNode` is the only entry for other DatabendStore components to access meta data.
 
 - `RaftNode` communicates with remote RaftNode through `Network`, which send
-    messages to meta-grpc service on other DatafuseStore nodes.
+    messages to meta-grpc service on other DatabendStore nodes.
 
 - `Network` relies on `Storage` to find out info of other nodes.
 
 
 ```
-DatafuseStore components:
+DatabendStore components:
 .---------------------------.
 |                           |
 | flight-grpc     meta-grpc |
@@ -172,7 +172,7 @@ node, it pulls the data block from the uploading node.
 
 ## Meta cluster startup
 
-A DatafuseStore cluster is stateful thus the startup is done in several steps:
+A DatabendStore cluster is stateful thus the startup is done in several steps:
 
 - Boot up the first node in a cluster, by calling `MetaNode::boot()`.
   This func creates an empty raft instance add initialize itself as the leader of the solo cluster.
@@ -195,7 +195,7 @@ When a node is restarted:
 # DFS Example
 
 ```
-FQ:      DatafuseQuery node
+FQ:      DatabendQuery node
 
 flight:  arrow-flight server
 handler: execution handler

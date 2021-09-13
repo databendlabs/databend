@@ -3,7 +3,7 @@ id: api-config
 title: Config
 ---
 
-Get the config of the Datafuse query server.
+Get the config of the Databend query server.
 
 ## Examples
 

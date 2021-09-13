@@ -17,9 +17,9 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 ```
 
 !!! note
-    Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatafuseQuery memory/disk locally.
+    Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatabendQuery memory/disk locally.
 
-    Remote engine is `remote`, will be stored in the remote DatafuseStore cluster.
+    Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
 
 ## Examples
 

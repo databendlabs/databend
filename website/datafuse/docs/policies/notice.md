@@ -1,4 +1,5 @@
-# Datafuse includes some code from
+# Databend includes some code from
+
 - [arrow/datafusion](https://github.com/apache/arrow/tree/master/rust/datafusion)
 - [pola-rs/polars](https://github.com/pola-rs/polars)
 

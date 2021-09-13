@@ -5,10 +5,10 @@ title: How to write aggregate functions
 
 ## How to write aggregate functions
 
-Datafuse allows us to write custom aggregate functions through rust code.
-It's not an easy way because you need to be a rustacean first. Datafuse has a plan to support writing UDAFs in other languages(like js, web assembly) in the future.
+Databend allows us to write custom aggregate functions through rust code.
+It's not an easy way because you need to be a rustacean first. Databend has a plan to support writing UDAFs in other languages(like js, web assembly) in the future.
 
-In this section we will talk about how to write aggregate functions in Datafuse.
+In this section we will talk about how to write aggregate functions in Databend.
 
 
 ## AggregateFunction trait introduction
@@ -16,7 +16,7 @@ In this section we will talk about how to write aggregate functions in Datafuse.
 All aggregate functions implement `AggregateFunction` trait, and we register them into a global static factory named `FactoryFuncRef`, the factory is just an index map and the key is the name of the aggregate function.
 
 !!! note
-    Function name in Datafuse is case-insensitive.
+    Function name in Databend is case-insensitive.
 
 
 ``` rust
@@ -110,11 +110,11 @@ Since we already know the array type of this function, we can safely cast it to 
 Ok, this example is pretty easy. If you already read this, you may have the ability to write a new function.
 
 ## Refer to other examples
-As you see, adding a new aggregate function in Datafuse is not as hard as you think.
+As you see, adding a new aggregate function in Databend is not as hard as you think.
 Before you start to add one, please refer to other aggregate function examples, such as `min`, `count`, `max`, `avg`.
 
 ## Testing
 To be a good engineer, don't forget to test your codes, please add unit tests and stateless tests after you finish the new aggregate functions.
 
 ## Summary
-We welcome all community users to contribute more powerful functions to Datafuse. If you find any problems, feel free to [open an issue](https://github.com/datafuselabs/datafuse/issues) in GitHub, we will use our best efforts to help you.
+We welcome all community users to contribute more powerful functions to Databend. If you find any problems, feel free to [open an issue](https://github.com/datafuselabs/databend/issues) in GitHub, we will use our best efforts to help you.

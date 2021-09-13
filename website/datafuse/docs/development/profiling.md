@@ -1,12 +1,12 @@
 ---
 id: development-howtoprofile
-title: How to profile Datafuse
+title: How to profile Databend
 ---
 
 
 ## flame graph
 
-Open `http://localhost:8080/debug/pprof/profile?seconds=5` in browser, Datafuse debug api will response the svg of the flame graph to the client.
+Open `http://localhost:8080/debug/pprof/profile?seconds=5` in browser, Databend debug api will response the svg of the flame graph to the client.
 
 ![](../images/profiling-flamegraph.png)
 
@@ -38,5 +38,5 @@ Showing top 10 nodes out of 204
 
 Or
 ```
-go tool pprof -http=0.0.0.0:8081 /home/bohu/pprof/pprof.cpu.007.pb.gz
+go tool pprof -http=0.0.0.0:8081 $HOME/pprof/pprof.cpu.007.pb.gz
 ```

@@ -19,16 +19,16 @@
 # IN THE SOFTWARE.
 
 # Project information
-site_name: Datafuse
-site_url: https://datafuse.rs
+site_name: Databend
+site_url: https://databend.rs
 site_author: DatafuseLabs
 site_description: >-
   Built to make the Data Cloud easy.
 
 # Repository
-repo_name: datafuselabs/datafuse
-repo_url: https://github.com/datafuselabs/datafuse
-edit_uri: "https://github.com/datafuselabs/datafuse/tree/master/website/datafuse/docs"
+repo_name: datafuselabs/databend
+repo_url: https://github.com/datafuselabs/databend
+edit_uri: "https://github.com/datafuselabs/databend/tree/master/website/datafuse/docs"
 
 # Copyright
 copyright: Copyright &copy; 2020 - 2021 Datafuse Labs
@@ -203,12 +203,12 @@ nav:
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - RFCs:
-        - DatafuseQuery Join: rfcs/query/0001-join-framework-design.md
-        - DatafuseQuery Expression: rfcs/query/0002-plan-expression.md
-        - DatafuseQuery Shuffle: rfcs/query/0003-data-shuffle.md
-        - DatafuseStore Design: rfcs/store/0001-store-design.md
+        - DatabendQuery Join: rfcs/query/0001-join-framework-design.md
+        - DatabendQuery Expression: rfcs/query/0002-plan-expression.md
+        - DatabendQuery Shuffle: rfcs/query/0003-data-shuffle.md
+        - DatabendStore Design: rfcs/store/0001-store-design.md
         - Performance Test: rfcs/query/0004-performance-test.md
-        - DatafuseCLI Design: rfcs/cli/0001-cli-design.md
+        - DatabendCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
   - Whitepapers: overview/architecture.md
 

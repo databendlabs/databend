@@ -3,7 +3,7 @@ id: building-and-running
 title: Deploy
 ---
 
-This document describes how to build and run [DatafuseQuery](https://github.com/datafuselabs/datafuse/tree/master/query) as a distributed query engine.
+This document describes how to build and run [DatabendQuery](https://github.com/datafuselabs/databend/tree/master/query) as a distributed query engine.
 
 
 ## 1. Deploy
@@ -18,14 +18,14 @@ This document describes how to build and run [DatafuseQuery](https://github.com/
 === "Release binary"
 
     ```markdown
-    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/datafuse/master/scripts/installer/install-datafuse.sh | bash
+    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/master/scripts/installer/install-datafuse.sh | bash
     ```
 
 === "From source"
 
     ```markdown
-    $ git clone https://github.com/datafuselabs/datafuse.git
-    $ cd datafuse
+    $ git clone https://github.com/datafuselabs/databend.git
+    $ cd databend
     $ make setup
     $ make run
     ```

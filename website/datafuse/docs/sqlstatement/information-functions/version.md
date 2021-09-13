@@ -3,7 +3,7 @@ id: version
 title: VERSION
 ---
 
-Return the current version information of DatafuseQuery.
+Return the current version information of DatabendQuery.
 
 ## Syntax
 

@@ -26,12 +26,12 @@ Let's see how normal queries run on a single database node.
 
 ### Parser and AST
 
-DataFuse uses the third-party SQL parser and its AST.
+Databend uses the third-party SQL parser and its AST.
 For more information, see: https://github.com/ballista-compute/sqlparser-rs
 
 ### PlanBuilder and Plan
 
-A query plan (or query execution plan) is a sequence of steps used to access data in DataFuse. It is built by PlanBuilder from AST. We also use tree to describe it(similar to AST). But it has some differences with AST:
+A query plan (or query execution plan) is a sequence of steps used to access data in Databend. It is built by PlanBuilder from AST. We also use tree to describe it(similar to AST). But it has some differences with AST:
 
 - Plan is serializable and deserializable.
 - Plan is grammatically safe, we don't worry about it.
@@ -107,7 +107,7 @@ Let's see how normal queries run on a database cluster.
 
 ### ScatterOptimizer and StagePlan
 
-In Datafuse, we use ScatterOptimizer to decide the distributed computing of query. In other words, distributed query is an optimization of standalone query.
+In Databend, we use ScatterOptimizer to decide the distributed computing of query. In other words, distributed query is an optimization of standalone query.
 
 In ScatterOptimizer, we traverse all the plans of the query and rewrite the plan of interest(rewrite as StagePlan { kind:StageKind, input:Self }), where input is the rewritten plan, and kind is an enumeration(Normal: data is shuffled again, Expansive: data spreads from one node to multiple nodes, Convergent: data aggregation from multiple nodes to one node)
 

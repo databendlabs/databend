@@ -1,13 +1,13 @@
 ---
 id: development-tracing
-title: Tracing in Datafuse
+title: Tracing in Databend
 ---
 
-## Tracing In Datafuse
+## Tracing In Databend
 
-Datafuse using Rust's tracing ecosystem [tokio-tracing](https://github.com/tokio-rs/tracing) to do log and profile.
+Databend using Rust's tracing ecosystem [tokio-tracing](https://github.com/tokio-rs/tracing) to do log and profile.
 
-Datafuse default log level is `INFO`.
+Databend default log level is `INFO`.
 
 ## Enable Tracing
 

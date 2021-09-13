@@ -5,21 +5,21 @@ title: Whitepapers
 
 ## Design Overview
 
-Datafuse is an open source **elastic** and **scalable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
+Databend is an open source **elastic** and **scalable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
 
-Datafuse is intended for executing workloads with data stored in cloud storage systems, such as AWS S3 and Azure Blob Storage or others.
+Databend is intended for executing workloads with data stored in cloud storage systems, such as AWS S3 and Azure Blob Storage or others.
 
-We design Datafuse with the following key functionalities in mind:
+We design Databend with the following key functionalities in mind:
 
-1. **Elastic** In Datafuse storage and compute resources can dynamically scale up and down on demand.
-2. **Secure** All data files and network traffic in Datafuse is encrypted end-to-end, and provider *Role Based Access Control*  in SQL level.
-3. **User-friendly** Datafuse is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
-4. **Cost-efficient** Datafuse processes queries with high performance, and the user only pays for what is actually used.
+1. **Elastic** In Databend storage and compute resources can dynamically scale up and down on demand.
+2. **Secure** All data files and network traffic in Databend is encrypted end-to-end, and provider *Role Based Access Control*  in SQL level.
+3. **User-friendly** Databend is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
+4. **Cost-efficient** Databend processes queries with high performance, and the user only pays for what is actually used.
 
 
-![Datafuse Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
+![Databend Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
 
-The picture above shows the high-level architecture of Datafuse, it consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
+The picture above shows the high-level architecture of Databend, it consists of three components: `meta service` layer, and the  decoupled `compute` and `storage` layers.
 
 ## Meta Service Layer
 
@@ -91,9 +91,9 @@ The `Compute Layer` codes mainly in the `query` directory.
 
 ## Storage Layer
 
-Datafuse stores data in an efficient, columnar format as Parquet files.
+Databend stores data in an efficient, columnar format as Parquet files.
 Each Parquet file is sorted by the primary key before being written to the underlying shared storage.
-For efficient pruning, Datafuse also creates indexes for each Parquet file:
+For efficient pruning, Databend also creates indexes for each Parquet file:
 
 * `min_max.idx` The index file stores the *minimum* and *maximum* value of this Parquet file.
 * `sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records granularity.

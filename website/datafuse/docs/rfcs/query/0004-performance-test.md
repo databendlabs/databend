@@ -2,11 +2,11 @@
 
 Currently, we have already supports to run performance tests locally in tests/perfs directory, and here we need to support performance testing in CI
 
-Decoupling compute and storage allow datafuse to integrate into kubernetes easily.
-With the support of kubernetes platform, datafuse benchmarking could achieve the following advantages:
+Decoupling compute and storage allow databend to integrate into kubernetes easily.
+With the support of kubernetes platform, databend benchmarking could achieve the following advantages:
 1. Stable benchmarking results, with containerization and cgroup, easy testing instance could have idempotence computing resource
 2. Elastic, can expand or shrink tests on demand and also supports to run test locally(minikube + DinD) or on the cloud
-3. For following tests, we need to test on TPC benchmark and integrate datafuse-store storage layer to test infrastructure, thus far kubernetes can help instance scaling easily
+3. For following tests, we need to test on TPC benchmark and integrate databend-store storage layer to test infrastructure, thus far kubernetes can help instance scaling easily
 
 ## Goals
 

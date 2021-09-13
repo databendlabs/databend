@@ -1,8 +1,9 @@
-[https://datafuse.rs](https://datafuse.rs) 
+[https://databend.rs](https://databend.rs)
 
 # How to quickly test the website in local
 
 ## Dependencies
+
 ```markdown
 cd website/datafuse
 make install
