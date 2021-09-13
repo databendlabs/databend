@@ -22,8 +22,6 @@ members = [
     "common/management",
     "common/io",
     "common/cache",
-    "common/dal",
-    "common/indexing",
     "common/clickhouse-srv",
 
     # Datafuse Query

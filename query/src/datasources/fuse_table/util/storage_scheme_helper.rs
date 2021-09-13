@@ -13,9 +13,10 @@
 //  limitations under the License.
 //
 
-use common_dal::StorageScheme;
 use common_exception::ErrorCode;
 use common_exception::Result;
+
+use crate::datasources::dal::StorageScheme;
 
 pub type TableStorageScheme = StorageScheme;
 

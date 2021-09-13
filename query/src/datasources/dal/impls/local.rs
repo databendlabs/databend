@@ -21,15 +21,16 @@ use std::path::PathBuf;
 use async_compat::CompatExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_runtime::tokio;
 use futures::Stream;
 use futures::StreamExt;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-use crate::blob_accessor::Bytes;
-use crate::blob_accessor::DataAccessor;
-use crate::blob_accessor::InputStream;
-use crate::blob_accessor::SeekableReader;
+use crate::datasources::dal::Bytes;
+use crate::datasources::dal::DataAccessor;
+use crate::datasources::dal::InputStream;
+use crate::datasources::dal::SeekableReader;
 
 pub struct Local {
     root: PathBuf,

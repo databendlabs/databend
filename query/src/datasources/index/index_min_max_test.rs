@@ -25,8 +25,8 @@ use common_planners::col;
 use common_planners::lit;
 use pretty_assertions::assert_eq;
 
-use crate::IndexSchemaVersion;
-use crate::MinMaxIndex;
+use crate::datasources::index::IndexSchemaVersion;
+use crate::datasources::index::MinMaxIndex;
 
 #[test]
 fn test_min_max_index() -> Result<()> {

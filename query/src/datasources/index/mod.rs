@@ -16,16 +16,12 @@
 #[cfg(test)]
 mod index_min_max_test;
 #[cfg(test)]
-mod index_partition_test;
-#[cfg(test)]
 mod index_sparse_test;
 
 mod index_min_max;
-mod index_partition;
 mod index_sparse;
 
 pub use index_min_max::MinMaxIndex;
-pub use index_partition::PartitionIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;
 

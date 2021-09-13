@@ -21,7 +21,6 @@ use common_arrow::arrow::io::parquet::read::page_stream_to_array;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::parquet::read::get_page_stream;
 use common_cache::LruCache;
-use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::IntoSeries;
@@ -33,6 +32,7 @@ use common_planners::Part;
 use common_runtime::tokio::sync::mpsc::Sender;
 use futures::StreamExt;
 
+use crate::datasources::dal::DataAccessor;
 use crate::datasources::fuse_table::util::location_gen::block_location;
 
 #[derive(PartialEq, Eq, Hash)]

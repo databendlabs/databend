@@ -19,7 +19,6 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
@@ -30,6 +29,7 @@ use common_store_api::MetaApi;
 use futures::StreamExt;
 use uuid::Uuid;
 
+use crate::datasources::dal::DataAccessor;
 use crate::datasources::fuse_table::meta::table_snapshot::BlockLocation;
 use crate::datasources::fuse_table::meta::table_snapshot::BlockMeta;
 use crate::datasources::fuse_table::meta::table_snapshot::ColStats;

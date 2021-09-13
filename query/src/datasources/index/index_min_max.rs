@@ -20,7 +20,7 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::IndexSchemaVersion;
+use crate::datasources::index::IndexSchemaVersion;
 
 /// Min and Max index.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -31,6 +31,7 @@ pub struct MinMaxIndex {
     pub version: IndexSchemaVersion,
 }
 
+#[allow(dead_code)]
 impl MinMaxIndex {
     fn create(col: String, min: DataValue, max: DataValue) -> Self {
         MinMaxIndex {

@@ -18,6 +18,8 @@ mod common_test;
 mod tests;
 
 mod common;
+pub(crate) mod dal;
+mod index;
 mod meta_backend;
 
 pub(crate) mod example;

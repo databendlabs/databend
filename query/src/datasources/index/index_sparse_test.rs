@@ -25,9 +25,9 @@ use common_planners::col;
 use common_planners::lit;
 use pretty_assertions::assert_eq;
 
-use crate::IndexSchemaVersion;
-use crate::SparseIndex;
-use crate::SparseIndexValue;
+use crate::datasources::index::IndexSchemaVersion;
+use crate::datasources::index::SparseIndex;
+use crate::datasources::index::SparseIndexValue;
 
 #[test]
 fn test_sparse_index() -> Result<()> {

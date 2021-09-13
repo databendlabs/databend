@@ -38,7 +38,6 @@ common-profling = { path = "../common/profiling" }
 common-store-api = { path = "../common/store-api" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
-common-dal= {path = "../common/dal"}
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 
 # Github dependencies
@@ -47,9 +46,11 @@ clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev 
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "77f6ae5" }
 
 # Crates.io dependencies
-bumpalo = "3.7.0"
 ahash = "0.7.4"
 async-trait = "0.1"
+async-compat = "0.2.1"
+bumpalo = "3.7.0"
+bytes = "1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
 ctrlc = { version = "3.1.9", features = ["termination"] }
@@ -70,6 +71,8 @@ chrono-tz = "0.5"
 chrono =  "0.4.0"
 prost = "0.8.0"
 rand = "0.8.4"
+rusoto_s3 = "0.47.0"
+rusoto_core = "0.47.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
