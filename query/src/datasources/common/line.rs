@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod tests;
+use std::io;
+use std::io::BufRead;
+use std::io::BufReader;
 
-mod fuse_table;
-mod index;
-mod meta_backend;
-
-pub(crate) mod common;
-pub(crate) mod dal;
-pub(crate) mod example;
-pub(crate) mod local;
-pub(crate) mod remote;
-pub(crate) mod system;
-
-pub use meta_backend::MetaBackend;
+/// Counts lines in the source `handle`.
+/// count_lines(std::fs::File.open("foo.txt")
+pub fn count_lines<R: io::Read>(handle: R) -> Result<usize, io::Error> {
+    let sep = b'\n';
+    let mut reader = BufReader::new(handle);
+    let mut count = 0;
+    let mut line: Vec<u8> = Vec::new();
+    while match reader.read_until(sep, &mut line) {
+        Ok(n) if n > 0 => true,
+        Err(e) => return Err(e),
+        _ => false,
+    } {
+        if *line.last().unwrap() == sep {
+            count += 1;
+        };
+    }
+    Ok(count)
+}

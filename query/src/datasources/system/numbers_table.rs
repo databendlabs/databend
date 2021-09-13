@@ -30,8 +30,8 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
+use crate::datasources::common::generate_parts;
 use crate::datasources::system::NumbersStream;
-use crate::datasources::Common;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct NumbersTable {
@@ -110,7 +110,7 @@ impl Table for NumbersTable {
             table_id: scan.table_id,
             table_version: scan.table_version,
             schema: self.schema.clone(),
-            parts: Common::generate_parts(0, ctx.get_settings().get_max_threads()?, total),
+            parts: generate_parts(0, ctx.get_settings().get_max_threads()?, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
