@@ -19,9 +19,9 @@ use common_exception::Result;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::configs::Config;
-use crate::datasources::local::LocalDatabases;
-use crate::datasources::remote::RemoteDatabases;
-use crate::datasources::system::SystemDatabases;
+use crate::datasources::database::local::LocalDatabases;
+use crate::datasources::database::remote::RemoteDatabases;
+use crate::datasources::database::system::SystemDatabases;
 
 pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     let conf = Config::default();
