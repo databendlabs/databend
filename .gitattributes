@@ -1,4 +1,3 @@
 docker/** -text
 scripts/** -text
-website/datafuse/** -text
-
+website/databend/** -text

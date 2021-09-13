@@ -28,7 +28,7 @@ site_description: >-
 # Repository
 repo_name: datafuselabs/databend
 repo_url: https://github.com/datafuselabs/databend
-edit_uri: "https://github.com/datafuselabs/databend/tree/master/website/datafuse/docs"
+edit_uri: "https://github.com/datafuselabs/databend/tree/master/website/databend/docs"
 
 # Copyright
 copyright: Copyright &copy; 2020 - 2021 Datafuse Labs

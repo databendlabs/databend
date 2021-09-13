@@ -5,7 +5,7 @@
 ## Dependencies
 
 ```markdown
-cd website/datafuse
+cd website/databend
 make install
 ```
 
