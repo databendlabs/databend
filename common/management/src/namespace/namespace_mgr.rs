@@ -56,8 +56,8 @@ impl<T: KVApi> NamespaceMgr<T> {
 
         fn hex(num: u8) -> u8 {
             match num {
-                0..=10 => b'0' + num,
-                10..=16 => b'a' + (num - 10),
+                0..=9 => b'0' + num,
+                10..=15 => b'a' + (num - 10),
                 unreachable => unreachable!("Unreachable branch num = {}", unreachable),
             }
         }

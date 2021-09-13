@@ -146,9 +146,9 @@ fn global_unique_id() -> String {
         uuid = uuid / 62;
 
         match m as u8 {
-            0..=10 => unique_id.push((b'0' + m) as char),
-            10..=36 => unique_id.push((b'a' + (m - 10)) as char),
-            36..=62 => unique_id.push((b'A' + (m - 36)) as char),
+            0..=9 => unique_id.push((b'0' + m) as char),
+            10..=35 => unique_id.push((b'a' + (m - 10)) as char),
+            36..=61 => unique_id.push((b'A' + (m - 36)) as char),
             unreachable => unreachable!("Unreachable branch m = {}", unreachable),
         }
 
