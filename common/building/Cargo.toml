@@ -8,4 +8,4 @@ edition = "2021"
 
 [dependencies]
 vergen = "5.1.15"
-run_script = "^0.8.0"
+run_script = "^0.9.0"
