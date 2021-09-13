@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve Datafuse 
+about: Create a report to help us improve Databend
 title: ''
 labels: bug
 assignees: ''
@@ -14,7 +14,9 @@ Description for this bug.
 **How to reproduce**
 
 **Error message and/or stacktrace**
+
 If applicable, add screenshots to help explain your problem.
 
 **Additional context**
+
 Add any other context about the problem here.

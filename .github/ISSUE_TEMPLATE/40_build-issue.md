@@ -1,6 +1,6 @@
 ---
 name: Build issue
-about: Report failed Datafuse build from master
+about: Report failed Databend build from master
 title: ''
 labels: build
 assignees: ''
@@ -22,4 +22,4 @@ $ rustc --version
 $ cargo --version
 ```
 
-**Datafuse git version**
+**Databend git version**
