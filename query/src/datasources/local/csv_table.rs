@@ -26,8 +26,9 @@ use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::datasources::common::count_lines;
+use crate::datasources::common::generate_parts;
 use crate::datasources::local::CsvTableStream;
-use crate::datasources::Common;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct CsvTable {
@@ -95,7 +96,7 @@ impl Table for CsvTable {
     ) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
-        let lines_count = Common::count_lines(File::open(file.clone())?)?;
+        let lines_count = count_lines(File::open(file.clone())?)?;
 
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
@@ -103,7 +104,7 @@ impl Table for CsvTable {
             table_id: scan.table_id,
             table_version: scan.table_version,
             schema: self.schema.clone(),
-            parts: Common::generate_parts(
+            parts: generate_parts(
                 start_line as u64,
                 ctx.get_settings().get_max_threads()?,
                 lines_count as u64,

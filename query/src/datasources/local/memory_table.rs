@@ -30,7 +30,7 @@ use futures::stream::StreamExt;
 
 use super::MemoryTableStream;
 use crate::catalogs::Table;
-use crate::datasources::Common;
+use crate::datasources::common::generate_parts;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct MemoryTable {
@@ -95,7 +95,7 @@ impl Table for MemoryTable {
             table_id: scan.table_id,
             table_version: scan.table_version,
             schema: self.schema.clone(),
-            parts: Common::generate_parts(
+            parts: generate_parts(
                 0,
                 ctx.get_settings().get_max_threads()?,
                 blocks.len() as u64,

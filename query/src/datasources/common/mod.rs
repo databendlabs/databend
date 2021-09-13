@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,19 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 #[cfg(test)]
-mod tests;
+mod line_test;
+#[cfg(test)]
+mod part_test;
 
-mod fuse_table;
-mod index;
-mod meta_backend;
+mod line;
+mod part;
 
-pub(crate) mod common;
-pub(crate) mod dal;
-pub(crate) mod example;
-pub(crate) mod local;
-pub(crate) mod remote;
-pub(crate) mod system;
-
-pub use meta_backend::MetaBackend;
+pub use line::count_lines;
+pub use part::generate_parts;
