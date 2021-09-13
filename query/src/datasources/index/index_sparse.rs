@@ -20,7 +20,7 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::IndexSchemaVersion;
+use crate::datasources::index::IndexSchemaVersion;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SparseIndexValue {
@@ -42,6 +42,7 @@ pub struct SparseIndex {
     pub version: IndexSchemaVersion,
 }
 
+#[allow(dead_code)]
 impl SparseIndex {
     fn create(col: String) -> Self {
         SparseIndex {

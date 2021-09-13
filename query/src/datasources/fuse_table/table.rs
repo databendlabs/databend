@@ -16,7 +16,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -35,6 +34,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::catalogs::Table;
+use crate::datasources::dal::DataAccessor;
 use crate::datasources::fuse_table::io::block_reader::read_part;
 use crate::datasources::fuse_table::io::snapshot_reader::read_table_snapshot;
 use crate::datasources::fuse_table::meta::meta_info_reader::MetaInfoReader;

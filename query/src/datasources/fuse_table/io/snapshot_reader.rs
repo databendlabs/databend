@@ -15,9 +15,9 @@
 
 use std::sync::Arc;
 
-use common_dal::DataAccessor;
 use common_exception::Result;
 
+use crate::datasources::dal::DataAccessor;
 use crate::datasources::fuse_table::io::reader_util::do_read_obj;
 use crate::datasources::fuse_table::io::reader_util::do_read_obj_async;
 use crate::datasources::fuse_table::meta::table_snapshot::TableSnapshot;

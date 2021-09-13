@@ -15,12 +15,12 @@
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
-use common_dal::DataAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncReadExt;
 use serde::de::DeserializeOwned;
 
+use crate::datasources::dal::DataAccessor;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub fn do_read(

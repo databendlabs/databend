@@ -13,11 +13,11 @@
 //  limitations under the License.
 //
 
-mod blob_accessor;
-mod impls;
+#[cfg(test)]
+mod s3_input_stream_test;
 
-pub use blob_accessor::Bytes;
-pub use blob_accessor::DataAccessor;
-pub use impls::Local;
-pub use impls::StorageScheme;
-pub use impls::S3;
+mod s3;
+mod s3_input_stream;
+
+pub use s3::S3;
+pub use s3_input_stream::S3InputStream;

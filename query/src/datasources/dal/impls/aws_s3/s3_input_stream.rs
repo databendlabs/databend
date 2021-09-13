@@ -21,7 +21,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use bytes::BufMut;
-use bytes::BytesMut;
+use common_runtime::tokio::io::ErrorKind;
 use futures::ready;
 use futures::stream::Fuse;
 use futures::Future;
@@ -33,7 +33,6 @@ use rusoto_s3::HeadObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::StreamingBody;
 use rusoto_s3::S3;
-use tokio::io::ErrorKind;
 
 type StreamLenFuture = Pin<Box<dyn Future<Output = Result<i64, Error>> + Send>>;
 
@@ -51,7 +50,7 @@ pub struct S3InputStream {
 
     state: State,
 
-    buffer: BytesMut,
+    buffer: bytes::BytesMut,
     /// where reading begins
     cursor_pos: u64,
     /// total length of target object
@@ -65,7 +64,7 @@ impl S3InputStream {
             bucket: bucket.to_owned(),
             key: key.to_owned(),
             state: State::Bare,
-            buffer: BytesMut::new(),
+            buffer: bytes::BytesMut::new(),
             cursor_pos: 0,
             stream_len: len_hint,
         }

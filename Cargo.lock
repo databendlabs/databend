@@ -760,22 +760,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-dal"
-version = "0.1.0"
-dependencies = [
- "async-compat",
- "async-trait",
- "bytes",
- "common-exception",
- "futures",
- "log",
- "rand",
- "rusoto_core",
- "rusoto_s3",
- "tokio",
-]
-
-[[package]]
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
@@ -874,18 +858,6 @@ dependencies = [
  "serde",
  "serde_json",
  "unicase",
-]
-
-[[package]]
-name = "common-indexing"
-version = "0.1.0"
-dependencies = [
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-planners",
- "pretty_assertions",
- "serde",
 ]
 
 [[package]]
@@ -1425,11 +1397,13 @@ name = "datafuse-query"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "async-compat",
  "async-trait",
  "axum",
  "axum-server",
  "bumpalo",
  "byteorder",
+ "bytes",
  "cargo-license",
  "cargo_metadata 0.14.0",
  "chrono",
@@ -1439,7 +1413,6 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-clickhouse-srv",
- "common-dal",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1482,6 +1455,8 @@ dependencies = [
  "quantiles",
  "rand",
  "reqwest",
+ "rusoto_core",
+ "rusoto_s3",
  "serde",
  "serde_json",
  "sqlparser",

@@ -16,10 +16,10 @@
 use std::sync::Arc;
 
 use common_arrow::parquet::read::read_metadata;
-use common_dal::DataAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::datasources::dal::DataAccessor;
 use crate::datasources::fuse_table::io::segment_reader::read_segment;
 use crate::datasources::fuse_table::meta::table_snapshot::RawBlockStats;
 use crate::datasources::fuse_table::meta::table_snapshot::SegmentInfo;

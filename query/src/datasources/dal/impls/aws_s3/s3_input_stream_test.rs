@@ -16,6 +16,7 @@
 use std::io::SeekFrom;
 
 use common_exception::ErrorCode;
+use common_runtime::tokio;
 use futures::AsyncReadExt;
 use futures::AsyncSeekExt;
 use rusoto_core::ByteStream;
@@ -24,8 +25,8 @@ use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 
-use crate::impls::aws_s3::s3::S3;
-use crate::DataAccessor;
+use crate::datasources::dal::blob_accessor::DataAccessor;
+use crate::datasources::dal::S3;
 
 struct TestFixture {
     region: Region,

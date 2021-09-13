@@ -16,6 +16,7 @@
 use std::io::Write;
 
 use common_exception::ErrorCode;
+use common_runtime::tokio::io::AsyncReadExt;
 use futures::Stream;
 use futures::StreamExt;
 use rusoto_core::ByteStream;
@@ -24,13 +25,12 @@ use rusoto_s3::GetObjectRequest;
 use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
-use tokio::io::AsyncReadExt;
 
-use crate::blob_accessor::InputStream;
-use crate::blob_accessor::SeekableReader;
-use crate::impls::aws_s3::s3_input_stream::S3InputStream;
-use crate::Bytes;
-use crate::DataAccessor;
+use crate::datasources::dal::impls::aws_s3::S3InputStream;
+use crate::datasources::dal::Bytes;
+use crate::datasources::dal::DataAccessor;
+use crate::datasources::dal::InputStream;
+use crate::datasources::dal::SeekableReader;
 
 pub struct S3 {
     client: S3Client,
@@ -38,6 +38,7 @@ pub struct S3 {
 }
 
 impl S3 {
+    #[allow(dead_code)]
     pub fn new(region: Region, bucket: String) -> Self {
         let client = S3Client::new(region);
         S3 { client, bucket }
