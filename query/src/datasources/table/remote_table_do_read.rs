@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flights::StorageApi;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_store_api::ReadAction;
@@ -25,16 +26,14 @@ use crate::datasources::database::remote::RemoteTable;
 use crate::datasources::database::remote::StoreApis;
 use crate::sessions::DatabendQueryContextRef;
 
-impl<T> RemoteTable<T>
-where T: 'static + StoreApis + Clone
-{
+impl RemoteTable {
     #[inline]
-    pub(super) async fn do_read(
+    pub(in crate::datasources) async fn do_read(
         &self,
         ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let client = self.store_api_provider.try_get_store_apis().await?;
+        let client = self.store_client_provider.try_get_client().await?;
         let progress_callback = ctx.progress_callback();
 
         let plan = source_plan.clone();

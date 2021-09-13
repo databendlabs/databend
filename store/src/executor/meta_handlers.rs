@@ -69,6 +69,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
                 if_not_exists,
                 db: Database {
                     database_id: 0,
+                    database_engine: plan.engine.clone(),
                     tables: HashMap::new(),
                 },
             },
@@ -119,6 +120,7 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
                 let rst = GetDatabaseActionResult {
                     database_id: db.database_id,
                     db: db_name,
+                    engine: db.database_engine,
                 };
                 Ok(rst)
             }
@@ -184,6 +186,8 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         let table = Table {
             table_id: 0,
             schema: flight_data.data_header,
+            table_engine: plan.engine.clone(),
+            table_options: plan.options.clone(),
             parts: Default::default(),
         };
 
@@ -299,6 +303,8 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                     db: db_name.clone(),
                     name: table_name.clone(),
                     schema: Arc::new(arrow_schema.into()),
+                    engine: table.table_engine.clone(),
+                    options: table.table_options,
                 };
                 Ok(rst)
             }
@@ -328,6 +334,8 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     db: "".to_owned(),
                     name: "".to_owned(), // TODO for each version of table, we duplicates the name at present
                     schema: Arc::new(arrow_schema.into()),
+                    engine: table.table_engine.clone(),
+                    options: table.table_options,
                 };
                 Ok(rst)
             }

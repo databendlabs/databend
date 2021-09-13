@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -64,3 +65,6 @@ impl DatabaseEngine for SystemDatabases {
         "The system engine is used by tables in the system database, which store Databend information."
     }
 }
+
+
+ */

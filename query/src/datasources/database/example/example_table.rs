@@ -37,6 +37,7 @@ pub struct ExampleTable {
 }
 
 impl ExampleTable {
+    #[allow(dead_code)]
     pub fn try_create(
         db: String,
         name: String,

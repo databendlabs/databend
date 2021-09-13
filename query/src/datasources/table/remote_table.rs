@@ -27,25 +27,24 @@ use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
 use common_store_api::ReadPlanResult;
+use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::datasources::database::remote::StoreApis;
-use crate::datasources::database::remote::StoreApisProvider;
-use crate::sessions::DatabendQueryContextRef;
+use crate::datasources::database::remote::GetStoreApiClient;
+use crate::datasources::database::remote::StoreClientProvider;
+use crate::sessions::DatafuseQueryContextRef;
 
 #[allow(dead_code)]
-pub struct RemoteTable<T> {
+pub struct RemoteTable {
     pub(crate) db: String,
     pub(crate) name: String,
     pub(crate) schema: DataSchemaRef,
-    pub(crate) store_api_provider: StoreApisProvider<T>,
+    pub(crate) store_client_provider: StoreClientProvider,
 }
 
 #[async_trait::async_trait]
-impl<T> Table for RemoteTable<T>
-where T: 'static + StoreApis + Clone
-{
+impl Table for RemoteTable {
     fn name(&self) -> &str {
         &self.name
     }
@@ -74,7 +73,7 @@ where T: 'static + StoreApis + Clone
     ) -> Result<ReadDataSourcePlan> {
         // Change this method to async at current stage might be harsh
         let (tx, rx) = channel();
-        let cli_provider = self.store_api_provider.clone();
+        let cli_provider = self.store_client_provider.clone();
         let db_name = self.db.clone();
         let tbl_name = self.name.clone();
         {
@@ -118,7 +117,7 @@ where T: 'static + StoreApis + Clone
             let block_stream =
                 opt_stream.ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-            let mut client = self.store_api_provider.try_get_store_apis().await?;
+            let mut client = self.store_client_provider.try_get_store_apis().await?;
 
             client
                 .append_data(
@@ -134,27 +133,25 @@ where T: 'static + StoreApis + Clone
     }
 
     async fn truncate(&self, _ctx: DatabendQueryContextRef, plan: TruncateTablePlan) -> Result<()> {
-        let mut client = self.store_api_provider.try_get_store_apis().await?;
+        let mut client = self.store_client_provider.try_get_store_apis().await?;
         client.truncate(plan.db.clone(), plan.table.clone()).await?;
         Ok(())
     }
 }
 
-impl<T> RemoteTable<T>
-where T: 'static + StoreApis + Clone
-{
+impl RemoteTable {
     pub fn create(
         db: impl Into<String>,
         name: impl Into<String>,
         schema: DataSchemaRef,
-        store_client_provider: StoreApisProvider<T>,
+        store_client_provider: StoreClientProvider,
         _options: TableOptions,
     ) -> Box<dyn Table> {
         let table = Self {
             db: db.into(),
             name: name.into(),
             schema,
-            store_api_provider: store_client_provider,
+            store_client_provider,
         };
         Box::new(table)
     }

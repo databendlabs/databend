@@ -79,6 +79,10 @@ impl Table for MemoryTable {
         true
     }
 
+    fn is_stateful(&self) -> bool {
+        true
+    }
+
     fn read_plan(
         &self,
         ctx: DatabendQueryContextRef,
@@ -130,7 +134,8 @@ impl Table for MemoryTable {
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-        if insert_plan.schema().as_ref() != self.schema.as_ref() {
+        // NOTE, currently, schema contains ENGINE... TOBE fixed
+        if insert_plan.schema().as_ref().fields() != self.schema.as_ref().fields() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
         }
 

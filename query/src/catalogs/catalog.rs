@@ -24,6 +24,7 @@ use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::datasources::engines::database_factory_registry::EngineDescription;
 
 /// Catalog is the global view of all the databases of the user.
 /// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
@@ -60,5 +61,5 @@ pub trait Catalog {
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 
     // Get all db engines.
-    fn get_db_engines(&self) -> Result<Vec<Arc<dyn DatabaseEngine>>>;
+    fn get_db_engines(&self) -> Result<Vec<EngineDescription>>;
 }

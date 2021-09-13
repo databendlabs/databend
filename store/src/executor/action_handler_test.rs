@@ -175,6 +175,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
             Ok(want_db_id) => Ok(GetDatabaseActionResult {
                 database_id: want_db_id,
                 db: db_name.to_string(),
+                engine: "Local".to_string(),
             }),
             Err(err_str) => Err(ErrorCode::UnknownDatabase(err_str)),
         };
@@ -458,6 +459,8 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
                 db: db_name.to_string(),
                 name: table_name.to_string(),
                 schema,
+                engine: "JSON".to_owned(),
+                options: Default::default(),
             }),
             Err(err_str) => Err(ErrorCode::UnknownTable(err_str)),
         };

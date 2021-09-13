@@ -12,33 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod csv_table_test;
-#[cfg(test)]
-mod local_meta_backend_test;
-#[cfg(test)]
-mod memory_table_test;
-#[cfg(test)]
-mod null_table_test;
-#[cfg(test)]
-mod parquet_table_test;
+//pub use local_database::LocalDatabase;
+//pub use local_databases::LocalDatabases;
+//pub use local_meta_backend::LocalMetaBackend;
 
-mod csv_table;
-mod csv_table_stream;
-mod local_database;
-mod local_databases;
-mod local_meta_backend;
-mod memory_table;
-mod memory_table_stream;
-mod null_table;
-mod parquet_table;
+pub use crate::datasources::table::csv_table::CsvTable;
+pub use crate::datasources::table::csv_table_stream::CsvTableStream;
+pub use crate::datasources::table::memory_table::MemoryTable;
+pub use crate::datasources::table::memory_table_stream::MemoryTableStream;
+pub use crate::datasources::table::null_table::NullTable;
+pub use crate::datasources::table::parquet_table::ParquetTable;
 
-pub use csv_table::CsvTable;
-pub use csv_table_stream::CsvTableStream;
-pub use local_database::LocalDatabase;
-pub use local_databases::LocalDatabases;
-pub use local_meta_backend::LocalMetaBackend;
-pub use memory_table::MemoryTable;
-pub use memory_table_stream::MemoryTableStream;
-pub use null_table::NullTable;
-pub use parquet_table::ParquetTable;
+//#[cfg(test)]
+//mod local_meta_backend_test;
+//
+//mod local_database;
+//mod local_databases;
+//mod local_meta_backend;

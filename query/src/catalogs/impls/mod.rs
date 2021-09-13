@@ -14,5 +14,8 @@
 //
 
 mod database_catalog;
-
-pub use database_catalog::*;
+mod sub_cats;
+pub use database_catalog::DatabaseCatalog;
+pub use sub_cats::system_catalog::LOCAL_TBL_ID_BEGIN;
+pub use sub_cats::system_catalog::SYS_TBL_ID_BEGIN;
+pub use sub_cats::system_catalog::SYS_TBL_ID_END;

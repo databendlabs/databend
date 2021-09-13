@@ -32,6 +32,7 @@ pub struct RemoteDatabases {
 
 impl RemoteDatabases {
     pub fn create(conf: Config) -> Self {
+        // TODO check if we should keep this logic
         // If the meta meta_address is empty
         // We use the local backend as Remote meta data storage.
         if conf.meta.meta_address.is_empty() {

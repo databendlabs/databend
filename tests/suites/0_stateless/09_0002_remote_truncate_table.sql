@@ -2,7 +2,7 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t(a varchar, b varchar);
+CREATE TABLE IF NOT EXISTS t(a varchar, b varchar) Engine = remote;
 INSERT INTO t(a,b) VALUES('1', 'v1'),('2','v2');
 SELECT * FROM t;
 TRUNCATE TABLE t;

@@ -21,67 +21,70 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::Database;
-use crate::catalogs::MetaBackend;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::datasources::engines::metastore_clients::MetaStoreClient;
 
 pub struct ExampleDatabase {
-    name: String,
-    meta_backend: Arc<dyn MetaBackend>,
+    db_name: String,
+    engine_name: String,
 }
 
 impl ExampleDatabase {
-    pub fn create(name: &str, meta_backend: Arc<dyn MetaBackend>) -> Self {
-        ExampleDatabase {
-            name: name.to_string(),
-            meta_backend,
+    pub fn new(
+        db_name: impl Into<String>,
+        engine_name: impl Into<String>,
+        _meta_store_client: Arc<dyn MetaStoreClient>,
+    ) -> Self {
+        Self {
+            db_name: db_name.into(),
+            engine_name: engine_name.into(),
         }
     }
 }
 
 impl Database for ExampleDatabase {
     fn name(&self) -> &str {
-        self.name.as_str()
+        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {
-        "local"
+        self.engine_name.as_str()
     }
 
     fn is_local(&self) -> bool {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        self.meta_backend.get_table(self.name(), table_name)
+    fn get_table(&self, _table_name: &str) -> Result<Arc<TableMeta>> {
+        todo!()
     }
 
-    fn exists_table(&self, table_name: &str) -> Result<bool> {
-        Ok(self.get_table(table_name).is_ok())
+    fn exists_table(&self, _table_name: &str) -> Result<bool> {
+        todo!()
     }
 
     fn get_table_by_id(
         &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
+        _table_id: MetaId,
+        _table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.meta_backend
-            .get_table_by_id(self.name(), table_id, table_version)
+        todo!()
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        self.meta_backend.get_tables(self.name())
+        todo!()
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
         Ok(vec![])
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.meta_backend.create_table(plan)
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+        todo!()
     }
 
-    fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.meta_backend.drop_table(plan)
+    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+        todo!()
     }
 }

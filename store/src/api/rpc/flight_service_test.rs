@@ -85,12 +85,13 @@ async fn test_flight_restart() -> anyhow::Result<()> {
         false,
     )]));
     {
+        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
         let plan = CreateTablePlan {
             if_not_exists: false,
             db: db_name.to_string(),
             table: table_name.to_string(),
             schema: schema.clone(),
-            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            options: options.clone(),
             engine: "JSON".to_string(),
         };
 
@@ -104,6 +105,8 @@ async fn test_flight_restart() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: table_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
@@ -276,15 +279,14 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             false,
         )]));
 
+        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
         // Create table plan.
         let mut plan = CreateTablePlan {
             if_not_exists: false,
             db: db_name.to_string(),
             table: tbl_name.to_string(),
             schema: schema.clone(),
-            // TODO check get_table
-            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            // TODO
+            options: options.clone(),
             engine: "JSON".to_string(),
         };
 
@@ -302,6 +304,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
@@ -321,6 +325,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
@@ -346,6 +352,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get old table");
         }
@@ -402,15 +410,14 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
             false,
         )]));
 
+        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
         // Create table plan.
         let plan = CreateTablePlan {
             if_not_exists: false,
             db: db_name.to_string(),
             table: tbl_name.to_string(),
             schema: schema.clone(),
-            // TODO check get_table
-            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            // TODO
+            options: options.clone(),
             engine: "JSON".to_string(),
         };
 
@@ -428,6 +435,8 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
