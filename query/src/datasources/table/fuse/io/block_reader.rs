@@ -33,7 +33,7 @@ use common_runtime::tokio::sync::mpsc::Sender;
 use futures::StreamExt;
 
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::fuse_table::util::location_gen::block_location;
+use crate::datasources::table::fuse::block_location;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct BlockMetaCacheKey {

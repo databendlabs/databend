@@ -16,9 +16,9 @@
 use common_exception::Result;
 use common_planners::Extras;
 
-use crate::datasources::fuse_table::meta::meta_info_reader::MetaInfoReader;
-use crate::datasources::fuse_table::meta::table_snapshot::BlockLocation;
-use crate::datasources::fuse_table::meta::table_snapshot::TableSnapshot;
+use crate::datasources::table::fuse::BlockLocation;
+use crate::datasources::table::fuse::MetaInfoReader;
+use crate::datasources::table::fuse::TableSnapshot;
 
 struct TableSparseIndex {}
 struct CacheMgr;

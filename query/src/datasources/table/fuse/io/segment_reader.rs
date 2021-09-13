@@ -18,23 +18,21 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::fuse_table::io::reader_util::do_read_obj;
-use crate::datasources::fuse_table::io::reader_util::do_read_obj_async;
-use crate::datasources::fuse_table::meta::table_snapshot::TableSnapshot;
+use crate::datasources::table::fuse::do_read_obj;
+use crate::datasources::table::fuse::do_read_obj_async;
+use crate::datasources::table::fuse::SegmentInfo;
 use crate::sessions::DatafuseQueryContextRef;
 
-pub fn read_table_snapshot(
+#[allow(dead_code)]
+pub fn read_segment(
     da: Arc<dyn DataAccessor>,
     ctx: &DatafuseQueryContextRef,
     loc: &str,
-) -> Result<TableSnapshot> {
+) -> Result<SegmentInfo> {
     do_read_obj(da, ctx, loc)
 }
 
 #[allow(dead_code)]
-pub async fn read_table_snapshot_async(
-    da: Arc<dyn DataAccessor>,
-    loc: &str,
-) -> Result<TableSnapshot> {
+pub async fn read_segment_async(da: Arc<dyn DataAccessor>, loc: &str) -> Result<SegmentInfo> {
     do_read_obj_async(da, loc).await
 }

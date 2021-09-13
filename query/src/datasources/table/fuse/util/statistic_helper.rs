@@ -19,8 +19,8 @@ use std::collections::HashMap;
 use common_datavalues::DataType;
 use common_exception::Result;
 
-use crate::datasources::fuse_table::meta::table_snapshot::ColStats;
-use crate::datasources::fuse_table::meta::table_snapshot::ColumnId;
+use crate::datasources::table::fuse::ColStats;
+use crate::datasources::table::fuse::ColumnId;
 
 pub fn column_stats_reduce(
     stats: Vec<HashMap<ColumnId, (DataType, ColStats)>>,

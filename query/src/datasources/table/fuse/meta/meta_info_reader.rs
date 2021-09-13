@@ -20,9 +20,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::fuse_table::io::segment_reader::read_segment;
-use crate::datasources::fuse_table::meta::table_snapshot::RawBlockStats;
-use crate::datasources::fuse_table::meta::table_snapshot::SegmentInfo;
+use crate::datasources::table::fuse::read_segment;
+use crate::datasources::table::fuse::RawBlockStats;
+use crate::datasources::table::fuse::SegmentInfo;
 use crate::sessions::DatafuseQueryContextRef;
 
 // TODO cache

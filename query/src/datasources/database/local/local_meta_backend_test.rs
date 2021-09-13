@@ -16,9 +16,9 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use pretty_assertions::assert_eq;
 
+use crate::catalogs::MetaBackend;
 use crate::datasources::database::local::LocalMetaBackend;
 use crate::sql::PlanParser;
-use crate::catalogs::MetaBackend;
 
 #[test]
 fn test_meta_backend() -> Result<()> {

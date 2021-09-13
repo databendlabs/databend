@@ -30,15 +30,15 @@ use futures::StreamExt;
 use uuid::Uuid;
 
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::fuse_table::meta::table_snapshot::BlockLocation;
-use crate::datasources::fuse_table::meta::table_snapshot::BlockMeta;
-use crate::datasources::fuse_table::meta::table_snapshot::ColStats;
-use crate::datasources::fuse_table::meta::table_snapshot::ColumnId;
-use crate::datasources::fuse_table::meta::table_snapshot::SegmentInfo;
-use crate::datasources::fuse_table::meta::table_snapshot::Stats;
-use crate::datasources::fuse_table::table::FuseTable;
-use crate::datasources::fuse_table::util::location_gen::block_location;
-use crate::datasources::fuse_table::util::statistic_helper::column_stats_reduce;
+use crate::datasources::table::fuse::block_location;
+use crate::datasources::table::fuse::column_stats_reduce;
+use crate::datasources::table::fuse::BlockLocation;
+use crate::datasources::table::fuse::BlockMeta;
+use crate::datasources::table::fuse::ColStats;
+use crate::datasources::table::fuse::ColumnId;
+use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::fuse::SegmentInfo;
+use crate::datasources::table::fuse::Stats;
 use crate::sessions::DatafuseQueryContextRef;
 
 impl<T> FuseTable<T>

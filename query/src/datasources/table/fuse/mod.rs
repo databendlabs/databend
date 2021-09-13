@@ -13,10 +13,12 @@
 //  limitations under the License.
 //
 
-pub(crate) mod index_helpers;
-pub(crate) mod location_gen;
-pub(crate) mod projection_helper;
-pub(crate) mod statistic_helper;
-pub(crate) mod storage_scheme_helper;
+mod io;
+mod meta;
+mod table;
+mod util;
 
-pub use projection_helper::project_col_idx;
+pub use io::*;
+pub use meta::*;
+pub use table::FuseTable;
+pub use util::*;

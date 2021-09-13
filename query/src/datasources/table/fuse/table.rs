@@ -35,18 +35,18 @@ use uuid::Uuid;
 
 use crate::catalogs::Table;
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::fuse_table::io::block_reader::read_part;
-use crate::datasources::fuse_table::io::snapshot_reader::read_table_snapshot;
-use crate::datasources::fuse_table::meta::meta_info_reader::MetaInfoReader;
-use crate::datasources::fuse_table::meta::table_snapshot::BlockLocation;
-use crate::datasources::fuse_table::meta::table_snapshot::SegmentInfo;
-use crate::datasources::fuse_table::meta::table_snapshot::TableSnapshot;
-use crate::datasources::fuse_table::util::index_helpers;
-use crate::datasources::fuse_table::util::location_gen::segment_info_location;
-use crate::datasources::fuse_table::util::location_gen::snapshot_location;
-use crate::datasources::fuse_table::util::projection_helper::project_col_idx;
-use crate::datasources::fuse_table::util::storage_scheme_helper::parse_storage_scheme;
-use crate::datasources::fuse_table::util::storage_scheme_helper::TableStorageScheme;
+use crate::datasources::table::fuse::parse_storage_scheme;
+use crate::datasources::table::fuse::project_col_idx;
+use crate::datasources::table::fuse::range_filter;
+use crate::datasources::table::fuse::read_part;
+use crate::datasources::table::fuse::read_table_snapshot;
+use crate::datasources::table::fuse::segment_info_location;
+use crate::datasources::table::fuse::snapshot_location;
+use crate::datasources::table::fuse::BlockLocation;
+use crate::datasources::table::fuse::MetaInfoReader;
+use crate::datasources::table::fuse::SegmentInfo;
+use crate::datasources::table::fuse::TableSnapshot;
+use crate::datasources::table::fuse::TableStorageScheme;
 use crate::sessions::DatafuseQueryContextRef;
 
 pub struct FuseTable<T = StoreClient> {
@@ -146,8 +146,7 @@ where T: MetaApi + Send + Sync + 'static
         if let Some(snapshot) = tbl_snapshot {
             let da = self.data_accessor(&ctx)?;
             let meta_reader = MetaInfoReader::new(da, ctx.clone());
-            let block_locations =
-                index_helpers::range_filter(&snapshot, &scan.push_downs, meta_reader)?;
+            let block_locations = range_filter(&snapshot, &scan.push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
             let plan = ReadDataSourcePlan {
                 db: scan.schema_name.clone(),

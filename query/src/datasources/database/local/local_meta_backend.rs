@@ -44,7 +44,7 @@ use crate::datasources::database::local::LocalDatabase;
 use crate::datasources::database::local::MemoryTable;
 use crate::datasources::database::local::NullTable;
 use crate::datasources::database::local::ParquetTable;
-use crate::datasources::fuse_table::FuseTable;
+use crate::datasources::table::fuse::FuseTable;
 
 type Databases = Arc<RwLock<HashMap<String, (Arc<dyn Database>, InMemoryMetas)>>>;
 

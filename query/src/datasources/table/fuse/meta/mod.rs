@@ -13,9 +13,8 @@
 //  limitations under the License.
 //
 
-mod io;
-mod meta;
-mod table;
-mod util;
+mod meta_info_reader;
+mod table_snapshot;
 
-pub use table::FuseTable;
+pub use meta_info_reader::MetaInfoReader;
+pub use table_snapshot::*;
