@@ -36,7 +36,7 @@ pub struct Processor {
 
 impl Processor {
     pub fn create(conf: Config) -> Self {
-        fs::create_dir_all(conf.datafuse_dir.clone()).unwrap();
+        fs::create_dir_all(conf.databend_dir.clone()).unwrap();
 
         let sub_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
@@ -81,7 +81,7 @@ impl Processor {
     }
 
     pub fn process_run_interactive(&mut self) -> Result<()> {
-        let hist_path = format!("{}/history.txt", self.env.conf.datafuse_dir.clone());
+        let hist_path = format!("{}/history.txt", self.env.conf.databend_dir.clone());
         let _ = self.readline.load_history(hist_path.as_str());
 
         loop {

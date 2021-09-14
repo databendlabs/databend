@@ -6,4 +6,4 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
 echo "Starting cli package unit tests"
-cargo test -p datafuse-cli
+cargo test -p databend-cli

@@ -42,7 +42,7 @@ jobs:
       - name: Pack binaries
         run: |
           tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-query datafuse-store
-          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-cli
+          tar -C ./target/${{ matrix.config.target }}/release -czvf databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-cli
 
       - name: Release datafuse
         uses: svenstaro/upload-release-action@v2
@@ -55,12 +55,12 @@ jobs:
           overwrite: true
           body: ${{ steps.changelog_reader.outputs.log_entry }}
 
-      - name: Release datafuse-cli
+      - name: Release databend-cli
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
-          asset_name: datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
+          file: databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true

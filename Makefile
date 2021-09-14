@@ -37,7 +37,7 @@ cross-compile-release:
 	cross build --target arm-unknown-linux-gnueabi --release
 	cross build --target armv7-unknown-linux-gnueabihf --release
 
-cli:
+cli-build:
 	bash ./scripts/build/build-cli.sh
 
 unit-test:

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use datafuse_cli::cmds::Config;
-use datafuse_cli::cmds::Processor;
-use datafuse_cli::error::Result;
+use databend_cli::cmds::Config;
+use databend_cli::cmds::Processor;
+use databend_cli::error::Result;
 
 fn main() -> Result<()> {
     let conf = Config::create();

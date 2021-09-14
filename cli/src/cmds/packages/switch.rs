@@ -43,7 +43,7 @@ impl SwitchCommand {
     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
-                let bin_dir = format!("{}/bin", self.conf.datafuse_dir.clone());
+                let bin_dir = format!("{}/bin", self.conf.databend_dir.clone());
                 let paths = fs::read_dir(bin_dir)?;
                 let current_tag = if matches.value_of("version").unwrap() == "latest" {
                     self.get_latest_tag()?
@@ -68,7 +68,7 @@ impl SwitchCommand {
                     list.exec_match(writer, args)?;
                     writer.write_err(
                         format!(
-                            "Use command datafuse-cli package fetch {} to retrieve this version",
+                            "Use command databend-cli package fetch {} to retrieve this version",
                             current_tag
                         )
                         .as_str(),

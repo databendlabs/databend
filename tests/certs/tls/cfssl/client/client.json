@@ -1,5 +1,5 @@
 {
-    "CN": "Datafuse Client",
+    "CN": "Databend Client",
     "hosts": [],
     "key": {
         "algo": "rsa",

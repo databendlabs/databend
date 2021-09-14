@@ -1,5 +1,5 @@
 [package]
-name = "datafuse-cli"
+name = "databend-cli"
 version = "0.1.0"
 description = "All-in-one tool for setting up, managing with Datafuse"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
@@ -8,8 +8,8 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-cli"
-path = "src/bin/datafuse-cli.rs"
+name = "databend-cli"
+path = "src/bin/databend-cli.rs"
 
 [features]
 

@@ -6,5 +6,5 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 echo "Build(RELEASE) start..."
-cargo build --bin=datafuse-cli --release
+cargo build --bin=databend-cli --release
 echo "All done..."

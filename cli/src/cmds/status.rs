@@ -28,7 +28,7 @@ pub struct Status {
 
 impl Status {
     pub fn read(conf: Config) -> Result<Self> {
-        let status_path = format!("{}/.status.json", conf.datafuse_dir);
+        let status_path = format!("{}/.status.json", conf.databend_dir);
 
         if !Path::new(status_path.as_str()).exists() {
             // Create.
