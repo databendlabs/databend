@@ -262,9 +262,9 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eba6c9c53cdb7447b2936e40a0ffa20c9bcc13d39d0e818b3c62e0cf91b6b98d"
+checksum = "b7f6c23acf9033b877596e6e793f220f56ac513701a2635bdbeeb6b55d067bea"
 dependencies = [
  "futures-util",
  "http",
