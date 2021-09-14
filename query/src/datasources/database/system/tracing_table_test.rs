@@ -40,8 +40,8 @@ async fn test_tracing_table() -> Result<()> {
             "+---+----------------+---------------------------------------------+-------+----------+--------+-------------------------------------+",
             "| v | name           | msg                                         | level | hostname | pid    | time                                |",
             "+---+----------------+---------------------------------------------+-------+----------+--------+-------------------------------------+",
-            "| 0 | datafuse-query | signal received, starting graceful shutdown | 20    | thinkpad | 121242 | 2021-06-25T04:57:49.243264399+00:00 |",
-            "| 0 | datafuse-query | signal received, starting graceful shutdown | 20    | thinkpad | 121242 | 2021-06-25T04:57:49.243264399+00:00 |",
+            "| 0 | databend-query | signal received, starting graceful shutdown | 20    | thinkpad | 121242 | 2021-06-25T04:57:49.243264399+00:00 |",
+            "| 0 | databend-query | signal received, starting graceful shutdown | 20    | thinkpad | 121242 | 2021-06-25T04:57:49.243264399+00:00 |",
             "+---+----------------+---------------------------------------------+-------+----------+--------+-------------------------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

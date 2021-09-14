@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_streams::ProgressStream;
 use futures::stream::Stream;
 
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -31,7 +31,7 @@ struct BlockRange {
 }
 
 pub struct NumbersStream {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     schema: DataSchemaRef,
     block_index: usize,
     blocks: Vec<BlockRange>,
@@ -39,7 +39,7 @@ pub struct NumbersStream {
 
 impl NumbersStream {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         schema: DataSchemaRef,
     ) -> Result<ProgressStream> {
         let stream = Box::pin(NumbersStream {

@@ -39,7 +39,7 @@ use rand::Rng;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
-/// echo "select avg(number) from numbers(1000000)" |  ./target/debug/datafuse-benchmark -c 1  -i 10
+/// echo "select avg(number) from numbers(1000000)" |  ./target/debug/databend-benchmark -c 1  -i 10
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 #[serde(default)]
 pub struct Config {

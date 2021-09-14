@@ -6,4 +6,4 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
 echo "Starting profile"
-RUSTFLAGS="-g" cargo flamegraph --bin=datafuse-query
+RUSTFLAGS="-g" cargo flamegraph --bin=databend-query

@@ -1393,7 +1393,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "datafuse-query"
+name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "ahash",
@@ -2127,7 +2127,7 @@ dependencies = [
 name = "fuzz"
 version = "0.1.0"
 dependencies = [
- "datafuse-query",
+ "databend-query",
  "honggfuzz",
 ]
 

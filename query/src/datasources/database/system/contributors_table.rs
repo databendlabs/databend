@@ -26,7 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ContributorsTable {
     schema: DataSchemaRef,
@@ -64,7 +64,7 @@ impl Table for ContributorsTable {
 
     fn read_plan(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -87,7 +87,7 @@ impl Table for ContributorsTable {
 
     async fn read(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let contributors: Vec<&[u8]> = env!("FUSE_COMMIT_AUTHORS")

@@ -27,7 +27,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct EnginesTable {
     schema: DataSchemaRef,
@@ -68,7 +68,7 @@ impl Table for EnginesTable {
 
     fn read_plan(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -91,7 +91,7 @@ impl Table for EnginesTable {
 
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let engines = ctx.get_catalog().get_db_engines()?;

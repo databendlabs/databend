@@ -2,10 +2,10 @@
 
 /datafuse-store --single true &> /tmp/datafuse-store.log  &
 P1=$!
-/datafuse-query -c datafuse-query.toml &> /tmp/datafuse-query.log  &
+/databend-query -c databend-query.toml &> /tmp/databend-query.log  &
 P2=$!
 
-tail -f /tmp/datafuse-query.log &
+tail -f /tmp/databend-query.log &
 P3=$!
 
 tail -f /tmp/datafuse-store.log & 

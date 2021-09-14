@@ -61,10 +61,10 @@ jobs:
           echo $HOME
           export SCCACHE_DIR=/home/runner/.cache/sccache
           export RUSTC_WRAPPER=sccache
-          cargo build --bin=datafuse-query --bin=datafuse-store --target x86_64-unknown-linux-gnu --release
+          cargo build --bin=databend-query --bin=datafuse-store --target x86_64-unknown-linux-gnu --release
           mkdir -p distro
           sccache --show-stats
-          mv target/x86_64-unknown-linux-gnu/release/datafuse-query ./distro/datafuse-query
+          mv target/x86_64-unknown-linux-gnu/release/databend-query ./distro/databend-query
           mv target/x86_64-unknown-linux-gnu/release/datafuse-store ./distro/datafuse-store
           mv docker/bootstrap.sh ./distro/bootstrap.sh
       - name: Set up QEMU
@@ -158,10 +158,10 @@ jobs:
           echo $HOME
           export SCCACHE_DIR=/home/runner/.cache/sccache
           export RUSTC_WRAPPER=sccache
-          cargo build --bin=datafuse-query --bin=datafuse-store --target x86_64-unknown-linux-gnu --release
+          cargo build --bin=databend-query --bin=datafuse-store --target x86_64-unknown-linux-gnu --release
           mkdir -p distro
           sccache --show-stats
-          mv target/x86_64-unknown-linux-gnu/release/datafuse-query ./distro/datafuse-query
+          mv target/x86_64-unknown-linux-gnu/release/databend-query ./distro/databend-query
           mv target/x86_64-unknown-linux-gnu/release/datafuse-store ./distro/datafuse-store
           mv docker/bootstrap.sh ./distro/bootstrap.sh
       - name: Set up QEMU

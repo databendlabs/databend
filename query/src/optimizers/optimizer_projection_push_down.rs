@@ -36,7 +36,7 @@ use common_planners::Recursion;
 use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ProjectionPushDownOptimizer {}
 
@@ -238,7 +238,7 @@ impl Optimizer for ProjectionPushDownOptimizer {
 }
 
 impl ProjectionPushDownOptimizer {
-    pub fn create(_ctx: DatafuseQueryContextRef) -> ProjectionPushDownOptimizer {
+    pub fn create(_ctx: DatabendQueryContextRef) -> ProjectionPushDownOptimizer {
         ProjectionPushDownOptimizer {}
     }
 }

@@ -22,7 +22,7 @@ use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ConstantFoldingOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub trait Optimizer {
     fn name(&self) -> &str;
@@ -34,7 +34,7 @@ pub struct Optimizers {
 }
 
 impl Optimizers {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         let mut optimizers = Self::without_scatters(ctx.clone());
         optimizers
             .inner
@@ -42,7 +42,7 @@ impl Optimizers {
         optimizers
     }
 
-    pub fn without_scatters(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn without_scatters(ctx: DatabendQueryContextRef) -> Self {
         Optimizers {
             inner: vec![
                 Box::new(ConstantFoldingOptimizer::create(ctx.clone())),

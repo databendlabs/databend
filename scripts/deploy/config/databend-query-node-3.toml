@@ -1,5 +1,5 @@
 # Usage:
-# datafuse-query -c datafuse_query_config_spec.toml
+# databend-query -c databend_query_config_spec.toml
 
 [log]
 log_level = "ERROR"

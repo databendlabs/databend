@@ -27,24 +27,24 @@ use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
-use crate::api::rpc::DatafuseQueryFlightDispatcher;
-use crate::api::rpc::DatafuseQueryFlightService;
+use crate::api::rpc::DatabendQueryFlightDispatcher;
+use crate::api::rpc::DatabendQueryFlightService;
 use crate::configs::Config;
-use crate::servers::Server as DatafuseQueryServer;
+use crate::servers::Server as DatabendQueryServer;
 use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
     pub(crate) sessions: SessionManagerRef,
     pub(crate) abort_notify: Arc<Notify>,
-    pub(crate) dispatcher: Arc<DatafuseQueryFlightDispatcher>,
+    pub(crate) dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
 impl RpcService {
-    pub fn create(sessions: SessionManagerRef) -> Box<dyn DatafuseQueryServer> {
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn DatabendQueryServer> {
         Box::new(Self {
             sessions,
             abort_notify: Arc::new(Notify::new()),
-            dispatcher: Arc::new(DatafuseQueryFlightDispatcher::create()),
+            dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
         })
     }
 
@@ -79,7 +79,7 @@ impl RpcService {
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
         let sessions = self.sessions.clone();
         let flight_dispatcher = self.dispatcher.clone();
-        let flight_api_service = DatafuseQueryFlightService::create(flight_dispatcher, sessions);
+        let flight_api_service = DatabendQueryFlightService::create(flight_dispatcher, sessions);
         let conf = self.sessions.get_conf();
         let builder = Server::builder();
         let mut builder = if conf.tls_rpc_server_enabled() {
@@ -111,7 +111,7 @@ impl RpcService {
 }
 
 #[async_trait::async_trait]
-impl DatafuseQueryServer for RpcService {
+impl DatabendQueryServer for RpcService {
     async fn shutdown(&mut self) {
         self.dispatcher.abort();
         // We can't turn off listening on the connection

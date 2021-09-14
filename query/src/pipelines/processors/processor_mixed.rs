@@ -29,11 +29,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 // M inputs--> N outputs Mixed processor
 struct MixedWorker {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     inputs: Vec<Arc<dyn Processor>>,
     n: usize,
     shared_num: AtomicUsize,
@@ -127,7 +127,7 @@ pub struct MixedProcessor {
 }
 
 impl MixedProcessor {
-    pub fn create(ctx: DatafuseQueryContextRef, n: usize) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef, n: usize) -> Self {
         let worker = MixedWorker {
             ctx,
             inputs: vec![],

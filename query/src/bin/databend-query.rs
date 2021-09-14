@@ -16,16 +16,16 @@ use std::net::SocketAddr;
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
-use datafuse_query::api::HttpService;
-use datafuse_query::api::RpcService;
-use datafuse_query::clusters::Cluster;
-use datafuse_query::configs::Config;
-use datafuse_query::metrics::MetricService;
-use datafuse_query::servers::ClickHouseHandler;
-use datafuse_query::servers::MySQLHandler;
-use datafuse_query::servers::Server;
-use datafuse_query::servers::ShutdownHandle;
-use datafuse_query::sessions::SessionManager;
+use databend_query::api::HttpService;
+use databend_query::api::RpcService;
+use databend_query::clusters::Cluster;
+use databend_query::configs::Config;
+use databend_query::metrics::MetricService;
+use databend_query::servers::ClickHouseHandler;
+use databend_query::servers::MySQLHandler;
+use databend_query::servers::Server;
+use databend_query::servers::ShutdownHandle;
+use databend_query::sessions::SessionManager;
 use log::info;
 
 #[tokio::main]
@@ -49,15 +49,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .init();
     let _guards = init_tracing_with_file(
-        "datafuse-query",
+        "databend-query",
         conf.log.log_dir.as_str(),
         conf.log.log_level.as_str(),
     );
 
     info!("{:?}", conf);
     info!(
-        "DatafuseQuery v-{}",
-        *datafuse_query::configs::config::FUSE_COMMIT_VERSION,
+        "DatabendQuery v-{}",
+        *databend_query::configs::config::FUSE_COMMIT_VERSION,
     );
 
     let cluster = Cluster::create_global(conf.clone())?;

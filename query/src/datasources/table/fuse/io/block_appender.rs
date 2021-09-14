@@ -39,14 +39,14 @@ use crate::datasources::table::fuse::ColumnId;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 impl<T> FuseTable<T>
 where T: MetaApi + Send + Sync + 'static
 {
     pub async fn append_blocks(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         mut stream: BlockStream,
     ) -> Result<SegmentInfo> {
         let mut block_metas = vec![];

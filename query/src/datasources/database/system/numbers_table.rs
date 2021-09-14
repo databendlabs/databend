@@ -32,7 +32,7 @@ use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::common::generate_parts;
 use crate::datasources::database::system::NumbersStream;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct NumbersTable {
     table: &'static str,
@@ -82,7 +82,7 @@ impl Table for NumbersTable {
 
     fn read_plan(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -123,7 +123,7 @@ impl Table for NumbersTable {
 
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(NumbersStream::try_create(

@@ -23,17 +23,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct CsvTableStream {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     file: String,
     schema: DataSchemaRef,
 }
 
 impl CsvTableStream {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         schema: DataSchemaRef,
         file: String,
     ) -> Result<Self> {

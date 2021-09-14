@@ -23,7 +23,7 @@ use crate::sql::parser::ast::Statement;
 use crate::sql::parser::transformer::transform_sqlparser::TransformerSqlparser;
 
 // `AstTransformer` is a utility to transform an SQL AST produced by other parsers(e.g. sqlparser-rs)
-// into Datafuse `Statement`.
+// into Databend `Statement`.
 pub trait AstTransformer {
     fn transform(&self) -> Result<Statement>;
 }

@@ -40,7 +40,7 @@ impl TestFixture {
         let random_bytes: Vec<u8> = (0..size).map(|_| rand::random::<u8>()).collect();
         Self {
             region: Region::UsEast2,
-            bucket_name: "poc-datafuse".to_string(),
+            bucket_name: "poc-databend".to_string(),
             test_key: key,
             content: random_bytes,
         }

@@ -12,7 +12,7 @@ Databend default log level is `INFO`.
 ## Enable Tracing
 
 ```
-QUERY_LOG_LEVEL="DEBUG" ./datafuse-query
+QUERY_LOG_LEVEL="DEBUG" ./databend-query
 ```
 
 If we want to track the execution of a query:

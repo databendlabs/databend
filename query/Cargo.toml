@@ -1,5 +1,5 @@
 [package]
-name = "datafuse-query"
+name = "databend-query"
 version = "0.1.0"
 description = "A real-time Cloud Distributed Query Engine"
 authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
@@ -8,12 +8,12 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-query"
-path = "src/bin/datafuse-query.rs"
+name = "databend-query"
+path = "src/bin/databend-query.rs"
 
 [[bin]]
-name = "datafuse-benchmark"
-path = "src/bin/datafuse-benchmark.rs"
+name = "databend-benchmark"
+path = "src/bin/databend-benchmark.rs"
 
 [features]
 default = ["simd"]

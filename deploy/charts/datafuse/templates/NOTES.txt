@@ -1,7 +1,7 @@
 as we are using NodePort,
 get into your node instance first (ie in minikube, do minikube ssh)
 
-1. connect to datafuse-query mysql port:
+1. connect to databend-query mysql port:
 export FUSE_MYSQL_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "datafuse.fullname" . }})
 mysql -h127.0.0.1 -P$FUSE_MYSQL_PORT
 

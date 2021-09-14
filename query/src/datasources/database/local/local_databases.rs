@@ -66,6 +66,6 @@ impl DatabaseEngine for LocalDatabases {
     }
 
     fn engine_desc(&self) -> &str {
-        "The local engine stores data in DatafuseQuery local memory or disk, which can be one of Memory, Parquet, CSV, Null, it is used mainly for testing."
+        "The local engine stores data in DatabendQuery local memory or disk, which can be one of Memory, Parquet, CSV, Null, it is used mainly for testing."
     }
 }

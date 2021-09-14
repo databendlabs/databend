@@ -31,7 +31,7 @@ use futures::stream::StreamExt;
 use super::MemoryTableStream;
 use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct MemoryTable {
     db: String,
@@ -81,7 +81,7 @@ impl Table for MemoryTable {
 
     fn read_plan(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -109,7 +109,7 @@ impl Table for MemoryTable {
 
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let blocks = self.blocks.read();
@@ -121,7 +121,7 @@ impl Table for MemoryTable {
 
     async fn append_data(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         insert_plan: common_planners::InsertIntoPlan,
     ) -> Result<()> {
         let mut s = {
@@ -143,7 +143,7 @@ impl Table for MemoryTable {
 
     async fn truncate(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         let mut blocks = self.blocks.write();

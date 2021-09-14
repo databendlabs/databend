@@ -6,7 +6,7 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 killall datafuse-store
-killall datafuse-query
+killall databend-query
 sleep 1
 
 BIN=${1:-debug}
@@ -17,7 +17,7 @@ echo "Waiting on datafuse-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 
-echo 'Start DatafuseQuery...'
-nohup target/${BIN}/datafuse-query -c scripts/deploy/config/datafuse-query-node-1.toml &
-echo "Waiting on datafuse-query 10 seconds..."
+echo 'Start DatabendQuery...'
+nohup target/${BIN}/databend-query -c scripts/deploy/config/databend-query-node-1.toml &
+echo "Waiting on databend-query 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 3307
