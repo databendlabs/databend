@@ -6,12 +6,12 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 killall databend-query
-killall datafuse-store
+killall databend-store
 sleep 1
 
-echo 'Start one DatafuseStore...'
-nohup target/debug/datafuse-store  --single=true --log-level=ERROR &
-echo "Waiting on datafuse-store 10 seconds..."
+echo 'Start one DatabendStore...'
+nohup target/debug/databend-store  --single=true --log-level=ERROR &
+echo "Waiting on databend-store 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 echo 'Start DatabendQuery node-1'

@@ -208,9 +208,9 @@ build_exceptions! {
     ConcurrentSnapshotInstall(2404),
     IllegalSnapshot(2405),
 
-    // DatafuseStore server error
+    // DatabendStore server error
 
-    DatafuseStoreError(2501),
+    DatabendStoreError(2501),
 
     // FS error
 

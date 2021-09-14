@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-// Flight RPC for DatafuseStore.
+// Flight RPC for DatabendStore.
 package storeflight;
 
 // Request for flight do_get and do_action.

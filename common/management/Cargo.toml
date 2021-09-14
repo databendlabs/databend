@@ -14,7 +14,7 @@ common-metatypes= {path = "../metatypes"}
 common-store-api= {path = "../store-api"}
 common-tracing= {path = "../tracing"}
 
-datafuse-store = {path= "../../store"}
+databend-store = {path= "../../store"}
 
 async-trait = "0.1"
 tempfile = "3.2.0"

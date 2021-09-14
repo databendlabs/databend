@@ -886,7 +886,7 @@ dependencies = [
  "common-runtime",
  "common-store-api",
  "common-tracing",
- "datafuse-store",
+ "databend-store",
  "lazy_static",
  "mockall",
  "serde",
@@ -1474,7 +1474,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "datafuse-store"
+name = "databend-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",

@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-// meta data types for DatafuseStore
+// meta data types for DatabendStore
 package store_meta;
 
 // TODO(zbr): keep it or remove

@@ -1,15 +1,15 @@
 [package]
-name = "datafuse-store"
+name = "databend-store"
 version = "0.1.0"
 description = "A Cloud Distributed MergeTree Storage Engine"
-authors = ["DatafuseStore Authors <opensource@datafuselabs.com>"]
+authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-store"
-path = "src/bin/datafuse-store.rs"
+name = "databend-store"
+path = "src/bin/databend-store.rs"
 
 [features]
 default = ["simd"]
