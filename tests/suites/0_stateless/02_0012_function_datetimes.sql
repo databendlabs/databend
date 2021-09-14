@@ -46,4 +46,9 @@ select toYYYYMMDD(toDateTime(1630833797))  =  20210905;
 select toYYYYMMDD(toDate(18875))  =  20210905;
 select '===toYYYYMMDD===';
 
-
+select '===toStartOf===';
+select toStartOfYear(toDateTime(1630812366));
+select toStartOfISOYear(toDateTime(1630812366));
+select toStartOfYear(toDate(18869));
+select toStartOfISOYear(toDate(18869));
+select '===toStartOf===';

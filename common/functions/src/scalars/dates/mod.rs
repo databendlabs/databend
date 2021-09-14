@@ -24,6 +24,8 @@ mod round_function;
 mod simple_date;
 
 pub use date::DateFunction;
+pub use number_function::ToStartOfISOYearFunction;
+pub use number_function::ToStartOfYearFunction;
 pub use number_function::ToYYYYMMDDFunction;
 pub use number_function::ToYYYYMMDDhhmmssFunction;
 pub use number_function::ToYYYYMMFunction;
