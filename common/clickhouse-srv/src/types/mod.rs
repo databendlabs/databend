@@ -40,12 +40,10 @@ pub use self::enums::Enum16;
 pub use self::enums::Enum8;
 pub use self::from_sql::FromSql;
 pub use self::from_sql::FromSqlResult;
-pub(crate) use self::marshal::Marshal;
 pub use self::options::Options;
 pub(crate) use self::options::OptionsSource;
 pub use self::query::Query;
 pub(crate) use self::stat_buffer::StatBuffer;
-pub(crate) use self::unmarshal::Unmarshal;
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 use crate::binary::Encoder;
@@ -53,9 +51,7 @@ use crate::protocols::DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO;
 use crate::protocols::SERVER_PROGRESS;
 
 pub(crate) mod column;
-mod marshal;
 mod stat_buffer;
-mod unmarshal;
 
 mod from_sql;
 mod value;

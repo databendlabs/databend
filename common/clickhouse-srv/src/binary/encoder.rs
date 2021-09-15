@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_io::prelude::Marshal;
+
 use crate::binary;
-use crate::types::Marshal;
 use crate::types::StatBuffer;
 
 const MAX_VARINT_LEN64: usize = 10;

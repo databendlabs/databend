@@ -738,6 +738,7 @@ dependencies = [
  "chrono-tz",
  "clickhouse-rs-cityhash-sys",
  "combine",
+ "common-io",
  "env_logger 0.9.0",
  "futures",
  "futures-core",
