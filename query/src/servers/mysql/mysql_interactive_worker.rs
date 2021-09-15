@@ -33,6 +33,7 @@ use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::server::mock::get_mock_user;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
