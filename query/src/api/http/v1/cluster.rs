@@ -113,7 +113,7 @@ pub async fn cluster_add_handler(
 }
 
 // GET /v1/cluster/list
-// list all nodes in current datafuse-query cluster
+// list all nodes in current databend-query cluster
 // request: None
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
@@ -134,7 +134,7 @@ pub async fn cluster_list_handler(
 }
 
 // POST /v1/cluster/remove
-// remove a node based on name in current datafuse-query cluster
+// remove a node based on name in current databend-query cluster
 // request: Node to be deleted
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return Ok status code when delete success

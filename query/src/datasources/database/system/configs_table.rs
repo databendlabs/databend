@@ -27,7 +27,7 @@ use common_streams::SendableDataBlockStream;
 use serde_json::Value;
 
 use crate::catalogs::Table;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ConfigsTable {
     schema: DataSchemaRef,
@@ -90,7 +90,7 @@ impl Table for ConfigsTable {
 
     fn read_plan(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -113,7 +113,7 @@ impl Table for ConfigsTable {
 
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let config = ctx.get_config();

@@ -5,4 +5,3 @@ where_single_line = true
 trailing_comma = "Vertical"
 report_fixme = "Unnumbered"
 overflow_delimited_expr = true
-

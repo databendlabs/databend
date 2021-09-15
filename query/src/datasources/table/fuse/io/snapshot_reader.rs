@@ -21,11 +21,11 @@ use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::do_read_obj;
 use crate::datasources::table::fuse::do_read_obj_async;
 use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub fn read_table_snapshot(
     da: Arc<dyn DataAccessor>,
-    ctx: &DatafuseQueryContextRef,
+    ctx: &DatabendQueryContextRef,
     loc: &str,
 ) -> Result<TableSnapshot> {
     do_read_obj(da, ctx, loc)

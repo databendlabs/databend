@@ -1,6 +1,6 @@
 apiVersion: v2
-name: datafuse
-description: A Helm chart for datafuse
+name: databend
+description: A Helm chart for databend
 
 # A chart can be either an 'application' or a 'library' chart.
 #

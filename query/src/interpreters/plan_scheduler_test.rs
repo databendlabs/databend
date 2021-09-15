@@ -21,7 +21,7 @@ use common_runtime::tokio;
 
 use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::tests::try_create_cluster_context;
 use crate::tests::ClusterNode;
 
@@ -329,7 +329,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     Ok(())
 }
 
-async fn create_env() -> Result<DatafuseQueryContextRef> {
+async fn create_env() -> Result<DatabendQueryContextRef> {
     try_create_cluster_context(&[
         ClusterNode::create("dummy_local", 1, "localhost:9090"),
         ClusterNode::create("dummy", 1, "github.com:9090"),

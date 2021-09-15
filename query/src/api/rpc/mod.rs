@@ -29,8 +29,8 @@ pub use flight_actions::CancelAction;
 pub use flight_actions::FlightAction;
 pub use flight_actions::ShuffleAction;
 pub use flight_client::FlightClient;
-pub use flight_dispatcher::DatafuseQueryFlightDispatcher;
-pub use flight_service::DatafuseQueryFlightService;
+pub use flight_dispatcher::DatabendQueryFlightDispatcher;
+pub use flight_service::DatabendQueryFlightService;
 pub use flight_tickets::FlightTicket;
 
 mod flight_actions;

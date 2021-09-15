@@ -33,7 +33,6 @@ use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::server::mock::get_mock_user;
-use crate::sessions::DatafuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
@@ -203,11 +202,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         &mut self,
         _: &str,
         writer: StatementMetaWriter<'_, W>,
-        _: DatafuseQueryContextRef,
+        _: DatabendQueryContextRef,
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
-            "Prepare is not support in DataFuse.".as_bytes(),
+            "Prepare is not support in Databend.".as_bytes(),
         )?;
         Ok(())
     }
@@ -217,21 +216,21 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: u32,
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
-        _: DatafuseQueryContextRef,
+        _: DatabendQueryContextRef,
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
-            "Execute is not support in DataFuse.".as_bytes(),
+            "Execute is not support in Databend.".as_bytes(),
         )?;
         Ok(())
     }
 
-    fn do_close(&mut self, _: u32, _: DatafuseQueryContextRef) {}
+    fn do_close(&mut self, _: u32, _: DatabendQueryContextRef) {}
 
     fn do_query(
         &mut self,
         query: &str,
-        context: DatafuseQueryContextRef,
+        context: DatabendQueryContextRef,
     ) -> Result<Vec<DataBlock>> {
         log::debug!("{}", query);
 
@@ -276,7 +275,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    fn do_init(&mut self, database_name: &str, context: DatafuseQueryContextRef) -> Result<()> {
+    fn do_init(&mut self, database_name: &str, context: DatabendQueryContextRef) -> Result<()> {
         self.do_query(&format!("USE {};", database_name), context)?;
         Ok(())
     }

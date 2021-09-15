@@ -23,7 +23,7 @@ use futures::StreamExt;
 
 use crate::datasources::database::remote::RemoteTable;
 use crate::datasources::database::remote::StoreApis;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 impl<T> RemoteTable<T>
 where T: 'static + StoreApis + Clone
@@ -31,7 +31,7 @@ where T: 'static + StoreApis + Clone
     #[inline]
     pub(super) async fn do_read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let client = self.store_api_provider.try_get_store_apis().await?;

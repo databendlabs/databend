@@ -25,17 +25,17 @@ use common_planners::ScanPlan;
 
 use crate::catalogs::Catalog;
 use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::tests::try_create_catalog;
 
 pub struct NumberTestData {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     db: &'static str,
     table: &'static str,
 }
 
 impl NumberTestData {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         NumberTestData {
             ctx,
             db: "system",

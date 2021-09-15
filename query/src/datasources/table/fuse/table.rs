@@ -47,7 +47,7 @@ use crate::datasources::table::fuse::MetaInfoReader;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
 use crate::datasources::table::fuse::TableStorageScheme;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable<T = StoreClient> {
     pub db: String,
@@ -137,7 +137,7 @@ where T: MetaApi + Send + Sync + 'static
 
     fn read_plan(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -168,7 +168,7 @@ where T: MetaApi + Send + Sync + 'static
 
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let projection = project_col_idx(
@@ -213,7 +213,7 @@ where T: MetaApi + Send + Sync + 'static
 
     async fn append_data(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         // 1. take out input stream from plan
@@ -267,7 +267,7 @@ where T: MetaApi + Send + Sync + 'static
 
     async fn truncate(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         todo!()
@@ -277,7 +277,7 @@ where T: MetaApi + Send + Sync + 'static
 impl<T> FuseTable<T>
 where T: MetaApi + Sync + Send + 'static
 {
-    fn table_snapshot(&self, ctx: &DatafuseQueryContextRef) -> Result<Option<TableSnapshot>> {
+    fn table_snapshot(&self, ctx: &DatabendQueryContextRef) -> Result<Option<TableSnapshot>> {
         let schema = self.schema()?;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
             let r = read_table_snapshot(self.data_accessor(ctx)?, ctx, loc)?;
@@ -308,7 +308,7 @@ where T: MetaApi + Sync + Send + 'static
 
     pub(crate) fn data_accessor(
         &self,
-        ctx: &DatafuseQueryContextRef,
+        ctx: &DatabendQueryContextRef,
     ) -> Result<Arc<dyn DataAccessor>> {
         let scheme = &self.storage_scheme;
         ctx.get_data_accessor(scheme)

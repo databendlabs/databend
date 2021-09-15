@@ -42,13 +42,13 @@ impl PackageCommand {
         return App::new("package")
             .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersion)
-            .about("Package manage datafuse binary releases")
+            .about("Package manage databend binary releases")
             .subcommand(
                 App::new("fetch")
                     .setting(AppSettings::DisableVersion)
                     .setting(AppSettings::ColoredHelp)
                     .about("Fetch the given version binary package")
-                    .arg(Arg::with_name("version").help("Version of datafuse package to fetch").default_value("latest")),
+                    .arg(Arg::with_name("version").help("Version of databend package to fetch").default_value("latest")),
             )
             .subcommand(
                 App::new("list")
@@ -60,9 +60,9 @@ impl PackageCommand {
                 App::new("switch")
                     .setting(AppSettings::DisableVersion)
                     .setting(AppSettings::ColoredHelp)
-                    .about("Switch the active datafuse to a specified version")
+                    .about("Switch the active databend to a specified version")
                     .arg(Arg::with_name("version").required(true).help(
-                        "Version of datafuse package, e.g. v0.4.69-nightly. Check the versions: package list"
+                        "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
                     ))
             );
     }

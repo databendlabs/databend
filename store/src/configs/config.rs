@@ -20,7 +20,7 @@ use structopt_toml::StructOptToml;
 use crate::meta_service::NodeId;
 
 lazy_static! {
-    pub static ref FUSE_COMMIT_VERSION: String = {
+    pub static ref DATABEND_COMMIT_VERSION: String = {
         let build_semver = option_env!("VERGEN_BUILD_SEMVER");
         let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
         let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
@@ -39,7 +39,9 @@ lazy_static! {
     };
 }
 
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 pub struct Config {
     /// Identify a config. This is only meant to make debugging easier with more than one Config involved.
     #[structopt(long, default_value = "")]
@@ -225,5 +227,33 @@ impl Config {
     /// sled does not allow to open multiple `sled::Db` in one process.
     pub fn tree_name(&self, name: impl std::fmt::Display) -> String {
         format!("{}{}", self.sled_tree_prefix, name)
+    }
+
+    /// Defaulting values similar to query config
+    pub fn default() -> Self {
+        Config {
+            config_id: "".to_string(),
+            log_level: "INFO".to_string(),
+            log_dir: "./_logs".to_string(),
+            metric_api_address: "127.0.0.1:7171".to_string(),
+            http_api_address: "127.0.0.1:8181".to_string(),
+            tls_server_cert: "".to_string(),
+            tls_server_key: "".to_string(),
+            flight_api_address: "127.0.0.1:9191".to_string(),
+            meta_api_host: "127.0.0.1".to_string(),
+            meta_api_port: 9291,
+            meta_dir: "./_meta".to_string(),
+            meta_no_sync: false,
+            snapshot_logs_since_last: 1024,
+            heartbeat_interval: 500,
+            install_snapshot_timeout: 4000,
+            boot: false,
+            rpc_tls_server_cert: "".to_string(),
+            rpc_tls_server_key: "".to_string(),
+            single: false,
+            id: 0,
+            local_fs_dir: "./_local_fs".to_string(),
+            sled_tree_prefix: "".to_string(),
+        }
     }
 }

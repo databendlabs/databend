@@ -26,11 +26,11 @@ use common_store_api::KVApi;
 use common_store_api::PrefixListReply;
 use common_store_api::UpsertKVActionResult;
 use common_tracing::tracing;
-use datafuse_store::configs;
-use datafuse_store::meta_service::AppliedState;
-use datafuse_store::meta_service::Cmd;
-use datafuse_store::meta_service::LogEntry;
-use datafuse_store::meta_service::StateMachine;
+use databend_store::configs;
+use databend_store::meta_service::AppliedState;
+use databend_store::meta_service::Cmd;
+use databend_store::meta_service::LogEntry;
+use databend_store::meta_service::StateMachine;
 
 /// Local storage that provides the API defined by `KVApi`.
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
@@ -52,8 +52,8 @@ impl LocalKVStore {
     ///
     /// One of the following has to be called to initialize a process-wise sled::Db,
     /// before using `LocalKVStore`:
-    /// - `datafuse_store::meta_service::raft_db::init_sled_db`
-    /// - `datafuse_store::meta_service::raft_db::init_temp_sled_db`
+    /// - `databend_store::meta_service::raft_db::init_sled_db`
+    /// - `databend_store::meta_service::raft_db::init_temp_sled_db`
     #[allow(dead_code)]
     pub async fn new(name: &str) -> common_exception::Result<LocalKVStore> {
         let mut config = configs::Config::empty();
@@ -73,7 +73,7 @@ impl LocalKVStore {
 
     /// Creates a KVApi impl with a random and unique name.
     /// For use in testing, one should:
-    /// - call `datafuse_store::meta_service::raft_db::init_temp_sled_db()` to
+    /// - call `databend_store::meta_service::raft_db::init_temp_sled_db()` to
     ///   initialize sled::Db so that persistent data is cleaned up when process exits.
     /// - create a unique LocalKVStore with this function.
     ///

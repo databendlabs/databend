@@ -38,7 +38,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_restart() -> anyhow::Result<()> {
-    // Issue 1134  https://github.com/datafuselabs/datafuse/issues/1134
+    // Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a store server.
     // - create db and create table
     // - restart

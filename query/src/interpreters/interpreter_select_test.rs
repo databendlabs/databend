@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Disabled until https://github.com/datafuselabs/datafuse/pull/550 finished
+// Disabled until https://github.com/datafuselabs/databend/pull/550 finished
 /*
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_select_interpreter() -> anyhow::Result<()> {

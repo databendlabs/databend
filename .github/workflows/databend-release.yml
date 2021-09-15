@@ -41,26 +41,26 @@ jobs:
 
       - name: Pack binaries
         run: |
-          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-query datafuse-store
-          tar -C ./target/${{ matrix.config.target }}/release -czvf datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz datafuse-cli
+          tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-store
+          tar -C ./target/${{ matrix.config.target }}/release -czvf databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-cli
 
-      - name: Release datafuse
+      - name: Release databend
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
-          asset_name: datafuse-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
+          file: databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true
           body: ${{ steps.changelog_reader.outputs.log_entry }}
 
-      - name: Release datafuse-cli
+      - name: Release databend-cli
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
-          asset_name: datafuse-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
+          file: databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true
@@ -98,7 +98,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:${{ steps.get_version.outputs.VERSION }}
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend:${{ steps.get_version.outputs.VERSION }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
           context: .
           file: ./docker/release/Dockerfile

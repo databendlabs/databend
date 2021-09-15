@@ -23,16 +23,16 @@ use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::read_segment;
 use crate::datasources::table::fuse::RawBlockStats;
 use crate::datasources::table::fuse::SegmentInfo;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 // TODO cache
 pub struct MetaInfoReader {
     da: Arc<dyn DataAccessor>,
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 }
 
 impl MetaInfoReader {
-    pub fn new(da: Arc<dyn DataAccessor>, ctx: DatafuseQueryContextRef) -> Self {
+    pub fn new(da: Arc<dyn DataAccessor>, ctx: DatabendQueryContextRef) -> Self {
         MetaInfoReader { da, ctx }
     }
 }

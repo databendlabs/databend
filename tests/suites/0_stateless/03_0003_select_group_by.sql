@@ -5,7 +5,7 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 gr
 
 SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1;
 
--- https://github.com/datafuselabs/datafuse/issues/1786
+-- https://github.com/datafuselabs/databend/issues/1786
 SELECT count(*), name FROM system.credits WHERE name='ahash' GROUP BY name;
 SELECT count(1), name FROM system.credits WHERE name='ahash' GROUP BY name;
 

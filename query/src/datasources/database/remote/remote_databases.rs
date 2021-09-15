@@ -72,6 +72,6 @@ impl DatabaseEngine for RemoteDatabases {
     }
 
     fn engine_desc(&self) -> &str {
-        "The remote engine stores data in remote DatafuseStore cluster."
+        "The remote engine stores data in remote DatabendStore cluster."
     }
 }

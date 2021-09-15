@@ -32,7 +32,7 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Table;
 use crate::datasources::database::remote::StoreApis;
 use crate::datasources::database::remote::StoreApisProvider;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 #[allow(dead_code)]
 pub struct RemoteTable<T> {
@@ -68,7 +68,7 @@ where T: 'static + StoreApis + Clone
 
     fn read_plan(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -102,13 +102,13 @@ where T: 'static + StoreApis + Clone
 
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         self.do_read(ctx, source_plan).await
     }
 
-    async fn append_data(&self, _ctx: DatafuseQueryContextRef, plan: InsertIntoPlan) -> Result<()> {
+    async fn append_data(&self, _ctx: DatabendQueryContextRef, plan: InsertIntoPlan) -> Result<()> {
         let opt_stream = {
             let mut inner = plan.input_stream.lock();
             (*inner).take()
@@ -133,7 +133,7 @@ where T: 'static + StoreApis + Clone
         Ok(())
     }
 
-    async fn truncate(&self, _ctx: DatafuseQueryContextRef, plan: TruncateTablePlan) -> Result<()> {
+    async fn truncate(&self, _ctx: DatabendQueryContextRef, plan: TruncateTablePlan) -> Result<()> {
         let mut client = self.store_api_provider.try_get_store_apis().await?;
         client.truncate(plan.db.clone(), plan.table.clone()).await?;
         Ok(())

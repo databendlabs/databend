@@ -1,12 +1,12 @@
 # How to add a new datasource?
 
-Datasource is the source of all data for queries in Datafuse, and also provides the database, table, view schema.
+Datasource is the source of all data for queries in Databend, and also provides the database, table, view schema.
 
-In Datafuse, datasource is pluggable, it's easy to add a new datasource.
+In Databend, datasource is pluggable, it's easy to add a new datasource.
 
 ## Datasource
 
-By default, Datafuse has three built-in datasource:
+By default, Databend has three built-in datasource:
 * LOCAL - which is in `local` directory, maintains all the local database and table schema, it is used mainly for testing.
 * SYSTEM - which is in `system` directory, it maintains all the system database and table schema.
 * REMOTE - which is in `remote` directory, and maintains all the remote database and tables.
@@ -167,21 +167,21 @@ pub trait Table: Sync + Send {
     // Get the read source plan.
     fn read_plan(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         partitions: usize,
     ) -> Result<ReadDataSourcePlan>;
     // Read block data from the underling.
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -192,7 +192,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(

@@ -38,7 +38,7 @@ impl SQLCommon {
             SQLDataType::Date => Ok(DataType::Date16),
             SQLDataType::Timestamp => Ok(DataType::DateTime32(None)),
 
-            //custom types for datafuse
+            //custom types for databend
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
             SQLDataType::Custom(obj) if !obj.0.is_empty() => {
                 match obj.0[0].value.to_uppercase().as_str() {

@@ -13,6 +13,8 @@ tls = ["tokio-native-tls"]
 tokio_io = ["tokio"]
 
 [dependencies]
+common-io = {path = "../io"}
+
 lazy_static = "1.4.0"
 thiserror = "1.0.29"
 chrono-tz = "0.5"

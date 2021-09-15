@@ -29,7 +29,7 @@ use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
 use crate::datasources::common::generate_parts;
 use crate::datasources::database::local::CsvTableStream;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct CsvTable {
     db: String,
@@ -90,7 +90,7 @@ impl Table for CsvTable {
 
     fn read_plan(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
@@ -118,7 +118,7 @@ impl Table for CsvTable {
 
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(CsvTableStream::try_create(

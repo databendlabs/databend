@@ -14,11 +14,11 @@
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
-use datafuse_store::api::HttpService;
-use datafuse_store::api::StoreServer;
-use datafuse_store::configs::Config;
-use datafuse_store::meta_service::raft_db::init_sled_db;
-use datafuse_store::metrics::MetricService;
+use databend_store::api::HttpService;
+use databend_store::api::StoreServer;
+use databend_store::configs::Config;
+use databend_store::meta_service::raft_db::init_sled_db;
+use databend_store::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
 
@@ -31,15 +31,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .init();
 
     let _guards = init_tracing_with_file(
-        "datafuse-store",
+        "databend-store",
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
     );
 
     info!("{:?}", conf.clone());
     info!(
-        "DatafuseStore v-{}",
-        *datafuse_store::configs::config::FUSE_COMMIT_VERSION
+        "DatabendStore v-{}",
+        *databend_store::configs::config::DATABEND_COMMIT_VERSION
     );
 
     init_sled_db(conf.meta_dir.clone());
@@ -66,10 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = StoreServer::create(conf.clone());
         info!(
-            "DatafuseStore API server listening on {}",
+            "DatabendStore API server listening on {}",
             conf.flight_api_address
         );
-        let (_stop_tx, fin_rx) = srv.start().await.expect("DatafuseStore service error");
+        let (_stop_tx, fin_rx) = srv.start().await.expect("DatabendStore service error");
         fin_rx.await?;
     }
 

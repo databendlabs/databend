@@ -1,26 +1,26 @@
 #!/bin/bash
 set -e
-# Copyright 2020-2021 The Datafuse Authors.
+# Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 usage() {
   this=$1
   cat <<EOF
-$this: download rust binaries for datafuselabs/datafuse
+$this: download rust binaries for datafuselabs/databend
 Usage: $this [-b] bindir [-d] [tag]
-  -b sets bindir or installation directory, Defaults to {HOME}/.datafuse/bin
+  -b sets bindir or installation directory, Defaults to {HOME}/.databend/bin
   -d turns on debug logging
    [tag] is a tag from
-   https://github.com/datafuselabs/datafuse/releases
+   https://github.com/datafuselabs/databend/releases
    If tag is missing, then the latest will be used.
 EOF
   exit 2
 }
 
 parse_args() {
-  #BINDIR is ${HOME}/.datafuse/bin unless set be ENV
+  #BINDIR is ${HOME}/.databend/bin unless set be ENV
   # over-ridden by flag below
 
-  BINDIR=${BINDIR:-.datafuse/bin}
+  BINDIR=${BINDIR:-.databend/bin}
   while getopts "b:dh?x" arg; do
     case "$arg" in
       b) BINDIR="$OPTARG" ;;
@@ -392,7 +392,7 @@ assert_supported_architecture() {
             return 0
             ;;
         *)
-          log_err "current architecture $_arch is not supported, Make sure this script is up-to-date and file request at https://github.com/$DATAFUSE_REPO/issues/new"
+          log_err "current architecture $_arch is not supported, Make sure this script is up-to-date and file request at https://github.com/$DATABEND_REPO/issues/new"
           return 1
           ;;
     esac
@@ -425,51 +425,51 @@ abort_prompt_issue() {
     log_err ""
     log_err "If you believe this is a bug (or just need help),"
     log_err "please feel free to file an issue on Github ❤️"
-    log_err "    https://github.com/$DATAFUSE_REPO/issues/new"
+    log_err "    https://github.com/$DATABEND_REPO/issues/new"
     exit 1
 }
 
 set_tag() {
   local _tag="$TAG"; shift
   if [ -z "$_tag" ]; then
-      _tag=$(get_latest_tag "$DATAFUSE_REPO") || return 1
+      _tag=$(get_latest_tag "$DATABEND_REPO") || return 1
   fi
 
   TAG=$(echo "$_tag" | tr -d '"')
 }
 
-# Download datafuse compressed file to a temp file
+# Download databend compressed file to a temp file
 #
 # @param $1: The URL of the file to download to a temporary dir
 # @return <stdout>: The path of the temporary file downloaded
-download_datafuse() {
+download_databend() {
     local _status
     local _name="$1";
     local _url="$2"; shift
     tmpdir=$(mktemp -d)
     log_debug "downloading files into ${tmpdir}"
-    log_info "😊 Start to download datafuse in ${_url}"
+    log_info "😊 Start to download databend in ${_url}"
     http_download "${tmpdir}/${_name}" "${_url}"
     _status=$?
     if [ $_status -ne 0 ]; then
-        log_err "❌ Failed to download datafuse!"
+        log_err "❌ Failed to download databend!"
         log_err "    Error downloading from ${_url}"
         rm -rf tmpdir
         abort_prompt_issue
     fi
-  log_info "✅ Successfully downloaded datafuse in ${_url}"
+  log_info "✅ Successfully downloaded databend in ${_url}"
     srcdir="${tmpdir}"
     (cd "${tmpdir}" && untar "${_name}")
     _status=$?
     if [ $_status -ne 0 ]; then
-        log_err "❌ Failed to unzip datafuse!"
+        log_err "❌ Failed to unzip databend!"
         log_err "    Error from untar ${_name}"
         rm -rf tmpdir
         abort_prompt_issue
     fi
     echo "${HOME}/${BINDIR}"
     test ! -d "${HOME}/${BINDIR}" && install -d "${HOME}/${BINDIR}"
-    for binexe in datafuse-query datafuse-store; do
+    for binexe in databend-query databend-store; do
       #TODO(zhihanz) for windows we should add .exe suffix
       install "${srcdir}/${binexe}" "${HOME}/${BINDIR}/"
       ensure chmod +x "${HOME}/${BINDIR}/${binexe}"
@@ -514,7 +514,7 @@ http_copy() {
   echo "$body"
 }
 
-# Setup download name and url for datafuse releases
+# Setup download name and url for databend releases
 #
 # @param $1: rustup target architecture
 # @param $2: github release version
@@ -522,7 +522,7 @@ http_copy() {
 set_name_url() {
   local _arch=$1;
   local _version=$2; shift
-  NAME=datafuse-${_version}-${_arch}.tar.gz
+  NAME=databend-${_version}-${_arch}.tar.gz
   TARBALL=${NAME}
   TARBALL_URL=${GITHUB_DOWNLOAD}/${_version}/${TARBALL}
   echo "$TARBALL_URL"
@@ -531,7 +531,7 @@ set_name_url() {
 set_name() {
   local _arch=$1;
   local _version=$2; shift
-  NAME=datafuse--${_arch}.tar.gz
+  NAME=databend--${_arch}.tar.gz
   echo "$NAME"
 }
 
@@ -554,7 +554,7 @@ need_cmd() {
 check_cmd() {
     command -v "$1" > /dev/null 2>&1
 }
-# Prompts the user to add ~/.datafuse/bin to their PATH variable
+# Prompts the user to add ~/.databend/bin to their PATH variable
 path_hint() {
     log_info "💡 Please add '${HOME}/${BINDIR}/' to your PATH variable"
     log_info "   You can run the following to set your PATH on shell startup:"
@@ -563,12 +563,12 @@ path_hint() {
     # shellcheck disable=SC2016
     log_info '   For zsh : echo '\''export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'\'' >> ~/.zshrc'
     log_info ""
-    log_info "   To use datafuse-query or datafuse-store you'll need to restart your shell or run the following:"
+    log_info "   To use databend-query or databend-store you'll need to restart your shell or run the following:"
     # shellcheck disable=SC2016
     log_info '   export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'
 }
-DATAFUSE_REPO=datafuselabs/datafuse
-GITHUB_DOWNLOAD=https://github.com/${DATAFUSE_REPO}/releases/download
+DATABEND_REPO=datafuselabs/databend
+GITHUB_DOWNLOAD=https://github.com/${DATABEND_REPO}/releases/download
 
 main(){
   local _status _target _version _url _name
@@ -579,7 +579,7 @@ main(){
   need_cmd mkdir
   need_cmd mv
   need_cmd tar
-  log_info "👏👏👏 Welcome to use datafuse!"
+  log_info "👏👏👏 Welcome to use databend!"
 #   Detect architecture and ensure it's supported
   get_architecture || return 1
   local _arch="$RETVAL"
@@ -596,7 +596,7 @@ main(){
   _version="$TAG"
   _name=$(set_name "$_target" "$_version" || return 1)
   _url=$(set_name_url "$_target" "$_version" || return 1)
-  download_datafuse "$_name" "$_url" || return 1
+  download_databend "$_name" "$_url" || return 1
   log_info "🎉 Install complete!"
   path_hint
 }

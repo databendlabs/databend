@@ -62,7 +62,7 @@ impl Function for ArithmeticFunction {
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if args.len() == 1 {
-            return Ok(args[0].clone());
+            return numerical_unary_arithmetic_coercion(&self.op, &args[0]);
         }
 
         if is_interval(&args[0]) || is_interval(&args[1]) {
@@ -90,7 +90,7 @@ impl Function for ArithmeticFunction {
         }
 
         let result = match columns.len() {
-            1 => std::ops::Neg::neg(columns[0].column()),
+            1 => columns[0].column().unary_arithmetic(self.op.clone()),
             _ => columns[0]
                 .column()
                 .arithmetic(self.op.clone(), columns[1].column()),

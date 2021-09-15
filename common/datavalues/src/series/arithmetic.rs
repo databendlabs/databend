@@ -90,7 +90,7 @@ impl Neg for &Series {
     type Output = Result<Series>;
 
     fn neg(self) -> Self::Output {
-        let lhs = coerce_to_signed(self)?;
+        let lhs = coerce_unary_op(&DataValueArithmeticOperator::Minus, self)?;
         lhs.negative()
     }
 }
@@ -232,8 +232,8 @@ fn coerce_lhs_rhs_no_op(lhs: &Series, rhs: &Series) -> Result<(Series, Series)> 
     Ok((left, right))
 }
 
-fn coerce_to_signed(lhs: &Series) -> Result<Series> {
-    let dtype = numerical_signed_coercion(lhs.data_type())?;
+fn coerce_unary_op(op: &DataValueArithmeticOperator, lhs: &Series) -> Result<Series> {
+    let dtype = numerical_unary_arithmetic_coercion(op, lhs.data_type())?;
 
     let mut left = lhs.clone();
     if lhs.data_type() != &dtype {

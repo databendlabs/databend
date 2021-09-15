@@ -31,7 +31,7 @@ pub struct Aggregators;
 impl Aggregators {
     pub fn register(map: FactoryFuncRef) -> Result<()> {
         let mut map = map.write();
-        // DatafuseQuery always uses lowercase function names to get functions.
+        // DatabendQuery always uses lowercase function names to get functions.
         map.insert("count".into(), AggregateCountFunction::try_create);
         map.insert("sum".into(), try_create_aggregate_sum_function);
         map.insert("avg".into(), try_create_aggregate_avg_function);

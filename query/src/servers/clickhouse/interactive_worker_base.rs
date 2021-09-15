@@ -38,7 +38,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sql::PlanParser;
 
 pub struct InteractiveWorkerBase;
@@ -53,7 +53,7 @@ pub enum BlockItem {
 impl InteractiveWorkerBase {
     pub async fn do_query(
         ch_ctx: &mut CHContext,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Receiver<BlockItem>> {
         let query = &ch_ctx.state.query;
         log::debug!("{}", query);
@@ -103,7 +103,7 @@ impl InteractiveWorkerBase {
     pub async fn process_insert_query(
         insert: InsertIntoPlan,
         ch_ctx: &mut CHContext,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Receiver<BlockItem>> {
         let sample_block = DataBlock::empty_with_schema(insert.schema());
         let (sender, rec) = channel(4);

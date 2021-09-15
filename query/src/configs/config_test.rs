@@ -144,7 +144,7 @@ fn test_env_file_config() -> Result<()> {
     std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
     let config_path = std::env::current_dir()
         .unwrap()
-        .join("../scripts/deploy/config/datafuse-query-node-1.toml")
+        .join("../scripts/deploy/config/databend-query-node-1.toml")
         .display()
         .to_string();
     std::env::set_var("CONFIG_FILE", config_path);
@@ -157,7 +157,7 @@ fn test_env_file_config() -> Result<()> {
 
 #[test]
 fn test_fuse_commit_version() -> Result<()> {
-    let v = &crate::configs::config::FUSE_COMMIT_VERSION;
+    let v = &crate::configs::config::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())
 }

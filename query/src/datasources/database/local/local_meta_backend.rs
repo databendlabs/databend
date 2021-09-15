@@ -156,7 +156,7 @@ impl MetaBackend for LocalMetaBackend {
             "CSV" => CsvTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             "NULL" => NullTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
             "MEMORY" => MemoryTable::try_create(plan.db, plan.table, plan.schema, plan.options)?,
-            "FUSE_LOCAL" => {
+            "DATABEND_LOCAL" => {
                 FuseTable::try_create(plan.db, plan.table, plan.schema, plan.options, self.clone())?
             }
             _ => {

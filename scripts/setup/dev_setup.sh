@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) The Diem Core Contributors.
-# Copyright 2020-2021 The Datafuse Authors.
+# Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
 SCRIPT_PATH="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
@@ -130,10 +130,10 @@ EOF
 
 function welcome_message {
 cat <<EOF
-Welcome to DatafuseQuery!
+Welcome to DatabendQuery!
 
 This script will download and install the necessary dependencies needed to
-build, test and inspect DatafuseQuery.
+build, test and inspect DatabendQuery.
 
 Based on your selection, these tools will be included:
 EOF
@@ -228,7 +228,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] && \
 fi
 
 if [ ! -f rust-toolchain ]; then
-	echo "Unknown location. Please run this from the datafuse repository. Abort."
+	echo "Unknown location. Please run this from the databend repository. Abort."
 	exit 1
 fi
 
