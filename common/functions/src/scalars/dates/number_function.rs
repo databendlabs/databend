@@ -101,10 +101,8 @@ impl NumberResultFunction<u32> for ToStartOfYear {
         Ok(DataType::Date16)
     }
     fn to_number(value: DateTime<Utc>) -> u32 {
-        let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
         let end: DateTime<Utc> = Utc.ymd(value.year(), 1, 1).and_hms(0, 0, 0);
-        let duration = end.signed_duration_since(start);
-        duration.num_days() as u32
+        get_day(end)
     }
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
@@ -120,15 +118,48 @@ impl NumberResultFunction<u32> for ToStartOfISOYear {
         Ok(DataType::Date16)
     }
     fn to_number(value: DateTime<Utc>) -> u32 {
-        let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
         let week_day = value.weekday().num_days_from_monday();
         let iso_week = value.iso_week();
         let iso_week_num = iso_week.week();
         let sub_days = (iso_week_num - 1) * 7 + week_day;
         let result = value.timestamp_millis() - sub_days as i64 * 24 * 3600 * 1000;
         let end: DateTime<Utc> = Utc.timestamp_millis(result);
-        let duration = end.signed_duration_since(start);
-        duration.num_days() as u32
+        get_day(end)
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt16(Some(Self::to_number(value) as u16))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToStartOfQuarter;
+
+impl NumberResultFunction<u32> for ToStartOfQuarter {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::Date16)
+    }
+    fn to_number(value: DateTime<Utc>) -> u32 {
+        let new_month = value.month0() / 3 * 3 + 1;
+        let date = Utc.ymd(value.year(), new_month, 1).and_hms(0, 0, 0);
+        get_day(date)
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt16(Some(Self::to_number(value) as u16))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToStartOfMonth;
+
+impl NumberResultFunction<u32> for ToStartOfMonth {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::Date16)
+    }
+    fn to_number(value: DateTime<Utc>) -> u32 {
+        let date = Utc.ymd(value.year(), value.month(), 1).and_hms(0, 0, 0);
+        get_day(date)
     }
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
@@ -242,8 +273,16 @@ impl<T, R> fmt::Display for NumberFunction<T, R> {
     }
 }
 
+fn get_day(date: DateTime<Utc>) -> u32 {
+    let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
+    let duration = date.signed_duration_since(start);
+    duration.num_days() as u32
+}
+
 pub type ToYYYYMMFunction = NumberFunction<ToYYYYMM, u32>;
 pub type ToYYYYMMDDFunction = NumberFunction<ToYYYYMMDD, u32>;
 pub type ToYYYYMMDDhhmmssFunction = NumberFunction<ToYYYYMMDDhhmmss, u64>;
 pub type ToStartOfISOYearFunction = NumberFunction<ToStartOfISOYear, u32>;
 pub type ToStartOfYearFunction = NumberFunction<ToStartOfYear, u32>;
+pub type ToStartOfQuarterFunction = NumberFunction<ToStartOfQuarter, u32>;
+pub type ToStartOfMonthFunction = NumberFunction<ToStartOfMonth, u32>;

@@ -51,6 +51,22 @@ fn test_round_function() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_toStartOf_function() -> Result<()> {
+    let test = Test {
+        name: "test-timeSlot-now",
+        display: "toStartOfQuarter()",
+        nullable: false,
+        columns: vec![Series::new(vec![1631705259u32]).into()],
+        func: ToStartOfQuarterFunction::try_create("toStartOfQuarter"),
+        expect: Series::new(vec![18871u32]),
+        error: "",
+    };
+
+    do_test(test)?;
+    Ok(())
+}
+
 fn do_test(t: Test) -> Result<()> {
     let dummy = DataField::new("dummy", DataType::DateTime32(None), false);
     let rows = t.columns[0].len();
@@ -76,7 +92,9 @@ fn do_test(t: Test) -> Result<()> {
 
     let v = func.eval(&columns, rows)?;
     let expect: DataColumn = t.expect.into();
-
+    for val in v.to_values()? {
+        println!("{}", val);
+    }
     assert_eq!(&expect, &v);
     Ok(())
 }
