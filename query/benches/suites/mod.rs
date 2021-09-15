@@ -29,7 +29,7 @@ pub mod bench_sort_query_sql;
 pub async fn select_executor(sql: &str) -> Result<()> {
     let session_manager = try_create_session_mgr(Some(1))?;
     let executor_session = session_manager.create_session("Benches")?;
-    let ctx = executor_session.create_context();
+    let ctx = executor_session.create_context()?;
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone()).build_from_sql(sql)? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;

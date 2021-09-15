@@ -24,6 +24,9 @@ mod cluster;
 mod node;
 mod metastore_cluster;
 
-pub use cluster::Cluster;
-pub use cluster::ClusterRef;
 pub use node::Node;
+pub use cluster::Cluster;
+pub use cluster::ClusterDiscovery;
+
+pub use cluster::ClusterRef;
+pub use cluster::ClusterDiscoveryRef;

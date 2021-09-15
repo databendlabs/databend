@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::{DNSResolver, StoreClient};
+use common_flights::{DNSResolver, StoreClient, ConnectionFactory};
 use common_infallible::Mutex;
 
 use crate::clusters::address::Address;
@@ -28,26 +28,29 @@ use crate::clusters::node::Node;
 use crate::configs::Config;
 use common_management::{NamespaceApi, NamespaceMgr, LocalKVStore, NodeInfo};
 use std::time::Duration;
+use crate::api::FlightClient;
+use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 
 pub type ClusterRef = Arc<Cluster>;
+pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
 
-pub struct Cluster {
+pub struct ClusterDiscovery {
     local_port: u16,
     nodes: Mutex<HashMap<String, Arc<Node>>>,
     local_id: String,
     provider: Mutex<Box<dyn NamespaceApi + Sync + Send>>,
 }
 
-impl Cluster {
+impl ClusterDiscovery {
     // TODO(Winter): this should be disabled by compile flag
-    async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterRef> {
+    async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
         let tenant = &cfg.query.tenant;
         let namespace = &cfg.query.namespace;
         let lift_time = Duration::from_secs(60);
         let local_store = LocalKVStore::new_temp().await?;
         let namespace_manager = NamespaceMgr::new(local_store, tenant, namespace, lift_time)?;
 
-        Ok(Arc::new(Cluster {
+        Ok(Arc::new(ClusterDiscovery {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
             nodes: Mutex::new(HashMap::new()),
             local_id: global_unique_id(),
@@ -55,7 +58,7 @@ impl Cluster {
         }))
     }
 
-    async fn cluster_with_metastore(cfg: &Config) -> Result<ClusterRef> {
+    async fn cluster_with_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
         let address = &cfg.meta.meta_address;
         let username = &cfg.meta.meta_username;
         let password = &cfg.meta.meta_password;
@@ -66,7 +69,7 @@ impl Cluster {
         let lift_time = Duration::from_secs(60);
         let namespace_manager = NamespaceMgr::new(store_client, tenant, namespace, lift_time)?;
 
-        Ok(Arc::new(Cluster {
+        Ok(Arc::new(ClusterDiscovery {
             local_port: Address::create(&cfg.query.flight_api_address)?.port(),
             nodes: Mutex::new(HashMap::new()),
             local_id: global_unique_id(),
@@ -74,7 +77,7 @@ impl Cluster {
         }))
     }
 
-    pub async fn create_global(cfg: Config) -> Result<ClusterRef> {
+    pub async fn create_global(cfg: Config) -> Result<ClusterDiscoveryRef> {
         let cluster = match cfg.meta.meta_address.is_empty() {
             true => Self::standalone_without_metastore(&cfg).await?,
             false => Self::cluster_with_metastore(&cfg).await?,
@@ -84,50 +87,13 @@ impl Cluster {
         Ok(cluster)
     }
 
-    pub async fn empty() -> Result<ClusterRef> {
-        let lift_time = Duration::from_secs(60);
-        let local_store = LocalKVStore::new_temp().await?;
-        let namespace_manager = NamespaceMgr::new(local_store, "temp", "temp", lift_time)?;
 
-        Ok(Arc::new(Cluster {
-            local_port: 9090,
-            nodes: Mutex::new(HashMap::new()),
-            local_id: global_unique_id(),
-            provider: Mutex::new(Box::new(namespace_manager)),
-        }))
-    }
-
-    pub async fn immutable_cluster(&self) -> Result<()> {
+    pub async fn immutable_cluster(&self) -> Result<ClusterRef> {
         // TODO: sync and create cluster
-        Ok(())
-    }
+        let mut provider = self.provider.lock();
+        // let nodes_list = provider.get_nodes().await?;
 
-    pub fn is_empty(&self) -> Result<bool> {
-        Ok(self.nodes.lock().len() == 0)
-    }
-
-    pub fn get_node_by_name(&self, name: String) -> Result<Arc<Node>> {
-        self.nodes
-            .lock()
-            .get(&name)
-            .map(Clone::clone)
-            .ok_or_else(|| {
-                ErrorCode::NotFoundClusterNode(format!(
-                    "The node \"{}\" not found in the cluster",
-                    name
-                ))
-            })
-    }
-
-    pub fn get_nodes(&self) -> Result<Vec<Arc<Node>>> {
-        let mut nodes = self
-            .nodes
-            .lock()
-            .iter()
-            .map(|(_, node)| node.clone())
-            .collect::<Vec<_>>();
-        nodes.sort_by(|left, right| left.sequence.cmp(&right.sequence));
-        Ok(nodes)
+        Cluster::empty()
     }
 
     pub async fn register_to_metastore(&self, cfg: &Config) -> Result<()> {
@@ -140,6 +106,61 @@ impl Cluster {
         Ok(())
     }
 }
+
+pub struct Cluster {
+    local_id: String,
+    nodes: Vec<Arc<NodeInfo>>,
+}
+
+impl Cluster {
+    pub fn empty() -> Result<ClusterRef> {
+        Ok(Arc::new(Cluster { local_id: String::from(""), nodes: Vec::new() }))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    pub fn is_local(&self, node: &NodeInfo) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+
+        node.id == self.local_id
+    }
+
+    pub async fn create_node_conn(&self, name: String, config: Config) -> Result<FlightClient> {
+        for node in &self.nodes {
+            if node.id == name {
+                return match config.tls_query_cli_enabled() {
+                    true => Ok(FlightClient::new(FlightServiceClient::new(
+                        ConnectionFactory::create_flight_channel(
+                            node.flight_address.clone(),
+                            None,
+                            Some(config.tls_query_client_conf()),
+                        ).await?
+                    ))),
+                    false => Ok(FlightClient::new(FlightServiceClient::new(
+                        ConnectionFactory::create_flight_channel(
+                            node.flight_address.clone(),
+                            None,
+                            None,
+                        ).await?
+                    ))),
+                };
+            }
+        }
+
+        Err(ErrorCode::NotFoundClusterNode(format!(
+            "The node \"{}\" not found in the cluster", name
+        )))
+    }
+
+    pub fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
+        self.nodes.iter().cloned().collect()
+    }
+}
+
 
 fn global_unique_id() -> String {
     let mut uuid = uuid::Uuid::new_v4().as_u128();
@@ -161,40 +182,3 @@ fn global_unique_id() -> String {
         }
     }
 }
-//
-// async fn is_local(address: &Address, expect_port: u16) -> Result<bool> {
-//     if address.port() != expect_port {
-//         return Result::Ok(false);
-//     }
-//
-//     match address {
-//         Address::SocketAddress(socket_addr) => is_local_impl(&socket_addr.ip()),
-//         Address::Named((host, _)) => match DNSResolver::instance()?.resolve(host.as_str()).await {
-//             Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
-//                 "DNS resolver lookup error: {}",
-//                 error
-//             ))),
-//             Ok(resolved_ips) => {
-//                 for resolved_ip in &resolved_ips {
-//                     if is_local_impl(resolved_ip)? {
-//                         return Ok(true);
-//                     }
-//                 }
-//
-//                 Ok(false)
-//             }
-//         },
-//     }
-// }
-//
-// fn is_local_impl(address: &IpAddr) -> Result<bool> {
-//     for network_interface in &pnet::datalink::interfaces() {
-//         for interface_ip in &network_interface.ips {
-//             if address == &interface_ip.ip() {
-//                 return Ok(true);
-//             }
-//         }
-//     }
-//
-//     Ok(false)
-// }

@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_runtime::tokio;
 
 use crate::api::HttpService;
-use crate::clusters::Cluster;
+use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::servers::Server;
 use crate::tests::tls_constants::TEST_CA_CERT;
@@ -42,7 +42,7 @@ async fn test_http_service_tls_server() -> Result<()> {
     conf.query.api_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
     let addr_str = "127.0.0.1:30001";
-    let cluster = Cluster::create_global(conf.clone())?;
+    let cluster = ClusterDiscovery::create_global(conf.clone())?;
     let mut srv = HttpService::create(conf.clone(), cluster.clone());
     let listening = srv.start(addr_str.parse()?).await?;
     let port = listening.port();
@@ -78,7 +78,7 @@ async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
     conf.query.api_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
     let addr_str = "127.0.0.1:30010";
-    let cluster = Cluster::create_global(conf.clone())?;
+    let cluster = ClusterDiscovery::create_global(conf.clone())?;
     let mut srv = HttpService::create(conf.clone(), cluster.clone());
     let listening = srv.start(addr_str.parse()?).await?;
     let port = listening.port();
@@ -105,7 +105,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     conf.query.api_tls_server_root_ca_cert = TEST_TLS_CA_CERT.to_owned();
 
     let addr_str = "127.0.0.1:30011";
-    let cluster = Cluster::create_global(conf.clone())?;
+    let cluster = ClusterDiscovery::create_global(conf.clone())?;
     let mut srv = HttpService::create(conf.clone(), cluster.clone());
     let listening = srv.start(addr_str.parse()?).await?;
     let port = listening.port();
@@ -147,7 +147,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     conf.query.api_tls_server_root_ca_cert = TEST_TLS_CA_CERT.to_owned();
 
     let addr_str = "127.0.0.1:30012";
-    let cluster = Cluster::create_global(conf.clone())?;
+    let cluster = ClusterDiscovery::create_global(conf.clone())?;
     let mut srv = HttpService::create(conf.clone(), cluster.clone());
     let listening = srv.start(addr_str.parse()?).await?;
     let port = listening.port();

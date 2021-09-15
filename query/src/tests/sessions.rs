@@ -16,7 +16,7 @@ use std::env;
 
 use common_exception::Result;
 
-use crate::clusters::Cluster;
+use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
@@ -33,5 +33,5 @@ pub fn try_create_session_mgr(max_active_sessions: Option<u64>) -> Result<Sessio
         conf.query.max_active_sessions = max;
     }
 
-    SessionManager::from_conf(conf, Cluster::empty())
+    SessionManager::from_conf(conf, ClusterDiscovery::empty())
 }

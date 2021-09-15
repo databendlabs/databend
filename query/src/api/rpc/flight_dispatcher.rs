@@ -109,7 +109,7 @@ impl DatafuseQueryFlightDispatcher {
     }
 
     async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
-        let query_context = session.create_context().await;
+        let query_context = session.create_context().await?;
         let action_context = DatafuseQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
@@ -155,7 +155,7 @@ impl DatafuseQueryFlightDispatcher {
 
     async fn action_with_scatter<T>(&self, session: SessionRef, action: &FlightAction) -> Result<()>
     where T: FlightScatter + Send + 'static {
-        let query_context = session.create_context().await;
+        let query_context = session.create_context().await?;
         let action_context = DatafuseQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 

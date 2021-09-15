@@ -16,11 +16,11 @@ use common_exception::Result;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
-use crate::clusters::cluster::Cluster;
+use crate::clusters::cluster::ClusterDiscovery;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_node_with_local() -> Result<()> {
-    let cluster = Cluster::empty();
+    let cluster = ClusterDiscovery::empty();
 
     cluster
         .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))
@@ -57,7 +57,7 @@ async fn test_add_node_with_local() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_node_with_clone() -> Result<()> {
-    let cluster = Cluster::empty();
+    let cluster = ClusterDiscovery::empty();
 
     cluster
         .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))

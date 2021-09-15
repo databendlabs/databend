@@ -142,8 +142,8 @@ impl DatafuseQueryContext {
         Ok(())
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        self.shared.try_get_cluster()
+    pub fn get_cluster(&self) -> ClusterRef {
+        self.shared.get_cluster()
     }
 
     pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {

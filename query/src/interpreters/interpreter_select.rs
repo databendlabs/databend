@@ -87,11 +87,11 @@ impl SelectInterpreter {
 
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
         for (node, action) in remote_stage_actions {
-            let mut flight_client = node.get_flight_client(&self.ctx.get_config()).await?;
-            let executing_action = flight_client.execute_action(action.clone(), timeout);
+            // let mut flight_client = node.get_flight_client(&self.ctx.get_config()).await?;
+            // let executing_action = flight_client.execute_action(action.clone(), timeout);
 
-            executing_action.await?;
-            scheduled.insert(node.name.clone(), node.clone());
+            // executing_action.await?;
+            // scheduled.insert(node.name.clone(), node.clone());
         }
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());

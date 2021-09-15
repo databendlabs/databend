@@ -117,21 +117,35 @@ impl Session {
     /// Create a query context for query.
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
-    pub async fn create_context(self: &Arc<Self>) -> DatafuseQueryContextRef {
-        let mut state_guard = self.mutable_state.lock();
+    pub async fn create_context(self: &Arc<Self>) -> Result<DatafuseQueryContextRef> {
+        let context_shared = {
+            let mut mutable_state = self.mutable_state.lock();
+            match mutable_state.context_shared.as_ref() {
+                None => None,
+                Some(context_shared) => Some(context_shared.clone()),
+            }
+        };
 
-        if state_guard.context_shared.is_none() {
-            // TODO: async create context
-            let config = self.config.clone();
-            // let immutable_cluster = self.sessions.cluster.immutable_cluster();
-            let shared = DatafuseQueryContextShared::try_create(config, self.clone());
-            state_guard.context_shared = Some(shared);
-        }
-
-        match &state_guard.context_shared {
+        Ok(match context_shared.as_ref() {
             Some(shared) => DatafuseQueryContext::from_shared(shared.clone()),
-            None => unreachable!(),
-        }
+            None => {
+                let config = self.config.clone();
+                let discovery = self.sessions.get_cluster_discovery();
+
+                let cluster = discovery.immutable_cluster().await?;
+                let shared = DatafuseQueryContextShared::try_create(config, self.clone(), cluster);
+
+                let mut mutable_state = self.mutable_state.lock();
+
+                match mutable_state.context_shared.as_ref() {
+                    Some(shared) => DatafuseQueryContext::from_shared(shared.clone()),
+                    None => {
+                        mutable_state.context_shared = Some(shared.clone());
+                        DatafuseQueryContext::from_shared(shared)
+                    }
+                }
+            }
+        })
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
@@ -163,8 +177,9 @@ impl Session {
         self.mutable_state.lock().session_settings.clone()
     }
 
-    pub fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
-        Ok(self.sessions.get_cluster())
+    pub async fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
+        let cluster_discovery = self.sessions.get_cluster_discovery();
+        cluster_discovery.immutable_cluster().await
     }
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {

@@ -39,13 +39,13 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::ServerConfig;
 
 // use crate::api::http::router::Router;
-use crate::clusters::ClusterRef;
+use crate::clusters::{ClusterRef, ClusterDiscoveryRef};
 use crate::configs::Config;
 use crate::servers::Server;
 
 pub struct HttpService {
     cfg: Config,
-    cluster: ClusterRef,
+    discovery: ClusterDiscoveryRef,
     join_handle: Option<JoinHandle<std::result::Result<(), std::io::Error>>>,
     abort_handler: axum_server::Handle,
     tls_config: Option<ServerConfig>,
@@ -58,10 +58,10 @@ macro_rules! build_router {
             .route("/v1/health", get(super::http::v1::health::health_handler))
             .route("/v1/config", get(super::http::v1::config::config_handler))
             .route("/v1/logs", get(super::http::v1::logs::logs_handler))
-            .route(
-                "/v1/cluster/list",
-                get(super::http::v1::cluster::cluster_list_handler),
-            )
+            // .route(
+            //     "/v1/cluster/list",
+            //     get(super::http::v1::cluster::cluster_list_handler),
+            // )
             .route(
                 "/debug/home",
                 get(super::http::debug::home::debug_home_handler),
@@ -76,12 +76,12 @@ macro_rules! build_router {
 }
 
 impl HttpService {
-    pub fn create(cfg: Config, cluster: ClusterRef) -> Box<Self> {
+    pub fn create(cfg: Config, discovery: ClusterDiscoveryRef) -> Box<Self> {
         let tls_config = HttpService::build_tls(cfg.clone());
         let handler = axum_server::Handle::new();
         Box::new(HttpService {
             cfg,
-            cluster,
+            discovery,
             join_handle: None,
             abort_handler: handler,
             tls_config,
@@ -169,7 +169,7 @@ impl Server for HttpService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let app = build_router!(self.cfg.clone(), self.cluster.clone());
+        let app = build_router!(self.cfg.clone(), self.discovery.clone());
         let handler = self.abort_handler.clone();
         match self.tls_config.clone() {
             None => {

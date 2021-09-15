@@ -18,7 +18,7 @@ use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use datafuse_query::api::HttpService;
 use datafuse_query::api::RpcService;
-use datafuse_query::clusters::Cluster;
+use datafuse_query::clusters::ClusterDiscovery;
 use datafuse_query::configs::Config;
 use datafuse_query::metrics::MetricService;
 use datafuse_query::servers::ClickHouseHandler;
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf);
     info!("DatafuseQuery v-{}", *datafuse_query::configs::config::FUSE_COMMIT_VERSION);
 
-    let cluster = Cluster::create_global(conf.clone()).await?;
+    let cluster = ClusterDiscovery::create_global(conf.clone()).await?;
     let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 

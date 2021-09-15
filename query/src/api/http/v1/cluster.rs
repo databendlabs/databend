@@ -117,21 +117,21 @@ impl IntoResponse for ClusterError {
 // request: None
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
-pub async fn cluster_list_handler(
-    cluster_state: Extension<ClusterRef>,
-) -> Result<Json<Value>, ClusterError> {
-    let cluster: ClusterRef = cluster_state.0;
-    return match cluster.get_nodes() {
-        Ok(nodes) => {
-            log::info!("Successfully listed nodes ");
-            Ok(Json(json!(nodes)))
-        }
-        Err(_) => {
-            log::error!("Unable to list nodes ");
-            Err(ClusterError::List)
-        }
-    };
-}
+// pub async fn cluster_list_handler(
+//     cluster_state: Extension<ClusterRef>,
+// ) -> Result<Json<Value>, ClusterError> {
+//     let cluster: ClusterRef = cluster_state.0;
+//     return match cluster.get_nodes() {
+//         Ok(nodes) => {
+//             log::info!("Successfully listed nodes ");
+//             Ok(Json(json!(nodes)))
+//         }
+//         Err(_) => {
+//             log::error!("Unable to list nodes ");
+//             Err(ClusterError::List)
+//         }
+//     };
+// }
 
 // // POST /v1/cluster/remove
 // // remove a node based on name in current datafuse-query cluster

@@ -51,9 +51,10 @@ impl RemoteTransform {
 
     async fn flight_client(&self) -> Result<FlightClient> {
         let context = self.ctx.clone();
-        let cluster = context.try_get_cluster()?;
-        let fetch_node = cluster.get_node_by_name(self.fetch_node_name.clone())?;
-        fetch_node.get_flight_client(&self.ctx.get_config()).await
+        let node_name = self.fetch_node_name.clone();
+
+        let cluster = context.get_cluster();
+        cluster.create_node_conn(node_name, self.ctx.get_config()).await
     }
 }
 

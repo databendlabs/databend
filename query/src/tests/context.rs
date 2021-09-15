@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_runtime::tokio::runtime::Runtime;
 
-use crate::clusters::Cluster;
+use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::sessions::DatafuseQueryContextRef;
 use crate::sessions::SessionManager;
@@ -30,7 +30,7 @@ pub fn try_create_context() -> Result<DatafuseQueryContextRef> {
 }
 
 pub fn try_create_context_with_conf(mut config: Config) -> Result<DatafuseQueryContextRef> {
-    let cluster = Cluster::empty();
+    let cluster = ClusterDiscovery::empty();
 
     // Setup log dir to the tests directory.
     config.log.log_dir = env::current_dir()?
@@ -64,7 +64,7 @@ impl ClusterNode {
 
 pub fn try_create_cluster_context(nodes: &[ClusterNode]) -> Result<DatafuseQueryContextRef> {
     let config = Config::default();
-    let cluster = Cluster::empty();
+    let cluster = ClusterDiscovery::empty();
 
     for node in nodes {
         let node = node.clone();

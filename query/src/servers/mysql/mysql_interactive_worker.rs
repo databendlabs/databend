@@ -162,7 +162,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     async fn do_query(&mut self, query: &str) -> Result<Vec<DataBlock>> {
         log::debug!("{}", query);
 
-        let context = self.session.create_context().await;
+        let context = self.session.create_context().await?;
         context.attach_query_str(query);
 
         let query_parser = PlanParser::create(context.clone());
