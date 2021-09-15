@@ -15,12 +15,13 @@
 use std::io;
 use std::mem::MaybeUninit;
 
+use common_io::prelude::Unmarshal;
+
 use crate::errors::DriverError;
 use crate::errors::Error;
 use crate::errors::Result;
 use crate::types::column::StringPool;
 use crate::types::StatBuffer;
-use crate::types::Unmarshal;
 
 pub(crate) trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> Result<()>;

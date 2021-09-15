@@ -19,6 +19,8 @@ use std::sync::Arc;
 use chrono::prelude::*;
 use chrono::Date;
 use chrono_tz::Tz;
+use common_io::prelude::Marshal;
+use common_io::prelude::Unmarshal;
 
 use crate::binary::Encoder;
 use crate::binary::ReadEx;
@@ -34,10 +36,8 @@ use crate::types::column::ColumnFrom;
 use crate::types::column::ColumnWrapper;
 use crate::types::column::Either;
 use crate::types::DateConverter;
-use crate::types::Marshal;
 use crate::types::SqlType;
 use crate::types::StatBuffer;
-use crate::types::Unmarshal;
 use crate::types::Value;
 use crate::types::ValueRef;
 
