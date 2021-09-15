@@ -64,11 +64,7 @@ impl UserInfo {
         }
 
         let epassword = encode_password(password, &self.auth_type);
-        if epassword == self.password {
-            return true;
-        }
-
-        return false;
+        epassword == self.password
     }
 }
 

@@ -196,8 +196,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             return user.authenticate_user(encode_password);
         }
 
-        println!("{:?}", user);
-        return false;
+        false
     }
 }
 
@@ -302,7 +301,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
         for i in 0..20 {
             scramble[i] = bs[i];
             if scramble[i] == b'\0' || scramble[i] == b'$' {
-                scramble[i] = scramble[i] + 1;
+                scramble[i] += 1;
             }
         }
 
@@ -320,7 +319,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
 // TODO(winter), this is just a mock
 fn get_mock_user(user: &str) -> Result<UserInfo> {
     match user {
-        "default" => {
+        "default" | "" => {
             let user = NewUser::new("default", "", AuthType::None);
             Ok(user.into())
         }
