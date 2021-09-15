@@ -206,8 +206,9 @@ nav:
         - DatabendQuery Join: rfcs/query/0001-join-framework-design.md
         - DatabendQuery Expression: rfcs/query/0002-plan-expression.md
         - DatabendQuery Shuffle: rfcs/query/0003-data-shuffle.md
-        - DatabendStore Design: rfcs/store/0001-store-design.md
         - Performance Test: rfcs/query/0004-performance-test.md
+        - SQL Planner Framework: rfcs/query/0005-new-sql-planner-framework.md
+        - DatabendStore Design: rfcs/store/0001-store-design.md
         - DatabendCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
   - Whitepapers: overview/architecture.md
