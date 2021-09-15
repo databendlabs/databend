@@ -319,6 +319,39 @@ pub fn interval_arithmetic_coercion(
 }
 
 #[inline]
+pub fn numerical_unary_arithmetic_coercion(
+    op: &DataValueArithmeticOperator,
+    val_type: &DataType,
+) -> Result<DataType> {
+    // error on any non-numeric type
+    if !is_numeric(val_type) {
+        return Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported ({:?})",
+            val_type
+        )));
+    };
+
+    match op {
+        DataValueArithmeticOperator::Plus => Ok(val_type.clone()),
+        DataValueArithmeticOperator::Minus => {
+            let has_float = is_floating(val_type);
+            let has_signed = is_signed_numeric(val_type);
+            let numeric_size = numeric_byte_size(val_type)?;
+            let max_size = if has_signed {
+                numeric_size
+            } else {
+                next_size(numeric_size)
+            };
+            construct_numeric_type(true, has_float, max_size)
+        }
+        other => Result::Err(ErrorCode::UnknownFunction(format!(
+            "Unexpected operator:{:?} to unary function",
+            other
+        ))),
+    }
+}
+
+#[inline]
 pub fn numerical_signed_coercion(val_type: &DataType) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(val_type) {
