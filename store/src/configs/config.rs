@@ -20,7 +20,7 @@ use structopt_toml::StructOptToml;
 use crate::meta_service::NodeId;
 
 lazy_static! {
-    pub static ref FUSE_COMMIT_VERSION: String = {
+    pub static ref DATABEND_COMMIT_VERSION: String = {
         let build_semver = option_env!("VERGEN_BUILD_SEMVER");
         let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
         let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");

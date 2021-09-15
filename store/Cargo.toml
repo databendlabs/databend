@@ -2,7 +2,7 @@
 name = "databend-store"
 version = "0.1.0"
 description = "A Cloud Distributed MergeTree Storage Engine"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"

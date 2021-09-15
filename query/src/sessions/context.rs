@@ -71,7 +71,7 @@ impl DatabendQueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!(
                 "DatabendQuery v-{}",
-                *crate::configs::config::FUSE_COMMIT_VERSION
+                *crate::configs::config::DATABEND_COMMIT_VERSION
             ),
             shared,
         })

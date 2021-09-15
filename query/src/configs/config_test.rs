@@ -157,7 +157,7 @@ fn test_env_file_config() -> Result<()> {
 
 #[test]
 fn test_fuse_commit_version() -> Result<()> {
-    let v = &crate::configs::config::FUSE_COMMIT_VERSION;
+    let v = &crate::configs::config::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())
 }

@@ -43,7 +43,7 @@ and each cluster may consist of many nodes. Each node is a compute unit, and is 
   
   For example:
   ```
-  datafuse :) EXPLAIN SELECT number + 1 FROM numbers_mt(10) WHERE number > 8 LIMIT 2
+  databend :) EXPLAIN SELECT number + 1 FROM numbers_mt(10) WHERE number > 8 LIMIT 2
   ┌─explain─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ Limit: 2                                                                                                                │
   │   Projection: (number + 1):UInt64                                                                                       │
@@ -64,7 +64,7 @@ and each cluster may consist of many nodes. Each node is a compute unit, and is 
   
   For example:
   ```
-  datafuse :) EXPLAIN PIPELINE SELECT number + 1 FROM numbers_mt(10000) WHERE number > 8 LIMIT 2
+  databend :) EXPLAIN PIPELINE SELECT number + 1 FROM numbers_mt(10000) WHERE number > 8 LIMIT 2
   ┌─explain───────────────────────────────────────────────────────────────┐
   │ LimitTransform × 1 processor                                          │
   │   Merge (ProjectionTransform × 16 processors) to (LimitTransform × 1) │

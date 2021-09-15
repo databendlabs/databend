@@ -87,7 +87,7 @@ perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
 
 run-helm:
-	helm upgrade --install datafuse ./deploy/charts/datafuse \
+	helm upgrade --install databend ./deploy/charts/databend \
 		--set image.repository=${HUB}/databend-query --set image.tag=${TAG} --set configs.mysqlPort=3308
 
 profile:
@@ -99,6 +99,6 @@ clean:
 	rm -rf ./_local_fs/ ./_meta/ ./_logs/ ./common/stoppable/_logs/ ./query/_logs/ ./store/_logs/
 
 docker_release:
-	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/datafuse:${TAG} --build-arg version=$VERSION --push
+	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg version=$VERSION --push
 
 .PHONY: setup test run build fmt lint docker clean

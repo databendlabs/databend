@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf);
     info!(
         "DatabendQuery v-{}",
-        *databend_query::configs::config::FUSE_COMMIT_VERSION,
+        *databend_query::configs::config::DATABEND_COMMIT_VERSION,
     );
 
     let cluster = Cluster::create_global(conf.clone())?;

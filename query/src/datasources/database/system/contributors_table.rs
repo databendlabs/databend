@@ -90,7 +90,7 @@ impl Table for ContributorsTable {
         _ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let contributors: Vec<&[u8]> = env!("FUSE_COMMIT_AUTHORS")
+        let contributors: Vec<&[u8]> = env!("DATABEND_COMMIT_AUTHORS")
             .split_terminator(',')
             .map(|x| x.trim().as_bytes())
             .collect();

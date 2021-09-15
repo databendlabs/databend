@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf.clone());
     info!(
         "DatabendStore v-{}",
-        *databend_store::configs::config::FUSE_COMMIT_VERSION
+        *databend_store::configs::config::DATABEND_COMMIT_VERSION
     );
 
     init_sled_db(conf.meta_dir.clone());

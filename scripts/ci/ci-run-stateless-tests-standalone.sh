@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2020-2021 The Datafuse Authors.
+# Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
 echo "Starting standalone DatabendQuery(debug)"

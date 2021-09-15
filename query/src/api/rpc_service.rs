@@ -83,7 +83,7 @@ impl RpcService {
         let conf = self.sessions.get_conf();
         let builder = Server::builder();
         let mut builder = if conf.tls_rpc_server_enabled() {
-            log::info!("fuse query tls rpc enabled");
+            log::info!("databend query tls rpc enabled");
             builder
                 .tls_config(Self::server_tls_config(conf).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(

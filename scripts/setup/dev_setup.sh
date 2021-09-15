@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) The Diem Core Contributors.
-# Copyright 2020-2021 The Datafuse Authors.
+# Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
 SCRIPT_PATH="$( cd "$( dirname "$0" )" >/dev/null 2>&1 && pwd )"
@@ -228,7 +228,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] && \
 fi
 
 if [ ! -f rust-toolchain ]; then
-	echo "Unknown location. Please run this from the datafuse repository. Abort."
+	echo "Unknown location. Please run this from the databend repository. Abort."
 	exit 1
 fi
 

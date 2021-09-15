@@ -172,7 +172,7 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
 if __name__ == '__main__':
     parser = configargparse.ArgParser()
     parser.add_argument('-o', '--output', default=".", help='Perf results directory')
-    parser.add_argument('-b', '--bin', default="databend-benchmark", help='Fuse benchmark binary')
+    parser.add_argument('-b', '--bin', default="databend-benchmark", help='Databend benchmark binary')
     parser.add_argument('--host', default="127.0.0.1", help='Clickhouse handler Server host')
     parser.add_argument('-p', '--port', default="9001", help='Clickhouse handler Server port')
     parser.add_argument('-c', '--concurrency', default="", help='Set default concurrency for all perf tests')
