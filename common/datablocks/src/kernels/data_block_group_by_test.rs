@@ -24,7 +24,7 @@ fn test_data_block_group_by() -> Result<()> {
         DataField::new("b", DataType::String, false),
     ]);
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![
+    let block = DataBlock::create_by_array(schema, vec![
         Series::new(vec![1i8, 1, 2, 1, 2, 3]),
         Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);

@@ -74,7 +74,7 @@ fn test_array_apply() -> Result<()> {
         array.apply_cast_numeric(|arr| arr + 30),
         array.branch_apply_cast_numeric_no_null(|arr| match arr {
             Some(v) => (v + 40) as u16,
-            None => 0 as u16,
+            None => 0_u16,
         }),
     ];
 
@@ -182,7 +182,7 @@ fn test_string_array_apply() -> Result<()> {
         array.apply_cast_numeric::<_, u16>(|arr| arr.len() as u16),
         array.branch_apply_cast_numeric_no_null::<_, u16>(|arr| match arr {
             Some(v) => (v.len() + 1) as u16,
-            None => 0 as u16,
+            None => 0_u16,
         }),
     ];
 

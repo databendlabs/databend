@@ -39,7 +39,7 @@ fn test_database_function() -> Result<()> {
         func: DatabaseFunction::try_create("database")?,
         columns: vec![
             DataColumnWithField::new(Series::new(vec!["default"]).into(), dummy.clone()),
-            DataColumnWithField::new(Series::new(vec![4]).into(), dummy.clone()),
+            DataColumnWithField::new(Series::new(vec![4]).into(), dummy),
         ],
         expect: Series::new(vec!["default"]).into(),
         error: "",

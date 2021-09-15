@@ -1,5 +1,3 @@
-cargo-features = ["edition2021"]
-
 [package]
 name = "common-building"
 version = "0.1.0"
@@ -10,4 +8,4 @@ edition = "2021"
 
 [dependencies]
 vergen = "5.1.15"
-run_script = "^0.8.0"
+run_script = "^0.9.0"

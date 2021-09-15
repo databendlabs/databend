@@ -130,9 +130,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
         let sm = StateMachine::open(&tc.config, 1).await?;
 
         assert_eq!(3, sm.slots.len());
-        let n = match sm.replication {
-            Replication::Mirror(x) => x,
-        };
+        let Replication::Mirror(n) = sm.replication;
         assert_eq!(1, n);
     }
 
@@ -146,9 +144,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
             .init(sm);
 
         assert_eq!(5, sm.slots.len());
-        let n = match sm.replication {
-            Replication::Mirror(x) => x,
-        };
+        let Replication::Mirror(n) = sm.replication;
         assert_eq!(7, n);
     }
 
@@ -235,20 +231,14 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     }
 
     fn case(name: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
-        let prev = match prev {
-            None => None,
-            Some(id) => Some(Database {
-                database_id: id,
-                ..Default::default()
-            }),
-        };
-        let result = match result {
-            None => None,
-            Some(id) => Some(Database {
-                database_id: id,
-                ..Default::default()
-            }),
-        };
+        let prev = prev.map(|id| Database {
+            database_id: id,
+            ..Default::default()
+        });
+        let result = result.map(|id| Database {
+            database_id: id,
+            ..Default::default()
+        });
         T { name, prev, result }
     }
 
@@ -414,7 +404,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                 txid: None,
                 cmd: Cmd::UpsertKV {
                     key: c.key.clone(),
-                    seq: c.seq.clone(),
+                    seq: c.seq,
                     value: Some(c.value.clone()).into(),
                     value_meta: c.value_meta.clone(),
                 },
@@ -591,11 +581,11 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
     let prev = Some((1u64, "x"));
 
     let cases: Vec<T> = vec![
-        case("foo", MatchSeq::Any, prev.clone(), None),
-        case("foo", MatchSeq::Exact(1), prev.clone(), None),
-        case("foo", MatchSeq::Exact(0), prev.clone(), prev.clone()),
-        case("foo", MatchSeq::GE(1), prev.clone(), None),
-        case("foo", MatchSeq::GE(2), prev.clone(), prev.clone()),
+        case("foo", MatchSeq::Any, prev, None),
+        case("foo", MatchSeq::Exact(1), prev, None),
+        case("foo", MatchSeq::Exact(0), prev, prev),
+        case("foo", MatchSeq::GE(1), prev, None),
+        case("foo", MatchSeq::GE(2), prev, prev),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -622,7 +612,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                 txid: None,
                 cmd: Cmd::UpsertKV {
                     key: c.key.clone(),
-                    seq: c.seq.clone(),
+                    seq: c.seq,
                     value: Operation::Delete,
                     value_meta: None,
                 },

@@ -39,6 +39,10 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::datasources::dal::DataAccessor;
+use crate::datasources::dal::Local;
+use crate::datasources::dal::StorageScheme;
+use crate::datasources::dal::S3;
 use crate::sessions::context_shared::DatafuseQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -223,6 +227,17 @@ impl DatafuseQueryContext {
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.shared.session.get_sessions_manager()
+    }
+
+    pub fn get_data_accessor(
+        &self,
+        storage_scheme: &StorageScheme,
+    ) -> Result<Arc<dyn DataAccessor>> {
+        match storage_scheme {
+            StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
+            StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
+            _ => todo!(),
+        }
     }
 }
 

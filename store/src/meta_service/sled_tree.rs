@@ -49,7 +49,7 @@ pub struct SledTree {
 
 impl SledTree {
     /// Open SledTree
-    pub async fn open<N: AsRef<[u8]> + Display>(
+    pub fn open<N: AsRef<[u8]> + Display>(
         db: &sled::Db,
         tree_name: N,
         sync: bool,

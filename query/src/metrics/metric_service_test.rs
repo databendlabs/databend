@@ -39,7 +39,7 @@ async fn test_metric_server() -> common_exception::Result<()> {
     assert!(resp.is_ok());
     let resp = resp.unwrap();
     assert!(resp.status().is_success());
-    assert!(resp.text().await.unwrap().find("metrics_test 1").is_some());
+    assert!(resp.text().await.unwrap().contains("metrics_test 1"));
 
     Ok(())
 }

@@ -204,11 +204,8 @@ async fn test_scatter_optimizer() -> Result<()> {
     ];
 
     for test in tests {
-        let ctx = try_create_cluster_context(&vec![ClusterNode::create(
-            "Github",
-            1,
-            "www.github.com:9090",
-        )])?;
+        let ctx =
+            try_create_cluster_context(&[ClusterNode::create("Github", 1, "www.github.com:9090")])?;
 
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
         let mut optimizer = ScattersOptimizer::create(ctx);

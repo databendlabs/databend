@@ -65,7 +65,7 @@ impl RaftState {
         create: Option<()>,
     ) -> common_exception::Result<RaftState> {
         let tree_name = config.tree_name(TREE_RAFT_STATE);
-        let inner = SledTree::open(db, &tree_name, config.meta_sync()).await?;
+        let inner = SledTree::open(db, &tree_name, config.meta_sync())?;
 
         let state = inner.key_space::<RaftStateKV>();
         let curr_id = state.get(&RaftStateKey::Id)?.map(NodeId::from);

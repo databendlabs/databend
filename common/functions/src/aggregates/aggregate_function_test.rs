@@ -229,8 +229,8 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        DFInt64Array::new_from_slice(&vec![]).into_series(),
-        DFBooleanArray::new_from_slice(&vec![]).into_series(),
+        DFInt64Array::new_from_slice(&[]).into_series(),
+        DFBooleanArray::new_from_slice(&[]).into_series(),
     ];
 
     let args = vec![

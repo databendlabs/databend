@@ -16,6 +16,8 @@ use common_exception::Result;
 
 use super::now::NowFunction;
 use super::RoundFunction;
+use super::ToStartOfISOYearFunction;
+use super::ToStartOfYearFunction;
 use super::ToYYYYMMDDFunction;
 use super::ToYYYYMMDDhhmmssFunction;
 use super::ToYYYYMMFunction;
@@ -39,6 +41,11 @@ impl DateFunction {
         map.insert(
             "toYYYYMMDDhhmmss".into(),
             ToYYYYMMDDhhmmssFunction::try_create,
+        );
+        map.insert("toStartOfYear".into(), ToStartOfYearFunction::try_create);
+        map.insert(
+            "toStartOfISOYear".into(),
+            ToStartOfISOYearFunction::try_create,
         );
 
         // rounders

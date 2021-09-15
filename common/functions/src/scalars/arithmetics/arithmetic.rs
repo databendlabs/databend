@@ -18,6 +18,7 @@ use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValueArithmeticOperator;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::ArithmeticDivFunction;
@@ -63,6 +64,10 @@ impl Function for ArithmeticFunction {
         if args.len() == 1 {
             return Ok(args[0].clone());
         }
+
+        if is_interval(&args[0]) || is_interval(&args[1]) {
+            return interval_arithmetic_coercion(&self.op, &args[0], &args[1]);
+        }
         if is_date_or_date_time(&args[0]) || is_date_or_date_time(&args[1]) {
             return datetime_arithmetic_coercion(&self.op, &args[0], &args[1]);
         }
@@ -74,6 +79,16 @@ impl Function for ArithmeticFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let has_date_or_date_time = columns.iter().any(|c| is_date_or_date_time(c.data_type()));
+        let has_interval = columns.iter().any(|c| is_interval(c.data_type()));
+
+        if has_date_or_date_time && has_interval {
+            //TODO(Jun): implement data/datatime +/- interval
+            return Err(ErrorCode::UnImplement(
+                "Arithmetic operation between date and interval is not implemented yet.".to_owned(),
+            ));
+        }
+
         let result = match columns.len() {
             1 => std::ops::Neg::neg(columns[0].column()),
             _ => columns[0]
@@ -81,7 +96,6 @@ impl Function for ArithmeticFunction {
                 .arithmetic(self.op.clone(), columns[1].column()),
         }?;
 
-        let has_date_or_date_time = columns.iter().any(|c| is_date_or_date_time(c.data_type()));
         if has_date_or_date_time {
             let args = columns
                 .iter()

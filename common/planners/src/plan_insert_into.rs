@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_infallible::Mutex;
+use common_metatypes::MetaId;
 
-/// please do not keep this, this code is just for test purpose
 type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
@@ -26,6 +26,7 @@ type BlockStream =
 pub struct InsertIntoPlan {
     pub db_name: String,
     pub tbl_name: String,
+    pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
 
     #[serde(skip, default = "InsertIntoPlan::empty_stream")]

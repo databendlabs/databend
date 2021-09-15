@@ -24,7 +24,7 @@ fn test_projection_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
-    let empty_plan = EmptyPlan::create_with_schema(schema.clone());
+    let empty_plan = EmptyPlan::create_with_schema(schema);
 
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],

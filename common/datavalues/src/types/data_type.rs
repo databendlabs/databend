@@ -45,9 +45,29 @@ pub enum DataType {
     /// Option<String> indicates the timezone, if it's None, it's UTC
     DateTime32(Option<String>),
 
+    Interval(IntervalUnit),
+
     List(Box<DataField>),
     Struct(Vec<DataField>),
     String,
+}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
+pub enum IntervalUnit {
+    YearMonth,
+    DayTime,
+}
+
+impl fmt::Display for IntervalUnit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let str = match self {
+            IntervalUnit::YearMonth => "YearMonth",
+            IntervalUnit::DayTime => "DayTime",
+        };
+        write!(f, "{}", str)
+    }
 }
 
 impl DataType {
@@ -80,6 +100,7 @@ impl DataType {
                 ArrowDataType::Struct(arrows_fields)
             }
             String => ArrowDataType::LargeBinary,
+            Interval(_) => ArrowDataType::Int64,
         }
     }
 }
@@ -116,6 +137,14 @@ impl From<&ArrowDataType> for DataType {
             ArrowDataType::Timestamp(_, tz) => DataType::DateTime32(tz.clone()),
             ArrowDataType::Date32 => DataType::Date16,
             ArrowDataType::Date64 => DataType::Date32,
+
+            ArrowDataType::Extension(name, _arrow_type, extra) => match name.as_str() {
+                "Date16" => DataType::Date16,
+                "Date32" => DataType::Date32,
+                "DateTime32" => DataType::DateTime32(extra.clone()),
+                _ => unimplemented!("data_type: {}", dt),
+            },
+
             // this is safe, because we define the datatype firstly
             _ => {
                 unimplemented!("data_type: {}", dt)
@@ -159,6 +188,7 @@ impl fmt::Debug for DataType {
             Self::List(arg0) => f.debug_tuple("List").field(arg0).finish(),
             Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
             Self::String => write!(f, "String"),
+            Self::Interval(unit) => write!(f, "Interval({})", unit.to_string()),
         }
     }
 }

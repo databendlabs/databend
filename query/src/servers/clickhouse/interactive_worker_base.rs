@@ -66,11 +66,13 @@ impl InteractiveWorkerBase {
             _ => {
                 let start = Instant::now();
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+                let name = interpreter.name().to_string();
                 let async_data_stream = interpreter.execute();
                 let mut data_stream = async_data_stream.await?;
                 histogram!(
                     super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
-                    start.elapsed()
+                    start.elapsed(),
+                    "interpreter" => name
                 );
                 let mut interval_stream = IntervalStream::new(interval(Duration::from_millis(30)));
                 let cancel = Arc::new(AtomicBool::new(false));
@@ -118,6 +120,7 @@ impl InteractiveWorkerBase {
         };
         insert.set_input_stream(Box::pin(stream));
         let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::InsertInto(insert))?;
+        let name = interpreter.name().to_string();
 
         let (mut tx, rx) = mpsc::channel(20);
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
@@ -131,7 +134,8 @@ impl InteractiveWorkerBase {
         })?;
         histogram!(
             super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
-            start.elapsed()
+            start.elapsed(),
+            "interpreter" => name
         );
         Ok(rx)
     }

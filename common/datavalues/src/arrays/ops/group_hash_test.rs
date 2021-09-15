@@ -30,5 +30,5 @@ fn test_group_hash() -> Result<()> {
     assert_eq!(buffer[1], 2);
     assert_eq!(buffer[2], 3);
 
-    return Ok(());
+    Ok(())
 }

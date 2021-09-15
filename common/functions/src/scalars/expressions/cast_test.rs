@@ -113,7 +113,7 @@ fn test_cast_function() -> Result<()> {
         let actual_null = func.nullable(&DataSchema::empty())?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&columns, rows)?;
+        let v = &(func.eval(&columns, rows)?);
         // Type check.
         let expect_type = func.return_type(&[])?;
         let actual_type = v.data_type();

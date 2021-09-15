@@ -31,10 +31,10 @@ use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
-use crate::datasources::example::ExampleDatabases;
-use crate::datasources::local::LocalDatabases;
-use crate::datasources::remote::RemoteDatabases;
-use crate::datasources::system::SystemDatabases;
+use crate::datasources::database::example::ExampleDatabases;
+use crate::datasources::database::local::LocalDatabases;
+use crate::datasources::database::remote::RemoteDatabases;
+use crate::datasources::database::system::SystemDatabases;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 

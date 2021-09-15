@@ -43,6 +43,10 @@ pub fn is_numeric(dt: &DataType) -> bool {
         )
 }
 
+pub fn is_interval(dt: &DataType) -> bool {
+    matches!(dt, DataType::Interval(_))
+}
+
 fn next_size(size: usize) -> usize {
     if size < 8_usize {
         return size * 2;
@@ -273,11 +277,41 @@ pub fn datetime_arithmetic_coercion(
         DataValueArithmeticOperator::Plus => Ok(a),
 
         DataValueArithmeticOperator::Minus => {
-            if is_numeric(&b) {
+            if is_numeric(&b) || is_interval(&b) {
                 Ok(a)
             } else {
                 // Date minus Date or DateTime minus DateTime
                 Ok(DataType::Int32)
+            }
+        }
+        _ => e,
+    }
+}
+
+#[inline]
+pub fn interval_arithmetic_coercion(
+    op: &DataValueArithmeticOperator,
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> Result<DataType> {
+    let e = Result::Err(ErrorCode::BadDataValueType(format!(
+        "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+        lhs_type, op, rhs_type
+    )));
+
+    // only allow date/datetime [+/-] interval
+    if !(is_date_or_date_time(lhs_type) && is_interval(rhs_type)
+        || is_date_or_date_time(rhs_type) && is_interval(lhs_type))
+    {
+        return e;
+    }
+
+    match op {
+        DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Minus => {
+            if is_date_or_date_time(lhs_type) {
+                Ok(lhs_type.clone())
+            } else {
+                Ok(rhs_type.clone())
             }
         }
         _ => e,

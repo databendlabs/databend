@@ -26,17 +26,17 @@ fn test_data_block_group_by_hash() -> Result<()> {
         DataField::new("x", DataType::String, false),
     ]);
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![
+    let block = DataBlock::create_by_array(schema, vec![
         Series::new(vec![1i8, 1, 2, 1, 2, 3]),
         Series::new(vec![1i8, 1, 2, 1, 2, 3]),
         Series::new(vec![1i8, 1, 2, 1, 2, 3]),
         Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
-    let method = DataBlock::choose_hash_method(&block, &vec!["a".to_string(), "x".to_string()])?;
+    let method = DataBlock::choose_hash_method(&block, &["a".to_string(), "x".to_string()])?;
     assert_eq!(method.name(), HashMethodSerializer::default().name(),);
 
-    let method = DataBlock::choose_hash_method(&block, &vec![
+    let method = DataBlock::choose_hash_method(&block, &[
         "a".to_string(),
         "b".to_string(),
         "c".to_string(),

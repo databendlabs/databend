@@ -15,23 +15,11 @@
 use std::fmt;
 
 // TODO Using strings as a keys
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Enum8(pub(crate) i8);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct Enum16(pub(crate) i16);
-
-impl Default for Enum8 {
-    fn default() -> Self {
-        Self(0)
-    }
-}
-
-impl Default for Enum16 {
-    fn default() -> Self {
-        Self(0)
-    }
-}
 
 impl PartialEq for Enum16 {
     fn eq(&self, other: &Self) -> bool {

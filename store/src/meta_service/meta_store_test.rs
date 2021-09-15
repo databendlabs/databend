@@ -255,7 +255,7 @@ async fn test_meta_store_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<
         ms.log.insert(l).await?;
 
         if i < 2 {
-            ms.state_machine.write().await.apply(&l).await?;
+            ms.state_machine.write().await.apply(l).await?;
         }
     }
 
@@ -328,7 +328,7 @@ async fn test_meta_store_do_log_compaction_all_logs_with_memberchange() -> anyho
 
     for l in logs.iter() {
         ms.log.insert(l).await?;
-        ms.state_machine.write().await.apply(&l).await?;
+        ms.state_machine.write().await.apply(l).await?;
     }
 
     let curr_snap = ms.do_log_compaction().await?;

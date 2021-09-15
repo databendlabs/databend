@@ -22,11 +22,13 @@ mod table_function;
 mod table_meta;
 
 pub mod impls;
+mod meta_backend;
 
 pub use catalog::Catalog;
 pub use database::Database;
 pub use database_engine::DatabaseEngine;
 pub use meta::Meta;
+pub use meta_backend::MetaBackend;
 pub use table::Table;
 pub use table::TablePtr;
 pub use table_function::TableFunction;

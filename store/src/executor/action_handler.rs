@@ -167,13 +167,8 @@ impl ActionHandler {
         let content = self.fs.read_all(&part_file).await?;
         let reader = Cursor::new(content);
 
-        let reader = read::RecordReader::try_new(
-            reader,
-            Some(projection.to_vec()),
-            None,
-            Arc::new(|_, _| true),
-            None,
-        )?;
+        let reader =
+            read::RecordReader::try_new(reader, Some(projection.to_vec()), None, None, None)?;
 
         // For simplicity, we do the conversion in-memory, to be optimized later
         // TODO consider using `parquet_table` and `stream_parquet`
