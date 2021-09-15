@@ -1,24 +1,42 @@
 # Usage:
 # databend-query -c databend_query_config_spec.toml
 
-# Log level.
+# Log
+[log]
 log_level = "DEBUG"
+log_dir = "./_logs"
 
-# DatabendQuery rpc address.
+# Meta
+[meta]
+meta_address = "0.0.0.0:9191"
+meta_username = "root"
+meta_password = "root"
+
+# Store
+[store]
+store_address = "0.0.0.0:9191"
+store_username = "root"
+store_password = "root"
+
+# Query
+[query]
+max_active_sessions = 256
+disable_local_database_engine = "0"
+
 # For flight rpc.
 flight_api_address = "0.0.0.0:9091"
 
-# DatabendQuery http address.
+# Databend Query http address.
 # For admin RESET API.
 http_api_address = "0.0.0.0:8081"
 
-# DatabendQuery metrics RESET API.
+# Databend Query metrics RESET API.
 metric_api_address = "0.0.0.0:7071"
 
-# MySQL Handler.
+# Databend Query MySQL Handler.
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3307
 
-# ClickHouse Handler.
+# Databend Query ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001
