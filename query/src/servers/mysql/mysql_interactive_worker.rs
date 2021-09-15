@@ -18,9 +18,6 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_management::AuthType;
-use common_management::NewUser;
-use common_management::UserInfo;
 use common_runtime::tokio;
 use metrics::histogram;
 use msql_srv::ErrorKind;
@@ -35,6 +32,7 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
+use crate::servers::server::mock::get_mock_user;
 use crate::sessions::DatafuseQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::DfHint;
@@ -313,31 +311,5 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             salt: scramble,
             version: context.get_fuse_version(),
         }
-    }
-}
-
-// TODO(winter), this is just a mock
-fn get_mock_user(user: &str) -> Result<UserInfo> {
-    match user {
-        "default" | "" => {
-            let user = NewUser::new("default", "", AuthType::None);
-            Ok(user.into())
-        }
-        "default_plain" => {
-            let user = NewUser::new("default_plain", "default", AuthType::PlainText);
-            Ok(user.into())
-        }
-
-        "default_double_sha1" => {
-            let user = NewUser::new("default_double_sha1", "default", AuthType::DoubleSha1);
-            Ok(user.into())
-        }
-
-        "default_sha2" => {
-            let user = NewUser::new("default_sha2", "default", AuthType::Sha256);
-            Ok(user.into())
-        }
-
-        _ => Err(ErrorCode::UnknownUser(format!("User: {} not found", user))),
     }
 }

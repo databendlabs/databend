@@ -540,7 +540,7 @@ mod update {
         let test_seq = None;
 
         let old_pass = "old_key";
-        let old_auth_type = AuthType::Sha128;
+        let old_auth_type = AuthType::DoubleSha1;
 
         let user = NewUser::new(test_name, old_pass, old_auth_type);
         let user_info = UserInfo::from(user);
@@ -566,7 +566,7 @@ mod update {
         // and then, update_kv should be called
 
         let new_pass = "new pass";
-        let new_user = NewUser::new(test_name, new_pass, AuthType::Sha128);
+        let new_user = NewUser::new(test_name, new_pass, AuthType::DoubleSha1);
 
         let new_user_info = UserInfo::from(new_user);
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
