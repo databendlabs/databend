@@ -59,7 +59,7 @@ fn test_toStartOf_function() -> Result<()> {
         nullable: false,
         columns: vec![Series::new(vec![1631705259u32]).into()],
         func: ToStartOfQuarterFunction::try_create("toStartOfQuarter"),
-        expect: Series::new(vec![18871u32]),
+        expect: Series::new(vec![18809u32]),
         error: "",
     };
 
