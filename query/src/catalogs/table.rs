@@ -24,7 +24,7 @@ use common_planners::ScanPlan;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -37,21 +37,21 @@ pub trait Table: Sync + Send {
     // Get the read source plan.
     fn read_plan(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         scan: &ScanPlan,
         partitions: usize,
     ) -> Result<ReadDataSourcePlan>;
     // Read block data from the underling.
     async fn read(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -62,7 +62,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _ctx: DatafuseQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(

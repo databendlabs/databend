@@ -24,13 +24,13 @@ members = [
     "common/cache",
     "common/clickhouse-srv",
 
-    # Datafuse Query
+    # Query
     "query",
 
-    # Datafuse Store
+    # Store
     "store",
 
-    # Datafuse SQL Fuzz
+    # SQL Fuzz
     "query/fuzz",
 
     # CLI

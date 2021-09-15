@@ -21,7 +21,7 @@ use common_exception::Result;
 use common_streams::ProgressStream;
 use futures::stream::Stream;
 
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -30,7 +30,7 @@ struct BlockRange {
 }
 
 pub struct MemoryTableStream {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     block_index: usize,
     block_ranges: Vec<usize>,
     blocks: Vec<DataBlock>,
@@ -38,7 +38,7 @@ pub struct MemoryTableStream {
 
 impl MemoryTableStream {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         blocks: Vec<DataBlock>,
     ) -> Result<ProgressStream> {
         let stream = Box::pin(MemoryTableStream {

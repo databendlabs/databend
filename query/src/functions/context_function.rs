@@ -19,7 +19,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ContextFunction;
 
@@ -28,7 +28,7 @@ impl ContextFunction {
     // such as `SELECT database()`, the arg is ctx.get_default_db()
     pub fn build_args_from_ctx(
         name: &str,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
         if !FunctionFactory::check(name) && !AggregateFunctionFactory::check(name) {

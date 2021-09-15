@@ -43,10 +43,10 @@ async fn test_engines_table() -> Result<()> {
         "+---------+----------------------------------------------------------------------------------------------------------------------------------------------------+",
         "| name    | description                                                                                                                                        |",
         "+---------+----------------------------------------------------------------------------------------------------------------------------------------------------+",
-        "| remote  | The remote engine stores data in remote DatafuseStore cluster.                                                                                     |",
-        "| local   | The local engine stores data in DatafuseQuery local memory or disk, which can be one of Memory, Parquet, CSV, Null, it is used mainly for testing. |",
+        "| remote  | The remote engine stores data in remote DatabendStore cluster.                                                                                     |",
+        "| local   | The local engine stores data in DatabendQuery local memory or disk, which can be one of Memory, Parquet, CSV, Null, it is used mainly for testing. |",
         "| example | The example engine is used by example databases and tables.                                                                                        |",
-        "| system  | The system engine is used by tables in the system database, which store Datafuse information.                                                      |",
+        "| system  | The system engine is used by tables in the system database, which store Databend information.                                                      |",
         "+---------+----------------------------------------------------------------------------------------------------------------------------------------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

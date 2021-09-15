@@ -1,11 +1,11 @@
-# Default values for datafuse.
+# Default values for databend.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
 replicaCount: 1
 
 image:
-  repository: datafuselabs/datafuse
+  repository: datafuselabs/databend
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"

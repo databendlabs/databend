@@ -29,7 +29,7 @@ use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::pipelines::transforms::ExpressionExecutor;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ConstantFoldingOptimizer {}
 
@@ -262,7 +262,7 @@ impl Optimizer for ConstantFoldingOptimizer {
 }
 
 impl ConstantFoldingOptimizer {
-    pub fn create(_ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(_ctx: DatabendQueryContextRef) -> Self {
         ConstantFoldingOptimizer {}
     }
 }

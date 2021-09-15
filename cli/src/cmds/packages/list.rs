@@ -35,7 +35,7 @@ impl ListCommand {
         ListCommand { conf }
     }
     pub fn exec_match(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
-        let bin_dir = format!("{}/bin", self.conf.datafuse_dir.clone());
+        let bin_dir = format!("{}/bin", self.conf.databend_dir.clone());
         let paths = fs::read_dir(bin_dir)?;
 
         // Status.

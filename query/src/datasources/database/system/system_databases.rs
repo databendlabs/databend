@@ -61,6 +61,6 @@ impl DatabaseEngine for SystemDatabases {
     }
 
     fn engine_desc(&self) -> &str {
-        "The system engine is used by tables in the system database, which store Datafuse information."
+        "The system engine is used by tables in the system database, which store Databend information."
     }
 }

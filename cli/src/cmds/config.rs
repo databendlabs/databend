@@ -27,7 +27,7 @@ pub struct Config {
     //(TODO(zhihanz) remove those field as they already mentioned in Clap global flag)
     pub group: String,
 
-    pub datafuse_dir: String,
+    pub databend_dir: String,
 
     pub download_url: String,
 
@@ -46,24 +46,24 @@ impl Config {
                         .long("group")
                         .help("Sets the group name for configuration")
                         .default_value("test")
-                        .env("DATAFUSE_GROUP")
+                        .env("DATABEND_GROUP")
                         .global(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("datafuse_dir")
-                        .long("datafuse_dir")
-                        .help("Sets the directory to store datafuse binaries(query and store)")
-                        .default_value("~/.datafuse")
-                        .env("DATAFUSE_DIR")
+                    Arg::with_name("databend_dir")
+                        .long("databend_dir")
+                        .help("Sets the directory to store databend binaries(query and store)")
+                        .default_value("~/.databend")
+                        .env("databend_dir")
                         .global(true)
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("download_url")
                         .long("download_url")
-                        .help("Sets the url to download datafuse binaries")
-                        .default_value("https://github.com/datafuselabs/datafuse/releases/download")
+                        .help("Sets the url to download databend binaries")
+                        .default_value("https://github.com/datafuselabs/databend/releases/download")
                         .env("DOWNLOAD_URL")
                         .global(true)
                         .takes_value(true),
@@ -71,8 +71,8 @@ impl Config {
                 .arg(
                     Arg::with_name("tag_url")
                         .long("tag_url")
-                        .help("Sets the url to for datafuse tags")
-                        .default_value("https://api.github.com/repos/datafuselabs/datafuse/tags")
+                        .help("Sets the url to for databend tags")
+                        .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
                         .env("DOWNLOAD_URL")
                         .global(true)
                         .takes_value(true),
@@ -89,10 +89,10 @@ impl Config {
                 .unwrap()
                 .parse()
                 .unwrap(),
-            datafuse_dir: clap
+            databend_dir: clap
                 .clone()
                 .into_inner()
-                .value_of("datafuse_dir")
+                .value_of("databend_dir")
                 .unwrap()
                 .parse()
                 .unwrap(),
@@ -116,11 +116,11 @@ impl Config {
     }
     fn build(mut conf: Config) -> Self {
         let home_dir = dirs::home_dir().unwrap();
-        let datafuse_dir = home_dir.join(".datafuse");
-        if conf.datafuse_dir == "~/.datafuse" {
-            conf.datafuse_dir = format!("{}/{}", datafuse_dir.to_str().unwrap(), conf.group);
+        let databend_dir = home_dir.join(".databend");
+        if conf.databend_dir == "~/.databend" {
+            conf.databend_dir = format!("{}/{}", databend_dir.to_str().unwrap(), conf.group);
         } else {
-            conf.datafuse_dir = format!("{}/{}", conf.datafuse_dir, conf.group);
+            conf.databend_dir = format!("{}/{}", conf.databend_dir, conf.group);
         }
         conf
     }

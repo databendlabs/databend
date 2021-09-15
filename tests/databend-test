@@ -324,8 +324,8 @@ def main(args):
     os.environ.setdefault("QUERY_BINARY", args.binary)
     os.environ.setdefault("QUERY_DATABASE", args.database)
 
-    datafuse_query_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    datafuse_query_proc_create.communicate(b"SELECT 1")
+    databend_query_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    databend_query_proc_create.communicate(b"SELECT 1")
 
     def is_test_from_dir(suite_dir, case):
         case_file = os.path.join(suite_dir, case)
@@ -442,9 +442,9 @@ def get_additional_client_options_url(args):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser(description='datafuse-query functional tests')
+    parser = ArgumentParser(description='databend-query functional tests')
     parser.add_argument('-q', '--suites', help='Path to suites dir')
-    parser.add_argument('-b', '--binary', default='datafuse-query', help='Path to datafuse-query binary or name of binary in PATH')
+    parser.add_argument('-b', '--binary', default='databend-query', help='Path to databend-query binary or name of binary in PATH')
     parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
     parser.add_argument('-opt', '--options', default=' --comments --force ', help="Client program options")
     parser.add_argument('--tmp', help='Path to tmp dir')
@@ -463,7 +463,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip-dir', nargs='+', help="Skip all these tests in the dir")
     parser.add_argument('--run-dir', nargs='+', help="Only run these tests in the dir")
     parser.add_argument('--stop', action='store_true', default=None, dest='stop', help='Stop on network errors')
-    parser.add_argument('--mode', default='standalone', help='DatafuseQuery running mode, the value can be \'standalone\' or \'cluster\'')
+    parser.add_argument('--mode', default='standalone', help='DatabendQuery running mode, the value can be \'standalone\' or \'cluster\'')
 
     args = parser.parse_args()
 

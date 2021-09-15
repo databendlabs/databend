@@ -24,7 +24,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/datafuse:master # assume latest tag is the latest release tag
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend:master # assume latest tag is the latest release tag
           context: .
           file: ./docker/Dockerfile
 

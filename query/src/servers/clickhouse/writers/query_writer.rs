@@ -32,19 +32,19 @@ use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 
 use crate::servers::clickhouse::interactive_worker_base::BlockItem;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct QueryWriter<'a> {
     client_version: u64,
     conn: &'a mut Connection,
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 }
 
 impl<'a> QueryWriter<'a> {
     pub fn create(
         version: u64,
         conn: &'a mut Connection,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
     ) -> QueryWriter {
         QueryWriter {
             client_version: version,

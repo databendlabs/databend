@@ -1,18 +1,18 @@
 # Usage:
-# datafuse-query -c datafuse_query_config_spec.toml
+# databend-query -c databend_query_config_spec.toml
 
 # Log level.
 log_level = "DEBUG"
 
-# DatafuseQuery rpc address.
+# DatabendQuery rpc address.
 # For flight rpc.
 flight_api_address = "0.0.0.0:9091"
 
-# DatafuseQuery http address.
+# DatabendQuery http address.
 # For admin RESET API.
 http_api_address = "0.0.0.0:8081"
 
-# DatafuseQuery metrics RESET API.
+# DatabendQuery metrics RESET API.
 metric_api_address = "0.0.0.0:7071"
 
 # MySQL Handler.

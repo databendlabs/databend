@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-// meta data types for DatafuseStore
+// meta data types for DatabendStore
 package store_meta;
 
 // TODO(zbr): keep it or remove
@@ -36,7 +36,7 @@ message Table {
 
   map<string, string> options = 30;
   // a func(string, Vec<ReplicationGroupId>) mapping PartitionBy expr to
-  // replication group. A DatafuseQuery process should consider this to determine
+  // replication group. A DatabendQuery process should consider this to determine
   // where to send the read or write operations.
   bytes placement_policy = 10;
   // repeated ReplicationGroupId ReplicationGroupIds

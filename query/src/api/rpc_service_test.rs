@@ -24,7 +24,7 @@ use common_runtime::tokio::net::TcpListener;
 use common_runtime::tokio::sync::Notify;
 use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::api::rpc::DatafuseQueryFlightDispatcher;
+use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::RpcService;
 use crate::clusters::Cluster;
 use crate::configs::Config;
@@ -50,7 +50,7 @@ async fn test_tls_rpc_server() -> Result<()> {
     let mut srv = RpcService {
         sessions: session_manager.clone(),
         abort_notify: Arc::new(Notify::new()),
-        dispatcher: Arc::new(DatafuseQueryFlightDispatcher::create()),
+        dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
     };
     let addr_str = addr.to_string();
     let stream = TcpListenerStream::new(listener);
@@ -94,7 +94,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     let mut srv = RpcService {
         sessions: session_manager.clone(),
         abort_notify: Arc::new(Notify::new()),
-        dispatcher: Arc::new(DatafuseQueryFlightDispatcher::create()),
+        dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
     };
     let stream = TcpListenerStream::new(listener);
     let r = srv.start_with_incoming(stream).await;

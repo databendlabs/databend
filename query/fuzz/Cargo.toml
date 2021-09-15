@@ -10,4 +10,4 @@ path = "fuzz_targets/fuzz_parse_sql.rs"
 
 [dependencies]
 honggfuzz = "0.5.54"
-datafuse-query = { path = ".." }
+databend-query = { path = ".." }

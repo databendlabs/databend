@@ -63,12 +63,12 @@ impl ClickHouseSession for InteractiveWorker {
 
     // TODO: remove it
     fn dbms_name(&self) -> &str {
-        "datafuse"
+        "databend"
     }
 
     // TODO: remove it
     fn server_display_name(&self) -> &str {
-        "datafuse"
+        "databend"
     }
 
     // TODO: remove it

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use datafuse_query::sql::DfParser;
+use databend_query::sql::DfParser;
 use honggfuzz::fuzz;
 
 fn main() {

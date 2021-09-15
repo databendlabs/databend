@@ -886,7 +886,7 @@ dependencies = [
  "common-runtime",
  "common-store-api",
  "common-tracing",
- "datafuse-store",
+ "databend-store",
  "lazy_static",
  "mockall",
  "serde",
@@ -1366,7 +1366,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
-name = "datafuse-cli"
+name = "databend-cli"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
@@ -1393,7 +1393,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "datafuse-query"
+name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "ahash",
@@ -1474,7 +1474,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "datafuse-store"
+name = "databend-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2127,7 +2127,7 @@ dependencies = [
 name = "fuzz"
 version = "0.1.0"
 dependencies = [
- "datafuse-query",
+ "databend-query",
  "honggfuzz",
 ]
 

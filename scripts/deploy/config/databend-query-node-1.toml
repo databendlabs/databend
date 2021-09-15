@@ -1,5 +1,5 @@
 # Usage:
-# datafuse-query -c datafuse_query_config_spec.toml
+# databend-query -c databend_query_config_spec.toml
 
 # Log
 [log]
@@ -26,17 +26,17 @@ disable_local_database_engine = "0"
 # For flight rpc.
 flight_api_address = "0.0.0.0:9091"
 
-# Datafuse Query http address.
+# Databend Query http address.
 # For admin RESET API.
 http_api_address = "0.0.0.0:8081"
 
-# Datafuse Query metrics RESET API.
+# Databend Query metrics RESET API.
 metric_api_address = "0.0.0.0:7071"
 
-# Datafuse Query MySQL Handler.
+# Databend Query MySQL Handler.
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3307
 
-# Datafuse Query ClickHouse Handler.
+# Databend Query ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001

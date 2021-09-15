@@ -11,14 +11,14 @@ This document describes how to build and run [DatabendQuery](https://github.com/
 === "Run with Docker(Recommended)"
 
     ```markdown
-    $ docker pull datafuselabs/datafuse
-    $ docker run --init --rm -p 3307:3307 datafuselabs/datafuse
+    $ docker pull datafuselabs/databend
+    $ docker run --init --rm -p 3307:3307 datafuselabs/databend
     ```
 
 === "Release binary"
 
     ```markdown
-    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/master/scripts/installer/install-datafuse.sh | bash
+    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/master/scripts/installer/install-databend.sh | bash
     ```
 
 === "From source"

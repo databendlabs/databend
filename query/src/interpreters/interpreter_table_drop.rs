@@ -22,15 +22,15 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct DropTableInterpreter {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     plan: DropTablePlan,
 }
 
 impl DropTableInterpreter {
-    pub fn try_create(ctx: DatafuseQueryContextRef, plan: DropTablePlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: DatabendQueryContextRef, plan: DropTablePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(DropTableInterpreter { ctx, plan }))
     }
 }

@@ -26,7 +26,7 @@ use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::UpsertKVActionResult;
 use common_tracing::tracing;
-use datafuse_store::meta_service::raft_db::init_temp_sled_db;
+use databend_store::meta_service::raft_db::init_temp_sled_db;
 
 use crate::namespace::namespace_mgr::NamespaceMgr;
 use crate::namespace::LocalKVStore;

@@ -62,17 +62,17 @@ lazy_static! {
 
 /// Init logging and tracing.
 ///
-/// To enable reporting tracing data to jaeger, set env var `FUSE_JAEGER` to non-empty value.
+/// To enable reporting tracing data to jaeger, set env var `DATABEND_JAEGER` to non-empty value.
 /// A local tracing collection(maybe for testing) can be done with a local jaeger server.
 /// To report tracing data and view it:
 ///   docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
-///   FUSE_JAEGER=on RUST_LOG=trace cargo test
+///   DATABEND_JAEGER=on RUST_LOG=trace cargo test
 ///   open http://localhost:16686/
 ///
 /// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
-///   FUSE_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
+///   DATABEND_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
 ///
-// TODO(xp): use FUSE_JAEGER to assign jaeger server address.
+// TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
 fn init_tracing_stdout() {
     let fmt_layer = Layer::default()
         .with_thread_ids(true)
@@ -93,13 +93,13 @@ fn init_tracing_stdout() {
 fn jaeger_layer<
     S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
 >() -> Option<impl tracing_subscriber::layer::Layer<S>> {
-    let fuse_jaeger = env::var("FUSE_JAEGER").unwrap_or_else(|_| "".to_string());
+    let fuse_jaeger = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
 
     if !fuse_jaeger.is_empty() {
         global::set_text_map_propagator(TraceContextPropagator::new());
 
         let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("datafuse-store")
+            .with_service_name("databend-store")
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
@@ -160,7 +160,7 @@ pub fn init_global_tracing(app_name: &str, dir: &str) -> WorkerGuard {
 /// Create a file based tracing/logging subscriber.
 /// A guard must be held during using the logging.
 /// The format layer logging span/event in plain text, without color, one event per line.
-/// Optionally it adds a layer to send to opentelemetry if env var `FUSE_JAEGER` is present.
+/// Optionally it adds a layer to send to opentelemetry if env var `DATABEND_JAEGER` is present.
 pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Subscriber) {
     let path_str = dir.to_string() + "/" + app_name;
     let path: &Path = path_str.as_ref();
