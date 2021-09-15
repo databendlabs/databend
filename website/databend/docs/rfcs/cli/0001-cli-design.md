@@ -99,8 +99,8 @@ Check on disk utilization
 ```bash
 databend-cli cluster df
 | NAME | COMPONENT | USED | ALWAYABLE | LOCATION |
-| local-disk-1 | Block| 10Gi | 90Gi | /mnt/fuse-store |
-| s3-disk | Object| 100 Gi | 1000Gi | s3://bucket-1/mnt/fuse-store |
+| local-disk-1 | Block| 10Gi | 90Gi | /mnt/databend-store |
+| s3-disk | Object| 100 Gi | 1000Gi | s3://bucket-1/mnt/databend-store |
 ```
 
 ### Cluster delete
@@ -115,13 +115,13 @@ databend-cli cluster delete
 
 Show logs in current running instance
 
-show all fuse-query logs
+show all databend-query logs
 
 ```bash
 databend-cli cluster log --component=query --all
 ```
 
-The command above would show all fuse-store logs
+The command above would show all databend-store logs
 
 ```bash
 databend-cli cluster log --component=store --all
