@@ -39,7 +39,9 @@ lazy_static! {
     };
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 pub struct Config {
     /// Identify a config. This is only meant to make debugging easier with more than one Config involved.
     #[structopt(long, default_value = "")]
@@ -229,7 +231,7 @@ impl Config {
 
     /// Defaulting values similar to query config
     pub fn default() -> Self {
-        Config{
+        Config {
             config_id: "".to_string(),
             log_level: "INFO".to_string(),
             log_dir: "./_logs".to_string(),
@@ -251,7 +253,7 @@ impl Config {
             single: false,
             id: 0,
             local_fs_dir: "./_local_fs".to_string(),
-            sled_tree_prefix: "".to_string()
+            sled_tree_prefix: "".to_string(),
         }
     }
 }
