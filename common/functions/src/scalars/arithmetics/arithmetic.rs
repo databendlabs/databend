@@ -131,42 +131,106 @@ impl ArithmeticFunction {
         &self,
         columns: &DataColumnsWithField,
     ) -> Option<Result<DataColumn>> {
-        if columns.len() != 2 {
-            return None;
-        }
-
-        match (columns[0].data_type(), columns[1].data_type()) {
-            (&DataType::Interval(_), &DataType::Date16)
-            | (&DataType::Interval(_), &DataType::Date32)
-            | (&DataType::Interval(_), &DataType::DateTime32(_))
-            | (&DataType::Date16, &DataType::Interval(_))
-            | (&DataType::Date32, &DataType::Interval(_))
-            | (&DataType::DateTime32(_), &DataType::Interval(_)) => match self.op {
-                DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Minus => {
-                    Some(self.datetime_plus_minus_interval(columns))
-                }
-                _ => None,
-            },
-            _ => None,
+        if let Some((interval, date_datetime)) = self.check_interval_date_columns(columns) {
+            let col = match interval.data_type() {
+                DataType::Interval(IntervalUnit::YearMonth) => match date_datetime.data_type() {
+                    DataType::DateTime32(_) => {
+                        self.datetime_plus_minus_year_month(date_datetime, interval)
+                    }
+                    DataType::Date16 | DataType::Date32 => {
+                        self.date_plus_minus_year_month(date_datetime, interval)
+                    }
+                    _ => unreachable!(),
+                },
+                DataType::Interval(IntervalUnit::DayTime) => match date_datetime.data_type() {
+                    DataType::DateTime32(_) => {
+                        self.datetime_plus_minus_day_time(date_datetime, interval)
+                    }
+                    DataType::Date16 | DataType::Date32 => {
+                        self.date_plus_minus_day_time(date_datetime, interval)
+                    }
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            };
+            Some(col)
+        } else {
+            None
         }
     }
 
-    pub fn datetime_plus_minus_interval(
+    pub fn check_interval_date_columns<'a>(
         &self,
-        columns: &DataColumnsWithField,
-    ) -> Result<DataColumn> {
-        let days_to_datetime = |days: i64| -> Result<DateTime<Utc>> {
-            let naive =
-                NaiveDateTime::from_timestamp(0, 0).checked_add_signed(Duration::days(days));
-            if naive.is_none() {
-                return Err(ErrorCode::Overflow(format!(
-                    "Overflow on date with days {}.",
-                    days,
-                )));
-            }
-            Ok(DateTime::<Utc>::from_utc(naive.unwrap(), Utc))
-        };
+        columns: &'a DataColumnsWithField,
+    ) -> Option<(&'a DataColumnWithField, &'a DataColumnWithField)> {
+        if columns.len() != 2
+            || !matches!(
+                self.op,
+                DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Minus
+            )
+        {
+            return None;
+        }
 
+        let mut interval_opt = None;
+        let mut date_datetime_opt = None;
+        columns.iter().for_each(|column| match column.data_type() {
+            DataType::Interval(_) => interval_opt = Some(column),
+            DataType::Date16 | DataType::Date32 | DataType::DateTime32(_) => {
+                date_datetime_opt = Some(column)
+            }
+            _ => {}
+        });
+
+        if interval_opt.is_none() || date_datetime_opt.is_none() {
+            return None;
+        }
+
+        Some((interval_opt.unwrap(), date_datetime_opt.unwrap()))
+    }
+
+    pub fn date_plus_minus_day_time(
+        &self,
+        date: &DataColumnWithField,
+        daytime: &DataColumnWithField,
+    ) -> Result<DataColumn> {
+        let days: DataColumn = daytime
+            .column()
+            .to_array()?
+            .i64()?
+            .apply(|v| {
+                // Right shift on negative value is implementation-defined. For example -1_i64 >> 40 will return -1, not zero.
+                // In case of a negative value, do the division instead of right shift.
+                v / 0x1_0000_0000_i64
+                // Ignore the lower bits because the parser layer should make sure the milliseconds parts(lower bits) not exceed 24 hours.
+            })
+            .into();
+        date.column().arithmetic(self.op.clone(), &days)
+    }
+
+    pub fn datetime_plus_minus_day_time(
+        &self,
+        datetime: &DataColumnWithField,
+        daytime: &DataColumnWithField,
+    ) -> Result<DataColumn> {
+        let seconds_per_day = 24 * 3600_i64;
+        let seconds: DataColumn = daytime
+            .column()
+            .to_array()?
+            .i64()?
+            .apply(|v| {
+                let secs = (v / 0x1_0000_0000_i64) * seconds_per_day;
+                secs + ((v as i32) / 1000) as i64
+            })
+            .into();
+        datetime.column().arithmetic(self.op.clone(), &seconds)
+    }
+
+    pub fn datetime_plus_minus_year_month(
+        &self,
+        datetime: &DataColumnWithField,
+        year_month: &DataColumnWithField,
+    ) -> Result<DataColumn> {
         let seconds_to_datetime = |seconds: i64| -> Result<DateTime<Utc>> {
             let naive = NaiveDateTime::from_timestamp_opt(seconds, 0);
             if naive.is_none() {
@@ -178,94 +242,92 @@ impl ArithmeticFunction {
             Ok(DateTime::<Utc>::from_utc(naive.unwrap(), Utc))
         };
 
-        let (interval_column, date_column) = match columns[0].data_type() {
-            DataType::Interval(_) => (&columns[0], &columns[1]),
-            _ => (&columns[1], &columns[0]),
-        };
-
-        let interval_series = interval_column.column().to_array()?;
-        let date_series = date_column.column().to_array()?;
-        let len = date_series.len();
-        let mut dt_vec = Vec::<DateTime<Utc>>::with_capacity(len);
-
-        for i in 0..len {
-            // Convert Date16, Date32 or DateTime32 to chrono::DateTime
-            let date = date_series.try_get(i)?;
-            let dt = match date_column.data_type() {
-                DataType::DateTime32(_) => {
-                    let seconds = date.as_i64()?;
-                    seconds_to_datetime(seconds)
-                }
-                DataType::Date32 | DataType::Date16 => {
-                    let days = date.as_u64()?;
-                    days_to_datetime(days as i64)
-                }
-                _ => unreachable!(),
-            }?;
-
-            // Add interval to DateTime, the interval could be YearMonth or DayTime
-            let interval = interval_series.try_get(i)?.as_i64()?;
-            let new_dt = match interval_column.data_type() {
-                DataType::Interval(IntervalUnit::YearMonth) => {
-                    let months = match self.op {
-                        DataValueArithmeticOperator::Plus => interval,
-                        DataValueArithmeticOperator::Minus => -interval,
-                        _ => unreachable!(),
-                    };
-                    Self::datetime_add_signed_months(&dt, months)?
-                }
-                DataType::Interval(IntervalUnit::DayTime) => {
-                    let mut days: i64 = interval.abs() >> 32; //higher 32 bits as number of days
-                    let mut milliseconds: i64 = interval.abs() & 0x0000_0000_FFFF_FFFF; //lower 32 bits as milliseconds
-                    if interval < 0 {
-                        days = -days;
-                        milliseconds = -milliseconds;
+        let timestamps = datetime
+            .column()
+            .to_array()?
+            .u32()?
+            .into_no_null_iter()
+            .zip(year_month.column().to_array()?.i64()?.into_no_null_iter())
+            .map(|(seconds, months)| {
+                let dt = seconds_to_datetime(*seconds as i64)?;
+                let new_dt = match self.op {
+                    DataValueArithmeticOperator::Plus => {
+                        Self::datetime_plus_signed_months(&dt, *months)?
                     }
-
-                    let updated = match self.op {
-                        DataValueArithmeticOperator::Plus => dt.checked_add_signed(
-                            Duration::days(days) + Duration::milliseconds(milliseconds as i64),
-                        ),
-                        DataValueArithmeticOperator::Minus => dt.checked_sub_signed(
-                            Duration::days(days) + Duration::milliseconds(milliseconds as i64),
-                        ),
-                        _ => unreachable!(),
-                    };
-                    if updated.is_none() {
-                        return Err(ErrorCode::Overflow(format!(
-                            "Overflow on datetime with days {}, milliseconds {}.",
-                            days, milliseconds
-                        )));
+                    DataValueArithmeticOperator::Minus => {
+                        Self::datetime_plus_signed_months(&dt, -*months)?
                     }
-                    updated.unwrap()
-                }
-                _ => unreachable!(),
+                    _ => unreachable!(),
+                };
+                Ok(new_dt.timestamp() as u32)
+            })
+            .collect::<Result<Vec<u32>>>()?;
+
+        Ok(DFUInt32Array::new_from_iter(timestamps.into_iter()).into())
+    }
+
+    fn date_plus_minus_year_month(
+        &self,
+        date: &DataColumnWithField,
+        year_month: &DataColumnWithField,
+    ) -> Result<DataColumn> {
+        let date16_plus_minus_months =
+            |date: &DataColumnWithField, year_month: &DataColumnWithField| -> Result<DataColumn> {
+                let days = date
+                    .column()
+                    .to_array()?
+                    .u16()?
+                    .into_no_null_iter()
+                    .zip(year_month.column().to_array()?.i64()?.into_no_null_iter())
+                    .map(|(days, months)| self.days_plus_minus_months(*days as i64, *months))
+                    .collect::<Result<Vec<u32>>>()?;
+                Ok(DFUInt32Array::new_from_iter(days.into_iter()).into())
             };
 
-            dt_vec.push(new_dt);
-        }
+        let date32_plus_minus_months =
+            |date: &DataColumnWithField, year_month: &DataColumnWithField| -> Result<DataColumn> {
+                let days = date
+                    .column()
+                    .to_array()?
+                    .u32()?
+                    .into_no_null_iter()
+                    .zip(year_month.column().to_array()?.i64()?.into_no_null_iter())
+                    .map(|(days, months)| self.days_plus_minus_months(*days as i64, *months))
+                    .collect::<Result<Vec<u32>>>()?;
+                Ok(DFUInt32Array::new_from_iter(days.into_iter()).into())
+            };
 
-        match date_column.data_type() {
-            DataType::Date16 | DataType::Date32 => {
-                // convert datetime to elapsed days with UInt32 type
-                let arr = DFUInt32Array::new_from_iter(
-                    dt_vec
-                        .iter()
-                        .map(|dt| (dt.timestamp() / (24 * 3600)) as u32),
-                );
-                Ok(arr.into())
-            }
-            DataType::DateTime32(_) => {
-                // convert datetime to elapsed seconds with UInt32 type
-                let arr =
-                    DFUInt32Array::new_from_iter(dt_vec.iter().map(|dt| dt.timestamp() as u32));
-                Ok(arr.into())
-            }
+        match date.data_type() {
+            DataType::Date16 => date16_plus_minus_months(date, year_month),
+            DataType::Date32 => date32_plus_minus_months(date, year_month),
             _ => unreachable!(),
         }
     }
 
-    fn datetime_add_signed_months(dt: &DateTime<Utc>, months: i64) -> Result<DateTime<Utc>> {
+    fn days_plus_minus_months(&self, days: i64, months: i64) -> Result<u32> {
+        let naive = NaiveDateTime::from_timestamp(0, 0).checked_add_signed(Duration::days(days));
+        if naive.is_none() {
+            return Err(ErrorCode::Overflow(format!(
+                "Overflow on date with days {}.",
+                days,
+            )));
+        }
+        let dt = DateTime::<Utc>::from_utc(naive.unwrap(), Utc);
+
+        let seconds_per_day = 24 * 3600;
+        match self.op {
+            DataValueArithmeticOperator::Plus => {
+                let dt = Self::datetime_plus_signed_months(&dt, months)?;
+                Ok((dt.timestamp() / seconds_per_day) as u32)
+            }
+            _ => {
+                let dt = Self::datetime_plus_signed_months(&dt, -months)?;
+                Ok((dt.timestamp() / seconds_per_day) as u32)
+            }
+        }
+    }
+
+    fn datetime_plus_signed_months(dt: &DateTime<Utc>, months: i64) -> Result<DateTime<Utc>> {
         let total_months = (dt.month() as i64) + months;
         let mut new_year = dt.year() + (total_months / 12) as i32;
         let mut new_month = total_months % 12;
@@ -283,7 +345,7 @@ impl ArithmeticFunction {
             dt.second(),
         );
 
-        // Handle month last day overflow, "2020-2-29" + "1 year" should be "2020-2-28", or "1990-1-31" + "3 month" should be "1990-4-31".
+        // Handle month last day overflow, "2020-2-29" + "1 year" should be "2020-2-28", or "1990-1-31" + "3 month" should be "1990-4-30".
         let new_day =
             std::cmp::min::<u32>(d, Self::last_day_of_year_month(new_year, new_month as u32));
 

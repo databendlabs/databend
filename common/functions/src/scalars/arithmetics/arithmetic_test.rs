@@ -206,7 +206,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         DataField::new("datetime32", DataType::DateTime32(None), false),
         DataField::new("date32", DataType::Date32, false),
-        DataField::new("date16", DataType::Date32, false),
+        DataField::new("date16", DataType::Date16, false),
     ]);
 
     let tests = vec![
@@ -269,8 +269,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ])
                 .into(),
                 Series::new(vec![
-                    -(1i64 << 32),     /* -1 day */
-                    -25 * 3600 * 1000, /* -25 hours */
+                    -(1i64 << 32),                   /* -1 day */
+                    -(1i64 << 32 | 1 * 3600 * 1000), /* - 1 day and 1 hours */
                 ])
                 .into(),
             ],
@@ -294,8 +294,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ])
                 .into(),
                 Series::new(vec![
-                    -(1i64 << 32),     /* -1 day */
-                    -25 * 3600 * 1000, /* -25 hours */
+                    -(1i64 << 32),                   /* -1 day */
+                    -(1i64 << 32 | 1 * 3600 * 1000), /* - 1 day and 1 hours */
                 ])
                 .into(),
             ],
@@ -332,8 +332,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 Series::new(vec![to_days(2020, 2, 29), to_days(2000, 1, 31)]).into(),
                 Series::new(vec![
-                    -12i64,         /* 1 year */
-                    -(20 * 12 + 1), /* 20 years and 1 month */
+                    -12i64,         /* - 1 year */
+                    -(20 * 12 + 1), /* - 20 years and 1 month */
                 ])
                 .into(),
             ],
@@ -347,14 +347,31 @@ fn test_arithmetic_date_interval() -> Result<()> {
             arg_names: vec!["date32", "interval-day-time"],
             func: ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
             columns: vec![
-                Series::new(vec![to_days(2020, 3, 1), to_days(2020, 3, 1)]).into(),
+                Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
                 Series::new(vec![
-                    -(1i64 << 32),     /* -1 day */
-                    -25 * 3600 * 1000, /* -25 hours */
+                    -(1i64 << 32),                   /* -1 day */
+                    -(1i64 << 32 | 1 * 3600 * 1000), /* - 1 day and 1 hour */
                 ])
                 .into(),
             ],
-            expect: Series::new(vec![to_days(2020, 2, 29), to_days(2020, 2, 28)]).into(),
+            expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
+            error: "",
+        },
+        Test {
+            name: "date32-minus-day-time",
+            display: "minus",
+            nullable: false,
+            arg_names: vec!["date32", "interval-day-time"],
+            func: ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
+            columns: vec![
+                Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
+                Series::new(vec![
+                    1i64 << 32,                   /* 1 day */
+                    1i64 << 32 | 1 * 3600 * 1000, /* 1 day and 1 hour */
+                ])
+                .into(),
+            ],
+            expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
             error: "",
         },
         Test {
@@ -380,6 +397,23 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 to_days(2020, 2, 29) as u16,
             ])
             .into(),
+            error: "",
+        },
+        Test {
+            name: "date16-plus-day-time",
+            display: "plus",
+            nullable: false,
+            arg_names: vec!["date16", "interval-day-time"],
+            func: ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            columns: vec![
+                Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
+                Series::new(vec![
+                    1i64 << 32,                   /* 1 day */
+                    1i64 << 32 | 1 * 3600 * 1000, /* 1 day and 1 hour */
+                ])
+                .into(),
+            ],
+            expect: Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
             error: "",
         },
     ];
