@@ -351,22 +351,6 @@ pub fn numerical_unary_arithmetic_coercion(
     }
 }
 
-#[inline]
-pub fn numerical_signed_coercion(val_type: &DataType) -> Result<DataType> {
-    // error on any non-numeric type
-    if !is_numeric(val_type) {
-        return Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported ({:?})",
-            val_type
-        )));
-    };
-
-    let has_float = is_floating(val_type);
-    let max_size = numeric_byte_size(val_type)?;
-
-    construct_numeric_type(true, has_float, max_size)
-}
-
 // coercion rules for equality operations. This is a superset of all numerical coercion rules.
 pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
     if lhs_type == rhs_type {
