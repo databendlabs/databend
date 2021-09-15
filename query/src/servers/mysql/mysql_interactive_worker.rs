@@ -18,6 +18,9 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::AuthType;
+use common_management::NewUser;
+use common_management::UserInfo;
 use common_runtime::tokio;
 use metrics::histogram;
 use msql_srv::ErrorKind;
@@ -26,6 +29,7 @@ use msql_srv::MysqlShim;
 use msql_srv::ParamParser;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
+use rand::RngCore;
 use tokio_stream::StreamExt;
 
 use crate::interpreters::InterpreterFactory;
@@ -41,6 +45,8 @@ struct InteractiveWorkerBase<W: std::io::Write>(PhantomData<W>);
 pub struct InteractiveWorker<W: std::io::Write> {
     base: InteractiveWorkerBase<W>,
     session: SessionRef,
+    version: String,
+    salt: [u8; 20],
 }
 
 impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
@@ -132,6 +138,66 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 
         let context = self.session.create_context();
         DFInitResultWriter::create(writer).write(self.base.do_init(database_name, context))
+    }
+
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
+
+    fn connect_id(&self) -> u32 {
+        u32::from_le_bytes([0x08, 0x00, 0x00, 0x00])
+    }
+
+    fn default_auth_plugin(&self) -> &str {
+        "mysql_native_password"
+    }
+
+    fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
+        "mysql_native_password"
+    }
+
+    fn salt(&self) -> [u8; 20] {
+        self.salt
+    }
+
+    fn authenticate(
+        &self,
+        auth_plugin: &str,
+        username: &[u8],
+        salt: &[u8],
+        auth_data: &[u8],
+    ) -> bool {
+        let user = String::from_utf8_lossy(username);
+
+        if let Ok(user) = get_mock_user(&user) {
+            let encode_password = match auth_plugin {
+                "mysql_native_password" => {
+                    if auth_data.is_empty() {
+                        vec![]
+                    } else {
+                        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
+                        let mut m = sha1::Sha1::new();
+                        m.update(salt);
+                        m.update(&user.password);
+
+                        let result = m.digest().bytes();
+                        if auth_data.len() != result.len() {
+                            return false;
+                        }
+                        let mut s = Vec::with_capacity(result.len());
+                        for i in 0..result.len() {
+                            s.push(auth_data[i] ^ result[i]);
+                        }
+                        s
+                    }
+                }
+                _ => auth_data.to_vec(),
+            };
+            return user.authenticate_user(encode_password);
+        }
+
+        println!("{:?}", user);
+        return false;
     }
 }
 
@@ -228,9 +294,51 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
 impl<W: std::io::Write> InteractiveWorker<W> {
     pub fn create(session: SessionRef) -> InteractiveWorker<W> {
+        let mut bs = vec![0u8; 20];
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(bs.as_mut());
+
+        let mut scramble: [u8; 20] = [0; 20];
+        for i in 0..20 {
+            scramble[i] = bs[i];
+            if scramble[i] == b'\0' || scramble[i] == b'$' {
+                scramble[i] = scramble[i] + 1;
+            }
+        }
+
+        let context = session.create_context();
+
         InteractiveWorker::<W> {
             session,
             base: InteractiveWorkerBase::<W>(PhantomData::<W>),
+            salt: scramble,
+            version: context.get_fuse_version(),
         }
+    }
+}
+
+// TODO(winter), this is just a mock
+fn get_mock_user(user: &str) -> Result<UserInfo> {
+    match user {
+        "default" => {
+            let user = NewUser::new("default", "", AuthType::None);
+            Ok(user.into())
+        }
+        "default_plain" => {
+            let user = NewUser::new("default_plain", "default", AuthType::PlainText);
+            Ok(user.into())
+        }
+
+        "default_double_sha1" => {
+            let user = NewUser::new("default_double_sha1", "default", AuthType::DoubleSha1);
+            Ok(user.into())
+        }
+
+        "default_sha2" => {
+            let user = NewUser::new("default_sha2", "default", AuthType::Sha256);
+            Ok(user.into())
+        }
+
+        _ => Err(ErrorCode::UnknownUser(format!("User: {} not found", user))),
     }
 }

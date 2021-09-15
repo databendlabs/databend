@@ -891,6 +891,7 @@ dependencies = [
  "mockall",
  "serde",
  "serde_json",
+ "sha1",
  "sha2",
  "tempfile",
 ]
@@ -1420,6 +1421,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
+ "common-management",
  "common-metatypes",
  "common-planners",
  "common-profling",
@@ -1459,6 +1461,8 @@ dependencies = [
  "rusoto_s3",
  "serde",
  "serde_json",
+ "sha1",
+ "sha2",
  "sqlparser",
  "structopt",
  "structopt-toml",
@@ -3103,8 +3107,8 @@ dependencies = [
 
 [[package]]
 name = "msql-srv"
-version = "0.9.5"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=cc53408#cc534089d214636fa107375e7b94bacc246746d9"
+version = "0.9.6"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=bb7ba7b#bb7ba7b1fb2c1e27d60cf905752e189e0aaa050b"
 dependencies = [
  "byteorder",
  "chrono",

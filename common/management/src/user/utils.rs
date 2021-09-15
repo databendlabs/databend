@@ -15,6 +15,7 @@
 
 use sha2::Digest;
 
+use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_mgr::USER_API_KEY_PREFIX;
 
@@ -24,32 +25,78 @@ pub(crate) fn prepend(v: impl AsRef<str>) -> String {
     res
 }
 
+pub fn encode_password(password: impl AsRef<[u8]>, auth_type: &AuthType) -> Vec<u8> {
+    match auth_type {
+        AuthType::None => vec![],
+        AuthType::PlainText => password.as_ref().to_vec(),
+        AuthType::DoubleSha1 => {
+            let mut m = sha1::Sha1::new();
+            m.update(password.as_ref());
+
+            let bs = m.digest().bytes();
+            let mut m = sha1::Sha1::new();
+            m.update(&bs[..]);
+
+            m.digest().bytes().to_vec()
+        }
+        AuthType::Sha256 => {
+            let result = sha2::Sha256::digest(password.as_ref());
+            result[..].to_vec()
+        }
+    }
+}
+
+impl UserInfo {
+    pub fn authenticate_user(&self, password: impl AsRef<[u8]>) -> bool {
+        if self.auth_type == AuthType::None {
+            return true;
+        }
+
+        // MySQL already did x = sha1(x)
+        // so we just check double sha1(x)
+        if let AuthType::DoubleSha1 = self.auth_type {
+            let mut m = sha1::Sha1::new();
+            m.update(password.as_ref());
+            let epassword = m.digest().bytes();
+            if epassword.to_vec() == self.password {
+                return true;
+            }
+        }
+
+        let epassword = encode_password(password, &self.auth_type);
+        if epassword == self.password {
+            return true;
+        }
+
+        return false;
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub(crate) struct NewUser {
+pub struct NewUser {
     name: String,
     password: String,
-    salt: String,
+    auth_type: AuthType,
 }
+
 impl NewUser {
-    pub(crate) fn new(
-        name: impl Into<String>,
-        password: impl Into<String>,
-        salt: impl Into<String>,
-    ) -> Self {
+    #[allow(dead_code)]
+    pub fn new(name: impl Into<String>, password: impl Into<String>, auth_type: AuthType) -> Self {
         NewUser {
             name: name.into(),
             password: password.into(),
-            salt: salt.into(),
+            auth_type,
         }
     }
 }
 
 impl From<&NewUser> for UserInfo {
     fn from(new_user: &NewUser) -> Self {
+        let encode_password = encode_password(&new_user.password, &new_user.auth_type);
         UserInfo {
             name: new_user.name.clone(),
-            password_sha256: sha2::Sha256::digest(new_user.password.as_bytes()).into(),
-            salt_sha256: sha2::Sha256::digest(new_user.salt.as_bytes()).into(),
+            password: encode_password,
+            auth_type: new_user.auth_type.clone(),
         }
     }
 }
