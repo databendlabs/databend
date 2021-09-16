@@ -50,8 +50,10 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         dataset_writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
-        let mut default_response = OkResponse::default();
-        default_response.info = extra_info;
+        let default_response = OkResponse {
+            info: extra_info,
+            ..Default::default()
+        };
 
         if blocks.is_empty() || (blocks[0].num_columns() == 0) {
             dataset_writer.completed(default_response)?;
