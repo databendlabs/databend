@@ -97,7 +97,7 @@ jobs:
         with:
           push: true
           tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend:${{ steps.get_version.outputs.VERSION }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
+          platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/release/Dockerfile
           build-args: |
