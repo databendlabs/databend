@@ -22,7 +22,7 @@ use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 
-use crate::datasources::database::local::NullTable;
+use super::null_table::NullTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {

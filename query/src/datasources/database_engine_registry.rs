@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 
-use crate::datasources::engines::database_factory::DatabaseFactory;
+use crate::catalogs::DatabaseEngine;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct EngineDescription {
@@ -31,7 +31,7 @@ pub struct EngineDescription {
 
 /// Registry of Table Providers
 pub struct DatabaseEngineRegistry {
-    engines: RwLock<HashMap<String, Arc<dyn DatabaseFactory>>>,
+    engines: RwLock<HashMap<String, Arc<dyn DatabaseEngine>>>,
 }
 
 impl DatabaseEngineRegistry {
@@ -56,7 +56,7 @@ impl DatabaseEngineRegistry {
     pub fn register(
         &self,
         engine: impl Into<String>,
-        provider: Arc<dyn DatabaseFactory>,
+        provider: Arc<dyn DatabaseEngine>,
     ) -> Result<()> {
         let engine_name = engine.into();
         let mut w = self.engines.write();
@@ -75,7 +75,7 @@ impl DatabaseEngineRegistry {
     pub fn engine_provider(
         &self,
         table_engine: impl AsRef<str>,
-    ) -> Option<Arc<dyn DatabaseFactory>> {
+    ) -> Option<Arc<dyn DatabaseEngine>> {
         self.engines.read().get(table_engine.as_ref()).cloned()
     }
     pub fn descriptions(&self) -> Vec<EngineDescription> {

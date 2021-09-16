@@ -23,7 +23,7 @@ use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 
-use crate::datasources::database::local::MemoryTable;
+use super::memory_table::MemoryTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_memorytable() -> Result<()> {

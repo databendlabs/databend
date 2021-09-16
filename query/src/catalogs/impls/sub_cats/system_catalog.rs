@@ -25,12 +25,12 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::configs::Config;
 use crate::datasources::database::system::SystemDatabase;
-use crate::datasources::engines::database_factory_registry::EngineDescription;
+use crate::datasources::database_engine::DatabaseEngine;
+use crate::datasources::database_engine_registry::EngineDescription;
 
 // min id for system tables (inclusive)
 pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;

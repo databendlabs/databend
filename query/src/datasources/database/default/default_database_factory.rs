@@ -17,26 +17,26 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use crate::catalogs::meta_backend::DatabaseInfo;
+use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
 use crate::datasources::database::default::default_database::DefaultDatabase;
-use crate::datasources::database::remote::RemoteFactory;
-use crate::datasources::engines::database_factory::DatabaseFactory;
-use crate::datasources::engines::metastore_clients::DatabaseInfo;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
-use crate::datasources::engines::table_engine_registry::TableEngineRegistry;
+use crate::datasources::store_client::RemoteFactory;
+use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 /// Default database engine, which
 /// - creates tables by using TableFactory
 /// - keeps metadata in the given meta_backend
 pub struct DefaultDatabaseFactory {
-    meta_backend: Arc<dyn MetaStoreClient>,
+    meta_backend: Arc<dyn MetaBackend>,
     table_factory_registry: Arc<TableEngineRegistry>,
 }
 
 impl DefaultDatabaseFactory {
     pub fn new(
-        meta_backend: Arc<dyn MetaStoreClient>,
+        meta_backend: Arc<dyn MetaBackend>,
         table_factory_registry: Arc<TableEngineRegistry>,
     ) -> Self {
         Self {
@@ -46,7 +46,7 @@ impl DefaultDatabaseFactory {
     }
 }
 
-impl DatabaseFactory for DefaultDatabaseFactory {
+impl DatabaseEngine for DefaultDatabaseFactory {
     fn create(&self, conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let remote = RemoteFactory::new(conf);
         let client_provider = remote.store_client_provider();

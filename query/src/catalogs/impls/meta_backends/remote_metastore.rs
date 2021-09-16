@@ -38,11 +38,11 @@ use common_planners::DropTablePlan;
 use common_runtime::Runtime;
 use common_store_api::MetaApi;
 
-use crate::datasources::database::remote::StoreApis;
-use crate::datasources::database::remote::StoreApisProvider;
-use crate::datasources::engines::metastore_clients::metastore_client::DatabaseInfo;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
-use crate::datasources::engines::metastore_clients::TableInfo;
+use crate::catalogs::meta_backend::DatabaseInfo;
+use crate::catalogs::meta_backend::MetaBackend;
+use crate::catalogs::meta_backend::TableInfo;
+use crate::datasources::store_client::StoreApis;
+use crate::datasources::store_client::StoreApisProvider;
 
 type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
@@ -119,7 +119,7 @@ where T: 'static + StoreApis + Clone
     }
 }
 
-impl MetaStoreClient for RemoteMeteStoreClient {
+impl MetaBackend for RemoteMeteStoreClient {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>> {
         let cli_provider = self.store_api_provider.clone();
         let reply = {

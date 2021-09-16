@@ -13,15 +13,14 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
+// TODO move this mod to catalogs
 
-use common_exception::Result;
+pub use embedded_metastore::EmbeddedMetaStore;
+pub use remote_metastore::RemoteMeteStoreClient;
 
-use crate::catalogs::Database;
-use crate::configs::Config;
-use crate::datasources::engines::metastore_clients::DatabaseInfo;
+//pub use crate::catalogs::metastore_client::DatabaseInfo;
+//pub use crate::catalogs::metastore_client::MetaBackend;
+//pub use crate::catalogs::metastore_client::TableInfo;
 
-pub trait DatabaseFactory: Send + Sync {
-    fn create(&self, conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>>;
-    fn description(&self) -> String;
-}
+mod embedded_metastore;
+mod remote_metastore;

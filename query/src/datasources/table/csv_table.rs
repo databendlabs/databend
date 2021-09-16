@@ -28,7 +28,7 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
 use crate::datasources::common::generate_parts;
-use crate::datasources::database::local::CsvTableStream;
+use crate::datasources::table::csv_table_stream::CsvTableStream;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct CsvTable {

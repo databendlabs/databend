@@ -25,21 +25,21 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
+use crate::catalogs::impls::meta_backends::EmbeddedMetaStore;
+use crate::catalogs::impls::meta_backends::RemoteMeteStoreClient;
+use crate::catalogs::meta_backend::DatabaseInfo;
+use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
-use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::configs::Config;
-use crate::datasources::database::prelude_dbs::register_prelude_db_engines;
-use crate::datasources::database::remote::RemoteFactory;
-use crate::datasources::engines::database_factory_registry::DatabaseEngineRegistry;
-use crate::datasources::engines::database_factory_registry::EngineDescription;
-use crate::datasources::engines::metastore_clients::DatabaseInfo;
-use crate::datasources::engines::metastore_clients::EmbeddedMetaStore;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
-use crate::datasources::engines::metastore_clients::RemoteMeteStoreClient;
-use crate::datasources::engines::table_engine_registry::TableEngineRegistry;
-use crate::datasources::engines::table_engines::prelude::register_prelude;
+use crate::datasources::database::prelude::register_prelude_db_engines;
+use crate::datasources::database_engine::DatabaseEngine;
+use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
+use crate::datasources::database_engine_registry::EngineDescription;
+use crate::datasources::store_client::RemoteFactory;
+use crate::datasources::table::prelude::register_prelude;
+use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -48,7 +48,7 @@ use crate::datasources::engines::table_engines::prelude::register_prelude;
 /// - Database engines are free to save table meta in metastore or not
 pub struct MetaStoreCatalog {
     db_engine_registry: Arc<DatabaseEngineRegistry>,
-    meta_backend: Arc<dyn MetaStoreClient>,
+    meta_backend: Arc<dyn MetaBackend>,
     conf: Config,
 
     // this is not for performance:
@@ -62,7 +62,7 @@ impl MetaStoreCatalog {
     pub fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.store.store_address.is_empty();
 
-        let meta_backend: Arc<dyn MetaStoreClient>;
+        let meta_backend: Arc<dyn MetaBackend>;
 
         meta_backend = if local_mode {
             Arc::new(EmbeddedMetaStore::new())
@@ -70,10 +70,6 @@ impl MetaStoreCatalog {
             let store_client_provider = Arc::new(RemoteFactory::new(&conf).store_client_provider());
             Arc::new(RemoteMeteStoreClient::create(store_client_provider))
         };
-
-        //let store_client_provider = Arc::new(RemoteFactory::new(&conf).store_client_provider());
-        //meta_backend = Arc::new(RemoteMeteStoreClient::create(store_client_provider));
-        //meta_backend = Arc::new(EmbeddedMetaStore::new());
 
         let plan = CreateDatabasePlan {
             if_not_exists: false,

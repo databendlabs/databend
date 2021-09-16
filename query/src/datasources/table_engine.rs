@@ -18,8 +18,7 @@ use common_exception::Result;
 use common_planners::TableOptions;
 
 use crate::catalogs::Table;
-use crate::datasources::database::remote::RemoteTable;
-use crate::datasources::database::remote::StoreClientProvider;
+use crate::datasources::store_client::StoreClientProvider;
 
 pub trait TableFactory: Send + Sync {
     fn try_create(
@@ -46,21 +45,5 @@ where
         _store_provider: StoreClientProvider,
     ) -> Result<Box<dyn Table>> {
         self(db, name, schema, options)
-    }
-}
-
-pub struct RemoteTableFactory {}
-
-impl TableFactory for RemoteTableFactory {
-    fn try_create(
-        &self,
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        options: TableOptions,
-        store_client_provider: StoreClientProvider,
-    ) -> Result<Box<dyn Table>> {
-        let tbl = RemoteTable::create(db, name, schema, store_client_provider, options);
-        Ok(tbl)
     }
 }

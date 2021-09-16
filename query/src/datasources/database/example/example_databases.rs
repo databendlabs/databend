@@ -16,17 +16,17 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use crate::catalogs::impls::meta_backends::EmbeddedMetaStore;
+use crate::catalogs::meta_backend::DatabaseInfo;
+use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabase;
-use crate::datasources::engines::database_factory::DatabaseFactory;
-use crate::datasources::engines::metastore_clients::DatabaseInfo;
-use crate::datasources::engines::metastore_clients::EmbeddedMetaStore;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
 
 /// The collection of the local database.
 pub struct ExampleDatabases {
-    meta_backend: Arc<dyn MetaStoreClient>,
+    meta_backend: Arc<dyn MetaBackend>,
 }
 
 impl ExampleDatabases {
@@ -36,7 +36,7 @@ impl ExampleDatabases {
     }
 }
 
-impl DatabaseFactory for ExampleDatabases {
+impl DatabaseEngine for ExampleDatabases {
     fn create(&self, _conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let db = ExampleDatabase::new(&db_info.name, &db_info.engine, self.meta_backend.clone());
         Ok(Arc::new(db))

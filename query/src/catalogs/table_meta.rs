@@ -13,46 +13,43 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_metatypes::MetaId;
+use common_metatypes::MetaVersion;
 
-use crate::catalogs::Meta;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 
 pub type TableMeta = Meta<Arc<dyn Table>>;
 pub type TableFunctionMeta = Meta<Arc<dyn TableFunction>>;
 
-pub struct InMemoryMetas {
-    pub(crate) name2meta: HashMap<String, Arc<TableMeta>>,
-    pub(crate) id2meta: HashMap<MetaId, Arc<TableMeta>>,
+/// The wrapper of the T with meta version.
+#[derive(Debug, Clone)]
+pub struct Meta<T> {
+    t: T,
+    id: MetaId,
+    version: Option<MetaVersion>,
 }
 
-impl InMemoryMetas {
-    pub fn create() -> Self {
-        InMemoryMetas {
-            name2meta: HashMap::default(),
-            id2meta: HashMap::default(),
-        }
+impl<T> Meta<T> {
+    pub fn create(t: T, id: MetaId) -> Self {
+        Self::with_version(t, id, None)
     }
 
-    pub fn insert(&mut self, tbl_meta: TableMeta) {
-        let met_ref = Arc::new(tbl_meta);
-        let name = met_ref.raw().name().to_owned();
-        self.name2meta
-            .insert(met_ref.raw().name().to_owned(), met_ref.clone());
-        self.id2meta.insert(met_ref.meta_id(), met_ref);
-        self.get_by_name(&name);
+    pub fn with_version(t: T, id: MetaId, version: Option<MetaVersion>) -> Self {
+        Self { t, id, version }
     }
 
-    pub fn get_by_name(&self, name: &str) -> Option<Arc<TableMeta>> {
-        let res = self.name2meta.get(name).cloned();
-        res
+    pub fn meta_ver(&self) -> Option<MetaVersion> {
+        self.version
     }
 
-    pub fn get_by_id(&self, id: &MetaId) -> Option<Arc<TableMeta>> {
-        self.id2meta.get(id).cloned()
+    pub fn meta_id(&self) -> MetaId {
+        self.id
+    }
+
+    pub fn raw(&self) -> &T {
+        &self.t
     }
 }

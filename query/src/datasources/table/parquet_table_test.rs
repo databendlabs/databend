@@ -20,7 +20,7 @@ use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 
-use crate::datasources::database::local::ParquetTable;
+use super::parquet_table::ParquetTable;
 
 #[tokio::test]
 async fn test_parquet_table() -> Result<()> {

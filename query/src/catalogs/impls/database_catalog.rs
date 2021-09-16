@@ -22,7 +22,7 @@ use crate::catalogs::impls::sub_cats::overlaid_catalog::OverlaidCatalog;
 use crate::catalogs::impls::sub_cats::system_catalog::SystemCatalog;
 use crate::configs::Config;
 
-/// DatabaseCatalog is the Catalog exports to
+/// DatabaseCatalog is the Catalog exports to other query components
 pub type DatabaseCatalog = OverlaidCatalog;
 
 impl DatabaseCatalog {

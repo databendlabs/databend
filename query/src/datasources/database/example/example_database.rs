@@ -20,10 +20,10 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
 
 pub struct ExampleDatabase {
     db_name: String,
@@ -34,7 +34,7 @@ impl ExampleDatabase {
     pub fn new(
         db_name: impl Into<String>,
         engine_name: impl Into<String>,
-        _meta_store_client: Arc<dyn MetaStoreClient>,
+        _meta_store_client: Arc<dyn MetaBackend>,
     ) -> Self {
         Self {
             db_name: db_name.into(),

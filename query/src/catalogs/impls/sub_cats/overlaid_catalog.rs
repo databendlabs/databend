@@ -23,10 +23,10 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
-use crate::datasources::engines::database_factory_registry::EngineDescription;
+use crate::datasources::database_engine::DatabaseEngine;
+use crate::datasources::database_engine_registry::EngineDescription;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at

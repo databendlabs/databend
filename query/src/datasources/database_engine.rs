@@ -13,4 +13,15 @@
 //  limitations under the License.
 //
 
-pub(crate) mod prelude;
+use std::sync::Arc;
+
+use common_exception::Result;
+
+use crate::catalogs::meta_backend::DatabaseInfo;
+use crate::catalogs::Database;
+use crate::configs::Config;
+
+pub trait DatabaseEngine: Send + Sync {
+    fn create(&self, conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>>;
+    fn description(&self) -> String;
+}

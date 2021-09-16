@@ -13,9 +13,12 @@
 // limitations under the License.
 //
 
-mod database_catalog;
-mod sub_cats;
 pub use database_catalog::DatabaseCatalog;
 pub use sub_cats::system_catalog::LOCAL_TBL_ID_BEGIN;
 pub use sub_cats::system_catalog::SYS_TBL_ID_BEGIN;
 pub use sub_cats::system_catalog::SYS_TBL_ID_END;
+
+mod database_catalog;
+pub(crate) mod meta_backends;
+mod sub_cats;
+pub(crate) mod util;

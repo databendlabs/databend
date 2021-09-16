@@ -20,8 +20,6 @@ pub use crate::datasources::table::remote_table::RemoteTable;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//mod remote_database;
-//mod remote_databases;
+
 mod remote_factory;
-//mod remote_meta_backend;
 mod store_client_provider;

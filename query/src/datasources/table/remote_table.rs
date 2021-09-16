@@ -31,8 +31,9 @@ use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::datasources::database::remote::GetStoreApiClient;
-use crate::datasources::database::remote::StoreClientProvider;
+use crate::datasources::store_client::GetStoreApiClient;
+use crate::datasources::store_client::StoreClientProvider;
+use crate::datasources::table_engine::TableFactory;
 use crate::sessions::DatabendQueryContextRef;
 
 #[allow(dead_code)]
@@ -188,5 +189,21 @@ impl RemoteTable {
             scan_plan: Arc::new(scan_plan),
             remote: true,
         }
+    }
+}
+
+pub struct RemoteTableFactory {}
+
+impl TableFactory for RemoteTableFactory {
+    fn try_create(
+        &self,
+        db: String,
+        name: String,
+        schema: DataSchemaRef,
+        options: TableOptions,
+        store_client_provider: StoreClientProvider,
+    ) -> Result<Box<dyn Table>> {
+        let tbl = RemoteTable::create(db, name, schema, store_client_provider, options);
+        Ok(tbl)
     }
 }

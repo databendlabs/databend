@@ -26,9 +26,9 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::impls::LOCAL_TBL_ID_BEGIN;
-use crate::datasources::engines::metastore_clients::metastore_client::DatabaseInfo;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
-use crate::datasources::engines::metastore_clients::TableInfo;
+use crate::catalogs::meta_backend::DatabaseInfo;
+use crate::catalogs::meta_backend::MetaBackend;
+use crate::catalogs::meta_backend::TableInfo;
 
 struct InMemoryTableInfo {
     pub(crate) name2meta: HashMap<String, Arc<TableInfo>>,
@@ -77,7 +77,7 @@ impl EmbeddedMetaStore {
     }
 }
 
-impl MetaStoreClient for EmbeddedMetaStore {
+impl MetaBackend for EmbeddedMetaStore {
     fn get_table(
         &self,
         db_name: &str,

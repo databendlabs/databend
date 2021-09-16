@@ -17,18 +17,18 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
+use crate::catalogs::meta_backend::MetaBackend;
 use crate::datasources::database::default::default_database_factory::DefaultDatabaseFactory;
 use crate::datasources::database::example::ExampleDatabases;
-use crate::datasources::engines::database_factory_registry::DatabaseEngineRegistry;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
-use crate::datasources::engines::table_engine_registry::TableEngineRegistry;
+use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
+use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub const DB_ENGINE_DEFAULT: &str = "default";
 pub const DB_ENGINE_EXAMPLE: &str = "example";
 
 pub fn register_prelude_db_engines(
     registry: &DatabaseEngineRegistry,
-    meta_backend: Arc<dyn MetaStoreClient>,
+    meta_backend: Arc<dyn MetaBackend>,
     table_factory_registry: Arc<TableEngineRegistry>,
 ) -> Result<()> {
     let default = DefaultDatabaseFactory::new(meta_backend, table_factory_registry);

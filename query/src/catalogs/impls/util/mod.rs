@@ -13,12 +13,4 @@
 //  limitations under the License.
 //
 
-pub(crate) mod table_engines;
-
-pub(crate) mod database_factory;
-pub(crate) mod database_factory_registry;
-
-pub(crate) mod table_engine_registry;
-pub(crate) mod table_factory;
-
-pub(crate) mod metastore_clients;
+pub(crate) mod in_memory_metas;

@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 
-use crate::datasources::engines::table_factory::TableFactory;
+use crate::datasources::table_engine::TableFactory;
 
 /// Registry of Table Providers
 pub struct TableEngineRegistry {

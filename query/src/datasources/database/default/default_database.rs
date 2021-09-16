@@ -22,19 +22,19 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
+use crate::catalogs::meta_backend::MetaBackend;
+use crate::catalogs::meta_backend::TableInfo;
 use crate::catalogs::Database;
-use crate::catalogs::InMemoryMetas;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
-use crate::datasources::database::remote::StoreClientProvider;
-use crate::datasources::engines::metastore_clients::MetaStoreClient;
-use crate::datasources::engines::metastore_clients::TableInfo;
-use crate::datasources::engines::table_engine_registry::TableEngineRegistry;
+use crate::datasources::store_client::StoreClientProvider;
+use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub struct DefaultDatabase {
     db_name: String,
     engine_name: String,
-    meta_store_client: Arc<dyn MetaStoreClient>,
+    meta_store_client: Arc<dyn MetaBackend>,
     table_factory_registry: Arc<TableEngineRegistry>,
     client_provider: StoreClientProvider,
     stateful_table_cache: RwLock<InMemoryMetas>,
@@ -44,7 +44,7 @@ impl DefaultDatabase {
     pub fn new(
         db_name: impl Into<String>,
         engine_name: impl Into<String>,
-        meta_store_client: Arc<dyn MetaStoreClient>,
+        meta_store_client: Arc<dyn MetaBackend>,
         table_factory_registry: Arc<TableEngineRegistry>,
         client_provider: StoreClientProvider,
     ) -> Self {

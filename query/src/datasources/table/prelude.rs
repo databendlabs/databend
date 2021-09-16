@@ -15,13 +15,13 @@
 
 use common_exception::Result;
 
-use crate::datasources::database::local::CsvTable;
-use crate::datasources::database::local::MemoryTable;
-use crate::datasources::database::local::NullTable;
-use crate::datasources::database::local::ParquetTable;
-use crate::datasources::engines::table_engine_registry::TableEngineRegistry;
-use crate::datasources::engines::table_factory::RemoteTableFactory;
+use crate::datasources::table::csv_table::CsvTable;
 use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::memory_table::MemoryTable;
+use crate::datasources::table::null_table::NullTable;
+use crate::datasources::table::parquet_table::ParquetTable;
+use crate::datasources::table::remote_table::RemoteTableFactory;
+use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub fn register_prelude(registry: &TableEngineRegistry) -> Result<()> {
     registry.register("CSV", std::sync::Arc::new(CsvTable::try_create))?;

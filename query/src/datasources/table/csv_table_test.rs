@@ -21,7 +21,7 @@ use common_planners::*;
 use common_runtime::tokio;
 use futures::TryStreamExt;
 
-use crate::datasources::database::local::CsvTable;
+use crate::datasources::table::csv_table::CsvTable;
 
 #[tokio::test]
 async fn test_csv_table() -> Result<()> {

@@ -28,5 +28,6 @@ mod null_table_test;
 pub mod parquet_table;
 #[cfg(test)]
 mod parquet_table_test;
+pub(crate) mod prelude;
 pub mod remote_table;
 mod remote_table_do_read;
