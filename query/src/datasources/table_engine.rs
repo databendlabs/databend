@@ -15,10 +15,10 @@
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_flights::client_provider::StoreClientProvider;
 use common_planners::TableOptions;
 
 use crate::catalogs::Table;
-use crate::datasources::util::StoreClientProvider;
 
 pub trait TableEngine: Send + Sync {
     fn try_create(

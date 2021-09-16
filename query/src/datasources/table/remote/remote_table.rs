@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flights::client_provider::StoreClientProvider;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -27,14 +28,13 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
+use common_store_api::store_api::GetStoreApiClient;
 use common_store_api::ReadPlanResult;
 use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::datasources::table_engine::TableEngine;
-use crate::datasources::util::GetStoreApiClient;
-use crate::datasources::util::StoreClientProvider;
 use crate::sessions::DatabendQueryContextRef;
 
 #[allow(dead_code)]

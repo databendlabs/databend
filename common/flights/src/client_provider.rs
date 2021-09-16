@@ -13,11 +13,13 @@
 //  limitations under the License.
 //
 
-pub use common_flights::client_provider::StoreClientProvider;
-pub use common_flights::client_provider::TryGetStoreClient;
-pub use common_store_api::store_api::GetStoreApiClient;
-pub use common_store_api::store_api::StoreApis;
-pub use common_store_api::store_api::StoreApisProvider;
-pub use remote_factory::RemoteFactory;
+use std::sync::Arc;
 
-mod remote_factory;
+use crate::StoreClient;
+
+#[async_trait::async_trait]
+pub trait TryGetStoreClient {
+    async fn try_get_client(&self) -> common_exception::Result<StoreClient>;
+}
+
+pub type StoreClientProvider = Arc<dyn TryGetStoreClient + Send + Sync>;

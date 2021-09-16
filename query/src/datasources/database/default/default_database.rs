@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_flights::client_provider::StoreClientProvider;
 use common_infallible::RwLock;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
@@ -29,7 +30,6 @@ use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
-use crate::datasources::util::StoreClientProvider;
 
 pub struct DefaultDatabase {
     db_name: String,
