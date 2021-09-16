@@ -893,15 +893,13 @@ impl PlanParser {
     }
 
     fn interval_to_day_time(days: i32, ms: i32) -> Result<Expression> {
-        let milliseconds_per_day = 24 * 3600 * 1000;
-        let wrapped_days = days + ms / milliseconds_per_day;
-        let wrapped_ms = ms % milliseconds_per_day;
-        let num = (wrapped_days as i64) << 32 | (wrapped_ms as i64);
         let data_type = DataType::Interval(IntervalUnit::DayTime);
+        let milliseconds_per_day = 24 * 3600 * 1000;
+        let total_ms = days as i64 * milliseconds_per_day + ms as i64;
 
         Ok(Expression::Literal {
-            value: DataValue::Int64(Some(num)),
-            column_name: Some(num.to_string()),
+            value: DataValue::Int64(Some(total_ms)),
+            column_name: Some(total_ms.to_string()),
             data_type,
         })
     }
