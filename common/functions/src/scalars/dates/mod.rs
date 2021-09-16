@@ -25,6 +25,8 @@ mod simple_date;
 
 pub use date::DateFunction;
 pub use number_function::ToStartOfISOYearFunction;
+pub use number_function::ToStartOfMonthFunction;
+pub use number_function::ToStartOfQuarterFunction;
 pub use number_function::ToStartOfYearFunction;
 pub use number_function::ToYYYYMMDDFunction;
 pub use number_function::ToYYYYMMDDhhmmssFunction;
