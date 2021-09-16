@@ -54,10 +54,6 @@ impl TypeSerializer for StringSerializer {
         Ok(())
     }
 
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
-    }
-
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
         self.builder.append_value(reader);
         Ok(())
@@ -65,5 +61,9 @@ impl TypeSerializer for StringSerializer {
 
     fn de_null(&mut self) {
         self.builder.append_null()
+    }
+
+    fn finish_to_series(&mut self) -> Series {
+        self.builder.finish().into_series()
     }
 }

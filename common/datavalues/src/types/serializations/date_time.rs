@@ -71,10 +71,6 @@ where
         Ok(())
     }
 
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
-    }
-
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
         if reader.eq_ignore_ascii_case(b"null") {
             self.builder.append_null();
@@ -103,5 +99,9 @@ where
 
     fn de_null(&mut self) {
         self.builder.append_null()
+    }
+
+    fn finish_to_series(&mut self) -> Series {
+        self.builder.finish().into_series()
     }
 }

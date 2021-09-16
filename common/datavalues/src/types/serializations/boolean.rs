@@ -60,10 +60,6 @@ impl TypeSerializer for BooleanSerializer {
         Ok(())
     }
 
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
-    }
-
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
         let v = if reader.eq_ignore_ascii_case(b"false") {
             Some(false)
@@ -80,5 +76,9 @@ impl TypeSerializer for BooleanSerializer {
 
     fn de_null(&mut self) {
         self.builder.append_null()
+    }
+
+    fn finish_to_series(&mut self) -> Series {
+        self.builder.finish().into_series()
     }
 }
