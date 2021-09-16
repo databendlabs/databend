@@ -33,7 +33,7 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Table;
 use crate::datasources::database::remote::GetStoreApiClient;
 use crate::datasources::database::remote::StoreClientProvider;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 #[allow(dead_code)]
 pub struct RemoteTable {

@@ -23,7 +23,6 @@ use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::datasources::database::remote::RemoteTable;
-use crate::datasources::database::remote::StoreApis;
 use crate::sessions::DatabendQueryContextRef;
 
 impl RemoteTable {

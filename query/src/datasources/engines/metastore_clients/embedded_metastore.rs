@@ -94,14 +94,6 @@ impl MetaStoreClient for EmbeddedMetaStore {
                 let table = metas.name2meta.get(table_name).ok_or_else(|| {
                     ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
                 })?;
-
-                eprintln!(
-                    "got table {}, engine {:?}, option {:?}",
-                    &table.name,
-                    table.schema.meta().get("ENGINE"),
-                    &table.table_option
-                );
-
                 Ok(table.clone())
             }
         }
@@ -135,12 +127,6 @@ impl MetaStoreClient for EmbeddedMetaStore {
                     ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
                 })?;
 
-                eprintln!(
-                    "got table {}, engine {:?}, option {:?}",
-                    &table.name,
-                    table.schema.meta().get("ENGINE"),
-                    &table.table_option
-                );
                 Ok(table.clone())
             }
         }

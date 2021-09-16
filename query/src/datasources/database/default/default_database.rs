@@ -79,7 +79,6 @@ impl DefaultDatabase {
         let stateful = tbl.is_stateful();
         let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);
         if stateful {
-            eprintln!("//// stateful table , table id {}", table_info.table_id);
             self.stateful_table_cache.write().insert(tbl_meta.clone());
         }
 
@@ -101,14 +100,11 @@ impl Database for DefaultDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> common_exception::Result<Arc<TableMeta>> {
-        eprintln!("//// getting table by name {}", table_name);
         {
             if let Some(meta) = self.stateful_table_cache.read().get_by_name(table_name) {
-                eprintln!("////!!!!! got tale in cache, hit cache");
                 return Ok(meta);
             }
         }
-        eprintln!("//// getting table by name {}, cache missed", table_name);
         let db_name = self.name();
         let table_info = self.meta_store_client.get_table(db_name, table_name)?;
         self.build_table_instance(table_info.as_ref())
@@ -133,7 +129,6 @@ impl Database for DefaultDatabase {
             self.meta_store_client
                 .get_table_by_id(self.name(), table_id, table_version)?;
 
-        eprintln!("//// table cache missed, {:?}", &tbl_info);
         self.build_table_instance(tbl_info.as_ref())
     }
 

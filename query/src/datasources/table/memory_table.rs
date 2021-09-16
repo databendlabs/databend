@@ -28,9 +28,9 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
-use super::MemoryTableStream;
 use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
+use crate::datasources::table::memory_table_stream::MemoryTableStream;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct MemoryTable {
