@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use common_arrow::arrow::array::Array;
 use common_datavalues::chrono::*;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
@@ -194,16 +195,12 @@ impl ArithmeticFunction {
         date: &DataColumnWithField,
         daytime: &DataColumnWithField,
     ) -> Result<DataColumn> {
+        let milliseconds_per_day = 24 * 3600 * 1000;
         let days: DataColumn = daytime
             .column()
             .to_array()?
             .i64()?
-            .apply(|v| {
-                // Right shift on negative value is implementation-defined. For example -1_i64 >> 40 will return -1, not zero.
-                // In case of a negative value, do the division instead of right shift.
-                v / 0x1_0000_0000_i64
-                // Ignore the lower bits because the parser layer should make sure the milliseconds parts(lower bits) not exceed 24 hours.
-            })
+            .apply(|ms| ms / milliseconds_per_day)
             .into();
         date.column().arithmetic(self.op.clone(), &days)
     }
@@ -213,15 +210,11 @@ impl ArithmeticFunction {
         datetime: &DataColumnWithField,
         daytime: &DataColumnWithField,
     ) -> Result<DataColumn> {
-        let seconds_per_day = 24 * 3600_i64;
         let seconds: DataColumn = daytime
             .column()
             .to_array()?
             .i64()?
-            .apply(|v| {
-                let secs = (v / 0x1_0000_0000_i64) * seconds_per_day;
-                secs + ((v as i32) / 1000) as i64
-            })
+            .apply(|ms| ms / 1000)
             .into();
         datetime.column().arithmetic(self.op.clone(), &seconds)
     }
@@ -261,9 +254,14 @@ impl ArithmeticFunction {
                 };
                 Ok(new_dt.timestamp() as u32)
             })
-            .collect::<Result<Vec<u32>>>()?;
+            .collect::<Result<AlignedVec<u32>>>()?;
 
-        Ok(DFUInt32Array::new_from_iter(timestamps.into_iter()).into())
+        let validity = combine_validities(
+            datetime.column().to_array()?.u32()?.inner().validity(),
+            year_month.column().to_array()?.i64()?.inner().validity(),
+        );
+
+        Ok(DFUInt32Array::new_from_owned_with_null_bitmap(timestamps, validity).into())
     }
 
     fn date_plus_minus_year_month(
@@ -280,8 +278,12 @@ impl ArithmeticFunction {
                     .into_no_null_iter()
                     .zip(year_month.column().to_array()?.i64()?.into_no_null_iter())
                     .map(|(days, months)| self.days_plus_minus_months(*days as i64, *months))
-                    .collect::<Result<Vec<u32>>>()?;
-                Ok(DFUInt32Array::new_from_iter(days.into_iter()).into())
+                    .collect::<Result<AlignedVec<u32>>>()?;
+                let validity = combine_validities(
+                    date.column().to_array()?.u16()?.inner().validity(),
+                    year_month.column().to_array()?.i64()?.inner().validity(),
+                );
+                Ok(DFUInt32Array::new_from_owned_with_null_bitmap(days, validity).into())
             };
 
         let date32_plus_minus_months =
@@ -293,8 +295,12 @@ impl ArithmeticFunction {
                     .into_no_null_iter()
                     .zip(year_month.column().to_array()?.i64()?.into_no_null_iter())
                     .map(|(days, months)| self.days_plus_minus_months(*days as i64, *months))
-                    .collect::<Result<Vec<u32>>>()?;
-                Ok(DFUInt32Array::new_from_iter(days.into_iter()).into())
+                    .collect::<Result<AlignedVec<u32>>>()?;
+                let validity = combine_validities(
+                    date.column().to_array()?.u32()?.inner().validity(),
+                    year_month.column().to_array()?.i64()?.inner().validity(),
+                );
+                Ok(DFUInt32Array::new_from_owned_with_null_bitmap(days, validity).into())
             };
 
         match date.data_type() {

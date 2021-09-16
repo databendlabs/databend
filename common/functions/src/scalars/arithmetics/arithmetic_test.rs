@@ -181,6 +181,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
         (date_time.timestamp() / (24 * 3600)) as u32
     };
 
+    let daytime_to_ms = |days: i64, hour: i64, minute: i64, second: i64| -> i64 {
+        (days * 24 * 3600 * 1000) + (hour * 3600 * 1000) + (minute * 60 * 1000) + (second * 1000)
+    };
+
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -269,8 +273,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ])
                 .into(),
                 Series::new(vec![
-                    -(1i64 << 32),                   /* -1 day */
-                    -(1i64 << 32 | 1 * 3600 * 1000), /* - 1 day and 1 hours */
+                    daytime_to_ms(-1, 0, 0, 0),
+                    daytime_to_ms(-1, -1, 0, 0),
                 ])
                 .into(),
             ],
@@ -294,8 +298,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ])
                 .into(),
                 Series::new(vec![
-                    -(1i64 << 32),                   /* -1 day */
-                    -(1i64 << 32 | 1 * 3600 * 1000), /* - 1 day and 1 hours */
+                    daytime_to_ms(-1, 0, 0, 0),
+                    daytime_to_ms(-1, -1, 0, 0),
                 ])
                 .into(),
             ],
@@ -349,8 +353,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
                 Series::new(vec![
-                    -(1i64 << 32),                   /* -1 day */
-                    -(1i64 << 32 | 1 * 3600 * 1000), /* - 1 day and 1 hour */
+                    daytime_to_ms(-1, 0, 0, 0),
+                    daytime_to_ms(-1, -1, 0, 0),
                 ])
                 .into(),
             ],
@@ -365,11 +369,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
             func: ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
             columns: vec![
                 Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
-                Series::new(vec![
-                    1i64 << 32,                   /* 1 day */
-                    1i64 << 32 | 1 * 3600 * 1000, /* 1 day and 1 hour */
-                ])
-                .into(),
+                Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)]).into(),
             ],
             expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
             error: "",
@@ -407,11 +407,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
             func: ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
             columns: vec![
                 Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
-                Series::new(vec![
-                    1i64 << 32,                   /* 1 day */
-                    1i64 << 32 | 1 * 3600 * 1000, /* 1 day and 1 hour */
-                ])
-                .into(),
+                Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)]).into(),
             ],
             expect: Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
             error: "",
