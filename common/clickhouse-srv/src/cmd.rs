@@ -14,7 +14,10 @@
 
 use crate::binary::Encoder;
 use crate::connection::Connection;
+use crate::error_codes::WRONG_PASSWORD;
+use crate::errors::Error;
 use crate::errors::Result;
+use crate::errors::ServerError;
 use crate::protocols::HelloResponse;
 use crate::protocols::Packet;
 use crate::protocols::Stage;
@@ -39,6 +42,20 @@ impl Cmd {
             // todo cancel
             Packet::Cancel => {}
             Packet::Hello(hello) => {
+                if !connection
+                    .session
+                    .authenticate(&hello.user, &hello.password)
+                {
+                    let err = Error::Server(ServerError {
+                        code: WRONG_PASSWORD,
+                        name: "AuthenticateException".to_owned(),
+                        message: "Unknown user or wrong password".to_owned(),
+                        stack_trace: "".to_owned(),
+                    });
+                    connection.write_error(&err).await?;
+                    return Err(err);
+                }
+
                 let response = HelloResponse {
                     dbms_name: connection.session.dbms_name().to_string(),
                     dbms_version_major: connection.session.dbms_version_major(),
