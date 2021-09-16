@@ -25,7 +25,7 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::impls::meta_backends::EmbeddedMetaStore;
+use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
 use crate::catalogs::impls::meta_backends::RemoteMeteStoreClient;
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
@@ -38,8 +38,10 @@ use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::store_client::RemoteFactory;
-use crate::datasources::table::prelude::register_prelude;
+use crate::datasources::table::prelude::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
+
+pub const DEFAULT_DB_ENGINE: &str = "default";
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -65,7 +67,7 @@ impl MetaStoreCatalog {
         let meta_backend: Arc<dyn MetaBackend>;
 
         meta_backend = if local_mode {
-            Arc::new(EmbeddedMetaStore::new())
+            Arc::new(EmbeddedMetaBackend::new())
         } else {
             let store_client_provider = Arc::new(RemoteFactory::new(&conf).store_client_provider());
             Arc::new(RemoteMeteStoreClient::create(store_client_provider))
@@ -74,7 +76,7 @@ impl MetaStoreCatalog {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: "default".to_string(),
-            engine: "default".to_string(), // TODO use constant declare in DefaultDatabaseEngine
+            engine: DEFAULT_DB_ENGINE.to_string(),
             options: Default::default(),
         };
         meta_backend.create_database(plan)?;
@@ -82,7 +84,7 @@ impl MetaStoreCatalog {
         let db_engine_registry = Arc::new(DatabaseEngineRegistry::new());
         let table_engine_registry = Arc::new(TableEngineRegistry::new());
 
-        register_prelude(&table_engine_registry)?;
+        register_prelude_tbl_engines(&table_engine_registry)?;
         register_prelude_db_engines(
             &db_engine_registry,
             meta_backend.clone(),
@@ -132,13 +134,10 @@ impl MetaStoreCatalog {
 impl Catalog for MetaStoreCatalog {
     fn register_db_engine(
         &self,
-        _engine_type: &str,
-        _backend: Arc<dyn DatabaseEngine>,
+        engine_type: &str,
+        backend: Arc<dyn DatabaseEngine>,
     ) -> Result<()> {
-        todo!()
-        //let engine = engine_type.to_uppercase();
-        //self.database_engines.write().insert(engine, backend);
-        //Ok(())
+        self.db_engine_registry.register(engine_type, backend)
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
@@ -196,19 +195,6 @@ impl Catalog for MetaStoreCatalog {
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
-        //let db_name = plan.db.as_str();
-        //let exists = self.exists_database(db_name)?;
-        //if exists {
-        //    if plan.if_not_exists {
-        //        return Ok(());
-        //    } else {
-        //        return Err(ErrorCode::UnknownDatabase(format!(
-        //            "Database: '{}' already exists.",
-        //            db_name
-        //        )));
-        //    }
-        //}
-
         if self.db_engine_registry.contains(&plan.engine) {
             // TODO check if plan is valid (add validate method to database_factory)
             self.meta_backend.create_database(plan)

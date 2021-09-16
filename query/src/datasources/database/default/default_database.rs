@@ -96,7 +96,7 @@ impl Database for DefaultDatabase {
     }
 
     fn is_local(&self) -> bool {
-        todo!()
+        false
     }
 
     fn get_table(&self, table_name: &str) -> common_exception::Result<Arc<TableMeta>> {

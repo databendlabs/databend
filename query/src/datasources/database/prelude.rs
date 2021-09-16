@@ -19,12 +19,10 @@ use common_exception::Result;
 
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::datasources::database::default::default_database_factory::DefaultDatabaseFactory;
-use crate::datasources::database::example::ExampleDatabases;
 use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub const DB_ENGINE_DEFAULT: &str = "default";
-pub const DB_ENGINE_EXAMPLE: &str = "example";
 
 pub fn register_prelude_db_engines(
     registry: &DatabaseEngineRegistry,
@@ -33,8 +31,5 @@ pub fn register_prelude_db_engines(
 ) -> Result<()> {
     let default = DefaultDatabaseFactory::new(meta_backend, table_factory_registry);
     registry.register(DB_ENGINE_DEFAULT, Arc::new(default))?;
-
-    let example = ExampleDatabases::create();
-    registry.register(DB_ENGINE_EXAMPLE, Arc::new(example))?;
     Ok(())
 }

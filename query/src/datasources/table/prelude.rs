@@ -23,7 +23,7 @@ use crate::datasources::table::parquet_table::ParquetTable;
 use crate::datasources::table::remote_table::RemoteTableFactory;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
-pub fn register_prelude(registry: &TableEngineRegistry) -> Result<()> {
+pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry) -> Result<()> {
     registry.register("CSV", std::sync::Arc::new(CsvTable::try_create))?;
     registry.register("PARQUET", std::sync::Arc::new(ParquetTable::try_create))?;
     registry.register("NULL", std::sync::Arc::new(NullTable::try_create))?;

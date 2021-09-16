@@ -54,10 +54,10 @@ impl OverlaidCatalog {
 impl Catalog for OverlaidCatalog {
     fn register_db_engine(
         &self,
-        _engine_type: &str,
-        _database_engine: Arc<dyn DatabaseEngine>,
+        engine_type: &str,
+        database_engine: Arc<dyn DatabaseEngine>,
     ) -> common_exception::Result<()> {
-        todo!()
+        self.bottom.register_db_engine(engine_type, database_engine)
     }
 
     fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {

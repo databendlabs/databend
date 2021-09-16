@@ -28,8 +28,10 @@ use futures::future::Either;
 use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::Catalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::datasources::database::example::ExampleDatabaseEngine;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
@@ -47,6 +49,9 @@ pub type SessionManagerRef = Arc<SessionManager>;
 impl SessionManager {
     pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
+
+        catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
+
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             catalog,

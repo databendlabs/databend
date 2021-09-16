@@ -41,7 +41,6 @@ pub struct DatabaseInfo {
     pub engine: String,
 }
 
-/// TODO rename to MetaBackend after refactoring
 pub trait MetaBackend: Send + Sync {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>>;
     fn exist_table(&self, db_name: &str, table_name: &str) -> Result<bool>;

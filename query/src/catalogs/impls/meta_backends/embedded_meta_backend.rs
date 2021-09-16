@@ -53,12 +53,12 @@ impl InMemoryTableInfo {
 
 type Databases = Arc<RwLock<HashMap<String, (Arc<DatabaseInfo>, InMemoryTableInfo)>>>;
 
-pub struct EmbeddedMetaStore {
+pub struct EmbeddedMetaBackend {
     databases: Databases,
     tbl_id_seq: Arc<RwLock<u64>>,
 }
 
-impl EmbeddedMetaStore {
+impl EmbeddedMetaBackend {
     pub fn new() -> Self {
         let tbl_id_seq = Arc::new(RwLock::new(LOCAL_TBL_ID_BEGIN));
         Self {
@@ -68,16 +68,13 @@ impl EmbeddedMetaStore {
     }
 
     fn next_db_id(&self) -> u64 {
-        // `fetch_add` wraps around on overflow, but as LOCAL_TBL_ID_BEGIN
-        // is defined as (1 << 62) + 10000, there are about 13 quintillion ids are reserved
-        // for local tables, we do not check overflow here.
         *self.tbl_id_seq.write() += 1;
         let r = self.tbl_id_seq.read();
         *r
     }
 }
 
-impl MetaBackend for EmbeddedMetaStore {
+impl MetaBackend for EmbeddedMetaBackend {
     fn get_table(
         &self,
         db_name: &str,

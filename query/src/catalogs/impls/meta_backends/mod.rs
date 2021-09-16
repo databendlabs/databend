@@ -15,12 +15,12 @@
 
 // TODO move this mod to catalogs
 
-pub use embedded_metastore::EmbeddedMetaStore;
-pub use remote_metastore::RemoteMeteStoreClient;
+pub use embedded_meta_backend::EmbeddedMetaBackend;
+pub use remote_meta_backend::RemoteMeteStoreClient;
 
 //pub use crate::catalogs::metastore_client::DatabaseInfo;
 //pub use crate::catalogs::metastore_client::MetaBackend;
 //pub use crate::catalogs::metastore_client::TableInfo;
 
-mod embedded_metastore;
-mod remote_metastore;
+mod embedded_meta_backend;
+mod remote_meta_backend;

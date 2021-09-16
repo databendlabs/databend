@@ -217,11 +217,10 @@ impl MetaBackend for RemoteMeteStoreClient {
             Some(snapshot) => {
                 let mut res = vec![];
                 let db_metas = snapshot.db_metas;
-                for (name, _database) in db_metas {
+                for (name, database) in db_metas {
                     res.push(Arc::new(DatabaseInfo {
                         name,
-                        // TODO keep engine info in meta store
-                        engine: "default".to_string(),
+                        engine: database.database_engine,
                     }));
                 }
                 Ok(res)
