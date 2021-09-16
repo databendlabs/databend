@@ -27,14 +27,14 @@ jobs:
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh
-
-      - name: Cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target=${{ matrix.config.target }}
-          use-cross: ${{ matrix.config.cross }}
-
+          cargo install --version 0.1.16 cross
+      - name: Build Binary
+        run: |
+          if [ ${{ matrix.config.cross }} = true ]; then
+              cross build --release --target=${{ matrix.config.target }}
+          else
+              cargo build --release --target=${{ matrix.config.target }}
+          fi
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
