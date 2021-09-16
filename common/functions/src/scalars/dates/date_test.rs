@@ -90,6 +90,7 @@ fn do_test(t: Test) -> Result<()> {
     let actual_null = func.nullable(&DataSchema::empty())?;
     assert_eq!(expect_null, actual_null);
 
+    //Eq check
     let v = func.eval(&columns, rows)?;
     let expect: DataColumn = t.expect.into();
     for val in v.to_values()? {
