@@ -34,20 +34,27 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> { inner: Some(inner) }
     }
 
-    pub fn write(&mut self, query_result: Result<Vec<DataBlock>>) -> Result<()> {
+    pub fn write(&mut self, query_result: Result<(Vec<DataBlock>, String)>) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok(received_data) => Self::ok(received_data, writer)?,
+                Ok((blocks, extra_info)) => Self::ok(blocks, extra_info, writer)?,
                 Err(error) => Self::err(&error, writer)?,
             }
         }
         Ok(())
     }
 
-    fn ok(blocks: Vec<DataBlock>, dataset_writer: QueryResultWriter<'a, W>) -> Result<()> {
+    fn ok(
+        blocks: Vec<DataBlock>,
+        extra_info: String,
+        dataset_writer: QueryResultWriter<'a, W>,
+    ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
+        let mut default_response = OkResponse::default();
+        default_response.info = extra_info;
+
         if blocks.is_empty() || (blocks[0].num_columns() == 0) {
-            dataset_writer.completed(0, 0)?;
+            dataset_writer.completed(default_response)?;
             return Ok(());
         }
 
@@ -167,8 +174,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                         row_writer.end_row()?;
                     }
                 }
-
-                row_writer.finish()?;
+                row_writer.finish_with_info(&default_response.info)?;
 
                 Ok(())
             }
