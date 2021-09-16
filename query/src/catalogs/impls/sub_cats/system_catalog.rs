@@ -129,9 +129,10 @@ impl Catalog for SystemCatalog {
     }
 
     fn get_db_engines(&self) -> Result<Vec<EngineDescription>> {
+        // system catalog is special treated, no implicit database engine provided for it.
         let desc = EngineDescription {
             name: "system".to_owned(),
-            desc: "The system engine is used by tables in the system database, which store Datafuse information.".to_owned()
+            desc: "The system engine is used by tables in the system database, which store Databend information.".to_owned()
         };
         Ok(vec![desc])
     }
