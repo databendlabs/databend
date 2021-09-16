@@ -41,8 +41,8 @@ use common_store_api::MetaApi;
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::meta_backend::TableInfo;
-use crate::datasources::store_client::StoreApis;
-use crate::datasources::store_client::StoreApisProvider;
+use crate::datasources::util::StoreApis;
+use crate::datasources::util::StoreApisProvider;
 
 type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;

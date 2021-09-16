@@ -18,9 +18,9 @@ use common_exception::Result;
 use common_planners::TableOptions;
 
 use crate::catalogs::Table;
-use crate::datasources::store_client::StoreClientProvider;
+use crate::datasources::util::StoreClientProvider;
 
-pub trait TableFactory: Send + Sync {
+pub trait TableEngine: Send + Sync {
     fn try_create(
         &self,
         db: String,
@@ -31,7 +31,7 @@ pub trait TableFactory: Send + Sync {
     ) -> Result<Box<dyn Table>>;
 }
 
-impl<T> TableFactory for T
+impl<T> TableEngine for T
 where
     T: Fn(String, String, DataSchemaRef, TableOptions) -> Result<Box<dyn Table>>,
     T: Send + Sync,

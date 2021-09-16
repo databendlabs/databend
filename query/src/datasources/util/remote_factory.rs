@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_flights::StoreClient;
 
 use crate::configs::Config;
-use crate::datasources::store_client::StoreClientProvider;
-use crate::datasources::store_client::TryGetStoreClient;
+use crate::datasources::util::StoreClientProvider;
+use crate::datasources::util::TryGetStoreClient;
 
 pub struct RemoteFactory {
     store_client_provider: StoreClientProvider,

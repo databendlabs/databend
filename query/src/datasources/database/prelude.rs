@@ -22,7 +22,7 @@ use crate::datasources::database::default::default_database_factory::DefaultData
 use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
-pub const DB_ENGINE_DEFAULT: &str = "default";
+pub const DB_ENGINE_DEFAULT: &str = "Default";
 
 pub fn register_prelude_db_engines(
     registry: &DatabaseEngineRegistry,

@@ -30,13 +30,13 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "create-database-passed",
             sql: "CREATE DATABASE db1",
-            expect: "Create database db1, engine: default, if_not_exists:false, option: {}",
+            expect: "Create database db1, engine: Default, if_not_exists:false, option: {}",
             error: "",
         },
         Test {
             name: "create-database-if-not-exists-passed",
             sql: "CREATE DATABASE IF NOT EXISTS db1",
-            expect: "Create database db1, engine: default, if_not_exists:true, option: {}",
+            expect: "Create database db1, engine: Default, if_not_exists:true, option: {}",
             error: "",
         },
         Test {

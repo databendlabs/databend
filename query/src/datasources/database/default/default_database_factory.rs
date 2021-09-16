@@ -23,8 +23,8 @@ use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
 use crate::datasources::database::default::default_database::DefaultDatabase;
-use crate::datasources::store_client::RemoteFactory;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::util::RemoteFactory;
 
 /// Default database engine, which
 /// - creates tables by using TableFactory

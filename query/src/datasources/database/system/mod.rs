@@ -48,7 +48,6 @@ mod one_table;
 mod processes_table;
 mod settings_table;
 mod system_database;
-mod system_databases;
 mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;

@@ -15,12 +15,12 @@
 
 use common_exception::Result;
 
-use crate::datasources::table::csv_table::CsvTable;
+use crate::datasources::table::csv::csv_table::CsvTable;
 use crate::datasources::table::fuse::FuseTable;
-use crate::datasources::table::memory_table::MemoryTable;
-use crate::datasources::table::null_table::NullTable;
-use crate::datasources::table::parquet_table::ParquetTable;
-use crate::datasources::table::remote_table::RemoteTableFactory;
+use crate::datasources::table::memory::memory_table::MemoryTable;
+use crate::datasources::table::null::null_table::NullTable;
+use crate::datasources::table::parquet::parquet_table::ParquetTable;
+use crate::datasources::table::remote::remote_table::RemoteTableFactory;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry) -> Result<()> {

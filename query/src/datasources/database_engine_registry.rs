@@ -50,7 +50,9 @@ impl DatabaseEngineRegistry {
     }
 
     pub fn contains(&self, engine: &str) -> bool {
-        self.engines.read().contains_key(engine)
+        self.engines
+            .read()
+            .contains_key(engine.to_uppercase().as_str())
     }
 
     pub fn register(
@@ -58,7 +60,7 @@ impl DatabaseEngineRegistry {
         engine: impl Into<String>,
         provider: Arc<dyn DatabaseEngine>,
     ) -> Result<()> {
-        let engine_name = engine.into();
+        let engine_name = engine.into().to_uppercase();
         let mut w = self.engines.write();
 
         if let Entry::Vacant(e) = w.entry(engine_name.clone()) {
@@ -76,8 +78,12 @@ impl DatabaseEngineRegistry {
         &self,
         table_engine: impl AsRef<str>,
     ) -> Option<Arc<dyn DatabaseEngine>> {
-        self.engines.read().get(table_engine.as_ref()).cloned()
+        self.engines
+            .read()
+            .get(table_engine.as_ref().to_uppercase().as_str())
+            .cloned()
     }
+
     pub fn descriptions(&self) -> Vec<EngineDescription> {
         self.engines
             .read()

@@ -37,11 +37,11 @@ use crate::datasources::database::prelude::register_prelude_db_engines;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::database_engine_registry::EngineDescription;
-use crate::datasources::store_client::RemoteFactory;
-use crate::datasources::table::prelude::register_prelude_tbl_engines;
+use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::util::RemoteFactory;
 
-pub const DEFAULT_DB_ENGINE: &str = "default";
+pub const DEFAULT_DB_ENGINE: &str = "Default";
 
 /// Catalog based on MetaStore
 /// - System Database NOT included

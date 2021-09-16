@@ -28,8 +28,8 @@ use crate::catalogs::meta_backend::TableInfo;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
-use crate::datasources::store_client::StoreClientProvider;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::util::StoreClientProvider;
 
 pub struct DefaultDatabase {
     db_name: String,

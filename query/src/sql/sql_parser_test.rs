@@ -50,7 +50,7 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
-            engine: "default".to_string(),
+            engine: "Default".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;
@@ -61,7 +61,7 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
-            engine: "default".to_string(),
+            engine: "Default".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;

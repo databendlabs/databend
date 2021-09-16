@@ -43,9 +43,9 @@ async fn test_engines_table() -> Result<()> {
     "+---------+-----------------------------------------------------------------------------------------------+",
     "| name    | description                                                                                   |",
     "+---------+-----------------------------------------------------------------------------------------------+",
-    "| default | default database engine, with embedded metastore backend                                      |",
-    "| example | The example engine is used by example databases and tables.                                   |",
-    "| system  | The system engine is used by tables in the system database, which store Databend information. |",
+    "| DEFAULT | default database engine, with embedded metastore backend                                      |",
+    "| EXAMPLE | The example engine is used by example databases and tables.                                   |",
+    "| SYSTEM  | The system engine is used by tables in the system database, which store Databend information. |",
     "+---------+-----------------------------------------------------------------------------------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

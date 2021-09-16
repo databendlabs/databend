@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::catalogs::impls::sub_cats::metastore_catalog::MetaStoreCatalog;
-use crate::catalogs::impls::sub_cats::overlaid_catalog::OverlaidCatalog;
-use crate::catalogs::impls::sub_cats::system_catalog::SystemCatalog;
+use crate::catalogs::impls::catalog::metastore_catalog::MetaStoreCatalog;
+use crate::catalogs::impls::catalog::overlaid_catalog::OverlaidCatalog;
+use crate::catalogs::impls::catalog::system_catalog::SystemCatalog;
 use crate::configs::Config;
 
 /// DatabaseCatalog is the Catalog exports to other query components

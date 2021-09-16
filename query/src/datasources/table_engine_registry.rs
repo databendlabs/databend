@@ -21,11 +21,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 
-use crate::datasources::table_engine::TableFactory;
+use crate::datasources::table_engine::TableEngine;
 
 /// Registry of Table Providers
 pub struct TableEngineRegistry {
-    engines: RwLock<HashMap<String, Arc<dyn TableFactory>>>,
+    engines: RwLock<HashMap<String, Arc<dyn TableEngine>>>,
 }
 
 impl TableEngineRegistry {
@@ -38,7 +38,7 @@ impl TableEngineRegistry {
     pub fn register(
         &self,
         engine: impl Into<String>,
-        provider: Arc<dyn TableFactory>,
+        provider: Arc<dyn TableEngine>,
     ) -> Result<()> {
         let engine_name = engine.into().to_uppercase();
         let mut w = self.engines.write();
@@ -54,7 +54,7 @@ impl TableEngineRegistry {
         }
     }
 
-    pub fn engine_provider(&self, table_engine: impl AsRef<str>) -> Option<Arc<dyn TableFactory>> {
+    pub fn engine_provider(&self, table_engine: impl AsRef<str>) -> Option<Arc<dyn TableEngine>> {
         let name = table_engine.as_ref().to_uppercase();
         self.engines.read().get(&name).cloned()
     }

@@ -13,21 +13,14 @@
 // limitations under the License.
 //
 
-pub mod csv_table;
-pub mod csv_table_stream;
-#[cfg(test)]
-mod csv_table_test;
-pub(crate) mod fuse;
-pub mod memory_table;
-pub mod memory_table_stream;
-#[cfg(test)]
-mod memory_table_test;
-pub mod null_table;
-#[cfg(test)]
-mod null_table_test;
-pub mod parquet_table;
-#[cfg(test)]
-mod parquet_table_test;
-pub(crate) mod prelude;
-pub mod remote_table;
-mod remote_table_do_read;
+mod fuse;
+mod prelude;
+
+mod csv;
+mod memory;
+mod null;
+mod parquet;
+// deprecating
+mod remote;
+
+pub use prelude::register_prelude_tbl_engines;
