@@ -38,8 +38,6 @@ mod impl_flights;
 mod store_client;
 #[macro_use]
 mod store_do_action;
-#[cfg(feature = "mocks")]
-pub mod mocks;
 mod store_api_provider;
 mod store_client_conf;
 mod store_do_get;

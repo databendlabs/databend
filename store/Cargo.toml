@@ -30,6 +30,7 @@ common-profling = { path = "../common/profiling" }
 common-runtime = {path = "../common/runtime"}
 common-tracing = {path = "../common/tracing"}
 common-uniq-id = {path = "../common/uniq_id"}
+metasrv = {path = "../metasrv"}
 
 # Github dependencies
 

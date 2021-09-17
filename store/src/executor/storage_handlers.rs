@@ -19,12 +19,12 @@ use common_store_api_sdk::storage_api_impl::ReadPlanResult;
 use common_store_api_sdk::storage_api_impl::TruncateTableAction;
 use common_store_api_sdk::storage_api_impl::TruncateTableResult;
 use log::debug;
+use metasrv::meta_service::AppliedState;
+use metasrv::meta_service::Cmd;
+use metasrv::meta_service::LogEntry;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::AppliedState;
-use crate::meta_service::Cmd;
-use crate::meta_service::LogEntry;
 
 #[async_trait::async_trait]
 impl RequestHandler<ReadPlanAction> for ActionHandler {

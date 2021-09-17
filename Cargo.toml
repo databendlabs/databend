@@ -28,6 +28,8 @@ members = [
     # Query
     "query",
 
+    "metasrv",
+
     # Store
     "store",
 

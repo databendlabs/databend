@@ -21,5 +21,6 @@ mod local_kv_store_test;
 #[cfg(test)]
 mod namespace_mgr_test;
 
+mod local_kv_store;
 mod namespace_api;
 mod namespace_mgr;

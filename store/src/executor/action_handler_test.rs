@@ -44,6 +44,7 @@ use common_store_api_sdk::storage_api_impl::TruncateTableAction;
 use common_store_api_sdk::storage_api_impl::TruncateTableResult;
 use common_tracing::tracing;
 use maplit::hashmap;
+use metasrv::meta_service::MetaNode;
 use pretty_assertions::assert_eq;
 
 use crate::dfs::Dfs;
@@ -51,7 +52,6 @@ use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
 use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
-use crate::meta_service::MetaNode;
 use crate::tests::service::new_test_context;
 use crate::tests::service::StoreTestContext;
 
@@ -783,7 +783,7 @@ async fn bring_up_dfs_action_handler(
     let mut tc = new_test_context();
     let fs = LocalFS::try_create(tc.config.local_fs_dir.clone())?;
 
-    let mn = MetaNode::boot(0, &tc.config).await?;
+    let mn = MetaNode::boot(0, &tc.config.meta_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     let dfs = Dfs::create(fs, mn.clone());

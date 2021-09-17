@@ -126,7 +126,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
         // restart by opening existent meta db
-        tc.config.boot = false;
+        tc.config.meta_config.boot = false;
         crate::tests::start_store_server_with_context(&mut tc).await?;
     }
 

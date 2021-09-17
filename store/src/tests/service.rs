@@ -18,17 +18,16 @@ use anyhow::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot;
 use common_tracing::tracing;
-// use common_tracing::tracing::Span;
+use metasrv::meta_service::raft_db::get_sled_db;
+use metasrv::meta_service::GetReq;
+use metasrv::meta_service::MetaNode;
+use metasrv::meta_service::MetaServiceClient;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
 // use tracing_appender::non_blocking::WorkerGuard;
 use crate::api::StoreServer;
 use crate::configs;
-use crate::meta_service::raft_db::get_sled_db;
-use crate::meta_service::GetReq;
-use crate::meta_service::MetaNode;
-use crate::meta_service::MetaServiceClient;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
@@ -85,20 +84,20 @@ pub fn new_test_context() -> StoreTestContext {
     // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
     if cfg!(target_os = "macos") {
         tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-        config.meta_no_sync = true;
+        config.meta_config.no_sync = true;
     }
 
-    config.config_id = format!("{}", config_id);
+    config.meta_config.config_id = format!("{}", config_id);
 
     // By default, create a meta node instead of open an existent one.
-    config.single = true;
+    config.meta_config.single = true;
 
-    config.meta_api_port = config_id;
+    config.meta_config.raft_api_port = config_id;
 
     let host = "127.0.0.1";
 
     // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
-    config.sled_tree_prefix = format!("test-{}-", config_id);
+    config.meta_config.sled_tree_prefix = format!("test-{}-", config_id);
 
     {
         let flight_port = next_port();
@@ -116,7 +115,7 @@ pub fn new_test_context() -> StoreTestContext {
     }
 
     let tmp_meta_dir = tempdir().expect("create temp dir to store meta");
-    config.meta_dir = tmp_meta_dir.path().to_str().unwrap().to_string();
+    config.meta_config.raft_dir = tmp_meta_dir.path().to_str().unwrap().to_string();
 
     let tmp_local_fs_dir = tempdir().expect("create local fs dir to store data");
     config.local_fs_dir = tmp_local_fs_dir.path().to_str().unwrap().to_string();
@@ -145,7 +144,7 @@ pub fn new_sled_test_context() -> SledTestContext {
     // config for unit test of sled db, meta_sync() is true by default.
     let mut config = configs::Config::empty();
 
-    config.sled_tree_prefix = format!("test-{}-", next_port());
+    config.meta_config.sled_tree_prefix = format!("test-{}-", next_port());
 
     SledTestContext {
         config,
@@ -171,7 +170,7 @@ pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {
 macro_rules! init_store_ut {
     () => {{
         let t = tempfile::tempdir().expect("create temp dir to sled db");
-        crate::meta_service::raft_db::init_temp_sled_db(t);
+        metasrv::meta_service::raft_db::init_temp_sled_db(t);
 
         // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
         common_tracing::init_default_ut_tracing();
