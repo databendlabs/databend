@@ -119,8 +119,8 @@ impl fmt::Display for Cmd {
             } => {
                 write!(
                     f,
-                    "create_db:{}={}, if_not_exists:{}",
-                    name, db, if_not_exists
+                    "create_db:{}={}, if_not_exists:{}, engine:{}",
+                    name, db, if_not_exists, db.database_engine
                 )
             }
             Cmd::DropDatabase { name } => {

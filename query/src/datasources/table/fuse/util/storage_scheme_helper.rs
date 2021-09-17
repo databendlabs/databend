@@ -20,6 +20,7 @@ use crate::datasources::dal::StorageScheme;
 
 pub type TableStorageScheme = StorageScheme;
 
+#[allow(dead_code)]
 pub fn parse_storage_scheme(value: Option<&String>) -> Result<StorageScheme> {
     if let Some(v) = value {
         let v = v.to_uppercase();

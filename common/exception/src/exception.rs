@@ -251,7 +251,14 @@ build_exceptions! {
 
 
     // DAL error
-    DALTransportError(7000)
+    DALTransportError(7000),
+
+
+    // datasource error
+    DuplicatedTableEngineProvider(8000),
+    UnknownDatabaseEngine(8001),
+    UnknownTableEngine(8002),
+    DuplicatedDatabaseEngineProvider(8003),
 
 }
 // General errors

@@ -21,6 +21,8 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_store_api::store_api::GetStoreApiClient;
+use common_store_api::store_api::StoreApis;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -33,6 +35,7 @@ use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
+use crate::client_provider::StoreClientProvider;
 use crate::flight_result_to_str;
 use crate::store_do_action::RequestFor;
 use crate::store_do_action::StoreDoAction;
@@ -162,5 +165,14 @@ impl Interceptor for AuthInterceptor {
         let metadata = req.metadata_mut();
         metadata.insert_bin(AUTH_TOKEN_KEY, MetadataValue::from_bytes(&self.token));
         Ok(req)
+    }
+}
+
+impl StoreApis for StoreClient {}
+
+#[async_trait::async_trait]
+impl GetStoreApiClient<StoreClient> for StoreClientProvider {
+    async fn try_get_store_apis(&self) -> Result<StoreClient> {
+        self.try_get_client().await
     }
 }

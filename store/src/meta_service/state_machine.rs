@@ -431,7 +431,9 @@ impl StateMachine {
                 }
             }
 
-            Cmd::CreateDatabase { ref name, .. } => {
+            Cmd::CreateDatabase {
+                ref name, ref db, ..
+            } => {
                 // - If the db present, return it.
                 // - Otherwise, create a new one with next seq number as database id, and add it in to store.
                 if self.databases.contains_key(name) {
@@ -440,6 +442,7 @@ impl StateMachine {
                 } else {
                     let db = Database {
                         database_id: self.incr_seq(SEQ_DATABASE_ID).await?,
+                        database_engine: db.database_engine.clone(),
                         tables: Default::default(),
                     };
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
@@ -481,6 +484,8 @@ impl StateMachine {
                     let table = Table {
                         table_id: self.incr_seq(SEQ_TABLE_ID).await?,
                         schema: table.schema.clone(),
+                        table_engine: table.table_engine.clone(),
+                        table_options: table.table_options.clone(),
                         parts: table.parts.clone(),
                     };
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;

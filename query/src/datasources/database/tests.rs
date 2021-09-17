@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
 use common_runtime::tokio;
@@ -38,7 +39,7 @@ async fn test_datasource() -> Result<()> {
         catalog.create_database(CreateDatabasePlan {
             if_not_exists: false,
             db: "test_db".to_string(),
-            engine: "Local".to_string(),
+            engine: "default".to_string(),
             options: Default::default(),
         })?;
 
@@ -56,6 +57,24 @@ async fn test_datasource() -> Result<()> {
         let result = catalog.get_database("test_db");
         assert_eq!(true, result.is_err());
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_datasource_invalid_db_engine() -> Result<()> {
+    let catalog = try_create_catalog()?;
+
+    // Create database.
+    let r = catalog.create_database(CreateDatabasePlan {
+        if_not_exists: false,
+        db: "test_db".to_string(),
+        engine: "Local".to_string(),
+        options: Default::default(),
+    });
+    assert_eq!(true, r.is_err());
+    let err = r.unwrap_err();
+    assert_eq!(err.code(), ErrorCode::UnknownDatabaseEngine("").code());
 
     Ok(())
 }

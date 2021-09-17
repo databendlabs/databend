@@ -34,6 +34,12 @@ pub trait Table: Sync + Send {
     fn schema(&self) -> Result<DataSchemaRef>;
     // Is Local or Remote.
     fn is_local(&self) -> bool;
+
+    // Some tables may have internal states, like MemoryTable
+    // their instances will be kept, instead of dropped after used
+    fn is_stateful(&self) -> bool {
+        false
+    }
     // Get the read source plan.
     fn read_plan(
         &self,

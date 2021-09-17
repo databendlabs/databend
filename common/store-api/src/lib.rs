@@ -16,6 +16,7 @@
 pub mod kv_api;
 mod meta_api;
 mod storage_api;
+pub mod store_api;
 
 pub use kv_api::GetKVActionResult;
 pub use kv_api::KVApi;

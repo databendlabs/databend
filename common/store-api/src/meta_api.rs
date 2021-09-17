@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 
+use std::collections::HashMap;
+
 use common_datavalues::DataSchemaRef;
 use common_metatypes::Database;
 use common_metatypes::MetaId;
@@ -32,6 +34,7 @@ pub struct CreateDatabaseActionResult {
 pub struct GetDatabaseActionResult {
     pub database_id: u64,
     pub db: String,
+    pub engine: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -51,6 +54,8 @@ pub struct GetTableActionResult {
     pub db: String,
     pub name: String,
     pub schema: DataSchemaRef,
+    pub engine: String,
+    pub options: HashMap<String, String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
