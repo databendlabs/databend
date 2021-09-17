@@ -22,6 +22,7 @@ members = [
     "common/management",
     "common/io",
     "common/cache",
+    "common/uniq_id",
     "common/clickhouse-srv",
 
     # Query

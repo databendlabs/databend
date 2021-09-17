@@ -12,25 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
+pub fn uniq_usize() -> usize {
+    static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Debug)]
-pub struct Seq(usize);
-
-impl Default for Seq {
-    fn default() -> Self {
-        Seq(GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst))
-    }
-}
-
-impl Deref for Seq {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst)
 }
