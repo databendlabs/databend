@@ -29,7 +29,6 @@ use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
-use crate::tests::Seq;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
@@ -56,7 +55,7 @@ pub async fn start_store_server_with_context(tc: &mut StoreTestContext) -> Resul
 }
 
 pub fn next_port() -> u32 {
-    19000u32 + (*Seq::default() as u32)
+    19000u32 + (common_uniq_id::uniq_usize() as u32)
 }
 
 pub struct StoreTestContext {

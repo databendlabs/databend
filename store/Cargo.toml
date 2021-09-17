@@ -29,6 +29,7 @@ common-planners = {path = "../common/planners"}
 common-profling = { path = "../common/profiling" }
 common-runtime = {path = "../common/runtime"}
 common-tracing = {path = "../common/tracing"}
+common-uniq-id = {path = "../common/uniq_id"}
 
 # Github dependencies
 

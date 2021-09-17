@@ -1007,6 +1007,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-uniq-id"
+version = "0.1.0"
+
+[[package]]
 name = "console"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1501,6 +1505,7 @@ dependencies = [
  "common-profling",
  "common-runtime",
  "common-tracing",
+ "common-uniq-id",
  "env_logger 0.9.0",
  "flaky_test",
  "futures",
