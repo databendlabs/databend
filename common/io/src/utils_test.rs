@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use bytes::BufMut;
-pub use bytes::BytesMut;
+use crate::utils::convert_byte_size;
+use crate::utils::convert_number_size;
 
-pub use crate::binary_de::BinaryDe;
-pub use crate::binary_read::BinaryRead;
-pub use crate::binary_ser::BinarySer;
-pub use crate::binary_write::BinaryWrite;
-pub use crate::binary_write::BinaryWriteBuf;
-pub use crate::buf_read::BufReadExt;
-pub use crate::marshal::Marshal;
-pub use crate::stat_buffer::StatBuffer;
-pub use crate::unmarshal::Unmarshal;
-pub use crate::utils::*;
+#[test]
+fn convert_test() {
+    assert_eq!(convert_byte_size(1_f64), "1 B");
+    assert_eq!(convert_byte_size(1022_f64), "1.02 KB");
+    assert_eq!(convert_byte_size(1022_f64 * 10000000f64), "10.22 GB");
+
+    assert_eq!(convert_number_size(1_f64), "1");
+    assert_eq!(convert_number_size(1022_f64), "1.02 thousand");
+    assert_eq!(convert_number_size(10222_f64), "10.22 thousand");
+}
