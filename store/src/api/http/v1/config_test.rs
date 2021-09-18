@@ -31,7 +31,7 @@ async fn test_config() -> common_exception::Result<()> {
     use crate::api::http::v1::config::config_handler;
     use crate::configs::Config; // for `app.oneshot()`
 
-    let conf = Config::default();
+    let conf = Config::empty();
     let cluster_router = Router::new()
         .route("/v1/config", get(config_handler))
         .layer(AddExtensionLayer::new(conf.clone()));

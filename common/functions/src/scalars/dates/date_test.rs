@@ -52,7 +52,7 @@ fn test_round_function() -> Result<()> {
 }
 
 #[test]
-fn test_toStartOf_function() -> Result<()> {
+fn test_to_start_of_function() -> Result<()> {
     let test = Test {
         name: "test-timeSlot-now",
         display: "toStartOfQuarter()",
