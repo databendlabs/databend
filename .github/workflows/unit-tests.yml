@@ -43,6 +43,7 @@ jobs:
           components: rustfmt
           args: --all-features --no-fail-fast
         env:
+          RUST_TEST_THREADS: 2
           RUST_LOG: debug
           RUST_BACKTRACE: full
           CARGO_INCREMENTAL: '0'
