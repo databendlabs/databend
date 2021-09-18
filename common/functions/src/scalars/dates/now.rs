@@ -39,7 +39,7 @@ impl Function for NowFunction {
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::DateTime32)
+        Ok(DataType::DateTime32(None))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

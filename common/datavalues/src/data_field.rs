@@ -67,7 +67,12 @@ impl DataField {
         let custom_name = match self.data_type() {
             DataType::Date16 => Some("Date16"),
             DataType::Date32 => Some("Date32"),
-            DataType::DateTime32 => Some("DateTime32"),
+            DataType::DateTime32(_) => Some("DateTime32"),
+            _ => None,
+        };
+
+        let custom_metadata = match self.data_type() {
+            DataType::DateTime32(tz) => tz.clone(),
             _ => None,
         };
 
@@ -75,9 +80,13 @@ impl DataField {
         if let Some(custom_name) = custom_name {
             let mut mp = BTreeMap::new();
             mp.insert(
-                "ARROW:extension:datafuse_name".to_string(),
+                "ARROW:extension:databend_name".to_string(),
                 custom_name.to_string(),
             );
+
+            if let Some(m) = custom_metadata {
+                mp.insert("ARROW:extension:databend_metadata".to_string(), m);
+            }
             f = f.with_metadata(mp);
         }
 
@@ -89,11 +98,12 @@ impl From<&ArrowField> for DataField {
     fn from(f: &ArrowField) -> Self {
         let mut dt: DataType = f.data_type().into();
         if let Some(m) = f.metadata() {
-            if let Some(custom_name) = m.get("ARROW:extension:datafuse_name") {
+            if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
+                let metatada = m.get("ARROW:extension:databend_metadata");
                 match custom_name.as_str() {
                     "Date16" => dt = DataType::Date16,
                     "Date32" => dt = DataType::Date32,
-                    "DateTime32" => dt = DataType::DateTime32,
+                    "DateTime32" => dt = DataType::DateTime32(metatada.cloned()),
                     _ => {}
                 }
             }

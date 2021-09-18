@@ -21,14 +21,14 @@ use common_runtime::tokio;
 
 use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::tests::try_create_cluster_context;
 use crate::tests::ClusterNode;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
     let context = create_env().await?;
-    let scheduler = PlanScheduler::try_create(context.clone())?;
+    let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Empty(EmptyPlan::create()))?;
 
     assert!(scheduled_tasks.get_tasks()?.is_empty());
@@ -59,7 +59,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
      *  +------------------+
      */
     let context = create_env().await?;
-    let scheduler = PlanScheduler::try_create(context.clone())?;
+    let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Stage(StagePlan {
         kind: StageKind::Convergent,
         scatters_expr: Expression::create_literal(DataValue::UInt64(Some(0))),
@@ -129,7 +129,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
      *                  +-----------+       +-----------+
      */
     let context = create_env().await?;
-    let scheduler = PlanScheduler::try_create(context.clone())?;
+    let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
@@ -233,7 +233,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
      *   +-----------+      +-----------+       +-----------+
      */
     let context = create_env().await?;
-    let plan_scheduler = PlanScheduler::try_create(context.clone())?;
+    let plan_scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = plan_scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
@@ -329,8 +329,8 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     Ok(())
 }
 
-async fn create_env() -> Result<DatafuseQueryContextRef> {
-    try_create_cluster_context(&vec![
+async fn create_env() -> Result<DatabendQueryContextRef> {
+    try_create_cluster_context(&[
         ClusterNode::create("dummy_local", 1, "localhost:9090"),
         ClusterNode::create("dummy", 1, "github.com:9090"),
     ])

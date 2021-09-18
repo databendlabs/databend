@@ -22,15 +22,15 @@ use super::MixedProcessor;
 use crate::pipelines::processors::MergeProcessor;
 use crate::pipelines::processors::Pipe;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct Pipeline {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     pipes: Vec<Pipe>,
 }
 
 impl Pipeline {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         Pipeline { ctx, pipes: vec![] }
     }
 

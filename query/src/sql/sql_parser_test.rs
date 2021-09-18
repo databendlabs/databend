@@ -50,7 +50,7 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
-            engine: "Remote".to_string(),
+            engine: "Default".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;
@@ -61,7 +61,7 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
-            engine: "Remote".to_string(),
+            engine: "Default".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;
@@ -222,10 +222,10 @@ fn show_queries() -> Result<()> {
 
     let parse_sql_to_expr = |query_expr: &str| -> Expr {
         let dialect = GenericDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, &query_expr);
+        let mut tokenizer = Tokenizer::new(&dialect, query_expr);
         let tokens = tokenizer.tokenize().unwrap();
         let mut parser = Parser::new(tokens, &dialect);
-        return parser.parse_expr().unwrap();
+        parser.parse_expr().unwrap()
     };
 
     expect_parse_ok(

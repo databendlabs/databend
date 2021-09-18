@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::*;
 
-use crate::prelude::DFBooleanArray;
-use crate::prelude::DataColumn;
+use crate::prelude::*;
 use crate::TypeSerializer;
 
-pub struct BooleanSerializer {}
+pub struct BooleanSerializer {
+    pub builder: BooleanArrayBuilder,
+}
 
 impl TypeSerializer for BooleanSerializer {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
@@ -39,5 +42,43 @@ impl TypeSerializer for BooleanSerializer {
             })
             .collect();
         Ok(result)
+    }
+
+    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let value: bool = reader.read_scalar()?;
+        self.builder.append_value(value);
+        Ok(())
+    }
+
+    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+        for row in 0..rows {
+            let mut reader = &reader[step * row..];
+            let value: bool = reader.read_scalar()?;
+            self.builder.append_value(value);
+        }
+
+        Ok(())
+    }
+
+    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
+        let v = if reader.eq_ignore_ascii_case(b"false") {
+            Some(false)
+        } else if reader.eq_ignore_ascii_case(b"true") {
+            Some(true)
+        } else if reader.eq_ignore_ascii_case(b"null") {
+            None
+        } else {
+            return Err(ErrorCode::BadBytes("Incorrect boolean value"));
+        };
+        self.builder.append_option(v);
+        Ok(())
+    }
+
+    fn de_null(&mut self) {
+        self.builder.append_null()
+    }
+
+    fn finish_to_series(&mut self) -> Series {
+        self.builder.finish().into_series()
     }
 }

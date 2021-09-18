@@ -36,6 +36,7 @@ mod impls;
 mod store_client;
 #[macro_use]
 mod store_do_action;
+pub mod client_provider;
 mod store_do_get;
 
 // ProtoBuf generated files.

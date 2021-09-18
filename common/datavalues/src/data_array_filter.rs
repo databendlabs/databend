@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::filter::build_filter;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -53,11 +52,11 @@ impl DataArrayFilter {
     /// Remove null values by do a bitmask AND operation with null bits and the boolean bits.
     fn remove_null_filter(filter: &DFBooleanArray) -> DFBooleanArray {
         let array = filter.inner();
-        let mask = array.values();
-        if let Some(v) = array.validity() {
-            let mask = mask.bitand(v);
-            return DFBooleanArray::new(BooleanArray::from_data(ArrowType::Boolean, mask, None));
+        let filter_mask = array.values();
+
+        match array.validity() {
+            None => filter.clone(),
+            Some(v) => DFBooleanArray::from_arrow_data(filter_mask.bitand(v), None),
         }
-        filter.clone()
     }
 }

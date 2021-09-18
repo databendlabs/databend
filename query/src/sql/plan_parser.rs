@@ -61,10 +61,11 @@ use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
+use sqlparser::ast::UnaryOperator;
 
 use crate::catalogs::Catalog;
 use crate::functions::ContextFunction;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -83,11 +84,11 @@ use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
 
 pub struct PlanParser {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 }
 
 impl PlanParser {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         Self { ctx }
     }
 
@@ -435,6 +436,7 @@ impl PlanParser {
         let table = self.ctx.get_catalog().get_table(&db_name, &tbl_name)?;
 
         let mut schema = table.raw().schema()?;
+        let tbl_id = table.meta_id();
 
         if !columns.is_empty() {
             let fields = columns
@@ -470,6 +472,7 @@ impl PlanParser {
         let plan_node = InsertIntoPlan {
             db_name,
             tbl_name,
+            tbl_id,
             schema,
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
@@ -889,6 +892,43 @@ impl PlanParser {
         }
     }
 
+    fn interval_to_day_time(days: i32, ms: i32) -> Result<Expression> {
+        let data_type = DataType::Interval(IntervalUnit::DayTime);
+        let milliseconds_per_day = 24 * 3600 * 1000;
+        let total_ms = days as i64 * milliseconds_per_day + ms as i64;
+
+        Ok(Expression::Literal {
+            value: DataValue::Int64(Some(total_ms)),
+            column_name: Some(total_ms.to_string()),
+            data_type,
+        })
+    }
+
+    fn interval_to_year_month(months: i32) -> Result<Expression> {
+        let data_type = DataType::Interval(IntervalUnit::YearMonth);
+
+        Ok(Expression::Literal {
+            value: DataValue::Int64(Some(months as i64)),
+            column_name: Some(months.to_string()),
+            data_type,
+        })
+    }
+
+    fn interval_to_rex(
+        value: &str,
+        interval_kind: sqlparser::ast::DateTimeField,
+    ) -> Result<Expression> {
+        let num = value.parse::<i32>()?; // we only accept i32 for number in "interval [num] [year|month|day|hour|minute|second]"
+        match interval_kind {
+            sqlparser::ast::DateTimeField::Year => Self::interval_to_year_month(num * 12),
+            sqlparser::ast::DateTimeField::Month => Self::interval_to_year_month(num),
+            sqlparser::ast::DateTimeField::Day => Self::interval_to_day_time(num, 0),
+            sqlparser::ast::DateTimeField::Hour => Self::interval_to_day_time(0, num * 3600 * 1000),
+            sqlparser::ast::DateTimeField::Minute => Self::interval_to_day_time(0, num * 60 * 1000),
+            sqlparser::ast::DateTimeField::Second => Self::interval_to_day_time(0, num * 1000),
+        }
+    }
+
     fn value_to_rex(value: &sqlparser::ast::Value) -> Result<Expression> {
         match value {
             sqlparser::ast::Value::Number(ref n, _) => {
@@ -899,6 +939,35 @@ impl PlanParser {
             )),
             sqlparser::ast::Value::Boolean(b) => {
                 Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
+            }
+            sqlparser::ast::Value::Interval {
+                value: value_expr,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision,
+            } => {
+                // We don't support full interval expression like 'Interval ..To.. '. Currently only partial interval expression like "interval [num] [unit]" is supported.
+                if leading_precision.is_some()
+                    || last_field.is_some()
+                    || fractional_seconds_precision.is_some()
+                {
+                    return Result::Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported interval expression: {}.",
+                        value
+                    )));
+                }
+
+                // When the input is like "interval '1 hour'", leading_field will be None and value_expr will be '1 hour'.
+                // We may want to support this pattern in native paser (sqlparser-rs), to have a parsing result that leading_field is Some(Hour) and value_expr is number '1'.
+                if leading_field.is_none() {
+                    //TODO: support parsing literal interval like '1 hour'
+                    return Result::Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported interval expression: {}.",
+                        value
+                    )));
+                }
+                Self::interval_to_rex(value_expr, leading_field.clone().unwrap())
             }
             sqlparser::ast::Value::Null => Ok(Expression::create_literal(DataValue::Null)),
             other => Result::Err(ErrorCode::SyntaxException(format!(
@@ -925,10 +994,13 @@ impl PlanParser {
                     right: Box::new(self.sql_to_rex(right, schema, select)?),
                 })
             }
-            sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(Expression::UnaryExpression {
-                op: format!("{}", op),
-                expr: Box::new(self.sql_to_rex(expr, schema, select)?),
-            }),
+            sqlparser::ast::Expr::UnaryOp { op, expr } => match op {
+                UnaryOperator::Plus => self.sql_to_rex(expr, schema, select),
+                _ => Ok(Expression::UnaryExpression {
+                    op: format!("{}", op),
+                    expr: Box::new(self.sql_to_rex(expr, schema, select)?),
+                }),
+            },
             sqlparser::ast::Expr::Exists(q) => Ok(Expression::ScalarFunction {
                 op: "EXISTS".to_lowercase(),
                 args: vec![self.subquery_to_rex(q)?],

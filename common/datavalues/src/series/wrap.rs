@@ -278,9 +278,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn bool(&self) -> Result<&DFBooleanArray> {
-                if matches!(self.0.data_type(), &DataType::Boolean)
-                    || matches!(self.0.data_type(), &DataType::Null)
-                {
+                if matches!(self.0.data_type(), &DataType::Boolean) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBooleanArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(

@@ -16,3 +16,46 @@ select today() - 1 = yesterday();
 select today() - yesterday()  = 1;
 select today() + 1 = tomorrow();
 select tomorrow() - today() = 1;
+
+select toYYYYMM(toDateTime(1630833797));
+select toYYYYMM(toDate(18875));
+select toYYYYMM(toDateTime(1630833797))  =  202109;
+select toYYYYMM(toDate(18875))  =  202109;
+
+select '===round===';
+select timeSlot(toDateTime(1630320462));
+select toStartOfHour(toDateTime(1630320462));
+select toStartOfFifteenMinutes(toDateTime(1630320462));
+select toStartOfMinute(toDateTime(1630320462));
+select toStartOfFiveMinutes(toDateTime(1630320462));
+select toStartOfTenMinutes(toDateTime(1630320462));
+select timeSlot(now()) <= now();
+select '===round-end===';
+
+select '===toYYYYMMDDhhmmss===';
+select toYYYYMMDDhhmmss(toDateTime(1630833797));
+select toYYYYMMDDhhmmss(toDate(18875));
+select toYYYYMMDDhhmmss(toDateTime(1630833797))  =  20210905092317;
+select toYYYYMMDDhhmmss(toDate(18875))  =  20210905000000;
+select '===toYYYYMMDDhhmmss===';
+
+select '===toYYYYMMDD===';
+select toYYYYMMDD(toDateTime(1630833797));
+select toYYYYMMDD(toDate(18875));
+select toYYYYMMDD(toDateTime(1630833797))  =  20210905;
+select toYYYYMMDD(toDate(18875))  =  20210905;
+select '===toYYYYMMDD===';
+
+select '===toStartOf===';
+select toStartOfYear(toDateTime(1630812366));
+select toStartOfISOYear(toDateTime(1630812366));
+select toStartOfYear(toDate(18869));
+select toStartOfISOYear(toDate(18869));
+
+select toStartOfQuarter(toDateTime(1631705259));
+select toStartOfQuarter(toDateTime(1621078059));
+select toStartOfMonth(toDateTime(1631705259));
+select toStartOfQuarter(toDate(18885));
+select toStartOfQuarter(toDate(18762));
+select toStartOfMonth(toDate(18885));
+select '===toStartOf===';

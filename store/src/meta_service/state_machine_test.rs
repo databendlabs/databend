@@ -24,8 +24,10 @@ use common_metatypes::Database;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
+use common_metatypes::Operation;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;
+use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
@@ -128,9 +130,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
         let sm = StateMachine::open(&tc.config, 1).await?;
 
         assert_eq!(3, sm.slots.len());
-        let n = match sm.replication {
-            Replication::Mirror(x) => x,
-        };
+        let Replication::Mirror(n) = sm.replication;
         assert_eq!(1, n);
     }
 
@@ -144,9 +144,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
             .init(sm);
 
         assert_eq!(5, sm.slots.len());
-        let n = match sm.replication {
-            Replication::Mirror(x) => x,
-        };
+        let Replication::Mirror(n) = sm.replication;
         assert_eq!(7, n);
     }
 
@@ -233,20 +231,14 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     }
 
     fn case(name: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
-        let prev = match prev {
-            None => None,
-            Some(id) => Some(Database {
-                database_id: id,
-                ..Default::default()
-            }),
-        };
-        let result = match result {
-            None => None,
-            Some(id) => Some(Database {
-                database_id: id,
-                ..Default::default()
-            }),
-        };
+        let prev = prev.map(|id| Database {
+            database_id: id,
+            ..Default::default()
+        });
+        let result = result.map(|id| Database {
+            database_id: id,
+            ..Default::default()
+        });
         T { name, prev, result }
     }
 
@@ -412,8 +404,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                 txid: None,
                 cmd: Cmd::UpsertKV {
                     key: c.key.clone(),
-                    seq: c.seq.clone(),
-                    value: Some(c.value.clone()),
+                    seq: c.seq,
+                    value: Some(c.value.clone()).into(),
                     value_meta: c.value_meta.clone(),
                 },
             })
@@ -450,6 +442,100 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         let got = sm.get_kv(&c.key)?;
         assert_eq!(want, got, "get: {}", mes,);
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Result<()> {
+    // - Update a value-meta of None does nothing.
+    // - Update a value-meta of Some() only updates the value-meta.
+
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
+
+    let tc = new_test_context();
+    let mut sm = StateMachine::open(&tc.config, 1).await?;
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let key = "value_meta_foo".to_string();
+
+    tracing::info!("--- update meta of a nonexistent record");
+
+    let resp = sm
+        .apply_non_dup(&LogEntry {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: key.clone(),
+                seq: MatchSeq::Any,
+                value: Operation::AsIs,
+                value_meta: Some(KVMeta {
+                    expire_at: Some(now + 10),
+                }),
+            },
+        })
+        .await?;
+
+    assert_eq!(
+        AppliedState::KV {
+            prev: None,
+            result: None,
+        },
+        resp,
+        "update meta of None does nothing",
+    );
+
+    tracing::info!("--- update meta of a existent record");
+
+    // add a record
+    let _resp = sm
+        .apply_non_dup(&LogEntry {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: key.clone(),
+                seq: MatchSeq::Any,
+                value: Operation::Update(b"value_meta_bar".to_vec()),
+                value_meta: Some(KVMeta {
+                    expire_at: Some(now + 10),
+                }),
+            },
+        })
+        .await?;
+
+    // update the meta of the record
+    let _resp = sm
+        .apply_non_dup(&LogEntry {
+            txid: None,
+            cmd: Cmd::UpsertKV {
+                key: key.clone(),
+                seq: MatchSeq::Any,
+                value: Operation::AsIs,
+                value_meta: Some(KVMeta {
+                    expire_at: Some(now + 20),
+                }),
+            },
+        })
+        .await?;
+
+    tracing::info!("--- read the original value and updated meta");
+
+    let got = sm.get_kv(&key)?;
+    let got = got.unwrap();
+
+    assert_eq!(
+        KVValue {
+            meta: Some(KVMeta {
+                expire_at: Some(now + 20)
+            }),
+            value: b"value_meta_bar".to_vec()
+        },
+        got.1,
+        "update meta of None does nothing",
+    );
 
     Ok(())
 }
@@ -495,11 +581,11 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
     let prev = Some((1u64, "x"));
 
     let cases: Vec<T> = vec![
-        case("foo", MatchSeq::Any, prev.clone(), None),
-        case("foo", MatchSeq::Exact(1), prev.clone(), None),
-        case("foo", MatchSeq::Exact(0), prev.clone(), prev.clone()),
-        case("foo", MatchSeq::GE(1), prev.clone(), None),
-        case("foo", MatchSeq::GE(2), prev.clone(), prev.clone()),
+        case("foo", MatchSeq::Any, prev, None),
+        case("foo", MatchSeq::Exact(1), prev, None),
+        case("foo", MatchSeq::Exact(0), prev, prev),
+        case("foo", MatchSeq::GE(1), prev, None),
+        case("foo", MatchSeq::GE(2), prev, prev),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -514,7 +600,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
             cmd: Cmd::UpsertKV {
                 key: "foo".to_string(),
                 seq: MatchSeq::Any,
-                value: Some(b"x".to_vec()),
+                value: Some(b"x".to_vec()).into(),
                 value_meta: None,
             },
         })
@@ -526,8 +612,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
                 txid: None,
                 cmd: Cmd::UpsertKV {
                     key: c.key.clone(),
-                    seq: c.seq.clone(),
-                    value: None,
+                    seq: c.seq,
+                    value: Operation::Delete,
                     value_meta: None,
                 },
             })

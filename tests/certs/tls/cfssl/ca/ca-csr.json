@@ -1,0 +1,20 @@
+{
+    "CN": "Databend",
+    "CA": {
+        "expiry": "87600h"
+    },
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "US",
+            "L": "CA",
+            "O": "Datafuselabs",
+            "ST": "LA",
+            "OU": "Databend"
+        }
+    ]
+}
+

@@ -208,9 +208,9 @@ build_exceptions! {
     ConcurrentSnapshotInstall(2404),
     IllegalSnapshot(2405),
 
-    // DatafuseStore server error
+    // DatabendStore server error
 
-    DatafuseStoreError(2501),
+    DatabendStoreError(2501),
 
     // FS error
 
@@ -236,6 +236,11 @@ build_exceptions! {
     MetaNodeInternalError(4006),
     TrancateTableFailedError(4007),
 
+    // namespace error.
+    NamespaceUnknownNode(4008),
+    NamespaceNodeAlreadyExists(4009),
+    NamespaceIllegalNodeFormat(4010),
+
     // storage-api error codes
     IllegalScanPlan(5000),
     ReadFileError(5001),
@@ -246,7 +251,14 @@ build_exceptions! {
 
 
     // DAL error
-    DALTransportError(7000)
+    DALTransportError(7000),
+
+
+    // datasource error
+    DuplicatedTableEngineProvider(8000),
+    UnknownDatabaseEngine(8001),
+    UnknownTableEngine(8002),
+    DuplicatedDatabaseEngineProvider(8003),
 
 }
 // General errors

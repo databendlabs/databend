@@ -84,7 +84,7 @@ async fn test_transform_expression_error() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create(ctx.clone());
+    let mut pipeline = Pipeline::create(ctx);
     let source = test_source.number_source_transform_for_test(8)?;
     pipeline.add_source(Arc::new(source))?;
 

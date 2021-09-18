@@ -18,6 +18,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Debug;
 use std::fmt::Formatter;
 
 pub use errors::ConflictSeq;
@@ -76,6 +77,9 @@ impl PartialOrd<u64> for KVValue {
 pub struct Database {
     pub database_id: u64,
 
+    /// engine name of db
+    pub database_engine: String,
+
     /// tables belong to this database.
     pub tables: HashMap<String, u64>,
 }
@@ -93,6 +97,12 @@ pub struct Table {
     /// serialized schema
     pub schema: Vec<u8>,
 
+    /// table engine
+    pub table_engine: String,
+
+    /// table options
+    pub table_options: HashMap<String, String>,
+
     /// name of parts that belong to this table.
     pub parts: HashSet<String>,
 }
@@ -105,3 +115,22 @@ impl fmt::Display for Table {
 
 pub type MetaVersion = u64;
 pub type MetaId = u64;
+
+/// An operation that updates a field, delete it, or leave it as is.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Operation<T> {
+    Update(T),
+    Delete,
+    AsIs,
+}
+
+impl<T> From<Option<T>> for Operation<T>
+where for<'x> T: Serialize + Deserialize<'x> + Debug + Clone
+{
+    fn from(v: Option<T>) -> Self {
+        match v {
+            None => Operation::Delete,
+            Some(x) => Operation::Update(x),
+        }
+    }
+}

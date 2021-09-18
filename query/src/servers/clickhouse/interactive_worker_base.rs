@@ -18,8 +18,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use clickhouse_srv::types::Block as ClickHouseBlock;
-use clickhouse_srv::CHContext;
+use common_clickhouse_srv::types::Block as ClickHouseBlock;
+use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
@@ -38,7 +38,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sql::PlanParser;
 
 pub struct InteractiveWorkerBase;
@@ -53,7 +53,7 @@ pub enum BlockItem {
 impl InteractiveWorkerBase {
     pub async fn do_query(
         ch_ctx: &mut CHContext,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Receiver<BlockItem>> {
         let query = &ch_ctx.state.query;
         log::debug!("{}", query);
@@ -65,11 +65,13 @@ impl InteractiveWorkerBase {
             _ => {
                 let start = Instant::now();
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+                let name = interpreter.name().to_string();
                 let async_data_stream = interpreter.execute();
                 let mut data_stream = async_data_stream.await?;
                 histogram!(
                     super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
-                    start.elapsed()
+                    start.elapsed(),
+                    "interpreter" => name
                 );
                 let mut interval_stream = IntervalStream::new(interval(Duration::from_millis(30)));
                 let cancel = Arc::new(AtomicBool::new(false));
@@ -101,7 +103,7 @@ impl InteractiveWorkerBase {
     pub async fn process_insert_query(
         insert: InsertIntoPlan,
         ch_ctx: &mut CHContext,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Receiver<BlockItem>> {
         let sample_block = DataBlock::empty_with_schema(insert.schema());
         let (sender, rec) = channel(4);
@@ -115,6 +117,7 @@ impl InteractiveWorkerBase {
         };
         insert.set_input_stream(Box::pin(stream));
         let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::InsertInto(insert))?;
+        let name = interpreter.name().to_string();
 
         let (mut tx, rx) = mpsc::channel(20);
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
@@ -128,7 +131,8 @@ impl InteractiveWorkerBase {
         })?;
         histogram!(
             super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
-            start.elapsed()
+            start.elapsed(),
+            "interpreter" => name
         );
         Ok(rx)
     }

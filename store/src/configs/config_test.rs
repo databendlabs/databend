@@ -16,7 +16,7 @@ use crate::configs::Config;
 
 #[test]
 fn test_fuse_commit_version() -> anyhow::Result<()> {
-    let v = &crate::configs::config::FUSE_COMMIT_VERSION;
+    let v = &crate::configs::config::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())
 }

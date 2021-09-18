@@ -42,12 +42,12 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 // For example:
 //
 // use bumpalo::Bump;
-// use datafuse_query::common::HashTable;
+// use databend_query::common::HashTable;
 // use common_datablocks::HashMethodSerializer;
 // use common_datavalues::arrays::StringArrayBuilder;
-// use datafuse_query::pipelines::transforms::group_by::PolymorphicKeysHelper;
-// use datafuse_query::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
-// use datafuse_query::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
+// use databend_query::pipelines::transforms::group_by::PolymorphicKeysHelper;
+// use databend_query::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
+// use databend_query::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
 //
 // impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 //     type State = SerializedKeysAggregatorState;

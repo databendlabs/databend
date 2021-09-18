@@ -15,14 +15,15 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use clickhouse_srv::connection::Connection;
-use clickhouse_srv::CHContext;
-use clickhouse_srv::ClickHouseSession;
+use common_clickhouse_srv::connection::Connection;
+use common_clickhouse_srv::CHContext;
+use common_clickhouse_srv::ClickHouseSession;
 use metrics::histogram;
 
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
+use crate::servers::server::mock::get_mock_user;
 use crate::sessions::SessionRef;
 
 pub struct InteractiveWorker {
@@ -41,7 +42,7 @@ impl ClickHouseSession for InteractiveWorker {
         &self,
         ctx: &mut CHContext,
         conn: &mut Connection,
-    ) -> clickhouse_srv::errors::Result<()> {
+    ) -> common_clickhouse_srv::errors::Result<()> {
         let start = Instant::now();
 
         let context = self.session.create_context();
@@ -63,12 +64,12 @@ impl ClickHouseSession for InteractiveWorker {
 
     // TODO: remove it
     fn dbms_name(&self) -> &str {
-        "datafuse"
+        "databend"
     }
 
     // TODO: remove it
     fn server_display_name(&self) -> &str {
-        "datafuse"
+        "databend"
     }
 
     // TODO: remove it
@@ -97,8 +98,15 @@ impl ClickHouseSession for InteractiveWorker {
         54405
     }
 
+    fn authenticate(&self, user: &str, password: &[u8]) -> bool {
+        if let Ok(user) = get_mock_user(user) {
+            return user.authenticate_user(password);
+        }
+        false
+    }
+
     // TODO: remove it
-    fn get_progress(&self) -> clickhouse_srv::types::Progress {
+    fn get_progress(&self) -> common_clickhouse_srv::types::Progress {
         unimplemented!()
     }
 }

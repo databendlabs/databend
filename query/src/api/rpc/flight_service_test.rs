@@ -28,8 +28,8 @@ use tonic::Request;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_tickets::StreamTicket;
-use crate::api::rpc::DatafuseQueryFlightDispatcher;
-use crate::api::rpc::DatafuseQueryFlightService;
+use crate::api::rpc::DatabendQueryFlightDispatcher;
+use crate::api::rpc::DatabendQueryFlightService;
 use crate::api::FlightTicket;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
@@ -38,8 +38,8 @@ use crate::tests::try_create_session_mgr;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_shared_session() -> Result<()> {
     let sessions = try_create_session_mgr(None)?;
-    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
-    let service = DatafuseQueryFlightService::create(dispatcher, sessions);
+    let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
+    let service = DatabendQueryFlightService::create(dispatcher, sessions);
 
     for index in 0..2 {
         let query_id = "query_id";
@@ -61,8 +61,8 @@ async fn test_do_flight_action_with_shared_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_different_session() -> Result<()> {
     let sessions = try_create_session_mgr(None)?;
-    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
-    let service = DatafuseQueryFlightService::create(dispatcher, sessions);
+    let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
+    let service = DatabendQueryFlightService::create(dispatcher, sessions);
 
     for index in 0..2 {
         let query_id = format!("query_id_{}", index);
@@ -84,13 +84,13 @@ async fn test_do_flight_action_with_different_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_session() -> Result<()> {
     let sessions = try_create_session_mgr(None)?;
-    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
-    let service = DatafuseQueryFlightService::create(dispatcher.clone(), sessions);
+    let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
+    let service = DatabendQueryFlightService::create(dispatcher.clone(), sessions);
 
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(&query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id);
         service.do_action(request?).await?;
     }
 
@@ -99,14 +99,14 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
     for index in 2..4 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(&query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id);
         service.do_action(request?).await?;
     }
 
     for index in 0..4 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_get_request(&query_id, &stage_id);
+        let request = do_get_request(query_id, &stage_id);
         service.do_get(request?).await?;
     }
 
@@ -116,13 +116,13 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     let sessions = try_create_session_mgr(None)?;
-    let dispatcher = Arc::new(DatafuseQueryFlightDispatcher::create());
-    let service = DatafuseQueryFlightService::create(dispatcher.clone(), sessions);
+    let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
+    let service = DatabendQueryFlightService::create(dispatcher.clone(), sessions);
 
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(&query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id);
         service.do_action(request?).await?;
     }
 
@@ -146,7 +146,7 @@ async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_get_request(&query_id, &stage_id);
+        let request = do_get_request(query_id, &stage_id);
         service.do_get(request?).await?;
     }
 

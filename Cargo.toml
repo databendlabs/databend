@@ -22,16 +22,16 @@ members = [
     "common/management",
     "common/io",
     "common/cache",
-    "common/dal",
-    "common/indexing",
+    "common/uniq_id",
+    "common/clickhouse-srv",
 
-    # Datafuse Query
+    # Query
     "query",
 
-    # Datafuse Store
+    # Store
     "store",
 
-    # Datafuse SQL Fuzz
+    # SQL Fuzz
     "query/fuzz",
 
     # CLI
@@ -46,5 +46,4 @@ debug = true
 
 [profile.dev]
 split-debuginfo = "unpacked"
-
 

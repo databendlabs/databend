@@ -96,15 +96,23 @@ impl AggregateFunction for AggregateCountFunction {
             return Ok(());
         }
 
-        let array = arrays[0].get_array_ref();
-        let validity = array.validity();
-        for (row, place) in places.iter().enumerate() {
-            let place = place.next(offset);
-            let state = place.get::<AggregateCountState>();
-            if let Some(v) = validity {
-                state.count += v.get_bit(row) as u64;
+        match arrays[0].get_array_ref().validity() {
+            None => {
+                for place in places.iter() {
+                    let place = place.next(offset);
+                    let state = place.get::<AggregateCountState>();
+                    state.count += 1;
+                }
+            }
+            Some(nullable_marks) => {
+                for (row, place) in places.iter().enumerate() {
+                    let place = place.next(offset);
+                    let state = place.get::<AggregateCountState>();
+                    state.count += nullable_marks.get_bit(row) as u64;
+                }
             }
         }
+
         Ok(())
     }
 

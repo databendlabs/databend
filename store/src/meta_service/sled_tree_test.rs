@@ -38,7 +38,7 @@ async fn test_sledtree_open() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     Ok(())
 }
@@ -50,7 +50,7 @@ async fn test_sledtree_append() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
         (8, Entry {
@@ -109,7 +109,7 @@ async fn test_sledtree_append_values_and_range_get() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -185,7 +185,7 @@ async fn test_sledtree_range_keys() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -238,7 +238,7 @@ async fn test_sledtree_range_kvs() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -274,7 +274,7 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -366,7 +366,7 @@ async fn test_sledtree_scan_prefix() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let files: Vec<(String, String)> = vec![
         ("a".to_string(), "x".to_string()),
@@ -391,7 +391,7 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     assert!(tree.get::<sled_key_space::Logs>(&5)?.is_none());
 
@@ -456,7 +456,7 @@ async fn test_sledtree_contains_key() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     assert!(tree.get::<sled_key_space::Logs>(&5)?.is_none());
 
@@ -496,7 +496,7 @@ async fn test_sledtree_update_and_fetch() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let v = tree
         .update_and_fetch::<sled_key_space::Files, _>(&"foo".to_string(), |v| {
@@ -522,7 +522,7 @@ async fn test_sledtree_get() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     assert!(tree.get::<sled_key_space::Logs>(&5)?.is_none());
 
@@ -566,7 +566,7 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     assert!(tree.last::<sled_key_space::Logs>()?.is_none());
 
@@ -620,7 +620,7 @@ async fn test_sledtree_remove() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -661,7 +661,7 @@ async fn test_sledtree_range_remove() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -742,7 +742,7 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -811,7 +811,7 @@ async fn test_as_append() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
@@ -871,7 +871,7 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -948,7 +948,7 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -1002,7 +1002,7 @@ async fn test_as_range_kvs() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -1035,7 +1035,7 @@ async fn test_as_scan_prefix() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let file_tree = tree.key_space::<sled_key_space::Files>();
     let kv_tree = tree.key_space::<sled_key_space::GenericKV>();
 
@@ -1079,7 +1079,7 @@ async fn test_as_insert() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
@@ -1141,7 +1141,7 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
@@ -1182,7 +1182,7 @@ async fn test_as_update_and_fetch() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let file_tree = tree.key_space::<sled_key_space::Files>();
 
     let v = file_tree
@@ -1205,7 +1205,7 @@ async fn test_as_get() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
@@ -1246,7 +1246,7 @@ async fn test_as_last() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     assert_eq!(None, log_tree.last()?);
@@ -1282,7 +1282,7 @@ async fn test_as_remove() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -1316,7 +1316,7 @@ async fn test_as_range_remove() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -1379,7 +1379,7 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.tree_name("foo"), true).await?;
+    let tree = SledTree::open(db, tc.config.tree_name("foo"), true)?;
     let log_tree = tree.key_space::<sled_key_space::Logs>();
     let sm_meta = tree.key_space::<StateMachineMeta>();
 

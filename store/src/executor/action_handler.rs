@@ -68,7 +68,7 @@ impl ActionHandler {
     }
 
     /// Handle pull-file request, which is used internally for replicating data copies.
-    /// In DatafuseStore impl there is no internal file id etc, thus replication use the same `key` in communication with DatafuseQuery as in internal replication.
+    /// In DatabendStore impl there is no internal file id etc, thus replication use the same `key` in communication with DatabendQuery as in internal replication.
     pub async fn do_pull_file(
         &self,
         key: String,
@@ -112,6 +112,7 @@ impl ActionHandler {
 
             // general-purpose kv
             StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::UpdateKVMeta(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::MGetKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
@@ -166,13 +167,8 @@ impl ActionHandler {
         let content = self.fs.read_all(&part_file).await?;
         let reader = Cursor::new(content);
 
-        let reader = read::RecordReader::try_new(
-            reader,
-            Some(projection.to_vec()),
-            None,
-            Arc::new(|_, _| true),
-            None,
-        )?;
+        let reader =
+            read::RecordReader::try_new(reader, Some(projection.to_vec()), None, None, None)?;
 
         // For simplicity, we do the conversion in-memory, to be optimized later
         // TODO consider using `parquet_table` and `stream_parquet`

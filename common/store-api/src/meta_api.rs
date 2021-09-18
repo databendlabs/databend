@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 
+use std::collections::HashMap;
+
 use common_datavalues::DataSchemaRef;
 use common_metatypes::Database;
 use common_metatypes::MetaId;
@@ -32,6 +34,7 @@ pub struct CreateDatabaseActionResult {
 pub struct GetDatabaseActionResult {
     pub database_id: u64,
     pub db: String,
+    pub engine: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -51,6 +54,8 @@ pub struct GetTableActionResult {
     pub db: String,
     pub name: String,
     pub schema: DataSchemaRef,
+    pub engine: String,
+    pub options: HashMap<String, String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -60,6 +65,16 @@ pub struct DatabaseMetaSnapshot {
     pub tbl_metas: Vec<(u64, Table)>,
 }
 pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub enum CommitTableReply {
+    // done
+    Success,
+    // recoverable, returns the current snapshot-id, which should be merged with
+    Conflict(String),
+    // fatal, not recoverable, returns the current snapshot-id
+    Failure(String),
+}
 
 #[async_trait::async_trait]
 pub trait MetaApi {
@@ -102,4 +117,11 @@ pub trait MetaApi {
         &mut self,
         current_ver: Option<u64>,
     ) -> common_exception::Result<DatabaseMetaReply>;
+
+    async fn commit_table(
+        &self,
+        table_id: MetaId,
+        prev_snapshot: String,
+        new_snapshot: String,
+    ) -> common_exception::Result<CommitTableReply>;
 }

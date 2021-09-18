@@ -45,7 +45,7 @@ fn test_array_agg() -> Result<()> {
 
 #[test]
 fn test_boolean_array_agg() -> Result<()> {
-    let array = DFBooleanArray::new_from_slice(&vec![true, false, true]);
+    let array = DFBooleanArray::new_from_slice(&[true, false, true]);
 
     let value = [
         array.sum()?,
@@ -77,7 +77,7 @@ fn test_boolean_array_agg() -> Result<()> {
 
 #[test]
 fn test_string_array_agg() -> Result<()> {
-    let array = DFStringArray::new_from_slice(&vec!["h", "e", "l", "o"]);
+    let array = DFStringArray::new_from_slice(&["h", "e", "l", "o"]);
 
     let value = [
         array.max()?,

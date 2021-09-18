@@ -9,6 +9,7 @@ header:
     - "deploy"
     - "website"
     - "tests"
+    - "tools"
     - ".github"
     - ".dockerignore"
     - ".licenserc.yaml"

@@ -36,11 +36,11 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatafuseQueryContext;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct CreateSetsTransform {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     schema: DataSchemaRef,
     input: Arc<dyn Processor>,
     sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
@@ -48,7 +48,7 @@ pub struct CreateSetsTransform {
 
 impl CreateSetsTransform {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         schema: DataSchemaRef,
         sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
     ) -> Result<CreateSetsTransform> {
@@ -133,14 +133,14 @@ type SubqueryData = Result<DataValue>;
 type SharedFuture<'a> = Shared<BoxFuture<'a, SubqueryData>>;
 
 pub struct SubQueriesPuller<'a> {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     expressions: Vec<Expression>,
     sub_queries: Vec<SharedFuture<'a>>,
 }
 
 impl<'a> SubQueriesPuller<'a> {
     pub fn create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         expressions: Vec<Expression>,
     ) -> Arc<Mutex<SubQueriesPuller<'a>>> {
         let expression_len = expressions.len();
@@ -168,7 +168,7 @@ impl<'a> SubQueriesPuller<'a> {
 
     fn init(&mut self) -> Result<()> {
         for query_expression in &self.expressions {
-            let subquery_ctx = DatafuseQueryContext::new(self.ctx.clone());
+            let subquery_ctx = DatabendQueryContext::new(self.ctx.clone());
 
             match query_expression {
                 Expression::Subquery { query_plan, .. } => {

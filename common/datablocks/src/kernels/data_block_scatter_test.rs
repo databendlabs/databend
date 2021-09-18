@@ -24,7 +24,7 @@ fn test_data_block_scatter() -> Result<()> {
         DataField::new("b", DataType::Float64, false),
     ]);
 
-    let raw = DataBlock::create(schema.clone(), vec![
+    let raw = DataBlock::create(schema, vec![
         Series::new(vec![1i64, 2, 3]).into(),
         Series::new(vec![1.0f64, 2., 3.]).into(),
     ]);

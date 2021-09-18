@@ -43,6 +43,10 @@ pub fn is_numeric(dt: &DataType) -> bool {
         )
 }
 
+pub fn is_interval(dt: &DataType) -> bool {
+    matches!(dt, DataType::Interval(_))
+}
+
 fn next_size(size: usize) -> usize {
     if size < 8_usize {
         return size * 2;
@@ -57,7 +61,7 @@ pub fn is_floating(dt: &DataType) -> bool {
 pub fn is_date_or_date_time(dt: &DataType) -> bool {
     matches!(
         dt,
-        DataType::Date16 | DataType::Date32 | DataType::DateTime32
+        DataType::Date16 | DataType::Date32 | DataType::DateTime32(_)
     )
 }
 
@@ -273,7 +277,7 @@ pub fn datetime_arithmetic_coercion(
         DataValueArithmeticOperator::Plus => Ok(a),
 
         DataValueArithmeticOperator::Minus => {
-            if is_numeric(&b) {
+            if is_numeric(&b) || is_interval(&b) {
                 Ok(a)
             } else {
                 // Date minus Date or DateTime minus DateTime
@@ -285,7 +289,40 @@ pub fn datetime_arithmetic_coercion(
 }
 
 #[inline]
-pub fn numerical_signed_coercion(val_type: &DataType) -> Result<DataType> {
+pub fn interval_arithmetic_coercion(
+    op: &DataValueArithmeticOperator,
+    lhs_type: &DataType,
+    rhs_type: &DataType,
+) -> Result<DataType> {
+    let e = Result::Err(ErrorCode::BadDataValueType(format!(
+        "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+        lhs_type, op, rhs_type
+    )));
+
+    // only allow date/datetime [+/-] interval
+    if !(is_date_or_date_time(lhs_type) && is_interval(rhs_type)
+        || is_date_or_date_time(rhs_type) && is_interval(lhs_type))
+    {
+        return e;
+    }
+
+    match op {
+        DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Minus => {
+            if is_date_or_date_time(lhs_type) {
+                Ok(lhs_type.clone())
+            } else {
+                Ok(rhs_type.clone())
+            }
+        }
+        _ => e,
+    }
+}
+
+#[inline]
+pub fn numerical_unary_arithmetic_coercion(
+    op: &DataValueArithmeticOperator,
+    val_type: &DataType,
+) -> Result<DataType> {
     // error on any non-numeric type
     if !is_numeric(val_type) {
         return Result::Err(ErrorCode::BadDataValueType(format!(
@@ -294,10 +331,24 @@ pub fn numerical_signed_coercion(val_type: &DataType) -> Result<DataType> {
         )));
     };
 
-    let has_float = is_floating(val_type);
-    let max_size = numeric_byte_size(val_type)?;
-
-    construct_numeric_type(true, has_float, max_size)
+    match op {
+        DataValueArithmeticOperator::Plus => Ok(val_type.clone()),
+        DataValueArithmeticOperator::Minus => {
+            let has_float = is_floating(val_type);
+            let has_signed = is_signed_numeric(val_type);
+            let numeric_size = numeric_byte_size(val_type)?;
+            let max_size = if has_signed {
+                numeric_size
+            } else {
+                next_size(numeric_size)
+            };
+            construct_numeric_type(true, has_float, max_size)
+        }
+        other => Result::Err(ErrorCode::UnknownFunction(format!(
+            "Unexpected operator:{:?} to unary function",
+            other
+        ))),
+    }
 }
 
 // coercion rules for equality operations. This is a superset of all numerical coercion rules.

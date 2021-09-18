@@ -19,6 +19,7 @@ use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_metatypes::MatchSeq;
+use common_metatypes::Operation;
 use maplit::btreeset;
 use sled::IVec;
 
@@ -46,7 +47,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
                     cmd: Cmd::UpsertKV {
                         key: "a".to_string(),
                         seq: MatchSeq::Any,
-                        value: Some(b"A".to_vec()),
+                        value: Operation::Update(b"A".to_vec()),
                         value_meta: None,
                     },
                 },

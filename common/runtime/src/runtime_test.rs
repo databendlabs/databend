@@ -16,11 +16,14 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_exception::Result;
+use tokio::time::sleep_until;
+use tokio::time::Duration;
+use tokio::time::Instant;
+
+use crate::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_runtime() -> Result<()> {
-    use crate::*;
-
     let counter = Arc::new(Mutex::new(0));
 
     let runtime = Runtime::with_default_worker_threads()?;
@@ -57,6 +60,48 @@ async fn test_runtime() -> Result<()> {
 
     let result = *counter.lock().unwrap();
     assert_eq!(result, 4);
+
+    Ok(())
+}
+
+#[test]
+fn test_block_on() -> Result<()> {
+    async fn five() -> Result<u8> {
+        Ok(5)
+    }
+
+    async fn sleep() -> Result<()> {
+        let deadline = Instant::now() + Duration::from_millis(100);
+        sleep_until(deadline).await;
+        Ok(())
+    }
+
+    // Ok.
+    {
+        let rt = Runtime::with_default_worker_threads().unwrap();
+        let r = rt.block_on(five(), None)??;
+        assert_eq!(r, 5);
+    }
+
+    // Ok.
+    {
+        let rt = Runtime::with_default_worker_threads().unwrap();
+        let r = rt.block_on(five(), Some(Duration::from_secs(10)))??;
+        assert_eq!(r, 5);
+    }
+
+    // Timeout error.
+    {
+        let rt = Runtime::with_default_worker_threads().unwrap();
+        let r = rt.block_on(sleep(), Some(Duration::from_millis(50)));
+
+        assert!(r.is_err());
+        if let Err(e) = r {
+            let expect = "Code: 40, displayText = timed out waiting on channel.";
+            let actual = format!("{:}", e);
+            assert_eq!(expect, actual);
+        }
+    }
 
     Ok(())
 }

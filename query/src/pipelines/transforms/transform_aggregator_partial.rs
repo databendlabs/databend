@@ -127,9 +127,9 @@ impl Processor for AggregatorPartialTransform {
         let delta = start.elapsed();
         tracing::debug!("Aggregator partial cost: {:?}", delta);
 
-        let mut columns: Vec<Series> = vec![];
-
+        let mut columns = Vec::with_capacity(funcs.len());
         let mut bytes = BytesMut::new();
+
         for (idx, func) in funcs.iter().enumerate() {
             let place = places[idx].into();
             func.serialize(place, &mut bytes)?;

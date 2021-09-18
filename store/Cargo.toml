@@ -1,17 +1,15 @@
-cargo-features = ["edition2021"]
-
 [package]
-name = "datafuse-store"
+name = "databend-store"
 version = "0.1.0"
 description = "A Cloud Distributed MergeTree Storage Engine"
-authors = ["DatafuseStore Authors <opensource@datafuselabs.com>"]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-store"
-path = "src/bin/datafuse-store.rs"
+name = "databend-store"
+path = "src/bin/databend-store.rs"
 
 [features]
 default = ["simd"]
@@ -31,11 +29,12 @@ common-planners = {path = "../common/planners"}
 common-profling = { path = "../common/profiling" }
 common-runtime = {path = "../common/runtime"}
 common-tracing = {path = "../common/tracing"}
+common-uniq-id = {path = "../common/uniq_id"}
 
 # Github dependencies
 
 # Crates.io dependencies
-anyhow = "1.0.43"
+anyhow = "1.0.44"
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
 async-trait = "0.1"
 byteorder = "1.1.0"
@@ -56,15 +55,15 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 structopt = "0.3"
 structopt-toml = "0.5.0"
 tempfile = "3.2.0"
-thiserror = "1.0.28"
+thiserror = "1.0.29"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
 tracing-appender = "0.1.2"
 tonic = { version = "0.5.2", features = ["tls"]}
 
-sha2 = "0.9.6"
+sha2 = "0.9.8"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-axum = {version = "0.2.3", features=["headers"] }
+axum = {version = "0.2.4", features=["headers"] }
 axum-server = { version = "0.2", features = ["tls-rustls"] }
 
 [dev-dependencies]
@@ -73,6 +72,8 @@ pretty_assertions = "0.7"
 test-env-log = "0.2.7"
 flaky_test = "0.1"
 maplit = "1.0.2"
+tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
+reqwest = { version = "0.11", features = ["json"] }
 
 [build-dependencies]
 common-building = {path = "../common/building"}

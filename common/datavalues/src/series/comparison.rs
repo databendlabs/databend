@@ -46,17 +46,9 @@ fn null_to_boolean(s: &Series) -> DFBooleanArray {
     if s.data_type() == &DataType::Null {
         DFBooleanArray::full_null(s.len())
     } else {
-        let array_ref = s.get_array_ref();
-        let validity = array_ref.validity();
-        match validity {
-            Some(v) => DFBooleanArray::new_from_opt_iter(v.into_iter().map(|c| {
-                if c {
-                    Some(true)
-                } else {
-                    None
-                }
-            })),
+        match s.get_array_ref().validity() {
             None => DFBooleanArray::full(true, s.len()),
+            Some(v) => DFBooleanArray::from_arrow_data(v.clone(), None),
         }
     }
 }

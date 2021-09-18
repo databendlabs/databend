@@ -1,9 +1,7 @@
-cargo-features = ["edition2021"]
-
 [package]
 name = "common-tracing"
 version = "0.1.0"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
@@ -13,8 +11,8 @@ lazy_static = "1.4.0"
 opentelemetry = { version = "0.16", default-features = false, features = ["trace", "rt-tokio"] }
 opentelemetry-jaeger = { version = "0.15", features = ["rt-tokio"] }
 tonic = "0.5.2"
-tracing = "0.1.26"
+tracing = "0.1.27"
 tracing-appender = "0.1.2"
 tracing-bunyan-formatter = "0.2"
 tracing-opentelemetry = "0.15.0"
-tracing-subscriber = "0.2.20"
+tracing-subscriber = "0.2.23"

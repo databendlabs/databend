@@ -39,35 +39,39 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::sessions::context_shared::DatafuseQueryContextShared;
+use crate::datasources::dal::DataAccessor;
+use crate::datasources::dal::Local;
+use crate::datasources::dal::StorageScheme;
+use crate::datasources::dal::S3;
+use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
-pub struct DatafuseQueryContext {
+pub struct DatabendQueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
     version: String,
-    shared: Arc<DatafuseQueryContextShared>,
+    shared: Arc<DatabendQueryContextShared>,
 }
 
-pub type DatafuseQueryContextRef = Arc<DatafuseQueryContext>;
+pub type DatabendQueryContextRef = Arc<DatabendQueryContext>;
 
-impl DatafuseQueryContext {
-    pub fn new(other: DatafuseQueryContextRef) -> DatafuseQueryContextRef {
-        DatafuseQueryContext::from_shared(other.shared.clone())
+impl DatabendQueryContext {
+    pub fn new(other: DatabendQueryContextRef) -> DatabendQueryContextRef {
+        DatabendQueryContext::from_shared(other.shared.clone())
     }
 
-    pub fn from_shared(shared: Arc<DatafuseQueryContextShared>) -> DatafuseQueryContextRef {
+    pub fn from_shared(shared: Arc<DatabendQueryContextShared>) -> DatabendQueryContextRef {
         shared.increment_ref_count();
 
-        log::info!("Create DatafuseQueryContext");
+        log::info!("Create DatabendQueryContext");
 
-        Arc::new(DatafuseQueryContext {
+        Arc::new(DatabendQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!(
-                "DatafuseQuery v-{}",
-                *crate::configs::config::FUSE_COMMIT_VERSION
+                "DatabendQuery v-{}",
+                *crate::configs::config::DATABEND_COMMIT_VERSION
             ),
             shared,
         })
@@ -224,25 +228,36 @@ impl DatafuseQueryContext {
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.shared.session.get_sessions_manager()
     }
+
+    pub fn get_data_accessor(
+        &self,
+        storage_scheme: &StorageScheme,
+    ) -> Result<Arc<dyn DataAccessor>> {
+        match storage_scheme {
+            StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
+            StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
+            _ => todo!(),
+        }
+    }
 }
 
-impl std::fmt::Debug for DatafuseQueryContext {
+impl std::fmt::Debug for DatabendQueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_settings())
     }
 }
 
-impl Drop for DatafuseQueryContext {
+impl Drop for DatabendQueryContext {
     fn drop(&mut self) {
         self.shared.destroy_context_ref()
     }
 }
 
-impl DatafuseQueryContextShared {
+impl DatabendQueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            log::info!("Destroy DatafuseQueryContext");
+            log::info!("Destroy DatabendQueryContext");
             self.session.destroy_context_shared();
         }
     }

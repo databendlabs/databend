@@ -1,21 +1,19 @@
-cargo-features = ["edition2021"]
-
 [package]
-name = "datafuse-query"
+name = "databend-query"
 version = "0.1.0"
 description = "A real-time Cloud Distributed Query Engine"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-query"
-path = "src/bin/datafuse-query.rs"
+name = "databend-query"
+path = "src/bin/databend-query.rs"
 
 [[bin]]
-name = "datafuse-benchmark"
-path = "src/bin/datafuse-benchmark.rs"
+name = "databend-benchmark"
+path = "src/bin/databend-benchmark.rs"
 
 [features]
 default = ["simd"]
@@ -24,6 +22,7 @@ simd = ["common-arrow/simd"]
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
+common-management = { path = "../common/management" }
 common-cache = { path = "../common/cache"}
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
@@ -40,17 +39,19 @@ common-profling = { path = "../common/profiling" }
 common-store-api = { path = "../common/store-api" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
+common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "cc53408" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "60e369b" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "77f6ae5" }
 
 # Crates.io dependencies
-clickhouse-srv = "0.3.1"
-bumpalo = "3.7.0"
 ahash = "0.7.4"
 async-trait = "0.1"
+async-compat = "0.2.1"
+bumpalo = "3.7.1"
+bytes = "1"
 crossbeam = "0.8"
 quantiles = "0.7.1"
 ctrlc = { version = "3.1.9", features = ["termination"] }
@@ -71,6 +72,8 @@ chrono-tz = "0.5"
 chrono =  "0.4.0"
 prost = "0.8.0"
 rand = "0.8.4"
+rusoto_s3 = "0.47.0"
+rusoto_core = "0.47.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3"
@@ -80,21 +83,29 @@ tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.6"
 tonic = "0.5.2"
 walkdir = "2.3.2"
-axum = {version = "0.2.3", features=["headers"] }
+axum = {version = "0.2.4", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
-hyper = "0.14.12"
-tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
+hyper = "0.14.13"
 headers = "0.3.4"
 tokio-rustls = "0.22.0"
+axum-server = { version = "0.2", features = ["tls-rustls"] }
+cargo-license = "0.4.2"
+cargo_metadata = "0.14.0"
+sha2 = "0.9.8"
+sha1 = "0.6.0"
+
+[dependencies.parquet-format-async-temp]
+version = "0.2.0"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
 criterion = "0.3"
 mysql = "21.0.1"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "native-tls"] }
 flaky_test = "0.1"
 tempfile = "3.2.0"
+tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 
 [build-dependencies]
 common-building = {path = "../common/building"}

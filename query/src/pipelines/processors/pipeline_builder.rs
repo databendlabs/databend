@@ -50,16 +50,16 @@ use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct PipelineBuilder {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 
     limit: Option<usize>,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: DatafuseQueryContextRef) -> PipelineBuilder {
+    pub fn create(ctx: DatabendQueryContextRef) -> PipelineBuilder {
         PipelineBuilder { ctx, limit: None }
     }
 

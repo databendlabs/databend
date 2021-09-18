@@ -15,19 +15,18 @@
 use std::process::Command;
 
 use assert_cmd::cargo::CommandCargoExt;
-use datafuse_cli::error::CliError;
+use databend_cli::error::CliError;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
 fn init_fusectl() -> Command {
-    let mut cmd = Command::cargo_bin("datafuse-cli").unwrap();
+    let mut cmd = Command::cargo_bin("databend-cli").unwrap();
     cmd.current_dir("/tmp");
     cmd
 }
 
 fn raw_fusectl() -> Command {
-    let cmd = init_fusectl();
-    cmd
+    init_fusectl()
 }
 
 fn fusectl() -> assert_cmd::Command {
@@ -66,8 +65,8 @@ fn version() {
         .assert()
         .success()
         .stdout(contains_all!(
-            "Datafuse CLI",
-            "Datafuse CLI SHA256",
+            "Databend CLI",
+            "Databend CLI SHA256",
             "Git commit",
             "Build date",
             "OS version"
@@ -84,7 +83,7 @@ fn package() -> Result<(), CliError> {
         .arg("package")
         .arg("fetch")
         .arg("v0.4.79-nightly")
-        .arg("--datafuse_dir")
+        .arg("--databend_dir")
         .arg(tmp_dir.path().to_str().unwrap())
         .arg("--group")
         .arg("integration")
@@ -101,7 +100,7 @@ fn package() -> Result<(), CliError> {
     fusectl()
         .arg("package")
         .arg("list")
-        .arg("--datafuse_dir")
+        .arg("--databend_dir")
         .arg(tmp_dir.path().to_str().unwrap())
         .arg("--group")
         .arg("integration")
@@ -115,7 +114,7 @@ fn package() -> Result<(), CliError> {
         .arg("package")
         .arg("switch")
         .arg("v0.4.79-nightly")
-        .arg("--datafuse_dir")
+        .arg("--databend_dir")
         .arg(tmp_dir.path().to_str().unwrap())
         .arg("--group")
         .arg("integration")

@@ -22,16 +22,16 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct UseDatabaseInterpreter {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     plan: UseDatabasePlan,
 }
 
 impl UseDatabaseInterpreter {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         plan: UseDatabasePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(UseDatabaseInterpreter { ctx, plan }))

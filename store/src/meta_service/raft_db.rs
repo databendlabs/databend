@@ -64,6 +64,8 @@ pub fn init_sled_db(path: String) {
 
 pub fn get_sled_db() -> sled::Db {
     let x = GLOBAL_SLED.as_ref().lock().unwrap();
-    let y = x.as_ref().unwrap();
+    let y = x.as_ref().expect(
+        "init_sled_db() or init_temp_sled_db() has to be called before using get_sled_db()",
+    );
     y.db.clone()
 }

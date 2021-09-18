@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
+use common_datavalues::DataValue;
+use common_datavalues::DateConverter;
 use common_exception::exception::ABORT_QUERY;
 use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
@@ -31,20 +34,29 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> { inner: Some(inner) }
     }
 
-    pub fn write(&mut self, query_result: Result<Vec<DataBlock>>) -> Result<()> {
+    pub fn write(&mut self, query_result: Result<(Vec<DataBlock>, String)>) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok(received_data) => Self::ok(received_data, writer)?,
+                Ok((blocks, extra_info)) => Self::ok(blocks, extra_info, writer)?,
                 Err(error) => Self::err(&error, writer)?,
             }
         }
         Ok(())
     }
 
-    fn ok(blocks: Vec<DataBlock>, dataset_writer: QueryResultWriter<'a, W>) -> Result<()> {
+    fn ok(
+        blocks: Vec<DataBlock>,
+        extra_info: String,
+        dataset_writer: QueryResultWriter<'a, W>,
+    ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
+        let default_response = OkResponse {
+            info: extra_info,
+            ..Default::default()
+        };
+
         if blocks.is_empty() || (blocks[0].num_columns() == 0) {
-            dataset_writer.completed(0, 0)?;
+            dataset_writer.completed(default_response)?;
             return Ok(());
         }
 
@@ -63,8 +75,9 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 DataType::Date16 | DataType::Date32 => Ok(ColumnType::MYSQL_TYPE_DATE),
-                DataType::DateTime32 => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                DataType::DateTime32(_) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
+                DataType::Interval(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
                 _ => Err(ErrorCode::UnImplement(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()
@@ -86,6 +99,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
+        let utc: Tz = "UTC".parse().unwrap();
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
@@ -93,30 +107,76 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 let mut row_writer = dataset_writer.start(&columns)?;
 
                 for block in &blocks {
-                    let mut datas = Vec::with_capacity(block.num_columns());
-                    for (idx, col) in block.columns().iter().enumerate() {
-                        let data_type = block.schema().fields()[idx].data_type();
-                        let serializer = data_type.get_serializer();
-                        datas.push(serializer.serialize_strings(col)?);
-                    }
-
                     let rows_size = block.column(0).len();
                     for row_index in 0..rows_size {
-                        let mut row = Vec::with_capacity(columns_size);
-                        for column_index in 0..columns_size {
-                            let e = datas
-                                .get(column_index)
-                                .unwrap()
-                                .get(row_index)
-                                .unwrap()
-                                .to_string();
-                            row.push(e);
+                        for col_index in 0..columns_size {
+                            let val = block.column(col_index).try_get(row_index)?;
+                            if val.is_null() {
+                                row_writer.write_col(None::<u8>)?;
+                                continue;
+                            }
+                            let data_type = block.schema().fields()[col_index].data_type();
+                            match (data_type, val) {
+                                (DataType::Boolean, DataValue::Boolean(Some(v))) => {
+                                    row_writer.write_col(v as i8)?
+                                }
+                                (DataType::Int8, DataValue::Int8(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Int16, DataValue::Int16(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Int32, DataValue::Int32(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Int64, DataValue::Int64(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt8, DataValue::UInt8(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt16, DataValue::UInt16(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt32, DataValue::UInt32(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::UInt64, DataValue::UInt64(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Float32, DataValue::Float32(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Float64, DataValue::Float64(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (DataType::Date16, DataValue::UInt16(Some(v))) => {
+                                    row_writer.write_col(v.to_date(&utc).naive_local())?
+                                }
+                                (DataType::Date32, DataValue::UInt32(Some(v))) => {
+                                    row_writer.write_col(v.to_date(&utc).naive_local())?
+                                }
+                                (DataType::DateTime32(tz), DataValue::UInt32(Some(v))) => {
+                                    let tz = tz.clone();
+                                    let tz = tz.unwrap_or_else(|| "UTC".to_string());
+                                    let tz: Tz = tz.parse().unwrap();
+                                    row_writer.write_col(v.to_date_time(&tz).naive_local())?
+                                }
+                                (DataType::String, DataValue::String(Some(v))) => {
+                                    row_writer.write_col(v)?
+                                }
+                                (_, v) => {
+                                    return Err(ErrorCode::BadDataValueType(format!(
+                                        "Unsupported column type:{:?}",
+                                        v.data_type()
+                                    )));
+                                }
+                            }
                         }
-                        row_writer.write_row(row)?;
+                        row_writer.end_row()?;
                     }
                 }
-
-                row_writer.finish()?;
+                row_writer.finish_with_info(&default_response.info)?;
 
                 Ok(())
             }

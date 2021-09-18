@@ -15,6 +15,14 @@
 use common_exception::Result;
 
 use super::now::NowFunction;
+use super::RoundFunction;
+use super::ToStartOfISOYearFunction;
+use super::ToStartOfMonthFunction;
+use super::ToStartOfQuarterFunction;
+use super::ToStartOfYearFunction;
+use super::ToYYYYMMDDFunction;
+use super::ToYYYYMMDDhhmmssFunction;
+use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
@@ -30,6 +38,54 @@ impl DateFunction {
         map.insert("yesterday".into(), YesterdayFunction::try_create);
         map.insert("tomorrow".into(), TomorrowFunction::try_create);
         map.insert("now".into(), NowFunction::try_create);
+        map.insert("toYYYYMM".into(), ToYYYYMMFunction::try_create);
+        map.insert("toYYYYMMDD".into(), ToYYYYMMDDFunction::try_create);
+        map.insert(
+            "toYYYYMMDDhhmmss".into(),
+            ToYYYYMMDDhhmmssFunction::try_create,
+        );
+        map.insert("toStartOfYear".into(), ToStartOfYearFunction::try_create);
+        map.insert(
+            "toStartOfISOYear".into(),
+            ToStartOfISOYearFunction::try_create,
+        );
+        map.insert(
+            "toStartOfQuarter".into(),
+            ToStartOfQuarterFunction::try_create,
+        );
+        map.insert("toStartOfMonth".into(), ToStartOfMonthFunction::try_create);
+        // rounders
+        {
+            map.insert("toStartOfSecond".into(), |display_name| {
+                RoundFunction::try_create(display_name, 1)
+            });
+
+            map.insert("toStartOfMinute".into(), |display_name| {
+                RoundFunction::try_create(display_name, 60)
+            });
+
+            map.insert("toStartOfFiveMinutes".into(), |display_name| {
+                RoundFunction::try_create(display_name, 5 * 60)
+            });
+
+            map.insert("toStartOfTenMinutes".into(), |display_name| {
+                RoundFunction::try_create(display_name, 10 * 60)
+            });
+
+            map.insert("toStartOfFifteenMinutes".into(), |display_name| {
+                RoundFunction::try_create(display_name, 15 * 60)
+            });
+
+            map.insert("timeSlot".into(), |display_name| {
+                RoundFunction::try_create(display_name, 30 * 60)
+            });
+            map.insert("toStartOfHour".into(), |display_name| {
+                RoundFunction::try_create(display_name, 60 * 60)
+            });
+            map.insert("toStartOfDay".into(), |display_name| {
+                RoundFunction::try_create(display_name, 60 * 60 * 24)
+            });
+        }
 
         Ok(())
     }

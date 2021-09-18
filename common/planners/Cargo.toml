@@ -1,9 +1,7 @@
-cargo-features = ["edition2021"]
-
 [package]
 name = "common-planners"
 version = "0.1.0"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"

@@ -29,7 +29,7 @@ fn test_context_function_build_arg_from_ctx() -> Result<()> {
 
     // Error.
     {
-        let result = ContextFunction::build_args_from_ctx("databasexx", ctx.clone()).is_err();
+        let result = ContextFunction::build_args_from_ctx("databasexx", ctx).is_err();
         assert_eq!(true, result);
     }
 

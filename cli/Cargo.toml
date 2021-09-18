@@ -1,17 +1,15 @@
-cargo-features = ["edition2021"]
-
 [package]
-name = "datafuse-cli"
+name = "databend-cli"
 version = "0.1.0"
-description = "All-in-one tool for setting up, managing with Datafuse"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+description = "All-in-one tool for setting up, managing with Databend"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-cli"
-path = "src/bin/datafuse-cli.rs"
+name = "databend-cli"
+path = "src/bin/databend-cli.rs"
 
 [features]
 
@@ -22,24 +20,24 @@ path = "src/bin/datafuse-cli.rs"
 clap = "2.33.3"
 colored = "2.0.0"
 comfy-table = "4.1.1"
-dirs = "3.0.2"
+dirs = "4.0.0"
 dyn-clone = "1.0.4"
-flate2 = "1.0.21"
+flate2 = "1.0.22"
 indicatif = "0.16.2"
-run_script = "^0.8.0"
+run_script = "^0.9.0"
 rustyline = "9.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha2 = "0.9.6"
-sysinfo = "0.20.2"
+sha2 = "0.9.8"
+sysinfo = "0.20.3"
 tar = "0.4.37"
-thiserror = "1.0.28"
+thiserror = "1.0.29"
 ureq = { version = "2.2.0", features = ["json"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
 tempfile = "3.2.0"
-assert_cmd = "2.0.0"
+assert_cmd = "2.0.1"
 predicates = "2.0.2"
 
 [build-dependencies]

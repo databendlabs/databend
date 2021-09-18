@@ -18,6 +18,7 @@ use async_raft::NodeId;
 use common_metatypes::Database;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
+use common_metatypes::Operation;
 use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
@@ -86,11 +87,12 @@ pub enum Cmd {
         seq: MatchSeq,
 
         /// The value to set. A `None` indicates to delete it.
-        value: Option<Vec<u8>>,
+        value: Operation<Vec<u8>>,
 
         /// Meta data of a value.
         value_meta: Option<KVMeta>,
     },
+
     /// Truncate Table
     TruncateTable { db_name: String, table_name: String },
 }
@@ -117,8 +119,8 @@ impl fmt::Display for Cmd {
             } => {
                 write!(
                     f,
-                    "create_db:{}={}, if_not_exists:{}",
-                    name, db, if_not_exists
+                    "create_db:{}={}, if_not_exists:{}, engine:{}",
+                    name, db, if_not_exists, db.database_engine
                 )
             }
             Cmd::DropDatabase { name } => {

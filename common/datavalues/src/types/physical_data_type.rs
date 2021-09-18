@@ -44,7 +44,7 @@ impl From<DataType> for PhysicalDataType {
             DataType::Boolean => Boolean,
             DataType::UInt8 => UInt8,
             DataType::UInt16 | DataType::Date16 => UInt16,
-            DataType::UInt32 | DataType::Date32 | DataType::DateTime32 => UInt32,
+            DataType::UInt32 | DataType::Date32 | DataType::DateTime32(_) => UInt32,
             DataType::UInt64 => UInt64,
             DataType::Int8 => Int8,
             DataType::Int16 => Int16,
@@ -55,6 +55,7 @@ impl From<DataType> for PhysicalDataType {
             DataType::List(x) => List(x),
             DataType::Struct(x) => Struct(x),
             DataType::String => String,
+            DataType::Interval(_) => Int64,
         }
     }
 }
@@ -80,4 +81,10 @@ impl From<PhysicalDataType> for DataType {
             PhysicalDataType::String => String,
         }
     }
+}
+
+// convert from DataType to PhysicalDataType then convert from PhysicalDataType to DataType
+pub fn data_type_physical(data_type: DataType) -> DataType {
+    let t: PhysicalDataType = data_type.into();
+    t.into()
 }

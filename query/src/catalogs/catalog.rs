@@ -21,9 +21,10 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
-use crate::catalogs::DatabaseEngine;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::datasources::database_engine::DatabaseEngine;
+use crate::datasources::database_engine_registry::EngineDescription;
 
 /// Catalog is the global view of all the databases of the user.
 /// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
@@ -58,4 +59,7 @@ pub trait Catalog {
     // Operation with database.
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+
+    // Get all db engines.
+    fn get_db_engines(&self) -> Result<Vec<EngineDescription>>;
 }
