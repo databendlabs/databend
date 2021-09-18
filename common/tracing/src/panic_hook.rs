@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub fn set_panic_hook(){
+pub fn set_panic_hook() {
     // Set a panic hook that records the panic as a `tracing` event at the
     // `ERROR` verbosity level.
     //
@@ -36,5 +36,4 @@ pub fn set_panic_hook(){
             tracing::error!(message = %panic);
         }
     }));
-
 }

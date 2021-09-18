@@ -14,6 +14,7 @@
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
+use common_tracing::set_panic_hook;
 use datafuse_store::api::HttpService;
 use datafuse_store::api::StoreServer;
 use datafuse_store::configs::Config;
@@ -35,6 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
     );
+    set_panic_hook();
 
     info!("{:?}", conf.clone());
     info!(

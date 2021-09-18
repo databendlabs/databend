@@ -3,7 +3,7 @@
 
 # Log
 [log]
-log_level = "INFO"
+log_level = "ERROR"
 log_dir = "./_logs"
 
 # Meta
