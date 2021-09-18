@@ -19,6 +19,7 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
+use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
@@ -40,12 +41,16 @@ use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
 use crate::sessions::DatabendQueryContextRef;
 
-impl FuseTable {
-    pub async fn append_blocks(
-        &self,
-        ctx: DatabendQueryContextRef,
-        mut stream: BlockStream,
-    ) -> Result<SegmentInfo> {
+pub struct BlockAppender {
+    data_accessor: Arc<dyn DataAccessor>,
+}
+
+impl BlockAppender {
+    pub fn new(data_accessor: Arc<dyn DataAccessor>) -> Self {
+        Self { data_accessor }
+    }
+
+    pub async fn append_blocks(&self, mut stream: BlockStream) -> Result<SegmentInfo> {
         let mut block_metas = vec![];
         let mut blocks_stats = vec![];
         let mut summary_row_count = 0u64;
@@ -65,7 +70,7 @@ impl FuseTable {
             let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
             let location = block_location(&part_uuid);
 
-            let file_size = save_block(&schema, block, data_accessor, &location)?;
+            let file_size = save_block(&schema, block, &self.data_accessor, &location)?;
 
             // TODO gather parquet meta
             let meta_size = 0u64;
@@ -150,7 +155,7 @@ pub fn block_stats(data_block: &DataBlock) -> Result<HashMap<ColumnId, (DataType
 pub(crate) fn save_block(
     arrow_schema: &ArrowSchema,
     block: DataBlock,
-    data_accessor: Arc<dyn DataAccessor>,
+    data_accessor: &Arc<dyn DataAccessor>,
     location: &str,
 ) -> Result<u64> {
     // TODO pick proper compression / encoding algos

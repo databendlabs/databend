@@ -116,11 +116,4 @@ pub trait MetaApi: Send + Sync {
         &self,
         current_ver: Option<u64>,
     ) -> common_exception::Result<DatabaseMetaReply>;
-
-    async fn commit_table(
-        &self,
-        table_id: MetaId,
-        prev_snapshot: String,
-        new_snapshot: String,
-    ) -> common_exception::Result<CommitTableReply>;
 }

@@ -49,14 +49,14 @@ t this stage, we reply on background task to merge the data properly.
     - `append` may be executed parallel.
     - operations should be logged/journaled in case of rollback/abort 
      
-- "Driver"
+    - "Driver"
 
-  Gather all the segments(info) , aggregates the statistics, merge segments
-  with previous snapshot, and commit.  
+      Gather all the segments(info) , aggregates the statistics, merge segments
+      with previous snapshot, and commit.  
 
-  In case of conflicts, "Driver" need to re-try the transaction.(OCC, Table level, READ-COMMITTED)
+      In case of conflicts, "Driver" need to re-try the transaction.(OCC, Table level, READ-COMMITTED)
 
-  For this iteration, the "Driver" is the `Table` itself.
+      For this iteration, the "Driver" is `interpreter_insert_into`.
 
 
 **Scan Flow:**

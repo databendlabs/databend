@@ -99,15 +99,6 @@ impl MetaApi for StoreClient {
         self.do_action(GetDatabaseMetaAction { ver_lower_bound })
             .await
     }
-
-    async fn commit_table(
-        &self,
-        _table_id: MetaId,
-        _prev_snapshot: String,
-        _new_snapshot: String,
-    ) -> common_exception::Result<CommitTableReply> {
-        Err(ErrorCode::UnImplement("commit_table not implemented"))
-    }
 }
 
 // == database actions ==
