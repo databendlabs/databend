@@ -39,7 +39,7 @@ impl From<&Config> for StoreClientConf {
             tls_conf,
         };
 
-        let meta_tls_conf = if conf.tls_store_cli_enabled() {
+        let meta_tls_conf = if conf.tls_meta_cli_enabled() {
             Some(RpcClientTlsConfig {
                 rpc_tls_server_root_ca_cert: conf.meta.rpc_tls_meta_server_root_ca_cert.clone(),
                 domain_name: conf.meta.rpc_tls_meta_service_domain_name.clone(),
