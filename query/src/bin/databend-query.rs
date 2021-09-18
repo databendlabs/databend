@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
+use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::clusters::Cluster;
@@ -25,6 +26,8 @@ use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
+use databend_query::sessions::SessionManager;
+
 use log::info;
 
 #[tokio::main]
