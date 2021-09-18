@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common::flight_result_to_str;
 pub use common::RpcClientTlsConfig;
 pub use common_store_api::KVApi;
 pub use common_store_api::MetaApi;
@@ -21,10 +20,13 @@ pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
 pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
-pub use impls::kv_api_impl;
-pub use impls::meta_api_impl;
-pub use impls::storage_api_impl;
+pub use impl_flights::kv_api_impl;
+pub use impl_flights::meta_api_impl;
+pub use impl_flights::storage_api_impl;
+pub use store_api_provider::StoreApiProvider;
 pub use store_client::StoreClient;
+pub use store_client_conf::ClientConf;
+pub use store_client_conf::StoreClientConf;
 pub use store_do_action::RequestFor;
 pub use store_do_action::StoreDoAction;
 pub use store_do_get::StoreDoGet;
@@ -32,11 +34,14 @@ pub use store_do_get::StoreDoGet;
 mod common;
 mod dns_resolver;
 mod flight_token;
-mod impls;
+mod impl_flights;
 mod store_client;
 #[macro_use]
 mod store_do_action;
-pub mod client_provider;
+#[cfg(feature = "mocks")]
+pub mod mocks;
+mod store_api_provider;
+mod store_client_conf;
 mod store_do_get;
 
 // ProtoBuf generated files.

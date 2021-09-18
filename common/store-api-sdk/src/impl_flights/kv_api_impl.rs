@@ -15,9 +15,9 @@
 use common_exception::Result;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
-pub use common_store_api::kv_api::MGetKVActionResult;
-pub use common_store_api::kv_api::PrefixListReply;
-pub use common_store_api::kv_api::UpsertKVActionResult;
+pub use common_store_api::kv_apis::kv_api::MGetKVActionResult;
+pub use common_store_api::kv_apis::kv_api::PrefixListReply;
+pub use common_store_api::kv_apis::kv_api::UpsertKVActionResult;
 pub use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_tracing::tracing;
@@ -31,7 +31,7 @@ use crate::StoreDoAction;
 impl KVApi for StoreClient {
     #[tracing::instrument(level = "debug", skip(self, value))]
     async fn upsert_kv(
-        &mut self,
+        &self,
         key: &str,
         seq: MatchSeq,
         value: Option<Vec<u8>>,
@@ -47,7 +47,7 @@ impl KVApi for StoreClient {
     }
 
     async fn update_kv_meta(
-        &mut self,
+        &self,
         key: &str,
         seq: MatchSeq,
         value_meta: Option<KVMeta>,
@@ -61,7 +61,7 @@ impl KVApi for StoreClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn get_kv(&mut self, key: &str) -> Result<GetKVActionResult> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionResult> {
         self.do_action(GetKVAction {
             key: key.to_string(),
         })
@@ -69,14 +69,14 @@ impl KVApi for StoreClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, keys))]
-    async fn mget_kv(&mut self, keys: &[String]) -> common_exception::Result<MGetKVActionResult> {
+    async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionResult> {
         let keys = keys.to_vec();
         //keys.iter().map(|k| k.to_string()).collect();
         self.do_action(MGetKVAction { keys }).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn prefix_list_kv(&mut self, prefix: &str) -> common_exception::Result<PrefixListReply> {
+    async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply> {
         self.do_action(PrefixListReq(prefix.to_string())).await
     }
 }

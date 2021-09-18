@@ -21,8 +21,6 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_store_api::store_api::GetStoreApiClient;
-use common_store_api::store_api::StoreApis;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -35,8 +33,8 @@ use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::client_provider::StoreClientProvider;
-use crate::flight_result_to_str;
+use crate::common::flight_result_to_str;
+use crate::store_client_conf::StoreClientConf;
 use crate::store_do_action::RequestFor;
 use crate::store_do_action::StoreDoAction;
 use crate::ConnectionFactory;
@@ -52,6 +50,16 @@ pub struct StoreClient {
 static AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
+    pub async fn try_new(conf: &StoreClientConf) -> Result<StoreClient> {
+        Self::with_tls_conf(
+            &conf.meta_service_config.address,
+            &conf.meta_service_config.username,
+            &conf.meta_service_config.password,
+            conf.meta_service_config.tls_conf.clone(),
+        )
+        .await
+    }
+
     #[tracing::instrument(level = "debug", skip(password))]
     pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
         Self::with_tls_conf(addr, username, password, None).await
@@ -125,7 +133,7 @@ impl StoreClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_action<T, R>(&mut self, v: T) -> Result<R>
+    pub(crate) async fn do_action<T, R>(&self, v: T) -> Result<R>
     where
         T: RequestFor<Reply = R>,
         T: Into<StoreDoAction>,
@@ -137,7 +145,7 @@ impl StoreClient {
 
         req.set_timeout(self.timeout);
 
-        let mut stream = self.client.do_action(req).await?.into_inner();
+        let mut stream = self.client.clone().do_action(req).await?.into_inner();
         match stream.message().await? {
             None => Err(ErrorCode::EmptyData(format!(
                 "Can not receive data from store flight server, action: {:?}",
@@ -165,14 +173,5 @@ impl Interceptor for AuthInterceptor {
         let metadata = req.metadata_mut();
         metadata.insert_bin(AUTH_TOKEN_KEY, MetadataValue::from_bytes(&self.token));
         Ok(req)
-    }
-}
-
-impl StoreApis for StoreClient {}
-
-#[async_trait::async_trait]
-impl GetStoreApiClient<StoreClient> for StoreClientProvider {
-    async fn try_get_store_apis(&self) -> Result<StoreClient> {
-        self.try_get_client().await
     }
 }

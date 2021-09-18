@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,15 +30,13 @@ use crate::namespace::NodeInfo;
 pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";
 
 #[allow(dead_code)]
-pub struct NamespaceMgr<KV> {
-    kv_api: KV,
+pub struct NamespaceMgr {
+    kv_api: Arc<dyn KVApi>,
 }
 
-impl<T> NamespaceMgr<T>
-where T: KVApi
-{
+impl NamespaceMgr {
     #[allow(dead_code)]
-    pub fn new(kv_api: T) -> Self {
+    pub fn new(kv_api: Arc<dyn KVApi>) -> Self {
         NamespaceMgr { kv_api }
     }
 
@@ -51,9 +51,9 @@ where T: KVApi
 }
 
 #[async_trait]
-impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
+impl NamespaceApi for NamespaceMgr {
     async fn add_node(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         node: NodeInfo,
@@ -83,7 +83,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
     }
 
     async fn get_nodes(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         _seq: Option<u64>,
@@ -101,7 +101,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
     }
 
     async fn update_node(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         node: NodeInfo,
@@ -128,7 +128,7 @@ impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
     }
 
     async fn drop_node(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         node_id: String,

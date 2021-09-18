@@ -16,7 +16,7 @@ use std::fmt;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::RpcClientTlsConfig;
+use common_store_api_sdk::RpcClientTlsConfig;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -640,6 +640,11 @@ impl Config {
     pub fn tls_store_cli_enabled(&self) -> bool {
         !self.store.rpc_tls_store_server_root_ca_cert.is_empty()
             && !self.store.rpc_tls_store_service_domain_name.is_empty()
+    }
+
+    pub fn tls_meta_cli_enabled(&self) -> bool {
+        !self.meta.rpc_tls_meta_server_root_ca_cert.is_empty()
+            && !self.meta.rpc_tls_meta_service_domain_name.is_empty()
     }
 
     pub fn tls_rpc_server_enabled(&self) -> bool {

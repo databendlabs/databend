@@ -17,7 +17,7 @@ mod config_test;
 
 pub mod config;
 
-pub use common_flights::RpcClientTlsConfig;
+pub use common_store_api_sdk::RpcClientTlsConfig;
 pub use config::Config;
 pub use config::LogConfig;
 pub use config::MetaConfig;

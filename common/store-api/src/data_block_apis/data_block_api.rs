@@ -96,9 +96,9 @@ pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
 #[async_trait::async_trait]
-pub trait StorageApi {
+pub trait StorageApi: Send + Sync {
     async fn read_plan(
-        &mut self,
+        &self,
         db_name: String,
         tbl_name: String,
         scan_plan: &ScanPlan,
@@ -106,13 +106,13 @@ pub trait StorageApi {
 
     /// Get partition.
     async fn read_partition(
-        &mut self,
+        &self,
         schema: DataSchemaRef,
         read_action: &ReadAction,
     ) -> common_exception::Result<SendableDataBlockStream>;
 
     async fn append_data(
-        &mut self,
+        &self,
         db_name: String,
         tbl_name: String,
         scheme_ref: DataSchemaRef,
@@ -120,7 +120,7 @@ pub trait StorageApi {
     ) -> common_exception::Result<AppendResult>;
 
     async fn truncate(
-        &mut self,
+        &self,
         db: String,
         table: String,
     ) -> common_exception::Result<TruncateTableResult>;

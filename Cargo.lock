@@ -809,36 +809,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-flights"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-arrow",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-metatypes",
- "common-planners",
- "common-runtime",
- "common-store-api",
- "common-streams",
- "common-tracing",
- "futures",
- "hyper",
- "jwt-simple",
- "lazy_static",
- "log",
- "pretty_assertions",
- "prost",
- "serde",
- "serde_json",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "trust-dns-resolver",
-]
-
-[[package]]
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
@@ -886,8 +856,8 @@ dependencies = [
  "common-metatypes",
  "common-runtime",
  "common-store-api",
+ "common-store-api-sdk",
  "common-tracing",
- "databend-store",
  "lazy_static",
  "mockall",
  "serde",
@@ -966,12 +936,46 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-management",
  "common-metatypes",
  "common-planners",
+ "common-runtime",
  "common-streams",
+ "common-tracing",
  "futures",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "common-store-api-sdk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-infallible",
+ "common-metatypes",
+ "common-planners",
+ "common-runtime",
+ "common-store-api",
+ "common-streams",
+ "common-tracing",
+ "futures",
+ "hyper",
+ "jwt-simple",
+ "lazy_static",
+ "log",
+ "pretty_assertions",
+ "prost",
+ "serde",
+ "serde_json",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "trust-dns-resolver",
 ]
 
 [[package]]
@@ -1422,7 +1426,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-flights",
  "common-functions",
  "common-infallible",
  "common-io",
@@ -1433,6 +1436,7 @@ dependencies = [
  "common-progress",
  "common-runtime",
  "common-store-api",
+ "common-store-api-sdk",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -1497,13 +1501,13 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-flights",
  "common-functions",
  "common-infallible",
  "common-metatypes",
  "common-planners",
  "common-profling",
  "common-runtime",
+ "common-store-api-sdk",
  "common-tracing",
  "common-uniq-id",
  "env_logger 0.9.0",

@@ -31,13 +31,14 @@ use common_arrow::arrow_flight::HandshakeResponse;
 use common_arrow::arrow_flight::PutResult;
 use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
-use common_flights::FlightClaim;
-use common_flights::FlightToken;
-use common_flights::StoreDoAction;
-use common_flights::StoreDoGet;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use common_runtime::tokio::sync::mpsc::Sender;
+use common_store_api_sdk::storage_api_impl;
+use common_store_api_sdk::FlightClaim;
+use common_store_api_sdk::FlightToken;
+use common_store_api_sdk::StoreDoAction;
+use common_store_api_sdk::StoreDoGet;
 use common_tracing::tracing;
 use futures::Stream;
 use futures::StreamExt;
@@ -197,8 +198,8 @@ impl FlightService for StoreFlightImpl {
         let _claim = self.check_token(request.metadata())?;
         let meta = request.metadata();
 
-        let (db_name, tbl_name) = common_flights::storage_api_impl::get_meta(meta)
-            .map_err(|e| Status::internal(e.to_string()))?;
+        let (db_name, tbl_name) =
+            storage_api_impl::get_meta(meta).map_err(|e| Status::internal(e.to_string()))?;
 
         let append_res = self
             .action_handler

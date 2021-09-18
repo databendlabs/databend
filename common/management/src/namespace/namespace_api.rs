@@ -52,7 +52,7 @@ impl TryFrom<Vec<u8>> for NodeInfo {
 pub trait NamespaceApi {
     // Add a new node info to /tenant/namespace/node-name.
     async fn add_node(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         node: NodeInfo,
@@ -60,7 +60,7 @@ pub trait NamespaceApi {
 
     // Get the tenant's namespace all nodes.
     async fn get_nodes(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         seq: Option<u64>,
@@ -68,7 +68,7 @@ pub trait NamespaceApi {
 
     // Update the tenant's namespace node.
     async fn update_node(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         node: NodeInfo,
@@ -77,7 +77,7 @@ pub trait NamespaceApi {
 
     // Drop the tenant's namespace one node by node.id.
     async fn drop_node(
-        &mut self,
+        &self,
         tenant_id: String,
         namespace_id: String,
         node_id: String,

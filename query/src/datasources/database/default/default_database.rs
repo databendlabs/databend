@@ -16,12 +16,12 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_flights::client_provider::StoreClientProvider;
 use common_infallible::RwLock;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
+use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
 use crate::catalogs::meta_backend::MetaBackend;
@@ -36,7 +36,7 @@ pub struct DefaultDatabase {
     engine_name: String,
     meta_store_client: Arc<dyn MetaBackend>,
     table_factory_registry: Arc<TableEngineRegistry>,
-    client_provider: StoreClientProvider,
+    store_api_provider: StoreApiProvider,
     stateful_table_cache: RwLock<InMemoryMetas>,
 }
 
@@ -46,14 +46,14 @@ impl DefaultDatabase {
         engine_name: impl Into<String>,
         meta_store_client: Arc<dyn MetaBackend>,
         table_factory_registry: Arc<TableEngineRegistry>,
-        client_provider: StoreClientProvider,
+        store_api_provider: StoreApiProvider,
     ) -> Self {
         Self {
             db_name: db_name.into(),
             engine_name: engine_name.into(),
             meta_store_client,
             table_factory_registry,
-            client_provider,
+            store_api_provider,
             stateful_table_cache: RwLock::new(InMemoryMetas::create()),
         }
     }
@@ -74,7 +74,7 @@ impl DefaultDatabase {
             table_info.name.clone(),
             table_info.schema.clone(),
             table_info.table_option.clone(),
-            self.client_provider.clone(),
+            self.store_api_provider.clone(),
         )?;
         let stateful = tbl.is_stateful();
         let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);

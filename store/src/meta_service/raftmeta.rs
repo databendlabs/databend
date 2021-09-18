@@ -36,8 +36,6 @@ use async_raft::SnapshotMeta;
 use async_raft::SnapshotPolicy;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
-use common_flights::storage_api_impl::AppendResult;
-use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
 use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
@@ -48,6 +46,8 @@ use common_runtime::tokio::sync::Mutex;
 use common_runtime::tokio::sync::RwLock;
 use common_runtime::tokio::sync::RwLockWriteGuard;
 use common_runtime::tokio::task::JoinHandle;
+use common_store_api_sdk::storage_api_impl::AppendResult;
+use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 

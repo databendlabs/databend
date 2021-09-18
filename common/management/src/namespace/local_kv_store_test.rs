@@ -1,18 +1,19 @@
-// Copyright 2020 Datafuse Labs.
+//  Copyright 2021 Datafuse Labs.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
 //
 
+use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -21,22 +22,63 @@ use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_runtime::tokio;
-use common_store_api::kv_api::MGetKVActionResult;
+use common_store_api::kv_apis::kv_api::MGetKVActionResult;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::UpsertKVActionResult;
+use common_store_api_sdk::mocks::LocalKVStore;
+use common_store_api_sdk::StoreApiProvider;
+use common_store_api_sdk::StoreClientConf;
 use common_tracing::tracing;
-use databend_store::meta_service::raft_db::init_temp_sled_db;
 
+use crate::namespace::namespace_api::NamespaceApi;
 use crate::namespace::namespace_mgr::NamespaceMgr;
-use crate::namespace::LocalKVStore;
-use crate::namespace::NamespaceApi;
 use crate::namespace::NodeInfo;
+
+struct Fixture;
+
+impl Fixture {
+    #[allow(dead_code)]
+    async fn new_kv_api_with_store_api_provider() -> Result<Arc<dyn KVApi>> {
+        // this is for Api(compilation) testing only
+        //
+
+        // StoreAiProvider::new accepts a arg which can be converted
+        // into StoreClientConf, which query::configs::Conf implemented
+        // like this:
+        //
+        // - the constructor of StoreApiProvider
+        //
+        // ```
+        // pub fn new(conf: impl Into<StoreClientConf>) -> Self
+        // ```
+        // - the converter in crate `query`
+        //
+        // ```
+        //
+        // impl From<&Config> for StoreClientConf {
+        //  ...
+        // }
+        // ```
+        //
+        // since this crate is not supposed to be depended on crate `query`
+        // we can not demo it. instead we passes in a default StoreClientConf
+        //
+        // please DO NOT use the bare default config, which will lead to runtime error
+
+        let conf = StoreClientConf::default();
+        let api_provider = StoreApiProvider::new(conf);
+        api_provider.try_get_kv_client().await
+    }
+
+    async fn new_kv_api() -> Result<Arc<dyn KVApi>> {
+        let cli = LocalKVStore::new()?;
+        Ok(Arc::new(cli))
+    }
+}
 
 #[tokio::test]
 async fn test_mgr_backed_with_local_kv_store() -> Result<()> {
-    init_testing_sled_db();
-
     let tenant_id = "tenant1";
     let namespace_id = "cluster1";
     let node_id = "node1";
@@ -48,9 +90,9 @@ async fn test_mgr_backed_with_local_kv_store() -> Result<()> {
         port: 0,
     };
 
-    let api = LocalKVStore::new_temp().await?;
+    let api = Fixture::new_kv_api().await?;
 
-    let mut mgr = NamespaceMgr::new(api);
+    let mgr = NamespaceMgr::new(api);
     let res = mgr
         .add_node(
             tenant_id.to_string(),
@@ -72,14 +114,12 @@ async fn test_mgr_backed_with_local_kv_store() -> Result<()> {
 
 #[tokio::test]
 async fn test_local_kv_store() -> Result<()> {
-    init_testing_sled_db();
-
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
-    let mut api = LocalKVStore::new_temp().await?;
+    let api = Fixture::new_kv_api().await?;
 
     tracing::info!("--- upsert");
 
@@ -226,9 +266,4 @@ async fn test_local_kv_store() -> Result<()> {
     );
 
     Ok(())
-}
-
-fn init_testing_sled_db() {
-    let t = tempfile::tempdir().expect("create temp dir to sled db");
-    init_temp_sled_db(t);
 }

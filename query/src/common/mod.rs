@@ -15,6 +15,7 @@
 #[cfg(test)]
 mod hash_table_grower_test;
 
+mod config_converter;
 mod hash_table;
 #[allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
 mod hash_table_entity;

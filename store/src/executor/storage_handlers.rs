@@ -14,10 +14,10 @@
 //
 
 use common_exception::ErrorCode;
-use common_flights::storage_api_impl::ReadPlanAction;
-use common_flights::storage_api_impl::ReadPlanResult;
-use common_flights::storage_api_impl::TruncateTableAction;
-use common_flights::storage_api_impl::TruncateTableResult;
+use common_store_api_sdk::storage_api_impl::ReadPlanAction;
+use common_store_api_sdk::storage_api_impl::ReadPlanResult;
+use common_store_api_sdk::storage_api_impl::TruncateTableAction;
+use common_store_api_sdk::storage_api_impl::TruncateTableResult;
 use log::debug;
 
 use crate::executor::action_handler::RequestHandler;

@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use async_raft::AppDataResponse;
-use common_flights::storage_api_impl::DataPartInfo;
 use common_metatypes::Database;
 use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
+use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use serde::Deserialize;
 use serde::Serialize;
 

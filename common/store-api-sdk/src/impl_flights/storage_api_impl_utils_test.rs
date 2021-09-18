@@ -17,8 +17,8 @@
 mod test {
     use tonic::metadata::MetadataMap;
 
-    use crate::impls::storage_api_impl_utils::get_meta;
-    use crate::impls::storage_api_impl_utils::put_meta;
+    use crate::impl_flights::storage_api_impl_utils::get_meta;
+    use crate::impl_flights::storage_api_impl_utils::put_meta;
 
     #[test]
     fn test_get_set_meta() {

@@ -43,8 +43,8 @@ use futures::StreamExt;
 use tonic::Request;
 
 use crate::action_declare;
-use crate::impls::storage_api_impl_utils;
-pub use crate::impls::storage_api_impl_utils::get_meta;
+use crate::impl_flights::storage_api_impl_utils;
+pub use crate::impl_flights::storage_api_impl_utils::get_meta;
 use crate::RequestFor;
 use crate::StoreClient;
 use crate::StoreDoAction;
@@ -70,7 +70,7 @@ action_declare!(
 #[async_trait::async_trait]
 impl StorageApi for StoreClient {
     async fn read_plan(
-        &mut self,
+        &self,
         db_name: String,
         tbl_name: String,
         scan_plan: &ScanPlan,
@@ -82,14 +82,14 @@ impl StorageApi for StoreClient {
     }
 
     async fn read_partition(
-        &mut self,
+        &self,
         schema: DataSchemaRef,
         read_action: &ReadAction,
     ) -> common_exception::Result<SendableDataBlockStream> {
         let cmd = StoreDoGet::Read(read_action.clone());
         let mut req = tonic::Request::<Ticket>::from(&cmd);
         req.set_timeout(self.timeout);
-        let res = self.client.do_get(req).await?.into_inner();
+        let res = self.client.clone().do_get(req).await?.into_inner();
         let mut arrow_schema: ArrowSchemaRef = Arc::new(schema.to_arrow());
 
         // replace table schema with projected schema
@@ -110,7 +110,7 @@ impl StorageApi for StoreClient {
     }
 
     async fn append_data(
-        &mut self,
+        &self,
         db_name: String,
         tbl_name: String,
         scheme_ref: DataSchemaRef,
@@ -153,7 +153,7 @@ impl StorageApi for StoreClient {
         let meta = req.metadata_mut();
         storage_api_impl_utils::put_meta(meta, &db_name, &tbl_name);
 
-        let res = self.client.do_put(req).await?;
+        let res = self.client.clone().do_put(req).await?;
 
         match res.into_inner().message().await? {
             Some(res) => Ok(serde_json::from_slice(&res.app_metadata)?),
@@ -162,7 +162,7 @@ impl StorageApi for StoreClient {
     }
 
     async fn truncate(
-        &mut self,
+        &self,
         db: String,
         table: String,
     ) -> common_exception::Result<TruncateTableResult> {

@@ -20,7 +20,6 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::client_provider::StoreClientProvider;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -28,9 +27,8 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
-use common_store_api::store_api::GetStoreApiClient;
 use common_store_api::ReadPlanResult;
-use common_store_api::StorageApi;
+use common_store_api_sdk::StoreApiProvider;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
@@ -42,7 +40,7 @@ pub struct RemoteTable {
     pub(crate) db: String,
     pub(crate) name: String,
     pub(crate) schema: DataSchemaRef,
-    pub(crate) store_client_provider: StoreClientProvider,
+    pub(crate) store_api_provider: StoreApiProvider,
 }
 
 #[async_trait::async_trait]
@@ -75,14 +73,14 @@ impl Table for RemoteTable {
     ) -> Result<ReadDataSourcePlan> {
         // Change this method to async at current stage might be harsh
         let (tx, rx) = channel();
-        let cli_provider = self.store_client_provider.clone();
+        let cli_provider = self.store_api_provider.clone();
         let db_name = self.db.clone();
         let tbl_name = self.name.clone();
         {
             let scan = scan.clone();
             ctx.execute_task(async move {
-                match cli_provider.try_get_store_apis().await {
-                    Ok(mut client) => {
+                match cli_provider.try_get_storage_client().await {
+                    Ok(client) => {
                         let parts_info = client
                             .read_plan(db_name, tbl_name, &scan)
                             .await
@@ -119,7 +117,7 @@ impl Table for RemoteTable {
             let block_stream =
                 opt_stream.ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-            let mut client = self.store_client_provider.try_get_store_apis().await?;
+            let client = self.store_api_provider.try_get_storage_client().await?;
 
             client
                 .append_data(
@@ -135,7 +133,7 @@ impl Table for RemoteTable {
     }
 
     async fn truncate(&self, _ctx: DatabendQueryContextRef, plan: TruncateTablePlan) -> Result<()> {
-        let mut client = self.store_client_provider.try_get_store_apis().await?;
+        let client = self.store_api_provider.try_get_storage_client().await?;
         client.truncate(plan.db.clone(), plan.table.clone()).await?;
         Ok(())
     }
@@ -146,14 +144,14 @@ impl RemoteTable {
         db: impl Into<String>,
         name: impl Into<String>,
         schema: DataSchemaRef,
-        store_client_provider: StoreClientProvider,
+        store_api_provider: StoreApiProvider,
         _options: TableOptions,
     ) -> Box<dyn Table> {
         let table = Self {
             db: db.into(),
             name: name.into(),
             schema,
-            store_client_provider,
+            store_api_provider,
         };
         Box::new(table)
     }
@@ -202,9 +200,9 @@ impl TableEngine for RemoteTableFactory {
         name: String,
         schema: DataSchemaRef,
         options: TableOptions,
-        store_client_provider: StoreClientProvider,
+        store_api_provider: StoreApiProvider,
     ) -> Result<Box<dyn Table>> {
-        let tbl = RemoteTable::create(db, name, schema, store_client_provider, options);
+        let tbl = RemoteTable::create(db, name, schema, store_api_provider, options);
         Ok(tbl)
     }
 }

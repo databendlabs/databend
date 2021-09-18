@@ -1,5 +1,5 @@
 [package]
-name = "common-flights"
+name = "common-store-api-sdk"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -18,6 +18,7 @@ common-runtime = {path = "../runtime"}
 common-streams = {path = "../streams"}
 common-tracing = {path = "../tracing"}
 common-store-api= {path = "../store-api"}
+common-infallible = {path = "../infallible"}
 
 # Github dependencies
 
@@ -40,3 +41,6 @@ pretty_assertions = "0.7"
 
 [build-dependencies]
 tonic-build = "0.5.2"
+
+[features]
+mocks = []

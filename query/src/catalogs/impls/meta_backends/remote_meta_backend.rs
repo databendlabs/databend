@@ -27,7 +27,6 @@ use common_cache::LruCache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::StoreClient;
 use common_infallible::Mutex;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
@@ -36,9 +35,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_runtime::Runtime;
-use common_store_api::store_api::StoreApis;
-use common_store_api::store_api::StoreApisProvider;
-use common_store_api::MetaApi;
+use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
@@ -48,26 +45,22 @@ type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
 #[derive(Clone)]
-pub struct RemoteMeteStoreClient<T = StoreClient>
-where T: 'static + StoreApis + Clone
-{
+pub struct RemoteMeteStoreClient {
     rt: Arc<Runtime>,
     rpc_time_out: Option<Duration>,
     table_meta_cache: Arc<Mutex<TableMetaCache>>,
-    store_api_provider: StoreApisProvider<T>,
+    store_api_provider: Arc<StoreApiProvider>,
 }
 
-impl<T> RemoteMeteStoreClient<T>
-where T: 'static + StoreApis + Clone
-{
-    pub fn create(apis_provider: StoreApisProvider<T>) -> RemoteMeteStoreClient<T> {
+impl RemoteMeteStoreClient {
+    pub fn create(apis_provider: Arc<StoreApiProvider>) -> RemoteMeteStoreClient {
         Self::with_timeout_setting(apis_provider, Some(Duration::from_secs(5)))
     }
 
     pub fn with_timeout_setting(
-        apis_provider: StoreApisProvider<T>,
+        apis_provider: Arc<StoreApiProvider>,
         timeout: Option<Duration>,
-    ) -> RemoteMeteStoreClient<T> {
+    ) -> RemoteMeteStoreClient {
         let rt = Runtime::with_worker_threads(1).expect("remote catalogs initialization failure");
         RemoteMeteStoreClient {
             rt: Arc::new(rt),
@@ -126,7 +119,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             let tbl_name = table_name.to_string();
             let db_name = db_name.to_string();
             self.do_block(async move {
-                let mut client = cli_provider.try_get_store_apis().await?;
+                let client = cli_provider.try_get_meta_client().await?;
                 client.get_table(db_name, tbl_name).await
             })??
         };
@@ -167,7 +160,7 @@ impl MetaBackend for RemoteMeteStoreClient {
 
         let cli = self.store_api_provider.clone();
         let reply = self.do_block(async move {
-            let mut client = cli.try_get_store_apis().await?;
+            let client = cli.try_get_meta_client().await?;
             client.get_table_ext(table_id, table_version).await
         })??;
 
@@ -192,7 +185,7 @@ impl MetaBackend for RemoteMeteStoreClient {
         let db = {
             let db_name = db_name.to_owned();
             self.do_block(async move {
-                let mut client = cli_provider.try_get_store_apis().await?;
+                let client = cli_provider.try_get_meta_client().await?;
                 client.get_database(&db_name).await
             })??
         };
@@ -208,7 +201,7 @@ impl MetaBackend for RemoteMeteStoreClient {
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
         let cli_provider = self.store_api_provider.clone();
         let db = self.do_block(async move {
-            let mut client = cli_provider.try_get_store_apis().await?;
+            let client = cli_provider.try_get_meta_client().await?;
             client.get_database_meta(None).await
         })??;
 
@@ -241,7 +234,7 @@ impl MetaBackend for RemoteMeteStoreClient {
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
         let cli = self.store_api_provider.clone();
         let reply = self.do_block(async move {
-            let mut client = cli.try_get_store_apis().await?;
+            let client = cli.try_get_meta_client().await?;
             // always take the latest snapshot
             client.get_database_meta(None).await
         })??;
@@ -276,7 +269,7 @@ impl MetaBackend for RemoteMeteStoreClient {
         // TODO validate plan by table engine first
         let cli = self.store_api_provider.clone();
         let _r = self.do_block(async move {
-            let mut client = cli.try_get_store_apis().await?;
+            let client = cli.try_get_meta_client().await?;
             client.create_table(plan).await
         })??;
         Ok(())
@@ -285,7 +278,7 @@ impl MetaBackend for RemoteMeteStoreClient {
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
         let cli = self.store_api_provider.clone();
         let _r = self.do_block(async move {
-            let mut client = cli.try_get_store_apis().await?;
+            let client = cli.try_get_meta_client().await?;
             client.drop_table(plan.clone()).await
         })??;
         Ok(())
@@ -294,7 +287,7 @@ impl MetaBackend for RemoteMeteStoreClient {
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let cli_provider = self.store_api_provider.clone();
         let _r = self.do_block(async move {
-            let mut cli = cli_provider.try_get_store_apis().await?;
+            let cli = cli_provider.try_get_meta_client().await?;
             cli.create_database(plan).await
         })?;
         Ok(())
@@ -303,7 +296,7 @@ impl MetaBackend for RemoteMeteStoreClient {
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let cli_provider = self.store_api_provider.clone();
         let _r = self.do_block(async move {
-            let mut cli = cli_provider.try_get_store_apis().await?;
+            let cli = cli_provider.try_get_meta_client().await?;
             cli.drop_database(plan).await
         })?;
         Ok(())
