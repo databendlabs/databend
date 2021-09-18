@@ -27,7 +27,6 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
-
 use log::info;
 
 #[tokio::main]
