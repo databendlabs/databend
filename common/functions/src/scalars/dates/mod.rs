@@ -18,12 +18,20 @@ mod date_function_test;
 #[cfg(test)]
 mod date_test;
 
+#[cfg(test)]
+mod interval_function_test;
+
+mod interval_function;
 mod now;
 mod number_function;
 mod round_function;
 mod simple_date;
 
 pub use date::DateFunction;
+pub use interval_function::IntervalArithmeticFunction;
+pub use interval_function::IntervalFunctionFactory;
+pub use interval_function::MonthsArithmeticFunction;
+pub use interval_function::SecondsArithmeticFunction;
 pub use number_function::ToStartOfISOYearFunction;
 pub use number_function::ToStartOfMonthFunction;
 pub use number_function::ToStartOfQuarterFunction;
