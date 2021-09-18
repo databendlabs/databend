@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
+use common_tracing::set_panic_hook;
 use datafuse_query::api::HttpService;
 use datafuse_query::api::RpcService;
 use datafuse_query::clusters::Cluster;
@@ -54,6 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conf.log.log_level.as_str(),
     );
 
+    set_panic_hook();
     info!("{:?}", conf);
     info!(
         "DatafuseQuery v-{}",
