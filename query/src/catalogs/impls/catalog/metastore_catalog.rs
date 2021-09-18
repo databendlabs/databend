@@ -62,7 +62,7 @@ pub struct MetaStoreCatalog {
 
 impl MetaStoreCatalog {
     pub fn try_create_with_config(conf: Config) -> Result<Self> {
-        let local_mode = conf.store.store_address.is_empty();
+        let local_mode = conf.meta.meta_address.is_empty();
 
         let meta_backend: Arc<dyn MetaBackend>;
 
