@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
-use common_flights::MetaApi;
-use common_flights::RpcClientTlsConfig;
-use common_flights::StoreClient;
 use common_runtime::tokio;
+use common_store_api_sdk::MetaApi;
+use common_store_api_sdk::RpcClientTlsConfig;
+use common_store_api_sdk::StoreClient;
 use pretty_assertions::assert_eq;
 
 use crate::tests::service::new_test_context;
@@ -47,8 +47,7 @@ async fn test_flight_tls() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let mut client =
-        StoreClient::with_tls_conf(addr.as_str(), "root", "xxx", Some(tls_conf)).await?;
+    let client = StoreClient::with_tls_conf(addr.as_str(), "root", "xxx", Some(tls_conf)).await?;
 
     let r = client
         .get_table("do not care".to_owned(), "do not care".to_owned())

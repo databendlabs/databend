@@ -15,8 +15,8 @@
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_flights::client_provider::StoreClientProvider;
 use common_planners::TableOptions;
+use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::Table;
 
@@ -27,7 +27,7 @@ pub trait TableEngine: Send + Sync {
         name: String,
         schema: DataSchemaRef,
         options: TableOptions,
-        store_provider: StoreClientProvider,
+        store_provider: StoreApiProvider,
     ) -> Result<Box<dyn Table>>;
 }
 
@@ -42,7 +42,7 @@ where
         name: String,
         schema: DataSchemaRef,
         options: TableOptions,
-        _store_provider: StoreClientProvider,
+        _store_provider: StoreApiProvider,
     ) -> Result<Box<dyn Table>> {
         self(db, name, schema, options)
     }

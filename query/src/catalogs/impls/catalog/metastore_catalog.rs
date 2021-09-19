@@ -23,6 +23,7 @@ use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
+use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
@@ -39,7 +40,6 @@ use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
-use crate::datasources::util::RemoteFactory;
 
 pub const DEFAULT_DB_ENGINE: &str = "Default";
 
@@ -69,7 +69,7 @@ impl MetaStoreCatalog {
         meta_backend = if local_mode {
             Arc::new(EmbeddedMetaBackend::new())
         } else {
-            let store_client_provider = Arc::new(RemoteFactory::new(&conf).store_client_provider());
+            let store_client_provider = Arc::new(StoreApiProvider::new(&conf));
             Arc::new(RemoteMeteStoreClient::create(store_client_provider))
         };
 

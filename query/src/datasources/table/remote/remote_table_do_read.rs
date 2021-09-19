@@ -15,7 +15,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::StorageApi;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_store_api::ReadAction;
@@ -33,7 +32,7 @@ impl RemoteTable {
         ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let client = self.store_client_provider.try_get_client().await?;
+        let client = self.store_api_provider.try_get_storage_client().await?;
         let progress_callback = ctx.progress_callback();
 
         let plan = source_plan.clone();
@@ -52,7 +51,7 @@ impl RemoteTable {
         let schema = self.schema.clone();
         let parts = futures::stream::iter(iter);
         let streams = parts.then(move |parts| {
-            let mut client = client.clone();
+            let client = client.clone();
             let schema = schema.clone();
             async move {
                 let r = client.read_partition(schema, &parts).await;

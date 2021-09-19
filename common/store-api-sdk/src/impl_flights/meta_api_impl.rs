@@ -40,23 +40,20 @@ use crate::StoreClient;
 impl MetaApi for StoreClient {
     /// Create database call.
     async fn create_database(
-        &mut self,
+        &self,
         plan: CreateDatabasePlan,
     ) -> common_exception::Result<CreateDatabaseActionResult> {
         self.do_action(CreateDatabaseAction { plan }).await
     }
 
-    async fn get_database(
-        &mut self,
-        db: &str,
-    ) -> common_exception::Result<GetDatabaseActionResult> {
+    async fn get_database(&self, db: &str) -> common_exception::Result<GetDatabaseActionResult> {
         self.do_action(GetDatabaseAction { db: db.to_string() })
             .await
     }
 
     /// Drop database call.
     async fn drop_database(
-        &mut self,
+        &self,
         plan: DropDatabasePlan,
     ) -> common_exception::Result<DropDatabaseActionResult> {
         self.do_action(DropDatabaseAction { plan }).await
@@ -64,7 +61,7 @@ impl MetaApi for StoreClient {
 
     /// Create table call.
     async fn create_table(
-        &mut self,
+        &self,
         plan: CreateTablePlan,
     ) -> common_exception::Result<CreateTableActionResult> {
         self.do_action(CreateTableAction { plan }).await
@@ -72,7 +69,7 @@ impl MetaApi for StoreClient {
 
     /// Drop table call.
     async fn drop_table(
-        &mut self,
+        &self,
         plan: DropTablePlan,
     ) -> common_exception::Result<DropTableActionResult> {
         self.do_action(DropTableAction { plan }).await
@@ -80,7 +77,7 @@ impl MetaApi for StoreClient {
 
     /// Get table.
     async fn get_table(
-        &mut self,
+        &self,
         db: String,
         table: String,
     ) -> common_exception::Result<GetTableActionResult> {
@@ -88,7 +85,7 @@ impl MetaApi for StoreClient {
     }
 
     async fn get_table_ext(
-        &mut self,
+        &self,
         tbl_id: MetaId,
         tbl_ver: Option<MetaVersion>,
     ) -> common_exception::Result<GetTableActionResult> {
@@ -96,7 +93,7 @@ impl MetaApi for StoreClient {
     }
 
     async fn get_database_meta(
-        &mut self,
+        &self,
         ver_lower_bound: Option<u64>,
     ) -> common_exception::Result<DatabaseMetaReply> {
         self.do_action(GetDatabaseMetaAction { ver_lower_bound })

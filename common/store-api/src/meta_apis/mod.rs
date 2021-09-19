@@ -13,18 +13,4 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
-use crate::MetaApi;
-use crate::StorageApi;
-
-pub trait StoreApis: MetaApi + StorageApi + Send {}
-
-#[async_trait::async_trait]
-pub trait GetStoreApiClient<T>
-where T: StoreApis
-{
-    async fn try_get_store_apis(&self) -> common_exception::Result<T>;
-}
-
-pub type StoreApisProvider<T> = Arc<dyn GetStoreApiClient<T> + Send + Sync>;
+pub mod meta_api;

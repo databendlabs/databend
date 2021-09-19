@@ -14,16 +14,16 @@
 //
 
 use common_exception::ErrorCode;
-use common_flights::kv_api_impl::GetKVAction;
-use common_flights::kv_api_impl::GetKVActionResult;
-use common_flights::kv_api_impl::KVMetaAction;
-use common_flights::kv_api_impl::MGetKVAction;
-use common_flights::kv_api_impl::MGetKVActionResult;
-use common_flights::kv_api_impl::PrefixListReply;
-use common_flights::kv_api_impl::PrefixListReq;
-use common_flights::kv_api_impl::UpsertKVAction;
-use common_flights::kv_api_impl::UpsertKVActionResult;
 use common_metatypes::Operation;
+use common_store_api_sdk::kv_api_impl::GetKVAction;
+use common_store_api_sdk::kv_api_impl::GetKVActionResult;
+use common_store_api_sdk::kv_api_impl::KVMetaAction;
+use common_store_api_sdk::kv_api_impl::MGetKVAction;
+use common_store_api_sdk::kv_api_impl::MGetKVActionResult;
+use common_store_api_sdk::kv_api_impl::PrefixListReply;
+use common_store_api_sdk::kv_api_impl::PrefixListReq;
+use common_store_api_sdk::kv_api_impl::UpsertKVAction;
+use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;

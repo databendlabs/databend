@@ -12,12 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
+pub mod kv_api;
 
-pub use common_flights::client_provider::StoreClientProvider;
-pub use common_flights::client_provider::TryGetStoreClient;
-pub use common_store_api::store_api::GetStoreApiClient;
-pub use common_store_api::store_api::StoreApis;
-pub use common_store_api::store_api::StoreApisProvider;
-pub use remote_factory::RemoteFactory;
-
-mod remote_factory;
+//pub mod local_kv_store;

@@ -21,7 +21,7 @@ pub fn flight_result_to_str(r: &arrow_flight::Result) -> String {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RpcClientTlsConfig {
     pub rpc_tls_server_root_ca_cert: String,
     pub domain_name: String,

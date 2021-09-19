@@ -6,7 +6,7 @@ members = [
     "common/cache",
     "common/datablocks",
     "common/datavalues",
-    "common/flights",
+    "common/store-api-sdk",
     "common/functions",
     "common/metatypes",
     "common/infallible",

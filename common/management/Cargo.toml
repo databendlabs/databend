@@ -14,10 +14,7 @@ common-metatypes= {path = "../metatypes"}
 common-store-api= {path = "../store-api"}
 common-tracing= {path = "../tracing"}
 
-databend-store = {path= "../../store"}
-
 async-trait = "0.1"
-tempfile = "3.2.0"
 lazy_static = "1.4.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -26,5 +23,5 @@ sha1 = "0.6.0"
 
 [dev-dependencies]
 common-runtime = { path = "../runtime"}
+common-store-api-sdk= {path = "../store-api-sdk", features= ["mocks"]}
 mockall = "0.10.2"
-common-metatypes = {path = "../metatypes"}

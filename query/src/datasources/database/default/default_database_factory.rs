@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
@@ -24,7 +25,6 @@ use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
 use crate::datasources::database::default::default_database::DefaultDatabase;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
-use crate::datasources::util::RemoteFactory;
 
 /// Default database engine, which
 /// - creates tables by using TableFactory
@@ -48,8 +48,7 @@ impl DefaultDatabaseFactory {
 
 impl DatabaseEngine for DefaultDatabaseFactory {
     fn create(&self, conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let remote = RemoteFactory::new(conf);
-        let client_provider = remote.store_client_provider();
+        let client_provider = StoreApiProvider::new(conf);
         let db = DefaultDatabase::new(
             &db_info.name,
             &db_info.engine,

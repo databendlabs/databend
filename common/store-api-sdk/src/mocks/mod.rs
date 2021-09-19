@@ -12,14 +12,5 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-
-use std::sync::Arc;
-
-use crate::StoreClient;
-
-#[async_trait::async_trait]
-pub trait TryGetStoreClient {
-    async fn try_get_client(&self) -> common_exception::Result<StoreClient>;
-}
-
-pub type StoreClientProvider = Arc<dyn TryGetStoreClient + Send + Sync>;
+mod local_kv_store;
+pub use local_kv_store::LocalKVStore;
