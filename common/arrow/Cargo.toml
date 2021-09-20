@@ -21,7 +21,7 @@ arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", d
 arrow-flight = { git="https://github.com/datafuse-extras/arrow2", rev = "f326fed" }
 #parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "83c3325" }
 #parquet = { package = "parquet2", git = "https://github.com/datafuse-extras/parquet2", default-features = false, rev = "1d310ee" }
-parquet2 = { version = "0.4", optional = false, default_features = false, features = ["stream"] }
+parquet2 = { version = "0.5", optional = false, default_features = false, features = ["stream"] }
 # Crates.io dependencies
 
 [dev-dependencies]

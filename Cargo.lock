@@ -114,7 +114,7 @@ dependencies = [
  "multiversion",
  "num-traits",
  "packed_simd_2",
- "parquet2",
+ "parquet2 0.4.0",
  "regex",
  "serde",
  "serde_json",
@@ -704,7 +704,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
- "parquet2",
+ "parquet2 0.5.0",
 ]
 
 [[package]]
@@ -3717,6 +3717,19 @@ name = "parquet2"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73758f76c8c842dfd846dfbc6ee05779aff626908531fffc3305a30cbccc55e7"
+dependencies = [
+ "async-stream",
+ "bitpacking",
+ "futures",
+ "parquet-format-async-temp",
+ "streaming-iterator",
+]
+
+[[package]]
+name = "parquet2"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19f7a559e610a513b181d4ba28f49e92c9a8d7fcc9e8d3a85e2f9ffb6f0d3ab6"
 dependencies = [
  "async-stream",
  "bitpacking",
