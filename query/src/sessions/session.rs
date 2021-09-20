@@ -132,7 +132,7 @@ impl Session {
                 let config = self.config.clone();
                 let discovery = self.sessions.get_cluster_discovery();
 
-                let cluster = discovery.immutable_cluster().await?;
+                let cluster = discovery.discover().await?;
                 let shared = DatafuseQueryContextShared::try_create(config, self.clone(), cluster);
 
                 let mut mutable_state = self.mutable_state.lock();
@@ -175,11 +175,6 @@ impl Session {
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
         self.mutable_state.lock().session_settings.clone()
-    }
-
-    pub async fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
-        let cluster_discovery = self.sessions.get_cluster_discovery();
-        cluster_discovery.immutable_cluster().await
     }
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {

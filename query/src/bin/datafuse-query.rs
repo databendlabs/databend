@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),
     )
-    .init();
+        .init();
     let _guards = init_tracing_with_file(
         "datafuse-query",
         conf.log.log_dir.as_str(),
@@ -57,8 +57,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf);
     info!("DatafuseQuery v-{}", *datafuse_query::configs::config::FUSE_COMMIT_VERSION);
 
-    let cluster = ClusterDiscovery::create_global(conf.clone()).await?;
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
+    let cluster_discovery = ClusterDiscovery::create_global(conf.clone()).await?;
+    let session_manager = SessionManager::from_conf(conf.clone(), cluster_discovery.clone())?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.
@@ -118,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .query
             .http_api_address
             .parse::<std::net::SocketAddr>()?;
-        let mut srv = HttpService::create(conf.clone(), cluster.clone());
+        let mut srv = HttpService::create(conf.clone(), cluster_discovery.clone());
         let listening = srv.start(listening).await?;
         shutdown_handle.add_service(srv);
         info!("HTTP API server listening on {}", listening);
@@ -136,8 +136,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("RPC API server listening on {}", listening);
     }
 
+    cluster_discovery.register_to_metastore(&conf).await?;
     log::info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
+    // TODO: destroy cluster
     log::info!("Shutdown server.");
     Ok(())
 }

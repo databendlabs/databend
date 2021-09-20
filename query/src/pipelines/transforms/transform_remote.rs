@@ -54,7 +54,7 @@ impl RemoteTransform {
         let node_name = self.fetch_node_name.clone();
 
         let cluster = context.get_cluster();
-        cluster.create_node_conn(node_name, self.ctx.get_config()).await
+        cluster.create_node_conn(&node_name, &self.ctx.get_config()).await
     }
 }
 

@@ -68,6 +68,7 @@ impl FlightClient {
 
     // Execute do_action.
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
+        println!("do action {:?}", action);
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();
         let mut request = Request::new(action);

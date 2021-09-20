@@ -21,18 +21,6 @@ use common_exception::Result;
 use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum NodeStatus {
-    Invalid = 1,
-    Working,
-}
-
-impl Default for NodeStatus {
-    fn default() -> Self {
-        NodeStatus::Invalid
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct NodeInfo {
     #[serde(default)]
     pub id: String,
@@ -40,8 +28,6 @@ pub struct NodeInfo {
     pub cpu_nums: u64,
     #[serde(default)]
     pub version: u32,
-    #[serde(default)]
-    pub status: NodeStatus,
     #[serde(default)]
     pub flight_address: String,
 
@@ -63,8 +49,12 @@ impl TryFrom<Vec<u8>> for NodeInfo {
 
 impl NodeInfo {
     pub fn create(id: String, cpu_nums: u64, flight_address: String) -> NodeInfo {
-        // NodeInfo { id, cpu_nums, version: 1, flight_address }
-        unimplemented!()
+        NodeInfo {
+            id,
+            cpu_nums,
+            version: 0,
+            flight_address,
+        }
     }
 }
 

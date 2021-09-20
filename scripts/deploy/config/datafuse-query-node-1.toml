@@ -2,9 +2,9 @@
 # datafuse-query -c datafuse_query_config_spec.toml
 
 # Log
-[log]
-log_level = "ERROR"
-log_dir = "./_logs"
+# [log]
+# log_level = "ERROR"
+# log_dir = "./_logs"
 
 # Meta
 [meta]
@@ -40,3 +40,5 @@ mysql_handler_port = 3307
 # Datafuse Query ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001
+
+namespace = "test_cluster"

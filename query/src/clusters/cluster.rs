@@ -17,93 +17,118 @@ use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
+use rand::{Rng, thread_rng};
+
+use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::{DNSResolver, StoreClient, ConnectionFactory};
-use common_infallible::Mutex;
+use common_flights::{ConnectionFactory, DNSResolver, StoreClient, KVApi};
+use common_management::{LocalKVStore, NamespaceApi, NamespaceMgr, NodeInfo};
+use common_runtime::tokio;
+use common_runtime::tokio::sync::Mutex;
+use common_runtime::tokio::time::sleep as tokio_async_sleep;
 
+use crate::api::FlightClient;
 use crate::clusters::address::Address;
 use crate::clusters::node::Node;
 use crate::configs::Config;
-use common_management::{NamespaceApi, NamespaceMgr, LocalKVStore, NodeInfo};
-use std::time::Duration;
-use crate::api::FlightClient;
-use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 
 pub type ClusterRef = Arc<Cluster>;
 pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
+type NamespaceApiProvider = Arc<Mutex<Box<dyn NamespaceApi + Send + Sync>>>;
 
 pub struct ClusterDiscovery {
-    local_port: u16,
-    nodes: Mutex<HashMap<String, Arc<Node>>>,
     local_id: String,
-    provider: Mutex<Box<dyn NamespaceApi + Sync + Send>>,
+    heartbeat: ClusterHeartbeat,
+    api_provider: NamespaceApiProvider,
 }
 
 impl ClusterDiscovery {
     // TODO(Winter): this should be disabled by compile flag
     async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
-        let tenant = &cfg.query.tenant;
-        let namespace = &cfg.query.namespace;
-        let lift_time = Duration::from_secs(60);
+        let local_id = global_unique_id();
         let local_store = LocalKVStore::new_temp().await?;
-        let namespace_manager = NamespaceMgr::new(local_store, tenant, namespace, lift_time)?;
+        let (lift_time, provider) = Self::create_provider(cfg, local_store)?;
 
         Ok(Arc::new(ClusterDiscovery {
-            local_port: Address::create(&cfg.query.flight_api_address)?.port(),
-            nodes: Mutex::new(HashMap::new()),
-            local_id: global_unique_id(),
-            provider: Mutex::new(Box::new(namespace_manager)),
+            local_id: local_id.clone(),
+            api_provider: provider.clone(),
+            heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
         }))
     }
 
     async fn cluster_with_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
-        let address = &cfg.meta.meta_address;
-        let username = &cfg.meta.meta_username;
-        let password = &cfg.meta.meta_password;
-        let store_client = StoreClient::try_create(address, username, password).await?;
-
-        let tenant = &cfg.query.tenant;
-        let namespace = &cfg.query.namespace;
-        let lift_time = Duration::from_secs(60);
-        let namespace_manager = NamespaceMgr::new(store_client, tenant, namespace, lift_time)?;
+        let local_id = global_unique_id();
+        let store_client = ClusterDiscovery::create_store_client(cfg).await?;
+        let (lift_time, provider) = Self::create_provider(cfg, store_client)?;
 
         Ok(Arc::new(ClusterDiscovery {
-            local_port: Address::create(&cfg.query.flight_api_address)?.port(),
-            nodes: Mutex::new(HashMap::new()),
-            local_id: global_unique_id(),
-            provider: Mutex::new(Box::new(namespace_manager)),
+            local_id: local_id.clone(),
+            api_provider: provider.clone(),
+            heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
         }))
     }
 
+    async fn create_store_client(cfg: &Config) -> Result<StoreClient> {
+        let address = &cfg.meta.meta_address;
+        let username = &cfg.meta.meta_username;
+        let password = &cfg.meta.meta_password;
+        match StoreClient::try_create(address, username, password).await {
+            Ok(client) => Ok(client),
+            Err(cause) => Err(cause.add_message_back("(while create namespace api)."))
+        }
+    }
+
     pub async fn create_global(cfg: Config) -> Result<ClusterDiscoveryRef> {
-        let cluster = match cfg.meta.meta_address.is_empty() {
-            true => Self::standalone_without_metastore(&cfg).await?,
-            false => Self::cluster_with_metastore(&cfg).await?,
-        };
-
-        cluster.register_to_metastore(&cfg).await;
-        Ok(cluster)
+        match cfg.meta.meta_address.is_empty() {
+            true => Self::standalone_without_metastore(&cfg).await,
+            false => Self::cluster_with_metastore(&cfg).await,
+        }
     }
 
+    fn create_provider<KVAPIProvider: KVApi + Sync + Send + 'static>(
+        cfg: &Config,
+        kv_api: KVAPIProvider,
+    ) -> Result<(Duration, NamespaceApiProvider)> {
+        let tenant = &cfg.query.tenant;
+        let namespace = &cfg.query.namespace;
+        let lift_time = Duration::from_secs(60);
+        let namespace_manager = NamespaceMgr::new(kv_api, tenant, namespace, lift_time)?;
 
-    pub async fn immutable_cluster(&self) -> Result<ClusterRef> {
-        // TODO: sync and create cluster
-        let mut provider = self.provider.lock();
-        // let nodes_list = provider.get_nodes().await?;
-
-        Cluster::empty()
+        Ok((lift_time, Arc::new(Mutex::new(Box::new(namespace_manager)))))
     }
 
-    pub async fn register_to_metastore(&self, cfg: &Config) -> Result<()> {
-        let mut api_provider = self.provider.lock();
+    pub async fn discover(&self) -> Result<ClusterRef> {
+        let mut provider = self.api_provider.lock().await;
+
+        match provider.get_nodes().await {
+            Err(cause) => Err(cause.add_message_back("(while namespace api get_nodes).")),
+            Ok(cluster_nodes) => {
+                let mut res = Vec::with_capacity(cluster_nodes.len());
+
+                for node in &cluster_nodes {
+                    res.push(Arc::new(node.clone()))
+                }
+
+                println!("Discover cluster nodes {:?}", res);
+                Ok(Cluster::create(res, self.local_id.clone()))
+            }
+        }
+    }
+
+    pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<()> {
+        let mut api_provider = self.api_provider.lock().await;
 
         let cpus = cfg.query.num_cpus;
         let address = cfg.query.flight_api_address.clone();
         let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
-        api_provider.add_node(node_info).await?;
-        Ok(())
+
+        match api_provider.add_node(node_info).await {
+            Ok(_) => self.heartbeat.startup(),
+            Err(cause) => Err(cause.add_message_back("(while namespace api add_node).")),
+        }
     }
 }
 
@@ -113,23 +138,23 @@ pub struct Cluster {
 }
 
 impl Cluster {
+    pub fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> ClusterRef {
+        Arc::new(Cluster { local_id, nodes })
+    }
+
     pub fn empty() -> Result<ClusterRef> {
         Ok(Arc::new(Cluster { local_id: String::from(""), nodes: Vec::new() }))
     }
 
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.nodes.len() == 1
     }
 
     pub fn is_local(&self, node: &NodeInfo) -> bool {
-        if self.is_empty() {
-            return true;
-        }
-
         node.id == self.local_id
     }
 
-    pub async fn create_node_conn(&self, name: String, config: Config) -> Result<FlightClient> {
+    pub async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient> {
         for node in &self.nodes {
             if node.id == name {
                 return match config.tls_query_cli_enabled() {
@@ -161,7 +186,6 @@ impl Cluster {
     }
 }
 
-
 fn global_unique_id() -> String {
     let mut uuid = uuid::Uuid::new_v4().as_u128();
     let mut unique_id = Vec::with_capacity(22);
@@ -182,3 +206,52 @@ fn global_unique_id() -> String {
         }
     }
 }
+
+struct ClusterHeartbeat {
+    lift_time: Duration,
+    local_node_id: String,
+    provider: Arc<Mutex<Box<dyn NamespaceApi + Sync + Send>>>,
+}
+
+impl ClusterHeartbeat {
+    pub fn create(
+        lift_time: Duration,
+        local_node_id: String,
+        provider: Arc<Mutex<Box<dyn NamespaceApi + Sync + Send>>>,
+    ) -> ClusterHeartbeat {
+        ClusterHeartbeat {
+            lift_time,
+            local_node_id,
+            provider,
+        }
+    }
+
+    pub fn startup(&self) -> Result<()> {
+        let sleep_time = self.lift_time.clone();
+        let local_node_id = self.local_node_id.clone();
+        let namespace_api_provider = self.provider.clone();
+
+        tokio::spawn(async move {
+            loop {
+                let min_sleep_time = sleep_time / 3;
+                let max_sleep_time = min_sleep_time * 2;
+                let sleep_range = min_sleep_time.as_millis()..=max_sleep_time.as_millis();
+
+                let mills = {
+                    let mut rng = thread_rng();
+                    rng.gen_range(sleep_range)
+                };
+
+                tokio_async_sleep(Duration::from_millis(mills as u64)).await;
+
+                let mut provider = namespace_api_provider.lock().await;
+                if let Err(cause) = provider.heartbeat(local_node_id.clone(), None).await {
+                    log::error!("Cluster Heartbeat failure: {:?}", cause);
+                }
+            }
+        });
+
+        Ok(())
+    }
+}
+

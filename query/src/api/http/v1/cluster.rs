@@ -25,7 +25,7 @@ use axum::response::IntoResponse;
 use serde_json::json;
 use serde_json::Value;
 
-use crate::clusters::ClusterRef;
+use crate::clusters::{ClusterRef, ClusterDiscoveryRef};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ClusterNodeRequest {
@@ -118,10 +118,11 @@ impl IntoResponse for ClusterError {
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
 // pub async fn cluster_list_handler(
-//     cluster_state: Extension<ClusterRef>,
+//     discovery: Extension<ClusterDiscoveryRef>,
 // ) -> Result<Json<Value>, ClusterError> {
-//     let cluster: ClusterRef = cluster_state.0;
-//     return match cluster.get_nodes() {
+//     let discovery: ClusterDiscoveryRef = discovery.0;
+//     let discover_cluster = discovery.discover()?;
+//     return match discovery.get_nodes() {
 //         Ok(nodes) => {
 //             log::info!("Successfully listed nodes ");
 //             Ok(Json(json!(nodes)))

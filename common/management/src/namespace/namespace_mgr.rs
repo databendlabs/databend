@@ -63,6 +63,7 @@ impl<T: KVApi> NamespaceMgr<T> {
 
         for char in key.as_bytes() {
             match char {
+                b'0'..=b'9' => new_key.push(*char),
                 b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(*char),
                 _other => {
                     new_key.push(b'%');
