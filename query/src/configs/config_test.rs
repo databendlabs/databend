@@ -24,6 +24,57 @@ use crate::configs::StoreConfig;
 // Default.
 #[test]
 fn test_default_config() -> Result<()> {
+    let expect = LogConfig {
+        log_level: "INFO".to_string(),
+        log_dir: "./_logs".to_string(),
+    };
+    let actual = LogConfig::default();
+    assert_eq!(actual, expect);
+
+    let expect = StoreConfig {
+        store_address: "".to_string(),
+        store_username: "root".to_string(),
+        store_password: "".to_string(),
+        rpc_tls_store_server_root_ca_cert: "".to_string(),
+        rpc_tls_store_service_domain_name: "localhost".to_string(),
+    };
+    let actual = StoreConfig::default();
+    assert_eq!(actual, expect);
+
+    let expect = MetaConfig {
+        meta_address: "".to_string(),
+        meta_username: "root".to_string(),
+        meta_password: "".to_string(),
+        rpc_tls_meta_server_root_ca_cert: "".to_string(),
+        rpc_tls_meta_service_domain_name: "localhost".to_string(),
+    };
+    let actual = MetaConfig::default();
+    assert_eq!(actual, expect);
+
+    let expect = QueryConfig {
+        tenant: "".to_string(),
+        namespace: "".to_string(),
+        num_cpus: 8,
+        mysql_handler_host: "127.0.0.1".to_string(),
+        mysql_handler_port: 3307,
+        max_active_sessions: 256,
+        clickhouse_handler_host: "127.0.0.1".to_string(),
+        clickhouse_handler_port: 9000,
+        flight_api_address: "127.0.0.1:9090".to_string(),
+        http_api_address: "127.0.0.1:8080".to_string(),
+        metric_api_address: "127.0.0.1:7070".to_string(),
+        api_tls_server_cert: "".to_string(),
+        api_tls_server_key: "".to_string(),
+        api_tls_server_root_ca_cert: "".to_string(),
+        rpc_tls_server_cert: "".to_string(),
+        rpc_tls_server_key: "".to_string(),
+        rpc_tls_query_server_root_ca_cert: "".to_string(),
+        rpc_tls_query_service_domain_name: "localhost".to_string(),
+        disable_local_database_engine: "0".to_string(),
+    };
+    let actual = QueryConfig::default();
+    assert_eq!(actual, expect);
+
     let expect = Config {
         log: LogConfig::default(),
         meta: MetaConfig::default(),

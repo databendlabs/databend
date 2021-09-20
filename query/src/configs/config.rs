@@ -113,10 +113,7 @@ pub struct LogConfig {
 
 impl LogConfig {
     pub fn default() -> Self {
-        LogConfig {
-            log_level: "INFO".to_string(),
-            log_dir: "./_logs".to_string(),
-        }
+        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
     }
 }
 
@@ -124,22 +121,22 @@ impl LogConfig {
 /// serde(default) make the toml de to default working.
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct StoreConfig {
-    #[structopt(long, env = STORE_ADDRESS, default_value = "", help = "Store backend address")]
+    #[structopt(long, env = STORE_ADDRESS, default_value, help = "Store backend address")]
     #[serde(default)]
     pub store_address: String,
 
-    #[structopt(long, env = STORE_USERNAME, default_value = "", help = "Store backend user name")]
+    #[structopt(long, env = STORE_USERNAME, default_value = "root", help = "Store backend user name")]
     #[serde(default)]
     pub store_username: String,
 
-    #[structopt(long, env = STORE_PASSWORD, default_value = "", help = "Store backend user password")]
+    #[structopt(long, env = STORE_PASSWORD, default_value, help = "Store backend user password")]
     #[serde(default)]
     pub store_password: String,
 
     #[structopt(
         long,
         env = "STORE_RPC_TLS_SERVER_ROOT_CA_CERT",
-        default_value = "",
+        default_value,
         help = "Certificate for client to identify store rpc server"
     )]
     #[serde(default)]
@@ -156,13 +153,7 @@ pub struct StoreConfig {
 
 impl StoreConfig {
     pub fn default() -> Self {
-        StoreConfig {
-            store_address: "".to_string(),
-            store_username: "root".to_string(),
-            store_password: "".to_string(),
-            rpc_tls_store_server_root_ca_cert: "".to_string(),
-            rpc_tls_store_service_domain_name: "localhost".to_string(),
-        }
+        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
     }
 }
 
@@ -180,22 +171,22 @@ impl fmt::Debug for StoreConfig {
 /// serde(default) make the toml de to default working.
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct MetaConfig {
-    #[structopt(long, env = META_ADDRESS, default_value = "", help = "MetaStore backend address")]
+    #[structopt(long, env = META_ADDRESS, default_value, help = "MetaStore backend address")]
     #[serde(default)]
     pub meta_address: String,
 
-    #[structopt(long, env = META_USERNAME, default_value = "", help = "MetaStore backend user name")]
+    #[structopt(long, env = META_USERNAME, default_value = "root", help = "MetaStore backend user name")]
     #[serde(default)]
     pub meta_username: String,
 
-    #[structopt(long, env = META_PASSWORD, default_value = "", help = "MetaStore backend user password")]
+    #[structopt(long, env = META_PASSWORD, default_value, help = "MetaStore backend user password")]
     #[serde(default)]
     pub meta_password: String,
 
     #[structopt(
         long,
         env = "META_RPC_TLS_SERVER_ROOT_CA_CERT",
-        default_value = "",
+        default_value,
         help = "Certificate for client to identify meta rpc server"
     )]
     #[serde(default)]
@@ -212,13 +203,7 @@ pub struct MetaConfig {
 
 impl MetaConfig {
     pub fn default() -> Self {
-        MetaConfig {
-            meta_address: "".to_string(),
-            meta_username: "root".to_string(),
-            meta_password: "".to_string(),
-            rpc_tls_meta_server_root_ca_cert: "".to_string(),
-            rpc_tls_meta_service_domain_name: "localhost".to_string(),
-        }
+        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
     }
 }
 
@@ -238,15 +223,15 @@ impl fmt::Debug for MetaConfig {
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct QueryConfig {
-    #[structopt(long, env = QUERY_TENANT, default_value = "", help = "Tenant id for get the information from the MetaStore")]
+    #[structopt(long, env = QUERY_TENANT, default_value, help = "Tenant id for get the information from the MetaStore")]
     #[serde(default)]
     pub tenant: String,
 
-    #[structopt(long, env = QUERY_NAMESPACE, default_value = "", help = "Namespace for construct the cluster")]
+    #[structopt(long, env = QUERY_NAMESPACE, default_value, help = "Namespace for construct the cluster")]
     #[serde(default)]
     pub namespace: String,
 
-    #[structopt(long, env = QUERY_NUM_CPUS, default_value = "0")]
+    #[structopt(long, env = QUERY_NUM_CPUS, default_value = "8")]
     #[serde(default)]
     pub num_cpus: u64,
 
@@ -310,22 +295,22 @@ pub struct QueryConfig {
     #[serde(default)]
     pub metric_api_address: String,
 
-    #[structopt(long, env = QUERY_API_TLS_SERVER_CERT, default_value = "")]
+    #[structopt(long, env = QUERY_API_TLS_SERVER_CERT, default_value)]
     #[serde(default)]
     pub api_tls_server_cert: String,
 
-    #[structopt(long, env = QUERY_API_TLS_SERVER_KEY, default_value = "")]
+    #[structopt(long, env = QUERY_API_TLS_SERVER_KEY, default_value)]
     #[serde(default)]
     pub api_tls_server_key: String,
 
-    #[structopt(long, env = QUERY_API_TLS_SERVER_ROOT_CA_CERT, default_value = "")]
+    #[structopt(long, env = QUERY_API_TLS_SERVER_ROOT_CA_CERT, default_value)]
     #[serde(default)]
     pub api_tls_server_root_ca_cert: String,
 
     #[structopt(
         long,
         env = "QUERY_RPC_TLS_SERVER_CERT",
-        default_value = "",
+        default_value,
         help = "rpc server cert"
     )]
     #[serde(default)]
@@ -334,7 +319,8 @@ pub struct QueryConfig {
     #[structopt(
         long,
         env = "QUERY_RPC_TLS_SERVER_KEY",
-        default_value = "key for rpc server cert"
+        default_value,
+        help = "key for rpc server cert"
     )]
     #[serde(default)]
     pub rpc_tls_server_key: String,
@@ -342,7 +328,7 @@ pub struct QueryConfig {
     #[structopt(
         long,
         env = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT",
-        default_value = "",
+        default_value,
         help = "Certificate for client to identify query rpc server"
     )]
     #[serde(default)]
@@ -363,27 +349,7 @@ pub struct QueryConfig {
 
 impl QueryConfig {
     pub fn default() -> Self {
-        QueryConfig {
-            tenant: "".to_string(),
-            namespace: "".to_string(),
-            num_cpus: 8,
-            mysql_handler_host: "127.0.0.1".to_string(),
-            mysql_handler_port: 3307,
-            max_active_sessions: 256,
-            clickhouse_handler_host: "127.0.0.1".to_string(),
-            clickhouse_handler_port: 9000,
-            flight_api_address: "127.0.0.1:9090".to_string(),
-            http_api_address: "127.0.0.1:8080".to_string(),
-            metric_api_address: "127.0.0.1:7070".to_string(),
-            api_tls_server_cert: "".to_string(),
-            api_tls_server_key: "".to_string(),
-            api_tls_server_root_ca_cert: "".to_string(),
-            rpc_tls_server_cert: "".to_string(),
-            rpc_tls_server_key: "".to_string(),
-            rpc_tls_query_server_root_ca_cert: "".to_string(),
-            rpc_tls_query_service_domain_name: "localhost".to_string(),
-            disable_local_database_engine: "0".to_string(),
-        }
+        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
     }
 }
 
