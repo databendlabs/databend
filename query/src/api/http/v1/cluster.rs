@@ -134,7 +134,6 @@ impl IntoResponse for ClusterError {
 //     };
 // }
 
-<<<<<<< HEAD
 // // POST /v1/cluster/remove
 // // remove a node based on name in current datafuse-query cluster
 // // request: Node to be deleted

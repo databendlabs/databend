@@ -40,7 +40,6 @@ common-store-api-sdk= {path = "../common/store-api-sdk" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
-common-management = { path = "../common/management" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "60e369b" }

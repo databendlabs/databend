@@ -82,7 +82,7 @@ impl LocalKVStore {
     /// - create a unique LocalKVStore with this function.
     ///
     #[allow(dead_code)]
-    pub async fn new_temp() -> common_exception::Result<LocalKVStore> {
+    pub async fn new_temp() -> common_exception::Result<Arc<dyn KVApi>> {
         // generate a unique id as part of the name of sled::Tree
 
         static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
@@ -91,7 +91,7 @@ impl LocalKVStore {
 
         let name = format!("temp-{}", id);
 
-        Self::new(&name).await
+        Ok(Arc::new(Self::new(&name).await?))
     }
 }
 

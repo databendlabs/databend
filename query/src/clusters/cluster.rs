@@ -24,7 +24,6 @@ use rand::{Rng, thread_rng};
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::{ConnectionFactory, DNSResolver, StoreClient, KVApi};
 use common_management::{LocalKVStore, NamespaceApi, NamespaceMgr, NodeInfo};
 use common_runtime::tokio;
 use common_runtime::tokio::sync::Mutex;
@@ -34,6 +33,7 @@ use crate::api::FlightClient;
 use crate::clusters::address::Address;
 use crate::clusters::node::Node;
 use crate::configs::Config;
+use common_store_api_sdk::{StoreApiProvider, KVApi, ConnectionFactory};
 
 pub type ClusterRef = Arc<Cluster>;
 pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
@@ -71,13 +71,11 @@ impl ClusterDiscovery {
         }))
     }
 
-    async fn create_store_client(cfg: &Config) -> Result<StoreClient> {
-        let address = &cfg.meta.meta_address;
-        let username = &cfg.meta.meta_username;
-        let password = &cfg.meta.meta_password;
-        match StoreClient::try_create(address, username, password).await {
+    async fn create_store_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
+        let store_api_provider = StoreApiProvider::new(cfg);
+        match store_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
-            Err(cause) => Err(cause.add_message_back("(while create namespace api)."))
+            Err(cause) => Err(cause.add_message_back("(while create namespace api).")),
         }
     }
 
@@ -88,13 +86,13 @@ impl ClusterDiscovery {
         }
     }
 
-    fn create_provider(cfg: &Config, kv_api: KVAPIProvider) -> Result<(Duration, NamespaceApiProvider)> {
+    fn create_provider(cfg: &Config, kv_api: Arc<dyn KVApi>) -> Result<(Duration, NamespaceApiProvider)> {
         let tenant = &cfg.query.tenant;
         let namespace = &cfg.query.namespace;
         let lift_time = Duration::from_secs(60);
         let namespace_manager = NamespaceMgr::new(kv_api, tenant, namespace, lift_time)?;
 
-        Ok((lift_time, Arc::new(Mutex::new(Box::new(namespace_manager)))))
+        Ok((lift_time, Arc::new(Mutex::new(namespace_manager))))
     }
 
     pub async fn discover(&self) -> Result<ClusterRef> {
@@ -207,14 +205,14 @@ fn global_unique_id() -> String {
 struct ClusterHeartbeat {
     lift_time: Duration,
     local_node_id: String,
-    provider: Arc<Mutex<Box<dyn NamespaceApi + Sync + Send>>>,
+    provider: Arc<Mutex<dyn NamespaceApi>>,
 }
 
 impl ClusterHeartbeat {
     pub fn create(
         lift_time: Duration,
         local_node_id: String,
-        provider: Arc<Mutex<Box<dyn NamespaceApi + Sync + Send>>>,
+        provider: Arc<Mutex<dyn NamespaceApi>>,
     ) -> ClusterHeartbeat {
         ClusterHeartbeat {
             lift_time,

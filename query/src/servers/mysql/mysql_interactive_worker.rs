@@ -120,13 +120,6 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             },
             Err(error) => writer.write(Err(error)),
         }
-        //
-        // histogram!(
-        //     super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-        //     start.elapsed()
-        // );
-        //
-        // Ok(())
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
@@ -223,7 +216,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_close(&mut self, _: u32) {}
 
-    async fn do_query(&mut self, query: &str) -> Result<Vec<DataBlock>> {
+    async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         log::debug!("{}", query);
 
         let context = self.session.create_context().await?;
@@ -238,12 +231,32 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         histogram!(super::mysql_metrics::METRIC_INTERPRETER_USEDTIME, instant.elapsed());
 
         match data_stream.collect::<Result<Vec<DataBlock>>>().await {
-            Ok(blocks) => Ok(blocks),
+            Ok(blocks) => {
+                let progress = context.get_progress_value();
+                let seconds = instant.elapsed().as_millis() as f64 / 1000f64;
+                let extra_info = format!(
+                    "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
+                    progress.read_rows,
+                    convert_byte_size(progress.read_bytes as f64),
+                    seconds,
+                    convert_number_size((progress.read_rows as f64) / (seconds as f64)),
+                    convert_byte_size((progress.read_bytes as f64) / (seconds as f64)),
+                );
+
+                histogram!(
+                    super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
+                    instant.elapsed()
+                );
+
+                Ok((blocks, extra_info))
+            },
             Err(cause) => match hints.iter().find(|v| v.error_code.is_some()) {
                 None => Err(cause),
                 Some(cause_hint) => match cause_hint.error_code {
                     None => Err(cause),
-                    Some(code) if code == cause.code() => Ok(vec![DataBlock::empty()]),
+                    Some(code) if code == cause.code() => {
+                        Ok((vec![DataBlock::empty()], String::from("")))
+                    },
                     Some(code) => {
                         let actual_code = cause.code();
                         Err(cause.add_message(format!(
@@ -283,8 +296,6 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             }
         }
 
-        let context = session.create_context();
-
         InteractiveWorker::<W> {
             session: session.clone(),
             base: InteractiveWorkerBase::<W> {
@@ -292,7 +303,8 @@ impl<W: std::io::Write> InteractiveWorker<W> {
                 generic_hold: PhantomData::default(),
             },
             salt: scramble,
-            version: context.get_fuse_version(),
+            // TODO: version
+            version: format!("{}", *crate::configs::config::DATABEND_COMMIT_VERSION),
         }
     }
 }

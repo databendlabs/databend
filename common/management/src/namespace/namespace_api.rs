@@ -59,7 +59,7 @@ impl NodeInfo {
 }
 
 #[async_trait]
-pub trait NamespaceApi {
+pub trait NamespaceApi: Sync + Send {
     // Add a new node info to /tenant/namespace/node-name.
     async fn add_node(&mut self, node: NodeInfo) -> Result<u64>;
 

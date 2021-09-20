@@ -19,7 +19,7 @@ use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
-use databend_query::clusters::Cluster;
+use databend_query::clusters::{Cluster, ClusterDiscovery};
 use databend_query::configs::Config;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
