@@ -14,22 +14,30 @@
 
 use std::cell::RefCell;
 
+use databend_query::configs::Config as QueryConfig;
+use databend_store::configs::Config as StoreConfig;
 use tempfile::tempdir;
 
+use crate::cmds::status::LocalConfig;
+use crate::cmds::status::LocalQueryConfig;
+use crate::cmds::status::LocalStoreConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
-use crate::cmds::status::{LocalConfig, LocalQueryConfig, LocalStoreConfig};
-use databend_query::configs::Config as QueryConfig;
-use databend_store::configs::Config as StoreConfig;
 
 macro_rules! default_local_config {
     () => {
-        LocalConfig{
-            query_configs: vec![LocalQueryConfig{pid: "test-query".to_string(), config: QueryConfig::default()}],
-            store_configs: Some(LocalStoreConfig{pid: "test-store".to_string(), config: StoreConfig::empty()}),
+        LocalConfig {
+            query_configs: vec![LocalQueryConfig {
+                pid: "test-query".to_string(),
+                config: QueryConfig::default(),
+            }],
+            store_configs: Some(LocalStoreConfig {
+                pid: "test-store".to_string(),
+                config: StoreConfig::empty(),
+            }),
         }
-    }
+    };
 }
 #[test]
 fn test_status() -> Result<()> {
@@ -71,13 +79,19 @@ fn test_status() -> Result<()> {
     {
         let mut status = Status::read(conf.clone())?;
         let mut local_config = default_local_config!();
-        local_config.query_configs.push(LocalQueryConfig{config: QueryConfig::default(), pid: "added".to_string()});
+        local_config.query_configs.push(LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: "added".to_string(),
+        });
         status.version = "default".to_string();
         status.local_configs = local_config;
         status.write()?;
 
         let mut expected_config = default_local_config!();
-        expected_config.query_configs.push(LocalQueryConfig{config: QueryConfig::default(), pid: "added".to_string()});
+        expected_config.query_configs.push(LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: "added".to_string(),
+        });
         // should have empty profile with set version
         if let Ok(status) = Status::read(conf.clone()) {
             assert_eq!(status.version, "default".to_string());

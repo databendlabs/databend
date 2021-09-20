@@ -16,8 +16,10 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::Path;
+
 use databend_query::configs::Config as QueryConfig;
 use databend_store::configs::Config as StoreConfig;
+
 use crate::cmds::Config;
 use crate::error::Result;
 
@@ -48,14 +50,14 @@ pub struct LocalStoreConfig {
 
 impl LocalConfig {
     pub fn empty() -> Self {
-        return LocalConfig{
+        LocalConfig {
             query_configs: vec![],
-            store_configs: None
+            store_configs: None,
         }
     }
 }
 
-
+trait LocalRuntime {}
 
 impl Status {
     pub fn read(conf: Config) -> Result<Self> {
