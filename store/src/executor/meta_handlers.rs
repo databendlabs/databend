@@ -41,15 +41,15 @@ use common_store_api_sdk::meta_api_impl::GetTableAction;
 use common_store_api_sdk::meta_api_impl::GetTableActionResult;
 use common_store_api_sdk::meta_api_impl::GetTableExtReq;
 use log::info;
+use metasrv::meta_service::cmd::Cmd::CreateDatabase;
+use metasrv::meta_service::cmd::Cmd::CreateTable;
+use metasrv::meta_service::cmd::Cmd::DropDatabase;
+use metasrv::meta_service::cmd::Cmd::DropTable;
+use metasrv::meta_service::AppliedState;
+use metasrv::meta_service::LogEntry;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::cmd::Cmd::CreateDatabase;
-use crate::meta_service::cmd::Cmd::CreateTable;
-use crate::meta_service::cmd::Cmd::DropDatabase;
-use crate::meta_service::cmd::Cmd::DropTable;
-use crate::meta_service::AppliedState;
-use crate::meta_service::LogEntry;
 
 // Db
 #[async_trait::async_trait]

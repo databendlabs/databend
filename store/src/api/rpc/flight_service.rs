@@ -43,6 +43,7 @@ use common_tracing::tracing;
 use futures::Stream;
 use futures::StreamExt;
 use log::info;
+use metasrv::meta_service::MetaNode;
 use prost::Message;
 use serde::Serialize;
 use tokio_stream::wrappers::ReceiverStream;
@@ -56,7 +57,6 @@ use crate::configs::Config;
 use crate::executor::ActionHandler;
 use crate::executor::ReplySerializer;
 use crate::fs::FileSystem;
-use crate::meta_service::MetaNode;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;

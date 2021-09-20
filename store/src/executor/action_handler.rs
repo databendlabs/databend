@@ -28,6 +28,7 @@ use common_store_api_sdk::storage_api_impl::ReadAction;
 use common_store_api_sdk::RequestFor;
 use common_store_api_sdk::StoreDoAction;
 use futures::Stream;
+use metasrv::meta_service::MetaNode;
 use serde::Serialize;
 use tokio_stream::StreamExt;
 use tonic::Status;
@@ -35,7 +36,6 @@ use tonic::Streaming;
 
 use crate::data_part::appender::Appender;
 use crate::fs::FileSystem;
-use crate::meta_service::MetaNode;
 
 pub trait ReplySerializer {
     type Output;

@@ -75,5 +75,6 @@ jobs:
             _local_fs/
             _logs/
             _meta/
+            metasrv/_logs/
             query/_logs/
             store/_logs/

@@ -208,14 +208,17 @@ build_exceptions! {
     ConcurrentSnapshotInstall(2404),
     IllegalSnapshot(2405),
 
-    // DatabendStore server error
+    // MetaSrv server error
 
-    DatabendStoreError(2501),
+    MetaSrvError(2501),
 
     // FS error
 
     IllegalFileName(2601),
 
+    // Store server error
+
+    DatabendStoreError(2701),
 
     // TODO
     // We may need to separate front-end errors from API errors (and system errors?)
