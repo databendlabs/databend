@@ -21,11 +21,11 @@ use futures::AsyncReadExt;
 use serde::de::DeserializeOwned;
 
 use crate::datasources::dal::DataAccessor;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub fn do_read(
     da: Arc<dyn DataAccessor>,
-    ctx: &DatafuseQueryContextRef,
+    ctx: &DatabendQueryContextRef,
     loc: &str,
 ) -> Result<Vec<u8>> {
     let (tx, rx) = channel();
@@ -52,7 +52,7 @@ pub fn do_read(
 
 pub fn do_read_obj<T: DeserializeOwned>(
     da: Arc<dyn DataAccessor>,
-    ctx: &DatafuseQueryContextRef,
+    ctx: &DatabendQueryContextRef,
     loc: &str,
 ) -> Result<T> {
     let bytes = do_read(da, ctx, loc)?;

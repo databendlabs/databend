@@ -65,7 +65,7 @@ impl Command for VersionCommand {
     }
 
     fn about(&self) -> &str {
-        "Datafuse CLI version"
+        "Databend CLI version"
     }
 
     fn is(&self, s: &str) -> bool {
@@ -81,9 +81,9 @@ impl Command for VersionCommand {
             _ => ("", "", ""),
         };
 
-        writer.writeln_width("Datafuse CLI", ver);
+        writer.writeln_width("Databend CLI", ver);
         if let Some(sha) = self.cli_sha_info() {
-            writer.writeln_width("Datafuse CLI SHA256", &sha);
+            writer.writeln_width("Databend CLI SHA256", &sha);
         }
         writer.writeln_width("Git commit", git);
         writer.writeln_width("Build date", ts);

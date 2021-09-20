@@ -38,7 +38,7 @@ use crate::sessions::Settings;
 ///         (SELECT scalar FROM table_name_3) AS scalar_3
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
-pub struct DatafuseQueryContextShared {
+pub struct DatabendQueryContextShared {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) progress: Arc<Progress>,
     pub(in crate::sessions) session: Arc<Session>,
@@ -52,13 +52,9 @@ pub struct DatafuseQueryContextShared {
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
 }
 
-impl DatafuseQueryContextShared {
-    pub fn try_create(
-        conf: Config,
-        session: Arc<Session>,
-        cluster_cache: ClusterRef,
-    ) -> Arc<DatafuseQueryContextShared> {
-        Arc::new(DatafuseQueryContextShared {
+impl DatabendQueryContextShared {
+    pub fn try_create(conf: Config, session: Arc<Session>, cluster_cache: ClusterRef) -> Arc<DatabendQueryContextShared> {
+        Arc::new(DatabendQueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),

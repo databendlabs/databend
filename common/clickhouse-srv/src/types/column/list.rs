@@ -16,9 +16,10 @@ use std::fmt;
 use std::mem;
 use std::slice;
 
-use crate::types::Marshal;
+use common_io::prelude::Marshal;
+use common_io::prelude::Unmarshal;
+
 use crate::types::StatBuffer;
-use crate::types::Unmarshal;
 
 #[derive(Clone)]
 pub struct List<T>

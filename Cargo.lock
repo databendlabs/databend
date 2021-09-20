@@ -262,9 +262,9 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7f6c23acf9033b877596e6e793f220f56ac513701a2635bdbeeb6b55d067bea"
+checksum = "7a0f1032f2de6c24e3bffefc09246fc8634ea8436eef64dbffc271309a5e5a7c"
 dependencies = [
  "futures-util",
  "http",
@@ -412,9 +412,9 @@ checksum = "40e38929add23cdf8a366df9b0e088953150724bcbe5fc330b0d8eb3b328eec8"
 
 [[package]]
 name = "bumpalo"
-version = "3.7.0"
+version = "3.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c59e7af012c713f529e7a3ee57ce9b31ddd858d4b512923602f74608b009631"
+checksum = "d9df67f7bf9ef8498769f994239c45613ef0c5899415fb58e9add412d2c1a538"
 
 [[package]]
 name = "bytecount"
@@ -738,6 +738,7 @@ dependencies = [
  "chrono-tz",
  "clickhouse-rs-cityhash-sys",
  "combine",
+ "common-io",
  "env_logger 0.9.0",
  "futures",
  "futures-core",
@@ -808,36 +809,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-flights"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-arrow",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-metatypes",
- "common-planners",
- "common-runtime",
- "common-store-api",
- "common-streams",
- "common-tracing",
- "futures",
- "hyper",
- "jwt-simple",
- "lazy_static",
- "log",
- "pretty_assertions",
- "prost",
- "serde",
- "serde_json",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "trust-dns-resolver",
-]
-
-[[package]]
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
@@ -885,12 +856,14 @@ dependencies = [
  "common-metatypes",
  "common-runtime",
  "common-store-api",
+ "common-store-api-sdk",
  "common-tracing",
- "datafuse-store",
  "lazy_static",
+ "metasrv",
  "mockall",
  "serde",
  "serde_json",
+ "sha1",
  "sha2",
  "tempfile",
 ]
@@ -964,12 +937,46 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-management",
  "common-metatypes",
  "common-planners",
+ "common-runtime",
  "common-streams",
+ "common-tracing",
  "futures",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "common-store-api-sdk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-infallible",
+ "common-metatypes",
+ "common-planners",
+ "common-runtime",
+ "common-store-api",
+ "common-streams",
+ "common-tracing",
+ "futures",
+ "hyper",
+ "jwt-simple",
+ "lazy_static",
+ "log",
+ "pretty_assertions",
+ "prost",
+ "serde",
+ "serde_json",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "trust-dns-resolver",
 ]
 
 [[package]]
@@ -1003,6 +1010,10 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "common-uniq-id"
+version = "0.1.0"
 
 [[package]]
 name = "console"
@@ -1366,7 +1377,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
-name = "datafuse-cli"
+name = "databend-cli"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
@@ -1393,7 +1404,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "datafuse-query"
+name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "ahash",
@@ -1416,7 +1427,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-flights",
  "common-functions",
  "common-infallible",
  "common-io",
@@ -1427,6 +1437,7 @@ dependencies = [
  "common-progress",
  "common-runtime",
  "common-store-api",
+ "common-store-api-sdk",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -1460,6 +1471,8 @@ dependencies = [
  "rusoto_s3",
  "serde",
  "serde_json",
+ "sha1",
+ "sha2",
  "sqlparser",
  "structopt",
  "structopt-toml",
@@ -1475,7 +1488,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "datafuse-store"
+name = "databend-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1489,14 +1502,15 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-flights",
  "common-functions",
  "common-infallible",
  "common-metatypes",
  "common-planners",
  "common-profling",
  "common-runtime",
+ "common-store-api-sdk",
  "common-tracing",
+ "common-uniq-id",
  "env_logger 0.9.0",
  "flaky_test",
  "futures",
@@ -1504,6 +1518,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maplit",
+ "metasrv",
  "metrics",
  "metrics-exporter-prometheus",
  "num",
@@ -1600,9 +1615,9 @@ dependencies = [
 
 [[package]]
 name = "dirs"
-version = "3.0.2"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30baa043103c9d0c2a57cf537cc2f35623889dc0d405e6c3cccfadbc81c71309"
+checksum = "ca3aa72a6f96ea37bbc5aa912f6788242832f75369bdfdadcb0e38423f100059"
 dependencies = [
  "dirs-sys",
 ]
@@ -2128,7 +2143,7 @@ dependencies = [
 name = "fuzz"
 version = "0.1.0"
 dependencies = [
- "datafuse-query",
+ "databend-query",
  "honggfuzz",
 ]
 
@@ -2420,9 +2435,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.12"
+version = "0.14.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13f67199e765030fa08fe0bd581af683f0d5bc04ea09c2b1102012c5fb90e7fd"
+checksum = "15d1cfb9e4f68655fa04c01f59edb405b6074a0f7118ea881e5026e4a1cd8593"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2968,6 +2983,63 @@ dependencies = [
 ]
 
 [[package]]
+name = "metasrv"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "axum",
+ "axum-server",
+ "byteorder",
+ "common-arrow",
+ "common-building",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-infallible",
+ "common-metatypes",
+ "common-planners",
+ "common-profling",
+ "common-runtime",
+ "common-store-api-sdk",
+ "common-tracing",
+ "common-uniq-id",
+ "env_logger 0.9.0",
+ "flaky_test",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "log",
+ "maplit",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "num",
+ "num_cpus",
+ "pretty_assertions",
+ "prost",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sled",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+ "test-env-log",
+ "thiserror",
+ "threadpool",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "tower",
+ "tracing-appender",
+ "uuid",
+]
+
+[[package]]
 name = "metrics"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3104,8 +3176,8 @@ dependencies = [
 
 [[package]]
 name = "msql-srv"
-version = "0.9.5"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=cc53408#cc534089d214636fa107375e7b94bacc246746d9"
+version = "0.9.6"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=60e369b#60e369b78fa092c95177428fda1c756342733064"
 dependencies = [
  "byteorder",
  "chrono",
@@ -4722,9 +4794,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.67"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f9e390c27c3c0ce8bc5d725f6e4d30a29d26659494aa4b17535f7522c5c950"
+checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
 dependencies = [
  "indexmap",
  "itoa",
@@ -5690,9 +5762,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.22"
+version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62af966210b88ad5776ee3ba12d5f35b8d6a2b2a12168f3080cf02b814d7376b"
+checksum = "56c42e73a9d277d4d2b6a88389a137ccf3c58599660b17e8f5fc39305e490669"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",

@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::future::Future;
+use std::sync::mpsc::channel;
 use std::thread;
+use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -74,6 +76,27 @@ impl Runtime {
         T::Output: Send + 'static,
     {
         self.handle.spawn(task)
+    }
+
+    // Poor man's runtime::block_on
+    // This mainly used for make async function to sync.
+    pub fn block_on<F>(&self, f: F, timeout: Option<Duration>) -> Result<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let (tx, rx) = channel();
+        let _jh = self.spawn(async move {
+            let r = f.await;
+            let _ = tx.send(r);
+        });
+        let reply = match timeout {
+            Some(to) => rx
+                .recv_timeout(to)
+                .map_err(|timeout_err| ErrorCode::Timeout(timeout_err.to_string()))?,
+            None => rx.recv().map_err(ErrorCode::from_std_error)?,
+        };
+        Ok(reply)
     }
 }
 

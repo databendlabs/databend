@@ -31,10 +31,7 @@ use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
-use crate::datasources::database::example::ExampleDatabases;
-use crate::datasources::database::local::LocalDatabases;
-use crate::datasources::database::remote::RemoteDatabases;
-use crate::datasources::database::system::SystemDatabases;
+use crate::datasources::database::example::ExampleDatabaseEngine;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 
@@ -52,14 +49,8 @@ pub type SessionManagerRef = Arc<SessionManager>;
 impl SessionManager {
     pub fn from_conf(conf: Config, discovery: ClusterDiscoveryRef) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
-        // Register local/system and remote database engine.
-        if conf.query.disable_local_database_engine == "0" {
-            catalog.register_db_engine("LOCAL", Arc::new(LocalDatabases::create(conf.clone())))?;
-        }
-        catalog.register_db_engine("SYSTEM", Arc::new(SystemDatabases::create(conf.clone())))?;
-        catalog.register_db_engine("REMOTE", Arc::new(RemoteDatabases::create(conf.clone())))?;
-        // Register the example for demo.
-        catalog.register_db_engine("EXAMPLE", Arc::new(ExampleDatabases::create(conf.clone())))?;
+
+        catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {

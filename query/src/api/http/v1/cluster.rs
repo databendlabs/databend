@@ -113,7 +113,7 @@ impl IntoResponse for ClusterError {
 // }
 
 // GET /v1/cluster/list
-// list all nodes in current datafuse-query cluster
+// list all nodes in current databend-query cluster
 // request: None
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
@@ -134,6 +134,7 @@ impl IntoResponse for ClusterError {
 //     };
 // }
 
+<<<<<<< HEAD
 // // POST /v1/cluster/remove
 // // remove a node based on name in current datafuse-query cluster
 // // request: Node to be deleted

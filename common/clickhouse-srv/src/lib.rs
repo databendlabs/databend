@@ -75,6 +75,10 @@ pub trait ClickHouseSession: Send + Sync {
     fn get_progress(&self) -> Progress {
         Progress::default()
     }
+
+    fn authenticate(&self, _username: &str, _password: &[u8]) -> bool {
+        true
+    }
 }
 
 #[derive(Default)]

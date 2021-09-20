@@ -37,7 +37,7 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_dispatcher::DatafuseQueryFlightDispatcher;
+use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManagerRef;
@@ -46,17 +46,17 @@ use futures::{TryFuture, Future};
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-pub struct DatafuseQueryFlightService {
+pub struct DatabendQueryFlightService {
     sessions: SessionManagerRef,
-    dispatcher: Arc<DatafuseQueryFlightDispatcher>,
+    dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
-impl DatafuseQueryFlightService {
+impl DatabendQueryFlightService {
     pub fn create(
-        dispatcher: Arc<DatafuseQueryFlightDispatcher>,
+        dispatcher: Arc<DatabendQueryFlightDispatcher>,
         sessions: SessionManagerRef,
     ) -> Self {
-        DatafuseQueryFlightService {
+        DatabendQueryFlightService {
             sessions,
             dispatcher,
         }
@@ -67,7 +67,7 @@ type Response<T> = Result<RawResponse<T>, Status>;
 type StreamRequest<T> = Request<Streaming<T>>;
 
 #[async_trait::async_trait]
-impl FlightService for DatafuseQueryFlightService {
+impl FlightService for DatabendQueryFlightService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
 
     async fn handshake(
@@ -75,7 +75,7 @@ impl FlightService for DatafuseQueryFlightService {
         _: StreamRequest<HandshakeRequest>,
     ) -> Response<Self::HandshakeStream> {
         Result::Err(Status::unimplemented(
-            "DatafuseQuery does not implement handshake.",
+            "DatabendQuery does not implement handshake.",
         ))
     }
 
@@ -83,19 +83,19 @@ impl FlightService for DatafuseQueryFlightService {
 
     async fn list_flights(&self, _: Request<Criteria>) -> Response<Self::ListFlightsStream> {
         Result::Err(Status::unimplemented(
-            "DatafuseQuery does not implement list_flights.",
+            "DatabendQuery does not implement list_flights.",
         ))
     }
 
     async fn get_flight_info(&self, _: Request<FlightDescriptor>) -> Response<FlightInfo> {
         Err(Status::unimplemented(
-            "DatafuseQuery does not implement get_flight_info.",
+            "DatabendQuery does not implement get_flight_info.",
         ))
     }
 
     async fn get_schema(&self, _: Request<FlightDescriptor>) -> Response<SchemaResult> {
         Err(Status::unimplemented(
-            "DatafuseQuery does not implement get_schema.",
+            "DatabendQuery does not implement get_schema.",
         ))
     }
 
@@ -119,7 +119,7 @@ impl FlightService for DatafuseQueryFlightService {
 
     async fn do_put(&self, _: StreamRequest<FlightData>) -> Response<Self::DoPutStream> {
         Result::Err(Status::unimplemented(
-            "DatafuseQuery does not implement do_put.",
+            "DatabendQuery does not implement do_put.",
         ))
     }
 
@@ -127,7 +127,7 @@ impl FlightService for DatafuseQueryFlightService {
 
     async fn do_exchange(&self, _: StreamRequest<FlightData>) -> Response<Self::DoExchangeStream> {
         Result::Err(Status::unimplemented(
-            "DatafuseQuery does not implement do_exchange.",
+            "DatabendQuery does not implement do_exchange.",
         ))
     }
 

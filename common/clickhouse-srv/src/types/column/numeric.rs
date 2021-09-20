@@ -16,6 +16,9 @@ use std::convert;
 use std::mem;
 use std::sync::Arc;
 
+use common_io::prelude::Marshal;
+use common_io::prelude::Unmarshal;
+
 use super::column_data::BoxColumnData;
 use super::column_data::ColumnData;
 use super::list::List;
@@ -28,10 +31,8 @@ use crate::types::column::nullable::NullableColumnData;
 use crate::types::column::ArcColumnWrapper;
 use crate::types::column::ColumnWrapper;
 use crate::types::HasSqlType;
-use crate::types::Marshal;
 use crate::types::SqlType;
 use crate::types::StatBuffer;
-use crate::types::Unmarshal;
 use crate::types::Value;
 use crate::types::ValueRef;
 

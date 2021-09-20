@@ -13,4 +13,14 @@
 // limitations under the License.
 //
 
-pub(crate) mod fuse;
+mod fuse;
+mod prelude;
+
+mod csv;
+mod memory;
+mod null;
+mod parquet;
+// deprecating
+mod remote;
+
+pub use prelude::register_prelude_tbl_engines;

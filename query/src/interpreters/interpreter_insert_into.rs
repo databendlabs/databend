@@ -22,16 +22,16 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct InsertIntoInterpreter {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     plan: InsertIntoPlan,
 }
 
 impl InsertIntoInterpreter {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         plan: InsertIntoPlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
@@ -47,7 +47,7 @@ impl Interpreter for InsertIntoInterpreter {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_catalog();
         let database = datasource.get_database(self.plan.db_name.as_str())?;
-        let table = database.get_table(self.plan.tbl_name.as_str())?;
+        let table = database.get_table_by_id(self.plan.tbl_id, None)?;
         table
             .raw()
             .append_data(self.ctx.clone(), self.plan.clone())

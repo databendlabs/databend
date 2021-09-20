@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -21,8 +23,8 @@ use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;
-use common_store_api::kv_api::MGetKVActionResult;
-use common_store_api::kv_api::PrefixListReply;
+use common_store_api::kv_apis::kv_api::MGetKVActionResult;
+use common_store_api::kv_apis::kv_api::PrefixListReply;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::UpsertKVActionResult;
@@ -39,7 +41,7 @@ mock! {
     #[async_trait]
     impl KVApi for KV {
         async fn upsert_kv(
-            &mut self,
+            &self,
             key: &str,
             seq: MatchSeq,
             value: Option<Vec<u8>>,
@@ -47,17 +49,17 @@ mock! {
         ) -> Result<UpsertKVActionResult>;
 
         async fn update_kv_meta(
-            &mut self,
+            &self,
             key: &str,
             seq: MatchSeq,
             value_meta: Option<KVMeta>
         ) -> Result<UpsertKVActionResult>;
 
-        async fn get_kv(&mut self, key: &str) -> Result<GetKVActionResult>;
+        async fn get_kv(&self, key: &str) -> Result<GetKVActionResult>;
 
-        async fn mget_kv(&mut self,key: &[String],) -> Result<MGetKVActionResult>;
+        async fn mget_kv(&self,key: &[String],) -> Result<MGetKVActionResult>;
 
-        async fn prefix_list_kv(&mut self, prefix: &str) -> Result<PrefixListReply>;
+        async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply>;
     }
 }
 
@@ -131,7 +133,8 @@ async fn test_add_node() -> Result<()> {
                 })
             });
 
-        let mut mgr = NamespaceMgr::new(api);
+        let api = Arc::new(api);
+        let mgr = NamespaceMgr::new(api);
         let res = mgr
             .add_node(
                 tenant_id.to_string(),
@@ -168,7 +171,8 @@ async fn test_add_node() -> Result<()> {
                 })
             });
 
-        let mut mgr = NamespaceMgr::new(api);
+        let api = Arc::new(api);
+        let mgr = NamespaceMgr::new(api);
         let res = mgr
             .add_node(
                 tenant_id.to_string(),
@@ -202,7 +206,8 @@ async fn test_add_node() -> Result<()> {
                 })
             });
 
-        let mut mgr = NamespaceMgr::new(api);
+        let api = Arc::new(api);
+        let mgr = NamespaceMgr::new(api);
         let res = mgr
             .add_node(tenant_id.to_string(), namespace_id.to_string(), node)
             .await;
@@ -234,7 +239,8 @@ async fn test_get_nodes_normal() -> Result<()> {
             .return_once(|_p| Ok(res));
     }
 
-    let mut mgr = NamespaceMgr::new(api);
+    let api = Arc::new(api);
+    let mgr = NamespaceMgr::new(api);
     let actual = mgr
         .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
         .await?;
@@ -272,7 +278,8 @@ async fn test_get_nodes_invalid_encoding() -> Result<()> {
             .return_once(|_p| Ok(res));
     }
 
-    let mut mgr = NamespaceMgr::new(api);
+    let api = Arc::new(api);
+    let mgr = NamespaceMgr::new(api);
     let res = mgr
         .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
         .await;
@@ -321,7 +328,8 @@ async fn test_update_node_normal() -> Result<()> {
             })
         });
 
-    let mut mgr = NamespaceMgr::new(api);
+    let api = Arc::new(api);
+    let mgr = NamespaceMgr::new(api);
     let res = mgr
         .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
         .await;
@@ -364,7 +372,8 @@ async fn test_update_node_error() -> Result<()> {
             })
         });
 
-    let mut mgr = NamespaceMgr::new(api);
+    let api = Arc::new(api);
+    let mgr = NamespaceMgr::new(api);
     let res = mgr
         .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
         .await;
@@ -405,7 +414,8 @@ async fn test_drop_node_normal() -> common_exception::Result<()> {
             })
         });
 
-    let mut mgr = NamespaceMgr::new(api);
+    let api = Arc::new(api);
+    let mgr = NamespaceMgr::new(api);
     let res = mgr
         .drop_node(
             tenant_id.to_string(),
@@ -446,7 +456,8 @@ async fn test_drop_node_error() -> common_exception::Result<()> {
             })
         });
 
-    let mut mgr = NamespaceMgr::new(api);
+    let api = Arc::new(api);
+    let mgr = NamespaceMgr::new(api);
     let res = mgr
         .drop_node(
             tenant_id.to_string(),

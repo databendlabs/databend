@@ -1,5 +1,5 @@
 {
-    "CN": "Datafuse",
+    "CN": "Databend",
     "CA": {
         "expiry": "87600h"
     },
@@ -13,7 +13,7 @@
             "L": "CA",
             "O": "Datafuselabs",
             "ST": "LA",
-            "OU": "Datafuse"
+            "OU": "Databend"
         }
     ]
 }

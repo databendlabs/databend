@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+
+## Note: this file is burrowed from ClickHouse repo.
+import sys
+import os
+import os.path
+import re
+import json
+import traceback
+
+from argparse import ArgumentParser
+import shlex
+import subprocess
+from subprocess import Popen
+from subprocess import PIPE
+from subprocess import CalledProcessError
+from subprocess import TimeoutExpired
+from datetime import datetime
+from time import time, sleep
+from errno import ESRCH
+try:
+    import termcolor
+except ImportError:
+    termcolor = None
+import random
+import string
+import multiprocessing
+from contextlib import closing
+
+
+
+MESSAGES_TO_RETRY = [
+]
+
+
+def remove_control_characters(s):
+    """
+    https://github.com/html5lib/html5lib-python/issues/96#issuecomment-43438438
+    """
+    def str_to_int(s, default, base=10):
+        if int(s, base) < 0x10000:
+            return chr(int(s, base))
+        return default
+    s = re.sub(r"&#(\d+);?", lambda c: str_to_int(c.group(1), c.group(0)), s)
+    s = re.sub(r"&#[xX]([0-9a-fA-F]+);?", lambda c: str_to_int(c.group(1), c.group(0), base=16), s)
+    s = re.sub(r"[\x00-\x08\x0b\x0e-\x1f\x7f]", "", s)
+    return s
+
+
+def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file, result_file):
+
+    # print(client_options)
+
+    params = {
+        'client': args.client_with_database,
+        'options': client_options,
+        'test': case_file,
+        'stdout': stdout_file,
+        'stderr': stderr_file,
+        "result": result_file,
+    }
+
+    pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
+    command = pattern.format(**params)
+    # print(command)
+
+    proc = Popen(command, shell=True, env=os.environ)
+    start_time = datetime.now()
+    while (datetime.now() - start_time).total_seconds() < args.timeout and proc.poll() is None:
+        sleep(0.01)
+
+    total_time = (datetime.now() - start_time).total_seconds()
+    # Normalize randomized database names in stdout, stderr files.
+    os.system("LC_ALL=C sed -i -e 's/{test_db}/default/g' {file}".format(test_db=args.database, file=stdout_file))
+
+    stdout = open(stdout_file, 'rb').read() if os.path.exists(stdout_file) else b''
+    stdout = str(stdout, errors='replace', encoding='utf-8')
+    stderr = open(stderr_file, 'rb').read() if os.path.exists(stderr_file) else b''
+    stderr = str(stderr, errors='replace', encoding='utf-8')
+
+    if proc.returncode == 0 and args.record == 1:
+        os.system("LC_ALL=C cp {stdout} {result}".format(stdout=stdout_file, result=result_file))
+
+    return proc, stdout, stderr, total_time
+
+
+def need_retry(stderr):
+    return any(msg in stderr for msg in MESSAGES_TO_RETRY)
+
+
+def get_processlist(client_cmd):
+    try:
+        return subprocess.check_output("{} --query 'SHOW PROCESSLIST FORMAT Vertical'".format(client_cmd), shell=True)
+    except:
+        return "" #  server seems dead
+
+
+def get_stacktraces(server_pid):
+    cmd = "gdb -batch -ex 'thread apply all backtrace' -p {}".format(server_pid)
+    try:
+        return subprocess.check_output(cmd, shell=True)
+    except Exception as ex:
+        return "Error occured while receiving stack traces {}".format(str(ex))
+
+
+def get_server_pid(server_tcp_port):
+    cmd = "lsof -i tcp:{port} -s tcp:LISTEN -Fp | awk '/^p[0-9]+$/{{print substr($0, 2)}}'".format(port=server_tcp_port)
+    try:
+        output = subprocess.check_output(cmd, shell=True)
+        if output:
+            return int(output[1:])
+        else:
+            return None # server dead
+    except Exception as ex:
+        return None
+
+
+def colored(text, args, color=None, on_color=None, attrs=None):
+    if termcolor and (sys.stdout.isatty() or args.force_color):
+        return termcolor.colored(text, color, on_color, attrs)
+    else:
+        return text
+
+
+SERVER_DIED = False
+exit_code = 0
+stop_time = None
+
+
+# def run_tests_array(all_tests, suite, suite_dir, suite_tmp_dir, run_total):
+def run_tests_array(all_tests_with_params):
+    all_tests, suite, suite_dir, suite_tmp_dir, run_total = all_tests_with_params
+    global exit_code
+    global SERVER_DIED
+    global stop_time
+
+    OP_SQUARE_BRACKET = colored("[", args, attrs=['bold'])
+    CL_SQUARE_BRACKET = colored("]", args, attrs=['bold'])
+
+    MSG_FAIL = OP_SQUARE_BRACKET + colored(" FAIL ", args, "red", attrs=['bold']) + CL_SQUARE_BRACKET
+    MSG_UNKNOWN = OP_SQUARE_BRACKET + colored(" UNKNOWN ", args, "yellow", attrs=['bold']) + CL_SQUARE_BRACKET
+    MSG_OK = OP_SQUARE_BRACKET + colored(" OK ", args, "green", attrs=['bold']) + CL_SQUARE_BRACKET
+    MSG_SKIPPED = OP_SQUARE_BRACKET + colored(" SKIPPED ", args, "cyan", attrs=['bold']) + CL_SQUARE_BRACKET
+
+    passed_total = 0
+    skipped_total = 0
+    failures_total = 0
+    failures = 0
+    failures_chain = 0
+
+    client_options = get_additional_client_options(args)
+
+    if len(all_tests):
+        print("\nRunning {} {} tests.".format(len(all_tests), suite) + "\n")
+
+    def print_test_time(test_time):
+        if args.print_time:
+            return " {0:.2f} sec.".format(test_time)
+        else:
+            return ''
+
+    for case in all_tests:
+        failures = 0
+        if SERVER_DIED:
+            break
+
+        if stop_time and time() > stop_time:
+            print("\nStop tests run because global time limit is exceeded.\n")
+            break
+
+        case_file = os.path.join(suite_dir, case)
+        (name, ext) = os.path.splitext(case)
+
+        try:
+            status = ''
+            is_concurrent = multiprocessing.current_process().name != "MainProcess"
+            if not is_concurrent:
+                sys.stdout.flush()
+                sys.stdout.write("{0:72}".format(name + ": "))
+                # This flush is needed so you can see the test name of the long
+                # running test before it will finish. But don't do it in parallel
+                # mode, so that the lines don't mix.
+                sys.stdout.flush()
+            else:
+                status = "{0:72}".format(name + ": ")
+
+            if args.skip and any(s in name for s in args.skip):
+                status += MSG_SKIPPED + " - skip\n"
+                skipped_total += 1
+            else:
+                disabled_file = os.path.join(suite_dir, name) + '.disabled'
+
+                if os.path.exists(disabled_file) and not args.disabled:
+                    message = open(disabled_file, 'r').read()
+                    status += MSG_SKIPPED + " - " + message + "\n"
+                else:
+                    file_suffix = ('.' + str(os.getpid())) if is_concurrent and args.test_runs > 1 else ''
+                    result_file = os.path.join(suite_dir, name) + '.result'
+                    cluster_result_file = os.path.join(suite_dir, name) + '_cluster.result'
+                    stdout_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stdout'
+                    stderr_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stderr'
+
+                    if args.mode == 'cluster' and os.path.isfile(cluster_result_file):
+                        result_file = cluster_result_file
+
+                    proc, stdout, stderr, total_time = run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file, result_file)
+
+                    if proc.returncode is None:
+                        try:
+                            proc.kill()
+                        except OSError as e:
+                            if e.errno != ESRCH:
+                                raise
+
+                        failures += 1
+                        status += MSG_FAIL
+                        status += print_test_time(total_time)
+                        status += " - Timeout!\n"
+                        if stderr:
+                            status += stderr
+                    else:
+                        counter = 1
+                        while proc.returncode != 0 and need_retry(stderr):
+                            proc, stdout, stderr, total_time = run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file, result_file)
+                            sleep(2**counter)
+                            counter += 1
+                            if counter > 6:
+                                break
+
+                        if proc.returncode != 0:
+                            failures += 1
+                            failures_chain += 1
+                            status += MSG_FAIL
+                            status += print_test_time(total_time)
+                            status += ' - return code {}\n'.format(proc.returncode)
+
+                            if stderr:
+                                status += stderr
+
+                            # Stop on fatal errors like segmentation fault. They are sent to client via logs.
+                            if ' <Fatal> ' in stderr:
+                                SERVER_DIED = True
+
+                            if args.stop and ('Connection refused' in stderr or 'Attempt to read after eof' in stderr) and not 'Received exception from server' in stderr:
+                                SERVER_DIED = True
+
+                            if os.path.isfile(stdout_file):
+                                status += ", result:\n\n"
+                                status += '\n'.join(
+                                    open(stdout_file).read().split('\n')[:100])
+                                status += '\n'
+
+                        elif stderr:
+                            failures += 1
+                            failures_chain += 1
+                            status += MSG_FAIL
+                            status += print_test_time(total_time)
+                            status += " - having stderror:\n{}\n".format(
+                                '\n'.join(stderr.split('\n')[:100]))
+                        elif 'Exception' in stdout:
+                            failures += 1
+                            failures_chain += 1
+                            status += MSG_FAIL
+                            status += print_test_time(total_time)
+                            status += " - having exception:\n{}\n".format(
+                                '\n'.join(stdout.split('\n')[:100]))
+                        elif not os.path.isfile(result_file):
+                            status += MSG_UNKNOWN
+                            status += print_test_time(total_time)
+                            status += " - no result file\n"
+                        else:
+                            result_is_different = subprocess.call(['diff', '-q', result_file, stdout_file], stdout=PIPE)
+                            if result_is_different:
+                                diff = Popen(['diff', '-U', str(args.unified), result_file, stdout_file], stdout=PIPE, universal_newlines=True).communicate()[0]
+                                failures += 1
+                                status += MSG_FAIL
+                                status += print_test_time(total_time)
+                                status += " - result differs with:\n{}\n".format(diff)
+                            else:
+                                passed_total += 1
+                                failures_chain = 0
+                                status += MSG_OK
+                                status += print_test_time(total_time)
+                                status += "\n"
+                                if os.path.exists(stdout_file):
+                                    os.remove(stdout_file)
+                                if os.path.exists(stderr_file):
+                                    os.remove(stderr_file)
+
+            if status and not status.endswith('\n'):
+                status += '\n'
+
+            sys.stdout.write(status)
+            sys.stdout.flush()
+        except KeyboardInterrupt as e:
+            print(colored("Break tests execution", args, "red"))
+            raise e
+        except:
+            exc_type, exc_value, tb = sys.exc_info()
+            failures += 1
+            print("{0} - Test internal error: {1}\n{2}\n{3}".format(MSG_FAIL, exc_type.__name__, exc_value, "\n".join(traceback.format_tb(tb, 10))))
+
+        if failures_chain >= 20:
+            break
+
+        failures_total = failures_total + failures
+
+    if failures_total > 0:
+        print(colored("\nHaving {failures_total} errors! {passed_total} tests passed. {skipped_total} tests skipped.".format(passed_total = passed_total, skipped_total = skipped_total, failures_total = failures_total), args, "red", attrs=["bold"]))
+        exit_code = 1
+    else:
+        print(colored("\n{passed_total} tests passed. {skipped_total} tests skipped.".format(passed_total = passed_total, skipped_total = skipped_total), args, "green", attrs=["bold"]))
+
+
+
+
+def main(args):
+    global SERVER_DIED
+    global exit_code
+
+    base_dir = os.path.abspath(args.suites)
+    tmp_dir = os.path.abspath(args.tmp)
+
+    os.environ.setdefault("QUERY_BINARY", args.binary)
+    os.environ.setdefault("QUERY_DATABASE", args.database)
+
+    databend_query_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    databend_query_proc_create.communicate(b"SELECT 1")
+
+    def is_test_from_dir(suite_dir, case):
+        case_file = os.path.join(suite_dir, case)
+        (name, ext) = os.path.splitext(case)
+        return os.path.isfile(case_file) and (ext == '.sql' or ext == '.sh' or ext == '.py')
+
+
+    def sute_key_func(item):
+        if -1 == item.find('_'):
+            return 99998, ''
+        prefix, suffix = item.split('_', 1)
+        try:
+            return int(prefix), suffix
+        except ValueError:
+            return 99997, ''
+
+    total_tests_run = 0
+    for suite in sorted(os.listdir(base_dir), key=sute_key_func):
+        if SERVER_DIED:
+            break
+
+        if args.skip_dir and any(s in suite for s in args.skip_dir):
+            continue
+
+        if args.run_dir and not any(s in suite for s in args.run_dir):
+            continue
+
+        suite_dir = os.path.join(base_dir, suite)
+        suite_re_obj = re.search('^[0-9]+_(.*)$', suite)
+        if not suite_re_obj: #skip .gitignore and so on
+            continue
+
+        suite_tmp_dir = os.path.join(tmp_dir, suite)
+        if not os.path.exists(suite_tmp_dir):
+            os.makedirs(suite_tmp_dir)
+
+        suite = suite_re_obj.group(1)
+        if os.path.isdir(suite_dir):
+            # Reverse sort order: we want run newest test first.
+            # And not reverse subtests
+            def key_func(item):
+                reverse = 1
+                if -1 == item.find('_'):
+                    return 99998, ''
+
+                prefix, suffix = item.split('_', 1)
+
+                try:
+                    return reverse * int(prefix), suffix
+                except ValueError:
+                    return 99997, ''
+
+            all_tests = os.listdir(suite_dir)
+            all_tests = filter(lambda case: is_test_from_dir(suite_dir, case), all_tests)
+
+            if args.test:
+                all_tests = [t for t in all_tests if any([re.search(r, t) for r in args.test])]
+            else:
+                all_tests = [t for t in all_tests]
+
+            bad_tests = filter(lambda case: re.search('^[0-9]+_[0-9]+_(.*)$', case) is None, all_tests)
+            bad_tests = [t for t in bad_tests]
+
+            if len(bad_tests) > 0:
+                print("Illegal test case names: {}, must match `^[0-9]+_[0-9]+_(.*)$`".format(bad_tests))
+                sys.exit(1)
+
+            all_tests.sort(key=key_func)
+
+            run_n, run_total = args.parallel.split('/')
+            run_n = float(run_n)
+            run_total = float(run_total)
+            tests_n = len(all_tests)
+            if run_total > tests_n:
+                run_total = tests_n
+            if run_n > run_total:
+                continue
+
+            jobs = args.jobs
+            if jobs > tests_n:
+                jobs = tests_n
+            if jobs > run_total:
+                run_total = jobs
+
+            all_tests_array = []
+            for n in range(1, 1 + int(run_total)):
+                start = int(tests_n / run_total * (n - 1))
+                end = int(tests_n / run_total * n)
+                all_tests_array.append([all_tests[start : end], suite, suite_dir, suite_tmp_dir, run_total])
+
+            if jobs > 1:
+                with closing(multiprocessing.Pool(processes=jobs)) as pool:
+                    pool.map(run_tests_array, all_tests_array)
+                    pool.terminate()
+            else:
+                run_tests_array(all_tests_array[int(run_n)-1])
+
+            total_tests_run += tests_n
+
+    if total_tests_run == 0:
+        print("No tests were run.")
+        sys.exit(1)
+
+    sys.exit(exit_code)
+
+
+
+def get_additional_client_options(args):
+    return args.options
+
+
+def get_additional_client_options_url(args):
+    return ''
+
+
+if __name__ == '__main__':
+    parser = ArgumentParser(description='databend-query functional tests')
+    parser.add_argument('-q', '--suites', help='Path to suites dir')
+    parser.add_argument('-b', '--binary', default='databend-query', help='Path to databend-query binary or name of binary in PATH')
+    parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
+    parser.add_argument('-opt', '--options', default=' --comments --force ', help="Client program options")
+    parser.add_argument('--tmp', help='Path to tmp dir')
+    parser.add_argument('-t', '--timeout', type=int, default=600, help='Timeout for each test case in seconds')
+    parser.add_argument('--record', type=int, default = 0, help="Force override result files from stdout files")
+    parser.add_argument('test', nargs='*', help='Optional test case name regex')
+    parser.add_argument('--test-runs', default=1, nargs='?', type=int, help='Run each test many times (useful for e.g. flaky check)')
+    parser.add_argument('-d', '--disabled', action='store_true', default=False, help='Also run disabled tests')
+    parser.add_argument('--force-color', action='store_true', default=False)
+    parser.add_argument('--print-time', action='store_true', dest='print_time', help='Print test time')
+    parser.add_argument('-U', '--unified', default=3, type=int, help='output NUM lines of unified context')
+    parser.add_argument('--database', default="default", help='Database for tests (random name test_XXXXXX by default)')
+    parser.add_argument('--parallel', default='1/1', help='One parallel test run number/total')
+    parser.add_argument('-j', '--jobs', default=1, nargs='?', type=int, help='Run all tests in parallel')
+    parser.add_argument('--skip', nargs='+', help="Skip these tests")
+    parser.add_argument('--skip-dir', nargs='+', help="Skip all these tests in the dir")
+    parser.add_argument('--run-dir', nargs='+', help="Only run these tests in the dir")
+    parser.add_argument('--stop', action='store_true', default=None, dest='stop', help='Stop on network errors')
+    parser.add_argument('--mode', default='standalone', help='DatabendQuery running mode, the value can be \'standalone\' or \'cluster\'')
+
+    args = parser.parse_args()
+
+    if args.suites is None and os.path.isdir('suites'):
+        args.suites = 'suites'
+    if args.suites is None:
+        print("Failed to detect path to the suites directory. Please specify it with '--suites' option.")
+        exit(1)
+
+    if args.tmp is None:
+        args.tmp = args.suites
+
+    args.client_with_database = args.client
+    if not args.database:
+        def random_str(length=6):
+            import random
+            import string
+            alphabet = string.ascii_lowercase + string.digits
+            return ''.join(random.choice(alphabet) for _ in range(length))
+        args.database = 'test_{suffix}'.format(suffix=random_str())
+    args.client_with_database += ' ' + args.database
+
+    main(args)

@@ -15,18 +15,20 @@
 use std::io;
 use std::mem::MaybeUninit;
 
+use common_io::prelude::Unmarshal;
+
 use crate::errors::DriverError;
 use crate::errors::Error;
 use crate::errors::Result;
 use crate::types::column::StringPool;
 use crate::types::StatBuffer;
-use crate::types::Unmarshal;
 
 pub(crate) trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> Result<()>;
     fn read_scalar<V>(&mut self) -> Result<V>
     where V: Copy + Unmarshal<V> + StatBuffer;
     fn read_string(&mut self) -> Result<String>;
+    fn read_len_encode_bytes(&mut self) -> Result<Vec<u8>>;
     fn skip_string(&mut self) -> Result<()>;
     fn read_uvarint(&mut self) -> Result<u64>;
     fn read_str_into_buffer(&mut self, pool: &mut StringPool) -> Result<()>;
@@ -68,6 +70,14 @@ where T: io::Read
         let mut buffer = vec![0_u8; str_len];
         self.read_bytes(buffer.as_mut())?;
         Ok(String::from_utf8(buffer)?)
+    }
+
+    fn read_len_encode_bytes(&mut self) -> Result<Vec<u8>> {
+        let str_len = self.read_uvarint()? as usize;
+        let mut buffer = vec![0_u8; str_len];
+        self.read_bytes(buffer.as_mut())?;
+
+        Ok(buffer)
     }
 
     fn skip_string(&mut self) -> Result<()> {

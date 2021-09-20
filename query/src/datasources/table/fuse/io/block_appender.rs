@@ -25,7 +25,6 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_store_api::BlockStream;
-use common_store_api::MetaApi;
 use futures::StreamExt;
 use uuid::Uuid;
 
@@ -39,14 +38,12 @@ use crate::datasources::table::fuse::ColumnId;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
-impl<T> FuseTable<T>
-where T: MetaApi + Send + Sync + 'static
-{
+impl FuseTable {
     pub async fn append_blocks(
         &self,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         mut stream: BlockStream,
     ) -> Result<SegmentInfo> {
         let mut block_metas = vec![];

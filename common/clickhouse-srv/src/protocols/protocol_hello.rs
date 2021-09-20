@@ -31,7 +31,7 @@ pub struct HelloRequest {
     pub default_database: String,
 
     pub user: String,
-    pub password: String,
+    pub password: Vec<u8>,
 
     // Not set currently
     pub client_version_patch: u64,
@@ -46,7 +46,7 @@ impl HelloRequest {
             client_revision: reader.read_uvarint()?,
             default_database: reader.read_string()?,
             user: reader.read_string()?,
-            password: reader.read_string()?,
+            password: reader.read_len_encode_bytes()?,
 
             client_version_patch: 0,
         };

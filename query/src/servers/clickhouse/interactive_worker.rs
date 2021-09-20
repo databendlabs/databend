@@ -23,6 +23,7 @@ use metrics::histogram;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
+use crate::servers::server::mock::get_mock_user;
 use crate::sessions::SessionRef;
 
 pub struct InteractiveWorker {
@@ -62,12 +63,12 @@ impl ClickHouseSession for InteractiveWorker {
 
     // TODO: remove it
     fn dbms_name(&self) -> &str {
-        "datafuse"
+        "databend"
     }
 
     // TODO: remove it
     fn server_display_name(&self) -> &str {
-        "datafuse"
+        "databend"
     }
 
     // TODO: remove it
@@ -94,6 +95,13 @@ impl ClickHouseSession for InteractiveWorker {
     // the MIN_SERVER_REVISION for suggestions is 54406
     fn dbms_tcp_protocol_version(&self) -> u64 {
         54405
+    }
+
+    fn authenticate(&self, user: &str, password: &[u8]) -> bool {
+        if let Ok(user) = get_mock_user(user) {
+            return user.authenticate_user(password);
+        }
+        false
     }
 
     // TODO: remove it

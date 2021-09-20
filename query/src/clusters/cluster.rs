@@ -37,7 +37,7 @@ use crate::configs::Config;
 
 pub type ClusterRef = Arc<Cluster>;
 pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
-type NamespaceApiProvider = Arc<Mutex<Box<dyn NamespaceApi + Send + Sync>>>;
+type NamespaceApiProvider = Arc<Mutex<dyn NamespaceApi>>;
 
 pub struct ClusterDiscovery {
     local_id: String,
@@ -88,10 +88,7 @@ impl ClusterDiscovery {
         }
     }
 
-    fn create_provider<KVAPIProvider: KVApi + Sync + Send + 'static>(
-        cfg: &Config,
-        kv_api: KVAPIProvider,
-    ) -> Result<(Duration, NamespaceApiProvider)> {
+    fn create_provider(cfg: &Config, kv_api: KVAPIProvider) -> Result<(Duration, NamespaceApiProvider)> {
         let tenant = &cfg.query.tenant;
         let namespace = &cfg.query.namespace;
         let lift_time = Duration::from_secs(60);

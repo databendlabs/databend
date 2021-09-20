@@ -1,15 +1,15 @@
 [package]
-name = "datafuse-cli"
+name = "databend-cli"
 version = "0.1.0"
-description = "All-in-one tool for setting up, managing with Datafuse"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+description = "All-in-one tool for setting up, managing with Databend"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-cli"
-path = "src/bin/datafuse-cli.rs"
+name = "databend-cli"
+path = "src/bin/databend-cli.rs"
 
 [features]
 
@@ -20,7 +20,7 @@ path = "src/bin/datafuse-cli.rs"
 clap = "2.33.3"
 colored = "2.0.0"
 comfy-table = "4.1.1"
-dirs = "3.0.2"
+dirs = "4.0.0"
 dyn-clone = "1.0.4"
 flate2 = "1.0.22"
 indicatif = "0.16.2"

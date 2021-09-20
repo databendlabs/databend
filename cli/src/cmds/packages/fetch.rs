@@ -38,7 +38,7 @@ impl FetchCommand {
         FetchCommand { conf }
     }
 
-    //(TODO(zhihanz)) general get_architecture similar to install-datafuse.sh
+    //(TODO(zhihanz)) general get_architecture similar to install-databend.sh
     fn get_architecture(&self) -> Result<String> {
         let os = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
@@ -87,17 +87,17 @@ impl FetchCommand {
                 // Create download dir.
                 let bin_download_dir = format!(
                     "{}/downloads/{}",
-                    self.conf.datafuse_dir.clone(),
+                    self.conf.databend_dir.clone(),
                     current_tag
                 );
                 fs::create_dir_all(bin_download_dir.clone()).unwrap();
 
                 // Create bin dir.
                 let bin_unpack_dir =
-                    format!("{}/bin/{}", self.conf.datafuse_dir.clone(), current_tag);
+                    format!("{}/bin/{}", self.conf.databend_dir.clone(), current_tag);
                 fs::create_dir_all(bin_unpack_dir.clone()).unwrap();
 
-                let bin_name = format!("datafuse-{}-{}.tar.gz", current_tag, arch);
+                let bin_name = format!("databend-{}-{}.tar.gz", current_tag, arch);
                 let bin_file = format!("{}/{}", bin_download_dir, bin_name);
                 let exists = Path::new(bin_file.as_str()).exists();
                 // Download.

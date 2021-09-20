@@ -1,3 +1,3 @@
-# DatafuseStore
+# DatabendStore
 
-DatafuseStore is a transactional metadata store service.
+DatabendStore is a transactional metadata store service.

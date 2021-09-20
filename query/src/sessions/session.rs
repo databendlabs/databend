@@ -24,9 +24,9 @@ use futures::channel::*;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::sessions::context_shared::DatafuseQueryContextShared;
-use crate::sessions::DatafuseQueryContext;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::context_shared::DatabendQueryContextShared;
+use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
@@ -37,7 +37,7 @@ pub(in crate::sessions) struct MutableStatus {
     #[allow(unused)]
     pub(in crate::sessions) client_host: Option<SocketAddr>,
     pub(in crate::sessions) io_shutdown_tx: Option<Sender<Sender<()>>>,
-    pub(in crate::sessions) context_shared: Option<Arc<DatafuseQueryContextShared>>,
+    pub(in crate::sessions) context_shared: Option<Arc<DatabendQueryContextShared>>,
 }
 
 #[derive(Clone)]
@@ -127,7 +127,7 @@ impl Session {
         };
 
         Ok(match context_shared.as_ref() {
-            Some(shared) => DatafuseQueryContext::from_shared(shared.clone()),
+            Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
             None => {
                 let config = self.config.clone();
                 let discovery = self.sessions.get_cluster_discovery();

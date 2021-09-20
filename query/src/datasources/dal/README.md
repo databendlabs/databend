@@ -1,6 +1,6 @@
 # DAL
 
-A data access layer (DAL) in Datafuse is a layer which provides methods for accessing to data stored in shared storage, such as AWS S3, Azure Blob, DFS or Local disk.
+A data access layer (DAL) in Databend is a layer which provides methods for accessing to data stored in shared storage, such as AWS S3, Azure Blob, DFS or Local disk.
 
 The API like:
 ```rust

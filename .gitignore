@@ -7,7 +7,7 @@
 # Rust
 target/*
 distro/*
-cli/e2e/datafuse-cli
+cli/e2e/databend-cli
 
 # cargo
 .cargo/

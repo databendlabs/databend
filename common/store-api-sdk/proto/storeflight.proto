@@ -1,0 +1,13 @@
+// Copyright 2020-2021 The DatabendQuery Authors.
+//
+// Code is licensed under Apache License, Version 2.0.
+
+syntax = "proto3";
+
+// Flight RPC for DatabendStore.
+package storeflight;
+
+// Request for flight do_get and do_action.
+message FlightStoreRequest {
+  string body = 1;
+}

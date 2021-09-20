@@ -17,6 +17,9 @@ use std::collections::HashMap;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use maplit::hashmap;
+use metasrv::meta_service::GetReq;
+use metasrv::meta_service::MetaNode;
+use metasrv::meta_service::MetaServiceClient;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
 use tempfile::TempDir;
@@ -24,9 +27,6 @@ use tempfile::TempDir;
 use crate::dfs::Dfs;
 use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
-use crate::meta_service::GetReq;
-use crate::meta_service::MetaNode;
-use crate::meta_service::MetaServiceClient;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 use crate::tests::service::StoreTestContext;
@@ -45,7 +45,7 @@ async fn test_distributed_fs_single_node_read_all() -> anyhow::Result<()> {
     };
     let dir = tempdir()?;
     let (tc, dfs) = bring_up_dfs(&dir, files.clone()).await?;
-    let meta_addr = tc.config.meta_api_addr();
+    let meta_addr = tc.config.meta_config.raft_api_addr();
 
     let mut client = MetaServiceClient::connect(format!("http://{}", meta_addr)).await?;
 
@@ -129,9 +129,9 @@ async fn bring_up_dfs(
     let fs = LocalFS::try_create(root)?;
 
     let mut tc = new_test_context();
-    let meta_addr = tc.config.meta_api_addr();
+    let meta_addr = tc.config.meta_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config).await?;
+    let mn = MetaNode::boot(0, &tc.config.meta_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     assert_meta_connection(&meta_addr).await?;

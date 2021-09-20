@@ -18,17 +18,17 @@ use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Empty;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::ConnectionFactory;
 use common_runtime::tokio;
 use common_runtime::tokio::net::TcpListener;
 use common_runtime::tokio::sync::Notify;
+use common_store_api_sdk::ConnectionFactory;
+use common_store_api_sdk::RpcClientTlsConfig;
 use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::api::rpc::DatafuseQueryFlightDispatcher;
+use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::RpcService;
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
-use crate::configs::RpcClientTlsConfig;
 use crate::sessions::SessionManager;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -50,7 +50,7 @@ async fn test_tls_rpc_server() -> Result<()> {
     let mut srv = RpcService {
         sessions: session_manager.clone(),
         abort_notify: Arc::new(Notify::new()),
-        dispatcher: Arc::new(DatafuseQueryFlightDispatcher::create()),
+        dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
     };
     let addr_str = addr.to_string();
     let stream = TcpListenerStream::new(listener);
@@ -94,7 +94,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     let mut srv = RpcService {
         sessions: session_manager.clone(),
         abort_notify: Arc::new(Notify::new()),
-        dispatcher: Arc::new(DatafuseQueryFlightDispatcher::create()),
+        dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
     };
     let stream = TcpListenerStream::new(listener);
     let r = srv.start_with_incoming(stream).await;

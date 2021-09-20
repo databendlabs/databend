@@ -13,14 +13,16 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;
-use common_store_api::kv_api::MGetKVActionResult;
-use common_store_api::kv_api::PrefixListReply;
+use common_store_api::kv_apis::kv_api::MGetKVActionResult;
+use common_store_api::kv_apis::kv_api::PrefixListReply;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::UpsertKVActionResult;
@@ -29,6 +31,7 @@ use mockall::*;
 use sha2::Digest;
 
 use super::user_mgr::USER_API_KEY_PREFIX;
+use crate::user::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
 use crate::user::utils::NewUser;
@@ -40,7 +43,7 @@ mock! {
     #[async_trait]
     impl KVApi for KV {
         async fn upsert_kv(
-            &mut self,
+            &self,
             key: &str,
             seq: MatchSeq,
             value: Option<Vec<u8>>,
@@ -48,34 +51,32 @@ mock! {
         ) -> common_exception::Result<UpsertKVActionResult>;
 
         async fn update_kv_meta(
-            &mut self,
+            &self,
             key: &str,
             seq: MatchSeq,
             value_meta: Option<KVMeta>
         ) -> common_exception::Result<UpsertKVActionResult>;
 
-        async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
+        async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionResult>;
 
         async fn mget_kv(
-            &mut self,
+            &self,
             key: &[String],
         ) -> common_exception::Result<MGetKVActionResult>;
 
-        async fn prefix_list_kv(&mut self, prefix: &str) -> common_exception::Result<PrefixListReply>;
+        async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply>;
         }
 }
 #[test]
 fn test_user_info_converter() {
     let name = "name";
     let pass = "pass";
-    let salt = "salt";
-    let user = NewUser::new(name, pass, salt);
+    let auth_type = AuthType::Sha256;
+    let user = NewUser::new(name, pass, auth_type);
     let user_info = UserInfo::from(&user);
     assert_eq!(name, &user_info.name);
     let digest: [u8; 32] = sha2::Sha256::digest(pass.as_bytes()).into();
-    assert_eq!(digest, user_info.password_sha256);
-    let digest: [u8; 32] = sha2::Sha256::digest(salt.as_bytes()).into();
-    assert_eq!(digest, user_info.salt_sha256);
+    assert_eq!(digest.to_vec(), user_info.password);
 }
 
 mod add {
@@ -87,8 +88,8 @@ mod add {
     async fn test_add_user() -> common_exception::Result<()> {
         let test_user_name = "test_user";
         let test_password = "test_password";
-        let test_salt = "test_salt";
-        let new_user = NewUser::new(test_user_name, test_password, test_salt);
+        let auth_type = AuthType::Sha256;
+        let new_user = NewUser::new(test_user_name, test_password, auth_type.clone());
         let user_info = UserInfo::from(new_user);
         let value = Some(serde_json::to_vec(&user_info)?);
 
@@ -113,10 +114,9 @@ mod add {
                         result: None,
                     })
                 });
+            let api = Arc::new(api);
             let mut user_mgr = UserMgr::new(api);
-            let res = user_mgr
-                .add_user(test_user_name, test_password, test_salt)
-                .await;
+            let res = user_mgr.add_user(user_info).await;
 
             assert_eq!(
                 res.unwrap_err().code(),
@@ -145,10 +145,14 @@ mod add {
                         result: None,
                     })
                 });
+
+            let api = Arc::new(api);
             let mut user_mgr = UserMgr::new(api);
-            let res = user_mgr
-                .add_user(test_user_name, test_password, test_salt)
-                .await;
+
+            let new_user = NewUser::new(test_user_name, test_password, auth_type.clone());
+            let user_info = UserInfo::from(new_user);
+
+            let res = user_mgr.add_user(user_info).await;
 
             assert_eq!(
                 res.unwrap_err().code(),
@@ -173,10 +177,13 @@ mod add {
                         result: None,
                     })
                 });
-            let mut user_mgr = UserMgr::new(api);
-            let res = user_mgr
-                .add_user(test_user_name, test_password, test_salt)
-                .await;
+
+            let kv = Arc::new(api);
+
+            let mut user_mgr = UserMgr::new(kv);
+            let new_user = NewUser::new(test_user_name, test_password, auth_type);
+            let user_info = UserInfo::from(new_user);
+            let res = user_mgr.add_user(user_info).await;
 
             assert_eq!(
                 res.unwrap_err().code(),
@@ -197,7 +204,7 @@ mod get {
         let test_name = "test";
         let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
 
-        let user = NewUser::new(test_name, "pass", "salt");
+        let user = NewUser::new(test_name, "pass", AuthType::Sha256);
         let user_info = UserInfo::from(user);
         let value = serde_json::to_vec(&user_info)?;
 
@@ -210,6 +217,8 @@ mod get {
                     result: Some((1, KVValue { meta: None, value })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, Some(1)).await;
         assert!(res.is_ok());
@@ -222,7 +231,7 @@ mod get {
         let test_name = "test";
         let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
 
-        let user = NewUser::new(test_name, "pass", "salt");
+        let user = NewUser::new(test_name, "pass", AuthType::Sha256);
         let user_info = UserInfo::from(user);
         let value = serde_json::to_vec(&user_info)?;
 
@@ -235,6 +244,8 @@ mod get {
                     result: Some((100, KVValue { meta: None, value })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert!(res.is_ok());
@@ -251,6 +262,8 @@ mod get {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert!(res.is_err());
@@ -275,6 +288,8 @@ mod get {
                     })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, Some(2)).await;
         assert!(res.is_err());
@@ -299,6 +314,8 @@ mod get {
                     })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert_eq!(
@@ -330,7 +347,7 @@ mod get_users {
             let name = format!("test_user_{}", i);
             names.push(name.clone());
             keys.push(prepend(&name));
-            let new_user = NewUser::new(&name, "pass", "salt");
+            let new_user = NewUser::new(&name, "pass", AuthType::Sha256);
             let user_info = UserInfo::from(new_user);
             if i % 2 == 0 {
                 res.push(Some((i, KVValue {
@@ -355,6 +372,8 @@ mod get_users {
             //.withf(|args| args.0 == keys.clone())
             .times(1)
             .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_users(&names).await?;
         assert_eq!(res, user_infos);
@@ -379,6 +398,7 @@ mod get_users {
                 .times(1)
                 .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
         }
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_users(&names).await;
         assert_eq!(
@@ -407,7 +427,7 @@ mod get_all_users {
             let name = format!("test_user_{}", i);
             names.push(name.clone());
             keys.push(prepend(&name));
-            let new_user = NewUser::new(&name, "pass", "salt");
+            let new_user = NewUser::new(&name, "pass", AuthType::Sha256);
             let user_info = UserInfo::from(new_user);
             res.push((
                 "fake_key".to_string(),
@@ -431,6 +451,8 @@ mod get_all_users {
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_all_users().await?;
         assert_eq!(res, user_infos);
@@ -459,6 +481,8 @@ mod get_all_users {
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_all_users().await;
         assert_eq!(
@@ -496,6 +520,7 @@ mod drop {
                     result: None,
                 })
             });
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.drop_user("test", None).await;
         assert!(res.is_ok());
@@ -505,9 +530,9 @@ mod drop {
 
     #[tokio::test]
     async fn test_drop_user_unknown() -> common_exception::Result<()> {
-        let mut v = MockKV::new();
+        let mut kv = MockKV::new();
         let test_key = USER_API_KEY_PREFIX.to_string() + "test";
-        v.expect_upsert_kv()
+        kv.expect_upsert_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::Any),
@@ -521,7 +546,8 @@ mod drop {
                     result: None,
                 })
             });
-        let mut user_mgr = UserMgr::new(v);
+        let kv = Arc::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.drop_user("test", None).await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -540,9 +566,9 @@ mod update {
         let test_seq = None;
 
         let old_pass = "old_key";
-        let old_salt = "old_salt";
+        let old_auth_type = AuthType::DoubleSha1;
 
-        let user = NewUser::new(test_name, old_pass, old_salt);
+        let user = NewUser::new(test_name, old_pass, old_auth_type);
         let user_info = UserInfo::from(user);
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -566,8 +592,7 @@ mod update {
         // and then, update_kv should be called
 
         let new_pass = "new pass";
-        let new_salt: Option<&str> = None;
-        let new_user = NewUser::new(test_name, new_pass, old_salt);
+        let new_user = NewUser::new(test_name, new_pass, AuthType::DoubleSha1);
 
         let new_user_info = UserInfo::from(new_user);
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
@@ -590,10 +615,11 @@ mod update {
                 })
             });
 
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
-            .update_user(test_name, Some(new_pass), new_salt, test_seq)
+            .update_user(test_name, Some(new_user_info.password), None, test_seq)
             .await;
         assert!(res.is_ok());
         Ok(())
@@ -609,8 +635,9 @@ mod update {
         // - update_kv should be called
 
         let new_pass = "new_pass";
-        let new_salt = "new_salt";
-        let new_user = NewUser::new(test_name, new_pass, new_salt);
+        let new_auth_type = AuthType::Sha256;
+
+        let new_user = NewUser::new(test_name, new_pass, new_auth_type.clone());
 
         let new_user_info = UserInfo::from(new_user);
         let new_value = serde_json::to_vec(&new_user_info)?;
@@ -634,10 +661,16 @@ mod update {
                 })
             });
 
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
-            .update_user(test_name, Some(new_pass), Some(new_salt), test_seq)
+            .update_user(
+                test_name,
+                Some(new_user_info.password),
+                Some(new_auth_type),
+                test_seq,
+            )
             .await;
         assert!(res.is_ok());
         Ok(())
@@ -648,12 +681,13 @@ mod update {
         // mock kv expects nothing
         let test_name = "name";
         let kv = MockKV::new();
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let new_password: Option<&str> = None;
-        let new_salt: Option<&str> = None;
         let res = user_mgr
-            .update_user(test_name, new_password, new_salt, None)
+            .update_user(test_name, new_password, None, None)
             .await;
         assert!(res.is_ok());
         Ok(())
@@ -673,11 +707,12 @@ mod update {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
-        let new_salt: Option<&str> = None;
         let res = user_mgr
-            .update_user(test_name, Some("new_pass"), new_salt, test_seq)
+            .update_user(test_name, Some("new_pass"), None, test_seq)
             .await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -709,10 +744,16 @@ mod update {
                 })
             });
 
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
-            .update_user(test_name, Some("new_pass"), Some("new_salt"), test_seq)
+            .update_user(
+                test_name,
+                Some("new_pass"),
+                Some(AuthType::Sha256),
+                test_seq,
+            )
             .await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())

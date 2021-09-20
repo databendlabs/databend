@@ -20,21 +20,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
-use common_flights::meta_api_impl::CreateDatabaseAction;
-use common_flights::meta_api_impl::CreateDatabaseActionResult;
-use common_flights::meta_api_impl::CreateTableAction;
-use common_flights::meta_api_impl::CreateTableActionResult;
-use common_flights::meta_api_impl::DropDatabaseAction;
-use common_flights::meta_api_impl::DropDatabaseActionResult;
-use common_flights::meta_api_impl::DropTableAction;
-use common_flights::meta_api_impl::DropTableActionResult;
-use common_flights::meta_api_impl::GetDatabaseAction;
-use common_flights::meta_api_impl::GetDatabaseActionResult;
-use common_flights::meta_api_impl::GetTableAction;
-use common_flights::meta_api_impl::GetTableActionResult;
-use common_flights::storage_api_impl::AppendResult;
-use common_flights::storage_api_impl::TruncateTableAction;
-use common_flights::storage_api_impl::TruncateTableResult;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -42,8 +27,24 @@ use common_planners::DropTablePlan;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::Receiver;
 use common_runtime::tokio::sync::mpsc::Sender;
+use common_store_api_sdk::meta_api_impl::CreateDatabaseAction;
+use common_store_api_sdk::meta_api_impl::CreateDatabaseActionResult;
+use common_store_api_sdk::meta_api_impl::CreateTableAction;
+use common_store_api_sdk::meta_api_impl::CreateTableActionResult;
+use common_store_api_sdk::meta_api_impl::DropDatabaseAction;
+use common_store_api_sdk::meta_api_impl::DropDatabaseActionResult;
+use common_store_api_sdk::meta_api_impl::DropTableAction;
+use common_store_api_sdk::meta_api_impl::DropTableActionResult;
+use common_store_api_sdk::meta_api_impl::GetDatabaseAction;
+use common_store_api_sdk::meta_api_impl::GetDatabaseActionResult;
+use common_store_api_sdk::meta_api_impl::GetTableAction;
+use common_store_api_sdk::meta_api_impl::GetTableActionResult;
+use common_store_api_sdk::storage_api_impl::AppendResult;
+use common_store_api_sdk::storage_api_impl::TruncateTableAction;
+use common_store_api_sdk::storage_api_impl::TruncateTableResult;
 use common_tracing::tracing;
 use maplit::hashmap;
+use metasrv::meta_service::MetaNode;
 use pretty_assertions::assert_eq;
 
 use crate::dfs::Dfs;
@@ -51,7 +52,6 @@ use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
 use crate::fs::FileSystem;
 use crate::localfs::LocalFS;
-use crate::meta_service::MetaNode;
 use crate::tests::service::new_test_context;
 use crate::tests::service::StoreTestContext;
 
@@ -175,6 +175,7 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
             Ok(want_db_id) => Ok(GetDatabaseActionResult {
                 database_id: want_db_id,
                 db: db_name.to_string(),
+                engine: "Local".to_string(),
             }),
             Err(err_str) => Err(ErrorCode::UnknownDatabase(err_str)),
         };
@@ -458,6 +459,8 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
                 db: db_name.to_string(),
                 name: table_name.to_string(),
                 schema,
+                engine: "JSON".to_owned(),
+                options: Default::default(),
             }),
             Err(err_str) => Err(ErrorCode::UnknownTable(err_str)),
         };
@@ -780,7 +783,7 @@ async fn bring_up_dfs_action_handler(
     let mut tc = new_test_context();
     let fs = LocalFS::try_create(tc.config.local_fs_dir.clone())?;
 
-    let mn = MetaNode::boot(0, &tc.config).await?;
+    let mn = MetaNode::boot(0, &tc.config.meta_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     let dfs = Dfs::create(fs, mn.clone());

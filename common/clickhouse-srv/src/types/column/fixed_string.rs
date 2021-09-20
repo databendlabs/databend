@@ -118,7 +118,7 @@ impl<K: ColumnType> ColumnData for FixedStringAdapter<K> {
             match self.column.at(index) {
                 ValueRef::String(_) => {
                     let string_ref = self.column.at(index).as_bytes().unwrap();
-                    buffer.extend(string_ref.as_ref());
+                    buffer.extend::<&[u8]>(string_ref.as_ref());
                 }
                 ValueRef::Array(SqlType::UInt8, vs) => {
                     let mut string_val: Vec<u8> = Vec::with_capacity(vs.len());

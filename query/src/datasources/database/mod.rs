@@ -16,7 +16,7 @@
 #[cfg(test)]
 mod tests;
 
+pub(crate) mod default;
 pub(crate) mod example;
-pub(crate) mod local;
-pub(crate) mod remote;
+pub(crate) mod prelude;
 pub(crate) mod system;

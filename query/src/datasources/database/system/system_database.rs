@@ -22,10 +22,10 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
 use crate::catalogs::impls::SYS_TBL_ID_BEGIN;
 use crate::catalogs::impls::SYS_TBL_ID_END;
 use crate::catalogs::Database;
-use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::catalogs::TableFunctionMeta;

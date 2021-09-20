@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,14 +32,14 @@ use std::ops::Add;
 pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";
 
 #[allow(dead_code)]
-pub struct NamespaceMgr<KV> {
-    kv_api: KV,
+pub struct NamespaceMgr {
+    kv_api: Arc<dyn KVApi>,
     lift_time: Duration,
     namespace_prefix: String,
 }
 
-impl<T: KVApi> NamespaceMgr<T> {
-    pub fn new(kv_api: T, tenant: &str, namespace: &str, lift_time: Duration) -> Result<Self> {
+impl NamespaceMgr {
+    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str, namespace: &str, lift_time: Duration) -> Result<Self> {
         Ok(NamespaceMgr {
             kv_api,
             lift_time,
@@ -121,7 +123,7 @@ impl<T: KVApi> NamespaceMgr<T> {
 }
 
 #[async_trait]
-impl<T: KVApi + Send> NamespaceApi for NamespaceMgr<T> {
+impl NamespaceApi for NamespaceMgr {
     async fn add_node(&mut self, node: NodeInfo) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
         let seq = MatchSeq::Exact(0);

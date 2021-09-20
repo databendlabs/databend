@@ -43,7 +43,7 @@ databend-cli cluster create --profile=<databend profile>
 
 Support three kinds of profile in alpha stage,
 
-1. local: local profile will run standalone `databend` cluster on local(one running fuse-query instance and one running fuse-store instance)
+1. local: local profile will run standalone `databend` cluster on local(one running databend-query instance and one running databend-store instance)
 2. demo: install a standalone `databend` instance on cloud(k8s or maybe fargate in later stage)
 3. cluster: install `databend` cluster on cloud( through `databend operator`)
 
@@ -99,8 +99,8 @@ Check on disk utilization
 ```bash
 databend-cli cluster df
 | NAME | COMPONENT | USED | ALWAYABLE | LOCATION |
-| local-disk-1 | Block| 10Gi | 90Gi | /mnt/fuse-store |
-| s3-disk | Object| 100 Gi | 1000Gi | s3://bucket-1/mnt/fuse-store |
+| local-disk-1 | Block| 10Gi | 90Gi | /mnt/databend-store |
+| s3-disk | Object| 100 Gi | 1000Gi | s3://bucket-1/mnt/databend-store |
 ```
 
 ### Cluster delete
@@ -115,13 +115,13 @@ databend-cli cluster delete
 
 Show logs in current running instance
 
-show all fuse-query logs
+show all databend-query logs
 
 ```bash
 databend-cli cluster log --component=query --all
 ```
 
-The command above would show all fuse-store logs
+The command above would show all databend-store logs
 
 ```bash
 databend-cli cluster log --component=store --all

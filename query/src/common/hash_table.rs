@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Reference the ClickHouse HashTable to implement the Datafuse HashTable
+// Reference the ClickHouse HashTable to implement the Databend HashTable
 
 use std::alloc::Layout;
 use std::marker::PhantomData;

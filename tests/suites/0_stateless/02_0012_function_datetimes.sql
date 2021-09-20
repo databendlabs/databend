@@ -51,4 +51,11 @@ select toStartOfYear(toDateTime(1630812366));
 select toStartOfISOYear(toDateTime(1630812366));
 select toStartOfYear(toDate(18869));
 select toStartOfISOYear(toDate(18869));
+
+select toStartOfQuarter(toDateTime(1631705259));
+select toStartOfQuarter(toDateTime(1621078059));
+select toStartOfMonth(toDateTime(1631705259));
+select toStartOfQuarter(toDate(18885));
+select toStartOfQuarter(toDate(18762));
+select toStartOfMonth(toDate(18885));
 select '===toStartOf===';

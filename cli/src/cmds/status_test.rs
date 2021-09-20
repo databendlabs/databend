@@ -24,13 +24,13 @@ use crate::error::Result;
 fn test_status() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
-        datafuse_dir: "/tmp/.datafuse".to_string(),
+        databend_dir: "/tmp/.databend".to_string(),
         download_url: "".to_string(),
         tag_url: "".to_string(),
         clap: RefCell::new(Default::default()),
     };
     let t = tempdir()?;
-    conf.datafuse_dir = t.path().to_str().unwrap().to_string();
+    conf.databend_dir = t.path().to_str().unwrap().to_string();
 
     let mut status = Status::read(conf)?;
     status.version = "xx".to_string();

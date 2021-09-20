@@ -32,7 +32,7 @@ use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 
 use crate::servers::clickhouse::interactive_worker_base::BlockItem;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use common_progress::ProgressValues;
 
 pub struct QueryWriter<'a> {

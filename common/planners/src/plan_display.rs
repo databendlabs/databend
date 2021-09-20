@@ -31,12 +31,12 @@ impl PlanNode {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 writeln!(
                     f,
-                    "// Begin DataFuse GraphViz Plan (see https://graphviz.org)"
+                    "// Begin Databend GraphViz Plan (see https://graphviz.org)"
                 )?;
                 writeln!(f, "digraph {{")?;
                 // TODO()
                 writeln!(f, "}}")?;
-                writeln!(f, "// End DataFuse GraphViz Plan")?;
+                writeln!(f, "// End Databend GraphViz Plan")?;
                 Ok(())
             }
         }

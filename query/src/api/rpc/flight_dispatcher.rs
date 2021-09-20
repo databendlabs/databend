@@ -33,7 +33,7 @@ use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::FlightAction;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::DatafuseQueryContext;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::SessionRef;
 
 struct StreamInfo {
@@ -43,15 +43,15 @@ struct StreamInfo {
     rx: mpsc::Receiver<Result<DataBlock>>,
 }
 
-pub struct DatafuseQueryFlightDispatcher {
+pub struct DatabendQueryFlightDispatcher {
     streams: Arc<RwLock<HashMap<String, StreamInfo>>>,
     stages_notify: Arc<RwLock<HashMap<String, Arc<Notify>>>>,
     abort: Arc<AtomicBool>,
 }
 
-impl DatafuseQueryFlightDispatcher {
-    pub fn create() -> DatafuseQueryFlightDispatcher {
-        DatafuseQueryFlightDispatcher {
+impl DatabendQueryFlightDispatcher {
+    pub fn create() -> DatabendQueryFlightDispatcher {
+        DatabendQueryFlightDispatcher {
             streams: Arc::new(RwLock::new(HashMap::new())),
             stages_notify: Arc::new(RwLock::new(HashMap::new())),
             abort: Arc::new(AtomicBool::new(false)),

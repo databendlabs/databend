@@ -20,12 +20,13 @@ use crate::datasources::dal::StorageScheme;
 
 pub type TableStorageScheme = StorageScheme;
 
+#[allow(dead_code)]
 pub fn parse_storage_scheme(value: Option<&String>) -> Result<StorageScheme> {
     if let Some(v) = value {
         let v = v.to_uppercase();
         match v.as_str() {
             "LOCAL_FS" | "LOCAL" => Ok(TableStorageScheme::LocalFs),
-            "FUSE_DFS" => Ok(TableStorageScheme::FuseDfs),
+            "DATABEND_DFS" => Ok(TableStorageScheme::FuseDfs),
             "S3" => Ok(TableStorageScheme::S3),
             _ => Err(ErrorCode::IllegalSchema(format!("unknown scheme {}", v))),
         }

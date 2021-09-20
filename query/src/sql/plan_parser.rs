@@ -61,10 +61,11 @@ use sqlparser::ast::OrderByExpr;
 use sqlparser::ast::Query;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
+use sqlparser::ast::UnaryOperator;
 
 use crate::catalogs::Catalog;
 use crate::functions::ContextFunction;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
@@ -83,11 +84,11 @@ use crate::sql::DfTruncateTable;
 use crate::sql::SQLCommon;
 
 pub struct PlanParser {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 }
 
 impl PlanParser {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         Self { ctx }
     }
 
@@ -892,15 +893,13 @@ impl PlanParser {
     }
 
     fn interval_to_day_time(days: i32, ms: i32) -> Result<Expression> {
-        let milliseconds_per_day = 24 * 3600 * 1000;
-        let wrapped_days = days + ms / milliseconds_per_day;
-        let wrapped_ms = ms % milliseconds_per_day;
-        let num = (wrapped_days as i64) << 32 | (wrapped_ms as i64);
         let data_type = DataType::Interval(IntervalUnit::DayTime);
+        let milliseconds_per_day = 24 * 3600 * 1000;
+        let total_ms = days as i64 * milliseconds_per_day + ms as i64;
 
         Ok(Expression::Literal {
-            value: DataValue::Int64(Some(num)),
-            column_name: Some(num.to_string()),
+            value: DataValue::Int64(Some(total_ms)),
+            column_name: Some(total_ms.to_string()),
             data_type,
         })
     }
@@ -995,10 +994,13 @@ impl PlanParser {
                     right: Box::new(self.sql_to_rex(right, schema, select)?),
                 })
             }
-            sqlparser::ast::Expr::UnaryOp { op, expr } => Ok(Expression::UnaryExpression {
-                op: format!("{}", op),
-                expr: Box::new(self.sql_to_rex(expr, schema, select)?),
-            }),
+            sqlparser::ast::Expr::UnaryOp { op, expr } => match op {
+                UnaryOperator::Plus => self.sql_to_rex(expr, schema, select),
+                _ => Ok(Expression::UnaryExpression {
+                    op: format!("{}", op),
+                    expr: Box::new(self.sql_to_rex(expr, schema, select)?),
+                }),
+            },
             sqlparser::ast::Expr::Exists(q) => Ok(Expression::ScalarFunction {
                 op: "EXISTS".to_lowercase(),
                 args: vec![self.subquery_to_rex(q)?],

@@ -18,12 +18,6 @@ use std::time::UNIX_EPOCH;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_flights::meta_api_impl::DropTableActionResult;
-use common_flights::meta_api_impl::GetTableActionResult;
-use common_flights::KVApi;
-use common_flights::MetaApi;
-use common_flights::StorageApi;
-use common_flights::StoreClient;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
@@ -33,12 +27,18 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
 use common_runtime::tokio;
+use common_store_api_sdk::meta_api_impl::DropTableActionResult;
+use common_store_api_sdk::meta_api_impl::GetTableActionResult;
+use common_store_api_sdk::KVApi;
+use common_store_api_sdk::MetaApi;
+use common_store_api_sdk::StorageApi;
+use common_store_api_sdk::StoreClient;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_restart() -> anyhow::Result<()> {
-    // Issue 1134  https://github.com/datafuselabs/datafuse/issues/1134
+    // Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a store server.
     // - create db and create table
     // - restart
@@ -49,7 +49,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
 
     let (mut tc, addr) = crate::tests::start_store_server().await?;
 
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let db_name = "db1";
     let table_name = "table1";
@@ -85,12 +85,13 @@ async fn test_flight_restart() -> anyhow::Result<()> {
         false,
     )]));
     {
+        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
         let plan = CreateTablePlan {
             if_not_exists: false,
             db: db_name.to_string(),
             table: table_name.to_string(),
             schema: schema.clone(),
-            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
+            options: options.clone(),
             engine: "JSON".to_string(),
         };
 
@@ -104,6 +105,8 @@ async fn test_flight_restart() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: table_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
@@ -123,7 +126,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
         // restart by opening existent meta db
-        tc.config.boot = false;
+        tc.config.meta_config.boot = false;
         crate::tests::start_store_server_with_context(&mut tc).await?;
     }
 
@@ -169,7 +172,7 @@ async fn test_flight_create_database() -> anyhow::Result<()> {
     // 1. Service starts.
     let (_tc, addr) = crate::tests::start_store_server().await?;
 
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // 2. Create database.
 
@@ -236,7 +239,6 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
     use common_datavalues::DataField;
     use common_datavalues::DataSchema;
-    use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
 
@@ -245,7 +247,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
     // 1. Service starts.
     let (_tc, addr) = crate::tests::start_store_server().await?;
 
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let db_name = "db1";
     let tbl_name = "tb2";
@@ -276,15 +278,14 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             false,
         )]));
 
+        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
         // Create table plan.
         let mut plan = CreateTablePlan {
             if_not_exists: false,
             db: db_name.to_string(),
             table: tbl_name.to_string(),
             schema: schema.clone(),
-            // TODO check get_table
-            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            // TODO
+            options: options.clone(),
             engine: "JSON".to_string(),
         };
 
@@ -302,6 +303,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
@@ -321,6 +324,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
@@ -346,6 +351,8 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get old table");
         }
@@ -362,7 +369,6 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
 
     use common_datavalues::DataField;
     use common_datavalues::DataSchema;
-    use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
 
@@ -371,7 +377,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
     // 1. Service starts.
     let (_tc, addr) = crate::tests::start_store_server().await?;
 
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let db_name = "db1";
     let tbl_name = "tb2";
@@ -402,15 +408,14 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
             false,
         )]));
 
+        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
         // Create table plan.
         let plan = CreateTablePlan {
             if_not_exists: false,
             db: db_name.to_string(),
             table: tbl_name.to_string(),
             schema: schema.clone(),
-            // TODO check get_table
-            options: maplit::hashmap! {"opt‐1".into() => "val-1".into()},
-            // TODO
+            options: options.clone(),
             engine: "JSON".to_string(),
         };
 
@@ -428,6 +433,8 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
                 db: db_name.into(),
                 name: tbl_name.into(),
                 schema: schema.clone(),
+                engine: "JSON".to_owned(),
+                options: options.clone(),
             };
             assert_eq!(want, got, "get created table");
         }
@@ -466,7 +473,6 @@ async fn test_do_append() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::prelude::*;
-    use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
 
@@ -490,7 +496,7 @@ async fn test_do_append() -> anyhow::Result<()> {
     let num_batch = batches.len();
     let stream = futures::stream::iter(batches);
 
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
     {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
@@ -538,7 +544,6 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     use std::sync::Arc;
 
     use common_datavalues::prelude::*;
-    use common_flights::StoreClient;
     use common_planners::CreateDatabasePlan;
     use common_planners::CreateTablePlan;
 
@@ -567,7 +572,7 @@ async fn test_scan_partition() -> anyhow::Result<()> {
     let num_batch = batches.len();
     let stream = futures::stream::iter(batches);
 
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
     {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
@@ -634,7 +639,7 @@ async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
 
         let (_tc, addr) = crate::tests::start_store_server().await?;
 
-        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         client
             .upsert_kv("k1", MatchSeq::Any, Some(b"v1".to_vec()), None)
@@ -682,7 +687,7 @@ async fn test_flight_generic_kv_list() -> anyhow::Result<()> {
 
         let (_tc, addr) = crate::tests::start_store_server().await?;
 
-        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         let mut values = vec![];
         {
@@ -730,7 +735,7 @@ async fn test_flight_generic_kv_delete() -> anyhow::Result<()> {
 
         let (_tc, addr) = crate::tests::start_store_server().await?;
 
-        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         let test_key = "test_key";
         client
@@ -798,7 +803,7 @@ async fn test_flight_generic_kv_update() -> anyhow::Result<()> {
 
         let (_tc, addr) = crate::tests::start_store_server().await?;
 
-        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         let test_key = "test_key_for_update";
 
@@ -904,7 +909,7 @@ async fn test_flight_generic_kv_update_meta() -> anyhow::Result<()> {
 
         let (_tc, addr) = crate::tests::start_store_server().await?;
 
-        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         let test_key = "test_key_for_update_meta";
 
@@ -1010,7 +1015,7 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
 
         let (_tc, addr) = crate::tests::start_store_server().await?;
 
-        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1124,7 +1129,7 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
 
         let (_tc, addr) = crate::tests::start_store_server().await?;
 
-        let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
         {
             // write
@@ -1194,7 +1199,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_store_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_store_server().await?;
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // Empty Database
     let res = client.get_database_meta(None).await?;
@@ -1208,7 +1213,7 @@ async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_store_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_store_server().await?;
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // create-db operation will increases meta_version
     let plan = CreateDatabasePlan {
@@ -1270,7 +1275,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_store_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_store_server().await?;
-    let mut client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let test_db = "db1";
     let plan = CreateDatabasePlan {
