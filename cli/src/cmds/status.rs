@@ -16,15 +16,46 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::Path;
-
+use databend_query::configs::Config as QueryConfig;
+use databend_store::configs::Config as StoreConfig;
 use crate::cmds::Config;
 use crate::error::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct Status {
     path: String,
     pub version: String,
+    pub local_configs: LocalConfig,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+pub struct LocalConfig {
+    pub query_configs: Vec<LocalQueryConfig>,
+    pub store_configs: Option<LocalStoreConfig>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+pub struct LocalQueryConfig {
+    pub config: QueryConfig,
+    pub pid: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+pub struct LocalStoreConfig {
+    pub config: StoreConfig,
+    pub pid: String,
+}
+
+impl LocalConfig {
+    pub fn empty() -> Self {
+        return LocalConfig{
+            query_configs: vec![],
+            store_configs: None
+        }
+    }
+}
+
+
 
 impl Status {
     pub fn read(conf: Config) -> Result<Self> {
@@ -36,6 +67,7 @@ impl Status {
             let status = Status {
                 path: status_path.clone(),
                 version: "".to_string(),
+                local_configs: LocalConfig::empty(),
             };
             serde_json::to_writer(&file, &status)?;
         }

@@ -15,8 +15,8 @@ path = "src/bin/databend-cli.rs"
 
 [dependencies]
 # Workspace dependencies
-
-# Crates.io dependencies
+databend-query = {path = "../query"}
+databend-store = {path = "../store"}
 clap = "2.33.3"
 colored = "2.0.0"
 comfy-table = "4.1.1"
