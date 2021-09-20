@@ -21,6 +21,7 @@ mod buf_read;
 mod marshal;
 mod stat_buffer;
 mod unmarshal;
+mod utils;
 
 #[cfg(test)]
 mod binary_read_test;
@@ -30,3 +31,6 @@ mod binary_write_test;
 mod buf_read_test;
 #[cfg(test)]
 mod marshal_test;
+
+#[cfg(test)]
+mod utils_test;

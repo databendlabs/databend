@@ -77,6 +77,9 @@ impl PartialOrd<u64> for KVValue {
 pub struct Database {
     pub database_id: u64,
 
+    /// engine name of db
+    pub database_engine: String,
+
     /// tables belong to this database.
     pub tables: HashMap<String, u64>,
 }
@@ -93,6 +96,12 @@ pub struct Table {
 
     /// serialized schema
     pub schema: Vec<u8>,
+
+    /// table engine
+    pub table_engine: String,
+
+    /// table options
+    pub table_options: HashMap<String, String>,
 
     /// name of parts that belong to this table.
     pub parts: HashSet<String>,

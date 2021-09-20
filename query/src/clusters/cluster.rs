@@ -20,8 +20,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::DNSResolver;
 use common_infallible::Mutex;
+use common_store_api_sdk::DNSResolver;
 
 use crate::clusters::address::Address;
 use crate::clusters::node::Node;

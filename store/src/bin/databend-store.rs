@@ -14,12 +14,13 @@
 
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
+use common_tracing::set_panic_hook;
 use databend_store::api::HttpService;
 use databend_store::api::StoreServer;
 use databend_store::configs::Config;
-use databend_store::meta_service::raft_db::init_sled_db;
 use databend_store::metrics::MetricService;
 use log::info;
+use metasrv::meta_service::raft_db::init_sled_db;
 use structopt::StructOpt;
 
 #[tokio::main]
@@ -35,6 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
     );
+    set_panic_hook();
 
     info!("{:?}", conf.clone());
     info!(
@@ -42,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         *databend_store::configs::config::DATABEND_COMMIT_VERSION
     );
 
-    init_sled_db(conf.meta_dir.clone());
+    init_sled_db(conf.meta_config.raft_dir.clone());
 
     // Metric API service.
     {

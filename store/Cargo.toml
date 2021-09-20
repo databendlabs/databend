@@ -21,7 +21,7 @@ common-arrow = {path = "../common/arrow"}
 common-datablocks = {path = "../common/datablocks"}
 common-datavalues = {path = "../common/datavalues"}
 common-exception = {path = "../common/exception"}
-common-flights = {path = "../common/flights"}
+common-store-api-sdk = {path = "../common/store-api-sdk" }
 common-functions = {path = "../common/functions"}
 common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}
@@ -29,6 +29,8 @@ common-planners = {path = "../common/planners"}
 common-profling = { path = "../common/profiling" }
 common-runtime = {path = "../common/runtime"}
 common-tracing = {path = "../common/tracing"}
+common-uniq-id = {path = "../common/uniq_id"}
+metasrv = {path = "../metasrv"}
 
 # Github dependencies
 

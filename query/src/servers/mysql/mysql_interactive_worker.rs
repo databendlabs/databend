@@ -18,6 +18,7 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::*;
 use common_runtime::tokio;
 use metrics::histogram;
 use msql_srv::ErrorKind;
@@ -232,17 +233,20 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         &mut self,
         query: &str,
         context: DatabendQueryContextRef,
-    ) -> Result<Vec<DataBlock>> {
+    ) -> Result<(Vec<DataBlock>, String)> {
         log::debug!("{}", query);
 
         let runtime = Self::build_runtime()?;
         let (plan, hints) = PlanParser::create(context.clone()).build_with_hint_from_sql(query);
+
+        let start = Instant::now();
 
         let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
             let start = Instant::now();
             let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
             let name = interpreter.name().to_string();
             let data_stream = runtime.block_on(interpreter.execute())?;
+
             histogram!(
                 super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
                 start.elapsed(),
@@ -251,8 +255,20 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             runtime.block_on(data_stream.collect::<Result<Vec<DataBlock>>>())
         };
         let blocks = fetch_query_blocks();
+
+        let progress = context.get_progress_value();
+        let seconds = start.elapsed().as_millis() as f64 / 1000f64;
+        let extra_info = format!(
+            "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
+            progress.read_rows,
+            convert_byte_size(progress.read_bytes as f64),
+            seconds,
+            convert_number_size((progress.read_rows as f64) / (seconds as f64)),
+            convert_byte_size((progress.read_bytes as f64) / (seconds as f64)),
+        );
+
         match blocks {
-            Ok(v) => Ok(v),
+            Ok(v) => Ok((v, extra_info)),
             Err(e) => {
                 let hint = hints.iter().find(|v| v.error_code.is_some());
                 if let Some(DfHint {
@@ -261,7 +277,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 }) = hint
                 {
                     if *code == e.code() {
-                        Ok(vec![DataBlock::empty()])
+                        Ok((vec![DataBlock::empty()], extra_info))
                     } else {
                         let actual_code = e.code();
                         Err(e.add_message(format!(

@@ -13,6 +13,12 @@
 // limitations under the License.
 //
 
-mod database_catalog;
+pub use catalog::system_catalog::LOCAL_TBL_ID_BEGIN;
+pub use catalog::system_catalog::SYS_TBL_ID_BEGIN;
+pub use catalog::system_catalog::SYS_TBL_ID_END;
+pub use database_catalog::DatabaseCatalog;
 
-pub use database_catalog::*;
+mod catalog;
+mod database_catalog;
+pub(crate) mod meta_backends;
+pub(crate) mod util;

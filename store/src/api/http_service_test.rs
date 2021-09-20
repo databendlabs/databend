@@ -28,7 +28,7 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 // TODO(zhihanz) add tls fail case
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server() -> Result<()> {
-    let mut conf = Config::default();
+    let mut conf = Config::empty();
     let addr_str = "127.0.0.1:0";
 
     conf.tls_server_key = TEST_SERVER_KEY.to_owned();

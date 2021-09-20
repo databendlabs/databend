@@ -14,38 +14,70 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalogs::meta_backend::MetaBackend;
+use crate::catalogs::meta_backend::TableInfo;
 use crate::catalogs::Database;
-use crate::catalogs::MetaBackend;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::datasources::database::example::ExampleTable;
 
 pub struct ExampleDatabase {
-    name: String,
-    meta_backend: Arc<dyn MetaBackend>,
+    db_name: String,
+    engine_name: String,
+    meta_store_client: Arc<dyn MetaBackend>,
 }
+const EXAMPLE_TBL_ENGINE: &str = "ExampleNull";
 
 impl ExampleDatabase {
-    pub fn create(name: &str, meta_backend: Arc<dyn MetaBackend>) -> Self {
-        ExampleDatabase {
-            name: name.to_string(),
-            meta_backend,
+    pub fn new(
+        db_name: impl Into<String>,
+        engine_name: impl Into<String>,
+        meta_store_client: Arc<dyn MetaBackend>,
+    ) -> Self {
+        Self {
+            db_name: db_name.into(),
+            engine_name: engine_name.into(),
+            meta_store_client,
         }
+    }
+
+    fn build_table_instance(
+        &self,
+        table_info: &TableInfo,
+    ) -> common_exception::Result<Arc<TableMeta>> {
+        let engine = &table_info.engine;
+        if !engine.is_empty() && engine != EXAMPLE_TBL_ENGINE {
+            return Err(ErrorCode::UnknownDatabaseEngine(format!(
+                "table engine {} not supported by example database, (supported table engine: {})",
+                engine, EXAMPLE_TBL_ENGINE,
+            )));
+        }
+
+        let tbl = ExampleTable::try_create(
+            table_info.db.clone(),
+            table_info.name.clone(),
+            table_info.schema.clone(),
+            table_info.table_option.clone(),
+        )?;
+        let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);
+        Ok(Arc::new(tbl_meta))
     }
 }
 
 impl Database for ExampleDatabase {
     fn name(&self) -> &str {
-        self.name.as_str()
+        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {
-        "local"
+        self.engine_name.as_str()
     }
 
     fn is_local(&self) -> bool {
@@ -53,24 +85,30 @@ impl Database for ExampleDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
-        self.meta_backend.get_table(self.name(), table_name)
+        let db_name = self.name();
+        let table_info = self.meta_store_client.get_table(db_name, table_name)?;
+        self.build_table_instance(table_info.as_ref())
     }
 
     fn exists_table(&self, table_name: &str) -> Result<bool> {
-        Ok(self.get_table(table_name).is_ok())
+        self.meta_store_client.exist_table(self.name(), table_name)
     }
 
     fn get_table_by_id(
         &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
+        _table_id: MetaId,
+        _table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.meta_backend
-            .get_table_by_id(self.name(), table_id, table_version)
+        todo!()
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        self.meta_backend.get_tables(self.name())
+        let table_infos = self.meta_store_client.get_tables(self.name())?;
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.build_table_instance(item)?;
+            acc.push(tbl);
+            Ok(acc)
+        })
     }
 
     fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
@@ -78,10 +116,10 @@ impl Database for ExampleDatabase {
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.meta_backend.create_table(plan)
+        self.meta_store_client.create_table(plan)
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.meta_backend.drop_table(plan)
+        self.meta_store_client.drop_table(plan)
     }
 }

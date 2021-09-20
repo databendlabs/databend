@@ -15,53 +15,33 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::CreateDatabasePlan;
-use common_planners::DropDatabasePlan;
 
+use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
+use crate::catalogs::meta_backend::DatabaseInfo;
+use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
-use crate::catalogs::MetaBackend;
 use crate::configs::Config;
-use crate::datasources::database::example::ExampleMetaBackend;
+use crate::datasources::database::example::ExampleDatabase;
 
-/// The collection of the local database.
-pub struct ExampleDatabases {
+pub struct ExampleDatabaseEngine {
     meta_backend: Arc<dyn MetaBackend>,
 }
 
-impl ExampleDatabases {
-    pub fn create(_conf: Config) -> Self {
-        let meta_backend = Arc::new(ExampleMetaBackend::create());
-        ExampleDatabases { meta_backend }
+impl ExampleDatabaseEngine {
+    pub fn create() -> Self {
+        let meta_backend = Arc::new(EmbeddedMetaBackend::new());
+        ExampleDatabaseEngine { meta_backend }
     }
 }
 
-impl DatabaseEngine for ExampleDatabases {
-    fn engine_name(&self) -> &str {
-        "example"
+impl DatabaseEngine for ExampleDatabaseEngine {
+    fn create(&self, _conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
+        let db = ExampleDatabase::new(&db_info.name, &db_info.engine, self.meta_backend.clone());
+        Ok(Arc::new(db))
     }
 
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        self.meta_backend.get_database(db_name)
-    }
-
-    fn exists_database(&self, db_name: &str) -> Result<bool> {
-        self.meta_backend.exists_database(db_name)
-    }
-
-    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        self.meta_backend.get_databases()
-    }
-
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
-        self.meta_backend.create_database(plan)
-    }
-
-    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        self.meta_backend.drop_database(plan)
-    }
-
-    fn engine_desc(&self) -> &str {
-        "The example engine is used by example databases and tables."
+    fn description(&self) -> String {
+        "The example engine is used by example databases and tables.".to_owned()
     }
 }

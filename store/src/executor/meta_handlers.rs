@@ -22,34 +22,34 @@ use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCode;
-use common_flights::meta_api_impl::CreateDatabaseAction;
-use common_flights::meta_api_impl::CreateDatabaseActionResult;
-use common_flights::meta_api_impl::CreateTableAction;
-use common_flights::meta_api_impl::CreateTableActionResult;
-use common_flights::meta_api_impl::DatabaseMetaReply;
-use common_flights::meta_api_impl::DatabaseMetaSnapshot;
-use common_flights::meta_api_impl::DropDatabaseAction;
-use common_flights::meta_api_impl::DropDatabaseActionResult;
-use common_flights::meta_api_impl::DropTableAction;
-use common_flights::meta_api_impl::DropTableActionResult;
-use common_flights::meta_api_impl::GetDatabaseAction;
-use common_flights::meta_api_impl::GetDatabaseActionResult;
-use common_flights::meta_api_impl::GetDatabaseMetaAction;
-use common_flights::meta_api_impl::GetTableAction;
-use common_flights::meta_api_impl::GetTableActionResult;
-use common_flights::meta_api_impl::GetTableExtReq;
 use common_metatypes::Database;
 use common_metatypes::Table;
+use common_store_api_sdk::meta_api_impl::CreateDatabaseAction;
+use common_store_api_sdk::meta_api_impl::CreateDatabaseActionResult;
+use common_store_api_sdk::meta_api_impl::CreateTableAction;
+use common_store_api_sdk::meta_api_impl::CreateTableActionResult;
+use common_store_api_sdk::meta_api_impl::DatabaseMetaReply;
+use common_store_api_sdk::meta_api_impl::DatabaseMetaSnapshot;
+use common_store_api_sdk::meta_api_impl::DropDatabaseAction;
+use common_store_api_sdk::meta_api_impl::DropDatabaseActionResult;
+use common_store_api_sdk::meta_api_impl::DropTableAction;
+use common_store_api_sdk::meta_api_impl::DropTableActionResult;
+use common_store_api_sdk::meta_api_impl::GetDatabaseAction;
+use common_store_api_sdk::meta_api_impl::GetDatabaseActionResult;
+use common_store_api_sdk::meta_api_impl::GetDatabaseMetaAction;
+use common_store_api_sdk::meta_api_impl::GetTableAction;
+use common_store_api_sdk::meta_api_impl::GetTableActionResult;
+use common_store_api_sdk::meta_api_impl::GetTableExtReq;
 use log::info;
+use metasrv::meta_service::cmd::Cmd::CreateDatabase;
+use metasrv::meta_service::cmd::Cmd::CreateTable;
+use metasrv::meta_service::cmd::Cmd::DropDatabase;
+use metasrv::meta_service::cmd::Cmd::DropTable;
+use metasrv::meta_service::AppliedState;
+use metasrv::meta_service::LogEntry;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::cmd::Cmd::CreateDatabase;
-use crate::meta_service::cmd::Cmd::CreateTable;
-use crate::meta_service::cmd::Cmd::DropDatabase;
-use crate::meta_service::cmd::Cmd::DropTable;
-use crate::meta_service::AppliedState;
-use crate::meta_service::LogEntry;
 
 // Db
 #[async_trait::async_trait]
@@ -69,6 +69,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
                 if_not_exists,
                 db: Database {
                     database_id: 0,
+                    database_engine: plan.engine.clone(),
                     tables: HashMap::new(),
                 },
             },
@@ -119,6 +120,7 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
                 let rst = GetDatabaseActionResult {
                     database_id: db.database_id,
                     db: db_name,
+                    engine: db.database_engine,
                 };
                 Ok(rst)
             }
@@ -184,6 +186,8 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         let table = Table {
             table_id: 0,
             schema: flight_data.data_header,
+            table_engine: plan.engine.clone(),
+            table_options: plan.options.clone(),
             parts: Default::default(),
         };
 
@@ -299,6 +303,8 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                     db: db_name.clone(),
                     name: table_name.clone(),
                     schema: Arc::new(arrow_schema.into()),
+                    engine: table.table_engine.clone(),
+                    options: table.table_options,
                 };
                 Ok(rst)
             }
@@ -328,6 +334,8 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     db: "".to_owned(),
                     name: "".to_owned(), // TODO for each version of table, we duplicates the name at present
                     schema: Arc::new(arrow_schema.into()),
+                    engine: table.table_engine.clone(),
+                    options: table.table_options,
                 };
                 Ok(rst)
             }

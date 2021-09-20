@@ -13,14 +13,16 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_runtime::tokio;
-use common_store_api::kv_api::MGetKVActionResult;
-use common_store_api::kv_api::PrefixListReply;
+use common_store_api::kv_apis::kv_api::MGetKVActionResult;
+use common_store_api::kv_apis::kv_api::PrefixListReply;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::UpsertKVActionResult;
@@ -41,7 +43,7 @@ mock! {
     #[async_trait]
     impl KVApi for KV {
         async fn upsert_kv(
-            &mut self,
+            &self,
             key: &str,
             seq: MatchSeq,
             value: Option<Vec<u8>>,
@@ -49,20 +51,20 @@ mock! {
         ) -> common_exception::Result<UpsertKVActionResult>;
 
         async fn update_kv_meta(
-            &mut self,
+            &self,
             key: &str,
             seq: MatchSeq,
             value_meta: Option<KVMeta>
         ) -> common_exception::Result<UpsertKVActionResult>;
 
-        async fn get_kv(&mut self, key: &str) -> common_exception::Result<GetKVActionResult>;
+        async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionResult>;
 
         async fn mget_kv(
-            &mut self,
+            &self,
             key: &[String],
         ) -> common_exception::Result<MGetKVActionResult>;
 
-        async fn prefix_list_kv(&mut self, prefix: &str) -> common_exception::Result<PrefixListReply>;
+        async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply>;
         }
 }
 #[test]
@@ -112,6 +114,7 @@ mod add {
                         result: None,
                     })
                 });
+            let api = Arc::new(api);
             let mut user_mgr = UserMgr::new(api);
             let res = user_mgr.add_user(user_info).await;
 
@@ -143,6 +146,7 @@ mod add {
                     })
                 });
 
+            let api = Arc::new(api);
             let mut user_mgr = UserMgr::new(api);
 
             let new_user = NewUser::new(test_user_name, test_password, auth_type.clone());
@@ -173,7 +177,10 @@ mod add {
                         result: None,
                     })
                 });
-            let mut user_mgr = UserMgr::new(api);
+
+            let kv = Arc::new(api);
+
+            let mut user_mgr = UserMgr::new(kv);
             let new_user = NewUser::new(test_user_name, test_password, auth_type);
             let user_info = UserInfo::from(new_user);
             let res = user_mgr.add_user(user_info).await;
@@ -210,6 +217,8 @@ mod get {
                     result: Some((1, KVValue { meta: None, value })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, Some(1)).await;
         assert!(res.is_ok());
@@ -235,6 +244,8 @@ mod get {
                     result: Some((100, KVValue { meta: None, value })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert!(res.is_ok());
@@ -251,6 +262,8 @@ mod get {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert!(res.is_err());
@@ -275,6 +288,8 @@ mod get {
                     })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, Some(2)).await;
         assert!(res.is_err());
@@ -299,6 +314,8 @@ mod get {
                     })),
                 })
             });
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_user(test_name, None).await;
         assert_eq!(
@@ -355,6 +372,8 @@ mod get_users {
             //.withf(|args| args.0 == keys.clone())
             .times(1)
             .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_users(&names).await?;
         assert_eq!(res, user_infos);
@@ -379,6 +398,7 @@ mod get_users {
                 .times(1)
                 .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
         }
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_users(&names).await;
         assert_eq!(
@@ -431,6 +451,8 @@ mod get_all_users {
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_all_users().await?;
         assert_eq!(res, user_infos);
@@ -459,6 +481,8 @@ mod get_all_users {
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.get_all_users().await;
         assert_eq!(
@@ -496,6 +520,7 @@ mod drop {
                     result: None,
                 })
             });
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.drop_user("test", None).await;
         assert!(res.is_ok());
@@ -505,9 +530,9 @@ mod drop {
 
     #[tokio::test]
     async fn test_drop_user_unknown() -> common_exception::Result<()> {
-        let mut v = MockKV::new();
+        let mut kv = MockKV::new();
         let test_key = USER_API_KEY_PREFIX.to_string() + "test";
-        v.expect_upsert_kv()
+        kv.expect_upsert_kv()
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::Any),
@@ -521,7 +546,8 @@ mod drop {
                     result: None,
                 })
             });
-        let mut user_mgr = UserMgr::new(v);
+        let kv = Arc::new(kv);
+        let mut user_mgr = UserMgr::new(kv);
         let res = user_mgr.drop_user("test", None).await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -589,6 +615,7 @@ mod update {
                 })
             });
 
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
@@ -634,6 +661,7 @@ mod update {
                 })
             });
 
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
@@ -653,6 +681,8 @@ mod update {
         // mock kv expects nothing
         let test_name = "name";
         let kv = MockKV::new();
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let new_password: Option<&str> = None;
@@ -677,6 +707,8 @@ mod update {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
+
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr
@@ -712,6 +744,7 @@ mod update {
                 })
             });
 
+        let kv = Arc::new(kv);
         let mut user_mgr = UserMgr::new(kv);
 
         let res = user_mgr

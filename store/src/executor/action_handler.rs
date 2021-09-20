@@ -21,13 +21,14 @@ use common_arrow::arrow::io::parquet::read;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCode;
-use common_flights::storage_api_impl::AppendResult;
-use common_flights::storage_api_impl::ReadAction;
-use common_flights::RequestFor;
-use common_flights::StoreDoAction;
 use common_planners::PlanNode;
 use common_runtime::tokio::sync::mpsc::Sender;
+use common_store_api_sdk::storage_api_impl::AppendResult;
+use common_store_api_sdk::storage_api_impl::ReadAction;
+use common_store_api_sdk::RequestFor;
+use common_store_api_sdk::StoreDoAction;
 use futures::Stream;
+use metasrv::meta_service::MetaNode;
 use serde::Serialize;
 use tokio_stream::StreamExt;
 use tonic::Status;
@@ -35,7 +36,6 @@ use tonic::Streaming;
 
 use crate::data_part::appender::Appender;
 use crate::fs::FileSystem;
-use crate::meta_service::MetaNode;
 
 pub trait ReplySerializer {
     type Output;

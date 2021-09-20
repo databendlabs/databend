@@ -208,14 +208,17 @@ build_exceptions! {
     ConcurrentSnapshotInstall(2404),
     IllegalSnapshot(2405),
 
-    // DatabendStore server error
+    // MetaSrv server error
 
-    DatabendStoreError(2501),
+    MetaSrvError(2501),
 
     // FS error
 
     IllegalFileName(2601),
 
+    // Store server error
+
+    DatabendStoreError(2701),
 
     // TODO
     // We may need to separate front-end errors from API errors (and system errors?)
@@ -251,7 +254,14 @@ build_exceptions! {
 
 
     // DAL error
-    DALTransportError(7000)
+    DALTransportError(7000),
+
+
+    // datasource error
+    DuplicatedTableEngineProvider(8000),
+    UnknownDatabaseEngine(8001),
+    UnknownTableEngine(8002),
+    DuplicatedDatabaseEngineProvider(8003),
 
 }
 // General errors
