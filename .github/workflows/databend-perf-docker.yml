@@ -24,9 +24,9 @@ jobs:
       - name: Build Perf Tool
         run: |
           if [ ${{ matrix.config.cross }} = true ]; then
-              cross build --release --target=${{ matrix.config.target }}
+              cross build --release --target=${{ matrix.config.target }} --bin databend-benchmark
           else
-              cargo build --release --target=${{ matrix.config.target }}
+              cargo build --release --target=${{ matrix.config.target }} --bin databend-benchmark
           fi
           mkdir -p ./distro
           mv ./target/${{ matrix.config.target }}/release/databend-benchmark  ./distro
