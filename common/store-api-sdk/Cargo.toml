@@ -1,0 +1,46 @@
+[package]
+name = "common-store-api-sdk"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-arrow = {path = "../arrow"}
+common-datablocks= {path = "../datablocks"}
+common-datavalues = {path = "../datavalues"}
+common-exception= {path = "../exception"}
+common-metatypes = {path = "../metatypes"}
+common-planners = {path = "../planners"}
+common-runtime = {path = "../runtime"}
+common-streams = {path = "../streams"}
+common-tracing = {path = "../tracing"}
+common-store-api= {path = "../store-api"}
+common-infallible = {path = "../infallible"}
+
+# Github dependencies
+
+# Crates.io dependencies
+futures = "0.3"
+jwt-simple = "0.10.4"
+log = "0.4"
+prost = "0.8.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio-stream = "0.1"
+tonic = { version = "0.5.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+hyper = "0.14.13"
+lazy_static = "1.4.0"
+trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
+async-trait = "0.1"
+
+[dev-dependencies]
+pretty_assertions = "0.7"
+
+[build-dependencies]
+tonic-build = "0.5.2"
+
+[features]
+mocks = []

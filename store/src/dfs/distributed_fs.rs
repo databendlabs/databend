@@ -18,13 +18,13 @@ use async_trait::async_trait;
 use common_exception::exception;
 use common_exception::ErrorCode;
 use common_tracing::tracing;
+use metasrv::meta_service::Cmd;
+use metasrv::meta_service::LogEntry;
+use metasrv::meta_service::MetaNode;
 
 use crate::fs::FileSystem;
 use crate::fs::ListResult;
 use crate::localfs::LocalFS;
-use crate::meta_service::Cmd;
-use crate::meta_service::LogEntry;
-use crate::meta_service::MetaNode;
 
 /// DFS is a distributed file system impl.
 /// When a file is added, it stores it locally, commit the this action into distributed meta data(something like a raft group).

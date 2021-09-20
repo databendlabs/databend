@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flights::StoreClient;
 use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -27,7 +26,6 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
-use common_store_api::MetaApi;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::wrappers::ReceiverStream;
@@ -35,7 +33,7 @@ use uuid::Uuid;
 
 use crate::catalogs::Table;
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::table::fuse::parse_storage_scheme;
+//use crate::datasources::table::fuse::parse_storage_scheme;
 use crate::datasources::table::fuse::project_col_idx;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
@@ -49,18 +47,17 @@ use crate::datasources::table::fuse::TableSnapshot;
 use crate::datasources::table::fuse::TableStorageScheme;
 use crate::sessions::DatabendQueryContextRef;
 
-pub struct FuseTable<T = StoreClient> {
+pub struct FuseTable {
     pub db: String,
     pub name: String,
     pub schema: DataSchemaRef,
     // Storage scheme is fixed during the whole life of the table
     // Local | FuseDFS | S3 | ... etc.
     pub storage_scheme: TableStorageScheme,
-    pub meta_client: T,
     pub local: bool,
 }
 
-impl<T> FuseTable<T> {
+impl FuseTable {
     pub(crate) async fn save_segment(
         &self,
         location: &str,
@@ -87,34 +84,39 @@ impl<T> FuseTable<T> {
     }
 }
 
-impl<T> FuseTable<T>
-where T: MetaApi + Send + Sync + 'static
-{
+impl FuseTable {
     pub fn try_create(
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        options: TableOptions,
-        meta_client: T,
+        _db: String,
+        _name: String,
+        _schema: DataSchemaRef,
+        _options: TableOptions,
     ) -> Result<Box<dyn Table>> {
-        let storage_scheme = parse_storage_scheme(options.get("STORAGE_SCHEME"))?;
-        let res = FuseTable {
-            db,
-            name,
-            schema,
-            storage_scheme,
-            meta_client,
-            local: true,
-        };
-
-        Ok(Box::new(res))
+        todo!()
     }
+
+    //    pub fn with_meta_client(
+    //        db: String,
+    //        name: String,
+    //        schema: DataSchemaRef,
+    //        options: TableOptions,
+    //        meta_client: T,
+    //    ) -> Result<Box<dyn Table>> {
+    //        let storage_scheme = parse_storage_scheme(options.get("STORAGE_SCHEME"))?;
+    //        let res = FuseTable {
+    //            db,
+    //            name,
+    //            schema,
+    //            storage_scheme,
+    //            meta_client,
+    //            local: true,
+    //        };
+    //
+    //        Ok(Box::new(res))
+    //    }
 }
 
 #[async_trait::async_trait]
-impl<T> Table for FuseTable<T>
-where T: MetaApi + Send + Sync + 'static
-{
+impl Table for FuseTable {
     fn name(&self) -> &str {
         &self.name
     }
@@ -240,9 +242,9 @@ where T: MetaApi + Send + Sync + 'static
         let tbl_snapshot = self
             .table_snapshot(&ctx)?
             .unwrap_or_else(TableSnapshot::new);
-        let snapshot_id = tbl_snapshot.snapshot_id;
+        let _snapshot_id = tbl_snapshot.snapshot_id;
         let new_snapshot: TableSnapshot = self.merge_seg(seg_loc, tbl_snapshot);
-        let new_snapshot_id = new_snapshot.snapshot_id;
+        let _new_snapshot_id = new_snapshot.snapshot_id;
 
         let snapshot_loc = {
             let uuid = Uuid::new_v4().to_simple().to_string();
@@ -253,15 +255,15 @@ where T: MetaApi + Send + Sync + 'static
             .await?;
 
         // 4. commit
-        let table_id = insert_plan.tbl_id;
+        let _table_id = insert_plan.tbl_id;
         // TODO simple retry strategy
-        self.meta_client
-            .commit_table(
-                table_id,
-                snapshot_id.to_simple().to_string(),
-                new_snapshot_id.to_simple().to_string(),
-            )
-            .await?;
+        // self.meta_client
+        //     .commit_table(
+        //         table_id,
+        //         snapshot_id.to_simple().to_string(),
+        //         new_snapshot_id.to_simple().to_string(),
+        //     )
+        //     .await?;
         Ok(())
     }
 
@@ -274,9 +276,7 @@ where T: MetaApi + Send + Sync + 'static
     }
 }
 
-impl<T> FuseTable<T>
-where T: MetaApi + Sync + Send + 'static
-{
+impl FuseTable {
     fn table_snapshot(&self, ctx: &DatabendQueryContextRef) -> Result<Option<TableSnapshot>> {
         let schema = self.schema()?;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {

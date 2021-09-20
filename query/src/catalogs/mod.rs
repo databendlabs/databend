@@ -13,25 +13,25 @@
 // limitations under the License.
 //
 
+pub use catalog::Catalog;
+pub use database::Database;
+pub use impls::util::in_memory_metas::InMemoryMetas;
+//pub use meta_backend::MetaBackend;
+pub use table::Table;
+pub use table::TablePtr;
+pub use table_function::TableFunction;
+//pub use database_engine::DatabaseEngine;
+pub use table_meta::Meta;
+pub use table_meta::TableFunctionMeta;
+pub use table_meta::TableMeta;
+
+pub use crate::datasources::database_engine::DatabaseEngine;
+
 mod catalog;
 mod database;
-mod database_engine;
-mod meta;
 mod table;
 mod table_function;
 mod table_meta;
 
 pub mod impls;
-mod meta_backend;
-
-pub use catalog::Catalog;
-pub use database::Database;
-pub use database_engine::DatabaseEngine;
-pub use meta::Meta;
-pub use meta_backend::MetaBackend;
-pub use table::Table;
-pub use table::TablePtr;
-pub use table_function::TableFunction;
-pub use table_meta::InMemoryMetas;
-pub use table_meta::TableFunctionMeta;
-pub use table_meta::TableMeta;
+pub mod meta_backend;

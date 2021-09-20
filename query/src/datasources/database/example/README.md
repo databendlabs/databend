@@ -93,7 +93,7 @@ pub trait MetaBackend: Sync + Send {
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }
 ```
-See [example_meta_backend.rs](example_meta_backend.rs)
+See [embedded_meta_backend.rs](embedded_meta_backend.rs)
 
 ### Databases
 
@@ -209,10 +209,6 @@ See [example_table.rs](example_table.rs)
 Register the `EXAMPLE` datasource to Catalog in sessions.rs:
 ```rust
 let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
-// Register local/system and remote database engine.
-catalog.register_db_engine("LOCAL", Arc::new(LocalDatabases::create(conf.clone())))?;
-catalog.register_db_engine("SYSTEM", Arc::new(SystemDatabases::create(conf.clone())))?;
-catalog.register_db_engine("REMOTE", Arc::new(RemoteDatabases::create(conf.clone())))?;
 // Register the example for demo.
 catalog.register_db_engine("EXAMPLE", Arc::new(ExampleDatabases::create(conf.clone())))?;
 

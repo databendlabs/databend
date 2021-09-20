@@ -14,6 +14,7 @@
 //
 
 use std::convert::TryInto;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
@@ -31,21 +32,19 @@ use crate::user::utils;
 
 pub static USER_API_KEY_PREFIX: &str = "__fd_users/";
 
-pub struct UserMgr<KV> {
-    kv_api: KV,
+pub struct UserMgr {
+    kv_api: Arc<dyn KVApi>,
 }
 
-impl<T> UserMgr<T>
-where T: KVApi
-{
+impl UserMgr {
     #[allow(dead_code)]
-    pub fn new(kv_api: T) -> Self {
+    pub fn new(kv_api: Arc<dyn KVApi>) -> Self {
         UserMgr { kv_api }
     }
 }
 
 #[async_trait]
-impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
+impl UserMgrApi for UserMgr {
     async fn add_user(&mut self, user_info: UserInfo) -> common_exception::Result<u64> {
         let value = serde_json::to_vec(&user_info)?;
         let key = utils::prepend(&user_info.name);

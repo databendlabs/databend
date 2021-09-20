@@ -14,23 +14,25 @@
 
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::Result;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
-use common_store_api::kv_api::MGetKVActionResult;
+use common_runtime::tokio::sync::Mutex;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::PrefixListReply;
 use common_store_api::UpsertKVActionResult;
+use common_store_api_sdk::kv_api_impl::MGetKVActionResult;
 use common_tracing::tracing;
-use databend_store::configs;
-use databend_store::meta_service::AppliedState;
-use databend_store::meta_service::Cmd;
-use databend_store::meta_service::LogEntry;
-use databend_store::meta_service::StateMachine;
+use metasrv::configs;
+use metasrv::meta_service::AppliedState;
+use metasrv::meta_service::Cmd;
+use metasrv::meta_service::LogEntry;
+use metasrv::meta_service::StateMachine;
 
 /// Local storage that provides the API defined by `KVApi`.
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
@@ -41,7 +43,7 @@ use databend_store::meta_service::StateMachine;
 /// - A sled::Db has to be a singleton, according to sled doc.
 /// - Every unit test has to generate a unique sled::Tree name to create a `LocalKVStore`.
 pub struct LocalKVStore {
-    inner: StateMachine,
+    inner: Arc<Mutex<StateMachine>>,
 }
 
 impl LocalKVStore {
@@ -58,16 +60,18 @@ impl LocalKVStore {
     pub async fn new(name: &str) -> common_exception::Result<LocalKVStore> {
         let mut config = configs::Config::empty();
 
-        config.sled_tree_prefix = format!("{}-local-kv-store", name);
+        config.meta_config.sled_tree_prefix = format!("{}-local-kv-store", name);
 
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.meta_no_sync = true;
+            config.meta_config.no_sync = true;
         }
 
         Ok(LocalKVStore {
             // StateMachine does not need to be replaced, thus we always use id=0
-            inner: StateMachine::open(&config, 0).await?,
+            inner: Arc::new(Mutex::new(
+                StateMachine::open(&config.meta_config, 0).await?,
+            )),
         })
     }
 
@@ -94,7 +98,7 @@ impl LocalKVStore {
 #[async_trait]
 impl KVApi for LocalKVStore {
     async fn upsert_kv(
-        &mut self,
+        &self,
         key: &str,
         seq: MatchSeq,
         value: Option<Vec<u8>>,
@@ -107,10 +111,8 @@ impl KVApi for LocalKVStore {
             value_meta,
         };
 
-        let res = self
-            .inner
-            .apply_non_dup(&LogEntry { txid: None, cmd })
-            .await?;
+        let mut sm = self.inner.lock().await;
+        let res = sm.apply_non_dup(&LogEntry { txid: None, cmd }).await?;
 
         match res {
             AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
@@ -121,7 +123,7 @@ impl KVApi for LocalKVStore {
     }
 
     async fn update_kv_meta(
-        &mut self,
+        &self,
         key: &str,
         seq: MatchSeq,
         value_meta: Option<KVMeta>,
@@ -133,10 +135,8 @@ impl KVApi for LocalKVStore {
             value_meta,
         };
 
-        let res = self
-            .inner
-            .apply_non_dup(&LogEntry { txid: None, cmd })
-            .await?;
+        let mut sm = self.inner.lock().await;
+        let res = sm.apply_non_dup(&LogEntry { txid: None, cmd }).await?;
 
         match res {
             AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
@@ -146,18 +146,21 @@ impl KVApi for LocalKVStore {
         }
     }
 
-    async fn get_kv(&mut self, key: &str) -> Result<GetKVActionResult> {
-        let res = self.inner.get_kv(key)?;
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionResult> {
+        let sm = self.inner.lock().await;
+        let res = sm.get_kv(key)?;
         Ok(GetKVActionResult { result: res })
     }
 
-    async fn mget_kv(&mut self, key: &[String]) -> Result<MGetKVActionResult> {
-        let res = self.inner.mget_kv(key)?;
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionResult> {
+        let sm = self.inner.lock().await;
+        let res = sm.mget_kv(key)?;
         Ok(MGetKVActionResult { result: res })
     }
 
-    async fn prefix_list_kv(&mut self, prefix: &str) -> Result<PrefixListReply> {
-        let res = self.inner.prefix_list_kv(prefix)?;
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply> {
+        let sm = self.inner.lock().await;
+        let res = sm.prefix_list_kv(prefix)?;
         Ok(res)
     }
 }

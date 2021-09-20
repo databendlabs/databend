@@ -23,6 +23,7 @@ use common_runtime::tokio::sync::oneshot::Receiver;
 use common_runtime::tokio::sync::oneshot::Sender;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
+use metasrv::meta_service::MetaNode;
 use tonic::transport;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -32,7 +33,6 @@ use crate::api::rpc::StoreFlightImpl;
 use crate::configs::Config;
 use crate::dfs::Dfs;
 use crate::localfs::LocalFS;
-use crate::meta_service::MetaNode;
 
 pub struct StoreServer {
     conf: Config,
@@ -93,19 +93,21 @@ impl StoreServer {
         // - open mode: open an existent node.
         tracing::info!(
             "Starting MetaNode boot:{} single: {} with config: {:?}",
-            self.conf.boot,
-            self.conf.single,
+            self.conf.meta_config.boot,
+            self.conf.meta_config.single,
             self.conf
         );
 
-        let mn = if self.conf.boot {
-            MetaNode::boot(0, &self.conf).await?
-        } else if self.conf.single {
+        let meta_config = &self.conf.meta_config;
+
+        let mn = if meta_config.boot {
+            MetaNode::boot(0, meta_config).await?
+        } else if meta_config.single {
             let (mn, _is_open) =
-                MetaNode::open_create_boot(&self.conf, Some(()), Some(()), Some(())).await?;
+                MetaNode::open_create_boot(meta_config, Some(()), Some(()), Some(())).await?;
             mn
         } else {
-            MetaNode::open(&self.conf).await?
+            MetaNode::open(meta_config).await?
         };
         tracing::info!("Done starting MetaNode: {:?}", self.conf);
 

@@ -24,10 +24,8 @@ use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
-// use common_arrow::parquet::arrow::ArrowWriter;
-// use common_arrow::parquet::file::writer::InMemoryWriteableCursor;
 use common_datablocks::DataBlock;
-use common_flights::storage_api_impl::AppendResult;
+use common_store_api_sdk::storage_api_impl::AppendResult;
 use futures::StreamExt;
 use uuid::Uuid;
 

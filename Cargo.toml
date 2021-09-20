@@ -6,7 +6,7 @@ members = [
     "common/cache",
     "common/datablocks",
     "common/datavalues",
-    "common/flights",
+    "common/store-api-sdk",
     "common/functions",
     "common/metatypes",
     "common/infallible",
@@ -22,10 +22,13 @@ members = [
     "common/management",
     "common/io",
     "common/cache",
+    "common/uniq_id",
     "common/clickhouse-srv",
 
     # Query
     "query",
+
+    "metasrv",
 
     # Store
     "store",

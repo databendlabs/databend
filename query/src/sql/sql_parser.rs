@@ -479,7 +479,7 @@ impl<'a> DfParser<'a> {
     fn parse_database_engine(&mut self) -> Result<String, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok("Remote".to_string());
+            return Ok("Default".to_string());
         }
 
         self.parser.expect_token(&Token::Eq)?;
