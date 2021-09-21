@@ -33,13 +33,13 @@ use uuid::Uuid;
 
 use crate::catalogs::Table;
 use crate::datasources::dal::DataAccessor;
-//use crate::datasources::table::fuse::parse_storage_scheme;
 use crate::datasources::table::fuse::project_col_idx;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::read_table_snapshot;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
+use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::MetaInfoReader;
 use crate::datasources::table::fuse::SegmentInfo;
@@ -230,7 +230,8 @@ impl Table for FuseTable {
         let data_accessor = self.data_accessor(&ctx)?;
 
         // 2. Append blocks to storage
-        let segment_info = self.append_blocks(ctx.clone(), block_stream).await?;
+        let appender = BlockAppender::new(data_accessor.clone());
+        let segment_info = appender.append_blocks(block_stream).await?;
         let seg_loc = {
             let uuid = Uuid::new_v4().to_simple().to_string();
             segment_info_location(&uuid)

@@ -19,7 +19,6 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
@@ -36,10 +35,8 @@ use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::ColStats;
 use crate::datasources::table::fuse::ColumnId;
-use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct BlockAppender {
     data_accessor: Arc<dyn DataAccessor>,
@@ -64,8 +61,6 @@ impl BlockAppender {
 
             let row_count = block.num_rows() as u64;
             let block_in_memory_size = block.memory_size() as u64;
-
-            let data_accessor = self.data_accessor(&ctx)?;
 
             let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
             let location = block_location(&part_uuid);

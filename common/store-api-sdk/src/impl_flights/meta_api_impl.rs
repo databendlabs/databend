@@ -13,14 +13,12 @@
 // limitations under the License.
 //
 
-use common_exception::ErrorCode;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_store_api::CommitTableReply;
 pub use common_store_api::CreateDatabaseActionResult;
 pub use common_store_api::CreateTableActionResult;
 pub use common_store_api::DatabaseMetaReply;
