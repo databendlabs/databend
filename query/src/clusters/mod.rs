@@ -13,18 +13,10 @@
 // limitations under the License.
 
 #[cfg(test)]
-mod address_test;
-#[cfg(test)]
 mod cluster_test;
-#[cfg(test)]
-mod node_test;
 
-mod address;
 mod cluster;
-mod node;
-mod metastore_cluster;
 
-pub use node::Node;
 pub use cluster::Cluster;
 pub use cluster::ClusterDiscovery;
 

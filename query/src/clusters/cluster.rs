@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry::Occupied;
-use std::collections::hash_map::Entry::Vacant;
-use std::collections::HashMap;
-use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,19 +26,16 @@ use common_runtime::tokio::sync::Mutex;
 use common_runtime::tokio::time::sleep as tokio_async_sleep;
 
 use crate::api::FlightClient;
-use crate::clusters::address::Address;
-use crate::clusters::node::Node;
 use crate::configs::Config;
 use common_store_api_sdk::{StoreApiProvider, KVApi, ConnectionFactory};
 
 pub type ClusterRef = Arc<Cluster>;
 pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
-type NamespaceApiProvider = Arc<Mutex<dyn NamespaceApi>>;
 
 pub struct ClusterDiscovery {
     local_id: String,
     heartbeat: ClusterHeartbeat,
-    api_provider: NamespaceApiProvider,
+    api_provider: Arc<Mutex<dyn NamespaceApi>>,
 }
 
 impl ClusterDiscovery {
@@ -86,7 +79,7 @@ impl ClusterDiscovery {
         }
     }
 
-    fn create_provider(cfg: &Config, kv_api: Arc<dyn KVApi>) -> Result<(Duration, NamespaceApiProvider)> {
+    fn create_provider(cfg: &Config, kv_api: Arc<dyn KVApi>) -> Result<(Duration, Arc<Mutex<dyn NamespaceApi>>)> {
         let tenant = &cfg.query.tenant;
         let namespace = &cfg.query.namespace;
         let lift_time = Duration::from_secs(60);
@@ -209,11 +202,7 @@ struct ClusterHeartbeat {
 }
 
 impl ClusterHeartbeat {
-    pub fn create(
-        lift_time: Duration,
-        local_node_id: String,
-        provider: Arc<Mutex<dyn NamespaceApi>>,
-    ) -> ClusterHeartbeat {
+    pub fn create(lift_time: Duration, local_node_id: String, provider: Arc<Mutex<dyn NamespaceApi>>) -> ClusterHeartbeat {
         ClusterHeartbeat {
             lift_time,
             local_node_id,

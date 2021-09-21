@@ -47,7 +47,6 @@ use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::catalogs::TablePtr;
-use crate::clusters::Node;
 use common_management::NodeInfo;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;

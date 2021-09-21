@@ -31,7 +31,6 @@ use futures::StreamExt;
 
 use crate::api::CancelAction;
 use crate::api::FlightAction;
-use crate::clusters::Node;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
