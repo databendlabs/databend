@@ -23,9 +23,9 @@ use common_metatypes::Operation;
 use maplit::btreeset;
 use sled::IVec;
 
-use crate::meta_service::state_machine::SnapshotKeyValue;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
+use crate::raft::state_machine::SnapshotKeyValue;
 
 /// Logs and the expected snapshot for testing snapshot.
 pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {

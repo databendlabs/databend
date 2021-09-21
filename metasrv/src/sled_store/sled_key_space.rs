@@ -27,12 +27,12 @@ use sled::IVec;
 
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
-use crate::meta_service::Node;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftStateKey;
 use crate::meta_service::RaftStateValue;
-use crate::meta_service::StateMachineMetaKey;
-use crate::meta_service::StateMachineMetaValue;
+use crate::raft::state_machine::Node;
+use crate::raft::state_machine::StateMachineMetaKey;
+use crate::raft::state_machine::StateMachineMetaValue;
 use crate::sled_store::SeqNum;
 use crate::sled_store::SledOrderedSerde;
 use crate::sled_store::SledSerde;
