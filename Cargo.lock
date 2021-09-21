@@ -234,9 +234,9 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "axum"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6eb8eeaec8dea1b26a8f6f2b7a5aff11465292023a91a3b045bf3fe2830a1944"
+checksum = "b6519a24c07bab4effe38e226c447faef56869f99aa66aa92502aba7ad47b168"
 dependencies = [
  "async-trait",
  "bitflags",
@@ -3177,7 +3177,7 @@ dependencies = [
 [[package]]
 name = "msql-srv"
 version = "0.9.6"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=60e369b#60e369b78fa092c95177428fda1c756342733064"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=9c706a3#9c706a3fbc210f3b49c06a06e0ce9518b2cfa38e"
 dependencies = [
  "byteorder",
  "chrono",
@@ -5657,9 +5657,9 @@ checksum = "360dfd1d6d30e05fda32ace2c8c70e9c0a9da713275777f5a4dbb8a1893930c6"
 
 [[package]]
 name = "tracing"
-version = "0.1.27"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ba9ab62b7d6497a8638dfda5e5c4fb3b2d5a7fca4118f2b96151c8ef1a437e"
+checksum = "84f96e095c0c82419687c20ddf5cb3eadb61f4e1405923c9dc8e53a1adacbda8"
 dependencies = [
  "cfg-if 1.0.0",
  "log",
@@ -5762,9 +5762,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.23"
+version = "0.2.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c42e73a9d277d4d2b6a88389a137ccf3c58599660b17e8f5fc39305e490669"
+checksum = "fdd0568dbfe3baf7048b7908d2b32bca0d81cd56bec6d2a8f894b01d74f86be3"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",
