@@ -152,7 +152,7 @@ impl StoreClient {
                 act
             ))),
             Some(resp) => {
-                info!("do_action: resp: {:}", flight_result_to_str(&resp));
+                log::debug!("do_action: resp: {:}", flight_result_to_str(&resp));
                 let v = serde_json::from_slice::<R>(&resp.body)?;
                 Ok(v)
             }

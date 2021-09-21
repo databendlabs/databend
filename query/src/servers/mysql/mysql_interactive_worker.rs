@@ -38,6 +38,7 @@ use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::DfHint;
 use crate::sql::PlanParser;
+use common_planners::PlanNode;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,
@@ -233,20 +234,10 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let query_parser = PlanParser::create(context.clone());
         let (plan, hints) = query_parser.build_with_hint_from_sql(query);
 
-        let instant = Instant::now();
-        let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
-        let data_stream = interpreter.execute().await?;
-        histogram!(super::mysql_metrics::METRIC_INTERPRETER_USEDTIME, instant.elapsed());
-
         match hints.iter().find(|v| v.error_code.is_some()).and_then(|x| x.error_code) {
-            None => {
-                let data_collector = data_stream.collect::<Result<Vec<DataBlock>>>();
-                let query_result = data_collector.await;
-                query_result.map(|data| (data, Self::extra_info(&context, instant)))
-            },
+            None => Self::exec_query(plan, &context).await,
             Some(hint_error_code) => {
-                let data_collector = data_stream.collect::<Result<Vec<DataBlock>>>();
-                match data_collector.await {
+                match Self::exec_query(plan, &context).await {
                     Ok(_) => Err(ErrorCode::UnexpectedError(format!(
                         "Expected server error code: {} but got: Ok.", hint_error_code
                     ))),
@@ -264,6 +255,22 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 }
             }
         }
+    }
+
+    async fn exec_query(
+        plan: Result<PlanNode>,
+        context: &DatabendQueryContextRef
+    ) -> Result<(Vec<DataBlock>, String)>
+    {
+        let instant = Instant::now();
+
+        let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
+        let data_stream = interpreter.execute().await?;
+        histogram!(super::mysql_metrics::METRIC_INTERPRETER_USEDTIME, instant.elapsed());
+
+        let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
+        let query_result = collector.await;
+        query_result.map(|data| (data, Self::extra_info(&context, instant)))
     }
 
     fn extra_info(context: &DatabendQueryContextRef, instant: Instant) -> String {
