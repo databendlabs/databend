@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::all)]
-pub mod protobuf {
-    include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
-}
+pub mod applied_state;
+pub mod sm;
+pub mod snapshot;
+pub mod state_machine_meta;
 
+pub mod placement;
 #[cfg(test)]
-#[macro_use]
-pub mod tests;
+mod placement_test;
+#[cfg(test)]
+mod state_machine_test;
 
-pub mod api;
-pub mod configs;
-pub mod executor;
-pub mod meta_service;
-pub mod metrics;
-pub mod raft;
-pub mod sled_store;
+pub use sm::Node;
+pub use sm::Replication;
+pub use sm::SerializableSnapshot;
+pub use sm::Slot;
+pub use sm::SnapshotKeyValue;
+pub use sm::StateMachine;
+pub use snapshot::Snapshot;
+pub use state_machine_meta::StateMachineMetaKey;
+pub use state_machine_meta::StateMachineMetaValue;

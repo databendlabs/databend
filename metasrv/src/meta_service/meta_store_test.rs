@@ -24,12 +24,12 @@ use common_runtime::tokio;
 use common_tracing::tracing;
 use maplit::btreeset;
 
-use crate::meta_service::state_machine::SerializableSnapshot;
-use crate::meta_service::state_machine_meta::StateMachineMetaKey::LastMembership;
 use crate::meta_service::testing::pretty_snapshot;
 use crate::meta_service::testing::snapshot_logs;
 use crate::meta_service::MetaRaftStore;
-use crate::meta_service::StateMachineMetaValue;
+use crate::raft::state_machine::SerializableSnapshot;
+use crate::raft::state_machine::StateMachineMetaKey::LastMembership;
+use crate::raft::state_machine::StateMachineMetaValue;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

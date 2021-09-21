@@ -21,9 +21,9 @@ use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta_service::Node;
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
+use crate::raft::state_machine::Node;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.

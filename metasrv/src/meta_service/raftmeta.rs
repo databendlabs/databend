@@ -55,7 +55,6 @@ use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
-use crate::meta_service::state_machine::SerializableSnapshot;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -63,11 +62,12 @@ use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
 use crate::meta_service::Network;
-use crate::meta_service::Node;
 use crate::meta_service::RetryableError;
 use crate::meta_service::ShutdownError;
-use crate::meta_service::Snapshot;
-use crate::meta_service::StateMachine;
+use crate::raft::state_machine::Node;
+use crate::raft::state_machine::SerializableSnapshot;
+use crate::raft::state_machine::Snapshot;
+use crate::raft::state_machine::StateMachine;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///

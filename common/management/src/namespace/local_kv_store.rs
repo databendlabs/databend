@@ -32,7 +32,7 @@ use metasrv::configs;
 use metasrv::meta_service::AppliedState;
 use metasrv::meta_service::Cmd;
 use metasrv::meta_service::LogEntry;
-use metasrv::meta_service::StateMachine;
+use metasrv::raft::state_machine::StateMachine;
 
 /// Local storage that provides the API defined by `KVApi`.
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
