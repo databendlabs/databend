@@ -177,6 +177,7 @@ build_exceptions! {
     AuthenticateFailure(51),
     TLSConfigurationFailure(52),
     UnknownSession(53),
+    UnexpectedError(54),
 
     // uncategorized
     UnexpectedResponseType(600),

@@ -230,43 +230,45 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let data_stream = interpreter.execute().await?;
         histogram!(super::mysql_metrics::METRIC_INTERPRETER_USEDTIME, instant.elapsed());
 
-        match data_stream.collect::<Result<Vec<DataBlock>>>().await {
-            Ok(blocks) => {
-                let progress = context.get_progress_value();
-                let seconds = instant.elapsed().as_millis() as f64 / 1000f64;
-                let extra_info = format!(
-                    "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
-                    progress.read_rows,
-                    convert_byte_size(progress.read_bytes as f64),
-                    seconds,
-                    convert_number_size((progress.read_rows as f64) / (seconds as f64)),
-                    convert_byte_size((progress.read_bytes as f64) / (seconds as f64)),
-                );
-
-                histogram!(
-                    super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-                    instant.elapsed()
-                );
-
-                Ok((blocks, extra_info))
+        match hints.iter().find(|v| v.error_code.is_some()).and_then(|x| x.error_code) {
+            None => {
+                let data_collector = data_stream.collect::<Result<Vec<DataBlock>>>();
+                let query_result = data_collector.await;
+                query_result.map(|data| (data, Self::extra_info(&context, instant)))
             },
-            Err(cause) => match hints.iter().find(|v| v.error_code.is_some()) {
-                None => Err(cause),
-                Some(cause_hint) => match cause_hint.error_code {
-                    None => Err(cause),
-                    Some(code) if code == cause.code() => {
-                        Ok((vec![DataBlock::empty()], String::from("")))
-                    },
-                    Some(code) => {
-                        let actual_code = cause.code();
-                        Err(cause.add_message(format!(
-                            "Expected server error code: {} but got: {}.",
-                            code, actual_code
-                        )))
-                    },
-                },
-            },
+            Some(hint_error_code) => {
+                let data_collector = data_stream.collect::<Result<Vec<DataBlock>>>();
+                match data_collector.await {
+                    Ok(_) => Err(ErrorCode::UnexpectedError(format!(
+                        "Expected server error code: {} but got: Ok.", hint_error_code
+                    ))),
+                    Err(error_code) => {
+                        if hint_error_code == error_code.code() {
+                            Ok((vec![DataBlock::empty()], String::from("")))
+                        } else {
+                            let actual_code = error_code.code();
+                            Err(error_code.add_message(format!(
+                                "Expected server error code: {} but got: {}.",
+                                hint_error_code, actual_code
+                            )))
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    fn extra_info(context: &DatabendQueryContextRef, instant: Instant) -> String {
+        let progress = context.get_progress_value();
+        let seconds = instant.elapsed().as_millis() as f64 / 1000f64;
+        format!(
+            "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
+            progress.read_rows,
+            convert_byte_size(progress.read_bytes as f64),
+            seconds,
+            convert_number_size((progress.read_rows as f64) / (seconds as f64)),
+            convert_byte_size((progress.read_bytes as f64) / (seconds as f64)),
+        )
     }
 
     fn do_init(&mut self, database_name: &str) -> Result<()> {
