@@ -23,8 +23,8 @@ use common_metatypes::KVValue;
 use common_metatypes::SeqValue;
 use sled::IVec;
 
-use crate::meta_service::sled_serde::SledOrderedSerde;
-use crate::meta_service::SledSerde;
+use crate::sled_store::SledOrderedSerde;
+use crate::sled_store::SledSerde;
 
 pub type LogIndex = u64;
 pub type Term = u64;

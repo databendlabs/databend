@@ -26,3 +26,4 @@ pub mod configs;
 pub mod executor;
 pub mod meta_service;
 pub mod metrics;
+pub mod sled_store;

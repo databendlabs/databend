@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // RPC API service.
+    // Flight API service.
     {
         let srv = FlightServer::create(conf.clone());
         info!(

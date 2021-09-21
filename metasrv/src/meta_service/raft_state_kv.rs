@@ -21,8 +21,8 @@ use serde::Serialize;
 use sled::IVec;
 
 use crate::meta_service::NodeId;
-use crate::meta_service::SledOrderedSerde;
-use crate::meta_service::SledSerde;
+use crate::sled_store::SledOrderedSerde;
+use crate::sled_store::SledSerde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RaftStateKey {
