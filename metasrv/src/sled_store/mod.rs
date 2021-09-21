@@ -21,8 +21,6 @@ pub mod sled_serde;
 pub mod sled_tree;
 
 #[cfg(test)]
-mod sled_serde_test;
-#[cfg(test)]
 mod sled_tree_test;
 
 pub use seq_num::SeqNum;
