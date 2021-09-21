@@ -655,7 +655,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
+async fn test_action_handler_truncate_table() -> anyhow::Result<()> {
     // - Bring up an ActionHandler backed with a Dfs
     // - Add a table.
     // - Assert getting present and absent databases.
@@ -673,7 +673,7 @@ async fn test_action_handler_trancate_table() -> anyhow::Result<()> {
     fn case(db_name: &'static str, table_name: &'static str, want: Result<(), &str>) -> T {
         let want = match want {
             Ok(..) => Ok(TruncateTableResult {
-                trancated_table_data_parts_count: 1,
+                truncated_table_data_parts_count: 1,
             }),
             Err(err_str) => Err(ErrorCode::UnknownTable(err_str)),
         };

@@ -88,7 +88,7 @@ pub struct AppendResult {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TruncateTableResult {
-    pub trancated_table_data_parts_count: usize,
+    pub truncated_table_data_parts_count: usize,
 }
 
 // TODO A better name, we already have a SendableDataBlockStream

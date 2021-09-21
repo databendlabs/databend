@@ -78,17 +78,17 @@ impl RequestHandler<TruncateTableAction> for ActionHandler {
                     if let Some(result) = result {
                         if result == 0 {
                             Ok(TruncateTableResult {
-                                trancated_table_data_parts_count: prev,
+                                truncated_table_data_parts_count: prev,
                             })
                         } else {
-                            Err(ErrorCode::TrancateTableFailedError(format!(
-                                "table trancate failed: {:}",
+                            Err(ErrorCode::TruncateTableFailedError(format!(
+                                "table truncate failed: {:}",
                                 tbl_name
                             )))
                         }
                     } else {
-                        Err(ErrorCode::TrancateTableFailedError(format!(
-                            "table trancate failed: {:}",
+                        Err(ErrorCode::TruncateTableFailedError(format!(
+                            "table truncate failed: {:}",
                             tbl_name
                         )))
                     }
