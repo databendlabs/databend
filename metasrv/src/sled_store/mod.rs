@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::all)]
-pub mod protobuf {
-    include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
-}
+//! sled_store implement a key-value like store backed by sled::Tree.
+//!
+//! It is used by raft for log and state machine storage.
+pub mod seq_num;
+pub mod sled_key_space;
+pub mod sled_serde;
+pub mod sled_tree;
 
 #[cfg(test)]
-#[macro_use]
-pub mod tests;
+mod sled_serde_test;
+#[cfg(test)]
+mod sled_tree_test;
 
-pub mod api;
-pub mod configs;
-pub mod executor;
-pub mod meta_service;
-pub mod metrics;
-pub mod sled_store;
+pub use seq_num::SeqNum;
+pub use sled_serde::SledOrderedSerde;
+pub use sled_serde::SledSerde;
+pub use sled_tree::AsKeySpace;
+pub use sled_tree::SledTree;
+pub use sled_tree::SledValueToKey;

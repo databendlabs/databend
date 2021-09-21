@@ -14,9 +14,9 @@
 
 use std::ops::Bound;
 
-use crate::meta_service::sled_serde::SledOrderedSerde;
-use crate::meta_service::sled_serde::SledRangeSerde;
 use crate::meta_service::NodeId;
+use crate::sled_store::sled_serde::SledOrderedSerde;
+use crate::sled_store::sled_serde::SledRangeSerde;
 
 #[test]
 fn test_node_id_serde() -> anyhow::Result<()> {

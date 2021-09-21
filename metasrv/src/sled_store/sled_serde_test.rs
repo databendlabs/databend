@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::meta_service::sled_serde::SledOrderedSerde;
 use crate::meta_service::NodeId;
+use crate::sled_store::sled_serde::SledOrderedSerde;
 
 #[test]
 fn test_serde_node_id() -> anyhow::Result<()> {

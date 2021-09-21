@@ -45,21 +45,21 @@ use sled::IVec;
 use crate::configs;
 use crate::meta_service::placement::rand_n_from_m;
 use crate::meta_service::raft_db::get_sled_db;
-use crate::meta_service::sled_key_space;
-use crate::meta_service::sled_key_space::StateMachineMeta;
 use crate::meta_service::state_machine_meta::StateMachineMetaKey::LastMembership;
 use crate::meta_service::AppliedState;
-use crate::meta_service::AsKeySpace;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
 use crate::meta_service::Placement;
-use crate::meta_service::SledSerde;
-use crate::meta_service::SledTree;
 use crate::meta_service::StateMachineMetaKey;
 use crate::meta_service::StateMachineMetaKey::Initialized;
 use crate::meta_service::StateMachineMetaKey::LastApplied;
 use crate::meta_service::StateMachineMetaValue;
+use crate::sled_store::sled_key_space;
+use crate::sled_store::sled_key_space::StateMachineMeta;
+use crate::sled_store::AsKeySpace;
+use crate::sled_store::SledSerde;
+use crate::sled_store::SledTree;
 
 /// seq number key to generate seq for the value of a `generic_kv` record.
 const SEQ_GENERIC_KV: &str = "generic_kv";
