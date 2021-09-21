@@ -30,11 +30,11 @@ use crate::api::rpc::MetaFlightImpl;
 use crate::configs::Config;
 use crate::meta_service::MetaNode;
 
-pub struct MetaServer {
+pub struct FlightServer {
     conf: Config,
 }
 
-impl MetaServer {
+impl FlightServer {
     pub fn create(conf: Config) -> Self {
         Self { conf }
     }

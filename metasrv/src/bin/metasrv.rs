@@ -15,8 +15,8 @@
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use log::info;
+use metasrv::api::FlightServer;
 use metasrv::api::HttpService;
-use metasrv::api::MetaServer;
 use metasrv::configs::Config;
 use metasrv::meta_service::raft_db::init_sled_db;
 use metasrv::metrics::MetricService;
@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // RPC API service.
     {
-        let srv = MetaServer::create(conf.clone());
+        let srv = FlightServer::create(conf.clone());
         info!(
             "Databend-Metasrv API server listening on {}",
             conf.flight_api_address
