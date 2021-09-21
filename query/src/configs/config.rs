@@ -387,7 +387,9 @@ impl QueryConfig {
     }
 }
 
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 #[serde(default)]
 pub struct Config {
     #[structopt(flatten)]
