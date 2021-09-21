@@ -14,13 +14,13 @@
 
 // The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
 
+mod flight_server;
 mod http;
 mod http_service;
 pub mod rpc;
-mod rpc_service;
 
 #[cfg(test)]
 mod http_service_test;
 
+pub use flight_server::FlightServer;
 pub use http_service::HttpService;
-pub use rpc_service::MetaServer;

@@ -1407,6 +1407,8 @@ dependencies = [
  "colored",
  "comfy-table",
  "common-building",
+ "databend-query",
+ "databend-store",
  "dirs",
  "dyn-clone",
  "flate2",

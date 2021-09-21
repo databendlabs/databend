@@ -23,7 +23,7 @@ use tempfile::tempdir;
 use tempfile::TempDir;
 
 // use tracing_appender::non_blocking::WorkerGuard;
-use crate::api::MetaServer;
+use crate::api::FlightServer;
 use crate::configs;
 use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::GetReq;
@@ -43,7 +43,7 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let srv = MetaServer::create(tc.config.clone());
+    let srv = FlightServer::create(tc.config.clone());
     let (stop_tx, fin_rx) = srv.start().await?;
 
     tc.channels = Some((stop_tx, fin_rx));
