@@ -266,11 +266,14 @@ impl MetaBackend for EmbeddedMetaBackend {
 
     fn create_database(&self, plan: CreateDatabasePlan) -> common_exception::Result<()> {
         let db_name = plan.db.as_str();
-        if self.exists_database(db_name)? {
+
+        let mut db = self.databases.write();
+
+        if db.get(db_name).is_some() {
             return if plan.if_not_exists {
                 Ok(())
             } else {
-                Err(ErrorCode::UnknownDatabase(format!(
+                Err(ErrorCode::DatabaseAlreadyExists(format!(
                     "Database: '{}' already exists.",
                     db_name
                 )))
@@ -282,7 +285,7 @@ impl MetaBackend for EmbeddedMetaBackend {
             engine: plan.engine.clone(),
         };
 
-        self.databases.write().insert(
+        db.insert(
             plan.db,
             (Arc::new(database_info), InMemoryTableInfo::create()),
         );

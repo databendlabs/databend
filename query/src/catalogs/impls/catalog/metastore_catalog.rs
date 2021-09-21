@@ -74,7 +74,7 @@ impl MetaStoreCatalog {
         };
 
         let plan = CreateDatabasePlan {
-            if_not_exists: false,
+            if_not_exists: true,
             db: "default".to_string(),
             engine: DEFAULT_DB_ENGINE.to_string(),
             options: Default::default(),
