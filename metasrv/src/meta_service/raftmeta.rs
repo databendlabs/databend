@@ -52,7 +52,6 @@ use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
 use crate::configs;
-use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::raft_log::RaftLog;
 use crate::meta_service::raft_state::RaftState;
 use crate::meta_service::AppliedState;
@@ -68,6 +67,7 @@ use crate::raft::state_machine::Node;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::Snapshot;
 use crate::raft::state_machine::StateMachine;
+use crate::sled_store::get_sled_db;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///
