@@ -1722,10 +1722,11 @@ dependencies = [
 
 [[package]]
 name = "ed25519-compact"
-version = "0.1.9"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf396058cc7285b342f9a10ed7a377f088942396c46c4c9a7eb4f0782cb1171"
+checksum = "f1f45ef578ef75efffba301628066d951042f6e988f21f8b548928468ba5877b"
 dependencies = [
+ "ct-codecs",
  "getrandom",
 ]
 
@@ -2670,9 +2671,9 @@ dependencies = [
 
 [[package]]
 name = "jwt-simple"
-version = "0.10.4"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30b75d31d9959a288196e4ea7f0cf35d0e8ea1b8901adca74112d44bddad8176"
+checksum = "2fb385d1fd9c591d7888b5e6e8f5d20ff04fc26362de2f26476662ff4aa1ae7d"
 dependencies = [
  "anyhow",
  "coarsetime",
