@@ -18,8 +18,8 @@ use log::info;
 use metasrv::api::FlightServer;
 use metasrv::api::HttpService;
 use metasrv::configs::Config;
-use metasrv::meta_service::raft_db::init_sled_db;
 use metasrv::metrics::MetricService;
+use metasrv::sled_store::init_sled_db;
 use structopt::StructOpt;
 
 #[tokio::main]

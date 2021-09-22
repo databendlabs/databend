@@ -41,7 +41,6 @@ pub mod errors;
 pub mod log_entry;
 pub mod meta_service_impl;
 pub mod network;
-pub mod raft_db;
 pub mod raft_log;
 pub mod raft_state;
 pub mod raft_state_kv;

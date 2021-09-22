@@ -28,7 +28,7 @@ use common_store_api::UpsertKVActionResult;
 use common_store_api_sdk::StoreApiProvider;
 use common_store_api_sdk::StoreClientConf;
 use common_tracing::tracing;
-use metasrv::meta_service::raft_db::init_temp_sled_db;
+use metasrv::sled_store::init_temp_sled_db;
 
 use crate::namespace::local_kv_store::LocalKVStore;
 use crate::namespace::namespace_mgr::NamespaceMgr;

@@ -20,7 +20,7 @@ use databend_store::api::StoreServer;
 use databend_store::configs::Config;
 use databend_store::metrics::MetricService;
 use log::info;
-use metasrv::meta_service::raft_db::init_sled_db;
+use metasrv::sled_store::init_sled_db;
 use structopt::StructOpt;
 
 #[tokio::main]

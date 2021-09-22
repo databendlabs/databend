@@ -43,7 +43,6 @@ use serde::Serialize;
 use sled::IVec;
 
 use crate::configs;
-use crate::meta_service::raft_db::get_sled_db;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
@@ -55,6 +54,7 @@ use crate::raft::state_machine::StateMachineMetaKey::Initialized;
 use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
 use crate::raft::state_machine::StateMachineMetaKey::LastMembership;
 use crate::raft::state_machine::StateMachineMetaValue;
+use crate::sled_store::get_sled_db;
 use crate::sled_store::sled_key_space;
 use crate::sled_store::sled_key_space::StateMachineMeta;
 use crate::sled_store::AsKeySpace;

@@ -18,10 +18,10 @@ use anyhow::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot;
 use common_tracing::tracing;
-use metasrv::meta_service::raft_db::get_sled_db;
 use metasrv::meta_service::GetReq;
 use metasrv::meta_service::MetaNode;
 use metasrv::meta_service::MetaServiceClient;
+use metasrv::sled_store::get_sled_db;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
@@ -170,7 +170,7 @@ pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {
 macro_rules! init_store_ut {
     () => {{
         let t = tempfile::tempdir().expect("create temp dir to sled db");
-        metasrv::meta_service::raft_db::init_temp_sled_db(t);
+        metasrv::sled_store::init_temp_sled_db(t);
 
         // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
         common_tracing::init_default_ut_tracing();

@@ -14,7 +14,7 @@
 
 #[macro_use]
 pub mod service;
-pub(crate) mod tls_constants;
+pub mod tls_constants;
 
 pub use service::assert_meta_connection;
 pub use service::next_port;
