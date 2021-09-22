@@ -17,7 +17,6 @@ pub mod protobuf {
     include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
 }
 
-#[cfg(test)]
 #[macro_use]
 pub mod tests;
 

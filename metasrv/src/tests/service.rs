@@ -161,10 +161,11 @@ pub async fn assert_meta_connection(addr: &str) -> anyhow::Result<()> {
 /// 1. Open a temp sled::Db for all tests.
 /// 2. Initialize a global tracing.
 /// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
+#[macro_export]
 macro_rules! init_meta_ut {
     () => {{
         let t = tempfile::tempdir().expect("create temp dir to sled db");
-        crate::meta_service::raft_db::init_temp_sled_db(t);
+        $crate::meta_service::raft_db::init_temp_sled_db(t);
 
         // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
         common_tracing::init_default_ut_tracing();

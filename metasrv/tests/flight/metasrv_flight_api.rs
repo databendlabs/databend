@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test arrow-flight API of metasrv
+
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -23,11 +25,12 @@ use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
 use common_store_api_sdk::KVApi;
 use common_store_api_sdk::StoreClient;
 use common_tracing::tracing;
+use metasrv::init_meta_ut;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_restart() -> anyhow::Result<()> {
-    // Issue 1134  https://github.com/datafuselabs/databend/issues/1134
+async fn test_restart() -> anyhow::Result<()> {
+    // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
     // - create db and create table
     // - restart
@@ -36,7 +39,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (mut tc, addr) = crate::tests::start_metasrv().await?;
+    let (mut tc, addr) = metasrv::tests::start_metasrv().await?;
 
     let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -91,7 +94,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
 
         // restart by opening existent meta db
         tc.config.meta_config.boot = false;
-        crate::tests::start_metasrv_with_context(&mut tc).await?;
+        metasrv::tests::start_metasrv_with_context(&mut tc).await?;
     }
 
     tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
@@ -118,14 +121,14 @@ async fn test_flight_restart() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
+async fn test_generic_kv_mget() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     {
-        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
+        let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = crate::tests::start_metasrv().await?;
+        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -166,14 +169,14 @@ async fn test_flight_generic_kv_mget() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_generic_kv_list() -> anyhow::Result<()> {
+async fn test_generic_kv_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     {
-        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
+        let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = crate::tests::start_metasrv().await?;
+        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -214,14 +217,14 @@ async fn test_flight_generic_kv_list() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_generic_kv_delete() -> anyhow::Result<()> {
+async fn test_generic_kv_delete() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     {
-        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
+        let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = crate::tests::start_metasrv().await?;
+        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -282,14 +285,14 @@ async fn test_flight_generic_kv_delete() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_generic_kv_update() -> anyhow::Result<()> {
+async fn test_generic_kv_update() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     {
-        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_list");
+        let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = crate::tests::start_metasrv().await?;
+        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -386,16 +389,16 @@ async fn test_flight_generic_kv_update() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_generic_kv_update_meta() -> anyhow::Result<()> {
+async fn test_generic_kv_update_meta() -> anyhow::Result<()> {
     // Only update meta, do not touch the value part.
 
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     {
-        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_update_meta");
+        let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_update_meta");
         let _ent = span.enter();
 
-        let (_tc, addr) = crate::tests::start_metasrv().await?;
+        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -489,7 +492,7 @@ async fn test_flight_generic_kv_update_meta() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
+async fn test_generic_kv_timeout() -> anyhow::Result<()> {
     // - Test get  expired and non-expired.
     // - Test mget expired and non-expired.
     // - Test list expired and non-expired.
@@ -498,10 +501,10 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     {
-        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv_timeout");
+        let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_timeout");
         let _ent = span.enter();
 
-        let (_tc, addr) = crate::tests::start_metasrv().await?;
+        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -607,15 +610,15 @@ async fn test_flight_generic_kv_timeout() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_generic_kv() -> anyhow::Result<()> {
+async fn test_generic_kv() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
     {
-        let span = tracing::span!(tracing::Level::INFO, "test_flight_generic_kv");
+        let span = tracing::span!(tracing::Level::INFO, "test_generic_kv");
         let _ent = span.enter();
 
-        let (_tc, addr) = crate::tests::start_metasrv().await?;
+        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
