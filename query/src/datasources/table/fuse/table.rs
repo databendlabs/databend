@@ -33,6 +33,7 @@ use uuid::Uuid;
 
 use crate::catalogs::Table;
 use crate::datasources::dal::DataAccessor;
+use crate::datasources::table::fuse::parse_storage_scheme;
 use crate::datasources::table::fuse::project_col_idx;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
@@ -51,7 +52,6 @@ pub struct FuseTable {
     pub db: String,
     pub name: String,
     pub schema: DataSchemaRef,
-    // Storage scheme is fixed during the whole life of the table
     // Local | FuseDFS | S3 | ... etc.
     pub storage_scheme: TableStorageScheme,
     pub local: bool,
@@ -86,33 +86,21 @@ impl FuseTable {
 
 impl FuseTable {
     pub fn try_create(
-        _db: String,
-        _name: String,
-        _schema: DataSchemaRef,
-        _options: TableOptions,
+        db: String,
+        name: String,
+        schema: DataSchemaRef,
+        options: TableOptions,
     ) -> Result<Box<dyn Table>> {
-        todo!()
+        let storage_scheme = parse_storage_scheme(options.get("STORAGE_SCHEME"))?;
+        let res = FuseTable {
+            db,
+            name,
+            schema,
+            storage_scheme,
+            local: true,
+        };
+        Ok(Box::new(res))
     }
-
-    //    pub fn with_meta_client(
-    //        db: String,
-    //        name: String,
-    //        schema: DataSchemaRef,
-    //        options: TableOptions,
-    //        meta_client: T,
-    //    ) -> Result<Box<dyn Table>> {
-    //        let storage_scheme = parse_storage_scheme(options.get("STORAGE_SCHEME"))?;
-    //        let res = FuseTable {
-    //            db,
-    //            name,
-    //            schema,
-    //            storage_scheme,
-    //            meta_client,
-    //            local: true,
-    //        };
-    //
-    //        Ok(Box::new(res))
-    //    }
 }
 
 #[async_trait::async_trait]
