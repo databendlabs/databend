@@ -60,4 +60,41 @@ mod test {
             assert_eq!(format!("{}", stmt), expect);
         }
     }
+
+    #[test]
+    fn test_parse_with_ddl() {
+        use crate::sql::parser::ast::*;
+        let parser = Parser {};
+        let sqls = vec![
+            "truncate table test",
+            "truncate table test.test",
+            "DROP table table1",
+            "DROP table IF EXISTS table1",
+            "CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar(255) null)",
+            "CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar(255) not null)",
+            "CREATE TABLE t(c1 int default 1)",
+        ];
+        let stmts: Vec<Statement> = sqls
+            .into_iter()
+            .map(|sql| {
+                parser
+                    .parse_with_sqlparser(sql)
+                    .map_err(|e| e.add_message(format!("SQL: {}", sql.to_owned())))
+                    .unwrap()
+            })
+            .flatten()
+            .collect();
+        let expected = vec![
+            r#"TRUNCATE TABLE test"#,
+            r#"TRUNCATE TABLE test.test"#,
+            r#"DROP TABLE table1"#,
+            r#"DROP TABLE IF EXISTS table1"#,
+            r#"CREATE TABLE t (c1 INTEGER NULL, c2 BIGINT NULL, c3 VARCHAR(255) NULL)"#,
+            r#"CREATE TABLE t (c1 INTEGER NOT NULL, c2 BIGINT NOT NULL, c3 VARCHAR(255) NOT NULL)"#,
+            r#"CREATE TABLE t (c1 INTEGER NULL DEFAULT 1)"#,
+        ];
+        for (stmt, expect) in stmts.iter().zip(expected) {
+            assert_eq!(format!("{}", stmt), expect);
+        }
+    }
 }
