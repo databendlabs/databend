@@ -132,8 +132,9 @@ impl Session {
                 let config = self.config.clone();
                 let discovery = self.sessions.get_cluster_discovery();
 
+                let session = self.clone();
                 let cluster = discovery.discover().await?;
-                let shared = DatabendQueryContextShared::try_create(config, self.clone(), cluster);
+                let shared = DatabendQueryContextShared::try_create(config, session, cluster);
 
                 let mut mutable_state = self.mutable_state.lock();
 

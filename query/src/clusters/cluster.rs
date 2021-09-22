@@ -113,6 +113,7 @@ impl ClusterDiscovery {
         let address = cfg.query.flight_api_address.clone();
         let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
 
+        // TODO: restart node
         match api_provider.add_node(node_info).await {
             Ok(_) => self.heartbeat.startup(),
             Err(cause) => Err(cause.add_message_back("(while namespace api add_node).")),
@@ -130,8 +131,8 @@ impl Cluster {
         Arc::new(Cluster { local_id, nodes })
     }
 
-    pub fn empty() -> Result<ClusterRef> {
-        Ok(Arc::new(Cluster { local_id: String::from(""), nodes: Vec::new() }))
+    pub fn empty() -> ClusterRef {
+        Arc::new(Cluster { local_id: String::from(""), nodes: Vec::new() })
     }
 
     pub fn is_empty(&self) -> bool {

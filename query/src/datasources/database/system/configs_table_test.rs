@@ -26,12 +26,7 @@ use crate::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
-    let config = Config::default();
-    let cluster = ClusterDiscovery::empty();
-
-    let sessions = SessionManager::from_conf(config, cluster)?;
-    let test_session = sessions.create_session("TestSession")?;
-    let ctx = test_session.create_context();
+    let ctx = crate::tests::try_create_context()?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create();

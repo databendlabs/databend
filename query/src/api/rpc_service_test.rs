@@ -41,9 +41,7 @@ async fn test_tls_rpc_server() -> Result<()> {
     let mut conf = Config::default();
     conf.query.rpc_tls_server_key = TEST_SERVER_KEY.to_owned();
     conf.query.rpc_tls_server_cert = TEST_SERVER_CERT.to_owned();
-
-    let cluster = ClusterDiscovery::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
+    let session_manager = crate::tests::try_create_session_mgr(None)?;
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -86,9 +84,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     let mut conf = Config::default();
     conf.query.rpc_tls_server_key = "../tests/data/certs/none.key".to_owned();
     conf.query.rpc_tls_server_cert = "../tests/data/certs/none.pem".to_owned();
-
-    let cluster = ClusterDiscovery::create_global(conf.clone())?;
-    let session_manager = SessionManager::from_conf(conf.clone(), cluster.clone())?;
+    let session_manager = crate::tests::try_create_session_mgr(None)?;
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut srv = RpcService {

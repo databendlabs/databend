@@ -65,7 +65,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
                 sinks: vec![stream_id.clone()],
                 scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
             }),
-        )?;
+        ).await?;
 
         let stream = stream_ticket(&query_id, &stage_id, &stream_id);
         let receiver = flight_dispatcher.get_stream(&stream)?;
@@ -107,7 +107,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
                 sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
                 scatters_expression: Expression::Column("number".to_string()),
             }),
-        )?;
+        ).await?;
 
         let stream_1 = stream_ticket(&query_id, &stage_id, "stream_1");
         let receiver = flight_dispatcher.get_stream(&stream_1)?;

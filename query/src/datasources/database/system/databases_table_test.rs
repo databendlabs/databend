@@ -23,8 +23,7 @@ use crate::datasources::database::system::DatabasesTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
-    let config = Config::default();
-    let ctx = crate::tests::try_create_context_with_conf(config)?;
+    let ctx = crate::tests::try_create_context()?;
     let table = DatabasesTable::create();
     let source_plan = table.read_plan(
         ctx.clone(),

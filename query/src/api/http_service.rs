@@ -42,6 +42,7 @@ use tokio_rustls::rustls::ServerConfig;
 use crate::clusters::{ClusterRef, ClusterDiscoveryRef};
 use crate::configs::Config;
 use crate::servers::Server;
+use axum::routing::BoxRoute;
 
 pub struct HttpService {
     cfg: Config,
@@ -49,30 +50,6 @@ pub struct HttpService {
     join_handle: Option<JoinHandle<std::result::Result<(), std::io::Error>>>,
     abort_handler: axum_server::Handle,
     tls_config: Option<ServerConfig>,
-}
-
-// build axum router
-macro_rules! build_router {
-    ($cfg: expr, $cluster: expr) => {
-        Router::new()
-            .route("/v1/health", get(super::http::v1::health::health_handler))
-            .route("/v1/config", get(super::http::v1::config::config_handler))
-            .route("/v1/logs", get(super::http::v1::logs::logs_handler))
-            // .route(
-            //     "/v1/cluster/list",
-            //     get(super::http::v1::cluster::cluster_list_handler),
-            // )
-            .route(
-                "/debug/home",
-                get(super::http::debug::home::debug_home_handler),
-            )
-            .route(
-                "/debug/pprof/profile",
-                get(super::http::debug::pprof::debug_pprof_handler),
-            )
-            .layer(AddExtensionLayer::new($cluster.clone()))
-            .layer(AddExtensionLayer::new($cfg.clone()))
-    };
 }
 
 impl HttpService {
@@ -151,6 +128,28 @@ impl HttpService {
         }
         None
     }
+
+    fn router() -> Router<BoxRoute> {
+        Router::new()
+            .route("/v1/health", get(super::http::v1::health::health_handler))
+            .route("/v1/config", get(super::http::v1::config::config_handler))
+            .route("/v1/logs", get(super::http::v1::logs::logs_handler))
+            // .route(
+            //     "/v1/cluster/list",
+            //     get(super::http::v1::cluster::cluster_list_handler),
+            // )
+            .route(
+                "/debug/home",
+                get(super::http::debug::home::debug_home_handler),
+            )
+            .route(
+                "/debug/pprof/profile",
+                get(super::http::debug::pprof::debug_pprof_handler),
+            )
+            // .layer(AddExtensionLayer::new($ cluster.clone()))
+            // .layer(AddExtensionLayer::new($ cfg.clone()))
+            .boxed()
+    }
 }
 
 #[async_trait::async_trait]
@@ -169,7 +168,8 @@ impl Server for HttpService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let app = build_router!(self.cfg.clone(), self.discovery.clone());
+        let app = Self::router();
+        // let app = build_router!(self.cfg.clone(), self.discovery.clone());
         let handler = self.abort_handler.clone();
         match self.tls_config.clone() {
             None => {
