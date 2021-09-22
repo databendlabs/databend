@@ -27,15 +27,15 @@ use sled::IVec;
 
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
-use crate::meta_service::Node;
 use crate::meta_service::NodeId;
 use crate::meta_service::RaftStateKey;
 use crate::meta_service::RaftStateValue;
-use crate::meta_service::SeqNum;
-use crate::meta_service::SledOrderedSerde;
-use crate::meta_service::SledSerde;
-use crate::meta_service::StateMachineMetaKey;
-use crate::meta_service::StateMachineMetaValue;
+use crate::raft::state_machine::Node;
+use crate::raft::state_machine::StateMachineMetaKey;
+use crate::raft::state_machine::StateMachineMetaValue;
+use crate::sled_store::SeqNum;
+use crate::sled_store::SledOrderedSerde;
+use crate::sled_store::SledSerde;
 
 /// Defines a key space in sled::Tree that has its own key value type.
 /// And a prefix that is used to distinguish keys from different spaces in a SledTree.

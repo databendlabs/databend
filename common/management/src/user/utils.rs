@@ -17,13 +17,6 @@ use sha2::Digest;
 
 use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
-use crate::user::user_mgr::USER_API_KEY_PREFIX;
-
-pub(crate) fn prepend(v: impl AsRef<str>) -> String {
-    let mut res = USER_API_KEY_PREFIX.to_string();
-    res.push_str(v.as_ref());
-    res
-}
 
 pub fn encode_password(password: impl AsRef<[u8]>, auth_type: &AuthType) -> Vec<u8> {
     match auth_type {

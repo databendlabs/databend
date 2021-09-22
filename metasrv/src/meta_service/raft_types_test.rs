@@ -14,12 +14,26 @@
 
 use std::ops::Bound;
 
-use crate::meta_service::sled_serde::SledOrderedSerde;
-use crate::meta_service::sled_serde::SledRangeSerde;
 use crate::meta_service::NodeId;
+use crate::sled_store::sled_serde::SledOrderedSerde;
+use crate::sled_store::sled_serde::SledRangeSerde;
 
 #[test]
-fn test_node_id_serde() -> anyhow::Result<()> {
+fn test_node_id_serde_ser() -> anyhow::Result<()> {
+    let ids: Vec<NodeId> = vec![9, 10, 11];
+
+    let want: Vec<sled::IVec> = vec![
+        sled::IVec::from(vec![0, 0, 0, 0, 0, 0, 0, 9]),
+        sled::IVec::from(vec![0, 0, 0, 0, 0, 0, 0, 10]),
+        sled::IVec::from(vec![0, 0, 0, 0, 0, 0, 0, 11]),
+    ];
+    let got = ids.iter().map(|id| id.ser().unwrap()).collect::<Vec<_>>();
+    assert_eq!(want, got);
+    Ok(())
+}
+
+#[test]
+fn test_node_id_serde_de() -> anyhow::Result<()> {
     let id9: NodeId = 9;
     let id10: NodeId = 10;
 

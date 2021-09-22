@@ -31,17 +31,17 @@ use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::state_machine::Replication;
-use crate::meta_service::state_machine::SerializableSnapshot;
 use crate::meta_service::testing::pretty_snapshot;
 use crate::meta_service::testing::pretty_snapshot_iter;
 use crate::meta_service::testing::snapshot_logs;
 use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
-use crate::meta_service::Node;
-use crate::meta_service::Slot;
-use crate::meta_service::StateMachine;
+use crate::raft::state_machine::Node;
+use crate::raft::state_machine::Replication;
+use crate::raft::state_machine::SerializableSnapshot;
+use crate::raft::state_machine::Slot;
+use crate::raft::state_machine::StateMachine;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

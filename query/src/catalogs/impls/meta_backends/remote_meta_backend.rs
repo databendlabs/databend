@@ -289,7 +289,7 @@ impl MetaBackend for RemoteMeteStoreClient {
         let _r = self.do_block(async move {
             let cli = cli_provider.try_get_meta_client().await?;
             cli.create_database(plan).await
-        })?;
+        })??;
         Ok(())
     }
 
@@ -298,7 +298,7 @@ impl MetaBackend for RemoteMeteStoreClient {
         let _r = self.do_block(async move {
             let cli = cli_provider.try_get_meta_client().await?;
             cli.drop_database(plan).await
-        })?;
+        })??;
         Ok(())
     }
 

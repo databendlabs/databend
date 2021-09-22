@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod action_handler;
-mod kv_handlers;
+//! sled_store implement a key-value like store backed by sled::Tree.
+//!
+//! It is used by raft for log and state machine storage.
+pub mod seq_num;
+pub mod sled_key_space;
+pub mod sled_serde;
+pub mod sled_tree;
 
-pub use action_handler::ActionHandler;
-pub use action_handler::ReplySerializer;
+#[cfg(test)]
+mod sled_tree_test;
+
+pub use seq_num::SeqNum;
+pub use sled_serde::SledOrderedSerde;
+pub use sled_serde::SledSerde;
+pub use sled_tree::AsKeySpace;
+pub use sled_tree::SledTree;
+pub use sled_tree::SledValueToKey;

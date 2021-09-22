@@ -36,14 +36,10 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub(crate) fn new(
-        name: impl Into<String>,
-        password: impl Into<Vec<u8>>,
-        auth_type: AuthType,
-    ) -> Self {
+    pub(crate) fn new(name: String, password: Vec<u8>, auth_type: AuthType) -> Self {
         UserInfo {
-            name: name.into(),
-            password: password.into(),
+            name,
+            password,
             auth_type,
         }
     }
@@ -53,32 +49,23 @@ impl UserInfo {
 pub trait UserMgrApi {
     async fn add_user(&mut self, user_info: UserInfo) -> common_exception::Result<u64>;
 
-    async fn get_user<V>(
+    async fn get_user(
         &mut self,
-        username: V,
+        username: String,
         seq: Option<u64>,
-    ) -> common_exception::Result<SeqValue<UserInfo>>
-    where
-        V: AsRef<str> + Send;
+    ) -> common_exception::Result<SeqValue<UserInfo>>;
 
-    async fn get_all_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>>;
+    async fn get_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>>;
 
-    async fn get_users<V>(&mut self, usernames: &[V]) -> Result<Vec<Option<SeqValue<UserInfo>>>>
-    where V: AsRef<str> + Sync;
-
-    async fn update_user<U, V>(
+    async fn update_user(
         &mut self,
-        username: U,
-        new_password: Option<V>,
-        new_auth_type: Option<AuthType>,
+        username: String,
+        new_password: Option<Vec<u8>>,
+        new_auth: Option<AuthType>,
         seq: Option<u64>,
-    ) -> Result<Option<u64>>
-    where
-        U: AsRef<str> + Sync + Send,
-        V: AsRef<[u8]> + Sync + Send;
+    ) -> Result<Option<u64>>;
 
-    async fn drop_user<V>(&mut self, username: V, seq: Option<u64>) -> Result<()>
-    where V: AsRef<str> + Send;
+    async fn drop_user(&mut self, username: String, seq: Option<u64>) -> Result<()>;
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {

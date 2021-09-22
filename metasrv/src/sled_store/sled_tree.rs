@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
 
-use crate::meta_service::sled_key_space::SledKeySpace;
+use crate::sled_store::sled_key_space::SledKeySpace;
 
 /// Extract key from a value of sled tree that includes its key.
 pub trait SledValueToKey<K> {

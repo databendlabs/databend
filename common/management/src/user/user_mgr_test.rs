@@ -19,7 +19,6 @@ use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
-use common_metatypes::SeqValue;
 use common_runtime::tokio;
 use common_store_api::kv_apis::kv_api::MGetKVActionResult;
 use common_store_api::kv_apis::kv_api::PrefixListReply;
@@ -30,7 +29,6 @@ use mockall::predicate::*;
 use mockall::*;
 use sha2::Digest;
 
-use super::user_mgr::USER_API_KEY_PREFIX;
 use crate::user::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
@@ -93,7 +91,7 @@ mod add {
         let user_info = UserInfo::from(new_user);
         let value = Some(serde_json::to_vec(&user_info)?);
 
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_user_name;
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = MatchSeq::Exact(0);
 
         // normal
@@ -115,7 +113,7 @@ mod add {
                     })
                 });
             let api = Arc::new(api);
-            let mut user_mgr = UserMgr::new(api);
+            let mut user_mgr = UserMgr::new(api, "tenant1");
             let res = user_mgr.add_user(user_info).await;
 
             assert_eq!(
@@ -147,7 +145,7 @@ mod add {
                 });
 
             let api = Arc::new(api);
-            let mut user_mgr = UserMgr::new(api);
+            let mut user_mgr = UserMgr::new(api, "tenant1");
 
             let new_user = NewUser::new(test_user_name, test_password, auth_type.clone());
             let user_info = UserInfo::from(new_user);
@@ -180,7 +178,7 @@ mod add {
 
             let kv = Arc::new(api);
 
-            let mut user_mgr = UserMgr::new(kv);
+            let mut user_mgr = UserMgr::new(kv, "tenant1");
             let new_user = NewUser::new(test_user_name, test_password, auth_type);
             let user_info = UserInfo::from(new_user);
             let res = user_mgr.add_user(user_info).await;
@@ -201,10 +199,10 @@ mod get {
 
     #[tokio::test]
     async fn test_get_user_seq_match() -> common_exception::Result<()> {
-        let test_name = "test";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "test";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
-        let user = NewUser::new(test_name, "pass", AuthType::Sha256);
+        let user = NewUser::new(test_user_name, "pass", AuthType::Sha256);
         let user_info = UserInfo::from(user);
         let value = serde_json::to_vec(&user_info)?;
 
@@ -219,8 +217,8 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_user(test_name, Some(1)).await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_user(test_user_name.to_string(), Some(1)).await;
         assert!(res.is_ok());
 
         Ok(())
@@ -228,10 +226,10 @@ mod get {
 
     #[tokio::test]
     async fn test_get_user_do_not_care_seq() -> common_exception::Result<()> {
-        let test_name = "test";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "test";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
-        let user = NewUser::new(test_name, "pass", AuthType::Sha256);
+        let user = NewUser::new(test_user_name, "pass", AuthType::Sha256);
         let user_info = UserInfo::from(user);
         let value = serde_json::to_vec(&user_info)?;
 
@@ -246,16 +244,16 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_user(test_name, None).await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_user(test_user_name.to_string(), None).await;
         assert!(res.is_ok());
         Ok(())
     }
 
     #[tokio::test]
     async fn test_get_user_not_exist() -> common_exception::Result<()> {
-        let test_name = "test";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "test";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -264,8 +262,8 @@ mod get {
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_user(test_name, None).await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_user(test_user_name.to_string(), None).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -273,8 +271,8 @@ mod get {
 
     #[tokio::test]
     async fn test_get_user_not_exist_seq_mismatch() -> common_exception::Result<()> {
-        let test_name = "test";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "test";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -290,8 +288,8 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_user(test_name, Some(2)).await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_user(test_user_name.to_string(), Some(2)).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -299,8 +297,8 @@ mod get {
 
     #[tokio::test]
     async fn test_get_user_invalid_user_info_encoding() -> common_exception::Result<()> {
-        let test_name = "test";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "test";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -316,8 +314,8 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_user(test_name, None).await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_user(test_user_name.to_string(), None).await;
         assert_eq!(
             res.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
@@ -330,92 +328,9 @@ mod get {
 mod get_users {
 
     use common_metatypes::KVValue;
-
-    use super::*;
-    use crate::user::utils::prepend;
-
-    type Strings = Vec<String>;
-    type UserInfos = Vec<Option<(u64, UserInfo)>>;
-    type Values = Vec<Option<SeqValue<KVValue>>>;
-
-    fn prepare(len: u64) -> common_exception::Result<(Strings, Strings, Values, UserInfos)> {
-        let mut names = vec![];
-        let mut keys = vec![];
-        let mut res = vec![];
-        let mut user_infos = vec![];
-        for i in 0..len {
-            let name = format!("test_user_{}", i);
-            names.push(name.clone());
-            keys.push(prepend(&name));
-            let new_user = NewUser::new(&name, "pass", AuthType::Sha256);
-            let user_info = UserInfo::from(new_user);
-            if i % 2 == 0 {
-                res.push(Some((i, KVValue {
-                    meta: None,
-                    value: serde_json::to_vec(&user_info)?,
-                })));
-                user_infos.push(Some((i, user_info)));
-            } else {
-                res.push(None);
-                user_infos.push(None);
-            }
-        }
-        Ok((names, keys, res, user_infos))
-    }
-
-    #[tokio::test]
-    async fn test_get_users_normal() -> common_exception::Result<()> {
-        let (names, keys, res, user_infos) = prepare(9)?;
-        let mut kv = MockKV::new();
-        kv.expect_mget_kv()
-            .with(predicate::function(move |ks: &[String]| ks == keys.clone()))
-            //.withf(|args| args.0 == keys.clone())
-            .times(1)
-            .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
-
-        let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_users(&names).await?;
-        assert_eq!(res, user_infos);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_get_users_invalid_user_info_encoding() -> common_exception::Result<()> {
-        let (names, keys, mut res, _user_infos) = prepare(9)?;
-        res.insert(
-            8,
-            Some((0, KVValue {
-                meta: None,
-                value: b"some arbitrary str".to_vec(),
-            })),
-        );
-        let mut kv = MockKV::new();
-        {
-            kv.expect_mget_kv()
-                .with(predicate::function(move |ks: &[String]| ks == keys))
-                .times(1)
-                .return_once(move |_: &[String]| Ok(MGetKVActionResult { result: res }));
-        }
-        let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_users(&names).await;
-        assert_eq!(
-            res.unwrap_err().code(),
-            ErrorCode::IllegalUserInfoFormat("").code()
-        );
-        Ok(())
-    }
-}
-
-mod get_all_users {
-
-    use common_metatypes::KVValue;
     use common_metatypes::SeqValue;
 
     use super::*;
-    use crate::user::utils::prepend;
 
     type UserInfos = Vec<(u64, UserInfo)>;
     fn prepare() -> common_exception::Result<(Vec<(String, SeqValue<KVValue>)>, UserInfos)> {
@@ -426,7 +341,8 @@ mod get_all_users {
         for i in 0..9 {
             let name = format!("test_user_{}", i);
             names.push(name.clone());
-            keys.push(prepend(&name));
+            let key = format!("{}/{}", "tenant1", name);
+            keys.push(key);
             let new_user = NewUser::new(&name, "pass", AuthType::Sha256);
             let user_info = UserInfo::from(new_user);
             res.push((
@@ -442,19 +358,20 @@ mod get_all_users {
     }
 
     #[tokio::test]
-    async fn test_get_all_users_normal() -> common_exception::Result<()> {
+    async fn test_get_users_normal() -> common_exception::Result<()> {
         let (res, user_infos) = prepare()?;
         let mut kv = MockKV::new();
         {
+            let k = "__fd_users/tenant1";
             kv.expect_prefix_list_kv()
-                .with(predicate::eq(USER_API_KEY_PREFIX))
+                .with(predicate::eq(k))
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_all_users().await?;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_users().await?;
         assert_eq!(res, user_infos);
 
         Ok(())
@@ -476,15 +393,16 @@ mod get_all_users {
 
         let mut kv = MockKV::new();
         {
+            let k = "__fd_users/tenant1";
             kv.expect_prefix_list_kv()
-                .with(predicate::eq(USER_API_KEY_PREFIX))
+                .with(predicate::eq(k))
                 .times(1)
                 .return_once(|_p| Ok(res));
         }
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.get_all_users().await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_users().await;
         assert_eq!(
             res.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
@@ -502,10 +420,10 @@ mod drop {
     #[tokio::test]
     async fn test_drop_user_normal_case() -> common_exception::Result<()> {
         let mut kv = MockKV::new();
-        let test_key = USER_API_KEY_PREFIX.to_string() + "test";
+        let test_key = "__fd_users/tenant1/test";
         kv.expect_upsert_kv()
             .with(
-                predicate::function(move |v| v == test_key.as_str()),
+                predicate::function(move |v| v == test_key),
                 predicate::eq(MatchSeq::Any),
                 predicate::eq(None),
                 predicate::eq(None),
@@ -521,8 +439,8 @@ mod drop {
                 })
             });
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.drop_user("test", None).await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.drop_user("test".to_string(), None).await;
         assert!(res.is_ok());
 
         Ok(())
@@ -531,10 +449,10 @@ mod drop {
     #[tokio::test]
     async fn test_drop_user_unknown() -> common_exception::Result<()> {
         let mut kv = MockKV::new();
-        let test_key = USER_API_KEY_PREFIX.to_string() + "test";
+        let test_key = "__fd_users/tenant1/test";
         kv.expect_upsert_kv()
             .with(
-                predicate::function(move |v| v == test_key.as_str()),
+                predicate::function(move |v| v == test_key),
                 predicate::eq(MatchSeq::Any),
                 predicate::eq(None),
                 predicate::eq(None),
@@ -547,8 +465,8 @@ mod drop {
                 })
             });
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
-        let res = user_mgr.drop_user("test", None).await;
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.drop_user("test".to_string(), None).await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
     }
@@ -561,14 +479,14 @@ mod update {
 
     #[tokio::test]
     async fn test_update_user_normal_partial_update() -> common_exception::Result<()> {
-        let test_name = "name";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "name";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
 
         let old_pass = "old_key";
         let old_auth_type = AuthType::DoubleSha1;
 
-        let user = NewUser::new(test_name, old_pass, old_auth_type);
+        let user = NewUser::new(test_user_name, old_pass, old_auth_type);
         let user_info = UserInfo::from(user);
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -592,7 +510,7 @@ mod update {
         // and then, update_kv should be called
 
         let new_pass = "new pass";
-        let new_user = NewUser::new(test_name, new_pass, AuthType::DoubleSha1);
+        let new_user = NewUser::new(test_user_name, new_pass, AuthType::DoubleSha1);
 
         let new_user_info = UserInfo::from(new_user);
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
@@ -616,10 +534,15 @@ mod update {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
-            .update_user(test_name, Some(new_user_info.password), None, test_seq)
+            .update_user(
+                test_user_name.to_string(),
+                Some(new_user_info.password),
+                None,
+                test_seq,
+            )
             .await;
         assert!(res.is_ok());
         Ok(())
@@ -627,8 +550,8 @@ mod update {
 
     #[tokio::test]
     async fn test_update_user_normal_full_update() -> common_exception::Result<()> {
-        let test_name = "name";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "name";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
 
         // - get_kv should NOT be called
@@ -637,7 +560,7 @@ mod update {
         let new_pass = "new_pass";
         let new_auth_type = AuthType::Sha256;
 
-        let new_user = NewUser::new(test_name, new_pass, new_auth_type.clone());
+        let new_user = NewUser::new(test_user_name, new_pass, new_auth_type.clone());
 
         let new_user_info = UserInfo::from(new_user);
         let new_value = serde_json::to_vec(&new_user_info)?;
@@ -662,11 +585,11 @@ mod update {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
             .update_user(
-                test_name,
+                test_user_name.to_string(),
                 Some(new_user_info.password),
                 Some(new_auth_type),
                 test_seq,
@@ -683,11 +606,11 @@ mod update {
         let kv = MockKV::new();
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
 
-        let new_password: Option<&str> = None;
+        let new_password: Option<Vec<u8>> = None;
         let res = user_mgr
-            .update_user(test_name, new_password, None, None)
+            .update_user(test_name.to_string(), new_password, None, None)
             .await;
         assert!(res.is_ok());
         Ok(())
@@ -695,8 +618,8 @@ mod update {
 
     #[tokio::test]
     async fn test_update_user_partial_unknown() -> common_exception::Result<()> {
-        let test_name = "name";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "name";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
 
         // if partial update, and get_kv returns None
@@ -709,10 +632,15 @@ mod update {
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
-            .update_user(test_name, Some("new_pass"), None, test_seq)
+            .update_user(
+                test_user_name.to_string(),
+                Some(Vec::from("new_pass".as_bytes())),
+                None,
+                test_seq,
+            )
             .await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -720,8 +648,8 @@ mod update {
 
     #[tokio::test]
     async fn test_update_user_full_unknown() -> common_exception::Result<()> {
-        let test_name = "name";
-        let test_key = USER_API_KEY_PREFIX.to_string() + test_name;
+        let test_user_name = "name";
+        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
 
         // get_kv should not be called
@@ -745,12 +673,12 @@ mod update {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv);
+        let mut user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
             .update_user(
-                test_name,
-                Some("new_pass"),
+                test_user_name.to_string(),
+                Some(Vec::from("new_pass".as_bytes())),
                 Some(AuthType::Sha256),
                 test_seq,
             )

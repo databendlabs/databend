@@ -14,12 +14,31 @@
 
 use std::cell::RefCell;
 
+use databend_query::configs::Config as QueryConfig;
+use databend_store::configs::Config as StoreConfig;
 use tempfile::tempdir;
 
+use crate::cmds::status::LocalConfig;
+use crate::cmds::status::LocalQueryConfig;
+use crate::cmds::status::LocalStoreConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
 
+macro_rules! default_local_config {
+    () => {
+        LocalConfig {
+            query_configs: vec![LocalQueryConfig {
+                pid: "test-query".to_string(),
+                config: QueryConfig::default(),
+            }],
+            store_configs: Some(LocalStoreConfig {
+                pid: "test-store".to_string(),
+                config: StoreConfig::empty(),
+            }),
+        }
+    };
+}
 #[test]
 fn test_status() -> Result<()> {
     let mut conf = Config {
@@ -31,10 +50,53 @@ fn test_status() -> Result<()> {
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
+    // empty profile
+    {
+        let mut status = Status::read(conf.clone())?;
+        status.version = "xx".to_string();
+        status.write()?;
+        // should have empty profile with set version
+        if let Ok(status) = Status::read(conf.clone()) {
+            assert_eq!(status.version, "xx".to_string());
+            assert_eq!(status.local_configs, LocalConfig::empty());
+        }
+    }
 
-    let mut status = Status::read(conf)?;
-    status.version = "xx".to_string();
-    status.write()?;
+    // create basic local profile
+    {
+        let mut status = Status::read(conf.clone())?;
+        status.version = "default".to_string();
+        status.local_configs = default_local_config!();
+        status.write()?;
+        // should have empty profile with set version
+        if let Ok(status) = Status::read(conf.clone()) {
+            assert_eq!(status.version, "default".to_string());
+            assert_eq!(status.local_configs, default_local_config!());
+        }
+    }
 
+    // update query component on local
+    {
+        let mut status = Status::read(conf.clone())?;
+        let mut local_config = default_local_config!();
+        local_config.query_configs.push(LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: "added".to_string(),
+        });
+        status.version = "default".to_string();
+        status.local_configs = local_config;
+        status.write()?;
+
+        let mut expected_config = default_local_config!();
+        expected_config.query_configs.push(LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: "added".to_string(),
+        });
+        // should have empty profile with set version
+        if let Ok(status) = Status::read(conf.clone()) {
+            assert_eq!(status.version, "default".to_string());
+            assert_eq!(status.local_configs, expected_config);
+        }
+    }
     Ok(())
 }

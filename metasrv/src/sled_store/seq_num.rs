@@ -17,7 +17,7 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta_service::SledSerde;
+use crate::sled_store::SledSerde;
 
 /// Sequence number that is used in SledTree
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]

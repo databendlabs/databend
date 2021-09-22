@@ -53,8 +53,7 @@ async fn test_flight_tls() -> anyhow::Result<()> {
         .get_table("do not care".to_owned(), "do not care".to_owned())
         .await;
     assert!(r.is_err());
-    let e = r.unwrap_err();
-    assert_eq!(e.code(), ErrorCode::UnknownDatabase("").code());
+
     Ok(())
 }
 

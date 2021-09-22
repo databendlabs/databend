@@ -19,16 +19,16 @@ use async_raft::LogId;
 use common_metatypes::KVValue;
 use common_runtime::tokio;
 
-use crate::meta_service::sled_key_space;
-use crate::meta_service::sled_key_space::SledKeySpace;
-use crate::meta_service::sled_key_space::StateMachineMeta;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::LogIndex;
-use crate::meta_service::SledTree;
-use crate::meta_service::StateMachineMetaKey::Initialized;
-use crate::meta_service::StateMachineMetaKey::LastApplied;
-use crate::meta_service::StateMachineMetaValue;
+use crate::raft::state_machine::StateMachineMetaKey::Initialized;
+use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
+use crate::raft::state_machine::StateMachineMetaValue;
+use crate::sled_store::sled_key_space;
+use crate::sled_store::sled_key_space::SledKeySpace;
+use crate::sled_store::sled_key_space::StateMachineMeta;
+use crate::sled_store::SledTree;
 use crate::tests::service::new_sled_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

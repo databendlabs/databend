@@ -12,25 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
 use common_runtime::tokio;
-use common_store_api_sdk::meta_api_impl::DropTableActionResult;
-use common_store_api_sdk::meta_api_impl::GetTableActionResult;
+use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
 use common_store_api_sdk::KVApi;
-use common_store_api_sdk::MetaApi;
 use common_store_api_sdk::StoreClient;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
@@ -50,65 +40,40 @@ async fn test_flight_restart() -> anyhow::Result<()> {
 
     let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
-    let db_name = "db1";
-    let table_name = "table1";
-
-    tracing::info!("--- create db");
+    tracing::info!("--- upsert kv");
     {
-        let plan = CreateDatabasePlan {
-            if_not_exists: false,
-            db: db_name.to_string(),
-            engine: "Local".to_string(),
-            options: Default::default(),
-        };
+        let res = client
+            .upsert_kv("foo", MatchSeq::Any, Some(b"bar".to_vec()), None)
+            .await;
 
-        let res = client.create_database(plan.clone()).await;
-        tracing::debug!("create database res: {:?}", res);
+        tracing::debug!("set kv res: {:?}", res);
         let res = res?;
-        assert_eq!(1, res.database_id, "first database id is 1");
+        assert_eq!(
+            UpsertKVActionResult {
+                prev: None,
+                result: Some((1, KVValue {
+                    meta: None,
+                    value: b"bar".to_vec()
+                }))
+            },
+            res,
+            "upsert kv"
+        );
     }
 
-    tracing::info!("--- get db");
+    tracing::info!("--- get kv");
     {
-        let res = client.get_database(db_name).await;
-        tracing::debug!("get present database res: {:?}", res);
+        let res = client.get_kv("foo").await;
+        tracing::debug!("get kv res: {:?}", res);
         let res = res?;
-        assert_eq!(1, res.database_id, "db1 id is 1");
-        assert_eq!(db_name, res.db, "db1.db is db1");
-    }
-
-    tracing::info!("--- create table {}.{}", db_name, table_name);
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "number",
-        DataType::UInt64,
-        false,
-    )]));
-    {
-        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
-        let plan = CreateTablePlan {
-            if_not_exists: false,
-            db: db_name.to_string(),
-            table: table_name.to_string(),
-            schema: schema.clone(),
-            options: options.clone(),
-            engine: "JSON".to_string(),
-        };
-
-        {
-            let res = client.create_table(plan.clone()).await?;
-            assert_eq!(1, res.table_id, "table id is 1");
-
-            let got = client.get_table(db_name.into(), table_name.into()).await?;
-            let want = GetTableActionResult {
-                table_id: 1,
-                db: db_name.into(),
-                name: table_name.into(),
-                schema: schema.clone(),
-                engine: "JSON".to_owned(),
-                options: options.clone(),
-            };
-            assert_eq!(want, got, "get created table");
-        }
+        assert_eq!(
+            Some((1, KVValue {
+                meta: None,
+                value: b"bar".to_vec()
+            })),
+            res.result,
+            "get kv"
+        );
     }
 
     tracing::info!("--- stop Metasrv");
@@ -132,321 +97,21 @@ async fn test_flight_restart() -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
 
     // try to reconnect the restarted server.
-    let mut _client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    // TODO(xp): db and table are still in pure memory store. the following test will no pass.
-
-    // tracing::info!("--- get db");
-    // {
-    //     let res = client.get_database(db_name).await;
-    //     tracing::debug!("get present database res: {:?}", res);
-    //     let res = res?;
-    //     assert_eq!(1, res.database_id, "db1 id is 1");
-    //     assert_eq!(db_name, res.db, "db1.db is db1");
-    // }
-    //
-    // tracing::info!("--- get table");
-    // {
-    //     let got = client
-    //         .get_table(db_name.into(), table_name.into())
-    //         .await
-    //         .unwrap();
-    //     let want = GetTableActionResult {
-    //         table_id: 1,
-    //         db: db_name.into(),
-    //         name: table_name.into(),
-    //         schema: schema.clone(),
-    //     };
-    //     assert_eq!(want, got, "get created table");
-    // }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_create_database() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    // 1. Service starts.
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
-
     let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
-    // 2. Create database.
-
-    // TODO: test arg if_not_exists: It should respond  an ErrorCode
+    tracing::info!("--- get kv");
     {
-        // create first db
-        let plan = CreateDatabasePlan {
-            // TODO test if_not_exists
-            if_not_exists: false,
-            db: "db1".to_string(),
-            engine: "Local".to_string(),
-            options: Default::default(),
-        };
-
-        let res = client.create_database(plan.clone()).await;
-        tracing::info!("create database res: {:?}", res);
-        let res = res.unwrap();
-        assert_eq!(1, res.database_id, "first database id is 1");
-    }
-    {
-        // create second db
-        let plan = CreateDatabasePlan {
-            if_not_exists: false,
-            db: "db2".to_string(),
-            engine: "Local".to_string(),
-            options: Default::default(),
-        };
-
-        let res = client.create_database(plan.clone()).await;
-        tracing::info!("create database res: {:?}", res);
-        let res = res.unwrap();
-        assert_eq!(2, res.database_id, "second database id is 2");
-    }
-
-    // 3. Get database.
-
-    {
-        // get present db
-        let res = client.get_database("db1").await;
-        tracing::debug!("get present database res: {:?}", res);
+        let res = client.get_kv("foo").await;
+        tracing::debug!("get kv res: {:?}", res);
         let res = res?;
-        assert_eq!(1, res.database_id, "db1 id is 1");
-        assert_eq!("db1".to_string(), res.db, "db1.db is db1");
-    }
-
-    {
-        // get absent db
-        let res = client.get_database("ghost").await;
-        tracing::debug!("=== get absent database res: {:?}", res);
-        assert!(res.is_err());
-        let res = res.unwrap_err();
-        assert_eq!(3, res.code());
-        assert_eq!("ghost".to_string(), res.message());
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_create_get_table() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    tracing::info!("init logging");
-
-    // 1. Service starts.
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
-
-    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    let db_name = "db1";
-    let tbl_name = "tb2";
-
-    {
-        // prepare db
-        let plan = CreateDatabasePlan {
-            if_not_exists: false,
-            db: db_name.to_string(),
-            engine: "Local".to_string(),
-            options: Default::default(),
-        };
-
-        let res = client.create_database(plan.clone()).await;
-
-        tracing::info!("create database res: {:?}", res);
-
-        let res = res.unwrap();
-        assert_eq!(1, res.database_id, "first database id is 1");
-    }
-    {
-        // create table and fetch it
-
-        // Table schema with metadata(due to serde issue).
-        let schema = Arc::new(DataSchema::new(vec![DataField::new(
-            "number",
-            DataType::UInt64,
-            false,
-        )]));
-
-        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
-        // Create table plan.
-        let mut plan = CreateTablePlan {
-            if_not_exists: false,
-            db: db_name.to_string(),
-            table: tbl_name.to_string(),
-            schema: schema.clone(),
-            options: options.clone(),
-            engine: "JSON".to_string(),
-        };
-
-        {
-            // create table OK
-            let res = client.create_table(plan.clone()).await.unwrap();
-            assert_eq!(1, res.table_id, "table id is 1");
-
-            let got = client
-                .get_table(db_name.into(), tbl_name.into())
-                .await
-                .unwrap();
-            let want = GetTableActionResult {
-                table_id: 1,
-                db: db_name.into(),
-                name: tbl_name.into(),
-                schema: schema.clone(),
-                engine: "JSON".to_owned(),
-                options: options.clone(),
-            };
-            assert_eq!(want, got, "get created table");
-        }
-
-        {
-            // create table again with if_not_exists = true
-            plan.if_not_exists = true;
-            let res = client.create_table(plan.clone()).await.unwrap();
-            assert_eq!(1, res.table_id, "new table id");
-
-            let got = client
-                .get_table(db_name.into(), tbl_name.into())
-                .await
-                .unwrap();
-            let want = GetTableActionResult {
-                table_id: 1,
-                db: db_name.into(),
-                name: tbl_name.into(),
-                schema: schema.clone(),
-                engine: "JSON".to_owned(),
-                options: options.clone(),
-            };
-            assert_eq!(want, got, "get created table");
-        }
-
-        {
-            // create table again with if_not_exists=false
-            plan.if_not_exists = false;
-
-            let res = client.create_table(plan.clone()).await;
-            tracing::info!("create table res: {:?}", res);
-
-            let status = res.err().unwrap();
-            assert_eq!(
-                format!("Code: 4003, displayText = table exists: {}.", tbl_name),
-                status.to_string()
-            );
-
-            // get_table returns the old table
-
-            let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
-            let want = GetTableActionResult {
-                table_id: 1,
-                db: db_name.into(),
-                name: tbl_name.into(),
-                schema: schema.clone(),
-                engine: "JSON".to_owned(),
-                options: options.clone(),
-            };
-            assert_eq!(want, got, "get old table");
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_drop_table() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    tracing::info!("init logging");
-
-    // 1. Service starts.
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
-
-    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    let db_name = "db1";
-    let tbl_name = "tb2";
-
-    {
-        // prepare db
-        let plan = CreateDatabasePlan {
-            if_not_exists: false,
-            db: db_name.to_string(),
-            engine: "Local".to_string(),
-            options: Default::default(),
-        };
-
-        let res = client.create_database(plan.clone()).await;
-
-        tracing::info!("create database res: {:?}", res);
-
-        let res = res.unwrap();
-        assert_eq!(1, res.database_id, "first database id is 1");
-    }
-    {
-        // create table and fetch it
-
-        // Table schema with metadata(due to serde issue).
-        let schema = Arc::new(DataSchema::new(vec![DataField::new(
-            "number",
-            DataType::UInt64,
-            false,
-        )]));
-
-        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
-        // Create table plan.
-        let plan = CreateTablePlan {
-            if_not_exists: false,
-            db: db_name.to_string(),
-            table: tbl_name.to_string(),
-            schema: schema.clone(),
-            options: options.clone(),
-            engine: "JSON".to_string(),
-        };
-
-        {
-            // create table OK
-            let res = client.create_table(plan.clone()).await.unwrap();
-            assert_eq!(1, res.table_id, "table id is 1");
-
-            let got = client
-                .get_table(db_name.into(), tbl_name.into())
-                .await
-                .unwrap();
-            let want = GetTableActionResult {
-                table_id: 1,
-                db: db_name.into(),
-                name: tbl_name.into(),
-                schema: schema.clone(),
-                engine: "JSON".to_owned(),
-                options: options.clone(),
-            };
-            assert_eq!(want, got, "get created table");
-        }
-
-        {
-            // drop table
-            let plan = DropTablePlan {
-                if_exists: true,
-                db: db_name.to_string(),
-                table: tbl_name.to_string(),
-            };
-            let res = client.drop_table(plan.clone()).await.unwrap();
-            assert_eq!(DropTableActionResult {}, res, "drop table {}", tbl_name)
-        }
-
-        {
-            let res = client.get_table(db_name.into(), tbl_name.into()).await;
-            let status = res.err().unwrap();
-            assert_eq!(
-                format!("Code: 25, displayText = table not found: {}.", tbl_name),
-                status.to_string(),
-                "get dropped table {}",
-                tbl_name
-            );
-        }
+        assert_eq!(
+            Some((1, KVValue {
+                meta: None,
+                value: b"bar".to_vec()
+            })),
+            res.result,
+            "get kv"
+        );
     }
 
     Ok(())
@@ -1013,160 +678,6 @@ async fn test_flight_generic_kv() -> anyhow::Result<()> {
             );
         }
     }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    // Empty Database
-    let res = client.get_database_meta(None).await?;
-    assert!(res.is_none());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    // create-db operation will increases meta_version
-    let plan = CreateDatabasePlan {
-        if_not_exists: false,
-        db: "db1".to_string(),
-        engine: "Local".to_string(),
-        options: Default::default(),
-    };
-    client.create_database(plan).await?;
-
-    let res = client.get_database_meta(None).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(1, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-
-    // if lower_bound < current meta version, returns database meta
-    let res = client.get_database_meta(Some(0)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(1, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-
-    // if lower_bound equals current meta version, returns None
-    let res = client.get_database_meta(Some(1)).await?;
-    assert!(res.is_none());
-
-    // failed ddl do not effect meta version
-    let plan = CreateDatabasePlan {
-        if_not_exists: true, // <<--
-        db: "db1".to_string(),
-        engine: "Local".to_string(),
-        options: Default::default(),
-    };
-
-    client.create_database(plan).await?;
-    let res = client.get_database_meta(Some(1)).await?;
-    assert!(res.is_none());
-
-    // drop-db will increase meta version
-    let plan = DropDatabasePlan {
-        if_exists: true,
-        db: "db1".to_string(),
-    };
-
-    client.drop_database(plan).await?;
-    let res = client.get_database_meta(Some(1)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-
-    assert_eq!(2, snapshot.meta_ver);
-    assert_eq!(0, snapshot.db_metas.len());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    let test_db = "db1";
-    let plan = CreateDatabasePlan {
-        if_not_exists: false,
-        db: test_db.to_string(),
-        engine: "Local".to_string(),
-        options: Default::default(),
-    };
-    client.create_database(plan).await?;
-
-    // After `create db`, meta_ver will be increased to 1
-
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "number",
-        DataType::UInt64,
-        false,
-    )]));
-
-    // create-tbl operation will increases meta_version
-    let plan = CreateTablePlan {
-        if_not_exists: true,
-        db: test_db.to_string(),
-        table: "tbl1".to_string(),
-        schema: schema.clone(),
-        options: Default::default(),
-        engine: "JSON".to_string(),
-    };
-
-    client.create_table(plan.clone()).await?;
-
-    let res = client.get_database_meta(None).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(2, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-    assert_eq!(1, snapshot.tbl_metas.len());
-
-    // if lower_bound < current meta version, returns database meta
-    let res = client.get_database_meta(Some(0)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(2, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-
-    // if lower_bound equals current meta version, returns None
-    let res = client.get_database_meta(Some(2)).await?;
-    assert!(res.is_none());
-
-    // failed ddl do not effect meta version
-    //  recall: plan.if_not_exist == true
-    let _r = client.create_table(plan).await?;
-    let res = client.get_database_meta(Some(2)).await?;
-    assert!(res.is_none());
-
-    // drop-table will increase meta version
-    let plan = DropTablePlan {
-        if_exists: true,
-        db: test_db.to_string(),
-        table: "tbl1".to_string(),
-    };
-
-    client.drop_table(plan).await?;
-    let res = client.get_database_meta(Some(2)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(3, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-    assert_eq!(0, snapshot.tbl_metas.len());
 
     Ok(())
 }

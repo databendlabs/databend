@@ -247,7 +247,7 @@ build_exceptions! {
     IllegalSchema(4005),
     IllegalMetaState(4005),
     MetaNodeInternalError(4006),
-    TrancateTableFailedError(4007),
+    TruncateTableFailedError(4007),
 
     // namespace error.
     NamespaceUnknownNode(4008),

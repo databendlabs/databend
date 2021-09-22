@@ -139,7 +139,7 @@ pub struct MetaConfig {
     #[structopt(
     long,
     env = "METASRV_HEARTBEAT_INTERVAL",
-    default_value = "500",
+    default_value = "1000",
     help = concat!("The interval in milli seconds at which a leader send heartbeat message to followers.",
     " Different value of this setting on leader and followers may cause unexpected behavior.")
     )]

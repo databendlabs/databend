@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::meta_service::placement::rand_n_from_m;
+use crate::raft::state_machine::placement::rand_n_from_m;
 
 #[test]
 fn test_rand_n_from_m() -> anyhow::Result<()> {

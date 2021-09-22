@@ -76,7 +76,7 @@ impl PackageCommand {
                 }
                 Some("list") => {
                     let list = ListCommand::create(self.conf.clone());
-                    list.exec_match(writer, matches.subcommand_matches("fetch"))?;
+                    list.exec_match(writer, matches.subcommand_matches("list"))?;
                 }
                 Some("switch") => {
                     let switch = SwitchCommand::create(self.conf.clone());
