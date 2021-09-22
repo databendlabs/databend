@@ -23,6 +23,7 @@ use crate::datasources::table::fuse::do_read_obj_async;
 use crate::datasources::table::fuse::TableSnapshot;
 use crate::sessions::DatabendQueryContextRef;
 
+// TODO ctx and da? these two args looks like redundant
 pub fn read_table_snapshot(
     da: Arc<dyn DataAccessor>,
     ctx: &DatabendQueryContextRef,

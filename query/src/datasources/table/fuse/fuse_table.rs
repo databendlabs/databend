@@ -78,8 +78,8 @@ impl FuseTable {
         let bytes = serde_json::to_vec(&snapshot)?;
         data_accessor.put(location, bytes).await
     }
-    pub(crate) fn merge_seg(&self, new_seg: String, mut prev: TableSnapshot) -> TableSnapshot {
-        prev.segments.push(new_seg);
+    pub(crate) fn merge_seg(&self, new_seg: &str, mut prev: TableSnapshot) -> TableSnapshot {
+        prev.segments.push(new_seg.to_owned());
         let new_id = Uuid::new_v4();
         prev.snapshot_id = new_id;
         prev
@@ -111,6 +111,7 @@ impl Table for FuseTable {
         &self.name
     }
 
+    // TODO should reflects the Table Engine which create this table
     fn engine(&self) -> &str {
         "fuse"
     }
@@ -123,6 +124,7 @@ impl Table for FuseTable {
         Ok(self.schema.clone())
     }
 
+    // TODO this method no longer make sense, should we remove it from all instance of `Table`?
     fn is_local(&self) -> bool {
         self.local
     }
@@ -234,7 +236,7 @@ impl Table for FuseTable {
             .table_snapshot(&ctx)?
             .unwrap_or_else(TableSnapshot::new);
         let prev_snapshot_id = tbl_snapshot.snapshot_id;
-        let new_snapshot: TableSnapshot = self.merge_seg(seg_loc, tbl_snapshot);
+        let new_snapshot: TableSnapshot = self.merge_seg(&seg_loc, tbl_snapshot);
         let new_snapshot_id = new_snapshot.snapshot_id;
 
         let snapshot_loc = {
@@ -249,17 +251,30 @@ impl Table for FuseTable {
         let table_id = insert_plan.tbl_id;
         let catalog = ctx.get_catalog();
 
-        // TODO Err(_) is also recoverable
-        let res = catalog.commit_table_snapshot(
+        // TODO Err is also recoverable,
+        let mut res = catalog.commit_table_snapshot(
             table_id,
             prev_snapshot_id.to_simple().to_string(), // wrap this
             new_snapshot_id.to_simple().to_string(),
         )?;
 
-        match res {
-            TableCommitmentReply::Success => Ok(()),
-            TableCommitmentReply::Conflict(_new_snapshot_id) => todo!(),
-            TableCommitmentReply::Fatal(_msg) => todo!(),
+        // TODO crossbeam backoff?
+        loop {
+            match res {
+                TableCommitmentReply::Success => break Ok(()),
+                TableCommitmentReply::Conflict(latest_snapshot_id) => {
+                    let latest = self.table_snapshot_by_id(&ctx, Some(&latest_snapshot_id))?;
+                    let latest = latest.unwrap();
+                    let new_snapshot = self.merge_seg(&seg_loc, latest);
+                    let new_snapshot_id = new_snapshot.snapshot_id;
+                    res = catalog.commit_table_snapshot(
+                        table_id,
+                        prev_snapshot_id.to_simple().to_string(),
+                        new_snapshot_id.to_simple().to_string(),
+                    )?;
+                }
+                TableCommitmentReply::Fatal(_msg) => todo!(),
+            }
         }
     }
 
@@ -276,6 +291,19 @@ impl FuseTable {
     fn table_snapshot(&self, ctx: &DatabendQueryContextRef) -> Result<Option<TableSnapshot>> {
         let schema = self.schema()?;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
+            let r = read_table_snapshot(self.data_accessor(ctx)?, ctx, loc)?;
+            Ok(Some(r))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn table_snapshot_by_id(
+        &self,
+        ctx: &DatabendQueryContextRef,
+        snapshot_id: Option<&str>,
+    ) -> Result<Option<TableSnapshot>> {
+        if let Some(loc) = snapshot_id {
             let r = read_table_snapshot(self.data_accessor(ctx)?, ctx, loc)?;
             Ok(Some(r))
         } else {
