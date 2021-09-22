@@ -114,15 +114,12 @@ impl MetaStoreCatalog {
             &db_info.engine
         };
 
-        let provider = self
-            .db_engine_registry
-            .engine_provider(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownDatabaseEngine(format!(
-                    "unknown database engine [{}]",
-                    db_info.engine
-                ))
-            })?;
+        let provider = self.db_engine_registry.engine(engine).ok_or_else(|| {
+            ErrorCode::UnknownDatabaseEngine(format!(
+                "unknown database engine [{}]",
+                db_info.engine
+            ))
+        })?;
 
         let name = db_info.name.clone();
         let db = provider.create(&self.conf, db_info)?;
@@ -132,12 +129,8 @@ impl MetaStoreCatalog {
 }
 
 impl Catalog for MetaStoreCatalog {
-    fn register_db_engine(
-        &self,
-        engine_type: &str,
-        backend: Arc<dyn DatabaseEngine>,
-    ) -> Result<()> {
-        self.db_engine_registry.register(engine_type, backend)
+    fn register_db_engine(&self, engine_type: &str, engine: Arc<dyn DatabaseEngine>) -> Result<()> {
+        self.db_engine_registry.register(engine_type, engine)
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {

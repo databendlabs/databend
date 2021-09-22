@@ -21,9 +21,9 @@ use common_store_api_sdk::StoreApiProvider;
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
-use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
 use crate::datasources::database::default::default_database::DefaultDatabase;
+use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 /// Default database engine, which

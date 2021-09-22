@@ -62,4 +62,22 @@ pub trait Catalog {
 
     // Get all db engines.
     fn get_db_engines(&self) -> Result<Vec<EngineDescription>>;
+
+    // for table level OCC Tx
+    fn commit_table_snapshot(
+        &self,
+        _table_id: MetaId,
+        _prev_snapshot_id: String,
+        _new_snapshot_id: String,
+    ) -> Result<TableCommitmentReply> {
+        unimplemented!()
+    }
+}
+
+pub enum TableCommitmentReply {
+    Success,
+    // recoverable exception, with current snapshot id
+    Conflict(String),
+    // non recoverable exception, like... table no longer exist
+    Fatal(String),
 }

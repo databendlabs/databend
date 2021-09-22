@@ -31,7 +31,9 @@ use common_streams::SendableDataBlockStream;
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
+use crate::catalogs::Catalog;
 use crate::catalogs::Table;
+use crate::catalogs::TableCommitmentReply;
 use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::parse_storage_scheme;
 use crate::datasources::table::fuse::project_col_idx;
@@ -231,9 +233,9 @@ impl Table for FuseTable {
         let tbl_snapshot = self
             .table_snapshot(&ctx)?
             .unwrap_or_else(TableSnapshot::new);
-        let _snapshot_id = tbl_snapshot.snapshot_id;
+        let prev_snapshot_id = tbl_snapshot.snapshot_id;
         let new_snapshot: TableSnapshot = self.merge_seg(seg_loc, tbl_snapshot);
-        let _new_snapshot_id = new_snapshot.snapshot_id;
+        let new_snapshot_id = new_snapshot.snapshot_id;
 
         let snapshot_loc = {
             let uuid = Uuid::new_v4().to_simple().to_string();
@@ -244,16 +246,21 @@ impl Table for FuseTable {
             .await?;
 
         // 4. commit
-        let _table_id = insert_plan.tbl_id;
-        // TODO simple retry strategy
-        // self.meta_client
-        //     .commit_table(
-        //         table_id,
-        //         snapshot_id.to_simple().to_string(),
-        //         new_snapshot_id.to_simple().to_string(),
-        //     )
-        //     .await?;
-        Ok(())
+        let table_id = insert_plan.tbl_id;
+        let catalog = ctx.get_catalog();
+
+        // TODO Err(_) is also recoverable
+        let res = catalog.commit_table_snapshot(
+            table_id,
+            prev_snapshot_id.to_simple().to_string(), // wrap this
+            new_snapshot_id.to_simple().to_string(),
+        )?;
+
+        match res {
+            TableCommitmentReply::Success => Ok(()),
+            TableCommitmentReply::Conflict(_new_snapshot_id) => todo!(),
+            TableCommitmentReply::Fatal(_msg) => todo!(),
+        }
     }
 
     async fn truncate(

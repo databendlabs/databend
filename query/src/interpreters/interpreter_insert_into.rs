@@ -45,8 +45,8 @@ impl Interpreter for InsertIntoInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_catalog();
-        let database = datasource.get_database(self.plan.db_name.as_str())?;
+        let catalog = self.ctx.get_catalog();
+        let database = catalog.get_database(self.plan.db_name.as_str())?;
         let table = database.get_table_by_id(self.plan.tbl_id, None)?;
         table
             .raw()

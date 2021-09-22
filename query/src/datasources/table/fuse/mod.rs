@@ -13,12 +13,12 @@
 //  limitations under the License.
 //
 
+mod fuse_table;
 mod io;
 mod meta;
-mod table;
 mod util;
 
+pub use fuse_table::FuseTable;
 pub use io::*;
 pub use meta::*;
-pub use table::FuseTable;
 pub use util::*;

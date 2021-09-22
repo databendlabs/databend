@@ -14,18 +14,15 @@
 //
 
 pub use catalog::Catalog;
+pub use catalog::TableCommitmentReply;
 pub use database::Database;
 pub use impls::util::in_memory_metas::InMemoryMetas;
-//pub use meta_backend::MetaBackend;
 pub use table::Table;
 pub use table::TablePtr;
 pub use table_function::TableFunction;
-//pub use database_engine::DatabaseEngine;
 pub use table_meta::Meta;
 pub use table_meta::TableFunctionMeta;
 pub use table_meta::TableMeta;
-
-pub use crate::datasources::database_engine::DatabaseEngine;
 
 mod catalog;
 mod database;

@@ -54,7 +54,6 @@ pub trait Table: Sync + Send {
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
-    // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
         _ctx: DatabendQueryContextRef,

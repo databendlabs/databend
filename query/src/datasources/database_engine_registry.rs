@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 
-use crate::catalogs::DatabaseEngine;
+use crate::datasources::database_engine::DatabaseEngine;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct EngineDescription {
@@ -74,10 +74,7 @@ impl DatabaseEngineRegistry {
         }
     }
 
-    pub fn engine_provider(
-        &self,
-        table_engine: impl AsRef<str>,
-    ) -> Option<Arc<dyn DatabaseEngine>> {
+    pub fn engine(&self, table_engine: impl AsRef<str>) -> Option<Arc<dyn DatabaseEngine>> {
         self.engines
             .read()
             .get(table_engine.as_ref().to_uppercase().as_str())

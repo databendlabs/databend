@@ -56,7 +56,7 @@ t this stage, we reply on background task to merge the data properly.
 
       In case of conflicts, "Driver" need to re-try the transaction.(OCC, Table level, READ-COMMITTED)
 
-      For this iteration, the "Driver" is `interpreter_insert_into`.
+      For this iteration, the "Driver" is `Table` itself.
 
 
 **Scan Flow:**

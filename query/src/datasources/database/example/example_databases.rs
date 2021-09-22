@@ -20,9 +20,9 @@ use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
-use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabase;
+use crate::datasources::database_engine::DatabaseEngine;
 
 pub struct ExampleDatabaseEngine {
     meta_backend: Arc<dyn MetaBackend>,
