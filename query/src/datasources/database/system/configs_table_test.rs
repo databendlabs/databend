@@ -23,10 +23,12 @@ use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::datasources::database::system::ConfigsTable;
 use crate::sessions::SessionManager;
+use crate::tests::{try_create_context, try_create_context_with_config};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let config = Config::default();
+    let ctx = try_create_context_with_config(config)?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create();

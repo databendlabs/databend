@@ -25,13 +25,25 @@ use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext, DatabendQue
 use crate::sessions::SessionManager;
 use std::sync::Arc;
 use common_management::NodeInfo;
+use crate::tests::try_create_session_mgr;
 
 pub fn try_create_context() -> Result<DatabendQueryContextRef> {
-    let sessions = crate::tests::try_create_session_mgr(None)?;
+    let sessions = try_create_session_mgr(None)?;
     let dummy_session = sessions.create_session("TestSession")?;
 
     Ok(DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
         sessions.get_conf().clone(),
+        Arc::new(dummy_session.as_ref().clone()),
+        Cluster::empty(),
+    )))
+}
+
+pub fn try_create_context_with_config(config: Config) -> Result<DatabendQueryContextRef> {
+    let sessions = try_create_session_mgr(None)?;
+    let dummy_session = sessions.create_session("TestSession")?;
+
+    Ok(DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
+        config,
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
     )))
@@ -68,7 +80,7 @@ impl ClusterDescriptor {
 }
 
 pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<DatabendQueryContextRef> {
-    let sessions = crate::tests::try_create_session_mgr(None)?;
+    let sessions = try_create_session_mgr(None)?;
     let dummy_session = sessions.create_session("TestSession")?;
 
     let local_id = desc.local_node_id;

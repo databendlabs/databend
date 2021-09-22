@@ -332,8 +332,8 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
 async fn create_env() -> Result<DatabendQueryContextRef> {
     try_create_cluster_context(
         ClusterDescriptor::new()
-            .with_node("dummy", "github.com:9090")
             .with_node("dummy_local", "localhost:9090")
+            .with_node("dummy", "github.com:9090")
             .with_local_id("dummy_local")
     )
 }

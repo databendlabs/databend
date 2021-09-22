@@ -34,43 +34,43 @@ use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
+use crate::servers::Server;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
     // setup
     let mut conf = Config::default();
+    conf.query.flight_api_address = "127.0.0.1:0".to_string();
     conf.query.rpc_tls_server_key = TEST_SERVER_KEY.to_owned();
     conf.query.rpc_tls_server_cert = TEST_SERVER_CERT.to_owned();
-    let session_manager = crate::tests::try_create_session_mgr(None)?;
 
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let mut srv = RpcService {
-        sessions: session_manager.clone(),
+    let mut rpc_service = RpcService {
+        sessions: crate::tests::try_create_session_mgr(None)?,
         abort_notify: Arc::new(Notify::new()),
         dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
     };
-    let addr_str = addr.to_string();
-    let stream = TcpListenerStream::new(listener);
-    srv.start_with_incoming(stream).await?;
 
-    let client_conf = RpcClientTlsConfig {
+    let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
+    listener_address = rpc_service.start(listener_address).await?;
+
+    let tls_conf = Some(RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),
         domain_name: TEST_CN_NAME.to_string(),
-    };
+    });
 
     // normal case
-    let conn =
-        ConnectionFactory::create_flight_channel(addr_str.clone(), None, Some(client_conf)).await;
-    assert!(conn.is_ok());
-    let channel = conn.unwrap();
+    let conn = ConnectionFactory::create_flight_channel(listener_address, None, tls_conf).await?;
+    // assert!(conn.is_ok());
+    let channel = conn;
     let mut f_client = FlightServiceClient::new(channel);
     let r = f_client.list_actions(Empty {}).await;
     assert!(r.is_ok());
 
     // client access without tls enabled will be failed
     // - channel can still be created, but communication will be failed
-    let channel = ConnectionFactory::create_flight_channel(addr_str, None, None).await?;
+    let channel = ConnectionFactory::create_flight_channel(listener_address, None, None).await?;
     let mut f_client = FlightServiceClient::new(channel);
     let r = f_client.list_actions(Empty {}).await;
     assert!(r.is_err());

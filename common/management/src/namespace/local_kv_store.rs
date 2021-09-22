@@ -84,6 +84,8 @@ impl LocalKVStore {
     #[allow(dead_code)]
     pub async fn new_temp() -> common_exception::Result<Arc<dyn KVApi>> {
         // generate a unique id as part of the name of sled::Tree
+        let temp_dir = tempfile::tempdir()?;
+        metasrv::meta_service::raft_db::init_temp_sled_db(temp_dir);
 
         static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
         let x = GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst);

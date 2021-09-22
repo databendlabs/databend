@@ -42,6 +42,7 @@ impl ClusterDiscovery {
     // TODO(Winter): this should be disabled by compile flag
     async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
         let local_id = global_unique_id();
+
         let local_store = LocalKVStore::new_temp().await?;
         let (lift_time, provider) = Self::create_provider(cfg, local_store)?;
 
@@ -136,7 +137,7 @@ impl Cluster {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.nodes.len() == 1
+        self.nodes.len() <= 1
     }
 
     pub fn is_local(&self, node: &NodeInfo) -> bool {

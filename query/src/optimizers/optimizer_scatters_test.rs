@@ -207,7 +207,8 @@ async fn test_scatter_optimizer() -> Result<()> {
         let ctx = try_create_cluster_context(
             ClusterDescriptor::new()
                 .with_node("Github", "www.github.com:9090")
-                .with_local_id("Github")
+                .with_node("dummy_local", "127.0.0.1:9090")
+                .with_local_id("dummy_local")
         )?;
 
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;

@@ -27,6 +27,8 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContextRef;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 pub struct ClustersTable {
     schema: DataSchemaRef,
@@ -39,7 +41,7 @@ impl ClustersTable {
                 DataField::new("name", DataType::String, false),
                 DataField::new("host", DataType::String, false),
                 DataField::new("port", DataType::UInt16, false),
-                DataField::new("priority", DataType::UInt8, false),
+                // DataField::new("priority", DataType::UInt8, false),
             ]),
         }
     }
@@ -95,26 +97,32 @@ impl Table for ClustersTable {
         ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        unimplemented!()
-        // let nodes = ctx.get_cluster().get_nodes();
-        // let names: Vec<&[u8]> = nodes.iter().map(|x| x.id.as_bytes()).collect();
-        // let hosts = nodes
-        //     .iter()
-        //     .map(|x| x.hostname())
-        //     .collect::<Vec<_>>();
-        // let hostnames = hosts.iter().map(|x| x.as_bytes()).collect::<Vec<&[u8]>>();
-        // let ports: Vec<u16> = nodes.iter().map(|x| x.address.port()).collect();
-        // let priorities: Vec<u8> = nodes.iter().map(|x| x.priority).collect();
-        // let block = DataBlock::create_by_array(self.schema.clone(), vec![
-        //     Series::new(names),
-        //     Series::new(hostnames),
-        //     Series::new(ports),
-        //     Series::new(priorities),
-        // ]);
-        // Ok(Box::pin(DataBlockStream::create(
-        //     self.schema.clone(),
-        //     None,
-        //     vec![block],
-        // )))
+        let cluster = ctx.get_cluster();
+        let cluster_nodes = cluster.get_nodes();
+
+        let mut names = StringArrayBuilder::with_capacity(cluster_nodes.len());
+        let mut addresses = StringArrayBuilder::with_capacity(cluster_nodes.len());
+        let mut addresses_port = DFUInt16ArrayBuilder::with_capacity(cluster_nodes.len());
+
+
+        for cluster_node in &cluster_nodes {
+            let address = SocketAddr::from_str(&cluster_node.flight_address)?;
+
+            names.append_value(cluster_node.id.as_bytes());
+            addresses.append_value(address.ip().to_string().as_bytes());
+            addresses_port.append_value(address.port());
+        }
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.schema.clone(),
+            None,
+            vec![DataBlock::create_by_array(
+                self.schema.clone(),
+                vec![
+                    names.finish().into_series(),
+                    addresses.finish().into_series(),
+                    addresses_port.finish().into_series(),
+                ])],
+        )))
     }
 }
