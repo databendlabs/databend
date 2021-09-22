@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,17 +22,18 @@ use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
 use common_runtime::tokio::sync::Mutex;
+use common_store_api::kv_apis::kv_api::MGetKVActionResult;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::PrefixListReply;
 use common_store_api::UpsertKVActionResult;
-use common_store_api_sdk::kv_api_impl::MGetKVActionResult;
 use common_tracing::tracing;
 use metasrv::configs;
 use metasrv::meta_service::AppliedState;
 use metasrv::meta_service::Cmd;
 use metasrv::meta_service::LogEntry;
 use metasrv::raft::state_machine::StateMachine;
+pub use metasrv::sled_store::init_temp_sled_db;
 
 /// Local storage that provides the API defined by `KVApi`.
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
