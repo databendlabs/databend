@@ -1,0 +1,31 @@
+[package]
+name = "kvlocal"
+version = "0.1.0"
+description = "distributed meta data service"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+
+[features]
+
+[dependencies]
+# Workspace dependencies
+common-exception = {path = "../common/exception"}
+common-metatypes = {path = "../common/metatypes"}
+common-runtime = {path = "../common/runtime"}
+common-tracing = {path = "../common/tracing"}
+common-store-api = {path = "../common/store-api"}
+
+metasrv = {path = "../metasrv"}
+
+
+# Crates.io dependencies
+async-trait = "0.1"
+tempfile = "3.2.0"
+
+
+[dev-dependencies]
+pretty_assertions = "0.7"
+

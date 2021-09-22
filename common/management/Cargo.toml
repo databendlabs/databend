@@ -16,7 +16,7 @@ common-store-api-sdk= {path = "../store-api-sdk"}
 common-store-api= {path = "../store-api"}
 common-tracing= {path = "../tracing"}
 
-metasrv = {path = "../../metasrv"}
+kvlocal = {path = "../../kvlocal" }
 
 async-trait = "0.1"
 lazy_static = "1.4.0"
@@ -28,5 +28,4 @@ sha1 = "0.6.0"
 [dev-dependencies]
 tempfile = "3.2.0"
 common-runtime = { path = "../runtime"}
-common-store-api-sdk= {path = "../store-api-sdk"}
 mockall = "0.10.2"

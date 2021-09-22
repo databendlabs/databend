@@ -880,8 +880,8 @@ dependencies = [
  "common-store-api",
  "common-store-api-sdk",
  "common-tracing",
+ "kvlocal",
  "lazy_static",
- "metasrv",
  "mockall",
  "serde",
  "serde_json",
@@ -959,7 +959,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-management",
  "common-metatypes",
  "common-planners",
  "common-runtime",
@@ -2701,6 +2700,21 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2",
+]
+
+[[package]]
+name = "kvlocal"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-metatypes",
+ "common-runtime",
+ "common-store-api",
+ "common-tracing",
+ "metasrv",
+ "pretty_assertions",
+ "tempfile",
 ]
 
 [[package]]
