@@ -47,7 +47,7 @@ impl Function for RunningDifferenceFunction {
         match args[0] {
             DataType::Int8 | DataType::UInt8 => Ok(DataType::Int16),
             DataType::Int16 | DataType::UInt16 | DataType::Date16 => Ok(DataType::Int32),
-            DataType::Int32 | DataType::UInt32 | DataType::Int64 | DataType::UInt64 | DataType::Date32 | DataType::DateTime32(_) => Ok(DataType::UInt64),
+            DataType::Int32 | DataType::UInt32 | DataType::Int64 | DataType::UInt64 | DataType::Date32 | DataType::DateTime32(_) => Ok(DataType::Int64),
             _ => Result::Err(ErrorCode::IllegalDataType(format!(
                 "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
                 "",

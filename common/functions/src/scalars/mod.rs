@@ -14,6 +14,8 @@
 
 #[cfg(test)]
 mod function_column_test;
+#[cfg(test)]
+mod function_running_difference_test;
 
 mod arithmetics;
 mod comparisons;
