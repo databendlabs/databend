@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,18 +17,17 @@ use common_runtime::tokio;
 use common_store_api_sdk::MetaApi;
 use common_store_api_sdk::RpcClientTlsConfig;
 use common_store_api_sdk::StoreClient;
+use metasrv::init_meta_ut;
+use metasrv::tests::service::new_test_context;
+use metasrv::tests::start_metasrv_with_context;
+use metasrv::tests::tls_constants::TEST_CA_CERT;
+use metasrv::tests::tls_constants::TEST_CN_NAME;
+use metasrv::tests::tls_constants::TEST_SERVER_CERT;
+use metasrv::tests::tls_constants::TEST_SERVER_KEY;
 use pretty_assertions::assert_eq;
 
-use crate::tests::service::new_test_context;
-use crate::tests::start_metasrv_with_context;
-
-const TEST_CA_CERT: &str = "../tests/certs/ca.pem";
-const TEST_SERVER_CERT: &str = "../tests/certs/server.pem";
-const TEST_SERVER_KEY: &str = "../tests/certs/server.key";
-const TEST_CN_NAME: &str = "localhost";
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_tls() -> anyhow::Result<()> {
+async fn test_tls_server() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -58,7 +57,7 @@ async fn test_flight_tls() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_tls_server_config_failure() -> anyhow::Result<()> {
+async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -73,7 +72,7 @@ async fn test_flight_tls_server_config_failure() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_tls_client_config_failure() -> anyhow::Result<()> {
+async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
