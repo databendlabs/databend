@@ -21,6 +21,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+          cargo install --version 0.1.16 cross
+
       - name: Build Perf Tool
         run: |
           if [ ${{ matrix.config.cross }} = true ]; then
