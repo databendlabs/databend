@@ -17,10 +17,10 @@ use std::fmt;
 use common_arrow::arrow::array::Array;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::prelude::*;
-
+use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
@@ -44,7 +44,15 @@ impl Function for RunningDifferenceFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        Ok(args[0].clone())
+        match args[0] {
+            DataType::Int8 | DataType::UInt8 => Ok(DataType::Int16),
+            DataType::Int16 | DataType::UInt16 | DataType::Date16 => Ok(DataType::Int32),
+            DataType::Int32 | DataType::UInt32 | DataType::Int64 | DataType::UInt64 | DataType::Date32 | DataType::DateTime32(_) => Ok(DataType::UInt64),
+            _ => Result::Err(ErrorCode::IllegalDataType(format!(
+                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                "",
+                self.name()))),
+        }
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -52,46 +60,36 @@ impl Function for RunningDifferenceFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        // 1. 支持number类型
-        let array = match columns[0].data_type() {
-            DataType::Date16 => {
-                if let DataColumn::Constant(_, _) = columns[0].column() {
-                    Ok(DataColumn::Constant(DataValue::Int16(Some(0i16)), input_rows))
-                } else {
-                    let inner_array = columns[0].column()
-                        .to_array()?
-                        .u16()?
-                        .inner();
-                    
-                        let result_vec = Vec::with_capacity(inner_array.len());
-                        // if inner_array.len() == 0 {
-                        //    DataColumn::
-                        //}
-                        for index in 0.. inner_array.len() {    
-                            match inner_array.is_null(index) {
-                                true => result_vec.push(None), 
-                                false => {
-                                    if index > 0 {
-                                        
-                                    }
-                                }
-                            }
-                        }
-
-                    Ok(result.into())
-                }
+         match columns[0].data_type() {
+            DataType::Int8 => { 
+                compute_i8(columns[0].column(), input_rows)
             },
-            DataType::Date32 => {
-
+            DataType::UInt8 => {
+                compute_u8(columns[0].column(), input_rows)
             },
-            DataType::DateTime32(_) => {
-
+            DataType::Int16 => {
+                compute_i16(columns[0].column(), input_rows)
             },
-            _ => unreachable!(),
-            
-        } 
-
-        Ok(columns[0].column().clone())
+            DataType::UInt16 | DataType::Date16 => {
+                compute_u16(columns[0].column(), input_rows)
+            },
+            DataType::Int32 => {
+                compute_i32(columns[0].column(), input_rows)
+            },
+            DataType::UInt32 | DataType::Date32 | DataType::DateTime32(_)=> {
+                compute_u32(columns[0].column(), input_rows)
+            },
+            DataType::Int64 => {
+                compute_i64(columns[0].column(), input_rows)
+            },
+            DataType::UInt64 => {
+                compute_u64(columns[0].column(), input_rows)
+            },
+            other => Result::Err(ErrorCode::IllegalDataType(format!(
+                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                other,
+                self.name()))),
+            }
     }
 
     fn is_deterministic(&self) -> bool {
@@ -102,6 +100,52 @@ impl Function for RunningDifferenceFunction {
         1
     }
 }
+
+macro_rules! run_difference_compute {
+    ($method:ident, $result_type:ident, $target_type:ty, $func: ident) => {
+        fn $func(
+            column: &DataColumn, input_rows:usize
+        ) -> Result<DataColumn> {
+            if let DataColumn::Constant(_, _) = column{
+                Ok(DataColumn::Constant(
+                    DataValue::$result_type(Some(0i8 as $target_type)),
+                    input_rows,
+                ))
+            } else {
+                let series = column.to_array()?;
+                let array = series.$method()?.inner();
+
+                let mut result_vec = Vec::with_capacity(array.len());
+                for index in 0..array.len() {
+                    match array.is_null(index) {
+                        true => result_vec.push(None),
+                        false => {
+                            if index == 0 {
+                                result_vec.push(Some(0i8 as $target_type))
+                            } else if array.is_null(index - 1) {
+                                result_vec.push(None)
+                            } else {
+                                let diff =  array.value(index) as $target_type - array.value(index - 1) as $target_type;
+                                result_vec.push(Some(diff))
+                            }
+                        }
+                    }
+                }
+
+                Ok(Series::new(result_vec).into())
+            }
+        }
+    }
+}
+
+run_difference_compute!(i8, Int16, i16, compute_i8);
+run_difference_compute!(u8, Int16, i16, compute_u8);
+run_difference_compute!(i16, Int32, i32, compute_i16);
+run_difference_compute!(u16, Int32, i32, compute_u16);
+run_difference_compute!(i32, Int64, i64, compute_i32 );
+run_difference_compute!(u32, Int64, i64, compute_u32);
+run_difference_compute!(i64, Int64, i64, compute_i64);
+run_difference_compute!(u64, Int64, i64, compute_u64);
 
 impl fmt::Display for RunningDifferenceFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
