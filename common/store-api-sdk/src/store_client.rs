@@ -22,6 +22,7 @@ use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_store_api::util::STORE_RUNTIME;
+use common_store_api::util::STORE_SYNC_CALL_TIMEOUT;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -63,7 +64,10 @@ impl StoreClient {
 
     pub fn sync_try_new(conf: &StoreClientConf) -> Result<StoreClient> {
         let cfg = conf.clone();
-        STORE_RUNTIME.block_on(async move { StoreClient::try_new(&cfg).await }, None)?
+        STORE_RUNTIME.block_on(
+            async move { StoreClient::try_new(&cfg).await },
+            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
+        )?
     }
 
     #[tracing::instrument(level = "debug", skip(password))]

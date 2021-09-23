@@ -16,6 +16,7 @@ common-datavalues= {path= "../datavalues"}
 common-streams = {path= "../streams"}
 common-datablocks = {path= "../datablocks"}
 common-runtime = { path = "../runtime"}
+common-tracing = { path = "../tracing"}
 
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3"
