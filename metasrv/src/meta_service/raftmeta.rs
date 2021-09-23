@@ -28,7 +28,6 @@ use async_raft::storage::CurrentSnapshotData;
 use async_raft::storage::HardState;
 use async_raft::storage::InitialState;
 use async_raft::ClientWriteError;
-use async_raft::NodeId;
 use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::RaftStorage;
@@ -67,6 +66,7 @@ use crate::raft::state_machine::Node;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::Snapshot;
 use crate::raft::state_machine::StateMachine;
+use crate::raft::types::NodeId;
 use crate::sled_store::get_sled_db;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.

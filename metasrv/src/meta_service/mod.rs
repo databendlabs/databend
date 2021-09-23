@@ -18,7 +18,6 @@ pub use errors::ShutdownError;
 pub use log_entry::LogEntry;
 pub use meta_service_impl::MetaServiceImpl;
 pub use network::Network;
-pub use raft_txid::RaftTxId;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaRaftStore;
 
@@ -34,7 +33,6 @@ pub mod errors;
 pub mod log_entry;
 pub mod meta_service_impl;
 pub mod network;
-pub mod raft_txid;
 pub mod raftmeta;
 
 #[cfg(test)]

@@ -11,11 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+mod raft_txid;
 mod raft_types;
 
 #[cfg(test)]
 mod raft_types_test;
 
+pub use raft_txid::RaftTxId;
 pub use raft_types::LogId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
