@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetic;
-mod common;
-mod comparison;
-mod conditional;
-mod data_column;
-mod logic;
-mod nullable;
+use common_exception::Result;
 
-pub use common::*;
-pub use comparison::*;
-pub use conditional::*;
-pub use data_column::*;
-pub use logic::*;
-pub use nullable::*;
+use crate::scalars::FactoryFuncRef;
+use crate::scalars::IsNotNullFunction;
+use crate::scalars::IsNullFunction;
+
+#[derive(Clone)]
+pub struct NullableFunction;
+
+impl NullableFunction {
+    pub fn register(map: FactoryFuncRef) -> Result<()> {
+        let mut map = map.write();
+
+        map.insert("isnull".into(), IsNullFunction::try_create_func);
+        map.insert("isnotnull".into(), IsNotNullFunction::try_create_func);
+
+        Ok(())
+    }
+}
