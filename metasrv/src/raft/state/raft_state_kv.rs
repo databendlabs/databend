@@ -16,11 +16,11 @@ use std::fmt;
 
 use async_raft::storage::HardState;
 use common_exception::ErrorCode;
+use common_metatypes::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::raft::types::NodeId;
 use crate::sled_store::SledOrderedSerde;
 use crate::sled_store::SledSerde;
 

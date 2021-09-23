@@ -17,6 +17,7 @@ use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use async_raft::LogId;
 use common_metatypes::KVValue;
+use common_metatypes::LogIndex;
 use common_runtime::tokio;
 
 use crate::meta_service::Cmd;
@@ -29,7 +30,6 @@ use crate::raft::sled_key_spaces::StateMachineMeta;
 use crate::raft::state_machine::StateMachineMetaKey::Initialized;
 use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
 use crate::raft::state_machine::StateMachineMetaValue;
-use crate::raft::types::LogIndex;
 use crate::sled_store::sled_key_space::SledKeySpace;
 use crate::sled_store::SledTree;
 use crate::tests::service::new_sled_test_context;

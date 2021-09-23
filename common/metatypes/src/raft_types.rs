@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2020 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod raft_txid;
-mod raft_types;
+pub use async_raft::LogId;
+pub use async_raft::NodeId;
 
-#[cfg(test)]
-mod raft_types_test;
-
-pub use cluster::Node;
-pub use cluster::Slot;
-pub use raft_txid::RaftTxId;
-pub use raft_types::LogId;
-pub use raft_types::LogIndex;
-pub use raft_types::NodeId;
-pub use raft_types::Term;
+pub type LogIndex = u64;
+pub type Term = u64;

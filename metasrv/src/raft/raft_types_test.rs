@@ -14,7 +14,8 @@
 
 use std::ops::Bound;
 
-use crate::raft::types::NodeId;
+use common_metatypes::NodeId;
+
 use crate::sled_store::sled_serde::SledOrderedSerde;
 use crate::sled_store::sled_serde::SledRangeSerde;
 

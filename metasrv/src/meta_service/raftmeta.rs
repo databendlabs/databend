@@ -37,6 +37,8 @@ use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
 use common_metatypes::Database;
 use common_metatypes::KVValue;
+use common_metatypes::Node;
+use common_metatypes::NodeId;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
 use common_runtime::tokio;
@@ -65,8 +67,6 @@ use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::Snapshot;
 use crate::raft::state_machine::StateMachine;
-use crate::raft::types::Node;
-use crate::raft::types::NodeId;
 use crate::sled_store::get_sled_db;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.

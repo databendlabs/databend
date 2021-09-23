@@ -17,6 +17,7 @@ use async_raft::raft::EntryConfigChange;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
+use common_metatypes::LogId;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
 use maplit::btreeset;
@@ -25,7 +26,6 @@ use sled::IVec;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::raft::state_machine::SnapshotKeyValue;
-use crate::raft::types::LogId;
 
 /// Logs and the expected snapshot for testing snapshot.
 pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {

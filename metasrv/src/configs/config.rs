@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_metatypes::NodeId;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde::Serialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
-
-use crate::raft::types::NodeId;
 
 lazy_static! {
     pub static ref DATABEND_COMMIT_VERSION: String = {

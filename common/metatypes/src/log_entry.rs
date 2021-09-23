@@ -16,8 +16,8 @@ use async_raft::AppData;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta_service::Cmd;
-use crate::raft::types::RaftTxId;
+use crate::Cmd;
+use crate::RaftTxId;
 
 /// The application data request type which the `Metasrv` works with.
 ///
