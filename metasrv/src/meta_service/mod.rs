@@ -41,7 +41,6 @@ pub mod errors;
 pub mod log_entry;
 pub mod meta_service_impl;
 pub mod network;
-pub mod raft_log;
 pub mod raft_state;
 pub mod raft_state_kv;
 pub mod raft_txid;
@@ -52,8 +51,6 @@ pub mod raftmeta;
 mod meta_service_impl_test;
 #[cfg(test)]
 mod meta_store_test;
-#[cfg(test)]
-mod raft_log_test;
 #[cfg(test)]
 mod raft_state_test;
 #[cfg(test)]

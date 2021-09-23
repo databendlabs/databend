@@ -43,12 +43,12 @@ use serde::Serialize;
 use sled::IVec;
 
 use crate::configs;
-use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::NodeId;
-use crate::meta_service::Placement;
 use crate::raft::state_machine::placement::rand_n_from_m;
+use crate::raft::state_machine::AppliedState;
+use crate::raft::state_machine::Placement;
 use crate::raft::state_machine::StateMachineMetaKey;
 use crate::raft::state_machine::StateMachineMetaKey::Initialized;
 use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
