@@ -81,7 +81,8 @@ fn test_status() -> Result<()> {
         let mut local_config = default_local_config!();
         local_config.query_configs.push(LocalQueryConfig {
             config: QueryConfig::default(),
-            pid: "added".to_string(),
+            pid: Some(123),
+            path: None
         });
         status.version = "default".to_string();
         status.local_configs = local_config;
@@ -90,7 +91,8 @@ fn test_status() -> Result<()> {
         let mut expected_config = default_local_config!();
         expected_config.query_configs.push(LocalQueryConfig {
             config: QueryConfig::default(),
-            pid: "added".to_string(),
+            pid: Some(46),
+            path: None
         });
         // should have empty profile with set version
         if let Ok(status) = Status::read(conf.clone()) {

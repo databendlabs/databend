@@ -16,12 +16,17 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::Path;
+use nix::unistd::Pid;
 
 use databend_query::configs::Config as QueryConfig;
 use databend_store::configs::Config as StoreConfig;
 
 use crate::cmds::Config;
-use crate::error::Result;
+use crate::error::{Result, CliError};
+use std::os::unix::raw::pid_t;
+use std::process::Command;
+use std::thread::sleep;
+use std::time;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct Status {
@@ -30,6 +35,7 @@ pub struct Status {
     pub local_configs: LocalConfig,
 }
 
+/// TODO(zhihanz) metastore and extension configurations
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalConfig {
     pub query_configs: Vec<LocalQueryConfig>,
@@ -39,13 +45,15 @@ pub struct LocalConfig {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalQueryConfig {
     pub config: QueryConfig,
-    pub pid: String,
+    pub pid: Option<pid_t>,
+    pub path: Option<String>, // download location
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalStoreConfig {
     pub config: StoreConfig,
-    pub pid: String,
+    pub pid: Option<pid_t>,
+    pub path: Option<String>, // download location
 }
 
 impl LocalConfig {
@@ -57,7 +65,89 @@ impl LocalConfig {
     }
 }
 
-trait LocalRuntime {}
+pub trait LocalRuntime {
+    const RETRIES: u16;
+    fn kill(&self) -> Result<()> {
+        let pid = self.get_pid();
+        match pid {
+            Some(id) => {
+                match nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT)) {
+                    Ok(_) => {
+                        Ok(())
+                    }
+                    Err(e) => {
+                        Err(CliError::from(e))
+                    }
+                }
+            }
+            None => {
+                Ok(())
+            }
+        }
+    }
+    fn start(&mut self) -> Result<()> {
+        if self.get_pid().is_some() {
+            CliError::Unknown(format!("current instance in path {} already started", self.get_path().expect("cannot retrieve executable path")))
+        }
+        let mut cmd = self.get_command().expect("cannot parse command");
+        let child = cmd.spawn().expect("cannot execute command");
+        self.set_pid(child.id() as pid_t);
+        self.verify()
+    }
+    fn get_pid(&self) -> Option<pid_t>;
+    fn verify(&self)  -> Result<()> ;
+    fn get_path(&self) -> Option<String>;
+    fn get_command(&self) -> Result<Command>;
+    fn set_pid(&mut self, id: pid_t);
+}
+
+impl LocalRuntime for LocalQueryConfig{
+    const RETRIES: u16 = 5;
+
+    fn get_pid(&self) -> Option<pid_t> {
+        self.pid
+    }
+
+    fn verify(&self) -> Result<()> {
+        for n in 0..= LocalRuntime::RETRIES {
+            match self.do_healthcheck() {
+                OK(_) => {
+                    Ok(())
+                }
+                Err(_) => {
+                    sleep(time::Duration::from_secs(5));
+                }
+            }
+        }
+        Err(CliError::Unknown(format!("local query instance did not get started")))
+    }
+
+    fn get_path(&self) -> Option<String> {
+        self.path.clone()
+    }
+
+    fn get_command(&self) -> Result<Command> {
+        todo!()
+    }
+
+    fn set_pid(&mut self, id: pid_t) {
+        self.pid = Some(id)
+    }
+}
+
+impl LocalQueryConfig {
+    // retrieve the configured url for health check
+    pub fn get_health_endpoint(&self) -> Some<String> {
+        let endpoint = None;
+        if !self.config.config_file.is_empty() {
+            let conf = databend_query::configs::Config::load_from_toml(conf.config_file.as_str()).expect("cannot parse query config");
+        } else {
+            let query_config = self.config.clone().query;
+            if query_config.http_api_address
+        }
+
+    }
+}
 
 impl Status {
     pub fn read(conf: Config) -> Result<Self> {

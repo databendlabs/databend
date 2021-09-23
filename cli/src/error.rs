@@ -32,6 +32,9 @@ pub enum CliError {
 
     #[error("Serde error: {0}")]
     Serde(Box<serde_json::Error>),
+
+    #[error("Nix error: {0}")]
+    Nix(Box<nix::Error>),
 }
 
 impl From<ureq::Error> for CliError {
@@ -43,5 +46,11 @@ impl From<ureq::Error> for CliError {
 impl From<serde_json::Error> for CliError {
     fn from(err: serde_json::Error) -> CliError {
         CliError::Serde(Box::new(err))
+    }
+}
+
+impl From<nix::Error> for CliError {
+    fn from(err: nix::Error) -> CliError {
+        CliError::Nix(Box::new(err))
     }
 }
