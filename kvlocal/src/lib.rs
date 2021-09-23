@@ -17,3 +17,5 @@ mod local_kv_store;
 
 #[cfg(test)]
 mod local_kv_store_test;
+
+pub use local_kv_store::LocalKVStore;

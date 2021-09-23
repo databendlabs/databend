@@ -20,7 +20,7 @@ use rand::{Rng, thread_rng};
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_management::{LocalKVStore, NamespaceApi, NamespaceMgr, NodeInfo};
+use common_management::{NamespaceApi, NamespaceMgr, NodeInfo};
 use common_runtime::tokio;
 use common_runtime::tokio::sync::Mutex;
 use common_runtime::tokio::time::sleep as tokio_async_sleep;
@@ -28,6 +28,7 @@ use common_runtime::tokio::time::sleep as tokio_async_sleep;
 use crate::api::FlightClient;
 use crate::configs::Config;
 use common_store_api_sdk::{StoreApiProvider, KVApi, ConnectionFactory};
+use kvlocal::LocalKVStore;
 
 pub type ClusterRef = Arc<Cluster>;
 pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;

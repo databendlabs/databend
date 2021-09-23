@@ -25,4 +25,3 @@ pub use user::utils::NewUser;
 pub use namespace::NamespaceApi;
 pub use namespace::NodeInfo;
 pub use namespace::NamespaceMgr;
-pub use namespace::LocalKVStore;
