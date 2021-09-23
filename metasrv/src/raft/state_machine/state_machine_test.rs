@@ -163,11 +163,8 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
         // incr "foo"
 
         let resp = sm
-            .apply_non_dup(&LogEntry {
-                txid: None,
-                cmd: Cmd::IncrSeq {
-                    key: "foo".to_string(),
-                },
+            .apply_cmd(&Cmd::IncrSeq {
+                key: "foo".to_string(),
             })
             .await?;
         assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
@@ -175,11 +172,8 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
         // incr "bar"
 
         let resp = sm
-            .apply_non_dup(&LogEntry {
-                txid: None,
-                cmd: Cmd::IncrSeq {
-                    key: "bar".to_string(),
-                },
+            .apply_cmd(&Cmd::IncrSeq {
+                key: "bar".to_string(),
             })
             .await?;
         assert_eq!(AppliedState::Seq { seq: i + 1 }, resp);
@@ -254,13 +248,10 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         // add
 
         let resp = m
-            .apply_non_dup(&LogEntry {
-                txid: None,
-                cmd: Cmd::CreateDatabase {
-                    name: c.name.to_string(),
-                    if_not_exists: true,
-                    db: Default::default(),
-                },
+            .apply_cmd(&Cmd::CreateDatabase {
+                name: c.name.to_string(),
+                if_not_exists: true,
+                db: Default::default(),
             })
             .await?;
         assert_eq!(
@@ -400,14 +391,11 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         // write
 
         let resp = sm
-            .apply_non_dup(&LogEntry {
-                txid: None,
-                cmd: Cmd::UpsertKV {
-                    key: c.key.clone(),
-                    seq: c.seq,
-                    value: Some(c.value.clone()).into(),
-                    value_meta: c.value_meta.clone(),
-                },
+            .apply_cmd(&Cmd::UpsertKV {
+                key: c.key.clone(),
+                seq: c.seq,
+                value: Some(c.value.clone()).into(),
+                value_meta: c.value_meta.clone(),
             })
             .await?;
         assert_eq!(
@@ -467,16 +455,13 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     tracing::info!("--- update meta of a nonexistent record");
 
     let resp = sm
-        .apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: key.clone(),
-                seq: MatchSeq::Any,
-                value: Operation::AsIs,
-                value_meta: Some(KVMeta {
-                    expire_at: Some(now + 10),
-                }),
-            },
+        .apply_cmd(&Cmd::UpsertKV {
+            key: key.clone(),
+            seq: MatchSeq::Any,
+            value: Operation::AsIs,
+            value_meta: Some(KVMeta {
+                expire_at: Some(now + 10),
+            }),
         })
         .await?;
 
@@ -493,31 +478,25 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
 
     // add a record
     let _resp = sm
-        .apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: key.clone(),
-                seq: MatchSeq::Any,
-                value: Operation::Update(b"value_meta_bar".to_vec()),
-                value_meta: Some(KVMeta {
-                    expire_at: Some(now + 10),
-                }),
-            },
+        .apply_cmd(&Cmd::UpsertKV {
+            key: key.clone(),
+            seq: MatchSeq::Any,
+            value: Operation::Update(b"value_meta_bar".to_vec()),
+            value_meta: Some(KVMeta {
+                expire_at: Some(now + 10),
+            }),
         })
         .await?;
 
     // update the meta of the record
     let _resp = sm
-        .apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: key.clone(),
-                seq: MatchSeq::Any,
-                value: Operation::AsIs,
-                value_meta: Some(KVMeta {
-                    expire_at: Some(now + 20),
-                }),
-            },
+        .apply_cmd(&Cmd::UpsertKV {
+            key: key.clone(),
+            seq: MatchSeq::Any,
+            value: Operation::AsIs,
+            value_meta: Some(KVMeta {
+                expire_at: Some(now + 20),
+            }),
         })
         .await?;
 
@@ -595,27 +574,21 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
 
         // prepare an record
-        sm.apply_non_dup(&LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: "foo".to_string(),
-                seq: MatchSeq::Any,
-                value: Some(b"x".to_vec()).into(),
-                value_meta: None,
-            },
+        sm.apply_cmd(&Cmd::UpsertKV {
+            key: "foo".to_string(),
+            seq: MatchSeq::Any,
+            value: Some(b"x".to_vec()).into(),
+            value_meta: None,
         })
         .await?;
 
         // delete
         let resp = sm
-            .apply_non_dup(&LogEntry {
-                txid: None,
-                cmd: Cmd::UpsertKV {
-                    key: c.key.clone(),
-                    seq: c.seq,
-                    value: Operation::Delete,
-                    value_meta: None,
-                },
+            .apply_cmd(&Cmd::UpsertKV {
+                key: c.key.clone(),
+                seq: c.seq,
+                value: Operation::Delete,
+                value_meta: None,
             })
             .await?;
         assert_eq!(
