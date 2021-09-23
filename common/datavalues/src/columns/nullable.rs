@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ impl DataColumn {
         }
 
         let input = self.to_minimal_array()?;
-
         let result = DFBooleanArray::new(compute::boolean::is_null(input.get_array_ref().as_ref()));
         let result: DataColumn = result.into_series().into();
         Ok(result.resize_constant(self.len()))
