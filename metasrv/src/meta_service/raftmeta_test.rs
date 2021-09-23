@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_metatypes::Cmd;
+use common_metatypes::LogEntry;
 use common_metatypes::MatchSeq;
 use common_metatypes::NodeId;
 use common_metatypes::RaftTxId;
@@ -27,8 +29,6 @@ use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 use crate::configs;
-use crate::meta_service::Cmd;
-use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
 use crate::meta_service::RetryableError;
 use crate::raft::state_machine::AppliedState;

@@ -15,11 +15,11 @@
 use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
+use common_metatypes::LogEntry;
 use common_metatypes::LogIndex;
 use common_tracing::tracing;
 
 use crate::configs;
-use crate::meta_service::LogEntry;
 use crate::raft::sled_key_spaces::Logs;
 use crate::sled_store::AsKeySpace;
 use crate::sled_store::SledSerde;

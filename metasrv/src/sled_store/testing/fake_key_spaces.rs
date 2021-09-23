@@ -20,12 +20,9 @@ use common_metatypes::Node;
 use common_metatypes::NodeId;
 use common_metatypes::SeqValue;
 
-use crate::raft::state::RaftStateKey;
-use crate::raft::state::RaftStateValue;
-use crate::raft::state_machine::StateMachineMetaKey;
-use crate::raft::state_machine::StateMachineMetaValue;
 use crate::sled_store::sled_key_space::SledKeySpace;
-use crate::sled_store::SeqNum;
+use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaKey;
+use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaValue;
 
 /// Types for raft log in SledTree
 pub struct Logs {}
@@ -54,19 +51,6 @@ impl SledKeySpace for StateMachineMeta {
     type V = StateMachineMetaValue;
 }
 
-/// Key-Value Types for storing meta data of a raft in sled::Tree:
-/// id: NodeId,
-/// hard_state:
-///      current_term,
-///      voted_for,
-pub struct RaftStateKV {}
-impl SledKeySpace for RaftStateKV {
-    const PREFIX: u8 = 4;
-    const NAME: &'static str = "raft-state";
-    type K = RaftStateKey;
-    type V = RaftStateValue;
-}
-
 /// Key-Value Types for storing DFS files in sled::Tree:
 pub struct Files {}
 impl SledKeySpace for Files {
@@ -83,13 +67,4 @@ impl SledKeySpace for GenericKV {
     const NAME: &'static str = "generic-kv";
     type K = String;
     type V = SeqValue<KVValue<Vec<u8>>>;
-}
-
-/// Key-Value Types for sequence number generator in sled::Tree:
-pub struct Sequences {}
-impl SledKeySpace for Sequences {
-    const PREFIX: u8 = 7;
-    const NAME: &'static str = "sequences";
-    type K = String;
-    type V = SeqNum;
 }

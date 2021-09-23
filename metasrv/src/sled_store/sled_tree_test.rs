@@ -15,45 +15,63 @@
 use async_raft::raft::Entry;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
-use async_raft::LogId;
+use common_metatypes::Cmd;
 use common_metatypes::KVValue;
+use common_metatypes::LogEntry;
+use common_metatypes::LogId;
 use common_metatypes::LogIndex;
 use common_runtime::tokio;
 
-use crate::meta_service::Cmd;
-use crate::meta_service::LogEntry;
-use crate::raft::sled_key_spaces::Files;
-use crate::raft::sled_key_spaces::GenericKV;
-use crate::raft::sled_key_spaces::Logs;
-use crate::raft::sled_key_spaces::Nodes;
-use crate::raft::sled_key_spaces::StateMachineMeta;
-use crate::raft::state_machine::StateMachineMetaKey::Initialized;
-use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
-use crate::raft::state_machine::StateMachineMetaValue;
+use crate::sled_store::get_sled_db;
 use crate::sled_store::sled_key_space::SledKeySpace;
+use crate::sled_store::testing::fake_key_spaces::Files;
+use crate::sled_store::testing::fake_key_spaces::GenericKV;
+use crate::sled_store::testing::fake_key_spaces::Logs;
+use crate::sled_store::testing::fake_key_spaces::Nodes;
+use crate::sled_store::testing::fake_key_spaces::StateMachineMeta;
+use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
+use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
+use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaValue;
 use crate::sled_store::SledTree;
-use crate::tests::service::new_sled_test_context;
+
+/// 1. Open a temp sled::Db for all tests.
+/// 2. Initialize a global tracing.
+/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
+#[macro_export]
+macro_rules! init_sled_ut {
+    () => {{
+        let t = tempfile::tempdir().expect("create temp dir to sled db");
+        $crate::sled_store::init_temp_sled_db(t);
+
+        common_tracing::init_default_ut_tracing();
+
+        let name = common_tracing::func_name!();
+        let span =
+            common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
+        ((), span)
+    }};
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_open() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_open() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    SledTree::open(db, tc.tree_name, true)?;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_append() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_append() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
         (8, Entry {
@@ -106,13 +124,13 @@ async fn test_sledtree_append() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_append_values_and_range_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_append_values_and_range_get() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -182,13 +200,13 @@ async fn test_sledtree_append_values_and_range_get() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_range_keys() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_range_keys() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -235,13 +253,13 @@ async fn test_sledtree_range_keys() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_range_kvs() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_range_kvs() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -267,8 +285,8 @@ async fn test_sledtree_range_kvs() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_range() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_range() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     // This test assumes the following order.
@@ -277,7 +295,7 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -363,13 +381,13 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_scan_prefix() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_scan_prefix() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let files: Vec<(String, String)> = vec![
         ("a".to_string(), "x".to_string()),
@@ -388,13 +406,13 @@ async fn test_sledtree_scan_prefix() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_insert() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_insert() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     assert!(tree.get::<Logs>(&5)?.is_none());
 
@@ -449,13 +467,13 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_contains_key() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_contains_key() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     assert!(tree.get::<Logs>(&5)?.is_none());
 
@@ -489,13 +507,13 @@ async fn test_sledtree_contains_key() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_update_and_fetch() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_update_and_fetch() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let v = tree
         .update_and_fetch::<Files, _>(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
@@ -511,13 +529,13 @@ async fn test_sledtree_update_and_fetch() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_get() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     assert!(tree.get::<Logs>(&5)?.is_none());
 
@@ -551,8 +569,8 @@ async fn test_sledtree_get() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_last() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_last() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     // This test assumes the following order.
@@ -561,7 +579,7 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     assert!(tree.last::<Logs>()?.is_none());
 
@@ -606,13 +624,13 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_remove() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_remove() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -644,13 +662,13 @@ async fn test_sledtree_remove() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_range_remove() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_range_remove() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -706,13 +724,13 @@ async fn test_sledtree_range_remove() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sledtree_multi_types() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+async fn test_sled_tree_multi_types() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -776,12 +794,12 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_append() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
@@ -836,12 +854,12 @@ async fn test_as_append() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -913,12 +931,12 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_keys() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -967,12 +985,12 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_kvs() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -1000,12 +1018,12 @@ async fn test_as_range_kvs() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_scan_prefix() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let file_tree = tree.key_space::<Files>();
     let kv_tree = tree.key_space::<GenericKV>();
 
@@ -1044,12 +1062,12 @@ async fn test_as_scan_prefix() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_insert() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
@@ -1106,12 +1124,12 @@ async fn test_as_insert() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_contains_key() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
@@ -1147,12 +1165,12 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_update_and_fetch() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let file_tree = tree.key_space::<Files>();
 
     let v = file_tree
@@ -1170,12 +1188,12 @@ async fn test_as_update_and_fetch() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
@@ -1211,12 +1229,12 @@ async fn test_as_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_last() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.last()?);
@@ -1247,12 +1265,12 @@ async fn test_as_last() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_remove() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -1281,12 +1299,12 @@ async fn test_as_remove() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_range_remove() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
@@ -1344,12 +1362,12 @@ async fn test_as_range_remove() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_as_multi_types() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_sled_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_sled_test_context();
     let db = &tc.db;
-    let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
+    let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
     let sm_meta = tree.key_space::<StateMachineMeta>();
 
@@ -1409,4 +1427,21 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+pub struct SledTestContext {
+    pub tree_name: String,
+    pub db: sled::Db,
+}
+
+/// Create a new context for testing sled
+pub fn new_sled_test_context() -> SledTestContext {
+    SledTestContext {
+        tree_name: format!("test-{}-", next_port()),
+        db: get_sled_db(),
+    }
+}
+
+pub fn next_port() -> u32 {
+    29000u32 + (common_uniq_id::uniq_usize() as u32)
 }

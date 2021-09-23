@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::Result;
+use common_metatypes::Cmd;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
@@ -30,7 +31,6 @@ use common_store_api::PrefixListReply;
 use common_store_api::UpsertKVActionResult;
 use common_tracing::tracing;
 use metasrv::configs;
-use metasrv::meta_service::Cmd;
 use metasrv::raft::state_machine::AppliedState;
 use metasrv::raft::state_machine::StateMachine;
 pub use metasrv::sled_store::init_temp_sled_db;
