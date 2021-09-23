@@ -54,7 +54,7 @@ macro_rules! run_difference_first_not_null_test {
                     None,
                     Some(6_i8 as $result_type),
                 ]);
-                actual.iter().for_each(|a| println!("{:?}", a));
+
                 assert_eq!(&expected, actual);
 
                 // result type
@@ -177,7 +177,7 @@ macro_rules! run_difference_first_null_test {
                 let actual = actual_ref.as_any().downcast_ref::<$array_type>().unwrap();
                 let expected =
                     $array_type::from([None, None, None, None, Some(4_i8 as $result_type)]);
-                actual.iter().for_each(|a| println!("{:?}", a));
+
                 assert_eq!(&expected, actual);
 
                 // result type
@@ -303,17 +303,14 @@ fn test_running_difference_datetime32_first_not_null() -> Result<()> {
 
         // eval
         let result = run_difference_function.eval(&columns, block.num_rows())?;
-        println!("result:{:?}", result);
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<Int64Array>().unwrap();
         let expected = Int64Array::from([Some(0i64), Some(1), None, None, Some(6)]);
-        actual.iter().for_each(|a| println!("{:?}", a));
         assert_eq!(&expected, actual);
 
         // result type
         let args_type_array = [DataType::DateTime32(None); 1];
         let result_type = run_difference_function.return_type(&args_type_array[..])?;
-        println!("result_type:{:?}", result_type);
         assert_eq!(result_type, DataType::Int64);
     }
 
@@ -345,7 +342,7 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<Int64Array>().unwrap();
         let expected = Int64Array::from([Some(0), Some(1_i64), None, None, Some(6_i64)]);
-        actual.iter().for_each(|a| println!("{:?}", a));
+
         assert_eq!(&expected, actual);
 
         // result type

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod function_column_test;
 mod arithmetics;
 mod comparisons;
 mod conditionals;
@@ -22,14 +20,16 @@ mod expressions;
 mod function;
 mod function_alias;
 mod function_column;
+#[cfg(test)]
+mod function_column_test;
 mod function_factory;
 mod function_literal;
 mod hashes;
 mod logics;
 mod nullables;
+mod others;
 mod strings;
 mod udfs;
-mod others;
 
 pub use arithmetics::*;
 pub use comparisons::*;
@@ -45,6 +45,6 @@ pub use function_literal::LiteralFunction;
 pub use hashes::*;
 pub use logics::*;
 pub use nullables::*;
+pub use others::*;
 pub use strings::*;
 pub use udfs::*;
-pub use others::*;

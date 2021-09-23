@@ -47,11 +47,15 @@ impl Function for RunningDifferenceFunction {
         match args[0] {
             DataType::Int8 | DataType::UInt8 => Ok(DataType::Int16),
             DataType::Int16 | DataType::UInt16 | DataType::Date16 => Ok(DataType::Int32),
-            DataType::Int32 | DataType::UInt32 | DataType::Int64 | DataType::UInt64 | DataType::Date32 | DataType::DateTime32(_) => Ok(DataType::Int64),
-            _ => Result::Err(ErrorCode::IllegalDataType(format!(
-                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
-                "",
-                self.name()))),
+            DataType::Int32
+            | DataType::UInt32
+            | DataType::Int64
+            | DataType::UInt64
+            | DataType::Date32
+            | DataType::DateTime32(_) => Ok(DataType::Int64),
+            _ => Result::Err(ErrorCode::IllegalDataType(
+                "Argument for function runningDifference must have numeric type",
+            )),
         }
     }
 
@@ -60,36 +64,23 @@ impl Function for RunningDifferenceFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-         match columns[0].data_type() {
-            DataType::Int8 => { 
-                compute_i8(columns[0].column(), input_rows)
-            },
-            DataType::UInt8 => {
-                compute_u8(columns[0].column(), input_rows)
-            },
-            DataType::Int16 => {
-                compute_i16(columns[0].column(), input_rows)
-            },
-            DataType::UInt16 | DataType::Date16 => {
-                compute_u16(columns[0].column(), input_rows)
-            },
-            DataType::Int32 => {
-                compute_i32(columns[0].column(), input_rows)
-            },
-            DataType::UInt32 | DataType::Date32 | DataType::DateTime32(_)=> {
+        match columns[0].data_type() {
+            DataType::Int8 => compute_i8(columns[0].column(), input_rows),
+            DataType::UInt8 => compute_u8(columns[0].column(), input_rows),
+            DataType::Int16 => compute_i16(columns[0].column(), input_rows),
+            DataType::UInt16 | DataType::Date16 => compute_u16(columns[0].column(), input_rows),
+            DataType::Int32 => compute_i32(columns[0].column(), input_rows),
+            DataType::UInt32 | DataType::Date32 | DataType::DateTime32(_) => {
                 compute_u32(columns[0].column(), input_rows)
-            },
-            DataType::Int64 => {
-                compute_i64(columns[0].column(), input_rows)
-            },
-            DataType::UInt64 => {
-                compute_u64(columns[0].column(), input_rows)
-            },
-            other => Result::Err(ErrorCode::IllegalDataType(format!(
-                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
-                other,
-                self.name()))),
             }
+            DataType::Int64 => compute_i64(columns[0].column(), input_rows),
+            DataType::UInt64 => compute_u64(columns[0].column(), input_rows),
+            _ => Result::Err(ErrorCode::IllegalDataType(
+                format!(
+                    "Argument for function runningDifference must have numeric type.: While processing runningDifference({})",
+                    columns[0].field().name(),
+                ))),
+        }
     }
 
     fn is_deterministic(&self) -> bool {
@@ -103,10 +94,8 @@ impl Function for RunningDifferenceFunction {
 
 macro_rules! run_difference_compute {
     ($method:ident, $result_type:ident, $target_type:ty, $func: ident) => {
-        fn $func(
-            column: &DataColumn, input_rows:usize
-        ) -> Result<DataColumn> {
-            if let DataColumn::Constant(_, _) = column{
+        fn $func(column: &DataColumn, input_rows: usize) -> Result<DataColumn> {
+            if let DataColumn::Constant(_, _) = column {
                 Ok(DataColumn::Constant(
                     DataValue::$result_type(Some(0i8 as $target_type)),
                     input_rows,
@@ -125,7 +114,8 @@ macro_rules! run_difference_compute {
                             } else if array.is_null(index - 1) {
                                 result_vec.push(None)
                             } else {
-                                let diff =  array.value(index) as $target_type - array.value(index - 1) as $target_type;
+                                let diff = array.value(index) as $target_type
+                                    - array.value(index - 1) as $target_type;
                                 result_vec.push(Some(diff))
                             }
                         }
@@ -135,14 +125,14 @@ macro_rules! run_difference_compute {
                 Ok(Series::new(result_vec).into())
             }
         }
-    }
+    };
 }
 
 run_difference_compute!(i8, Int16, i16, compute_i8);
 run_difference_compute!(u8, Int16, i16, compute_u8);
 run_difference_compute!(i16, Int32, i32, compute_i16);
 run_difference_compute!(u16, Int32, i32, compute_u16);
-run_difference_compute!(i32, Int64, i64, compute_i32 );
+run_difference_compute!(i32, Int64, i64, compute_i32);
 run_difference_compute!(u32, Int64, i64, compute_u32);
 run_difference_compute!(i64, Int64, i64, compute_i64);
 run_difference_compute!(u64, Int64, i64, compute_u64);
