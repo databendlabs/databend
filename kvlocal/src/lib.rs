@@ -13,13 +13,7 @@
 // limitations under the License.
 //
 
+mod local_kv_store;
+
 #[cfg(test)]
-mod namespace_mgr_test;
-
-mod namespace_api;
-mod namespace_mgr;
-
-pub use local_kv_store::LocalKVStore;
-pub use namespace_api::NamespaceApi;
-pub use namespace_api::NodeInfo;
-pub use namespace_mgr::NamespaceMgr;
+mod local_kv_store_test;

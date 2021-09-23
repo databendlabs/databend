@@ -79,12 +79,178 @@ impl TransformerSqlparser {
         }
     }
 
-    fn transform_ddl(&self, _: &SqlparserStatement) -> Result<Statement> {
-        // TODO: support transform DDL
-        Err(ErrorCode::SyntaxException(format!(
-            "Unsupported SQL statement: {}",
-            self.orig_stmt
-        )))
+    fn get_database_and_table_from_idents(
+        &self,
+        idents: &[Ident],
+    ) -> (Option<Identifier>, Option<Identifier>) {
+        if idents.len() == 1 {
+            (None, Some(Identifier::from(&idents[0])))
+        } else if idents.len() == 2 {
+            (
+                Some(Identifier::from(&idents[0])),
+                Some(Identifier::from(&idents[0])),
+            )
+        } else {
+            (None, None)
+        }
+    }
+
+    fn transform_ddl(&self, orig_ast: &SqlparserStatement) -> Result<Statement> {
+        match orig_ast {
+            SqlparserStatement::Truncate { table_name, .. } => {
+                let (db, tpl) = self.get_database_and_table_from_idents(&table_name.0);
+                if let Some(table) = tpl {
+                    Ok(Statement::TruncateTable {
+                        database: db,
+                        table,
+                    })
+                } else {
+                    Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    )))
+                }
+            }
+            SqlparserStatement::CreateTable {
+                if_not_exists,
+                name,
+                columns,
+                ..
+            } => {
+                let (db, tpl) = self.get_database_and_table_from_idents(&name.0);
+                let tpl = tpl.ok_or_else(|| {
+                    ErrorCode::SyntaxException(format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    ))
+                })?;
+                if columns.is_empty() {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    )));
+                }
+                let mut cols: Vec<ColumnDefinition> = vec![];
+                for column in columns {
+                    let ident = Identifier {
+                        name: column.name.value.clone(),
+                        quote: column.name.quote_style,
+                    };
+                    let typ = self.transform_data_type(&column.data_type)?;
+                    let mut is_null: bool = true;
+                    let mut has_default: bool = false;
+                    let mut default_literal: Literal = Literal::Null;
+                    for column_option_def in &column.options {
+                        use sqlparser::ast::ColumnOption::*;
+                        match &column_option_def.option {
+                            Null => {
+                                is_null = true;
+                            }
+                            NotNull => {
+                                is_null = false;
+                            }
+                            Default(expr) => {
+                                has_default = true;
+                                let res = self.transform_expr(expr)?;
+                                if let Expr::Literal(lit) = res {
+                                    default_literal = lit;
+                                } else {
+                                    return Err(ErrorCode::SyntaxException(format!(
+                                        "Unsupported SQL statement: {}",
+                                        self.orig_stmt
+                                    )));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    let mut default_val: Option<Literal> = None;
+                    if has_default {
+                        default_val = Some(default_literal);
+                    }
+                    let col = ColumnDefinition {
+                        name: ident,
+                        data_type: typ,
+                        nullable: is_null,
+                        default_value: default_val,
+                    };
+                    cols.push(col);
+                }
+                Ok(Statement::CreateTable {
+                    if_not_exists: *if_not_exists,
+                    database: db,
+                    table: tpl,
+                    columns: cols,
+                    engine: "".to_string(),
+                    options: vec![],
+                })
+            }
+            SqlparserStatement::AlterTable { .. } => {
+                // TODO: support transform DDL AlterTable
+                Err(ErrorCode::SyntaxException(format!(
+                    "Unsupported SQL statement: {}",
+                    self.orig_stmt
+                )))
+            }
+            SqlparserStatement::Drop {
+                object_type,
+                if_exists,
+                names,
+                ..
+            } => {
+                use sqlparser::ast::ObjectType::*;
+                match object_type {
+                    Table => {
+                        if names.is_empty() || names.len() > 1 {
+                            return Err(ErrorCode::SyntaxException(format!(
+                                "Unsupported SQL statement: {}",
+                                self.orig_stmt
+                            )));
+                        }
+                        let (db, tpl) = self.get_database_and_table_from_idents(&names[0].0);
+                        if let Some(table) = tpl {
+                            Ok(Statement::DropTable {
+                                if_exists: *if_exists,
+                                database: db,
+                                table,
+                            })
+                        } else {
+                            Err(ErrorCode::SyntaxException(format!(
+                                "Unsupported SQL statement: {}",
+                                self.orig_stmt
+                            )))
+                        }
+                    }
+                    View | Index | Schema => Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    ))),
+                }
+            }
+            SqlparserStatement::CreateDatabase {
+                db_name,
+                if_not_exists,
+                ..
+            } => {
+                let idents = &db_name.0;
+                if idents.len() != 1 {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported SQL statement: {}",
+                        self.orig_stmt
+                    )));
+                }
+                Ok(Statement::CreateDatabase {
+                    if_not_exists: *if_not_exists,
+                    name: Identifier::from(&idents[0]),
+                    engine: "".to_string(),
+                    options: vec![],
+                })
+            }
+            _ => Err(ErrorCode::SyntaxException(format!(
+                "Unsupported SQL statement: {}",
+                self.orig_stmt
+            ))),
+        }
     }
 
     fn transform_query(&self, orig_ast: &SqlparserQuery) -> Result<Query> {

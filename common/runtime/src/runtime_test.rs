@@ -70,12 +70,6 @@ fn test_block_on() -> Result<()> {
         Ok(5)
     }
 
-    async fn sleep() -> Result<()> {
-        let deadline = Instant::now() + Duration::from_millis(100);
-        sleep_until(deadline).await;
-        Ok(())
-    }
-
     // Ok.
     {
         let rt = Runtime::with_default_worker_threads().unwrap();
@@ -92,8 +86,14 @@ fn test_block_on() -> Result<()> {
 
     // Timeout error.
     {
+        async fn sleep() -> Result<()> {
+            let deadline = Instant::now() + Duration::from_millis(10_000);
+            sleep_until(deadline).await;
+            Ok(())
+        }
+
         let rt = Runtime::with_default_worker_threads().unwrap();
-        let r = rt.block_on(sleep(), Some(Duration::from_millis(50)));
+        let r = rt.block_on(sleep(), Some(Duration::from_millis(500)));
 
         assert!(r.is_err());
         if let Err(e) = r {
