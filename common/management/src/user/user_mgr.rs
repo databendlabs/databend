@@ -24,6 +24,7 @@ use common_metatypes::MatchSeq;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
 use common_store_api::KVApi;
+use common_store_api::SyncKVApi;
 
 use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
@@ -96,6 +97,8 @@ impl UserMgrApi for UserMgr {
 
             r.push((s, u));
         }
+
+        self.kv_api.sync_update_kv_meta("k", MatchSeq::Any, None);
         Ok(r)
     }
 

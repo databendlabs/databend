@@ -40,7 +40,7 @@ impl StoreApiProvider {
     }
 
     pub async fn try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
-        let client = StoreClient::try_new(&self.conf).await?;
+        let client = StoreClient::try_new(self.conf.clone()).await?;
         Ok(Arc::new(client))
     }
 
@@ -50,13 +50,13 @@ impl StoreApiProvider {
             let client = kvlocal::LocalKVStore::new_temp().await?;
             Ok(Arc::new(client))
         } else {
-            let client = StoreClient::try_new(&self.conf).await?;
+            let client = StoreClient::try_new(self.conf.clone()).await?;
             Ok(Arc::new(client))
         }
     }
 
     pub async fn try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
-        let client = StoreClient::try_new(&self.conf).await?;
+        let client = StoreClient::try_new(self.conf.clone()).await?;
         Ok(Arc::new(client))
     }
 }

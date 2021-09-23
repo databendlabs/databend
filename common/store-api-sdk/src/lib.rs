@@ -35,6 +35,7 @@ mod dns_resolver;
 mod flight_token;
 mod impl_flights;
 mod store_client;
+mod store_client_sync;
 #[macro_use]
 mod store_do_action;
 mod store_client_conf;

@@ -12,7 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-pub mod kv_api;
-pub mod kv_api_sync;
 
-//pub mod local_kv_store;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    // TODO review this
+    // - Let's panic if failed in creating dedicated runtime for store
+    // - Pass in configuration
+    pub static ref STORE_RUNTIME: common_runtime::Runtime =
+        common_runtime::Runtime::with_default_worker_threads()
+            .expect("FATAL, initialize store runtime failure");
+}

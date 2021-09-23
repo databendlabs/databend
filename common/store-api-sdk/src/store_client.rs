@@ -50,7 +50,7 @@ pub struct StoreClient {
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
-    pub async fn try_new(conf: &StoreClientConf) -> Result<StoreClient> {
+    pub async fn try_new(conf: StoreClientConf) -> Result<StoreClient> {
         Self::with_tls_conf(
             &conf.meta_service_config.address,
             &conf.meta_service_config.username,

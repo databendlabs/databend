@@ -965,6 +965,7 @@ dependencies = [
  "common-streams",
  "common-tracing",
  "futures",
+ "lazy_static",
  "serde",
  "thiserror",
 ]

@@ -22,7 +22,9 @@ use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
 use common_runtime::tokio::sync::Mutex;
+use common_runtime::Runtime;
 use common_store_api::kv_apis::kv_api::MGetKVActionResult;
+use common_store_api::util::STORE_RUNTIME;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::PrefixListReply;
@@ -43,6 +45,7 @@ pub use metasrv::sled_store::init_temp_sled_db;
 /// Since `StateMachine` is backed with sled::Tree, this impl has the same limitation as meta-store:
 /// - A sled::Db has to be a singleton, according to sled doc.
 /// - Every unit test has to generate a unique sled::Tree name to create a `LocalKVStore`.
+#[derive(Clone)]
 pub struct LocalKVStore {
     inner: Arc<Mutex<StateMachine>>,
 }
@@ -93,6 +96,10 @@ impl LocalKVStore {
         let name = format!("temp-{}", id);
 
         Self::new(&name).await
+    }
+
+    pub fn sync_new_temp() -> common_exception::Result<LocalKVStore> {
+        STORE_RUNTIME.block_on(LocalKVStore::new_temp(), None)?
     }
 }
 
