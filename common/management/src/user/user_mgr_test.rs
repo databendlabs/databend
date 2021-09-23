@@ -113,7 +113,7 @@ mod add {
                     })
                 });
             let api = Arc::new(api);
-            let mut user_mgr = UserMgr::new(api, "tenant1");
+            let user_mgr = UserMgr::new(api, "tenant1");
             let res = user_mgr.add_user(user_info).await;
 
             assert_eq!(
@@ -145,7 +145,7 @@ mod add {
                 });
 
             let api = Arc::new(api);
-            let mut user_mgr = UserMgr::new(api, "tenant1");
+            let user_mgr = UserMgr::new(api, "tenant1");
 
             let new_user = NewUser::new(test_user_name, test_password, auth_type.clone());
             let user_info = UserInfo::from(new_user);
@@ -178,7 +178,7 @@ mod add {
 
             let kv = Arc::new(api);
 
-            let mut user_mgr = UserMgr::new(kv, "tenant1");
+            let user_mgr = UserMgr::new(kv, "tenant1");
             let new_user = NewUser::new(test_user_name, test_password, auth_type);
             let user_info = UserInfo::from(new_user);
             let res = user_mgr.add_user(user_info).await;
@@ -217,7 +217,7 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), Some(1)).await;
         assert!(res.is_ok());
 
@@ -244,7 +244,7 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), None).await;
         assert!(res.is_ok());
         Ok(())
@@ -262,7 +262,7 @@ mod get {
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), None).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -288,7 +288,7 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), Some(2)).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -314,7 +314,7 @@ mod get {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), None).await;
         assert_eq!(
             res.unwrap_err().code(),
@@ -370,7 +370,7 @@ mod get_users {
         }
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_users().await?;
         assert_eq!(res, user_infos);
 
@@ -401,7 +401,7 @@ mod get_users {
         }
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_users().await;
         assert_eq!(
             res.unwrap_err().code(),
@@ -439,7 +439,7 @@ mod drop {
                 })
             });
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.drop_user("test".to_string(), None).await;
         assert!(res.is_ok());
 
@@ -465,7 +465,7 @@ mod drop {
                 })
             });
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.drop_user("test".to_string(), None).await;
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -534,7 +534,7 @@ mod update {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
             .update_user(
@@ -585,7 +585,7 @@ mod update {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
             .update_user(
@@ -606,7 +606,7 @@ mod update {
         let kv = MockKV::new();
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
 
         let new_password: Option<Vec<u8>> = None;
         let res = user_mgr
@@ -632,7 +632,7 @@ mod update {
             .return_once(move |_k| Ok(GetKVActionResult { result: None }));
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
             .update_user(
@@ -673,7 +673,7 @@ mod update {
             });
 
         let kv = Arc::new(kv);
-        let mut user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::new(kv, "tenant1");
 
         let res = user_mgr
             .update_user(
