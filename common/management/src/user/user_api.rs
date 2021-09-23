@@ -47,25 +47,25 @@ impl UserInfo {
 
 #[async_trait]
 pub trait UserMgrApi {
-    async fn add_user(&mut self, user_info: UserInfo) -> common_exception::Result<u64>;
+    async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64>;
 
     async fn get_user(
-        &mut self,
+        &self,
         username: String,
         seq: Option<u64>,
     ) -> common_exception::Result<SeqValue<UserInfo>>;
 
-    async fn get_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>>;
+    async fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>>;
 
     async fn update_user(
-        &mut self,
+        &self,
         username: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn drop_user(&mut self, username: String, seq: Option<u64>) -> Result<()>;
+    async fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()>;
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {
