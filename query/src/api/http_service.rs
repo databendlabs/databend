@@ -64,11 +64,11 @@ impl HttpService {
         let tls_key = Path::new(config.query.api_tls_server_key.as_str());
         let tls_cert = Path::new(config.query.api_tls_server_cert.as_str());
 
-        let key = HttpService::load_keys(tls_key)?;
+        let key = HttpService::load_keys(tls_key)?.remove(0);
         let certs = HttpService::load_certs(tls_cert)?;
 
         let mut tls_config = ServerConfig::new(NoClientAuth::new());
-        if let Err(cause) = tls_config.set_single_cert(certs, key[0].clone()) {
+        if let Err(cause) = tls_config.set_single_cert(certs, key) {
             return Err(ErrorCode::TLSConfigurationFailure(
                 format!(
                     "Cannot build TLS config for http service, cause {}", cause
@@ -129,10 +129,7 @@ impl HttpService {
             .route("/v1/health", get(super::http::v1::health::health_handler))
             .route("/v1/config", get(super::http::v1::config::config_handler))
             .route("/v1/logs", get(super::http::v1::logs::logs_handler))
-            // .route(
-            //     "/v1/cluster/list",
-            //     get(super::http::v1::cluster::cluster_list_handler),
-            // )
+            .route("/v1/cluster/list", get(super::http::v1::cluster::cluster_list_handler))
             .route("/debug/home", get(super::http::debug::home::debug_home_handler))
             .route("/debug/pprof/profile", get(super::http::debug::pprof::debug_pprof_handler))
             .boxed()
@@ -144,8 +141,8 @@ impl HttpService {
         let loader = Self::tls_loader(self.sessions.get_conf());
 
         let server = axum_server::bind(listening.to_string())
-            .loader(loader.await?)
             .handle(self.abort_handler.clone())
+            .loader(loader.await?)
             .serve(self.build_router());
 
         self.join_handle = Some(tokio::spawn(server));

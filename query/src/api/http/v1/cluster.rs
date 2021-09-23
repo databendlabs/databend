@@ -26,6 +26,7 @@ use serde_json::json;
 use serde_json::Value;
 
 use crate::clusters::{ClusterRef, ClusterDiscoveryRef};
+use crate::sessions::SessionManagerRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ClusterNodeRequest {
@@ -79,60 +80,32 @@ impl IntoResponse for ClusterError {
         (status, body).into_response()
     }
 }
-// // POST /v1/cluster/list
-// // create node depends on json context in http body
-// // request: the request body contains node message(name, ip address, priority)
-// // cluster_state: the shared in memory state which store all nodes known to current node
-// // return: return node information when add success
-// pub async fn cluster_add_handler(
-//     request: Json<ClusterNodeRequest>,
-//     cluster_state: Extension<ClusterRef>,
-// ) -> Result<Json<Value>, ClusterError> {
-//     let req: ClusterNodeRequest = request.0;
-//     let cluster: ClusterRef = cluster_state.0;
-//     log::info!("Cluster add node: {:?}", req);
-//     return match cluster
-//         .add_node(&req.name.clone(), req.priority, &req.address)
-//         .await
-//     {
-//         Ok(_) => match cluster.get_node_by_name(req.clone().name) {
-//             Ok(node) => {
-//                 log::info!("Successfully added node: {:?}", req);
-//                 Ok(Json(json!(node)))
-//             }
-//             Err(_) => {
-//                 log::error!("Cannot find {:?} in current cluster configuration", req);
-//                 Err(ClusterError::Add)
-//             }
-//         },
-//         Err(_) => {
-//             log::error!("Cannot add {:?} in current cluster", req);
-//             Err(ClusterError::Add)
-//         }
-//     };
-// }
 
 // GET /v1/cluster/list
 // list all nodes in current databend-query cluster
 // request: None
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
-// pub async fn cluster_list_handler(
-//     discovery: Extension<ClusterDiscoveryRef>,
-// ) -> Result<Json<Value>, ClusterError> {
-//     let discovery: ClusterDiscoveryRef = discovery.0;
-//     let discover_cluster = discovery.discover()?;
-//     return match discovery.get_nodes() {
-//         Ok(nodes) => {
-//             log::info!("Successfully listed nodes ");
-//             Ok(Json(json!(nodes)))
-//         }
-//         Err(_) => {
-//             log::error!("Unable to list nodes ");
-//             Err(ClusterError::List)
-//         }
-//     };
-// }
+pub async fn cluster_list_handler(
+    sessions: Extension<SessionManagerRef>
+) -> Result<Json<Value>, ClusterError> {
+    // let sessions = sessions.0;
+    // let watch_cluster_session = sessions.create_session("WatchCluster")?;
+    // let watch_cluster_context = watch_cluster_session.create_context().await?;
+
+    // let cluster = watch_cluster_context.get_cluster();
+    unimplemented!("TODO")
+    // return match discovery.get_nodes() {
+    //     Ok(nodes) => {
+    //         log::info!("Successfully listed nodes ");
+    //         Ok(Json(json!(nodes)))
+    //     }
+    //     Err(_) => {
+    //         log::error!("Unable to list nodes ");
+    //         Err(ClusterError::List)
+    //     }
+    // };
+}
 
 // // POST /v1/cluster/remove
 // // remove a node based on name in current datafuse-query cluster

@@ -31,22 +31,32 @@ pub fn try_create_context() -> Result<DatabendQueryContextRef> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    Ok(DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
-        sessions.get_conf().clone(),
-        Arc::new(dummy_session.as_ref().clone()),
-        Cluster::empty(),
-    )))
+    let context = DatabendQueryContext::from_shared(
+        DatabendQueryContextShared::try_create(
+            sessions.get_conf().clone(),
+            Arc::new(dummy_session.as_ref().clone()),
+            Cluster::empty(),
+        )
+    );
+
+    context.get_settings().set_max_threads(8)?;
+    Ok(context)
 }
 
 pub fn try_create_context_with_config(config: Config) -> Result<DatabendQueryContextRef> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    Ok(DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
-        config,
-        Arc::new(dummy_session.as_ref().clone()),
-        Cluster::empty(),
-    )))
+    let context = DatabendQueryContext::from_shared(
+        DatabendQueryContextShared::try_create(
+            config,
+            Arc::new(dummy_session.as_ref().clone()),
+            Cluster::empty(),
+        )
+    );
+
+    context.get_settings().set_max_threads(8)?;
+    Ok(context)
 }
 
 pub struct ClusterDescriptor {
@@ -86,9 +96,14 @@ pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<DatabendQue
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list.clone();
 
-    Ok(DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
-        sessions.get_conf().clone(),
-        Arc::new(dummy_session.as_ref().clone()),
-        Cluster::create(nodes, local_id),
-    )))
+    let context = DatabendQueryContext::from_shared(
+        DatabendQueryContextShared::try_create(
+            sessions.get_conf().clone(),
+            Arc::new(dummy_session.as_ref().clone()),
+            Cluster::create(nodes, local_id),
+        )
+    );
+
+    context.get_settings().set_max_threads(8)?;
+    Ok(context)
 }

@@ -64,6 +64,24 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::inner_create(new_config)
     }
 
+    pub fn api_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config.clone();
+        new_config.query.api_tls_server_key = value.into();
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
+    pub fn api_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config.clone();
+        new_config.query.api_tls_server_cert = value.into();
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
+    pub fn api_tls_server_root_ca_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config.clone();
+        new_config.query.api_tls_server_root_ca_cert = value.into();
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
     pub fn log_dir_with_relative(self, path: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config.clone();
         new_config.log.log_dir = env::current_dir()
