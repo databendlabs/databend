@@ -37,7 +37,6 @@ pub struct UserMgr {
 }
 
 impl UserMgr {
-    #[allow(dead_code)]
     pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
         UserMgr {
             kv_api,
@@ -48,7 +47,7 @@ impl UserMgr {
 
 #[async_trait]
 impl UserMgrApi for UserMgr {
-    async fn add_user(&mut self, user_info: UserInfo) -> common_exception::Result<u64> {
+    async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = format!("{}/{}", self.user_prefix, user_info.name);
         let value = serde_json::to_vec(&user_info)?;
@@ -71,7 +70,7 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn get_user(&mut self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>> {
+    async fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>> {
         let key = format!("{}/{}", self.user_prefix, username);
         let res = self.kv_api.get_kv(&key).await?;
 
@@ -85,7 +84,7 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn get_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>> {
+    async fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>> {
         let values = self
             .kv_api
             .prefix_list_kv(self.user_prefix.as_str())
@@ -101,7 +100,7 @@ impl UserMgrApi for UserMgr {
     }
 
     async fn update_user(
-        &mut self,
+        &self,
         username: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
@@ -143,7 +142,7 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn drop_user(&mut self, username: String, seq: Option<u64>) -> Result<()> {
+    async fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
         let key = format!("{}/{}", self.user_prefix, username);
         let res = self.kv_api.upsert_kv(&key, seq.into(), None, None).await?;
         if res.prev.is_some() && res.result.is_none() {

@@ -23,7 +23,6 @@ pub use flight_token::FlightToken;
 pub use impl_flights::kv_api_impl;
 pub use impl_flights::meta_api_impl;
 pub use impl_flights::storage_api_impl;
-pub use store_api_provider::StoreApiProvider;
 pub use store_client::StoreClient;
 pub use store_client_conf::ClientConf;
 pub use store_client_conf::StoreClientConf;
@@ -38,7 +37,6 @@ mod impl_flights;
 mod store_client;
 #[macro_use]
 mod store_do_action;
-mod store_api_provider;
 mod store_client_conf;
 mod store_do_get;
 

@@ -21,7 +21,6 @@ use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
-use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
 use crate::catalogs::meta_backend::MetaBackend;
@@ -29,6 +28,7 @@ use crate::catalogs::meta_backend::TableInfo;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::common::StoreApiProvider;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub struct DefaultDatabase {

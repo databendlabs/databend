@@ -23,7 +23,6 @@ use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
-use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
@@ -33,6 +32,7 @@ use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::common::StoreApiProvider;
 use crate::configs::Config;
 use crate::datasources::database::prelude::register_prelude_db_engines;
 use crate::datasources::database_engine::DatabaseEngine;

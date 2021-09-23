@@ -28,10 +28,10 @@ use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
 use common_store_api::ReadPlanResult;
-use common_store_api_sdk::StoreApiProvider;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::common::StoreApiProvider;
 use crate::datasources::table_engine::TableEngine;
 use crate::sessions::DatabendQueryContextRef;
 
