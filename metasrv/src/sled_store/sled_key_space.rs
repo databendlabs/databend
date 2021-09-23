@@ -26,13 +26,13 @@ use common_metatypes::SeqValue;
 use sled::IVec;
 
 use crate::meta_service::LogEntry;
-use crate::meta_service::LogIndex;
-use crate::meta_service::NodeId;
 use crate::raft::state::RaftStateKey;
 use crate::raft::state::RaftStateValue;
 use crate::raft::state_machine::Node;
 use crate::raft::state_machine::StateMachineMetaKey;
 use crate::raft::state_machine::StateMachineMetaValue;
+use crate::raft::types::LogIndex;
+use crate::raft::types::NodeId;
 use crate::sled_store::SeqNum;
 use crate::sled_store::SledOrderedSerde;
 use crate::sled_store::SledSerde;

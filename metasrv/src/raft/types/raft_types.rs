@@ -14,7 +14,7 @@
 
 use std::mem::size_of_val;
 
-use async_raft::LogId;
+pub use async_raft::LogId;
 pub use async_raft::NodeId;
 use byteorder::BigEndian;
 use byteorder::ByteOrder;

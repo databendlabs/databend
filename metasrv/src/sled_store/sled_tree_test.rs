@@ -21,10 +21,10 @@ use common_runtime::tokio;
 
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
-use crate::meta_service::LogIndex;
 use crate::raft::state_machine::StateMachineMetaKey::Initialized;
 use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
 use crate::raft::state_machine::StateMachineMetaValue;
+use crate::raft::types::LogIndex;
 use crate::sled_store::sled_key_space;
 use crate::sled_store::sled_key_space::SledKeySpace;
 use crate::sled_store::sled_key_space::StateMachineMeta;

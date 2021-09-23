@@ -20,7 +20,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::meta_service::NodeId;
+use crate::raft::types::NodeId;
 use crate::sled_store::SledOrderedSerde;
 use crate::sled_store::SledSerde;
 
