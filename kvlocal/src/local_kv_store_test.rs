@@ -20,13 +20,13 @@ use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_runtime::tokio;
+use common_sled_store::init_temp_sled_db;
 use common_store_api::kv_apis::kv_api::MGetKVActionResult;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::SyncKVApi;
 use common_store_api::UpsertKVActionResult;
 use common_tracing::tracing;
-use metasrv::sled_store::init_temp_sled_db;
 
 use crate::local_kv_store::LocalKVStore;
 

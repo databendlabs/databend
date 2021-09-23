@@ -12,26 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! sled_store implement a key-value like store backed by sled::Tree.
-//!
-//! It is used by raft for log and state machine storage.
-pub use db::get_sled_db;
-pub use db::init_sled_db;
-pub use db::init_temp_sled_db;
-pub use seq_num::SeqNum;
-pub use sled_serde::SledOrderedSerde;
-pub use sled_serde::SledSerde;
-pub use sled_tree::AsKeySpace;
-pub use sled_tree::SledTree;
-pub use sled_tree::SledValueToKey;
+use crate::KVValue;
+use crate::SledSerde;
 
-pub mod db;
-pub mod seq_num;
-pub mod sled_key_space;
-pub mod sled_serde;
-pub mod sled_tree;
+/// Value with a corresponding sequence number
+pub type SeqValue<T = Vec<u8>> = (u64, T);
 
-#[cfg(test)]
-mod sled_tree_test;
-#[cfg(test)]
-mod testing;
+impl SledSerde for SeqValue<KVValue> {}

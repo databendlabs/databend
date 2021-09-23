@@ -37,6 +37,9 @@ use common_metatypes::Slot;
 use common_metatypes::Table;
 use common_planners::Part;
 use common_planners::Statistics;
+use common_sled_store::get_sled_db;
+use common_sled_store::AsKeySpace;
+use common_sled_store::SledTree;
 use common_store_api_sdk::storage_api_impl::AppendResult;
 use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use common_tracing::tracing;
@@ -58,10 +61,6 @@ use crate::raft::state_machine::StateMachineMetaKey::Initialized;
 use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
 use crate::raft::state_machine::StateMachineMetaKey::LastMembership;
 use crate::raft::state_machine::StateMachineMetaValue;
-use crate::sled_store::get_sled_db;
-use crate::sled_store::AsKeySpace;
-use crate::sled_store::SledSerde;
-use crate::sled_store::SledTree;
 
 /// seq number key to generate seq for the value of a `generic_kv` record.
 const SEQ_GENERIC_KV: &str = "generic_kv";
@@ -937,9 +936,6 @@ impl StateMachine {
         self.sm_tree.key_space()
     }
 }
-
-/// For Node to be able to be stored in sled::Tree as a value.
-impl SledSerde for Node {}
 
 impl Placement for StateMachine {
     fn get_slots(&self) -> &[Slot] {

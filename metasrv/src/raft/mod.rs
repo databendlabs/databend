@@ -17,7 +17,5 @@ pub mod sled_key_spaces;
 pub mod state;
 pub mod state_machine;
 
-mod sled_impl;
-
 #[cfg(test)]
 mod raft_types_test;

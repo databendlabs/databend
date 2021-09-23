@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use common_runtime::tokio;
+use common_sled_store::init_sled_db;
 use common_tracing::init_tracing_with_file;
 use log::info;
 use metasrv::api::FlightServer;
 use metasrv::api::HttpService;
 use metasrv::configs::Config;
 use metasrv::metrics::MetricService;
-use metasrv::sled_store::init_sled_db;
 use structopt::StructOpt;
 
 #[tokio::main]

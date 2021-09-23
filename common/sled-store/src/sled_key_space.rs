@@ -22,8 +22,8 @@ use std::ops::RangeBounds;
 use common_exception::ErrorCode;
 use sled::IVec;
 
-use crate::sled_store::SledOrderedSerde;
-use crate::sled_store::SledSerde;
+use crate::SledOrderedSerde;
+use crate::SledSerde;
 
 /// Defines a key space in sled::Tree that has its own key value type.
 /// And a prefix that is used to distinguish keys from different spaces in a SledTree.

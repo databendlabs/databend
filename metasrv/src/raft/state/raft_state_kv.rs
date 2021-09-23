@@ -17,12 +17,11 @@ use std::fmt;
 use async_raft::storage::HardState;
 use common_exception::ErrorCode;
 use common_metatypes::NodeId;
+use common_sled_store::SledOrderedSerde;
+use common_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
-
-use crate::sled_store::SledOrderedSerde;
-use crate::sled_store::SledSerde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RaftStateKey {

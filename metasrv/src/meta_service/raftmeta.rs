@@ -49,6 +49,7 @@ use common_runtime::tokio::sync::Mutex;
 use common_runtime::tokio::sync::RwLock;
 use common_runtime::tokio::sync::RwLockWriteGuard;
 use common_runtime::tokio::task::JoinHandle;
+use common_sled_store::get_sled_db;
 use common_store_api_sdk::storage_api_impl::AppendResult;
 use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use common_tracing::tracing;
@@ -67,7 +68,6 @@ use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::Snapshot;
 use crate::raft::state_machine::StateMachine;
-use crate::sled_store::get_sled_db;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///

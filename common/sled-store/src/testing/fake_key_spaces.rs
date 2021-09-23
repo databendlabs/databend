@@ -20,9 +20,14 @@ use common_metatypes::Node;
 use common_metatypes::NodeId;
 use common_metatypes::SeqValue;
 
-use crate::sled_store::sled_key_space::SledKeySpace;
-use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaKey;
-use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaValue;
+use crate::testing::fake_state_machine_meta::StateMachineMetaKey;
+use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
+use crate::SledKeySpace;
+use crate::SledSerde;
+
+impl SledSerde for SeqValue<KVValue> {}
+
+impl SledSerde for Node {}
 
 /// Types for raft log in SledTree
 pub struct Logs {}

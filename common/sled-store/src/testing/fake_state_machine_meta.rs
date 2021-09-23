@@ -20,8 +20,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::sled_store::SledOrderedSerde;
-use crate::sled_store::SledSerde;
+use crate::SledOrderedSerde;
+use crate::SledSerde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StateMachineMetaKey {

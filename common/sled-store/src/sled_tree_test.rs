@@ -22,17 +22,17 @@ use common_metatypes::LogId;
 use common_metatypes::LogIndex;
 use common_runtime::tokio;
 
-use crate::sled_store::get_sled_db;
-use crate::sled_store::sled_key_space::SledKeySpace;
-use crate::sled_store::testing::fake_key_spaces::Files;
-use crate::sled_store::testing::fake_key_spaces::GenericKV;
-use crate::sled_store::testing::fake_key_spaces::Logs;
-use crate::sled_store::testing::fake_key_spaces::Nodes;
-use crate::sled_store::testing::fake_key_spaces::StateMachineMeta;
-use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
-use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
-use crate::sled_store::testing::fake_state_machine_meta::StateMachineMetaValue;
-use crate::sled_store::SledTree;
+use crate::get_sled_db;
+use crate::testing::fake_key_spaces::Files;
+use crate::testing::fake_key_spaces::GenericKV;
+use crate::testing::fake_key_spaces::Logs;
+use crate::testing::fake_key_spaces::Nodes;
+use crate::testing::fake_key_spaces::StateMachineMeta;
+use crate::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
+use crate::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
+use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
+use crate::SledKeySpace;
+use crate::SledTree;
 
 /// 1. Open a temp sled::Db for all tests.
 /// 2. Initialize a global tracing.
@@ -41,7 +41,7 @@ use crate::sled_store::SledTree;
 macro_rules! init_sled_ut {
     () => {{
         let t = tempfile::tempdir().expect("create temp dir to sled db");
-        $crate::sled_store::init_temp_sled_db(t);
+        $crate::init_temp_sled_db(t);
 
         common_tracing::init_default_ut_tracing();
 

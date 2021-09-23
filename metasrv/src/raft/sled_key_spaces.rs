@@ -19,13 +19,13 @@ use common_metatypes::LogIndex;
 use common_metatypes::Node;
 use common_metatypes::NodeId;
 use common_metatypes::SeqValue;
+use common_sled_store::SeqNum;
+use common_sled_store::SledKeySpace;
 
 use crate::raft::state::RaftStateKey;
 use crate::raft::state::RaftStateValue;
 use crate::raft::state_machine::StateMachineMetaKey;
 use crate::raft::state_machine::StateMachineMetaValue;
-use crate::sled_store::sled_key_space::SledKeySpace;
-use crate::sled_store::SeqNum;
 
 /// Types for raft log in SledTree
 pub struct Logs {}

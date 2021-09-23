@@ -15,9 +15,8 @@
 use std::ops::Bound;
 
 use common_metatypes::NodeId;
-
-use crate::sled_store::sled_serde::SledOrderedSerde;
-use crate::sled_store::sled_serde::SledRangeSerde;
+use common_sled_store::SledOrderedSerde;
+use common_sled_store::SledRangeSerde;
 
 #[test]
 fn test_node_id_serde_ser() -> anyhow::Result<()> {
