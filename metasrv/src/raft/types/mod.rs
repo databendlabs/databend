@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod raft_txid;
-mod raft_types;
-
-#[cfg(test)]
-mod raft_types_test;
-
 pub use cluster::Node;
 pub use cluster::Slot;
+pub use cmd::Cmd;
+pub use log_entry::LogEntry;
 pub use raft_txid::RaftTxId;
 pub use raft_types::LogId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
+
+mod cluster;
+mod cmd;
+mod log_entry;
+mod raft_txid;
+mod raft_types;
+
+#[cfg(test)]
+mod raft_types_test;

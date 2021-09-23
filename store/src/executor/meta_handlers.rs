@@ -41,12 +41,12 @@ use common_store_api_sdk::meta_api_impl::GetTableAction;
 use common_store_api_sdk::meta_api_impl::GetTableActionResult;
 use common_store_api_sdk::meta_api_impl::GetTableExtReq;
 use log::info;
-use metasrv::meta_service::cmd::Cmd::CreateDatabase;
-use metasrv::meta_service::cmd::Cmd::CreateTable;
-use metasrv::meta_service::cmd::Cmd::DropDatabase;
-use metasrv::meta_service::cmd::Cmd::DropTable;
 use metasrv::meta_service::LogEntry;
 use metasrv::raft::state_machine::AppliedState;
+use metasrv::raft::types::Cmd::CreateDatabase;
+use metasrv::raft::types::Cmd::CreateTable;
+use metasrv::raft::types::Cmd::DropDatabase;
+use metasrv::raft::types::Cmd::DropTable;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
