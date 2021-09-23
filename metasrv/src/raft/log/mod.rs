@@ -12,5 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod log;
-pub mod state_machine;
+mod raft_log;
+
+#[cfg(test)]
+mod raft_log_test;
+
+pub use raft_log::RaftLog;
