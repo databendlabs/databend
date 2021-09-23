@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod log;
-pub mod state;
-pub mod state_machine;
+//! Raft state includes some enssential information about raft, such as term, voted_for
+mod raft_state;
+mod raft_state_kv;
+
+#[cfg(test)]
+mod raft_state_test;
+
+pub use raft_state::RaftState;
+pub use raft_state_kv::RaftStateKey;
+pub use raft_state_kv::RaftStateValue;

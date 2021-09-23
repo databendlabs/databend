@@ -18,8 +18,6 @@ pub use errors::ShutdownError;
 pub use log_entry::LogEntry;
 pub use meta_service_impl::MetaServiceImpl;
 pub use network::Network;
-pub use raft_state_kv::RaftStateKey;
-pub use raft_state_kv::RaftStateValue;
 pub use raft_txid::RaftTxId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
@@ -39,8 +37,6 @@ pub mod errors;
 pub mod log_entry;
 pub mod meta_service_impl;
 pub mod network;
-pub mod raft_state;
-pub mod raft_state_kv;
 pub mod raft_txid;
 pub mod raft_types;
 pub mod raftmeta;
@@ -49,8 +45,6 @@ pub mod raftmeta;
 mod meta_service_impl_test;
 #[cfg(test)]
 mod meta_store_test;
-#[cfg(test)]
-mod raft_state_test;
 #[cfg(test)]
 mod raft_types_test;
 #[cfg(test)]

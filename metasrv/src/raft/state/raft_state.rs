@@ -18,8 +18,8 @@ use common_tracing::tracing;
 
 use crate::configs;
 use crate::meta_service::NodeId;
-use crate::meta_service::RaftStateKey;
-use crate::meta_service::RaftStateValue;
+use crate::raft::state::RaftStateKey;
+use crate::raft::state::RaftStateValue;
 use crate::sled_store::sled_key_space::RaftStateKV;
 use crate::sled_store::AsKeySpace;
 use crate::sled_store::SledSerde;
