@@ -56,8 +56,8 @@ impl From<&Config> for StoreClientConf {
         };
 
         StoreClientConf {
-            // kv service config are not separated yet, we use configs::Config.store as it
-            kv_service_config: config.clone(),
+            // kv service is configured by conf.meta
+            kv_service_config: meta_config.clone(),
             block_service_config: config,
             // copy meta config from query config
             meta_service_config: meta_config,

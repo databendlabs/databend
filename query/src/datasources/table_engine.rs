@@ -16,9 +16,9 @@
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::TableOptions;
-use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::Table;
+use crate::common::StoreApiProvider;
 
 pub trait TableEngine: Send + Sync {
     fn try_create(

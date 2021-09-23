@@ -16,15 +16,21 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_store_api::KVApi;
 use common_store_api::MetaApi;
+use common_store_api::StorageApi;
+use common_store_api_sdk::StoreClient;
+use common_store_api_sdk::StoreClientConf;
 
-use crate::store_client_conf::StoreClientConf;
-use crate::KVApi;
-use crate::StorageApi;
-use crate::StoreClient;
+// Since there is a pending dependency issue,
+// StoreApiProvider is temporarily moved from store-api-sdk
+//
+// @see https://github.com/datafuselabs/databend/issues/1929
 
 #[derive(Clone)]
 pub struct StoreApiProvider {
+    // do not depend on query::configs::Config in case of moving back to sdk
+    // also @see config_converter.rs
     conf: StoreClientConf,
 }
 
@@ -39,8 +45,14 @@ impl StoreApiProvider {
     }
 
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
-        let client = StoreClient::try_new(&self.conf).await?;
-        Ok(Arc::new(client))
+        let local = self.conf.kv_service_config.address.is_empty();
+        if local {
+            let client = kvlocal::LocalKVStore::new_temp().await?;
+            Ok(Arc::new(client))
+        } else {
+            let client = StoreClient::try_new(&self.conf).await?;
+            Ok(Arc::new(client))
+        }
     }
 
     pub async fn try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
