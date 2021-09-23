@@ -35,11 +35,11 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_runtime::Runtime;
-use common_store_api_sdk::StoreApiProvider;
 
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::meta_backend::TableInfo;
+use crate::common::StoreApiProvider;
 
 type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;

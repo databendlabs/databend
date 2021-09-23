@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use hash_table::HashTable;
+pub use hash_table_entity::HashTableEntity;
+pub use hash_table_entity::KeyValueEntity;
+pub use hash_table_iter::HashTableIter;
+pub use hash_table_key::HashTableKeyable;
+
 #[cfg(test)]
 mod hash_table_grower_test;
 
@@ -22,12 +28,8 @@ mod hash_table_entity;
 mod hash_table_grower;
 mod hash_table_iter;
 mod hash_table_key;
-
-pub use hash_table::HashTable;
-pub use hash_table_entity::HashTableEntity;
-pub use hash_table_entity::KeyValueEntity;
-pub use hash_table_iter::HashTableIter;
-pub use hash_table_key::HashTableKeyable;
+mod store_api_provider;
 
 pub type HashMap<Key, Value> = HashTable<Key, KeyValueEntity<Key, Value>>;
 pub type HashMapIterator<Key, Value> = HashTableIter<Key, KeyValueEntity<Key, Value>>;
+pub use store_api_provider::StoreApiProvider;
