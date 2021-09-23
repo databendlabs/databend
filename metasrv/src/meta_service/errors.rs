@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+
+use crate::raft::types::NodeId;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum RetryableError {

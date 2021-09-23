@@ -14,7 +14,6 @@
 
 use std::fmt;
 
-use async_raft::NodeId;
 use common_metatypes::Database;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
@@ -23,7 +22,8 @@ use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::raft::state_machine::Node;
+use crate::raft::types::Node;
+use crate::raft::types::NodeId;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.

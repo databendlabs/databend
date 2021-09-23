@@ -19,7 +19,7 @@ use serde::Serialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
-use crate::meta_service::NodeId;
+use crate::raft::types::NodeId;
 
 lazy_static! {
     pub static ref DATABEND_COMMIT_VERSION: String = {

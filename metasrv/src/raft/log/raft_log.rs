@@ -19,7 +19,7 @@ use common_tracing::tracing;
 
 use crate::configs;
 use crate::meta_service::LogEntry;
-use crate::meta_service::LogIndex;
+use crate::raft::types::LogIndex;
 use crate::sled_store::sled_key_space;
 use crate::sled_store::AsKeySpace;
 use crate::sled_store::SledSerde;

@@ -20,7 +20,7 @@ use serde::Serialize;
 
 use crate::meta_service::Cmd;
 use crate::meta_service::RaftMes;
-use crate::meta_service::RaftTxId;
+use crate::raft::types::RaftTxId;
 
 /// The application data request type which the `Metasrv` works with.
 ///

@@ -23,7 +23,7 @@ use serde::Serialize;
 
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
-use crate::raft::state_machine::Node;
+use crate::raft::types::Node;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.

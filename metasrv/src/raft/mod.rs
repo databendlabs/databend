@@ -15,3 +15,4 @@
 pub mod log;
 pub mod state;
 pub mod state_machine;
+pub mod types;

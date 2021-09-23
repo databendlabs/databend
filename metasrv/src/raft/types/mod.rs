@@ -12,23 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod applied_state;
-pub mod sm;
-pub mod snapshot;
-pub mod state_machine_meta;
+mod cluster;
+mod raft_txid;
+mod raft_types;
 
-pub mod placement;
 #[cfg(test)]
-mod placement_test;
-#[cfg(test)]
-mod state_machine_test;
+mod raft_types_test;
 
-pub use applied_state::AppliedState;
-pub use placement::Placement;
-pub use sm::Replication;
-pub use sm::SerializableSnapshot;
-pub use sm::SnapshotKeyValue;
-pub use sm::StateMachine;
-pub use snapshot::Snapshot;
-pub use state_machine_meta::StateMachineMetaKey;
-pub use state_machine_meta::StateMachineMetaValue;
+pub use cluster::Node;
+pub use cluster::Slot;
+pub use raft_txid::RaftTxId;
+pub use raft_types::LogId;
+pub use raft_types::LogIndex;
+pub use raft_types::NodeId;
+pub use raft_types::Term;

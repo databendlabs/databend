@@ -21,7 +21,6 @@ use async_raft::raft::InstallSnapshotRequest;
 use async_raft::raft::InstallSnapshotResponse;
 use async_raft::raft::VoteRequest;
 use async_raft::raft::VoteResponse;
-use async_raft::NodeId;
 use async_raft::RaftNetwork;
 use common_tracing::tracing;
 use tonic::transport::channel::Channel;
@@ -31,6 +30,7 @@ use crate::meta_service::MetaRaftStore;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
+use crate::raft::types::NodeId;
 
 impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<LogEntry> {
     fn into_request(self) -> tonic::Request<RaftMes> {
