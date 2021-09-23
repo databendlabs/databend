@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use async_raft::async_trait::async_trait;
@@ -31,6 +32,27 @@ use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
 use crate::raft::types::NodeId;
+
+/// Impl grpc method `write`
+impl tonic::IntoRequest<RaftMes> for LogEntry {
+    fn into_request(self) -> tonic::Request<RaftMes> {
+        let mes = RaftMes {
+            data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
+        };
+        tonic::Request::new(mes)
+    }
+}
+
+impl TryFrom<RaftMes> for LogEntry {
+    type Error = tonic::Status;
+
+    fn try_from(mes: RaftMes) -> Result<Self, Self::Error> {
+        let req: LogEntry =
+            serde_json::from_str(&mes.data).map_err(|e| tonic::Status::internal(e.to_string()))?;
+        Ok(req)
+    }
+}
 
 impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<LogEntry> {
     fn into_request(self) -> tonic::Request<RaftMes> {

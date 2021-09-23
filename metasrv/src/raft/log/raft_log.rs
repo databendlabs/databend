@@ -19,8 +19,8 @@ use common_tracing::tracing;
 
 use crate::configs;
 use crate::meta_service::LogEntry;
+use crate::raft::sled_key_spaces::Logs;
 use crate::raft::types::LogIndex;
-use crate::sled_store::sled_key_space;
 use crate::sled_store::AsKeySpace;
 use crate::sled_store::SledSerde;
 use crate::sled_store::SledTree;
@@ -129,7 +129,7 @@ impl RaftLog {
     }
 
     /// Returns a borrowed key space in sled::Tree for logs
-    fn logs(&self) -> AsKeySpace<sled_key_space::Logs> {
+    fn logs(&self) -> AsKeySpace<Logs> {
         self.inner.key_space()
     }
 }

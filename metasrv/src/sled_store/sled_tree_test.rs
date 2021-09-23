@@ -21,13 +21,16 @@ use common_runtime::tokio;
 
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
+use crate::raft::sled_key_spaces::Files;
+use crate::raft::sled_key_spaces::GenericKV;
+use crate::raft::sled_key_spaces::Logs;
+use crate::raft::sled_key_spaces::Nodes;
+use crate::raft::sled_key_spaces::StateMachineMeta;
 use crate::raft::state_machine::StateMachineMetaKey::Initialized;
 use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
 use crate::raft::state_machine::StateMachineMetaValue;
 use crate::raft::types::LogIndex;
-use crate::sled_store::sled_key_space;
 use crate::sled_store::sled_key_space::SledKeySpace;
-use crate::sled_store::sled_key_space::StateMachineMeta;
 use crate::sled_store::SledTree;
 use crate::tests::service::new_sled_test_context;
 
@@ -70,7 +73,7 @@ async fn test_sledtree_append() -> anyhow::Result<()> {
         }),
     ];
 
-    tree.append::<sled_key_space::Logs>(&logs).await?;
+    tree.append::<Logs>(&logs).await?;
 
     let want: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -90,13 +93,13 @@ async fn test_sledtree_append() -> anyhow::Result<()> {
         },
     ];
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..)?;
+    let got = tree.range_values::<Logs, _>(0..)?;
     assert_eq!(want, got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..=5)?;
+    let got = tree.range_values::<Logs, _>(0..=5)?;
     assert_eq!(want[0..1], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(6..9)?;
+    let got = tree.range_values::<Logs, _>(6..9)?;
     assert_eq!(want[1..], got);
 
     Ok(())
@@ -144,36 +147,36 @@ async fn test_sledtree_append_values_and_range_get() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..)?;
+    let got = tree.range_values::<Logs, _>(0..)?;
     assert_eq!(logs, got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..=2)?;
+    let got = tree.range_values::<Logs, _>(0..=2)?;
     assert_eq!(logs[0..1], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..3)?;
+    let got = tree.range_values::<Logs, _>(0..3)?;
     assert_eq!(logs[0..1], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..5)?;
+    let got = tree.range_values::<Logs, _>(0..5)?;
     assert_eq!(logs[0..2], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..10)?;
+    let got = tree.range_values::<Logs, _>(0..10)?;
     assert_eq!(logs[0..3], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(0..11)?;
+    let got = tree.range_values::<Logs, _>(0..11)?;
     assert_eq!(logs[0..4], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(9..11)?;
+    let got = tree.range_values::<Logs, _>(9..11)?;
     assert_eq!(logs[2..4], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(10..256)?;
+    let got = tree.range_values::<Logs, _>(10..256)?;
     assert_eq!(logs[3..4], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(10..257)?;
+    let got = tree.range_values::<Logs, _>(10..257)?;
     assert_eq!(logs[3..5], got);
 
-    let got = tree.range_values::<sled_key_space::Logs, _>(257..)?;
+    let got = tree.range_values::<Logs, _>(257..)?;
     assert_eq!(logs[5..], got);
     Ok(())
 }
@@ -202,30 +205,30 @@ async fn test_sledtree_range_keys() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(0..)?;
+    let got = tree.range_keys::<Logs, _>(0..)?;
     assert_eq!(vec![2, 9, 10], got);
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(0..=2)?;
+    let got = tree.range_keys::<Logs, _>(0..=2)?;
     assert_eq!(vec![2], got);
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(0..3)?;
+    let got = tree.range_keys::<Logs, _>(0..3)?;
     assert_eq!(vec![2], got);
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(0..10)?;
+    let got = tree.range_keys::<Logs, _>(0..10)?;
     assert_eq!(vec![2, 9], got);
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(0..11)?;
+    let got = tree.range_keys::<Logs, _>(0..11)?;
     assert_eq!(vec![2, 9, 10], got);
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(9..11)?;
+    let got = tree.range_keys::<Logs, _>(9..11)?;
     assert_eq!(vec![9, 10], got);
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(10..256)?;
+    let got = tree.range_keys::<Logs, _>(10..256)?;
     assert_eq!(vec![10], got);
 
-    let got = tree.range_keys::<sled_key_space::Logs, _>(11..)?;
+    let got = tree.range_keys::<Logs, _>(11..)?;
     assert_eq!(Vec::<LogIndex>::new(), got);
 
     Ok(())
@@ -255,9 +258,9 @@ async fn test_sledtree_range_kvs() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
-    let got = tree.range_kvs::<sled_key_space::Logs, _>(9..11)?;
+    let got = tree.range_kvs::<Logs, _>(9..11)?;
     assert_eq!(vec![(9, logs[1].clone()), (10, logs[2].clone())], got);
 
     Ok(())
@@ -270,7 +273,7 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
     // This test assumes the following order.
     // to check the range boundary.
-    assert!(sled_key_space::Logs::PREFIX < StateMachineMeta::PREFIX);
+    assert!(Logs::PREFIX < StateMachineMeta::PREFIX);
 
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -294,7 +297,7 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
     let metas = vec![
         (
@@ -306,12 +309,12 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
     tree.append::<StateMachineMeta>(metas.as_slice()).await?;
 
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
     let meta_tree = tree.key_space::<StateMachineMeta>();
 
     // key sapce Logs
 
-    let mut it = tree.range::<sled_key_space::Logs, _>(..)?;
+    let mut it = tree.range::<Logs, _>(..)?;
     assert_eq!((2, logs[0].clone()), it.next().unwrap()?);
     assert_eq!((4, logs[1].clone()), it.next().unwrap()?);
     assert!(it.next().is_none());
@@ -323,7 +326,7 @@ async fn test_sledtree_range() -> anyhow::Result<()> {
 
     // key sapce Logs reversed
 
-    let mut it = tree.range::<sled_key_space::Logs, _>(..)?.rev();
+    let mut it = tree.range::<Logs, _>(..)?.rev();
     assert_eq!((4, logs[1].clone()), it.next().unwrap()?);
     assert_eq!((2, logs[0].clone()), it.next().unwrap()?);
     assert!(it.next().is_none());
@@ -376,9 +379,9 @@ async fn test_sledtree_scan_prefix() -> anyhow::Result<()> {
         ("b".to_string(), "y".to_string()),
     ];
 
-    tree.append::<sled_key_space::Files>(&files).await?;
+    tree.append::<Files>(&files).await?;
 
-    let got = tree.scan_prefix::<sled_key_space::Files>(&"ab".to_string())?;
+    let got = tree.scan_prefix::<Files>(&"ab".to_string())?;
     assert_eq!(files[1..4], got);
 
     Ok(())
@@ -393,7 +396,7 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
 
-    assert!(tree.get::<sled_key_space::Logs>(&5)?.is_none());
+    assert!(tree.get::<Logs>(&5)?.is_none());
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -414,10 +417,10 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
     ];
 
     for log in logs.iter() {
-        tree.insert_value::<sled_key_space::Logs>(log).await?;
+        tree.insert_value::<Logs>(log).await?;
     }
 
-    assert_eq!(logs, tree.range_values::<sled_key_space::Logs, _>(..)?);
+    assert_eq!(logs, tree.range_values::<Logs, _>(..)?);
 
     // insert and override
 
@@ -426,9 +429,7 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = tree
-        .insert_value::<sled_key_space::Logs>(&override_2)
-        .await?;
+    let prev = tree.insert_value::<Logs>(&override_2).await?;
     assert_eq!(Some(logs[0].clone()), prev);
 
     // insert and override nothing
@@ -441,9 +442,7 @@ async fn test_sledtree_insert() -> anyhow::Result<()> {
         payload: EntryPayload::Blank,
     };
 
-    let prev = tree
-        .insert_value::<sled_key_space::Logs>(&override_nothing)
-        .await?;
+    let prev = tree.insert_value::<Logs>(&override_nothing).await?;
     assert_eq!(None, prev);
 
     Ok(())
@@ -458,7 +457,7 @@ async fn test_sledtree_contains_key() -> anyhow::Result<()> {
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
 
-    assert!(tree.get::<sled_key_space::Logs>(&5)?.is_none());
+    assert!(tree.get::<Logs>(&5)?.is_none());
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -478,13 +477,13 @@ async fn test_sledtree_contains_key() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
-    assert!(!tree.contains_key::<sled_key_space::Logs>(&1)?);
-    assert!(tree.contains_key::<sled_key_space::Logs>(&2)?);
-    assert!(!tree.contains_key::<sled_key_space::Logs>(&3)?);
-    assert!(tree.contains_key::<sled_key_space::Logs>(&4)?);
-    assert!(!tree.contains_key::<sled_key_space::Logs>(&5)?);
+    assert!(!tree.contains_key::<Logs>(&1)?);
+    assert!(tree.contains_key::<Logs>(&2)?);
+    assert!(!tree.contains_key::<Logs>(&3)?);
+    assert!(tree.contains_key::<Logs>(&4)?);
+    assert!(!tree.contains_key::<Logs>(&5)?);
 
     Ok(())
 }
@@ -499,16 +498,12 @@ async fn test_sledtree_update_and_fetch() -> anyhow::Result<()> {
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
 
     let v = tree
-        .update_and_fetch::<sled_key_space::Files, _>(&"foo".to_string(), |v| {
-            Some(v.unwrap_or_default() + "1")
-        })
+        .update_and_fetch::<Files, _>(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
         .await?;
     assert_eq!(Some("1".to_string()), v);
 
     let v = tree
-        .update_and_fetch::<sled_key_space::Files, _>(&"foo".to_string(), |v| {
-            Some(v.unwrap_or_default() + "1")
-        })
+        .update_and_fetch::<Files, _>(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
         .await?;
     assert_eq!(Some("11".to_string()), v);
 
@@ -524,7 +519,7 @@ async fn test_sledtree_get() -> anyhow::Result<()> {
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
 
-    assert!(tree.get::<sled_key_space::Logs>(&5)?.is_none());
+    assert!(tree.get::<Logs>(&5)?.is_none());
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -544,13 +539,13 @@ async fn test_sledtree_get() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
-    assert_eq!(None, tree.get::<sled_key_space::Logs>(&1)?);
-    assert_eq!(Some(logs[0].clone()), tree.get::<sled_key_space::Logs>(&2)?);
-    assert_eq!(None, tree.get::<sled_key_space::Logs>(&3)?);
-    assert_eq!(Some(logs[1].clone()), tree.get::<sled_key_space::Logs>(&4)?);
-    assert_eq!(None, tree.get::<sled_key_space::Logs>(&5)?);
+    assert_eq!(None, tree.get::<Logs>(&1)?);
+    assert_eq!(Some(logs[0].clone()), tree.get::<Logs>(&2)?);
+    assert_eq!(None, tree.get::<Logs>(&3)?);
+    assert_eq!(Some(logs[1].clone()), tree.get::<Logs>(&4)?);
+    assert_eq!(None, tree.get::<Logs>(&5)?);
 
     Ok(())
 }
@@ -562,13 +557,13 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
 
     // This test assumes the following order.
     // To ensure a last() does not returns item from another key space with smaller prefix
-    assert!(sled_key_space::Logs::PREFIX < StateMachineMeta::PREFIX);
+    assert!(Logs::PREFIX < StateMachineMeta::PREFIX);
 
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
 
-    assert!(tree.last::<sled_key_space::Logs>()?.is_none());
+    assert!(tree.last::<Logs>()?.is_none());
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -588,7 +583,7 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
     assert_eq!(None, tree.last::<StateMachineMeta>()?);
 
     let metas = vec![
@@ -601,10 +596,7 @@ async fn test_sledtree_last() -> anyhow::Result<()> {
 
     tree.append::<StateMachineMeta>(metas.as_slice()).await?;
 
-    assert_eq!(
-        Some((4, logs[1].clone())),
-        tree.last::<sled_key_space::Logs>()?
-    );
+    assert_eq!(Some((4, logs[1].clone())), tree.last::<Logs>()?);
     assert_eq!(
         Some((Initialized, StateMachineMetaValue::Bool(true))),
         tree.last::<StateMachineMeta>()?
@@ -633,23 +625,20 @@ async fn test_sledtree_remove() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
-    let removed = tree.remove::<sled_key_space::Logs>(&0, false).await?;
+    let removed = tree.remove::<Logs>(&0, false).await?;
     assert_eq!(None, removed);
-    assert_eq!(logs[..], tree.range_values::<sled_key_space::Logs, _>(0..)?);
+    assert_eq!(logs[..], tree.range_values::<Logs, _>(0..)?);
 
     // remove other key space
-    let removed = tree.remove::<sled_key_space::Nodes>(&0, false).await?;
+    let removed = tree.remove::<Nodes>(&0, false).await?;
     assert_eq!(None, removed);
-    assert_eq!(logs[..], tree.range_values::<sled_key_space::Logs, _>(0..)?);
+    assert_eq!(logs[..], tree.range_values::<Logs, _>(0..)?);
 
-    let removed = tree.remove::<sled_key_space::Logs>(&2, false).await?;
+    let removed = tree.remove::<Logs>(&2, false).await?;
     assert_eq!(Some(logs[0].clone()), removed);
-    assert_eq!(
-        logs[1..],
-        tree.range_values::<sled_key_space::Logs, _>(0..)?
-    );
+    assert_eq!(logs[1..], tree.range_values::<Logs, _>(0..)?);
 
     Ok(())
 }
@@ -696,41 +685,22 @@ async fn test_sledtree_range_remove() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_remove::<sled_key_space::Logs, _>(0.., false)
-        .await?;
-    assert_eq!(
-        logs[5..],
-        tree.range_values::<sled_key_space::Logs, _>(0..)?
-    );
+    tree.append_values::<Logs>(&logs).await?;
+    tree.range_remove::<Logs, _>(0.., false).await?;
+    assert_eq!(logs[5..], tree.range_values::<Logs, _>(0..)?);
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_remove::<sled_key_space::Logs, _>(1.., false)
-        .await?;
-    assert_eq!(
-        logs[5..],
-        tree.range_values::<sled_key_space::Logs, _>(0..)?
-    );
+    tree.append_values::<Logs>(&logs).await?;
+    tree.range_remove::<Logs, _>(1.., false).await?;
+    assert_eq!(logs[5..], tree.range_values::<Logs, _>(0..)?);
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_remove::<sled_key_space::Logs, _>(3.., true)
-        .await?;
-    assert_eq!(
-        logs[0..1],
-        tree.range_values::<sled_key_space::Logs, _>(0..)?
-    );
+    tree.append_values::<Logs>(&logs).await?;
+    tree.range_remove::<Logs, _>(3.., true).await?;
+    assert_eq!(logs[0..1], tree.range_values::<Logs, _>(0..)?);
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
-    tree.range_remove::<sled_key_space::Logs, _>(3..10, true)
-        .await?;
-    assert_eq!(
-        logs[0..1],
-        tree.range_values::<sled_key_space::Logs, _>(0..5)?
-    );
-    assert_eq!(
-        logs[3..],
-        tree.range_values::<sled_key_space::Logs, _>(5..)?
-    );
+    tree.append_values::<Logs>(&logs).await?;
+    tree.range_remove::<Logs, _>(3..10, true).await?;
+    assert_eq!(logs[0..1], tree.range_values::<Logs, _>(0..5)?);
+    assert_eq!(logs[3..], tree.range_values::<Logs, _>(5..)?);
 
     Ok(())
 }
@@ -762,7 +732,7 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
         },
     ];
 
-    tree.append_values::<sled_key_space::Logs>(&logs).await?;
+    tree.append_values::<Logs>(&logs).await?;
 
     let metas = vec![
         (
@@ -775,7 +745,7 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
 
     // range get/keys are limited to its own namespace.
     {
-        let got = tree.range_values::<sled_key_space::Logs, _>(..)?;
+        let got = tree.range_values::<Logs, _>(..)?;
         assert_eq!(logs, got);
 
         let got = tree.range_values::<StateMachineMeta, _>(..=LastApplied)?;
@@ -795,7 +765,7 @@ async fn test_sledtree_multi_types() -> anyhow::Result<()> {
     {
         tree.range_remove::<StateMachineMeta, _>(.., false).await?;
 
-        let got = tree.range_values::<sled_key_space::Logs, _>(..)?;
+        let got = tree.range_values::<Logs, _>(..)?;
         assert_eq!(logs, got);
     }
 
@@ -812,7 +782,7 @@ async fn test_as_append() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
         (8, Entry {
@@ -872,7 +842,7 @@ async fn test_as_append_values_and_range_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -949,7 +919,7 @@ async fn test_as_range_keys() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -1003,7 +973,7 @@ async fn test_as_range_kvs() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -1036,8 +1006,8 @@ async fn test_as_scan_prefix() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let file_tree = tree.key_space::<sled_key_space::Files>();
-    let kv_tree = tree.key_space::<sled_key_space::GenericKV>();
+    let file_tree = tree.key_space::<Files>();
+    let kv_tree = tree.key_space::<GenericKV>();
 
     let files: Vec<(String, String)> = vec![
         ("a".to_string(), "x".to_string()),
@@ -1080,7 +1050,7 @@ async fn test_as_insert() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
 
@@ -1142,7 +1112,7 @@ async fn test_as_contains_key() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
 
@@ -1183,7 +1153,7 @@ async fn test_as_update_and_fetch() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let file_tree = tree.key_space::<sled_key_space::Files>();
+    let file_tree = tree.key_space::<Files>();
 
     let v = file_tree
         .update_and_fetch(&"foo".to_string(), |v| Some(v.unwrap_or_default() + "1"))
@@ -1206,7 +1176,7 @@ async fn test_as_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.get(&5)?);
 
@@ -1247,7 +1217,7 @@ async fn test_as_last() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     assert_eq!(None, log_tree.last()?);
 
@@ -1283,7 +1253,7 @@ async fn test_as_remove() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -1317,7 +1287,7 @@ async fn test_as_range_remove() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -1380,7 +1350,7 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
     let tree = SledTree::open(db, tc.config.meta_config.tree_name("foo"), true)?;
-    let log_tree = tree.key_space::<sled_key_space::Logs>();
+    let log_tree = tree.key_space::<Logs>();
     let sm_meta = tree.key_space::<StateMachineMeta>();
 
     let logs: Vec<Entry<LogEntry>> = vec![

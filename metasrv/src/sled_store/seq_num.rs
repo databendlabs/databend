@@ -17,8 +17,6 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::sled_store::SledSerde;
-
 /// Sequence number that is used in SledTree
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct SeqNum(pub(crate) u64);
@@ -42,5 +40,3 @@ impl From<SeqNum> for u64 {
         sn.0
     }
 }
-
-impl SledSerde for SeqNum {}

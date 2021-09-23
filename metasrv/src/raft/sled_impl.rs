@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod log;
-pub mod state;
-pub mod state_machine;
-pub mod types;
+use crate::sled_store::SeqNum;
+use crate::sled_store::SledSerde;
 
-mod sled_impl;
-pub mod sled_key_spaces;
+impl SledSerde for SeqNum {}
