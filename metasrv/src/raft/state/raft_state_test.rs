@@ -14,7 +14,7 @@
 use async_raft::storage::HardState;
 use common_runtime::tokio;
 
-use crate::meta_service::raft_state::RaftState;
+use crate::raft::state::RaftState;
 use crate::tests::service::new_sled_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
