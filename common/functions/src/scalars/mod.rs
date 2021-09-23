@@ -14,9 +14,6 @@
 
 #[cfg(test)]
 mod function_column_test;
-#[cfg(test)]
-mod function_running_difference_test;
-
 mod arithmetics;
 mod comparisons;
 mod conditionals;
@@ -27,12 +24,12 @@ mod function_alias;
 mod function_column;
 mod function_factory;
 mod function_literal;
-mod function_running_difference;
 mod hashes;
 mod logics;
 mod nullables;
 mod strings;
 mod udfs;
+mod others;
 
 pub use arithmetics::*;
 pub use comparisons::*;
@@ -45,9 +42,9 @@ pub use function_column::ColumnFunction;
 pub use function_factory::FactoryFuncRef;
 pub use function_factory::FunctionFactory;
 pub use function_literal::LiteralFunction;
-pub use function_running_difference::RunningDifferenceFunction;
 pub use hashes::*;
 pub use logics::*;
 pub use nullables::*;
 pub use strings::*;
 pub use udfs::*;
+pub use others::*;

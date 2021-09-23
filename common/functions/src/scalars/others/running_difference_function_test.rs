@@ -117,6 +117,22 @@ run_difference_first_not_null_test!(
     Int64Array
 );
 run_difference_first_not_null_test!(
+    test_running_difference_i64_first_not_null,
+    i64,
+    Int64,
+    i64,
+    Int64,
+    Int64Array
+);
+run_difference_first_not_null_test!(
+    test_running_difference_u64_first_not_null,
+    u64,
+    UInt64,
+    i64,
+    Int64,
+    Int64Array
+);
+run_difference_first_not_null_test!(
     test_running_difference_data16_first_not_null,
     u16,
     Date16,
@@ -242,6 +258,24 @@ run_difference_first_null_test!(
     test_running_difference_u64_first_null,
     u64,
     UInt64,
+    i64,
+    Int64,
+    Int64Array
+);
+
+run_difference_first_null_test!(
+    test_running_difference_date16_first_null,
+    u16,
+    UInt16,
+    i32,
+    Int32,
+    Int32Array
+);
+
+run_difference_first_null_test!(
+    test_running_difference_date32_first_null,
+    u32,
+    UInt32,
     i64,
     Int64,
     Int64Array
