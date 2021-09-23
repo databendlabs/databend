@@ -41,6 +41,11 @@ use sled::IVec;
 use crate::configs;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
+use crate::raft::sled_key_spaces::Files;
+use crate::raft::sled_key_spaces::GenericKV;
+use crate::raft::sled_key_spaces::Nodes;
+use crate::raft::sled_key_spaces::Sequences;
+use crate::raft::sled_key_spaces::StateMachineMeta;
 use crate::raft::state_machine::placement::rand_n_from_m;
 use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::Placement;
@@ -54,8 +59,6 @@ use crate::raft::types::Node;
 use crate::raft::types::NodeId;
 use crate::raft::types::Slot;
 use crate::sled_store::get_sled_db;
-use crate::sled_store::sled_key_space;
-use crate::sled_store::sled_key_space::StateMachineMeta;
 use crate::sled_store::AsKeySpace;
 use crate::sled_store::SledSerde;
 use crate::sled_store::SledTree;
@@ -913,24 +916,24 @@ impl StateMachine {
         self.sm_tree.key_space()
     }
 
-    pub fn nodes(&self) -> AsKeySpace<sled_key_space::Nodes> {
+    pub fn nodes(&self) -> AsKeySpace<Nodes> {
         self.sm_tree.key_space()
     }
 
     /// The file names stored in this cluster
-    pub fn files(&self) -> AsKeySpace<sled_key_space::Files> {
+    pub fn files(&self) -> AsKeySpace<Files> {
         self.sm_tree.key_space()
     }
 
     /// A kv store of all other general purpose information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
-    pub fn kvs(&self) -> AsKeySpace<sled_key_space::GenericKV> {
+    pub fn kvs(&self) -> AsKeySpace<GenericKV> {
         self.sm_tree.key_space()
     }
 
     /// storage of auto-incremental number.
-    pub fn sequences(&self) -> AsKeySpace<sled_key_space::Sequences> {
+    pub fn sequences(&self) -> AsKeySpace<Sequences> {
         self.sm_tree.key_space()
     }
 }

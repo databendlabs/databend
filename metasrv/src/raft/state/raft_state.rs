@@ -17,10 +17,10 @@ use common_exception::ErrorCode;
 use common_tracing::tracing;
 
 use crate::configs;
+use crate::raft::sled_key_spaces::RaftStateKV;
 use crate::raft::state::RaftStateKey;
 use crate::raft::state::RaftStateValue;
 use crate::raft::types::NodeId;
-use crate::sled_store::sled_key_space::RaftStateKV;
 use crate::sled_store::AsKeySpace;
 use crate::sled_store::SledSerde;
 use crate::sled_store::SledTree;
