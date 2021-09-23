@@ -15,8 +15,6 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::future::Future;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -71,26 +69,6 @@ impl RemoteMeteStoreClient {
         }
     }
 
-    // Poor man's runtime::block_on
-    fn do_block<F>(&self, f: F) -> Result<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let (tx, rx) = channel();
-        let _jh = self.rt.spawn(async move {
-            let r = f.await;
-            let _ = tx.send(r);
-        });
-        let reply = match self.rpc_time_out {
-            Some(to) => rx
-                .recv_timeout(to)
-                .map_err(|timeout_err| ErrorCode::Timeout(timeout_err.to_string()))?,
-            None => rx.recv().map_err(ErrorCode::from_std_error)?,
-        };
-        Ok(reply)
-    }
-
     fn to_table_info(&self, db_name: &str, t_name: &str, tbl: &CatalogTable) -> Result<TableInfo> {
         let schema_bin = &tbl.schema;
         let t_id = tbl.table_id;
@@ -118,10 +96,13 @@ impl MetaBackend for RemoteMeteStoreClient {
         let reply = {
             let tbl_name = table_name.to_string();
             let db_name = db_name.to_string();
-            self.do_block(async move {
-                let client = cli_provider.try_get_meta_client().await?;
-                client.get_table(db_name, tbl_name).await
-            })??
+            self.rt.block_on(
+                async move {
+                    let client = cli_provider.try_get_meta_client().await?;
+                    client.get_table(db_name, tbl_name).await
+                },
+                self.rpc_time_out,
+            )??
         };
 
         let table_info = TableInfo {
@@ -159,10 +140,13 @@ impl MetaBackend for RemoteMeteStoreClient {
         }
 
         let cli = self.store_api_provider.clone();
-        let reply = self.do_block(async move {
-            let client = cli.try_get_meta_client().await?;
-            client.get_table_ext(table_id, table_version).await
-        })??;
+        let reply = self.rt.block_on(
+            async move {
+                let client = cli.try_get_meta_client().await?;
+                client.get_table_ext(table_id, table_version).await
+            },
+            self.rpc_time_out,
+        )??;
 
         let res = TableInfo {
             db: db_name.to_owned(),
@@ -184,10 +168,13 @@ impl MetaBackend for RemoteMeteStoreClient {
         let cli_provider = self.store_api_provider.clone();
         let db = {
             let db_name = db_name.to_owned();
-            self.do_block(async move {
-                let client = cli_provider.try_get_meta_client().await?;
-                client.get_database(&db_name).await
-            })??
+            self.rt.block_on(
+                async move {
+                    let client = cli_provider.try_get_meta_client().await?;
+                    client.get_database(&db_name).await
+                },
+                self.rpc_time_out,
+            )??
         };
 
         let database_info = DatabaseInfo {
@@ -200,10 +187,13 @@ impl MetaBackend for RemoteMeteStoreClient {
 
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
         let cli_provider = self.store_api_provider.clone();
-        let db = self.do_block(async move {
-            let client = cli_provider.try_get_meta_client().await?;
-            client.get_database_meta(None).await
-        })??;
+        let db = self.rt.block_on(
+            async move {
+                let client = cli_provider.try_get_meta_client().await?;
+                client.get_database_meta(None).await
+            },
+            self.rpc_time_out,
+        )??;
 
         match db {
             None => Ok(vec![]),
@@ -233,11 +223,14 @@ impl MetaBackend for RemoteMeteStoreClient {
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
         let cli = self.store_api_provider.clone();
-        let reply = self.do_block(async move {
-            let client = cli.try_get_meta_client().await?;
-            // always take the latest snapshot
-            client.get_database_meta(None).await
-        })??;
+        let reply = self.rt.block_on(
+            async move {
+                let client = cli.try_get_meta_client().await?;
+                // always take the latest snapshot
+                client.get_database_meta(None).await
+            },
+            self.rpc_time_out,
+        )??;
 
         match reply {
             None => Ok(vec![]),
@@ -268,37 +261,49 @@ impl MetaBackend for RemoteMeteStoreClient {
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
         // TODO validate plan by table engine first
         let cli = self.store_api_provider.clone();
-        let _r = self.do_block(async move {
-            let client = cli.try_get_meta_client().await?;
-            client.create_table(plan).await
-        })??;
+        let _r = self.rt.block_on(
+            async move {
+                let client = cli.try_get_meta_client().await?;
+                client.create_table(plan).await
+            },
+            self.rpc_time_out,
+        )??;
         Ok(())
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
         let cli = self.store_api_provider.clone();
-        let _r = self.do_block(async move {
-            let client = cli.try_get_meta_client().await?;
-            client.drop_table(plan.clone()).await
-        })??;
+        let _r = self.rt.block_on(
+            async move {
+                let client = cli.try_get_meta_client().await?;
+                client.drop_table(plan.clone()).await
+            },
+            self.rpc_time_out,
+        )??;
         Ok(())
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
         let cli_provider = self.store_api_provider.clone();
-        let _r = self.do_block(async move {
-            let cli = cli_provider.try_get_meta_client().await?;
-            cli.create_database(plan).await
-        })??;
+        let _r = self.rt.block_on(
+            async move {
+                let cli = cli_provider.try_get_meta_client().await?;
+                cli.create_database(plan).await
+            },
+            self.rpc_time_out,
+        )??;
         Ok(())
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let cli_provider = self.store_api_provider.clone();
-        let _r = self.do_block(async move {
-            let cli = cli_provider.try_get_meta_client().await?;
-            cli.drop_database(plan).await
-        })??;
+        let _r = self.rt.block_on(
+            async move {
+                let cli = cli_provider.try_get_meta_client().await?;
+                cli.drop_database(plan).await
+            },
+            self.rpc_time_out,
+        )??;
         Ok(())
     }
 
