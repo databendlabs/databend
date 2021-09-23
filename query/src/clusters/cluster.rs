@@ -27,8 +27,9 @@ use common_runtime::tokio::time::sleep as tokio_async_sleep;
 
 use crate::api::FlightClient;
 use crate::configs::Config;
-use common_store_api_sdk::{StoreApiProvider, KVApi, ConnectionFactory};
+use common_store_api_sdk::{KVApi, ConnectionFactory};
 use kvlocal::LocalKVStore;
+use crate::common::StoreApiProvider;
 
 pub type ClusterRef = Arc<Cluster>;
 pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
@@ -40,31 +41,31 @@ pub struct ClusterDiscovery {
 }
 
 impl ClusterDiscovery {
-    // TODO(Winter): this should be disabled by compile flag
-    async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
-        let local_id = global_unique_id();
-
-        let local_store = LocalKVStore::new_temp().await?;
-        let (lift_time, provider) = Self::create_provider(cfg, local_store)?;
-
-        Ok(Arc::new(ClusterDiscovery {
-            local_id: local_id.clone(),
-            api_provider: provider.clone(),
-            heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
-        }))
-    }
-
-    async fn cluster_with_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
-        let local_id = global_unique_id();
-        let store_client = ClusterDiscovery::create_store_client(cfg).await?;
-        let (lift_time, provider) = Self::create_provider(cfg, store_client)?;
-
-        Ok(Arc::new(ClusterDiscovery {
-            local_id: local_id.clone(),
-            api_provider: provider.clone(),
-            heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
-        }))
-    }
+    // // TODO(Winter): this should be disabled by compile flag
+    // async fn standalone_without_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
+    //     let local_id = global_unique_id();
+    //
+    //     let local_store = LocalKVStore::new_temp().await?;
+    //     let (lift_time, provider) = Self::create_provider(cfg, local_store)?;
+    //
+    //     Ok(Arc::new(ClusterDiscovery {
+    //         local_id: local_id.clone(),
+    //         api_provider: provider.clone(),
+    //         heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
+    //     }))
+    // }
+    //
+    // async fn cluster_with_metastore(cfg: &Config) -> Result<ClusterDiscoveryRef> {
+    //     let local_id = global_unique_id();
+    //     let store_client = ClusterDiscovery::create_store_client(cfg).await?;
+    //     let (lift_time, provider) = Self::create_provider(cfg, store_client)?;
+    //
+    //     Ok(Arc::new(ClusterDiscovery {
+    //         local_id: local_id.clone(),
+    //         api_provider: provider.clone(),
+    //         heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
+    //     }))
+    // }
 
     async fn create_store_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
         let store_api_provider = StoreApiProvider::new(cfg);
@@ -75,10 +76,15 @@ impl ClusterDiscovery {
     }
 
     pub async fn create_global(cfg: Config) -> Result<ClusterDiscoveryRef> {
-        match cfg.meta.meta_address.is_empty() {
-            true => Self::standalone_without_metastore(&cfg).await,
-            false => Self::cluster_with_metastore(&cfg).await,
-        }
+        let local_id = global_unique_id();
+        let store_client = ClusterDiscovery::create_store_client(&cfg).await?;
+        let (lift_time, provider) = Self::create_provider(&cfg, store_client)?;
+
+        Ok(Arc::new(ClusterDiscovery {
+            local_id: local_id.clone(),
+            api_provider: provider.clone(),
+            heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
+        }))
     }
 
     fn create_provider(cfg: &Config, kv_api: Arc<dyn KVApi>) -> Result<(Duration, Arc<Mutex<dyn NamespaceApi>>)> {

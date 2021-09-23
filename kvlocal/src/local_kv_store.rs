@@ -83,7 +83,7 @@ impl LocalKVStore {
     /// - create a unique LocalKVStore with this function.
     ///
     #[allow(dead_code)]
-    pub async fn new_temp() -> common_exception::Result<Arc<dyn KVApi>> {
+    pub async fn new_temp() -> common_exception::Result<LocalKVStore> {
         // generate a unique id as part of the name of sled::Tree
         let temp_dir = tempfile::tempdir()?;
         metasrv::sled_store::init_temp_sled_db(temp_dir);
@@ -94,7 +94,7 @@ impl LocalKVStore {
 
         let name = format!("temp-{}", id);
 
-        Ok(Arc::new(Self::new(&name).await?))
+        Self::new(&name).await
     }
 }
 
