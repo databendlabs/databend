@@ -22,6 +22,7 @@ mod now;
 mod number_function;
 mod round_function;
 mod simple_date;
+mod week_date;
 
 pub use date::DateFunction;
 pub use number_function::ToStartOfISOYearFunction;
@@ -35,3 +36,4 @@ pub use round_function::RoundFunction;
 pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
 pub use simple_date::YesterdayFunction;
+pub use week_date::ToStartOfWeekFunction;
