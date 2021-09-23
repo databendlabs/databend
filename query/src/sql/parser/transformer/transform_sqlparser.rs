@@ -88,7 +88,7 @@ impl TransformerSqlparser {
         } else if idents.len() == 2 {
             (
                 Some(Identifier::from(&idents[0])),
-                Some(Identifier::from(&idents[0])),
+                Some(Identifier::from(&idents[1])),
             )
         } else {
             (None, None)
