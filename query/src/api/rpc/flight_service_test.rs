@@ -32,12 +32,11 @@ use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::api::FlightTicket;
 use crate::api::ShuffleAction;
-use crate::tests::parse_query;
-use crate::tests::try_create_session_mgr;
+use crate::tests::{parse_query, SessionManagerBuilder};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_shared_session() -> Result<()> {
-    let sessions = try_create_session_mgr(None)?;
+    let sessions = SessionManagerBuilder::create().build()?;
     let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
     let service = DatabendQueryFlightService::create(dispatcher, sessions);
 
@@ -60,7 +59,7 @@ async fn test_do_flight_action_with_shared_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_different_session() -> Result<()> {
-    let sessions = try_create_session_mgr(None)?;
+    let sessions = SessionManagerBuilder::create().build()?;
     let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
     let service = DatabendQueryFlightService::create(dispatcher, sessions);
 
@@ -83,7 +82,7 @@ async fn test_do_flight_action_with_different_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_session() -> Result<()> {
-    let sessions = try_create_session_mgr(None)?;
+    let sessions = SessionManagerBuilder::create().build()?;
     let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
     let service = DatabendQueryFlightService::create(dispatcher.clone(), sessions);
 
@@ -115,7 +114,7 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
-    let sessions = try_create_session_mgr(None)?;
+    let sessions = SessionManagerBuilder::create().build()?;
     let dispatcher = Arc::new(DatabendQueryFlightDispatcher::create());
     let service = DatabendQueryFlightService::create(dispatcher.clone(), sessions);
 

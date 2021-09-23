@@ -37,19 +37,17 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 use crate::servers::Server;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
-    // setup
-    let mut conf = Config::default();
-    conf.query.flight_api_address = "127.0.0.1:0".to_string();
-    conf.query.rpc_tls_server_key = TEST_SERVER_KEY.to_owned();
-    conf.query.rpc_tls_server_cert = TEST_SERVER_CERT.to_owned();
-
     let mut rpc_service = RpcService {
-        sessions: crate::tests::try_create_session_mgr(None)?,
         abort_notify: Arc::new(Notify::new()),
         dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
+        sessions: SessionManagerBuilder::create()
+            .rpc_tls_server_key(TEST_SERVER_KEY)
+            .rpc_tls_server_cert(TEST_SERVER_CERT)
+            .build()?,
     };
 
     let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
@@ -81,16 +79,14 @@ async fn test_tls_rpc_server() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     // setup, invalid cert locations
-    let mut conf = Config::default();
-    conf.query.rpc_tls_server_key = "../tests/data/certs/none.key".to_owned();
-    conf.query.rpc_tls_server_cert = "../tests/data/certs/none.pem".to_owned();
-    let session_manager = crate::tests::try_create_session_mgr(None)?;
-
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut srv = RpcService {
-        sessions: session_manager.clone(),
         abort_notify: Arc::new(Notify::new()),
         dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
+        sessions: SessionManagerBuilder::create()
+            .rpc_tls_server_key("../tests/data/certs/none.key")
+            .rpc_tls_server_cert("../tests/data/certs/none.pem")
+            .build()?,
     };
     let stream = TcpListenerStream::new(listener);
     let r = srv.start_with_incoming(stream).await;

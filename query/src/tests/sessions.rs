@@ -22,30 +22,63 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
 use common_runtime::tokio::runtime::Runtime;
 
-async fn async_try_create_sessions(max_sessions: Option<u64>) -> Result<SessionManagerRef> {
-    let mut conf = Config::default();
+async fn async_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
+    let cluster_discovery = ClusterDiscovery::create_global(config.clone()).await?;
+    SessionManager::from_conf(config, cluster_discovery)
+}
 
-    // Setup log dir to the tests directory.
-    conf.log.log_dir = env::current_dir()?
-        .join("../tests/data/logs")
-        .display()
-        .to_string();
-    // Set max active session number if have.
-    if let Some(max) = max_sessions {
-        conf.query.max_active_sessions = max;
+fn sync_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
+    let runtime = Runtime::new()?;
+    runtime.block_on(async_try_create_sessions(config))
+}
+
+pub struct SessionManagerBuilder {
+    config: Config,
+}
+
+impl SessionManagerBuilder {
+    pub fn create() -> SessionManagerBuilder {
+        SessionManagerBuilder::inner_create(Config::default())
+            .log_dir_with_relative("../tests/data/logs")
     }
 
-    let cluster_discovery = ClusterDiscovery::create_global(conf.clone()).await?;
-    SessionManager::from_conf(conf, cluster_discovery)
-}
+    fn inner_create(config: Config) -> SessionManagerBuilder {
+        SessionManagerBuilder { config }
+    }
 
-fn sync_try_create_sessions(max_sessions: Option<u64>) -> Result<SessionManagerRef> {
-    let runtime = Runtime::new()?;
-    runtime.block_on(async_try_create_sessions(max_sessions))
-}
+    pub fn max_sessions(self, max_sessions: u64) -> SessionManagerBuilder {
+        let mut new_config = self.config.clone();
+        new_config.query.max_active_sessions = max_sessions;
+        SessionManagerBuilder::inner_create(new_config)
+    }
 
-pub fn try_create_session_mgr(max_active_sessions: Option<u64>) -> Result<SessionManagerRef> {
-    let handle = std::thread::spawn(move || sync_try_create_sessions(max_active_sessions));
-    handle.join().unwrap()
+    pub fn rpc_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config.clone();
+        new_config.query.rpc_tls_server_key = value.into();
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
+    pub fn rpc_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config.clone();
+        new_config.query.rpc_tls_server_cert = value.into();
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
+    pub fn log_dir_with_relative(self, path: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config.clone();
+        new_config.log.log_dir = env::current_dir()
+            .unwrap()
+            .join(path.into())
+            .display()
+            .to_string();
+
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
+    pub fn build(self) -> Result<SessionManagerRef> {
+        let config = self.config.clone();
+        let handle = std::thread::spawn(move || sync_try_create_sessions(config));
+        handle.join().unwrap()
+    }
 }
 

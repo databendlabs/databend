@@ -18,8 +18,8 @@ use common_runtime::tokio;
 use criterion::Criterion;
 use databend_query::interpreters::SelectInterpreter;
 use databend_query::sql::PlanParser;
-use databend_query::tests::try_create_session_mgr;
 use futures::StreamExt;
+use databend_query::tests::SessionManagerBuilder;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;
@@ -27,7 +27,7 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-    let session_manager = try_create_session_mgr(Some(1))?;
+    let sessions = SessionManagerBuilder::create().build()?;
     let executor_session = session_manager.create_session("Benches")?;
     let ctx = executor_session.create_context()?;
 
