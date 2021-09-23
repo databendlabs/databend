@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::AppData;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -32,5 +31,3 @@ pub struct LogEntry {
     /// The action a client want to take.
     pub cmd: Cmd,
 }
-
-impl AppData for LogEntry {}

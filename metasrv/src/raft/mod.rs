@@ -13,9 +13,13 @@
 // limitations under the License.
 
 pub mod log;
+pub mod sled_key_spaces;
 pub mod state;
 pub mod state_machine;
 pub mod types;
 
+mod raft_impl;
 mod sled_impl;
-pub mod sled_key_spaces;
+
+#[cfg(test)]
+mod raft_types_test;

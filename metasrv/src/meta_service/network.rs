@@ -26,11 +26,11 @@ use async_raft::RaftNetwork;
 use common_tracing::tracing;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::LogEntry;
 use crate::meta_service::MetaRaftStore;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
+use crate::raft::types::LogEntry;
 use crate::raft::types::NodeId;
 
 /// Impl grpc method `write`

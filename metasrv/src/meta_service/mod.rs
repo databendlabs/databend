@@ -25,8 +25,8 @@ pub use crate::protobuf::meta_service_server::MetaServiceServer;
 pub use crate::protobuf::GetReply;
 pub use crate::protobuf::GetReq;
 pub use crate::protobuf::RaftMes;
-pub use crate::raft::types::cmd::Cmd;
-pub use crate::raft::types::log_entry::LogEntry;
+pub use crate::raft::types::Cmd;
+pub use crate::raft::types::LogEntry;
 
 pub mod errors;
 pub mod meta_service_impl;

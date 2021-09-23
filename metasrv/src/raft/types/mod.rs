@@ -27,6 +27,3 @@ mod cmd;
 mod log_entry;
 mod raft_txid;
 mod raft_types;
-
-#[cfg(test)]
-mod raft_types_test;
