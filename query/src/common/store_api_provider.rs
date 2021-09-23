@@ -40,7 +40,12 @@ impl StoreApiProvider {
     }
 
     pub async fn try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
-        let client = StoreClient::try_new(self.conf.clone()).await?;
+        let client = StoreClient::try_new(&self.conf).await?;
+        Ok(Arc::new(client))
+    }
+
+    pub fn sync_try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
+        let client = StoreClient::sync_try_new(&self.conf)?;
         Ok(Arc::new(client))
     }
 
@@ -50,13 +55,29 @@ impl StoreApiProvider {
             let client = kvlocal::LocalKVStore::new_temp().await?;
             Ok(Arc::new(client))
         } else {
-            let client = StoreClient::try_new(self.conf.clone()).await?;
+            let client = StoreClient::try_new(&self.conf).await?;
+            Ok(Arc::new(client))
+        }
+    }
+
+    pub fn sync_try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
+        let local = self.conf.kv_service_config.address.is_empty();
+        if local {
+            let client = kvlocal::LocalKVStore::sync_new_temp()?;
+            Ok(Arc::new(client))
+        } else {
+            let client = StoreClient::sync_try_new(&self.conf)?;
             Ok(Arc::new(client))
         }
     }
 
     pub async fn try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
-        let client = StoreClient::try_new(self.conf.clone()).await?;
+        let client = StoreClient::try_new(&self.conf).await?;
+        Ok(Arc::new(client))
+    }
+
+    pub fn sync_try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
+        let client = StoreClient::sync_try_new(&self.conf)?;
         Ok(Arc::new(client))
     }
 }

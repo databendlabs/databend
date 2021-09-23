@@ -51,7 +51,7 @@ pub struct StoreClient {
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
-    pub async fn try_new(conf: StoreClientConf) -> Result<StoreClient> {
+    pub async fn try_new(conf: &StoreClientConf) -> Result<StoreClient> {
         Self::with_tls_conf(
             &conf.meta_service_config.address,
             &conf.meta_service_config.username,
@@ -61,9 +61,9 @@ impl StoreClient {
         .await
     }
 
-    pub fn try_new_sync(conf: &StoreClientConf) -> Result<StoreClient> {
+    pub fn sync_try_new(conf: &StoreClientConf) -> Result<StoreClient> {
         let cfg = conf.clone();
-        STORE_RUNTIME.block_on(StoreClient::try_new(cfg), None)?
+        STORE_RUNTIME.block_on(async move { StoreClient::try_new(&cfg).await }, None)?
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
