@@ -68,15 +68,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // MySQL handler.
     {
-        let listening = format!(
-            "{}:{}",
-            conf.query.mysql_handler_host.clone(),
-            conf.query.mysql_handler_port
-        );
-        let listening = listening.parse::<SocketAddr>()?;
-
+        let hostname = conf.query.mysql_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
         let mut handler = MySQLHandler::create(session_manager.clone());
-        let listening = handler.start(listening).await?;
+        let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
         info!(
@@ -91,10 +86,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let hostname = conf.query.clickhouse_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_handler_port);
-        let listening = listening.parse::<SocketAddr>()?;
 
         let mut srv = ClickHouseHandler::create(session_manager.clone());
-        let listening = srv.start(listening).await?;
+        let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
         info!(
@@ -107,36 +101,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Metric API service.
     {
-        let listening = conf
-            .query
-            .metric_api_address
-            .parse::<std::net::SocketAddr>()?;
+        let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
-        let listening = srv.start(listening).await?;
+        let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Metric API server listening on {}", listening);
     }
 
     // HTTP API service.
     {
-        let listening = conf
-            .query
-            .http_api_address
-            .parse::<std::net::SocketAddr>()?;
-        let mut srv = HttpService::create(conf.clone(), cluster_discovery.clone());
-        let listening = srv.start(listening).await?;
+        let address = conf.query.http_api_address.clone();
+        let mut srv = HttpService::create(session_manager.clone());
+        let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("HTTP API server listening on {}", listening);
     }
 
     // RPC API service.
     {
-        let addr = conf
-            .query
-            .flight_api_address
-            .parse::<std::net::SocketAddr>()?;
+        let address = conf.query.flight_api_address.clone();
         let mut srv = RpcService::create(session_manager.clone());
-        let listening = srv.start(addr).await?;
+        let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("RPC API server listening on {}", listening);
     }
