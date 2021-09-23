@@ -21,6 +21,7 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_store_api::util::STORE_RUNTIME;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -58,6 +59,11 @@ impl StoreClient {
             conf.meta_service_config.tls_conf.clone(),
         )
         .await
+    }
+
+    pub fn try_new_sync(conf: &StoreClientConf) -> Result<StoreClient> {
+        let cfg = conf.clone();
+        STORE_RUNTIME.block_on(StoreClient::try_new(cfg), None)?
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
