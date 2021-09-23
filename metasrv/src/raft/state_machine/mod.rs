@@ -25,10 +25,8 @@ mod state_machine_test;
 
 pub use applied_state::AppliedState;
 pub use placement::Placement;
-pub use sm::Node;
 pub use sm::Replication;
 pub use sm::SerializableSnapshot;
-pub use sm::Slot;
 pub use sm::SnapshotKeyValue;
 pub use sm::StateMachine;
 pub use snapshot::Snapshot;

@@ -62,10 +62,10 @@ use crate::meta_service::ShutdownError;
 use crate::raft::log::RaftLog;
 use crate::raft::state::RaftState;
 use crate::raft::state_machine::AppliedState;
-use crate::raft::state_machine::Node;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::Snapshot;
 use crate::raft::state_machine::StateMachine;
+use crate::raft::types::Node;
 use crate::raft::types::NodeId;
 use crate::sled_store::get_sled_db;
 

@@ -16,9 +16,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use crate::raft::state_machine::Node;
-use crate::raft::state_machine::Slot;
+use crate::raft::types::Node;
 use crate::raft::types::NodeId;
+use crate::raft::types::Slot;
 
 /// IPlacement defines the behavior of an algo to assign file to nodes.
 /// An placement algo considers the replication config, such as number of copies,

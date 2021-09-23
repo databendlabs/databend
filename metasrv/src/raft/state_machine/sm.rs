@@ -14,16 +14,12 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::fmt;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
-use async_raft::LogId;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_metatypes::Database;
@@ -53,7 +49,10 @@ use crate::raft::state_machine::StateMachineMetaKey::Initialized;
 use crate::raft::state_machine::StateMachineMetaKey::LastApplied;
 use crate::raft::state_machine::StateMachineMetaKey::LastMembership;
 use crate::raft::state_machine::StateMachineMetaValue;
+use crate::raft::types::LogId;
+use crate::raft::types::Node;
 use crate::raft::types::NodeId;
+use crate::raft::types::Slot;
 use crate::sled_store::get_sled_db;
 use crate::sled_store::sled_key_space;
 use crate::sled_store::sled_key_space::StateMachineMeta;
@@ -933,26 +932,6 @@ impl StateMachine {
     /// storage of auto-incremental number.
     pub fn sequences(&self) -> AsKeySpace<sled_key_space::Sequences> {
         self.sm_tree.key_space()
-    }
-}
-
-/// A slot is a virtual and intermediate allocation unit in a distributed storage.
-/// The key of an object is mapped to a slot by some hashing algo.
-/// A slot is assigned to several physical servers(normally 3 for durability).
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
-pub struct Slot {
-    pub node_ids: Vec<NodeId>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct Node {
-    pub name: String,
-    pub address: String,
-}
-
-impl Display for Node {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}={}", self.name, self.address)
     }
 }
 

@@ -22,7 +22,7 @@ use common_metatypes::Table;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::raft::state_machine::Node;
+use crate::raft::types::Node;
 use crate::raft::types::NodeId;
 
 /// A Cmd describes what a user want to do to raft state machine

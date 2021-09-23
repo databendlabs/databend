@@ -37,11 +37,11 @@ use crate::meta_service::testing::snapshot_logs;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::raft::state_machine::AppliedState;
-use crate::raft::state_machine::Node;
 use crate::raft::state_machine::Replication;
 use crate::raft::state_machine::SerializableSnapshot;
-use crate::raft::state_machine::Slot;
 use crate::raft::state_machine::StateMachine;
+use crate::raft::types::Node;
+use crate::raft::types::Slot;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
