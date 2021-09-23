@@ -356,7 +356,7 @@ impl StateMachine {
                     }
                 }
 
-                let resp = self.apply_non_dup(data).await?;
+                let resp = self.apply_cmd(&data.cmd).await?;
 
                 if let Some(ref txid) = data.txid {
                     self.client_last_resp
@@ -379,16 +379,14 @@ impl StateMachine {
         Ok(AppliedState::None)
     }
 
-    /// Apply an op into state machine.
+    /// Apply a `Cmd` to state machine.
+    ///
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
-    /// The `data` is always committed by raft before applying.
+    /// The `cmd` is always committed by raft before applying.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn apply_non_dup(
-        &mut self,
-        data: &LogEntry,
-    ) -> common_exception::Result<AppliedState> {
-        match data.cmd {
+    pub async fn apply_cmd(&mut self, cmd: &Cmd) -> common_exception::Result<AppliedState> {
+        match cmd {
             Cmd::AddFile { ref key, ref value } => {
                 // TODO(xp): put it in a transaction
                 let files = self.files();

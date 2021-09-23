@@ -29,9 +29,8 @@ use common_store_api::PrefixListReply;
 use common_store_api::UpsertKVActionResult;
 use common_tracing::tracing;
 use metasrv::configs;
-use metasrv::meta_service::AppliedState;
 use metasrv::meta_service::Cmd;
-use metasrv::meta_service::LogEntry;
+use metasrv::raft::state_machine::AppliedState;
 use metasrv::raft::state_machine::StateMachine;
 pub use metasrv::sled_store::init_temp_sled_db;
 
@@ -113,7 +112,7 @@ impl KVApi for LocalKVStore {
         };
 
         let mut sm = self.inner.lock().await;
-        let res = sm.apply_non_dup(&LogEntry { txid: None, cmd }).await?;
+        let res = sm.apply_cmd(&cmd).await?;
 
         match res {
             AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
@@ -137,7 +136,7 @@ impl KVApi for LocalKVStore {
         };
 
         let mut sm = self.inner.lock().await;
-        let res = sm.apply_non_dup(&LogEntry { txid: None, cmd }).await?;
+        let res = sm.apply_cmd(&cmd).await?;
 
         match res {
             AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
