@@ -47,7 +47,7 @@ pub struct StoreClient {
     pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
-static AUTH_TOKEN_KEY: &str = "auth-token-bin";
+const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
     pub async fn try_new(conf: &StoreClientConf) -> Result<StoreClient> {
@@ -75,7 +75,7 @@ impl StoreClient {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
-        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf).await;
+        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf);
 
         tracing::debug!("connecting to {}, res: {:?}", addr, res);
 
