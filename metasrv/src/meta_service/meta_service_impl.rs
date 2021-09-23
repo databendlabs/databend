@@ -18,6 +18,7 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use common_metatypes::LogEntry;
 use common_tracing::tracing;
 
 use crate::meta_service::GetReply;
@@ -25,7 +26,6 @@ use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaService;
 use crate::meta_service::RaftMes;
-use crate::raft::types::LogEntry;
 
 pub struct MetaServiceImpl {
     pub meta_node: Arc<MetaNode>,

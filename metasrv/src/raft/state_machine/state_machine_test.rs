@@ -24,8 +24,10 @@ use common_metatypes::Database;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
+use common_metatypes::Node;
 use common_metatypes::Operation;
 use common_metatypes::SeqValue;
+use common_metatypes::Slot;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use maplit::btreeset;
@@ -40,8 +42,6 @@ use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::Replication;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::StateMachine;
-use crate::raft::types::Node;
-use crate::raft::types::Slot;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

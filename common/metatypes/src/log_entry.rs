@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_raft::AppData;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::raft::types::Cmd;
-use crate::raft::types::RaftTxId;
+use crate::Cmd;
+use crate::RaftTxId;
 
 /// The application data request type which the `Metasrv` works with.
 ///
@@ -31,3 +32,5 @@ pub struct LogEntry {
     /// The action a client want to take.
     pub cmd: Cmd,
 }
+
+impl AppData for LogEntry {}

@@ -14,10 +14,9 @@
 
 use std::fmt;
 
+use async_raft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::raft::types::NodeId;
 
 /// A slot is a virtual and intermediate allocation unit in a distributed storage.
 /// The key of an object is mapped to a slot by some hashing algo.

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use common_metatypes::Cmd;
+pub use common_metatypes::LogEntry;
 pub use errors::RetryableError;
 pub use errors::ShutdownError;
 pub use meta_service_impl::MetaServiceImpl;
@@ -25,8 +27,6 @@ pub use crate::protobuf::meta_service_server::MetaServiceServer;
 pub use crate::protobuf::GetReply;
 pub use crate::protobuf::GetReq;
 pub use crate::protobuf::RaftMes;
-pub use crate::raft::types::Cmd;
-pub use crate::raft::types::LogEntry;
 
 pub mod errors;
 pub mod meta_service_impl;

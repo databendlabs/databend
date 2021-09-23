@@ -14,13 +14,13 @@
 
 use async_raft::storage::HardState;
 use common_exception::ErrorCode;
+use common_metatypes::NodeId;
 use common_tracing::tracing;
 
 use crate::configs;
 use crate::raft::sled_key_spaces::RaftStateKV;
 use crate::raft::state::RaftStateKey;
 use crate::raft::state::RaftStateValue;
-use crate::raft::types::NodeId;
 use crate::sled_store::AsKeySpace;
 use crate::sled_store::SledSerde;
 use crate::sled_store::SledTree;

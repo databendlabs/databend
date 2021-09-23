@@ -18,10 +18,10 @@ use byteorder::BigEndian;
 use byteorder::ByteOrder;
 use common_exception::ErrorCode;
 use common_metatypes::KVValue;
+use common_metatypes::LogId;
 use common_metatypes::SeqValue;
 use sled::IVec;
 
-use crate::raft::types::LogId;
 use crate::sled_store::SeqNum;
 use crate::sled_store::SledOrderedSerde;
 use crate::sled_store::SledSerde;
