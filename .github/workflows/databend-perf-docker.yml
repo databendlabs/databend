@@ -36,7 +36,11 @@ jobs:
           mkdir -p ./distro
           mv ./target/${{ matrix.config.target }}/release/databend-benchmark  ./distro
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@v1
 
       - name: Login to DockerHub

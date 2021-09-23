@@ -4,7 +4,8 @@ COPY ./tests/perfs/compare.py /compare.py
 COPY ./distro/databend-benchmark /databend-benchmark
 
 COPY ./tests/perfs/perfs.yaml /perfs.yaml
-
+RUN rm /usr/bin/lsb_release || true
+RUN rm /usr/local/bin/lsb_release || true
 RUN pip install --no-cache-dir pyyaml \
     && pip install -U cos-python-sdk-v5 \
     && python3 -m pip install configargparse\
