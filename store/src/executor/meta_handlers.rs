@@ -45,8 +45,8 @@ use metasrv::meta_service::cmd::Cmd::CreateDatabase;
 use metasrv::meta_service::cmd::Cmd::CreateTable;
 use metasrv::meta_service::cmd::Cmd::DropDatabase;
 use metasrv::meta_service::cmd::Cmd::DropTable;
-use metasrv::meta_service::AppliedState;
 use metasrv::meta_service::LogEntry;
+use metasrv::raft::state_machine::AppliedState;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;

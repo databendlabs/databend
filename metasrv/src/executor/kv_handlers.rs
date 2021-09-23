@@ -27,9 +27,9 @@ use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
+use crate::raft::state_machine::AppliedState;
 
 #[async_trait::async_trait]
 impl RequestHandler<UpsertKVAction> for ActionHandler {

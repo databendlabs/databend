@@ -33,8 +33,6 @@ pub use crate::protobuf::meta_service_server::MetaServiceServer;
 pub use crate::protobuf::GetReply;
 pub use crate::protobuf::GetReq;
 pub use crate::protobuf::RaftMes;
-pub use crate::raft::state_machine::applied_state::AppliedState;
-pub use crate::raft::state_machine::placement::Placement;
 
 pub mod cmd;
 pub mod errors;

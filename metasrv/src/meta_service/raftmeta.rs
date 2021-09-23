@@ -53,7 +53,6 @@ use common_tracing::tracing::Instrument;
 
 use crate::configs;
 use crate::meta_service::raft_state::RaftState;
-use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::LogEntry;
 use crate::meta_service::MetaServiceClient;
@@ -63,6 +62,7 @@ use crate::meta_service::Network;
 use crate::meta_service::RetryableError;
 use crate::meta_service::ShutdownError;
 use crate::raft::log::RaftLog;
+use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::Node;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::Snapshot;

@@ -18,13 +18,13 @@ use common_runtime::tokio;
 use log::info;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::AppliedState;
 use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
 use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;
+use crate::raft::state_machine::AppliedState;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 
