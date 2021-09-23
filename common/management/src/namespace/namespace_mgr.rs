@@ -15,13 +15,13 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
 use common_store_api::KVApi;
+use common_store_api::SyncKVApi;
 
 use crate::namespace::NamespaceApi;
 use crate::namespace::NodeInfo;
@@ -50,14 +50,8 @@ impl NamespaceMgr {
     }
 }
 
-#[async_trait]
 impl NamespaceApi for NamespaceMgr {
-    async fn add_node(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        node: NodeInfo,
-    ) -> Result<u64> {
+    fn add_node(&self, tenant_id: String, namespace_id: String, node: NodeInfo) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
         let match_seq = MatchSeq::Exact(0);
 
@@ -66,8 +60,7 @@ impl NamespaceApi for NamespaceMgr {
 
         let res = self
             .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
-            .await?;
+            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
 
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
@@ -82,14 +75,14 @@ impl NamespaceApi for NamespaceMgr {
         }
     }
 
-    async fn get_nodes(
+    fn get_nodes(
         &self,
         tenant_id: String,
         namespace_id: String,
         _seq: Option<u64>,
     ) -> Result<Vec<SeqValue<NodeInfo>>> {
         let key = self.key_prefix(&[tenant_id, namespace_id]);
-        let values = self.kv_api.prefix_list_kv(key.as_str()).await?;
+        let values = self.kv_api.sync_prefix_list_kv(key.as_str())?;
         let mut r = vec![];
         for (_key, (s, val)) in values {
             let u = serde_json::from_slice::<NodeInfo>(&val.value)
@@ -100,7 +93,7 @@ impl NamespaceApi for NamespaceMgr {
         Ok(r)
     }
 
-    async fn update_node(
+    fn update_node(
         &self,
         tenant_id: String,
         namespace_id: String,
@@ -116,8 +109,7 @@ impl NamespaceApi for NamespaceMgr {
         };
         let res = self
             .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
-            .await?;
+            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::NamespaceUnknownNode(format!(
@@ -127,7 +119,7 @@ impl NamespaceApi for NamespaceMgr {
         }
     }
 
-    async fn drop_node(
+    fn drop_node(
         &self,
         tenant_id: String,
         namespace_id: String,
@@ -135,7 +127,7 @@ impl NamespaceApi for NamespaceMgr {
         seq: Option<u64>,
     ) -> Result<()> {
         let key = self.key_prefix(&[tenant_id, namespace_id, node_id.clone()]);
-        let r = self.kv_api.upsert_kv(&key, seq.into(), None, None).await?;
+        let r = self.kv_api.sync_upsert_kv(&key, seq.into(), None, None)?;
         if r.prev.is_some() && r.result.is_none() {
             Ok(())
         } else {

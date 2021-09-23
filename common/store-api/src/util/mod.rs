@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-pub mod kv_api;
-pub mod kv_api_sync;
 
-//pub mod local_kv_store;
+mod store_runtime;
+pub use store_runtime::STORE_RUNTIME;
+pub use store_runtime::STORE_SYNC_CALL_TIMEOUT;

@@ -22,7 +22,6 @@ use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
-use common_runtime::tokio;
 use common_store_api::kv_apis::kv_api::MGetKVActionResult;
 use common_store_api::kv_apis::kv_api::PrefixListReply;
 use common_store_api::GetKVActionResult;
@@ -95,8 +94,8 @@ fn prepare() -> common_exception::Result<(Vec<(String, SeqValue<KVValue>)>, Node
     Ok((res, node_infos))
 }
 
-#[tokio::test]
-async fn test_add_node() -> Result<()> {
+#[test]
+fn test_add_node() -> Result<()> {
     let tenant_id = "tenant1";
     let namespace_id = "cluster1";
     let node_id = "node1";
@@ -135,13 +134,11 @@ async fn test_add_node() -> Result<()> {
 
         let api = Arc::new(api);
         let mgr = NamespaceMgr::new(api);
-        let res = mgr
-            .add_node(
-                tenant_id.to_string(),
-                namespace_id.to_string(),
-                node.clone(),
-            )
-            .await;
+        let res = mgr.add_node(
+            tenant_id.to_string(),
+            namespace_id.to_string(),
+            node.clone(),
+        );
 
         assert_eq!(
             res.unwrap_err().code(),
@@ -173,13 +170,11 @@ async fn test_add_node() -> Result<()> {
 
         let api = Arc::new(api);
         let mgr = NamespaceMgr::new(api);
-        let res = mgr
-            .add_node(
-                tenant_id.to_string(),
-                namespace_id.to_string(),
-                node.clone(),
-            )
-            .await;
+        let res = mgr.add_node(
+            tenant_id.to_string(),
+            namespace_id.to_string(),
+            node.clone(),
+        );
 
         assert_eq!(
             res.unwrap_err().code(),
@@ -208,9 +203,7 @@ async fn test_add_node() -> Result<()> {
 
         let api = Arc::new(api);
         let mgr = NamespaceMgr::new(api);
-        let res = mgr
-            .add_node(tenant_id.to_string(), namespace_id.to_string(), node)
-            .await;
+        let res = mgr.add_node(tenant_id.to_string(), namespace_id.to_string(), node);
 
         assert_eq!(
             res.unwrap_err().code(),
@@ -221,8 +214,8 @@ async fn test_add_node() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_get_nodes_normal() -> Result<()> {
+#[test]
+fn test_get_nodes_normal() -> Result<()> {
     let (res, infos) = prepare()?;
 
     let tenant_id = "tenant_1";
@@ -241,17 +234,15 @@ async fn test_get_nodes_normal() -> Result<()> {
 
     let api = Arc::new(api);
     let mgr = NamespaceMgr::new(api);
-    let actual = mgr
-        .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
-        .await?;
+    let actual = mgr.get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)?;
     let expect = infos;
     assert_eq!(actual, expect);
 
     Ok(())
 }
 
-#[tokio::test]
-async fn test_get_nodes_invalid_encoding() -> Result<()> {
+#[test]
+fn test_get_nodes_invalid_encoding() -> Result<()> {
     let (mut res, _infos) = prepare()?;
     res.insert(
         8,
@@ -280,9 +271,7 @@ async fn test_get_nodes_invalid_encoding() -> Result<()> {
 
     let api = Arc::new(api);
     let mgr = NamespaceMgr::new(api);
-    let res = mgr
-        .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
-        .await;
+    let res = mgr.get_nodes(tenant_id.to_string(), namespace_id.to_string(), None);
 
     let actual = res.unwrap_err().code();
     let expect = ErrorCode::NamespaceIllegalNodeFormat("").code();
@@ -291,8 +280,8 @@ async fn test_get_nodes_invalid_encoding() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_update_node_normal() -> Result<()> {
+#[test]
+fn test_update_node_normal() -> Result<()> {
     let tenant_id = "tenant1";
     let namespace_id = "cluster1";
     let node_id = "node1";
@@ -330,16 +319,14 @@ async fn test_update_node_normal() -> Result<()> {
 
     let api = Arc::new(api);
     let mgr = NamespaceMgr::new(api);
-    let res = mgr
-        .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
-        .await;
+    let res = mgr.update_node(tenant_id.to_string(), namespace_id.to_string(), node, None);
 
     assert!(res.is_ok());
     Ok(())
 }
 
-#[tokio::test]
-async fn test_update_node_error() -> Result<()> {
+#[test]
+fn test_update_node_error() -> Result<()> {
     let tenant_id = "tenant1";
     let namespace_id = "cluster1";
     let node_id = "node1";
@@ -374,9 +361,7 @@ async fn test_update_node_error() -> Result<()> {
 
     let api = Arc::new(api);
     let mgr = NamespaceMgr::new(api);
-    let res = mgr
-        .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
-        .await;
+    let res = mgr.update_node(tenant_id.to_string(), namespace_id.to_string(), node, None);
 
     let actual = res.unwrap_err().code();
     let expect = ErrorCode::NamespaceUnknownNode("").code();
@@ -385,8 +370,8 @@ async fn test_update_node_error() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_drop_node_normal() -> common_exception::Result<()> {
+#[test]
+fn test_drop_node_normal() -> common_exception::Result<()> {
     let tenant_id = "tenant1";
     let namespace_id = "cluster1";
     let node_id = "node1";
@@ -416,22 +401,20 @@ async fn test_drop_node_normal() -> common_exception::Result<()> {
 
     let api = Arc::new(api);
     let mgr = NamespaceMgr::new(api);
-    let res = mgr
-        .drop_node(
-            tenant_id.to_string(),
-            namespace_id.to_string(),
-            node_id.to_string(),
-            None,
-        )
-        .await;
+    let res = mgr.drop_node(
+        tenant_id.to_string(),
+        namespace_id.to_string(),
+        node_id.to_string(),
+        None,
+    );
 
     assert!(res.is_ok());
 
     Ok(())
 }
 
-#[tokio::test]
-async fn test_drop_node_error() -> common_exception::Result<()> {
+#[test]
+fn test_drop_node_error() -> common_exception::Result<()> {
     let tenant_id = "tenant1";
     let namespace_id = "cluster1";
     let node_id = "node1";
@@ -458,14 +441,12 @@ async fn test_drop_node_error() -> common_exception::Result<()> {
 
     let api = Arc::new(api);
     let mgr = NamespaceMgr::new(api);
-    let res = mgr
-        .drop_node(
-            tenant_id.to_string(),
-            namespace_id.to_string(),
-            "node1".to_string(),
-            None,
-        )
-        .await;
+    let res = mgr.drop_node(
+        tenant_id.to_string(),
+        namespace_id.to_string(),
+        "node1".to_string(),
+        None,
+    );
 
     let actual = res.unwrap_err().code();
     let expect = ErrorCode::NamespaceUnknownNode("").code();

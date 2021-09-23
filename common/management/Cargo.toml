@@ -12,7 +12,6 @@ edition = "2021"
 common-exception= {path = "../exception"}
 common-metatypes= {path = "../metatypes"}
 common-runtime= {path = "../runtime"}
-common-store-api-sdk= {path = "../store-api-sdk"}
 common-store-api= {path = "../store-api"}
 common-tracing= {path = "../tracing"}
 

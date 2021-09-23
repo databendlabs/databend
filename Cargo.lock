@@ -878,7 +878,6 @@ dependencies = [
  "common-metatypes",
  "common-runtime",
  "common-store-api",
- "common-store-api-sdk",
  "common-tracing",
  "kvlocal",
  "lazy_static",
@@ -965,6 +964,7 @@ dependencies = [
  "common-streams",
  "common-tracing",
  "futures",
+ "lazy_static",
  "serde",
  "thiserror",
 ]

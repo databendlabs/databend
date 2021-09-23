@@ -15,7 +15,6 @@
 
 use std::convert::TryFrom;
 
-use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metatypes::SeqValue;
@@ -48,18 +47,12 @@ impl TryFrom<Vec<u8>> for NodeInfo {
     }
 }
 
-#[async_trait]
 pub trait NamespaceApi {
     // Add a new node info to /tenant/namespace/node-name.
-    async fn add_node(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        node: NodeInfo,
-    ) -> Result<u64>;
+    fn add_node(&self, tenant_id: String, namespace_id: String, node: NodeInfo) -> Result<u64>;
 
     // Get the tenant's namespace all nodes.
-    async fn get_nodes(
+    fn get_nodes(
         &self,
         tenant_id: String,
         namespace_id: String,
@@ -67,7 +60,7 @@ pub trait NamespaceApi {
     ) -> Result<Vec<SeqValue<NodeInfo>>>;
 
     // Update the tenant's namespace node.
-    async fn update_node(
+    fn update_node(
         &self,
         tenant_id: String,
         namespace_id: String,
@@ -76,7 +69,7 @@ pub trait NamespaceApi {
     ) -> Result<Option<u64>>;
 
     // Drop the tenant's namespace one node by node.id.
-    async fn drop_node(
+    fn drop_node(
         &self,
         tenant_id: String,
         namespace_id: String,
