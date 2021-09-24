@@ -185,6 +185,9 @@ nav:
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
           - VERSION: sqlstatement/information-functions/version.md
+      - Nullable Functions:
+          - isNull: sqlstatement/nullable-functions/isnull.md
+          - isNotNull: sqlstatement/nullable-functions/isnotnull.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
       - Test Functions:
