@@ -44,7 +44,6 @@ members = [
 
 [profile.release]
 debug = 1
-opt-level = "z"     # Optimize for size.
 codegen-units = 1   # Reduce number of codegen units to increase optimizations.
 
 [profile.bench]
@@ -53,3 +52,11 @@ debug = true
 [profile.dev]
 split-debuginfo = "unpacked"
 
+[profile.dev.package]
+addr2line = { opt-level = 3 }
+adler = { opt-level = 3 }
+backtrace = { opt-level = 3 }
+gimli = { opt-level = 3 }
+miniz_oxide = { opt-level = 3 }
+object = { opt-level = 3 }
+rustc-demangle = { opt-level = 3 }
