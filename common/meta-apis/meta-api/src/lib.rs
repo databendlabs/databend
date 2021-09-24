@@ -13,4 +13,6 @@
 //  limitations under the License.
 //
 
-pub mod meta_api;
+mod meta_api;
+
+pub use meta_api::MetaApi;

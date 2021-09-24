@@ -26,6 +26,8 @@ members = [
     "common/store-api",
     "common/kv-apis/util",
     "common/kv-apis/kv-api",
+    "common/kv-apis/kv-api-vo",
+    "common/meta-apis/meta-api",
     "common/sled-store",
     "common/stoppable",
     "common/store-api",

@@ -911,6 +911,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-meta-api-vo",
+ "common-metatypes",
+ "common-planners",
+ "futures",
+]
+
+[[package]]
+name = "common-meta-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-datavalues",
+ "common-metatypes",
+ "serde",
+]
+
+[[package]]
 name = "common-metatypes"
 version = "0.1.0"
 dependencies = [
@@ -1051,6 +1072,8 @@ dependencies = [
  "common-exception",
  "common-infallible",
  "common-kv-api-vo",
+ "common-meta-api",
+ "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-runtime",
@@ -1542,6 +1565,8 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-vo",
  "common-management",
+ "common-meta-api",
+ "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-profling",
@@ -1618,6 +1643,8 @@ dependencies = [
  "common-infallible",
  "common-kv-api",
  "common-kv-api-vo",
+ "common-meta-api",
+ "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-profling",
@@ -3136,6 +3163,7 @@ dependencies = [
  "common-infallible",
  "common-kv-api",
  "common-kv-api-vo",
+ "common-meta-api",
  "common-metatypes",
  "common-planners",
  "common-profling",

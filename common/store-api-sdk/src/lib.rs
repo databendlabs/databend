@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub use common::RpcClientTlsConfig;
-pub use common_store_api::MetaApi;
 pub use common_store_api::StorageApi;
 pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;

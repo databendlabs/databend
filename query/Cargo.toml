@@ -39,6 +39,8 @@ common-store-api = { path = "../common/store-api" }
 common-store-api-sdk= {path = "../common/store-api-sdk" }
 common-kv-api = { path = "../common/kv-apis/kv-api" }
 common-kv-api-vo = { path = "../common/kv-apis/kv-api-vo" }
+common-meta-api = { path = "../common/meta-apis/meta-api" }
+common-meta-api-vo = { path = "../common/meta-apis/meta-api-vo" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }

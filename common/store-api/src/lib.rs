@@ -22,18 +22,7 @@ pub use data_block_apis::data_block_api::ReadPlanResult;
 pub use data_block_apis::data_block_api::StorageApi;
 pub use data_block_apis::data_block_api::Summary;
 pub use data_block_apis::data_block_api::TruncateTableResult;
-pub use meta_apis::meta_api::CommitTableReply;
-pub use meta_apis::meta_api::CreateDatabaseActionResult;
-pub use meta_apis::meta_api::CreateTableActionResult;
-pub use meta_apis::meta_api::DatabaseMetaReply;
-pub use meta_apis::meta_api::DatabaseMetaSnapshot;
-pub use meta_apis::meta_api::DropDatabaseActionResult;
-pub use meta_apis::meta_api::DropTableActionResult;
-pub use meta_apis::meta_api::GetDatabaseActionResult;
-pub use meta_apis::meta_api::GetTableActionResult;
-pub use meta_apis::meta_api::MetaApi;
 
 pub mod data_block_apis;
-pub mod meta_apis;
 pub use common_kv_api as kv_api;
 pub use common_store_api_util as util;
