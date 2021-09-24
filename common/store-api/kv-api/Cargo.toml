@@ -1,0 +1,21 @@
+[package]
+name = "common-store-kv-api"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+common-metatypes = {path= "../../metatypes"}
+common-exception = {path = "../../exception"}
+common-store-api-util= { path = "../util"}
+common-store-kv-api-vo= { path = "../kv-api-vo"}
+
+
+
+futures = "0.3"
+async-trait = "0.1"

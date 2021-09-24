@@ -26,6 +26,11 @@ use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::SyncKVApi;
 use common_store_api::UpsertKVActionResult;
+use common_store_kv_api::KVApi;
+use common_store_kv_api::SyncKVApi;
+use common_store_kv_api_vo::GetKVActionResult;
+use common_store_kv_api_vo::MGetKVActionResult;
+use common_store_kv_api_vo::UpsertKVActionResult;
 use common_tracing::tracing;
 
 use crate::local_kv_store::LocalKVStore;

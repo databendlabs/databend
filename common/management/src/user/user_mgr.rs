@@ -22,8 +22,8 @@ use common_exception::ToErrorCode;
 use common_metatypes::MatchSeq;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
-use common_store_api::KVApi;
-use common_store_api::SyncKVApi;
+use common_store_kv_api::KVApi;
+use common_store_kv_api::SyncKVApi;
 
 use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;

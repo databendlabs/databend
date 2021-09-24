@@ -12,7 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-pub mod kv_api;
-pub mod kv_api_sync;
+mod kv_api;
+mod kv_api_sync;
 
-//pub mod local_kv_store;
+use common_store_api_util as util;
+pub use kv_api::KVApi;
+pub use kv_api_sync::SyncKVApi;

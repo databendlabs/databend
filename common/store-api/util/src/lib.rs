@@ -14,5 +14,7 @@
 //
 
 mod store_runtime;
+pub use store_runtime::CONF_STORE_RT_TH_NUM;
+pub use store_runtime::CONF_STORE_SYNC_CALL_TIMEOUT_SEC;
 pub use store_runtime::STORE_RUNTIME;
 pub use store_runtime::STORE_SYNC_CALL_TIMEOUT;

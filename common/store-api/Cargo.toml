@@ -17,6 +17,9 @@ common-streams = {path= "../streams"}
 common-datablocks = {path= "../datablocks"}
 common-runtime = { path = "../runtime"}
 common-tracing = { path = "../tracing"}
+common-store-api-util= { path = "./util"}
+common-store-kv-api= { path = "./kv-api"}
+common-store-kv-api-vo= { path = "./kv-api-vo"}
 
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3"
@@ -25,4 +28,3 @@ thiserror = "1.0.29"
 lazy_static = "1.4.0"
 
 [dev-dependencies]
-common-tracing= {path = "../tracing"}

@@ -18,14 +18,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
+use common_store_kv_api_vo::GetKVActionResult;
+use common_store_kv_api_vo::MGetKVActionResult;
+use common_store_kv_api_vo::PrefixListReply;
+use common_store_kv_api_vo::UpsertKVActionResult;
 
-use crate::kv_apis::kv_api::MGetKVActionResult;
+use crate::kv_api::KVApi;
 use crate::util::STORE_RUNTIME;
 use crate::util::STORE_SYNC_CALL_TIMEOUT;
-use crate::GetKVActionResult;
-use crate::KVApi;
-use crate::PrefixListReply;
-use crate::UpsertKVActionResult;
 
 pub trait SyncKVApi: KVApi
 where Self: Clone + 'static

@@ -37,6 +37,8 @@ common-tracing = { path = "../common/tracing" }
 common-profling = { path = "../common/profiling" }
 common-store-api = { path = "../common/store-api" }
 common-store-api-sdk= {path = "../common/store-api-sdk" }
+common-store-kv-api = { path = "../common/store-api/kv-api" }
+common-store-kv-api-vo = { path = "../common/store-api/kv-api-vo" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }

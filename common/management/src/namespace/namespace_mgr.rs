@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
-use common_store_api::KVApi;
-use common_store_api::SyncKVApi;
+use common_store_kv_api::KVApi;
+use common_store_kv_api::SyncKVApi;
 
 use crate::namespace::NamespaceApi;
 use crate::namespace::NodeInfo;

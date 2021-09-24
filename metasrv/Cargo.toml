@@ -32,6 +32,8 @@ common-sled-store = {path = "../common/sled-store"}
 common-store-api-sdk = {path = "../common/store-api-sdk"}
 common-tracing = {path = "../common/tracing"}
 common-uniq-id = {path = "../common/uniq_id"}
+common-store-api-sdk = {path = "../common/store-api-sdk"}
+common-store-kv-api-vo = {path = "../common/store-api/kv-api-vo"}
 
 # Github dependencies
 
@@ -69,6 +71,9 @@ axum = {version = "0.2.5", features=["headers"] }
 axum-server = { version = "0.2", features = ["tls-rustls"] }
 
 [dev-dependencies]
+
+common-store-kv-api = {path = "../common/store-api/kv-api"}
+
 pretty_assertions = "0.7"
 test-env-log = "0.2.7"
 flaky_test = "0.1"

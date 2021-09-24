@@ -15,14 +15,14 @@
 use common_exception::Result;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
-pub use common_store_api::kv_apis::kv_api::MGetKVActionResult;
-pub use common_store_api::kv_apis::kv_api::PrefixListReply;
-pub use common_store_api::kv_apis::kv_api::UpsertKVActionResult;
-pub use common_store_api::GetKVActionResult;
-use common_store_api::KVApi;
+use common_store_kv_api_vo::GetKVActionResult;
+use common_store_kv_api_vo::MGetKVActionResult;
+use common_store_kv_api_vo::PrefixListReply;
+use common_store_kv_api_vo::UpsertKVActionResult;
 use common_tracing::tracing;
 
 use crate::action_declare;
+use crate::kv_api::*;
 use crate::RequestFor;
 use crate::StoreClient;
 use crate::StoreDoAction;

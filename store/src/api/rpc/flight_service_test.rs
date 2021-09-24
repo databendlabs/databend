@@ -29,10 +29,10 @@ use common_planners::ScanPlan;
 use common_runtime::tokio;
 use common_store_api_sdk::meta_api_impl::DropTableActionResult;
 use common_store_api_sdk::meta_api_impl::GetTableActionResult;
-use common_store_api_sdk::KVApi;
 use common_store_api_sdk::MetaApi;
 use common_store_api_sdk::StorageApi;
 use common_store_api_sdk::StoreClient;
+use common_store_kv_api::KVApi;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 
