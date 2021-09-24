@@ -1,5 +1,5 @@
 [package]
-name = "common-store-api-util"
+name = "common-store-kv-api"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -10,9 +10,12 @@ edition = "2021"
 
 [dependencies]
 
-common-runtime = { path = "../../runtime"}
-common-tracing = { path = "../../tracing"}
+common-metatypes = {path= "../../metatypes" }
+common-exception = {path = "../../exception" }
+common-store-api-util= { path = "../util" }
+common-store-kv-api-vo= { path = "../kv-api-vo" }
 
 
 
-lazy_static = "1.4.0"
+futures = "0.3"
+async-trait = "0.1"
