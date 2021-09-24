@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_kv_api::KVApi;
 use common_kv_api_vo::GetKVActionResult;
 use common_kv_api_vo::MGetKVActionResult;
 use common_kv_api_vo::PrefixListReply;
@@ -22,7 +23,6 @@ use common_metatypes::MatchSeq;
 use common_tracing::tracing;
 
 use crate::action_declare;
-use crate::kv_api::*;
 use crate::RequestFor;
 use crate::StoreClient;
 use crate::StoreDoAction;

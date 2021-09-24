@@ -82,6 +82,9 @@ maplit = "1.0.2"
 tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 reqwest = { version = "0.11", features = ["json"] }
 
+common-dfs-api = {path = "../common/dfs-apis/api" }
+common-dfs-api-vo = {path = "../common/dfs-apis/vo" }
+
 [build-dependencies]
 common-building = {path = "../common/building"}
 tonic-build = "0.5.2"

@@ -1,5 +1,5 @@
 [package]
-name = "common-kv-api"
+name = "common-dfs-api"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -10,10 +10,12 @@ edition = "2021"
 
 [dependencies]
 
-common-metatypes = {path= "../../metatypes" }
 common-exception = {path = "../../exception" }
-common-kv-api-util= { path = "../util" }
-common-kv-api-vo= { path = "../vo" }
+common-datavalues= {path = "../../datavalues" }
+common-planners= {path = "../../planners" }
+common-streams= {path = "../../streams" }
+common-datablocks= {path = "../../datablocks" }
+common-dfs-api-vo= {path = "../vo" }
 
 
 futures = "0.3"

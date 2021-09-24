@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub use common::RpcClientTlsConfig;
-pub use common_store_api::StorageApi;
 pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
 pub use flight_token::FlightClaim;
@@ -47,5 +46,3 @@ pub mod protobuf {
 
 #[cfg(test)]
 mod dns_resolver_test;
-
-use common_store_api::kv_api;

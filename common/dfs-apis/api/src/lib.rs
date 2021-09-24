@@ -13,16 +13,5 @@
 //  limitations under the License.
 //
 
-pub use data_block_apis::data_block_api::AppendResult;
-pub use data_block_apis::data_block_api::BlockStream;
-pub use data_block_apis::data_block_api::DataPartInfo;
-pub use data_block_apis::data_block_api::PartitionInfo;
-pub use data_block_apis::data_block_api::ReadAction;
-pub use data_block_apis::data_block_api::ReadPlanResult;
-pub use data_block_apis::data_block_api::StorageApi;
-pub use data_block_apis::data_block_api::Summary;
-pub use data_block_apis::data_block_api::TruncateTableResult;
-
-pub mod data_block_apis;
-pub use common_kv_api as kv_api;
-pub use common_store_api_util as util;
+mod dfs_api;
+pub use dfs_api::StorageApi;

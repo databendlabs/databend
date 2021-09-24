@@ -1,5 +1,5 @@
 [package]
-name = "common-kv-api-util"
+name = "common-dfs-api-vo"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -10,9 +10,8 @@ edition = "2021"
 
 [dependencies]
 
-common-runtime = { path = "../../runtime" }
-common-tracing = { path = "../../tracing" }
+common-datablocks= {path = "../../datablocks" }
+common-planners= {path = "../../planners" }
 
-
-
-lazy_static = "1.4.0"
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
