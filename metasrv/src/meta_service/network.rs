@@ -32,6 +32,7 @@ use crate::meta_service::MetaRaftStore;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
+use crate::raft::state_machine::AppliedState;
 
 /// Impl grpc method `write`
 impl tonic::IntoRequest<RaftMes> for LogEntry {
@@ -173,5 +174,39 @@ impl RaftNetwork<LogEntry> for Network {
         let resp = serde_json::from_str(&mes.data)?;
 
         Ok(resp)
+    }
+}
+
+// === from and to transport message
+
+impl From<AppliedState> for RaftMes {
+    fn from(msg: AppliedState) -> Self {
+        let data = serde_json::to_string(&msg).expect("fail to serialize");
+        RaftMes {
+            data,
+            error: "".to_string(),
+        }
+    }
+}
+
+impl From<Result<AppliedState, RetryableError>> for RaftMes {
+    fn from(rst: Result<AppliedState, RetryableError>) -> Self {
+        match rst {
+            Ok(resp) => resp.into(),
+            Err(err) => err.into(),
+        }
+    }
+}
+
+impl From<RaftMes> for Result<AppliedState, RetryableError> {
+    fn from(msg: RaftMes) -> Self {
+        if !msg.data.is_empty() {
+            let resp: AppliedState = serde_json::from_str(&msg.data).expect("fail to deserialize");
+            Ok(resp)
+        } else {
+            let err: RetryableError =
+                serde_json::from_str(&msg.error).expect("fail to deserialize");
+            Err(err)
+        }
     }
 }

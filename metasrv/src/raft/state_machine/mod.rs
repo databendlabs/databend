@@ -12,6 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use applied_state::AppliedState;
+pub use placement::Placement;
+pub use sm::Replication;
+pub use sm::SerializableSnapshot;
+pub use sm::SnapshotKeyValue;
+pub use sm::StateMachine;
+pub use snapshot::Snapshot;
+pub use state_machine_meta::StateMachineMetaKey;
+pub use state_machine_meta::StateMachineMetaValue;
+
 pub mod applied_state;
 pub mod sm;
 pub mod snapshot;
@@ -22,13 +32,5 @@ pub mod placement;
 mod placement_test;
 #[cfg(test)]
 mod state_machine_test;
-
-pub use applied_state::AppliedState;
-pub use placement::Placement;
-pub use sm::Replication;
-pub use sm::SerializableSnapshot;
-pub use sm::SnapshotKeyValue;
-pub use sm::StateMachine;
-pub use snapshot::Snapshot;
-pub use state_machine_meta::StateMachineMetaKey;
-pub use state_machine_meta::StateMachineMetaValue;
+#[cfg(test)]
+pub mod testing;

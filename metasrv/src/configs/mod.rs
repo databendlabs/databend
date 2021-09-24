@@ -13,8 +13,10 @@
 // limitations under the License.
 
 pub mod config;
+
 #[cfg(test)]
 mod config_test;
 
 pub use config::Config;
-pub use config::MetaConfig;
+
+pub use crate::raft::config::RaftConfig;

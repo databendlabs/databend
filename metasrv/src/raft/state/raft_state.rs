@@ -57,7 +57,7 @@ impl RaftState {
     #[tracing::instrument(level = "info", skip(db))]
     pub async fn open_create(
         db: &sled::Db,
-        config: &configs::MetaConfig,
+        config: &configs::RaftConfig,
         open: Option<()>,
         create: Option<()>,
     ) -> common_exception::Result<RaftState> {

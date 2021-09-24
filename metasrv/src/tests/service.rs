@@ -82,20 +82,20 @@ pub fn new_test_context() -> MetaSrvTestContext {
     // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
     if cfg!(target_os = "macos") {
         tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-        config.meta_config.no_sync = true;
+        config.raft_config.no_sync = true;
     }
 
-    config.meta_config.config_id = format!("{}", config_id);
+    config.raft_config.config_id = format!("{}", config_id);
 
     // By default, create a meta node instead of open an existent one.
-    config.meta_config.single = true;
+    config.raft_config.single = true;
 
-    config.meta_config.raft_api_port = config_id;
+    config.raft_config.raft_api_port = config_id;
 
     let host = "127.0.0.1";
 
     // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
-    config.meta_config.sled_tree_prefix = format!("test-{}-", config_id);
+    config.raft_config.sled_tree_prefix = format!("test-{}-", config_id);
 
     {
         let flight_port = next_port();
@@ -113,7 +113,7 @@ pub fn new_test_context() -> MetaSrvTestContext {
     }
 
     let temp_raft_dir = tempdir().expect("create temp dir to store meta");
-    config.meta_config.raft_dir = temp_raft_dir.path().to_str().unwrap().to_string();
+    config.raft_config.raft_dir = temp_raft_dir.path().to_str().unwrap().to_string();
 
     tracing::info!("new test context config: {:?}", config);
 
@@ -138,7 +138,7 @@ pub fn new_sled_test_context() -> SledTestContext {
     // config for unit test of sled db, meta_sync() is true by default.
     let mut config = configs::Config::empty();
 
-    config.meta_config.sled_tree_prefix = format!("test-{}-", next_port());
+    config.raft_config.sled_tree_prefix = format!("test-{}-", next_port());
 
     SledTestContext {
         config,
