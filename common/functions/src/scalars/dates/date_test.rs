@@ -55,10 +55,10 @@ fn test_round_function() -> Result<()> {
 fn test_to_start_of_function() -> Result<()> {
     let test = Test {
         name: "test-timeSlot-now",
-        display: "toStartOfQuarter()",
+        display: "toStartOfWeek()",
         nullable: false,
         columns: vec![Series::new(vec![1631705259u32]).into()],
-        func: ToStartOfQuarterFunction::try_create("toStartOfQuarter"),
+        func: ToStartOfQuarterFunction::try_create("toStartOfWeek"),
         expect: Series::new(vec![18809u32]),
         error: "",
     };
