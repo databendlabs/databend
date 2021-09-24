@@ -22,6 +22,7 @@ use common_metatypes::LogEntry;
 use common_metatypes::LogId;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
+use common_metatypes::RaftTxId;
 use maplit::btreeset;
 use sled::IVec;
 
@@ -135,4 +136,127 @@ pub fn pretty_snapshot_iter(snap: impl Iterator<Item = sled::Result<(IVec, IVec)
     }
 
     res
+}
+
+// test cases fro Cmd::IncrSeq:
+// case_name, txid, key, want
+pub fn cases_incr_seq() -> Vec<(&'static str, Option<RaftTxId>, &'static str, u64)> {
+    vec![
+        ("incr on none", Some(RaftTxId::new("foo", 1)), "k1", 1),
+        ("incr on existent", Some(RaftTxId::new("foo", 2)), "k1", 2),
+        (
+            "dup: same serial, even with diff key, got the previous result",
+            Some(RaftTxId::new("foo", 2)),
+            "k2",
+            2,
+        ),
+        (
+            "diff client, same serial, not a dup request",
+            Some(RaftTxId::new("bar", 2)),
+            "k2",
+            1,
+        ),
+        ("no txid, no de-dup", None, "k2", 2),
+    ]
+}
+
+// test cases for Cmd::AddFile
+// case_name, txid, key, value, want_prev, want_result
+pub fn cases_add_file() -> Vec<(
+    &'static str,
+    Option<RaftTxId>,
+    &'static str,
+    &'static str,
+    Option<String>,
+    Option<String>,
+)> {
+    vec![
+        (
+            "add on none",
+            Some(RaftTxId::new("foo", 1)),
+            "k1",
+            "v1",
+            None,
+            Some("v1".to_string()),
+        ),
+        (
+            "add on existent",
+            Some(RaftTxId::new("foo", 2)),
+            "k1",
+            "v2",
+            Some("v1".to_string()),
+            None,
+        ),
+        (
+            "dup set with same serial, even with diff key, got the previous result",
+            Some(RaftTxId::new("foo", 2)),
+            "k2",
+            "v3",
+            Some("v1".to_string()),
+            None,
+        ),
+        (
+            "diff client, same serial",
+            Some(RaftTxId::new("bar", 2)),
+            "k2",
+            "v3",
+            None,
+            Some("v3".to_string()),
+        ),
+        ("no txid", None, "k3", "v4", None, Some("v4".to_string())),
+    ]
+}
+
+// test cases for Cmd::SetFile
+// case_name, txid, key, value, want_prev, want_result
+pub fn cases_set_file() -> Vec<(
+    &'static str,
+    Option<RaftTxId>,
+    &'static str,
+    &'static str,
+    Option<String>,
+    Option<String>,
+)> {
+    vec![
+        (
+            "set on none",
+            Some(RaftTxId::new("foo", 1)),
+            "k1",
+            "v1",
+            None,
+            Some("v1".to_string()),
+        ),
+        (
+            "set on existent",
+            Some(RaftTxId::new("foo", 2)),
+            "k1",
+            "v2",
+            Some("v1".to_string()),
+            Some("v2".to_string()),
+        ),
+        (
+            "dup set with same serial, even with diff key, got the previous result",
+            Some(RaftTxId::new("foo", 2)),
+            "k2",
+            "v3",
+            Some("v1".to_string()),
+            Some("v2".to_string()),
+        ),
+        (
+            "diff client, same serial",
+            Some(RaftTxId::new("bar", 2)),
+            "k2",
+            "v3",
+            None,
+            Some("v3".to_string()),
+        ),
+        (
+            "no txid",
+            None,
+            "k2",
+            "v4",
+            Some("v3".to_string()),
+            Some("v4".to_string()),
+        ),
+    ]
 }

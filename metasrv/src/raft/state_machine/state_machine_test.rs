@@ -190,7 +190,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
-    let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
+    let cases = crate::raft::state_machine::testing::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
         let resp = sm
@@ -618,7 +618,7 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
-    let cases = crate::meta_service::raftmeta_test::cases_add_file();
+    let cases = crate::raft::state_machine::testing::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
@@ -657,7 +657,7 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
     let tc = new_test_context();
     let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
-    let cases = crate::meta_service::raftmeta_test::cases_set_file();
+    let cases = crate::raft::state_machine::testing::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
