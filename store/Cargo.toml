@@ -22,10 +22,10 @@ common-datablocks = {path = "../common/datablocks"}
 common-datavalues = {path = "../common/datavalues"}
 common-exception = {path = "../common/exception"}
 common-store-api-sdk = {path = "../common/store-api-sdk" }
-common-kv-api = {path = "../common/kv-apis/kv-api" }
-common-kv-api-vo = {path = "../common/kv-apis/kv-api-vo" }
-common-meta-api = {path = "../common/meta-apis/meta-api" }
-common-meta-api-vo = {path = "../common/meta-apis/meta-api-vo" }
+common-kv-api = {path = "../common/kv-apis/api" }
+common-kv-api-vo = {path = "../common/kv-apis/vo" }
+common-meta-api = {path = "../common/meta-apis/api" }
+common-meta-api-vo = {path = "../common/meta-apis/vo" }
 common-functions = {path = "../common/functions"}
 common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}

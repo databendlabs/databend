@@ -12,8 +12,8 @@ edition = "2021"
 common-exception= {path = "../exception"}
 common-metatypes= {path = "../metatypes"}
 common-runtime= {path = "../runtime"}
-common-kv-api= {path = "../kv-apis/kv-api" }
-common-kv-api-vo= {path = "../kv-apis/kv-api-vo" }
+common-kv-api= {path = "../kv-apis/api" }
+common-kv-api-vo= {path = "../kv-apis/vo" }
 common-tracing= {path = "../tracing"}
 
 kvlocal = {path = "../../kvlocal" }

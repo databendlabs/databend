@@ -18,9 +18,9 @@ common-runtime = {path = "../runtime"}
 common-streams = {path = "../streams"}
 common-tracing = {path = "../tracing"}
 common-store-api = {path = "../store-api"}
-common-kv-api-vo = {path = "../kv-apis/kv-api-vo" }
-common-meta-api-vo = {path = "../meta-apis/meta-api-vo" }
-common-meta-api = {path = "../meta-apis/meta-api" }
+common-kv-api-vo = {path = "../kv-apis/vo" }
+common-meta-api-vo = {path = "../meta-apis/vo" }
+common-meta-api = {path = "../meta-apis/api" }
 common-infallible = {path = "../infallible"}
 common-store-api-sdk-util = {path = "./util"}
 

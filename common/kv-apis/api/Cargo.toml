@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-api"
+name = "common-kv-api"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -12,8 +12,8 @@ edition = "2021"
 
 common-metatypes = {path= "../../metatypes" }
 common-exception = {path = "../../exception" }
-common-planners = {path = "../../planners"}
-common-meta-api-vo= { path = "../meta-api-vo" }
+common-store-api-util= { path = "../util" }
+common-kv-api-vo= { path = "../vo" }
 
 
 futures = "0.3"
