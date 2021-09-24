@@ -19,7 +19,7 @@ use common_sled_store::AsKeySpace;
 use common_sled_store::SledTree;
 use common_tracing::tracing;
 
-use crate::configs;
+use crate::raft::config::RaftConfig;
 use crate::raft::sled_key_spaces::RaftStateKV;
 use crate::raft::state::RaftStateKey;
 use crate::raft::state::RaftStateValue;
@@ -57,7 +57,7 @@ impl RaftState {
     #[tracing::instrument(level = "info", skip(db))]
     pub async fn open_create(
         db: &sled::Db,
-        config: &configs::RaftConfig,
+        config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
     ) -> common_exception::Result<RaftState> {

@@ -21,15 +21,15 @@ use common_metatypes::LogEntry;
 use common_runtime::tokio;
 
 use crate::raft::log::RaftLog;
-use crate::tests::service::new_sled_test_context;
+use crate::raft::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_open() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let tc = new_sled_test_context();
+    let tc = new_raft_test_context();
     let db = &tc.db;
-    RaftLog::open(db, &tc.config.raft_config).await?;
+    RaftLog::open(db, &tc.raft_config).await?;
 
     Ok(())
 }
@@ -38,9 +38,9 @@ async fn test_raft_log_open() -> anyhow::Result<()> {
 async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let tc = new_sled_test_context();
+    let tc = new_raft_test_context();
     let db = &tc.db;
-    let rl = RaftLog::open(db, &tc.config.raft_config).await?;
+    let rl = RaftLog::open(db, &tc.raft_config).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {
@@ -113,9 +113,9 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
 async fn test_raft_log_insert() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let tc = new_sled_test_context();
+    let tc = new_raft_test_context();
     let db = &tc.db;
-    let rl = RaftLog::open(db, &tc.config.raft_config).await?;
+    let rl = RaftLog::open(db, &tc.raft_config).await?;
 
     assert_eq!(None, rl.get(&5)?);
 
@@ -150,9 +150,9 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
 async fn test_raft_log_get() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let tc = new_sled_test_context();
+    let tc = new_raft_test_context();
     let db = &tc.db;
-    let rl = RaftLog::open(db, &tc.config.raft_config).await?;
+    let rl = RaftLog::open(db, &tc.raft_config).await?;
 
     assert_eq!(None, rl.get(&5)?);
 
@@ -189,9 +189,9 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
 async fn test_raft_log_last() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let tc = new_sled_test_context();
+    let tc = new_raft_test_context();
     let db = &tc.db;
-    let rl = RaftLog::open(db, &tc.config.raft_config).await?;
+    let rl = RaftLog::open(db, &tc.raft_config).await?;
 
     assert_eq!(None, rl.last()?);
 
@@ -223,9 +223,9 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
 async fn test_raft_log_range_remove() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let tc = new_sled_test_context();
+    let tc = new_raft_test_context();
     let db = &tc.db;
-    let rl = RaftLog::open(db, &tc.config.raft_config).await?;
+    let rl = RaftLog::open(db, &tc.raft_config).await?;
 
     let logs: Vec<Entry<LogEntry>> = vec![
         Entry {

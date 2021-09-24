@@ -15,7 +15,7 @@ use async_raft::storage::HardState;
 use common_runtime::tokio;
 
 use crate::raft::state::RaftState;
-use crate::tests::service::new_sled_test_context;
+use crate::raft::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_create() -> anyhow::Result<()> {
@@ -25,25 +25,25 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_sled_test_context();
+    let mut tc = new_raft_test_context();
     let db = &tc.db;
-    tc.config.raft_config.id = 3;
-    let rs = RaftState::open_create(db, &tc.config.raft_config, None, Some(())).await?;
+    tc.raft_config.id = 3;
+    let rs = RaftState::open_create(db, &tc.raft_config, None, Some(())).await?;
     let is_open = rs.is_open();
 
     assert_eq!(3, rs.id);
     assert!(!is_open);
 
-    tc.config.raft_config.id = 4;
-    let res = RaftState::open_create(db, &tc.config.raft_config, None, Some(())).await;
+    tc.raft_config.id = 4;
+    let res = RaftState::open_create(db, &tc.raft_config, None, Some(())).await;
     assert!(res.is_err());
     assert_eq!(
         "Code: 2402, displayText = raft state present id=3, can not create.",
         res.unwrap_err().to_string()
     );
 
-    tc.config.raft_config.id = 3;
-    let res = RaftState::open_create(db, &tc.config.raft_config, None, Some(())).await;
+    tc.raft_config.id = 3;
+    let res = RaftState::open_create(db, &tc.raft_config, None, Some(())).await;
     assert!(res.is_err());
     assert_eq!(
         "Code: 2402, displayText = raft state present id=3, can not create.",
@@ -60,17 +60,17 @@ async fn test_raft_state_open() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_sled_test_context();
+    let mut tc = new_raft_test_context();
     let db = &tc.db;
-    tc.config.raft_config.id = 3;
-    let rs = RaftState::open_create(db, &tc.config.raft_config, None, Some(())).await?;
+    tc.raft_config.id = 3;
+    let rs = RaftState::open_create(db, &tc.raft_config, None, Some(())).await?;
     let is_open = rs.is_open();
 
     assert_eq!(3, rs.id);
     assert!(!is_open);
 
-    tc.config.raft_config.id = 1000;
-    let rs = RaftState::open_create(db, &tc.config.raft_config, Some(()), None).await?;
+    tc.raft_config.id = 1000;
+    let rs = RaftState::open_create(db, &tc.raft_config, Some(()), None).await?;
     let is_open = rs.is_open();
     assert_eq!(3, rs.id);
     assert!(is_open);
@@ -82,10 +82,10 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_sled_test_context();
+    let mut tc = new_raft_test_context();
     let db = &tc.db;
-    tc.config.raft_config.id = 3;
-    let rs = RaftState::open_create(db, &tc.config.raft_config, Some(()), Some(())).await?;
+    tc.raft_config.id = 3;
+    let rs = RaftState::open_create(db, &tc.raft_config, Some(()), Some(())).await?;
     let is_open = rs.is_open();
 
     assert_eq!(3, rs.id);
@@ -101,10 +101,10 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_sled_test_context();
+    let mut tc = new_raft_test_context();
     let db = &tc.db;
-    tc.config.raft_config.id = 3;
-    let rs = RaftState::open_create(db, &tc.config.raft_config, None, Some(())).await?;
+    tc.raft_config.id = 3;
+    let rs = RaftState::open_create(db, &tc.raft_config, None, Some(())).await?;
 
     assert_eq!(3, rs.id);
 
@@ -136,10 +136,10 @@ async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_sled_test_context();
+    let mut tc = new_raft_test_context();
     let db = &tc.db;
-    tc.config.raft_config.id = 3;
-    let rs = RaftState::open_create(db, &tc.config.raft_config, None, Some(())).await?;
+    tc.raft_config.id = 3;
+    let rs = RaftState::open_create(db, &tc.raft_config, None, Some(())).await?;
 
     // read got a None
 

@@ -55,13 +55,13 @@ use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
-use crate::configs;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
 use crate::meta_service::Network;
 use crate::meta_service::RetryableError;
 use crate::meta_service::ShutdownError;
+use crate::raft::config::RaftConfig;
 use crate::raft::log::RaftLog;
 use crate::raft::state::RaftState;
 use crate::raft::state_machine::AppliedState;
@@ -84,7 +84,7 @@ pub struct MetaRaftStore {
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
     pub id: NodeId,
 
-    config: configs::RaftConfig,
+    config: RaftConfig,
 
     /// If the instance is opened from an existent state(e.g. load from disk) or created.
     is_open: bool,
@@ -153,7 +153,7 @@ impl MetaRaftStore {
     /// Otherwise it panic
     #[tracing::instrument(level = "info", skip(config), fields(config_id=%config.config_id))]
     pub async fn open_create(
-        config: &configs::RaftConfig,
+        config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
     ) -> common_exception::Result<MetaRaftStore> {
@@ -673,7 +673,7 @@ impl MetaNodeBuilder {
 }
 
 impl MetaNode {
-    pub fn builder(config: &configs::RaftConfig) -> MetaNodeBuilder {
+    pub fn builder(config: &RaftConfig) -> MetaNodeBuilder {
         let raft_config = MetaNode::new_raft_config(config);
 
         MetaNodeBuilder {
@@ -685,7 +685,7 @@ impl MetaNode {
         }
     }
 
-    pub fn new_raft_config(config: &configs::RaftConfig) -> Config {
+    pub fn new_raft_config(config: &RaftConfig) -> Config {
         // TODO(xp): configure cluster name.
 
         let hb = config.heartbeat_interval;
@@ -739,7 +739,7 @@ impl MetaNode {
 
     /// Start a Metasrv node from initialized store.
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(config: &configs::RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
+    pub async fn open(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
         let (mn, _is_open) = Self::open_create_boot(config, Some(()), None, None).await?;
         Ok(mn)
     }
@@ -751,7 +751,7 @@ impl MetaNode {
     /// 3. If `boot` is `Some` and it is just created, try to initialize a single-node cluster.
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
-        config: &configs::RaftConfig,
+        config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
         boot: Option<()>,
@@ -876,7 +876,7 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot(
         node_id: NodeId,
-        config: &configs::RaftConfig,
+        config: &RaftConfig,
     ) -> common_exception::Result<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
@@ -917,7 +917,7 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot_non_voter(
         node_id: NodeId,
-        config: &configs::RaftConfig,
+        config: &RaftConfig,
     ) -> common_exception::Result<Arc<MetaNode>> {
         // TODO(xp): what if fill in the node info into an empty state-machine, then MetaNode can be started without delaying grpc.
 

@@ -21,7 +21,7 @@ use common_sled_store::AsKeySpace;
 use common_sled_store::SledTree;
 use common_tracing::tracing;
 
-use crate::configs;
+use crate::raft::config::RaftConfig;
 use crate::raft::sled_key_spaces::Logs;
 
 const TREE_RAFT_LOG: &str = "raft_log";
@@ -35,10 +35,7 @@ pub struct RaftLog {
 impl RaftLog {
     /// Open RaftLog
     #[tracing::instrument(level = "info", skip(db))]
-    pub async fn open(
-        db: &sled::Db,
-        config: &configs::RaftConfig,
-    ) -> common_exception::Result<RaftLog> {
+    pub async fn open(db: &sled::Db, config: &RaftConfig) -> common_exception::Result<RaftLog> {
         let tree_name = config.tree_name(TREE_RAFT_LOG);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;
         let rl = RaftLog { inner };

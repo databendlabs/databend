@@ -18,5 +18,3 @@ pub mod config;
 mod config_test;
 
 pub use config::Config;
-
-pub use crate::raft::config::RaftConfig;

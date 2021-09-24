@@ -47,7 +47,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::configs;
+use crate::raft::config::RaftConfig;
 use crate::raft::sled_key_spaces::Files;
 use crate::raft::sled_key_spaces::GenericKV;
 use crate::raft::sled_key_spaces::Nodes;
@@ -95,7 +95,7 @@ impl Default for Replication {
 #[derive(Debug)]
 pub struct StateMachine {
     // TODO(xp): config is not required. Remove it after snapshot is done.
-    config: configs::RaftConfig,
+    config: RaftConfig,
 
     /// The dedicated sled db to store everything about a state machine.
     /// A state machine has several trees opened on this db.
@@ -196,12 +196,12 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=%config.config_id, prefix=%config.sled_tree_prefix))]
-    pub fn tree_name(config: &configs::RaftConfig, sm_id: u64) -> String {
+    pub fn tree_name(config: &RaftConfig, sm_id: u64) -> String {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
     }
 
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub fn clean(config: &configs::RaftConfig, sm_id: u64) -> common_exception::Result<()> {
+    pub fn clean(config: &RaftConfig, sm_id: u64) -> common_exception::Result<()> {
         let tree_name = StateMachine::tree_name(config, sm_id);
 
         let db = get_sled_db();
@@ -214,10 +214,7 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(
-        config: &configs::RaftConfig,
-        sm_id: u64,
-    ) -> common_exception::Result<StateMachine> {
+    pub async fn open(config: &RaftConfig, sm_id: u64) -> common_exception::Result<StateMachine> {
         let db = get_sled_db();
 
         let tree_name = StateMachine::tree_name(config, sm_id);

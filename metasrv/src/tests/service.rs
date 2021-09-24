@@ -17,13 +17,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot;
-use common_sled_store::get_sled_db;
 use common_tracing::tracing;
-// use common_tracing::tracing::Span;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
-// use tracing_appender::non_blocking::WorkerGuard;
 use crate::api::FlightServer;
 use crate::configs;
 use crate::meta_service::GetReq;
@@ -125,24 +122,6 @@ pub fn new_test_context() -> MetaSrvTestContext {
         meta_nodes: vec![],
 
         channels: None,
-    }
-}
-
-pub struct SledTestContext {
-    pub config: configs::Config,
-    pub db: sled::Db,
-}
-
-/// Create a new context for testing sled
-pub fn new_sled_test_context() -> SledTestContext {
-    // config for unit test of sled db, meta_sync() is true by default.
-    let mut config = configs::Config::empty();
-
-    config.raft_config.sled_tree_prefix = format!("test-{}-", next_port());
-
-    SledTestContext {
-        config,
-        db: get_sled_db(),
     }
 }
 
