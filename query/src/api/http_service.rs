@@ -140,7 +140,7 @@ impl HttpService {
 
         let loader = Self::tls_loader(self.sessions.get_conf());
 
-        let server = axum_server::bind(listening.to_string())
+        let server = axum_server::bind_rustls(listening.to_string())
             .handle(self.abort_handler.clone())
             .loader(loader.await?)
             .serve(self.build_router());
