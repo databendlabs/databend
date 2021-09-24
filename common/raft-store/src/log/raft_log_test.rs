@@ -20,12 +20,13 @@ use common_metatypes::Cmd;
 use common_metatypes::LogEntry;
 use common_runtime::tokio;
 
-use crate::raft::log::RaftLog;
-use crate::raft::testing::new_raft_test_context;
+use crate::init_raft_store_ut;
+use crate::log::RaftLog;
+use crate::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_open() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -36,7 +37,7 @@ async fn test_raft_log_open() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -111,7 +112,7 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_insert() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -148,7 +149,7 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -187,7 +188,7 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_last() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -221,7 +222,7 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_range_remove() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
     let tc = new_raft_test_context();
     let db = &tc.db;

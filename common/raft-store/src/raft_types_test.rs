@@ -15,6 +15,7 @@
 use std::ops::Bound;
 
 use common_metatypes::NodeId;
+use common_sled_store::sled;
 use common_sled_store::SledOrderedSerde;
 use common_sled_store::SledRangeSerde;
 

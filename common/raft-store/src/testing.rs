@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use common_sled_store::get_sled_db;
+use common_sled_store::sled;
 
-use crate::raft::config::RaftConfig;
+use crate::config::RaftConfig;
 
 pub struct RaftTestContext {
     pub raft_config: RaftConfig,
@@ -32,4 +33,23 @@ pub fn new_raft_test_context() -> RaftTestContext {
         raft_config: config,
         db: get_sled_db(),
     }
+}
+
+/// 1. Open a temp sled::Db for all tests.
+/// 2. Initialize a global tracing.
+/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
+#[macro_export]
+macro_rules! init_raft_store_ut {
+    () => {{
+        let t = tempfile::tempdir().expect("create temp dir to sled db");
+        common_sled_store::init_temp_sled_db(t);
+
+        // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
+        common_tracing::init_default_ut_tracing();
+
+        let name = common_tracing::func_name!();
+        let span =
+            common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
+        ((), span)
+    }};
 }

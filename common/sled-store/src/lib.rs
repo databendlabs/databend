@@ -22,6 +22,7 @@ pub use kv::KVMeta;
 pub use kv::KVValue;
 pub use seq_num::SeqNum;
 pub use seq_value::SeqValue;
+pub use sled;
 pub use sled_key_space::SledKeySpace;
 pub use sled_serde::SledOrderedSerde;
 pub use sled_serde::SledRangeSerde;

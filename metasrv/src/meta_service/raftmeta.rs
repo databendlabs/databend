@@ -43,6 +43,13 @@ use common_metatypes::Node;
 use common_metatypes::NodeId;
 use common_metatypes::SeqValue;
 use common_metatypes::Table;
+use common_raft_store::config::RaftConfig;
+use common_raft_store::log::RaftLog;
+use common_raft_store::state::RaftState;
+use common_raft_store::state_machine::AppliedState;
+use common_raft_store::state_machine::SerializableSnapshot;
+use common_raft_store::state_machine::Snapshot;
+use common_raft_store::state_machine::StateMachine;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::watch;
 use common_runtime::tokio::sync::Mutex;
@@ -61,13 +68,6 @@ use crate::meta_service::MetaServiceServer;
 use crate::meta_service::Network;
 use crate::meta_service::RetryableError;
 use crate::meta_service::ShutdownError;
-use crate::raft::config::RaftConfig;
-use crate::raft::log::RaftLog;
-use crate::raft::state::RaftState;
-use crate::raft::state_machine::AppliedState;
-use crate::raft::state_machine::SerializableSnapshot;
-use crate::raft::state_machine::Snapshot;
-use crate::raft::state_machine::StateMachine;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///

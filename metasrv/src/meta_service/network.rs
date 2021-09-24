@@ -25,6 +25,7 @@ use async_raft::raft::VoteResponse;
 use async_raft::RaftNetwork;
 use common_metatypes::LogEntry;
 use common_metatypes::NodeId;
+use common_raft_store::state_machine::AppliedState;
 use common_tracing::tracing;
 use tonic::transport::channel::Channel;
 
@@ -32,7 +33,6 @@ use crate::meta_service::MetaRaftStore;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
-use crate::raft::state_machine::AppliedState;
 
 /// Impl grpc method `write`
 impl tonic::IntoRequest<RaftMes> for LogEntry {

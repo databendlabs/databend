@@ -14,12 +14,11 @@ edition = "2021"
 # Workspace dependencies
 common-exception = {path = "../common/exception"}
 common-metatypes = {path = "../common/metatypes"}
+common-raft-store = {path = "../common/raft-store"}
 common-runtime = {path = "../common/runtime"}
-common-tracing = {path = "../common/tracing"}
-common-store-api = {path = "../common/store-api"}
 common-sled-store = {path = "../common/sled-store"}
-
-metasrv = {path = "../metasrv"}
+common-store-api = {path = "../common/store-api"}
+common-tracing = {path = "../common/tracing"}
 
 
 # Crates.io dependencies

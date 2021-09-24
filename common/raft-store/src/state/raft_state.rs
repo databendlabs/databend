@@ -15,14 +15,15 @@
 use async_raft::storage::HardState;
 use common_exception::ErrorCode;
 use common_metatypes::NodeId;
+use common_sled_store::sled;
 use common_sled_store::AsKeySpace;
 use common_sled_store::SledTree;
 use common_tracing::tracing;
 
-use crate::raft::config::RaftConfig;
-use crate::raft::sled_key_spaces::RaftStateKV;
-use crate::raft::state::RaftStateKey;
-use crate::raft::state::RaftStateValue;
+use crate::config::RaftConfig;
+use crate::sled_key_spaces::RaftStateKV;
+use crate::state::RaftStateKey;
+use crate::state::RaftStateValue;
 
 /// Raft state stores everything else other than log and state machine, which includes:
 /// id: NodeId,

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_raft_store::config::RaftConfig;
 use lazy_static::lazy_static;
-use metasrv::raft::config::RaftConfig;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 

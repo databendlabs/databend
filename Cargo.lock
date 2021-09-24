@@ -933,6 +933,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-raft-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "common-exception",
+ "common-metatypes",
+ "common-planners",
+ "common-runtime",
+ "common-sled-store",
+ "common-store-api-sdk",
+ "common-tracing",
+ "common-uniq-id",
+ "maplit",
+ "pretty_assertions",
+ "rand",
+ "serde",
+ "serde_json",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+]
+
+[[package]]
 name = "common-runtime"
 version = "0.1.0"
 dependencies = [
@@ -1553,6 +1578,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-profling",
+ "common-raft-store",
  "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",
@@ -2733,11 +2759,11 @@ dependencies = [
  "async-trait",
  "common-exception",
  "common-metatypes",
+ "common-raft-store",
  "common-runtime",
  "common-sled-store",
  "common-store-api",
  "common-tracing",
- "metasrv",
  "pretty_assertions",
  "tempfile",
 ]
@@ -3066,6 +3092,7 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-profling",
+ "common-raft-store",
  "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",

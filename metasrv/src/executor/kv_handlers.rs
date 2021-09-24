@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use common_metatypes::Cmd;
 use common_metatypes::LogEntry;
 use common_metatypes::Operation;
+use common_raft_store::state_machine::AppliedState;
 use common_store_api_sdk::kv_api_impl::GetKVAction;
 use common_store_api_sdk::kv_api_impl::GetKVActionResult;
 use common_store_api_sdk::kv_api_impl::KVMetaAction;
@@ -29,7 +30,6 @@ use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::raft::state_machine::AppliedState;
 
 #[async_trait::async_trait]
 impl RequestHandler<UpsertKVAction> for ActionHandler {

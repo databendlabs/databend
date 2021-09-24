@@ -17,6 +17,7 @@ use std::fmt;
 use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_exception::ErrorCode;
+use common_sled_store::sled;
 use common_sled_store::SledOrderedSerde;
 use common_sled_store::SledSerde;
 use serde::Deserialize;

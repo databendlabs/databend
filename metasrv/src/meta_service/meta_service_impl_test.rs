@@ -15,6 +15,7 @@
 use async_raft::State;
 use common_metatypes::Cmd;
 use common_metatypes::LogEntry;
+use common_raft_store::state_machine::AppliedState;
 use common_runtime::tokio;
 #[allow(unused_imports)]
 use log::info;
@@ -24,7 +25,6 @@ use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;
-use crate::raft::state_machine::AppliedState;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 
@@ -41,7 +41,7 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
-    let cases = crate::raft::state_machine::testing::cases_add_file();
+    let cases = common_raft_store::state_machine::testing::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
         let req = LogEntry {
@@ -82,7 +82,7 @@ async fn test_meta_server_set_file() -> anyhow::Result<()> {
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
-    let cases = crate::raft::state_machine::testing::cases_set_file();
+    let cases = common_raft_store::state_machine::testing::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
         let req = LogEntry {
@@ -221,7 +221,7 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
-    let cases = crate::raft::state_machine::testing::cases_incr_seq();
+    let cases = common_raft_store::state_machine::testing::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
         let req = LogEntry {

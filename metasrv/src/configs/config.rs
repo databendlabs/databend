@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_raft_store::config::RaftConfig;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde::Serialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
-
-use crate::raft::config::RaftConfig;
 
 lazy_static! {
     pub static ref DATABEND_COMMIT_VERSION: String = {

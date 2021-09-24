@@ -35,21 +35,22 @@ use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
-use crate::raft::state_machine::testing::pretty_snapshot;
-use crate::raft::state_machine::testing::pretty_snapshot_iter;
-use crate::raft::state_machine::testing::snapshot_logs;
-use crate::raft::state_machine::AppliedState;
-use crate::raft::state_machine::Replication;
-use crate::raft::state_machine::SerializableSnapshot;
-use crate::raft::state_machine::StateMachine;
-use crate::raft::testing::new_raft_test_context;
+use crate::init_raft_store_ut;
+use crate::state_machine::testing::pretty_snapshot;
+use crate::state_machine::testing::pretty_snapshot_iter;
+use crate::state_machine::testing::snapshot_logs;
+use crate::state_machine::AppliedState;
+use crate::state_machine::Replication;
+use crate::state_machine::SerializableSnapshot;
+use crate::state_machine::StateMachine;
+use crate::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     // - Create a state machine with 3 node 1,3,5.
     // - Assert that expected number of nodes are assigned to a slot.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
@@ -90,7 +91,7 @@ async fn test_state_machine_init_slots() -> anyhow::Result<()> {
     // - Initialize all slots.
     // - Assert slot states.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
@@ -122,7 +123,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
     // - Assert default state machine builder
     // - Assert customized state machine builder
 
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     {
@@ -153,7 +154,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
@@ -184,13 +185,13 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
     let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    let cases = crate::raft::state_machine::testing::cases_incr_seq();
+    let cases = crate::state_machine::testing::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
         let resp = sm
@@ -212,7 +213,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
@@ -285,7 +286,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
@@ -439,7 +440,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     // - Update a value-meta of None does nothing.
     // - Update a value-meta of Some() only updates the value-meta.
 
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
@@ -521,7 +522,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     struct T {
@@ -612,13 +613,13 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
     let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    let cases = crate::raft::state_machine::testing::cases_add_file();
+    let cases = crate::state_machine::testing::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
@@ -651,13 +652,13 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
     let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    let cases = crate::raft::state_machine::testing::cases_set_file();
+    let cases = crate::state_machine::testing::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_result) in cases.iter() {
         let resp = sm
@@ -693,7 +694,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     // - Feed logs into state machine.
     // - Take a snapshot and examine the data
 
-    let (_log_guards, ut_span) = init_meta_ut!();
+    let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();

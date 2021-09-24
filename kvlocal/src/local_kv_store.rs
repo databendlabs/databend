@@ -22,6 +22,9 @@ use common_metatypes::Cmd;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
+use common_raft_store::config::RaftConfig;
+use common_raft_store::state_machine::AppliedState;
+use common_raft_store::state_machine::StateMachine;
 use common_runtime::tokio::sync::Mutex;
 pub use common_sled_store::init_temp_sled_db;
 use common_store_api::kv_apis::kv_api::MGetKVActionResult;
@@ -31,9 +34,6 @@ use common_store_api::KVApi;
 use common_store_api::PrefixListReply;
 use common_store_api::UpsertKVActionResult;
 use common_tracing::tracing;
-use metasrv::configs;
-use metasrv::raft::state_machine::AppliedState;
-use metasrv::raft::state_machine::StateMachine;
 
 /// Local storage that provides the API defined by `KVApi`.
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
@@ -60,20 +60,18 @@ impl LocalKVStore {
     /// - `databend_store::meta_service::raft_db::init_temp_sled_db`
     #[allow(dead_code)]
     pub async fn new(name: &str) -> common_exception::Result<LocalKVStore> {
-        let mut config = configs::Config::empty();
+        let mut config = RaftConfig::empty();
 
-        config.raft_config.sled_tree_prefix = format!("{}-local-kv-store", name);
+        config.sled_tree_prefix = format!("{}-local-kv-store", name);
 
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.raft_config.no_sync = true;
+            config.no_sync = true;
         }
 
         Ok(LocalKVStore {
             // StateMachine does not need to be replaced, thus we always use id=0
-            inner: Arc::new(Mutex::new(
-                StateMachine::open(&config.raft_config, 0).await?,
-            )),
+            inner: Arc::new(Mutex::new(StateMachine::open(&config, 0).await?)),
         })
     }
 

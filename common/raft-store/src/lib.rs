@@ -12,25 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use applied_state::AppliedState;
-pub use placement::Placement;
-pub use sm::Replication;
-pub use sm::SerializableSnapshot;
-pub use sm::SnapshotKeyValue;
-pub use sm::StateMachine;
-pub use snapshot::Snapshot;
-pub use state_machine_meta::StateMachineMetaKey;
-pub use state_machine_meta::StateMachineMetaValue;
+pub mod config;
+pub mod log;
+pub mod sled_key_spaces;
+pub mod state;
+pub mod state_machine;
 
-pub mod applied_state;
-pub mod sm;
-pub mod snapshot;
-pub mod state_machine_meta;
+#[macro_use]
+#[cfg(test)]
+mod testing;
 
-pub mod placement;
 #[cfg(test)]
-mod placement_test;
-#[cfg(test)]
-mod state_machine_test;
-#[cfg(test)]
-pub mod testing;
+mod raft_types_test;
