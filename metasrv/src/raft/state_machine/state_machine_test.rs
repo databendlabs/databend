@@ -35,9 +35,9 @@ use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::testing::pretty_snapshot;
-use crate::meta_service::testing::pretty_snapshot_iter;
-use crate::meta_service::testing::snapshot_logs;
+use crate::raft::state_machine::testing::pretty_snapshot;
+use crate::raft::state_machine::testing::pretty_snapshot_iter;
+use crate::raft::state_machine::testing::snapshot_logs;
 use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::Replication;
 use crate::raft::state_machine::SerializableSnapshot;

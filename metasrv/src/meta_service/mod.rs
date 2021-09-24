@@ -37,5 +37,3 @@ mod meta_service_impl_test;
 mod meta_store_test;
 #[cfg(test)]
 pub mod raftmeta_test;
-#[cfg(test)]
-pub mod testing;

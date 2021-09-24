@@ -24,9 +24,9 @@ use common_runtime::tokio;
 use common_tracing::tracing;
 use maplit::btreeset;
 
-use crate::meta_service::testing::pretty_snapshot;
-use crate::meta_service::testing::snapshot_logs;
 use crate::meta_service::MetaRaftStore;
+use crate::raft::state_machine::testing::pretty_snapshot;
+use crate::raft::state_machine::testing::snapshot_logs;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::StateMachineMetaKey::LastMembership;
 use crate::raft::state_machine::StateMachineMetaValue;
