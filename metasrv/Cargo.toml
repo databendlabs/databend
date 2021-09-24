@@ -32,7 +32,6 @@ common-sled-store = {path = "../common/sled-store"}
 common-store-api-sdk = {path = "../common/store-api-sdk"}
 common-tracing = {path = "../common/tracing"}
 common-uniq-id = {path = "../common/uniq_id"}
-common-store-api-sdk = {path = "../common/store-api-sdk"}
 common-store-kv-api-vo = {path = "../common/store-api/kv-api-vo"}
 
 # Github dependencies

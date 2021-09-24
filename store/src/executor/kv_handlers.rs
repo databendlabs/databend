@@ -23,13 +23,10 @@ use common_store_api_sdk::kv_api_impl::KVMetaAction;
 use common_store_api_sdk::kv_api_impl::MGetKVAction;
 use common_store_api_sdk::kv_api_impl::PrefixListReq;
 use common_store_api_sdk::kv_api_impl::UpsertKVAction;
-use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
 use common_store_kv_api_vo::GetKVActionResult;
 use common_store_kv_api_vo::MGetKVActionResult;
 use common_store_kv_api_vo::PrefixListReply;
 use common_store_kv_api_vo::UpsertKVActionResult;
-use metasrv::meta_service::Cmd;
-use metasrv::meta_service::LogEntry;
 use metasrv::raft::state_machine::AppliedState;
 
 use crate::executor::action_handler::RequestHandler;

@@ -877,7 +877,8 @@ dependencies = [
  "common-exception",
  "common-metatypes",
  "common-runtime",
- "common-store-api",
+ "common-store-kv-api",
+ "common-store-kv-api-vo",
  "common-tracing",
  "kvlocal",
  "lazy_static",
@@ -1008,6 +1009,9 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-runtime",
+ "common-store-api-util",
+ "common-store-kv-api",
+ "common-store-kv-api-vo",
  "common-streams",
  "common-tracing",
  "futures",
@@ -1030,6 +1034,8 @@ dependencies = [
  "common-planners",
  "common-runtime",
  "common-store-api",
+ "common-store-api-sdk-util",
+ "common-store-kv-api-vo",
  "common-streams",
  "common-tracing",
  "futures",
@@ -1045,6 +1051,39 @@ dependencies = [
  "tonic",
  "tonic-build",
  "trust-dns-resolver",
+]
+
+[[package]]
+name = "common-store-api-sdk-util"
+version = "0.1.0"
+
+[[package]]
+name = "common-store-api-util"
+version = "0.1.0"
+dependencies = [
+ "common-runtime",
+ "common-tracing",
+ "lazy_static",
+]
+
+[[package]]
+name = "common-store-kv-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-metatypes",
+ "common-store-api-util",
+ "common-store-kv-api-vo",
+ "futures",
+]
+
+[[package]]
+name = "common-store-kv-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-metatypes",
+ "serde",
 ]
 
 [[package]]
@@ -1508,6 +1547,8 @@ dependencies = [
  "common-runtime",
  "common-store-api",
  "common-store-api-sdk",
+ "common-store-kv-api",
+ "common-store-kv-api-vo",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -1582,6 +1623,8 @@ dependencies = [
  "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",
+ "common-store-kv-api",
+ "common-store-kv-api-vo",
  "common-tracing",
  "common-uniq-id",
  "env_logger 0.9.0",
@@ -2762,7 +2805,9 @@ dependencies = [
  "common-raft-store",
  "common-runtime",
  "common-sled-store",
- "common-store-api",
+ "common-store-api-util",
+ "common-store-kv-api",
+ "common-store-kv-api-vo",
  "common-tracing",
  "pretty_assertions",
  "tempfile",
@@ -3096,6 +3141,8 @@ dependencies = [
  "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",
+ "common-store-kv-api",
+ "common-store-kv-api-vo",
  "common-tracing",
  "common-uniq-id",
  "env_logger 0.9.0",
