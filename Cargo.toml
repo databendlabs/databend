@@ -43,7 +43,9 @@ members = [
 ]
 
 [profile.release]
-debug = true
+debug = 1
+opt-level = "z"     # Optimize for size.
+codegen-units = 1   # Reduce number of codegen units to increase optimizations.
 
 [profile.bench]
 debug = true
