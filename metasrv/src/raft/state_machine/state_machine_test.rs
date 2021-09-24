@@ -53,7 +53,7 @@ async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
     sm.nodes()
         .append(&[
             (1, Node::default()),
@@ -94,7 +94,7 @@ async fn test_state_machine_init_slots() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
     sm.nodes()
         .append(&[
             (1, Node::default()),
@@ -127,7 +127,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
 
     {
         let tc = new_test_context();
-        let sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+        let sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
         assert_eq!(3, sm.slots.len());
         let Replication::Mirror(n) = sm.replication;
@@ -136,7 +136,7 @@ async fn test_state_machine_builder() -> anyhow::Result<()> {
 
     {
         let tc = new_test_context();
-        let sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+        let sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
         let sm = StateMachine::initializer()
             .slots(5)
@@ -157,7 +157,7 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
     for i in 0..3 {
         // incr "foo"
@@ -188,7 +188,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
     let cases = crate::meta_service::raftmeta_test::cases_incr_seq();
 
@@ -216,7 +216,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut m = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut m = StateMachine::open(&tc.config.raft_config, 1).await?;
 
     struct T {
         name: &'static str,
@@ -289,7 +289,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
     struct T {
         // input:
@@ -443,7 +443,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -571,7 +571,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let mes = format!("{}-th: {}({})", i, c.key, c.seq);
 
         let tc = new_test_context();
-        let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+        let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
         // prepare an record
         sm.apply_cmd(&Cmd::UpsertKV {
@@ -616,7 +616,7 @@ async fn test_state_machine_apply_add_file() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
     let cases = crate::meta_service::raftmeta_test::cases_add_file();
 
@@ -655,7 +655,7 @@ async fn test_state_machine_apply_set_file() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 1).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 1).await?;
 
     let cases = crate::meta_service::raftmeta_test::cases_set_file();
 
@@ -697,7 +697,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let mut sm = StateMachine::open(&tc.config.meta_config, 0).await?;
+    let mut sm = StateMachine::open(&tc.config.raft_config, 0).await?;
 
     let (logs, want) = snapshot_logs();
     // TODO(xp): following logs are not saving to sled yet:

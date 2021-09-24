@@ -17,4 +17,4 @@ pub mod config;
 mod config_test;
 
 pub use config::Config;
-pub use config::MetaConfig;
+pub use config::RaftConfig;

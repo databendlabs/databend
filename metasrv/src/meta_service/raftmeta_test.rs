@@ -168,9 +168,9 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let addr = tc.config.meta_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
 
     let got = mn.get_node(&0).await?;
     assert_eq!(addr, got.unwrap().address);
@@ -397,11 +397,11 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     let snap_logs = 10;
 
     let mut tc = new_test_context();
-    tc.config.meta_config.snapshot_logs_since_last = snap_logs;
-    tc.config.meta_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
-    let addr = tc.config.meta_config.raft_api_addr();
+    tc.config.raft_config.snapshot_logs_since_last = snap_logs;
+    tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
+    let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
 
     assert_meta_connection(&addr).await?;
 
@@ -540,12 +540,12 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     // restart
     let config = configs::Config::empty();
-    let mn0 = MetaNode::builder(&config.meta_config)
+    let mn0 = MetaNode::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)
         .build()
         .await?;
-    let mn1 = MetaNode::builder(&config.meta_config)
+    let mn1 = MetaNode::builder(&config.raft_config)
         .node_id(1)
         .sto(sto1)
         .build()
@@ -613,7 +613,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     }
 
     tracing::info!("--- reopen MetaNode");
-    let leader = MetaNode::open(&tc.config.meta_config).await?;
+    let leader = MetaNode::open(&tc.config.raft_config).await?;
     log_cnt += 1;
 
     wait_for_state(&leader, State::Leader).await?;
@@ -635,7 +635,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     tracing::info!("--- check state machine: nodes");
     {
         let node = leader.sto.get_node(&0).await?.unwrap();
-        assert_eq!(tc.config.meta_config.raft_api_addr(), node.address);
+        assert_eq!(tc.config.raft_config.raft_api_addr(), node.address);
     }
 
     Ok(())
@@ -717,10 +717,10 @@ async fn setup_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
 
     let nid = 0;
     let mut tc = new_test_context();
-    let addr = tc.config.meta_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr();
 
     // boot up a single-node cluster
-    let mn = MetaNode::boot(nid, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot(nid, &tc.config.raft_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     {
@@ -743,9 +743,9 @@ async fn setup_non_voter(
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
     let mut tc = new_test_context();
-    let addr = tc.config.meta_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot_non_voter(id, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot_non_voter(id, &tc.config.raft_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     {

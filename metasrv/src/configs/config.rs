@@ -83,11 +83,11 @@ pub struct Config {
     pub flight_tls_server_key: String,
 
     #[structopt(flatten)]
-    pub meta_config: MetaConfig,
+    pub raft_config: RaftConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
-pub struct MetaConfig {
+pub struct RaftConfig {
     /// Identify a config. This is only meant to make debugging easier with more than one Config involved.
     #[structopt(long, default_value = "")]
     pub config_id: String,
@@ -201,7 +201,16 @@ impl Config {
     }
 }
 
-impl MetaConfig {
+impl RaftConfig {
+    /// StructOptToml provides a default Default impl that loads config from cli args,
+    /// which conflicts with unit test if case-filter arguments passed, e.g.:
+    /// `cargo test my_unit_test_fn`
+    ///
+    /// Thus we need another method to generate an empty default instance.
+    pub fn empty() -> Self {
+        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
+    }
+
     pub fn raft_api_addr(&self) -> String {
         format!("{}:{}", self.raft_api_host, self.raft_api_port)
     }

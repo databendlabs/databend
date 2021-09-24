@@ -62,17 +62,17 @@ impl LocalKVStore {
     pub async fn new(name: &str) -> common_exception::Result<LocalKVStore> {
         let mut config = configs::Config::empty();
 
-        config.meta_config.sled_tree_prefix = format!("{}-local-kv-store", name);
+        config.raft_config.sled_tree_prefix = format!("{}-local-kv-store", name);
 
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.meta_config.no_sync = true;
+            config.raft_config.no_sync = true;
         }
 
         Ok(LocalKVStore {
             // StateMachine does not need to be replaced, thus we always use id=0
             inner: Arc::new(Mutex::new(
-                StateMachine::open(&config.meta_config, 0).await?,
+                StateMachine::open(&config.raft_config, 0).await?,
             )),
         })
     }

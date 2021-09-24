@@ -82,7 +82,7 @@ pub struct Config {
 
     /// Config for the embedded metasrv.
     #[structopt(flatten)]
-    pub meta_config: metasrv::configs::MetaConfig,
+    pub meta_config: metasrv::configs::RaftConfig,
 
     #[structopt(
         long,
