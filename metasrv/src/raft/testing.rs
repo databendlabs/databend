@@ -12,14 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod config;
-pub mod log;
-pub mod sled_key_spaces;
-pub mod state;
-pub mod state_machine;
+use common_sled_store::get_sled_db;
 
-#[cfg(test)]
-mod raft_types_test;
+use crate::configs::RaftConfig;
 
-#[cfg(test)]
-mod testing;
+pub struct RaftTestContext {
+    pub raft_config: RaftConfig,
+    pub db: sled::Db,
+}
+
+/// Create a new context for testing sled
+pub fn new_raft_test_context() -> RaftTestContext {
+    // config for unit test of sled db, meta_sync() is true by default.
+    let mut config = RaftConfig::empty();
+
+    config.sled_tree_prefix = format!("test-{}-", 30900 + common_uniq_id::uniq_usize());
+
+    RaftTestContext {
+        raft_config: config,
+        db: get_sled_db(),
+    }
+}

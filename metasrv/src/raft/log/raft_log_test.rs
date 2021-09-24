@@ -21,7 +21,7 @@ use common_metatypes::LogEntry;
 use common_runtime::tokio;
 
 use crate::raft::log::RaftLog;
-use crate::tests::service::new_raft_test_context;
+use crate::raft::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_log_open() -> anyhow::Result<()> {

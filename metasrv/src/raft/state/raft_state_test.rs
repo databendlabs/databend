@@ -15,7 +15,7 @@ use async_raft::storage::HardState;
 use common_runtime::tokio;
 
 use crate::raft::state::RaftState;
-use crate::tests::service::new_raft_test_context;
+use crate::raft::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_create() -> anyhow::Result<()> {

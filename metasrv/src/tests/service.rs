@@ -17,19 +17,15 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::oneshot;
-use common_sled_store::get_sled_db;
 use common_tracing::tracing;
-// use common_tracing::tracing::Span;
 use tempfile::tempdir;
 use tempfile::TempDir;
 
-// use tracing_appender::non_blocking::WorkerGuard;
 use crate::api::FlightServer;
 use crate::configs;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
-use crate::raft::config::RaftConfig;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
@@ -126,24 +122,6 @@ pub fn new_test_context() -> MetaSrvTestContext {
         meta_nodes: vec![],
 
         channels: None,
-    }
-}
-
-pub struct RaftTestContext {
-    pub raft_config: RaftConfig,
-    pub db: sled::Db,
-}
-
-/// Create a new context for testing sled
-pub fn new_raft_test_context() -> RaftTestContext {
-    // config for unit test of sled db, meta_sync() is true by default.
-    let mut config = RaftConfig::empty();
-
-    config.sled_tree_prefix = format!("test-{}-", next_port());
-
-    RaftTestContext {
-        raft_config: config,
-        db: get_sled_db(),
     }
 }
 

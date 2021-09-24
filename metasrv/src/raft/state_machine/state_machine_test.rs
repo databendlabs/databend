@@ -42,7 +42,7 @@ use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::Replication;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::StateMachine;
-use crate::tests::service::new_raft_test_context;
+use crate::raft::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
