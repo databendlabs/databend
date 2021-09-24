@@ -870,15 +870,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-kv-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-kv-api-vo",
+ "common-metatypes",
+ "common-store-api-util",
+ "futures",
+]
+
+[[package]]
+name = "common-kv-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-metatypes",
+ "serde",
+]
+
+[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-exception",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-runtime",
- "common-store-kv-api",
- "common-store-kv-api-vo",
  "common-tracing",
  "kvlocal",
  "lazy_static",
@@ -1006,12 +1026,12 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-planners",
  "common-runtime",
  "common-store-api-util",
- "common-store-kv-api",
- "common-store-kv-api-vo",
  "common-streams",
  "common-tracing",
  "futures",
@@ -1030,12 +1050,12 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-infallible",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-planners",
  "common-runtime",
  "common-store-api",
  "common-store-api-sdk-util",
- "common-store-kv-api-vo",
  "common-streams",
  "common-tracing",
  "futures",
@@ -1064,26 +1084,6 @@ dependencies = [
  "common-runtime",
  "common-tracing",
  "lazy_static",
-]
-
-[[package]]
-name = "common-store-kv-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-exception",
- "common-metatypes",
- "common-store-api-util",
- "common-store-kv-api-vo",
- "futures",
-]
-
-[[package]]
-name = "common-store-kv-api-vo"
-version = "0.1.0"
-dependencies = [
- "common-metatypes",
- "serde",
 ]
 
 [[package]]
@@ -1539,6 +1539,8 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-management",
  "common-metatypes",
  "common-planners",
@@ -1547,8 +1549,6 @@ dependencies = [
  "common-runtime",
  "common-store-api",
  "common-store-api-sdk",
- "common-store-kv-api",
- "common-store-kv-api-vo",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -1616,6 +1616,8 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-infallible",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-planners",
  "common-profling",
@@ -1623,8 +1625,6 @@ dependencies = [
  "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",
- "common-store-kv-api",
- "common-store-kv-api-vo",
  "common-tracing",
  "common-uniq-id",
  "env_logger 0.9.0",
@@ -2801,13 +2801,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-exception",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-raft-store",
  "common-runtime",
  "common-sled-store",
  "common-store-api-util",
- "common-store-kv-api",
- "common-store-kv-api-vo",
  "common-tracing",
  "pretty_assertions",
  "tempfile",
@@ -3134,6 +3134,8 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-infallible",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-planners",
  "common-profling",
@@ -3141,8 +3143,6 @@ dependencies = [
  "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",
- "common-store-kv-api",
- "common-store-kv-api-vo",
  "common-tracing",
  "common-uniq-id",
  "env_logger 0.9.0",

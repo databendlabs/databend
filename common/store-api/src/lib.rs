@@ -35,5 +35,5 @@ pub use meta_apis::meta_api::MetaApi;
 
 pub mod data_block_apis;
 pub mod meta_apis;
+pub use common_kv_api as kv_api;
 pub use common_store_api_util as util;
-pub use common_store_kv_api as kv_api;
