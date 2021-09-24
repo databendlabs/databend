@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetic;
-mod common;
-mod comparison;
-mod conditional;
-mod data_column;
-mod logic;
+mod is_not_null;
+mod is_null;
 mod nullable;
+#[cfg(test)]
+mod nullable_test;
 
-pub use common::*;
-pub use comparison::*;
-pub use conditional::*;
-pub use data_column::*;
-pub use logic::*;
-pub use nullable::*;
+pub use is_not_null::IsNotNullFunction;
+pub use is_null::IsNullFunction;
+pub use nullable::NullableFunction;
