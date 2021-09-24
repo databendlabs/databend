@@ -24,6 +24,7 @@ use common_runtime::tokio::runtime::Runtime;
 
 async fn async_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
     let cluster_discovery = ClusterDiscovery::create_global(config.clone()).await?;
+    cluster_discovery.register_to_metastore(&config).await?;
     SessionManager::from_conf(config, cluster_discovery)
 }
 

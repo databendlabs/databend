@@ -154,7 +154,9 @@ impl NamespaceApi for NamespaceMgr {
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, (_, value)) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.value)?;
-            node_info.id = Self::unescape_for_key(&node_key)?;
+            let mut node_key = Self::unescape_for_key(&node_key)?;
+
+            node_info.id = node_key[self.namespace_prefix.len() + 1..].to_string();
             nodes_info.push(node_info);
         }
 
