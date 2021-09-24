@@ -21,19 +21,14 @@ use axum::http::Response;
 use axum::http::StatusCode;
 use axum::response::Html;
 use axum::response::IntoResponse;
-use common_exception::ErrorCode;
-use common_planners::{ScanPlan, ReadDataSourcePlan};
-use futures::Future;
+use common_datablocks::DataBlock;
+use common_exception::Result;
+use common_planners::ScanPlan;
+use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
-use crate::clusters::ClusterDiscovery;
-use crate::configs::Config;
-use crate::sessions::{SessionManager, SessionManagerRef, DatabendQueryContextRef};
-use common_exception::Result;
-use crate::catalogs::Table;
-use std::sync::Arc;
-use common_streams::SendableDataBlockStream;
-use common_datablocks::DataBlock;
+use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::SessionManagerRef;
 
 pub struct LogTemplate {
     result: Result<String>,
@@ -57,32 +52,33 @@ impl IntoResponse for LogTemplate {
 // read log files from cfg.log.log_dir
 pub async fn logs_handler(sessions_extension: Extension<SessionManagerRef>) -> LogTemplate {
     let sessions = sessions_extension.0;
-    LogTemplate { result: select_table(sessions).await }
+    LogTemplate {
+        result: select_table(sessions).await,
+    }
 }
 
 async fn select_table(sessions: SessionManagerRef) -> Result<String> {
     let session = sessions.create_session("WatchLogs")?;
     let query_context = session.create_context().await?;
 
-    let mut tracing_table_stream = execute_tracing_query(query_context).await?;
-    let tracing_logs = tracing_table_stream.collect::<Result<Vec<DataBlock>>>().await?;
+    let tracing_table_stream = execute_query(query_context).await?;
+    let tracing_logs = tracing_table_stream
+        .collect::<Result<Vec<DataBlock>>>()
+        .await?;
     Ok(format!("{:?}", tracing_logs))
 }
 
-fn execute_tracing_query(
-    context: DatabendQueryContextRef
-) -> impl Future<Output=Result<SendableDataBlockStream>> {
-    async move {
-        let tracing_table_meta = context.get_table("system", "tracing")?;
+async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
+    let tracing_table_meta = context.get_table("system", "tracing")?;
 
-        let tracing_table = tracing_table_meta.raw();
-        let tracing_table_read_plan = tracing_table.read_plan(
-            context.clone(),
-            &ScanPlan::empty(),
-            context.get_settings().get_max_threads()? as usize,
-        )?;
+    let tracing_table = tracing_table_meta.raw();
+    let tracing_table_read_plan = tracing_table.read_plan(
+        context.clone(),
+        &ScanPlan::empty(),
+        context.get_settings().get_max_threads()? as usize,
+    )?;
 
-        tracing_table.read(context.clone(), &tracing_table_read_plan).await
-    }
+    tracing_table
+        .read(context.clone(), &tracing_table_read_plan)
+        .await
 }
-

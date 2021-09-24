@@ -15,18 +15,19 @@
 use std::borrow::BorrowMut;
 use std::fs::File;
 use std::io::BufReader;
-use std::io::{self};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
 use axum::handler::get;
-use axum::handler::post;
+use axum::routing::BoxRoute;
 use axum::AddExtensionLayer;
 use axum::Router;
 use axum_server;
 use axum_server::tls::TlsLoader;
-use common_exception::{Result, ErrorCode};
+use axum_server::Handle;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_runtime::tokio;
 use common_runtime::tokio::task::JoinHandle;
 use tokio_rustls::rustls::internal::pemfile::certs;
@@ -38,12 +39,9 @@ use tokio_rustls::rustls::PrivateKey;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::ServerConfig;
 
-use crate::clusters::{ClusterRef, ClusterDiscoveryRef};
-use crate::configs::{Config, QueryConfig};
+use crate::configs::Config;
 use crate::servers::Server;
-use axum::routing::BoxRoute;
 use crate::sessions::SessionManagerRef;
-use axum_server::Handle;
 
 pub struct HttpService {
     sessions: SessionManagerRef,
@@ -69,11 +67,10 @@ impl HttpService {
 
         let mut tls_config = ServerConfig::new(NoClientAuth::new());
         if let Err(cause) = tls_config.set_single_cert(certs, key) {
-            return Err(ErrorCode::TLSConfigurationFailure(
-                format!(
-                    "Cannot build TLS config for http service, cause {}", cause
-                )
-            ))
+            return Err(ErrorCode::TLSConfigurationFailure(format!(
+                "Cannot build TLS config for http service, cause {}",
+                cause
+            )));
         }
 
         HttpService::add_tls_pem_files(config, tls_config)
@@ -87,9 +84,12 @@ impl HttpService {
             let pem_file = File::open(pem_path.as_str())?;
             let mut root_cert_store = RootCertStore::empty();
 
-            if let Err(_) = root_cert_store.add_pem_file(BufReader::new(pem_file).borrow_mut()) {
+            if root_cert_store
+                .add_pem_file(BufReader::new(pem_file).borrow_mut())
+                .is_err()
+            {
                 return Err(ErrorCode::TLSConfigurationFailure(
-                    "Cannot add client ca in for http service"
+                    "Cannot add client ca in for http service",
                 ));
             }
 
@@ -129,9 +129,18 @@ impl HttpService {
             .route("/v1/health", get(super::http::v1::health::health_handler))
             .route("/v1/config", get(super::http::v1::config::config_handler))
             .route("/v1/logs", get(super::http::v1::logs::logs_handler))
-            .route("/v1/cluster/list", get(super::http::v1::cluster::cluster_list_handler))
-            .route("/debug/home", get(super::http::debug::home::debug_home_handler))
-            .route("/debug/pprof/profile", get(super::http::debug::pprof::debug_pprof_handler))
+            .route(
+                "/v1/cluster/list",
+                get(super::http::v1::cluster::cluster_list_handler),
+            )
+            .route(
+                "/debug/home",
+                get(super::http::debug::home::debug_home_handler),
+            )
+            .route(
+                "/debug/pprof/profile",
+                get(super::http::debug::pprof::debug_pprof_handler),
+            )
             .boxed()
     }
 
@@ -153,7 +162,7 @@ impl HttpService {
             Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
             Some(addresses) => {
                 // 0.0.0.0, for multiple network interface, we may listen to multiple address
-                let first_address = addresses[0].clone();
+                let first_address = addresses[0];
                 for address in addresses {
                     if address.port() != first_address.port() {
                         return Err(ErrorCode::CannotListenerPort(""));
@@ -171,9 +180,10 @@ impl HttpService {
 
         match tls_loader.load().await {
             Ok(_) => Ok(tls_loader),
-            Err(cause) => Err(ErrorCode::TLSConfigurationFailure(
-                format!("Cannot load tls config, cause {}", cause)
-            ))
+            Err(cause) => Err(ErrorCode::TLSConfigurationFailure(format!(
+                "Cannot load tls config, cause {}",
+                cause
+            ))),
         }
     }
 
@@ -192,7 +202,7 @@ impl HttpService {
             Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
             Some(addresses) => {
                 // 0.0.0.0, for multiple network interface, we may listen to multiple address
-                let first_address = addresses[0].clone();
+                let first_address = addresses[0];
                 for address in addresses {
                     if address.port() != first_address.port() {
                         return Err(ErrorCode::CannotListenerPort(""));

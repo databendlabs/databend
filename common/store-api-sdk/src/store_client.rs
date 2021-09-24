@@ -26,7 +26,6 @@ use common_store_api::util::STORE_SYNC_CALL_TIMEOUT;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
-use log::info;
 use prost::Message;
 use serde::de::DeserializeOwned;
 use tonic::codegen::InterceptedService;
@@ -44,6 +43,7 @@ use crate::RpcClientTlsConfig;
 
 #[derive(Clone)]
 pub struct StoreClient {
+    #[allow(dead_code)]
     token: Vec<u8>,
     pub(crate) timeout: Duration,
     pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,

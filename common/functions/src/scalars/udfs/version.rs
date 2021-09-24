@@ -24,13 +24,13 @@ use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct VersionFunction {
-    display_name: String,
+    _display_name: String,
 }
 
 impl VersionFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(VersionFunction {
-            display_name: display_name.to_string(),
+            _display_name: display_name.to_string(),
         }))
     }
 }

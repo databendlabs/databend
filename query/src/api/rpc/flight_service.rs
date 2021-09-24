@@ -41,7 +41,6 @@ use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManagerRef;
-use futures::{TryFuture, Future};
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -153,7 +152,9 @@ impl FlightService for DatabendQueryFlightService {
                 let is_aborted = self.dispatcher.is_aborted();
                 let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
 
-                self.dispatcher.broadcast_action(session, flight_action).await?;
+                self.dispatcher
+                    .broadcast_action(session, flight_action)
+                    .await?;
                 FlightResult { body: vec![] }
             }
             FlightAction::PrepareShuffleAction(action) => {
@@ -161,7 +162,9 @@ impl FlightService for DatabendQueryFlightService {
                 let is_aborted = self.dispatcher.is_aborted();
                 let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
 
-                self.dispatcher.shuffle_action(session, flight_action).await?;
+                self.dispatcher
+                    .shuffle_action(session, flight_action)
+                    .await?;
                 FlightResult { body: vec![] }
             }
         };

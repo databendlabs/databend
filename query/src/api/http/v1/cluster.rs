@@ -13,23 +13,17 @@
 // limitations under the License.
 
 use std::convert::Infallible;
-use std::fmt::Debug;
 
 use axum::body::Bytes;
 use axum::body::Full;
 use axum::extract::Extension;
-use axum::extract::Json;
 use axum::http::Response;
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Html};
-use serde_json::json;
-use serde_json::Value;
+use axum::response::Html;
+use axum::response::IntoResponse;
+use common_exception::Result;
 
-use crate::clusters::{ClusterRef, ClusterDiscoveryRef};
 use crate::sessions::SessionManagerRef;
-use common_management::NodeInfo;
-use common_exception::{Result, ErrorCode};
-use std::sync::Arc;
 
 pub struct ClusterTemplate {
     result: Result<String>,
@@ -44,7 +38,10 @@ impl IntoResponse for ClusterTemplate {
             Ok(nodes) => Html(nodes).into_response(),
             Err(cause) => Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Full::from(format!("Failed to fetch cluster nodes list. cause: {}", cause)))
+                .body(Full::from(format!(
+                    "Failed to fetch cluster nodes list. cause: {}",
+                    cause
+                )))
                 .unwrap(),
         }
     }
@@ -57,7 +54,9 @@ impl IntoResponse for ClusterTemplate {
 // return: return a list of cluster node information
 pub async fn cluster_list_handler(sessions: Extension<SessionManagerRef>) -> ClusterTemplate {
     let sessions = sessions.0;
-    ClusterTemplate { result: list_nodes(sessions).await }
+    ClusterTemplate {
+        result: list_nodes(sessions).await,
+    }
 }
 
 async fn list_nodes(sessions: SessionManagerRef) -> Result<String> {

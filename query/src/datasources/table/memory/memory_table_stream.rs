@@ -25,8 +25,8 @@ use crate::sessions::DatabendQueryContextRef;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
-    begin: u64,
-    end: u64,
+    _begin: u64,
+    _end: u64,
 }
 
 pub struct MemoryTableStream {

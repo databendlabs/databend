@@ -18,8 +18,8 @@ use common_runtime::tokio;
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;
 use crate::sql::PlanParser;
-use crate::tests::ClusterDescriptor;
 use crate::tests::try_create_cluster_context;
+use crate::tests::ClusterDescriptor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scatter_optimizer() -> Result<()> {
@@ -208,7 +208,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             ClusterDescriptor::new()
                 .with_node("Github", "www.github.com:9090")
                 .with_node("dummy_local", "127.0.0.1:9090")
-                .with_local_id("dummy_local")
+                .with_local_id("dummy_local"),
         )?;
 
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;

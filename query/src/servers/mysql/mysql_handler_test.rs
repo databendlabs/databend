@@ -33,11 +33,8 @@ use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let mut handler = MySQLHandler::create(
-        SessionManagerBuilder::create()
-            .max_sessions(1)
-            .build()?
-    );
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -53,11 +50,8 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let mut handler = MySQLHandler::create(
-        SessionManagerBuilder::create()
-            .max_sessions(1)
-            .build()?
-    );
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -115,11 +109,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let mut handler = MySQLHandler::create(
-        SessionManagerBuilder::create()
-            .max_sessions(1)
-            .build()?
-    );
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;

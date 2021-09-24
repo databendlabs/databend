@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
-
 use common_runtime::tokio;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
-use databend_query::clusters::{Cluster, ClusterDiscovery};
+use databend_query::clusters::ClusterDiscovery;
 use databend_query::configs::Config;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
@@ -48,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),
     )
-        .init();
+    .init();
     let _guards = init_tracing_with_file(
         "databend-query",
         conf.log.log_dir.as_str(),

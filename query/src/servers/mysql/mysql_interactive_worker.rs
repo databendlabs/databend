@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
+use common_planners::PlanNode;
 use common_runtime::tokio;
 use metrics::histogram;
 use msql_srv::ErrorKind;
@@ -36,9 +37,7 @@ use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::server::mock::get_mock_user;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionRef;
-use crate::sql::DfHint;
 use crate::sql::PlanParser;
-use common_planners::PlanNode;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,
@@ -185,7 +184,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
                 );
 
                 write_result
-            },
+            }
             Err(error) => writer.write(Err(error)),
         }
     }
@@ -215,7 +214,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         Ok(())
     }
 
-    fn do_execute(&mut self, _: u32, _: ParamParser<'_>, writer: QueryResultWriter<'_, W>) -> Result<()> {
+    fn do_execute(
+        &mut self,
+        _: u32,
+        _: ParamParser<'_>,
+        writer: QueryResultWriter<'_, W>,
+    ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
             "Execute is not support in Databend.".as_bytes(),
@@ -234,43 +238,48 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let query_parser = PlanParser::create(context.clone());
         let (plan, hints) = query_parser.build_with_hint_from_sql(query);
 
-        match hints.iter().find(|v| v.error_code.is_some()).and_then(|x| x.error_code) {
+        match hints
+            .iter()
+            .find(|v| v.error_code.is_some())
+            .and_then(|x| x.error_code)
+        {
             None => Self::exec_query(plan, &context).await,
-            Some(hint_error_code) => {
-                match Self::exec_query(plan, &context).await {
-                    Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                        "Expected server error code: {} but got: Ok.", hint_error_code
-                    ))),
-                    Err(error_code) => {
-                        if hint_error_code == error_code.code() {
-                            Ok((vec![DataBlock::empty()], String::from("")))
-                        } else {
-                            let actual_code = error_code.code();
-                            Err(error_code.add_message(format!(
-                                "Expected server error code: {} but got: {}.",
-                                hint_error_code, actual_code
-                            )))
-                        }
+            Some(hint_error_code) => match Self::exec_query(plan, &context).await {
+                Ok(_) => Err(ErrorCode::UnexpectedError(format!(
+                    "Expected server error code: {} but got: Ok.",
+                    hint_error_code
+                ))),
+                Err(error_code) => {
+                    if hint_error_code == error_code.code() {
+                        Ok((vec![DataBlock::empty()], String::from("")))
+                    } else {
+                        let actual_code = error_code.code();
+                        Err(error_code.add_message(format!(
+                            "Expected server error code: {} but got: {}.",
+                            hint_error_code, actual_code
+                        )))
                     }
                 }
-            }
+            },
         }
     }
 
     async fn exec_query(
         plan: Result<PlanNode>,
-        context: &DatabendQueryContextRef
-    ) -> Result<(Vec<DataBlock>, String)>
-    {
+        context: &DatabendQueryContextRef,
+    ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
         let data_stream = interpreter.execute().await?;
-        histogram!(super::mysql_metrics::METRIC_INTERPRETER_USEDTIME, instant.elapsed());
+        histogram!(
+            super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
+            instant.elapsed()
+        );
 
         let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
         let query_result = collector.await;
-        query_result.map(|data| (data, Self::extra_info(&context, instant)))
+        query_result.map(|data| (data, Self::extra_info(context, instant)))
     }
 
     fn extra_info(context: &DatabendQueryContextRef, instant: Instant) -> String {
@@ -294,7 +303,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             Err(error_code) => Err(error_code),
             Ok(runtime) => match runtime.block_on(do_query) {
                 Ok(_) => Ok(()),
-                Err(error_code) => Err(error_code)
+                Err(error_code) => Err(error_code),
             },
         }
     }
@@ -329,7 +338,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             },
             salt: scramble,
             // TODO: version
-            version: format!("{}", *crate::configs::config::DATABEND_COMMIT_VERSION),
+            version: crate::configs::config::DATABEND_COMMIT_VERSION.to_string(),
         }
     }
 }

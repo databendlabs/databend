@@ -117,6 +117,7 @@ impl fmt::Debug for ServerInfo {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub(crate) struct Context {
     pub(crate) server_info: ServerInfo,
     pub(crate) hostname: String,

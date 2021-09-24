@@ -334,6 +334,6 @@ async fn create_env() -> Result<DatabendQueryContextRef> {
         ClusterDescriptor::new()
             .with_node("dummy_local", "localhost:9090")
             .with_node("dummy", "github.com:9090")
-            .with_local_id("dummy_local")
+            .with_local_id("dummy_local"),
     )
 }

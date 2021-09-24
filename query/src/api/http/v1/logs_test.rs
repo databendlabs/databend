@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_runtime::tokio;
 use axum::body::Body;
 use axum::handler::get;
 use axum::http::Request;
@@ -20,13 +19,12 @@ use axum::http::StatusCode;
 use axum::http::{self};
 use axum::AddExtensionLayer;
 use axum::Router;
+use common_exception::Result;
+use common_runtime::tokio;
 use pretty_assertions::assert_eq;
-use tempfile::tempdir;
 use tower::ServiceExt;
 
 use crate::api::http::v1::logs::logs_handler;
-use crate::configs::Config;
-use common_exception::Result;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
@@ -37,13 +35,14 @@ async fn test_logs() -> Result<()> {
         .route("/v1/logs", get(logs_handler))
         .layer(AddExtensionLayer::new(sessions));
     {
-        let response = test_router.oneshot(
-            Request::builder()
-                .uri("/v1/logs")
-                .method(http::Method::GET)
-                .body(Body::empty())
-                .unwrap(),
-        )
+        let response = test_router
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/logs")
+                    .method(http::Method::GET)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

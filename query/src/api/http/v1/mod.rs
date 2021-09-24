@@ -15,14 +15,13 @@
 #[cfg(test)]
 mod cluster_test;
 #[cfg(test)]
+mod config_test;
+#[cfg(test)]
 mod health_test;
 #[cfg(test)]
 mod logs_test;
-#[cfg(test)]
-mod config_test;
 
 pub mod cluster;
 pub mod config;
 pub mod health;
 pub mod logs;
-

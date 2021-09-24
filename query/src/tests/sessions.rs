@@ -15,12 +15,12 @@
 use std::env;
 
 use common_exception::Result;
+use common_runtime::tokio::runtime::Runtime;
 
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
-use common_runtime::tokio::runtime::Runtime;
 
 async fn async_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
     let cluster_discovery = ClusterDiscovery::create_global(config.clone()).await?;
@@ -100,4 +100,3 @@ impl SessionManagerBuilder {
         handle.join().unwrap()
     }
 }
-

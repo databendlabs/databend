@@ -24,13 +24,13 @@ use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct IsNullFunction {
-    display_name: String,
+    _display_name: String,
 }
 
 impl IsNullFunction {
     pub fn try_create_func(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNullFunction {
-            display_name: display_name.to_string(),
+            _display_name: display_name.to_string(),
         }))
     }
 }

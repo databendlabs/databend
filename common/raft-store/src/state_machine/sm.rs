@@ -96,7 +96,7 @@ impl Default for Replication {
 #[derive(Debug)]
 pub struct StateMachine {
     // TODO(xp): config is not required. Remove it after snapshot is done.
-    config: RaftConfig,
+    _config: RaftConfig,
 
     /// The dedicated sled db to store everything about a state machine.
     /// A state machine has several trees opened on this db.
@@ -223,7 +223,7 @@ impl StateMachine {
         let sm_tree = SledTree::open(&db, &tree_name, config.is_sync())?;
 
         let sm = StateMachine {
-            config: config.clone(),
+            _config: config.clone(),
             _db: db,
 
             sm_tree,

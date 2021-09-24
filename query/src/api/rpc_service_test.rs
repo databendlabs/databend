@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
@@ -27,16 +29,11 @@ use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::RpcService;
-use crate::clusters::ClusterDiscovery;
-use crate::configs::Config;
-use crate::sessions::SessionManager;
+use crate::servers::Server;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
-use crate::servers::Server;
-use std::net::SocketAddr;
-use std::str::FromStr;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

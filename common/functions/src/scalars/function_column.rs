@@ -26,14 +26,14 @@ use crate::scalars::Function;
 #[derive(Clone, Debug)]
 pub struct ColumnFunction {
     value: String,
-    saved: Option<DataValue>,
+    _saved: Option<DataValue>,
 }
 
 impl ColumnFunction {
     pub fn try_create(value: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ColumnFunction {
             value: value.to_string(),
-            saved: None,
+            _saved: None,
         }))
     }
 }

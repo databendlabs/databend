@@ -24,7 +24,8 @@ use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
-use crate::tests::{parse_query, SessionManagerBuilder};
+use crate::tests::parse_query;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
@@ -55,16 +56,18 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
         let sessions = SessionManagerBuilder::create().build()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
-        flight_dispatcher.shuffle_action(
-            rpc_session,
-            FlightAction::PrepareShuffleAction(ShuffleAction {
-                query_id: query_id.clone(),
-                stage_id: stage_id.clone(),
-                plan: parse_query("SELECT number FROM numbers(5)")?,
-                sinks: vec![stream_id.clone()],
-                scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
-            }),
-        ).await?;
+        flight_dispatcher
+            .shuffle_action(
+                rpc_session,
+                FlightAction::PrepareShuffleAction(ShuffleAction {
+                    query_id: query_id.clone(),
+                    stage_id: stage_id.clone(),
+                    plan: parse_query("SELECT number FROM numbers(5)")?,
+                    sinks: vec![stream_id.clone()],
+                    scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
+                }),
+            )
+            .await?;
 
         let stream = stream_ticket(&query_id, &stage_id, &stream_id);
         let receiver = flight_dispatcher.get_stream(&stream)?;
@@ -97,16 +100,18 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
         let sessions = SessionManagerBuilder::create().build()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
-        flight_dispatcher.shuffle_action(
-            rpc_session,
-            FlightAction::PrepareShuffleAction(ShuffleAction {
-                query_id: query_id.clone(),
-                stage_id: stage_id.clone(),
-                plan: parse_query("SELECT number FROM numbers(5)")?,
-                sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
-                scatters_expression: Expression::Column("number".to_string()),
-            }),
-        ).await?;
+        flight_dispatcher
+            .shuffle_action(
+                rpc_session,
+                FlightAction::PrepareShuffleAction(ShuffleAction {
+                    query_id: query_id.clone(),
+                    stage_id: stage_id.clone(),
+                    plan: parse_query("SELECT number FROM numbers(5)")?,
+                    sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
+                    scatters_expression: Expression::Column("number".to_string()),
+                }),
+            )
+            .await?;
 
         let stream_1 = stream_ticket(&query_id, &stage_id, "stream_1");
         let receiver = flight_dispatcher.get_stream(&stream_1)?;

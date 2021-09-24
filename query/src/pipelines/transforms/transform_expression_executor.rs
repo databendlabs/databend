@@ -33,7 +33,7 @@ use common_tracing::tracing;
 pub struct ExpressionExecutor {
     // description of this executor
     description: String,
-    input_schema: DataSchemaRef,
+    _input_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
@@ -52,7 +52,7 @@ impl ExpressionExecutor {
 
         Ok(Self {
             description: description.to_string(),
-            input_schema,
+            _input_schema: input_schema,
             output_schema,
             chain: Arc::new(chain),
             alias_project,

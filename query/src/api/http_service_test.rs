@@ -22,16 +22,16 @@ use common_exception::Result;
 use common_runtime::tokio;
 
 use crate::api::HttpService;
-use crate::clusters::ClusterDiscovery;
-use crate::configs::Config;
 use crate::servers::Server;
-use crate::tests::tls_constants::{TEST_CA_CERT, TEST_TLS_SERVER_KEY, TEST_TLS_SERVER_CERT};
+use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 use crate::tests::tls_constants::TEST_TLS_CA_CERT;
 use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
 use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
+use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
+use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
 use crate::tests::SessionManagerBuilder;
 
 // need to support local_addr, but axum_server do not have local_addr callback
@@ -42,7 +42,7 @@ async fn test_http_service_tls_server() -> Result<()> {
         SessionManagerBuilder::create()
             .api_tls_server_key(TEST_SERVER_KEY)
             .api_tls_server_cert(TEST_SERVER_CERT)
-            .build()?
+            .build()?,
     );
 
     let listening = srv.start(address_str.parse()?).await?;
@@ -67,7 +67,6 @@ async fn test_http_service_tls_server() -> Result<()> {
     assert!(resp.status().is_success());
     assert_eq!("/v1/health", resp.url().path());
 
-
     Ok(())
 }
 
@@ -79,7 +78,7 @@ async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
         SessionManagerBuilder::create()
             .api_tls_server_key(TEST_SERVER_KEY)
             .api_tls_server_cert(TEST_SERVER_CERT)
-            .build()?
+            .build()?,
     );
     let listening = http_service.start(address.parse()?).await?;
 
@@ -101,7 +100,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
             .api_tls_server_key(TEST_TLS_SERVER_KEY)
             .api_tls_server_cert(TEST_TLS_SERVER_CERT)
             .api_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
-            .build()?
+            .build()?,
     );
     let listening = srv.start(addr_str.parse()?).await?;
 
@@ -138,7 +137,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
             .api_tls_server_key(TEST_TLS_SERVER_KEY)
             .api_tls_server_cert(TEST_TLS_SERVER_CERT)
             .api_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
-            .build()?
+            .build()?,
     );
     let listening = srv.start(addr_str.parse()?).await?;
 

@@ -13,20 +13,20 @@
 // limitations under the License.
 //
 
+use std::ops::Add;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::UNIX_EPOCH;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
-use common_metatypes::{MatchSeq, KVMeta};
-use common_metatypes::SeqValue;
-use common_store_api::{KVApi, UpsertKVActionResult};
-use common_store_api::SyncKVApi;
+use common_metatypes::KVMeta;
+use common_metatypes::MatchSeq;
+use common_store_api::KVApi;
+use common_store_api::UpsertKVActionResult;
 
 use crate::namespace::NamespaceApi;
 use crate::namespace::NodeInfo;
-use std::time::{Duration, UNIX_EPOCH};
-use std::ops::Add;
 
 #[allow(dead_code)]
 pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";
@@ -39,7 +39,12 @@ pub struct NamespaceMgr {
 }
 
 impl NamespaceMgr {
-    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str, namespace: &str, lift_time: Duration) -> Result<Self> {
+    pub fn new(
+        kv_api: Arc<dyn KVApi>,
+        tenant: &str,
+        namespace: &str,
+        lift_time: Duration,
+    ) -> Result<Self> {
         Ok(NamespaceMgr {
             kv_api,
             lift_time,
@@ -99,17 +104,16 @@ impl NamespaceMgr {
                     num += unhex(bytes[index + 2]);
                     new_key.push(num);
                     index += 3;
-                },
+                }
                 other => {
                     new_key.push(other);
                     index += 1;
-                },
+                }
             }
         }
 
         Ok(String::from_utf8(new_key)?)
     }
-
 
     fn new_lift_time(&self) -> KVMeta {
         let now = std::time::SystemTime::now();
@@ -118,7 +122,9 @@ impl NamespaceMgr {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
-        KVMeta { expire_at: Some(expire_at.as_secs()) }
+        KVMeta {
+            expire_at: Some(expire_at.as_secs()),
+        }
     }
 }
 
@@ -129,22 +135,31 @@ impl NamespaceApi for NamespaceMgr {
         let seq = MatchSeq::Exact(0);
         let meta = Some(self.new_lift_time());
         let value = Some(serde_json::to_vec(&node)?);
-        let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node.id)?);
+        let node_key = format!(
+            "{}/{}",
+            self.namespace_prefix,
+            Self::escape_for_key(&node.id)?
+        );
         let upsert_node = self.kv_api.upsert_kv(&node_key, seq, value, meta);
 
-
         match upsert_node.await? {
-            UpsertKVActionResult { prev: None, result: Some((s, _)) } => Ok(s),
-            UpsertKVActionResult { prev: Some((s, _)), result: None } => Err(
-                ErrorCode::NamespaceNodeAlreadyExists(format!(
-                    "Namespace already exists, seq [{}]", s
-                ))
-            ),
-            catch_result @ UpsertKVActionResult { .. } => Err(
-                ErrorCode::UnknownException(format!(
-                    "upsert result not expected (using version 0, got {:?})", catch_result
-                ))
-            )
+            UpsertKVActionResult {
+                prev: None,
+                result: Some((s, _)),
+            } => Ok(s),
+            UpsertKVActionResult {
+                prev: Some((s, _)),
+                result: None,
+            } => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
+                "Namespace already exists, seq [{}]",
+                s
+            ))),
+            catch_result @ UpsertKVActionResult { .. } => {
+                Err(ErrorCode::UnknownException(format!(
+                    "upsert result not expected (using version 0, got {:?})",
+                    catch_result
+                )))
+            }
         }
     }
 
@@ -154,8 +169,8 @@ impl NamespaceApi for NamespaceMgr {
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, (_, value)) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.value)?;
-            let mut node_key = Self::unescape_for_key(&node_key)?;
 
+            let node_key = Self::unescape_for_key(&node_key)?;
             node_info.id = node_key[self.namespace_prefix.len() + 1..].to_string();
             nodes_info.push(node_info);
         }
@@ -164,30 +179,46 @@ impl NamespaceApi for NamespaceMgr {
     }
 
     async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
-        let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node_id)?);
+        let node_key = format!(
+            "{}/{}",
+            self.namespace_prefix,
+            Self::escape_for_key(&node_id)?
+        );
         let upsert_node = self.kv_api.upsert_kv(&node_key, seq.into(), None, None);
 
         match upsert_node.await? {
-            UpsertKVActionResult { prev: Some(_), result: None } => Ok(()),
-            UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(
-                format!("unknown node {:?}", node_id)
-            ))
+            UpsertKVActionResult {
+                prev: Some(_),
+                result: None,
+            } => Ok(()),
+            UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+                "unknown node {:?}",
+                node_id
+            ))),
         }
     }
 
     async fn heartbeat(&self, node_id: String, seq: Option<u64>) -> Result<u64> {
         let meta = Some(self.new_lift_time());
-        let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node_id)?);
+        let node_key = format!(
+            "{}/{}",
+            self.namespace_prefix,
+            Self::escape_for_key(&node_id)?
+        );
         match seq {
             None => {
                 let seq = MatchSeq::GE(1);
                 let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
 
                 match upsert_meta.await? {
-                    UpsertKVActionResult { prev: Some(_), result: Some((s, _)) } => Ok(s),
-                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(
-                        format!("unknown node {:?}", node_id)
-                    ))
+                    UpsertKVActionResult {
+                        prev: Some(_),
+                        result: Some((s, _)),
+                    } => Ok(s),
+                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+                        "unknown node {:?}",
+                        node_id
+                    ))),
                 }
             }
             Some(exact) => {
@@ -195,10 +226,14 @@ impl NamespaceApi for NamespaceMgr {
                 let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
 
                 match upsert_meta.await? {
-                    UpsertKVActionResult { prev: Some(_), result: Some((s, _)) } => Ok(s),
-                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(
-                        format!("unknown node {:?}", node_id)
-                    ))
+                    UpsertKVActionResult {
+                        prev: Some(_),
+                        result: Some((s, _)),
+                    } => Ok(s),
+                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+                        "unknown node {:?}",
+                        node_id
+                    ))),
                 }
             }
         }

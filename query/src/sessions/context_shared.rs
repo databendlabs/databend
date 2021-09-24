@@ -53,7 +53,11 @@ pub struct DatabendQueryContextShared {
 }
 
 impl DatabendQueryContextShared {
-    pub fn try_create(conf: Config, session: Arc<Session>, cluster_cache: ClusterRef) -> Arc<DatabendQueryContextShared> {
+    pub fn try_create(
+        conf: Config,
+        session: Arc<Session>,
+        cluster_cache: ClusterRef,
+    ) -> Arc<DatabendQueryContextShared> {
         Arc::new(DatabendQueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),

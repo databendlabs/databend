@@ -18,8 +18,8 @@ use common_runtime::tokio;
 use criterion::Criterion;
 use databend_query::interpreters::SelectInterpreter;
 use databend_query::sql::PlanParser;
-use futures::StreamExt;
 use databend_query::tests::SessionManagerBuilder;
+use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;

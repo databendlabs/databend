@@ -17,7 +17,6 @@ use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct NodeInfo {
@@ -29,7 +28,6 @@ pub struct NodeInfo {
     pub version: u32,
     #[serde(default)]
     pub flight_address: String,
-
 }
 
 impl TryFrom<Vec<u8>> for NodeInfo {

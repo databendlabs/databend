@@ -61,7 +61,7 @@ where
 #[derive(Clone)]
 pub struct AggregateSumFunction<T, SumT> {
     display_name: String,
-    arguments: Vec<DataField>,
+    _arguments: Vec<DataField>,
     t: PhantomData<T>,
     sum_t: PhantomData<SumT>,
 }
@@ -185,7 +185,7 @@ where
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
-            arguments,
+            _arguments: arguments,
             t: PhantomData,
             sum_t: PhantomData,
         }))

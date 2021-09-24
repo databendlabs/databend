@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -27,8 +29,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContextRef;
-use std::net::SocketAddr;
-use std::str::FromStr;
 
 pub struct ClustersTable {
     schema: DataSchemaRef,
@@ -104,7 +104,6 @@ impl Table for ClustersTable {
         let mut addresses = StringArrayBuilder::with_capacity(cluster_nodes.len());
         let mut addresses_port = DFUInt16ArrayBuilder::with_capacity(cluster_nodes.len());
 
-
         for cluster_node in &cluster_nodes {
             let address = SocketAddr::from_str(&cluster_node.flight_address)?;
 
@@ -116,13 +115,11 @@ impl Table for ClustersTable {
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![DataBlock::create_by_array(
-                self.schema.clone(),
-                vec![
-                    names.finish().into_series(),
-                    addresses.finish().into_series(),
-                    addresses_port.finish().into_series(),
-                ])],
+            vec![DataBlock::create_by_array(self.schema.clone(), vec![
+                names.finish().into_series(),
+                addresses.finish().into_series(),
+                addresses_port.finish().into_series(),
+            ])],
         )))
     }
 }

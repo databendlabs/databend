@@ -12,32 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::env;
-
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_exception::ToErrorCode;
-use common_runtime::tokio::runtime::Runtime;
-
-use crate::clusters::{ClusterDiscovery, Cluster};
-use crate::configs::Config;
-use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext, DatabendQueryContextShared};
-use crate::sessions::SessionManager;
 use std::sync::Arc;
+
+use common_exception::Result;
 use common_management::NodeInfo;
+
+use crate::clusters::Cluster;
+use crate::configs::Config;
+use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
 pub fn try_create_context() -> Result<DatabendQueryContextRef> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    let context = DatabendQueryContext::from_shared(
-        DatabendQueryContextShared::try_create(
-            sessions.get_conf().clone(),
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::empty(),
-        )
-    );
+    let context = DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
+        sessions.get_conf().clone(),
+        Arc::new(dummy_session.as_ref().clone()),
+        Cluster::empty(),
+    ));
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
@@ -47,13 +42,11 @@ pub fn try_create_context_with_config(config: Config) -> Result<DatabendQueryCon
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    let context = DatabendQueryContext::from_shared(
-        DatabendQueryContextShared::try_create(
-            config,
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::empty(),
-        )
-    );
+    let context = DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
+        config,
+        Arc::new(dummy_session.as_ref().clone()),
+        Cluster::empty(),
+    ));
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
@@ -96,13 +89,11 @@ pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<DatabendQue
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list.clone();
 
-    let context = DatabendQueryContext::from_shared(
-        DatabendQueryContextShared::try_create(
-            sessions.get_conf().clone(),
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::create(nodes, local_id),
-        )
-    );
+    let context = DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
+        sessions.get_conf().clone(),
+        Arc::new(dummy_session.as_ref().clone()),
+        Cluster::create(nodes, local_id),
+    ));
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)

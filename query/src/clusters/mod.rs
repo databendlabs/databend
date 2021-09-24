@@ -19,6 +19,5 @@ mod cluster;
 
 pub use cluster::Cluster;
 pub use cluster::ClusterDiscovery;
-
-pub use cluster::ClusterRef;
 pub use cluster::ClusterDiscoveryRef;
+pub use cluster::ClusterRef;

@@ -22,7 +22,6 @@ use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
 use crate::catalogs::impls::DatabaseCatalog;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::DatabendQueryContext;
@@ -119,11 +118,8 @@ impl Session {
     /// We can bind the environment to the context in create_context method.
     pub async fn create_context(self: &Arc<Self>) -> Result<DatabendQueryContextRef> {
         let context_shared = {
-            let mut mutable_state = self.mutable_state.lock();
-            match mutable_state.context_shared.as_ref() {
-                None => None,
-                Some(context_shared) => Some(context_shared.clone()),
-            }
+            let mutable_state = self.mutable_state.lock();
+            mutable_state.context_shared.as_ref().map(Clone::clone)
         };
 
         Ok(match context_shared.as_ref() {

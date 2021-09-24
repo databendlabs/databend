@@ -25,6 +25,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
+use common_progress::ProgressValues;
 use common_runtime::tokio;
 use common_runtime::tokio::sync::mpsc::channel;
 use common_runtime::tokio::time::interval;
@@ -38,9 +39,9 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::{DatabendQueryContextRef, SessionRef};
+use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
-use common_progress::ProgressValues;
 
 pub struct InteractiveWorkerBase;
 
@@ -52,7 +53,10 @@ pub enum BlockItem {
 }
 
 impl InteractiveWorkerBase {
-    pub async fn do_query(ch_ctx: &mut CHContext, session: SessionRef) -> Result<Receiver<BlockItem>> {
+    pub async fn do_query(
+        ch_ctx: &mut CHContext,
+        session: SessionRef,
+    ) -> Result<Receiver<BlockItem>> {
         let query = &ch_ctx.state.query;
         log::debug!("{}", query);
 

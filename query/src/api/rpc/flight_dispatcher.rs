@@ -90,7 +90,10 @@ impl DatabendQueryFlightDispatcher {
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
             1 => self.one_sink_action(session, &action).await,
-            _ => self.action_with_scatter::<BroadcastFlightScatter>(session, &action).await,
+            _ => {
+                self.action_with_scatter::<BroadcastFlightScatter>(session, &action)
+                    .await
+            }
         }
     }
 
@@ -104,7 +107,10 @@ impl DatabendQueryFlightDispatcher {
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
             1 => self.one_sink_action(session, &action).await,
-            _ => self.action_with_scatter::<HashFlightScatter>(session, &action).await,
+            _ => {
+                self.action_with_scatter::<HashFlightScatter>(session, &action)
+                    .await
+            }
         }
     }
 
@@ -153,8 +159,14 @@ impl DatabendQueryFlightDispatcher {
         Ok(())
     }
 
-    async fn action_with_scatter<T>(&self, session: SessionRef, action: &FlightAction) -> Result<()>
-    where T: FlightScatter + Send + 'static {
+    async fn action_with_scatter<T>(
+        &self,
+        session: SessionRef,
+        action: &FlightAction,
+    ) -> Result<()>
+    where
+        T: FlightScatter + Send + 'static,
+    {
         let query_context = session.create_context().await?;
         let action_context = DatabendQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());

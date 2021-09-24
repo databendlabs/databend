@@ -21,6 +21,7 @@ use std::task::Context;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_management::NodeInfo;
 use common_planners::SelectPlan;
 use common_runtime::tokio::macros::support::Pin;
 use common_runtime::tokio::macros::support::Poll;
@@ -36,7 +37,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
-use common_management::NodeInfo;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct SelectInterpreter {

@@ -18,7 +18,6 @@ use common_runtime::tokio;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
-use crate::configs::Config;
 use crate::datasources::database::system::TablesTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

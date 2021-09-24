@@ -12,24 +12,21 @@
 // // See the License for the specific language governing permissions and
 // // limitations under the License.
 
-use common_exception::Result;
-use common_runtime::tokio;
-use crate::tests::SessionManagerBuilder;
 use axum::body::Body;
 use axum::handler::get;
-use axum::handler::post;
 use axum::http::Request;
 use axum::http::StatusCode;
 use axum::http::{self};
 use axum::AddExtensionLayer;
 use axum::Router;
+use common_exception::Result;
+use common_management::NodeInfo;
+use common_runtime::tokio;
 use pretty_assertions::assert_eq;
-use serde_json::json;
 use tower::ServiceExt;
 
 use crate::api::http::v1::cluster::*;
-use crate::clusters::Cluster;
-use common_management::NodeInfo;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
 async fn test_cluster() -> Result<()> {
@@ -55,7 +52,8 @@ async fn test_cluster() -> Result<()> {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
-        let nodes = serde_json::from_str::<Vec<NodeInfo>>(&String::from_utf8_lossy(&*body.to_vec()))?;
+        let nodes =
+            serde_json::from_str::<Vec<NodeInfo>>(&String::from_utf8_lossy(&*body.to_vec()))?;
         assert_eq!(nodes.len(), 1);
     }
 
