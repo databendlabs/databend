@@ -49,9 +49,9 @@ impl WeekResultFunction<u32> for ToStartOfWeek {
     }
     fn to_number(value: DateTime<Utc>, mode: Option<u64>) -> u32 {
         let week_mode = mode.unwrap_or(0);
-        let mut weekday = value.weekday().number_from_monday();
-        if (week_mode & 1) == 0 {
-            weekday = value.weekday().number_from_sunday();
+        let mut weekday = value.weekday().number_from_sunday();
+        if week_mode & 1 == 1 {
+            weekday = value.weekday().number_from_monday();
         }
         weekday -= 1;
         let duration = Duration::days(weekday as i64);
