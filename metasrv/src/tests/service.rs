@@ -29,6 +29,7 @@ use crate::configs;
 use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
+use crate::raft::config::RaftConfig;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
@@ -128,20 +129,20 @@ pub fn new_test_context() -> MetaSrvTestContext {
     }
 }
 
-pub struct SledTestContext {
-    pub config: configs::Config,
+pub struct RaftTestContext {
+    pub raft_config: RaftConfig,
     pub db: sled::Db,
 }
 
 /// Create a new context for testing sled
-pub fn new_sled_test_context() -> SledTestContext {
+pub fn new_raft_test_context() -> RaftTestContext {
     // config for unit test of sled db, meta_sync() is true by default.
-    let mut config = configs::Config::empty();
+    let mut config = RaftConfig::empty();
 
-    config.raft_config.sled_tree_prefix = format!("test-{}-", next_port());
+    config.sled_tree_prefix = format!("test-{}-", next_port());
 
-    SledTestContext {
-        config,
+    RaftTestContext {
+        raft_config: config,
         db: get_sled_db(),
     }
 }
