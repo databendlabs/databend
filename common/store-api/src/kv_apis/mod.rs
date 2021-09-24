@@ -13,5 +13,6 @@
 //  limitations under the License.
 //
 pub mod kv_api;
+pub mod kv_api_sync;
 
 //pub mod local_kv_store;

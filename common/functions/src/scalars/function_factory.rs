@@ -28,6 +28,7 @@ use crate::scalars::DateFunction;
 use crate::scalars::Function;
 use crate::scalars::HashesFunction;
 use crate::scalars::LogicFunction;
+use crate::scalars::NullableFunction;
 use crate::scalars::StringFunction;
 use crate::scalars::ToCastFunction;
 use crate::scalars::UdfFunction;
@@ -44,6 +45,7 @@ lazy_static! {
         ArithmeticFunction::register(map.clone()).unwrap();
         ComparisonFunction::register(map.clone()).unwrap();
         LogicFunction::register(map.clone()).unwrap();
+        NullableFunction::register(map.clone()).unwrap();
         StringFunction::register(map.clone()).unwrap();
         UdfFunction::register(map.clone()).unwrap();
         HashesFunction::register(map.clone()).unwrap();

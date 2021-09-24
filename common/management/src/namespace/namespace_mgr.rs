@@ -15,13 +15,13 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_metatypes::{MatchSeq, KVMeta};
 use common_metatypes::SeqValue;
 use common_store_api::{KVApi, UpsertKVActionResult};
+use common_store_api::SyncKVApi;
 
 use crate::namespace::NamespaceApi;
 use crate::namespace::NodeInfo;
@@ -122,9 +122,9 @@ impl NamespaceMgr {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl NamespaceApi for NamespaceMgr {
-    async fn add_node(&mut self, node: NodeInfo) -> Result<u64> {
+    async fn add_node(&self, node: NodeInfo) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
         let seq = MatchSeq::Exact(0);
         let meta = Some(self.new_lift_time());
@@ -148,7 +148,7 @@ impl NamespaceApi for NamespaceMgr {
         }
     }
 
-    async fn get_nodes(&mut self) -> Result<Vec<NodeInfo>> {
+    async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
         let values = self.kv_api.prefix_list_kv(&self.namespace_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
@@ -161,7 +161,7 @@ impl NamespaceApi for NamespaceMgr {
         Ok(nodes_info)
     }
 
-    async fn drop_node(&mut self, node_id: String, seq: Option<u64>) -> Result<()> {
+    async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
         let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node_id)?);
         let upsert_node = self.kv_api.upsert_kv(&node_key, seq.into(), None, None);
 
@@ -173,7 +173,7 @@ impl NamespaceApi for NamespaceMgr {
         }
     }
 
-    async fn heartbeat(&mut self, node_id: String, seq: Option<u64>) -> Result<u64> {
+    async fn heartbeat(&self, node_id: String, seq: Option<u64>) -> Result<u64> {
         let meta = Some(self.new_lift_time());
         let node_key = format!("{}/{}", self.namespace_prefix, Self::escape_for_key(&node_id)?);
         match seq {

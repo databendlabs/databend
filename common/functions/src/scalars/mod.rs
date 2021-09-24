@@ -27,6 +27,7 @@ mod function_factory;
 mod function_literal;
 mod hashes;
 mod logics;
+mod nullables;
 mod strings;
 mod udfs;
 
@@ -43,5 +44,6 @@ pub use function_factory::FunctionFactory;
 pub use function_literal::LiteralFunction;
 pub use hashes::*;
 pub use logics::*;
+pub use nullables::*;
 pub use strings::*;
 pub use udfs::*;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_runtime::tokio;
+use common_sled_store::init_sled_db;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use databend_store::api::HttpService;
@@ -20,7 +21,6 @@ use databend_store::api::StoreServer;
 use databend_store::configs::Config;
 use databend_store::metrics::MetricService;
 use log::info;
-use metasrv::sled_store::init_sled_db;
 use structopt::StructOpt;
 
 #[tokio::main]

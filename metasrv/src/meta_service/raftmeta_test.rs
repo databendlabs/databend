@@ -17,7 +17,11 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_metatypes::Cmd;
+use common_metatypes::LogEntry;
 use common_metatypes::MatchSeq;
+use common_metatypes::NodeId;
+use common_raft_store::state_machine::AppliedState;
 use common_runtime::tokio;
 use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
@@ -25,139 +29,11 @@ use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 use crate::configs;
-use crate::meta_service::AppliedState;
-use crate::meta_service::Cmd;
-use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
-use crate::meta_service::NodeId;
-use crate::meta_service::RaftTxId;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 use crate::tests::service::MetaSrvTestContext;
-
-// test cases fro Cmd::IncrSeq:
-// case_name, txid, key, want
-pub fn cases_incr_seq() -> Vec<(&'static str, Option<RaftTxId>, &'static str, u64)> {
-    vec![
-        ("incr on none", Some(RaftTxId::new("foo", 1)), "k1", 1),
-        ("incr on existent", Some(RaftTxId::new("foo", 2)), "k1", 2),
-        (
-            "dup: same serial, even with diff key, got the previous result",
-            Some(RaftTxId::new("foo", 2)),
-            "k2",
-            2,
-        ),
-        (
-            "diff client, same serial, not a dup request",
-            Some(RaftTxId::new("bar", 2)),
-            "k2",
-            1,
-        ),
-        ("no txid, no de-dup", None, "k2", 2),
-    ]
-}
-
-// test cases for Cmd::AddFile
-// case_name, txid, key, value, want_prev, want_result
-pub fn cases_add_file() -> Vec<(
-    &'static str,
-    Option<RaftTxId>,
-    &'static str,
-    &'static str,
-    Option<String>,
-    Option<String>,
-)> {
-    vec![
-        (
-            "add on none",
-            Some(RaftTxId::new("foo", 1)),
-            "k1",
-            "v1",
-            None,
-            Some("v1".to_string()),
-        ),
-        (
-            "add on existent",
-            Some(RaftTxId::new("foo", 2)),
-            "k1",
-            "v2",
-            Some("v1".to_string()),
-            None,
-        ),
-        (
-            "dup set with same serial, even with diff key, got the previous result",
-            Some(RaftTxId::new("foo", 2)),
-            "k2",
-            "v3",
-            Some("v1".to_string()),
-            None,
-        ),
-        (
-            "diff client, same serial",
-            Some(RaftTxId::new("bar", 2)),
-            "k2",
-            "v3",
-            None,
-            Some("v3".to_string()),
-        ),
-        ("no txid", None, "k3", "v4", None, Some("v4".to_string())),
-    ]
-}
-
-// test cases for Cmd::SetFile
-// case_name, txid, key, value, want_prev, want_result
-pub fn cases_set_file() -> Vec<(
-    &'static str,
-    Option<RaftTxId>,
-    &'static str,
-    &'static str,
-    Option<String>,
-    Option<String>,
-)> {
-    vec![
-        (
-            "set on none",
-            Some(RaftTxId::new("foo", 1)),
-            "k1",
-            "v1",
-            None,
-            Some("v1".to_string()),
-        ),
-        (
-            "set on existent",
-            Some(RaftTxId::new("foo", 2)),
-            "k1",
-            "v2",
-            Some("v1".to_string()),
-            Some("v2".to_string()),
-        ),
-        (
-            "dup set with same serial, even with diff key, got the previous result",
-            Some(RaftTxId::new("foo", 2)),
-            "k2",
-            "v3",
-            Some("v1".to_string()),
-            Some("v2".to_string()),
-        ),
-        (
-            "diff client, same serial",
-            Some(RaftTxId::new("bar", 2)),
-            "k2",
-            "v3",
-            None,
-            Some("v3".to_string()),
-        ),
-        (
-            "no txid",
-            None,
-            "k2",
-            "v4",
-            Some("v3".to_string()),
-            Some("v4".to_string()),
-        ),
-    ]
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
@@ -168,9 +44,9 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_test_context();
-    let addr = tc.config.meta_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
 
     let got = mn.get_node(&0).await?;
     assert_eq!(addr, got.unwrap().address);
@@ -397,11 +273,11 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     let snap_logs = 10;
 
     let mut tc = new_test_context();
-    tc.config.meta_config.snapshot_logs_since_last = snap_logs;
-    tc.config.meta_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
-    let addr = tc.config.meta_config.raft_api_addr();
+    tc.config.raft_config.snapshot_logs_since_last = snap_logs;
+    tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
+    let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
 
     assert_meta_connection(&addr).await?;
 
@@ -540,12 +416,12 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     // restart
     let config = configs::Config::empty();
-    let mn0 = MetaNode::builder(&config.meta_config)
+    let mn0 = MetaNode::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)
         .build()
         .await?;
-    let mn1 = MetaNode::builder(&config.meta_config)
+    let mn1 = MetaNode::builder(&config.raft_config)
         .node_id(1)
         .sto(sto1)
         .build()
@@ -613,7 +489,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     }
 
     tracing::info!("--- reopen MetaNode");
-    let leader = MetaNode::open(&tc.config.meta_config).await?;
+    let leader = MetaNode::open(&tc.config.raft_config).await?;
     log_cnt += 1;
 
     wait_for_state(&leader, State::Leader).await?;
@@ -635,7 +511,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     tracing::info!("--- check state machine: nodes");
     {
         let node = leader.sto.get_node(&0).await?.unwrap();
-        assert_eq!(tc.config.meta_config.raft_api_addr(), node.address);
+        assert_eq!(tc.config.raft_config.raft_api_addr(), node.address);
     }
 
     Ok(())
@@ -717,10 +593,10 @@ async fn setup_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
 
     let nid = 0;
     let mut tc = new_test_context();
-    let addr = tc.config.meta_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr();
 
     // boot up a single-node cluster
-    let mn = MetaNode::boot(nid, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot(nid, &tc.config.raft_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     {
@@ -743,9 +619,9 @@ async fn setup_non_voter(
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
     let mut tc = new_test_context();
-    let addr = tc.config.meta_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot_non_voter(id, &tc.config.meta_config).await?;
+    let mn = MetaNode::boot_non_voter(id, &tc.config.raft_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     {

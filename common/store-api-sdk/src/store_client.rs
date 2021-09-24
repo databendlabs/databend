@@ -21,6 +21,8 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_store_api::util::STORE_RUNTIME;
+use common_store_api::util::STORE_SYNC_CALL_TIMEOUT;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -47,7 +49,7 @@ pub struct StoreClient {
     pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
-static AUTH_TOKEN_KEY: &str = "auth-token-bin";
+const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
     pub async fn try_new(conf: &StoreClientConf) -> Result<StoreClient> {
@@ -58,6 +60,14 @@ impl StoreClient {
             conf.meta_service_config.tls_conf.clone(),
         )
         .await
+    }
+
+    pub fn sync_try_new(conf: &StoreClientConf) -> Result<StoreClient> {
+        let cfg = conf.clone();
+        STORE_RUNTIME.block_on(
+            async move { StoreClient::try_new(&cfg).await },
+            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
+        )?
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
@@ -75,7 +85,7 @@ impl StoreClient {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
-        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf).await;
+        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf);
 
         tracing::debug!("connecting to {}, res: {:?}", addr, res);
 

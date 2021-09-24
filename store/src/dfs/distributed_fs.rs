@@ -17,9 +17,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_exception::exception;
 use common_exception::ErrorCode;
+use common_metatypes::Cmd;
+use common_metatypes::LogEntry;
 use common_tracing::tracing;
-use metasrv::meta_service::Cmd;
-use metasrv::meta_service::LogEntry;
 use metasrv::meta_service::MetaNode;
 
 use crate::fs::FileSystem;

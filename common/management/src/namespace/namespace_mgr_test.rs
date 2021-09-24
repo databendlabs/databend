@@ -22,7 +22,6 @@ use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_metatypes::SeqValue;
-use common_runtime::tokio;
 use common_store_api::kv_apis::kv_api::MGetKVActionResult;
 use common_store_api::kv_apis::kv_api::PrefixListReply;
 use common_store_api::GetKVActionResult;
@@ -34,8 +33,7 @@ use mockall::*;
 use super::*;
 use crate::namespace::namespace_mgr::NamespaceMgr;
 use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
-//
-// // and mock!
+// and mock!
 // mock! {
 //     pub KV {}
 //     #[async_trait]
@@ -80,7 +78,7 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //             id: node_id,
 //             cpu_nums: 0,
 //             version: 0,
-//             flight_address: "".to_string(),
+//             ip: "".to_string(),
 //             port: 0,
 //         };
 //         res.push((
@@ -95,8 +93,8 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //     Ok((res, node_infos))
 // }
 //
-// #[tokio::test]
-// async fn test_add_node() -> Result<()> {
+// #[test]
+// fn test_add_node() -> Result<()> {
 //     let tenant_id = "tenant1";
 //     let namespace_id = "cluster1";
 //     let node_id = "node1";
@@ -108,7 +106,8 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //         id: node_id.to_string(),
 //         cpu_nums: 0,
 //         version: 0,
-//         flight_address: "".to_string(),
+//         ip: "".to_string(),
+//         port: 0,
 //     };
 //     let value = Some(serde_json::to_vec(&node)?);
 //     let seq = MatchSeq::Exact(0);
@@ -134,13 +133,11 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //         let api = Arc::new(api);
 //         let mgr = NamespaceMgr::new(api);
-//         let res = mgr
-//             .add_node(
-//                 tenant_id.to_string(),
-//                 namespace_id.to_string(),
-//                 node.clone(),
-//             )
-//             .await;
+//         let res = mgr.add_node(
+//             tenant_id.to_string(),
+//             namespace_id.to_string(),
+//             node.clone(),
+//         );
 //
 //         assert_eq!(
 //             res.unwrap_err().code(),
@@ -172,13 +169,11 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //         let api = Arc::new(api);
 //         let mgr = NamespaceMgr::new(api);
-//         let res = mgr
-//             .add_node(
-//                 tenant_id.to_string(),
-//                 namespace_id.to_string(),
-//                 node.clone(),
-//             )
-//             .await;
+//         let res = mgr.add_node(
+//             tenant_id.to_string(),
+//             namespace_id.to_string(),
+//             node.clone(),
+//         );
 //
 //         assert_eq!(
 //             res.unwrap_err().code(),
@@ -207,9 +202,7 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //         let api = Arc::new(api);
 //         let mgr = NamespaceMgr::new(api);
-//         let res = mgr
-//             .add_node(tenant_id.to_string(), namespace_id.to_string(), node)
-//             .await;
+//         let res = mgr.add_node(tenant_id.to_string(), namespace_id.to_string(), node);
 //
 //         assert_eq!(
 //             res.unwrap_err().code(),
@@ -220,8 +213,8 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //     Ok(())
 // }
 //
-// #[tokio::test]
-// async fn test_get_nodes_normal() -> Result<()> {
+// #[test]
+// fn test_get_nodes_normal() -> Result<()> {
 //     let (res, infos) = prepare()?;
 //
 //     let tenant_id = "tenant_1";
@@ -240,17 +233,15 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //     let api = Arc::new(api);
 //     let mgr = NamespaceMgr::new(api);
-//     let actual = mgr
-//         .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
-//         .await?;
+//     let actual = mgr.get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)?;
 //     let expect = infos;
 //     assert_eq!(actual, expect);
 //
 //     Ok(())
 // }
 //
-// #[tokio::test]
-// async fn test_get_nodes_invalid_encoding() -> Result<()> {
+// #[test]
+// fn test_get_nodes_invalid_encoding() -> Result<()> {
 //     let (mut res, _infos) = prepare()?;
 //     res.insert(
 //         8,
@@ -279,9 +270,7 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //     let api = Arc::new(api);
 //     let mgr = NamespaceMgr::new(api);
-//     let res = mgr
-//         .get_nodes(tenant_id.to_string(), namespace_id.to_string(), None)
-//         .await;
+//     let res = mgr.get_nodes(tenant_id.to_string(), namespace_id.to_string(), None);
 //
 //     let actual = res.unwrap_err().code();
 //     let expect = ErrorCode::NamespaceIllegalNodeFormat("").code();
@@ -290,8 +279,8 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //     Ok(())
 // }
 //
-// #[tokio::test]
-// async fn test_update_node_normal() -> Result<()> {
+// #[test]
+// fn test_update_node_normal() -> Result<()> {
 //     let tenant_id = "tenant1";
 //     let namespace_id = "cluster1";
 //     let node_id = "node1";
@@ -303,7 +292,7 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //         id: node_id.to_string(),
 //         cpu_nums: 0,
 //         version: 0,
-//         flight_address: "".to_string(),
+//         ip: "".to_string(),
 //         port: 0,
 //     };
 //     let new_value = serde_json::to_vec(&node)?;
@@ -329,16 +318,14 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //     let api = Arc::new(api);
 //     let mgr = NamespaceMgr::new(api);
-//     let res = mgr
-//         .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
-//         .await;
+//     let res = mgr.update_node(tenant_id.to_string(), namespace_id.to_string(), node, None);
 //
 //     assert!(res.is_ok());
 //     Ok(())
 // }
 //
-// #[tokio::test]
-// async fn test_update_node_error() -> Result<()> {
+// #[test]
+// fn test_update_node_error() -> Result<()> {
 //     let tenant_id = "tenant1";
 //     let namespace_id = "cluster1";
 //     let node_id = "node1";
@@ -350,7 +337,7 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //         id: node_id.to_string(),
 //         cpu_nums: 0,
 //         version: 0,
-//         flight_address: "".to_string(),
+//         ip: "".to_string(),
 //         port: 0,
 //     };
 //     let new_value = serde_json::to_vec(&node)?;
@@ -373,9 +360,7 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //     let api = Arc::new(api);
 //     let mgr = NamespaceMgr::new(api);
-//     let res = mgr
-//         .update_node(tenant_id.to_string(), namespace_id.to_string(), node, None)
-//         .await;
+//     let res = mgr.update_node(tenant_id.to_string(), namespace_id.to_string(), node, None);
 //
 //     let actual = res.unwrap_err().code();
 //     let expect = ErrorCode::NamespaceUnknownNode("").code();
@@ -384,8 +369,8 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //     Ok(())
 // }
 //
-// #[tokio::test]
-// async fn test_drop_node_normal() -> common_exception::Result<()> {
+// #[test]
+// fn test_drop_node_normal() -> common_exception::Result<()> {
 //     let tenant_id = "tenant1";
 //     let namespace_id = "cluster1";
 //     let node_id = "node1";
@@ -415,22 +400,20 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //     let api = Arc::new(api);
 //     let mgr = NamespaceMgr::new(api);
-//     let res = mgr
-//         .drop_node(
-//             tenant_id.to_string(),
-//             namespace_id.to_string(),
-//             node_id.to_string(),
-//             None,
-//         )
-//         .await;
+//     let res = mgr.drop_node(
+//         tenant_id.to_string(),
+//         namespace_id.to_string(),
+//         node_id.to_string(),
+//         None,
+//     );
 //
 //     assert!(res.is_ok());
 //
 //     Ok(())
 // }
 //
-// #[tokio::test]
-// async fn test_drop_node_error() -> common_exception::Result<()> {
+// #[test]
+// fn test_drop_node_error() -> common_exception::Result<()> {
 //     let tenant_id = "tenant1";
 //     let namespace_id = "cluster1";
 //     let node_id = "node1";
@@ -457,14 +440,12 @@ use crate::namespace::namespace_mgr::NAMESPACE_API_KEY_PREFIX;
 //
 //     let api = Arc::new(api);
 //     let mgr = NamespaceMgr::new(api);
-//     let res = mgr
-//         .drop_node(
-//             tenant_id.to_string(),
-//             namespace_id.to_string(),
-//             "node1".to_string(),
-//             None,
-//         )
-//         .await;
+//     let res = mgr.drop_node(
+//         tenant_id.to_string(),
+//         namespace_id.to_string(),
+//         "node1".to_string(),
+//         None,
+//     );
 //
 //     let actual = res.unwrap_err().code();
 //     let expect = ErrorCode::NamespaceUnknownNode("").code();

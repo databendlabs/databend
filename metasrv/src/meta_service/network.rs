@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use async_raft::async_trait::async_trait;
@@ -21,16 +22,38 @@ use async_raft::raft::InstallSnapshotRequest;
 use async_raft::raft::InstallSnapshotResponse;
 use async_raft::raft::VoteRequest;
 use async_raft::raft::VoteResponse;
-use async_raft::NodeId;
 use async_raft::RaftNetwork;
+use common_metatypes::LogEntry;
+use common_metatypes::NodeId;
+use common_raft_store::state_machine::AppliedState;
 use common_tracing::tracing;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::LogEntry;
 use crate::meta_service::MetaRaftStore;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
+
+/// Impl grpc method `write`
+impl tonic::IntoRequest<RaftMes> for LogEntry {
+    fn into_request(self) -> tonic::Request<RaftMes> {
+        let mes = RaftMes {
+            data: serde_json::to_string(&self).expect("fail to serialize"),
+            error: "".to_string(),
+        };
+        tonic::Request::new(mes)
+    }
+}
+
+impl TryFrom<RaftMes> for LogEntry {
+    type Error = tonic::Status;
+
+    fn try_from(mes: RaftMes) -> Result<Self, Self::Error> {
+        let req: LogEntry =
+            serde_json::from_str(&mes.data).map_err(|e| tonic::Status::internal(e.to_string()))?;
+        Ok(req)
+    }
+}
 
 impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<LogEntry> {
     fn into_request(self) -> tonic::Request<RaftMes> {
@@ -151,5 +174,39 @@ impl RaftNetwork<LogEntry> for Network {
         let resp = serde_json::from_str(&mes.data)?;
 
         Ok(resp)
+    }
+}
+
+// === from and to transport message
+
+impl From<AppliedState> for RaftMes {
+    fn from(msg: AppliedState) -> Self {
+        let data = serde_json::to_string(&msg).expect("fail to serialize");
+        RaftMes {
+            data,
+            error: "".to_string(),
+        }
+    }
+}
+
+impl From<Result<AppliedState, RetryableError>> for RaftMes {
+    fn from(rst: Result<AppliedState, RetryableError>) -> Self {
+        match rst {
+            Ok(resp) => resp.into(),
+            Err(err) => err.into(),
+        }
+    }
+}
+
+impl From<RaftMes> for Result<AppliedState, RetryableError> {
+    fn from(msg: RaftMes) -> Self {
+        if !msg.data.is_empty() {
+            let resp: AppliedState = serde_json::from_str(&msg.data).expect("fail to deserialize");
+            Ok(resp)
+        } else {
+            let err: RetryableError =
+                serde_json::from_str(&msg.error).expect("fail to deserialize");
+            Err(err)
+        }
     }
 }

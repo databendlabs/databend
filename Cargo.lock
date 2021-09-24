@@ -878,7 +878,6 @@ dependencies = [
  "common-metatypes",
  "common-runtime",
  "common-store-api",
- "common-store-api-sdk",
  "common-tracing",
  "kvlocal",
  "lazy_static",
@@ -894,6 +893,8 @@ dependencies = [
 name = "common-metatypes"
 version = "0.1.0"
 dependencies = [
+ "async-raft",
+ "common-sled-store",
  "pretty_assertions",
  "serde",
 ]
@@ -932,11 +933,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-raft-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "common-exception",
+ "common-metatypes",
+ "common-planners",
+ "common-runtime",
+ "common-sled-store",
+ "common-store-api-sdk",
+ "common-tracing",
+ "common-uniq-id",
+ "maplit",
+ "pretty_assertions",
+ "rand",
+ "serde",
+ "serde_json",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+]
+
+[[package]]
 name = "common-runtime"
 version = "0.1.0"
 dependencies = [
  "common-exception",
  "tokio",
+]
+
+[[package]]
+name = "common-sled-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "byteorder",
+ "common-exception",
+ "common-metatypes",
+ "common-runtime",
+ "common-tracing",
+ "common-uniq-id",
+ "lazy_static",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sled",
+ "tempfile",
 ]
 
 [[package]]
@@ -965,6 +1011,7 @@ dependencies = [
  "common-streams",
  "common-tracing",
  "futures",
+ "lazy_static",
  "serde",
  "thiserror",
 ]
@@ -1531,7 +1578,9 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-profling",
+ "common-raft-store",
  "common-runtime",
+ "common-sled-store",
  "common-store-api-sdk",
  "common-tracing",
  "common-uniq-id",
@@ -2710,10 +2759,11 @@ dependencies = [
  "async-trait",
  "common-exception",
  "common-metatypes",
+ "common-raft-store",
  "common-runtime",
+ "common-sled-store",
  "common-store-api",
  "common-tracing",
- "metasrv",
  "pretty_assertions",
  "tempfile",
 ]
@@ -3042,7 +3092,9 @@ dependencies = [
  "common-metatypes",
  "common-planners",
  "common-profling",
+ "common-raft-store",
  "common-runtime",
+ "common-sled-store",
  "common-store-api-sdk",
  "common-tracing",
  "common-uniq-id",

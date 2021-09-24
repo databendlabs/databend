@@ -87,12 +87,12 @@ impl FlightServer {
         // - open mode: open an existent node.
         tracing::info!(
             "Starting MetaNode boot:{} single: {} with config: {:?}",
-            self.conf.meta_config.boot,
-            self.conf.meta_config.single,
+            self.conf.raft_config.boot,
+            self.conf.raft_config.single,
             self.conf
         );
 
-        let meta_config = &self.conf.meta_config;
+        let meta_config = &self.conf.raft_config;
 
         let mn = if meta_config.boot {
             MetaNode::boot(0, meta_config).await?

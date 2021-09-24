@@ -21,13 +21,15 @@ common-arrow = {path = "../common/arrow"}
 common-datablocks = {path = "../common/datablocks"}
 common-datavalues = {path = "../common/datavalues"}
 common-exception = {path = "../common/exception"}
-common-store-api-sdk = {path = "../common/store-api-sdk" }
 common-functions = {path = "../common/functions"}
 common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}
 common-planners = {path = "../common/planners"}
 common-profling = { path = "../common/profiling" }
+common-raft-store = {path = "../common/raft-store"}
 common-runtime = {path = "../common/runtime"}
+common-sled-store = {path = "../common/sled-store"}
+common-store-api-sdk = {path = "../common/store-api-sdk" }
 common-tracing = {path = "../common/tracing"}
 common-uniq-id = {path = "../common/uniq_id"}
 metasrv = {path = "../metasrv"}

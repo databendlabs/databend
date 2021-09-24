@@ -7,7 +7,10 @@ publish = false
 edition = "2021"
 
 [dependencies]
+common-sled-store = {path = "../sled-store"}
+
 serde = { version = "1.0", features = ["derive"] }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
 
 [dev-dependencies]
 pretty_assertions = "0.7"

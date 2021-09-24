@@ -160,14 +160,14 @@ impl Cluster {
                             node.flight_address.clone(),
                             None,
                             Some(config.tls_query_client_conf()),
-                        ).await?
+                        )?
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(
                         ConnectionFactory::create_flight_channel(
                             node.flight_address.clone(),
                             None,
                             None,
-                        ).await?
+                        )?
                     ))),
                 };
             }

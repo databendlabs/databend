@@ -20,16 +20,16 @@ use async_raft::raft::MembershipConfig;
 use async_raft::storage::HardState;
 use async_raft::LogId;
 use async_raft::RaftStorage;
+use common_raft_store::state_machine::testing::pretty_snapshot;
+use common_raft_store::state_machine::testing::snapshot_logs;
+use common_raft_store::state_machine::SerializableSnapshot;
+use common_raft_store::state_machine::StateMachineMetaKey::LastMembership;
+use common_raft_store::state_machine::StateMachineMetaValue;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use maplit::btreeset;
 
-use crate::meta_service::testing::pretty_snapshot;
-use crate::meta_service::testing::snapshot_logs;
 use crate::meta_service::MetaRaftStore;
-use crate::raft::state_machine::SerializableSnapshot;
-use crate::raft::state_machine::StateMachineMetaKey::LastMembership;
-use crate::raft::state_machine::StateMachineMetaValue;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -47,11 +47,11 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
 
     let id = 3;
     let mut tc = new_test_context();
-    tc.config.meta_config.id = id;
+    tc.config.raft_config.id = id;
 
     tracing::info!("--- new Metasrv");
     {
-        let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+        let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
         assert_eq!(id, ms.id);
         assert!(!ms.is_open());
         assert_eq!(None, ms.read_hard_state().await?);
@@ -67,7 +67,7 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- reopen Metasrv");
     {
-        let ms = MetaRaftStore::open_create(&tc.config.meta_config, Some(()), None).await?;
+        let ms = MetaRaftStore::open_create(&tc.config.raft_config, Some(()), None).await?;
         assert_eq!(id, ms.id);
         assert!(ms.is_open());
         assert_eq!(
@@ -93,10 +93,10 @@ async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
 
     let id = 3;
     let mut tc = new_test_context();
-    tc.config.meta_config.id = id;
+    tc.config.raft_config.id = id;
 
     tracing::info!("--- new Metasrv");
-    let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+    let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     let c0 = MembershipConfig {
         members: btreeset![4],
@@ -194,9 +194,9 @@ async fn test_metasrv_do_log_compaction_empty() -> anyhow::Result<()> {
 
     let id = 3;
     let mut tc = new_test_context();
-    tc.config.meta_config.id = id;
+    tc.config.raft_config.id = id;
 
-    let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+    let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     tracing::info!("--- snapshot without any data");
 
@@ -243,9 +243,9 @@ async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()>
 
     let id = 3;
     let mut tc = new_test_context();
-    tc.config.meta_config.id = id;
+    tc.config.raft_config.id = id;
 
-    let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+    let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     tracing::info!("--- feed logs and state machine");
 
@@ -318,9 +318,9 @@ async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::
 
     let id = 3;
     let mut tc = new_test_context();
-    tc.config.meta_config.id = id;
+    tc.config.raft_config.id = id;
 
-    let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+    let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     tracing::info!("--- feed logs and state machine");
 
@@ -372,9 +372,9 @@ async fn test_metasrv_do_log_compaction_current_snapshot() -> anyhow::Result<()>
 
     let id = 3;
     let mut tc = new_test_context();
-    tc.config.meta_config.id = id;
+    tc.config.raft_config.id = id;
 
-    let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+    let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     tracing::info!("--- feed logs and state machine");
 
@@ -429,9 +429,9 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
     let snap;
     {
         let mut tc = new_test_context();
-        tc.config.meta_config.id = id;
+        tc.config.raft_config.id = id;
 
-        let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+        let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
         tracing::info!("--- feed logs and state machine");
 
@@ -447,9 +447,9 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
     tracing::info!("--- reopen a new Metasrv to install snapshot");
     {
         let mut tc = new_test_context();
-        tc.config.meta_config.id = id;
+        tc.config.raft_config.id = id;
 
-        let ms = MetaRaftStore::open_create(&tc.config.meta_config, None, Some(())).await?;
+        let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
         tracing::info!("--- rejected because old sm is not cleaned");
         {

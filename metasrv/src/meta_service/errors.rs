@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::NodeId;
+use common_metatypes::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;

@@ -54,7 +54,7 @@ impl Expression {
     /// ```text
     /// pre_visit(BinaryExpr(GT))
     /// pre_visit(Column("foo"))
-    /// mutatate(Column("foo"))
+    /// mutate(Column("foo"))
     /// pre_visit(Column("bar"))
     /// mutate(Column("bar"))
     /// mutate(BinaryExpr(GT))

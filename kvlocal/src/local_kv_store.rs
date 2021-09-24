@@ -18,22 +18,22 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::Result;
+use common_metatypes::Cmd;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
+use common_raft_store::config::RaftConfig;
+use common_raft_store::state_machine::AppliedState;
+use common_raft_store::state_machine::StateMachine;
 use common_runtime::tokio::sync::Mutex;
+pub use common_sled_store::init_temp_sled_db;
 use common_store_api::kv_apis::kv_api::MGetKVActionResult;
+use common_store_api::util::STORE_RUNTIME;
 use common_store_api::GetKVActionResult;
 use common_store_api::KVApi;
 use common_store_api::PrefixListReply;
 use common_store_api::UpsertKVActionResult;
 use common_tracing::tracing;
-use metasrv::configs;
-use metasrv::meta_service::AppliedState;
-use metasrv::meta_service::Cmd;
-use metasrv::meta_service::LogEntry;
-use metasrv::raft::state_machine::StateMachine;
-pub use metasrv::sled_store::init_temp_sled_db;
 
 /// Local storage that provides the API defined by `KVApi`.
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
@@ -43,6 +43,7 @@ pub use metasrv::sled_store::init_temp_sled_db;
 /// Since `StateMachine` is backed with sled::Tree, this impl has the same limitation as meta-store:
 /// - A sled::Db has to be a singleton, according to sled doc.
 /// - Every unit test has to generate a unique sled::Tree name to create a `LocalKVStore`.
+#[derive(Clone)]
 pub struct LocalKVStore {
     inner: Arc<Mutex<StateMachine>>,
 }
@@ -59,20 +60,18 @@ impl LocalKVStore {
     /// - `databend_store::meta_service::raft_db::init_temp_sled_db`
     #[allow(dead_code)]
     pub async fn new(name: &str) -> common_exception::Result<LocalKVStore> {
-        let mut config = configs::Config::empty();
+        let mut config = RaftConfig::empty();
 
-        config.meta_config.sled_tree_prefix = format!("{}-local-kv-store", name);
+        config.sled_tree_prefix = format!("{}-local-kv-store", name);
 
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.meta_config.no_sync = true;
+            config.no_sync = true;
         }
 
         Ok(LocalKVStore {
             // StateMachine does not need to be replaced, thus we always use id=0
-            inner: Arc::new(Mutex::new(
-                StateMachine::open(&config.meta_config, 0).await?,
-            )),
+            inner: Arc::new(Mutex::new(StateMachine::open(&config, 0).await?)),
         })
     }
 
@@ -86,7 +85,7 @@ impl LocalKVStore {
     pub async fn new_temp() -> common_exception::Result<LocalKVStore> {
         // generate a unique id as part of the name of sled::Tree
         let temp_dir = tempfile::tempdir()?;
-        metasrv::sled_store::init_temp_sled_db(temp_dir);
+        common_sled_store::init_temp_sled_db(temp_dir);
 
         static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
         let x = GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst);
@@ -95,6 +94,10 @@ impl LocalKVStore {
         let name = format!("temp-{}", id);
 
         Self::new(&name).await
+    }
+
+    pub fn sync_new_temp() -> common_exception::Result<LocalKVStore> {
+        STORE_RUNTIME.block_on(LocalKVStore::new_temp(), None)?
     }
 }
 
@@ -115,7 +118,7 @@ impl KVApi for LocalKVStore {
         };
 
         let mut sm = self.inner.lock().await;
-        let res = sm.apply_non_dup(&LogEntry { txid: None, cmd }).await?;
+        let res = sm.apply_cmd(&cmd).await?;
 
         match res {
             AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
@@ -139,7 +142,7 @@ impl KVApi for LocalKVStore {
         };
 
         let mut sm = self.inner.lock().await;
-        let res = sm.apply_non_dup(&LogEntry { txid: None, cmd }).await?;
+        let res = sm.apply_cmd(&cmd).await?;
 
         match res {
             AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
