@@ -17,12 +17,12 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use common_kv_api::KVApi;
+use common_kv_api_vo::UpsertKVActionResult;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_runtime::tokio;
-use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
-use common_store_api_sdk::KVApi;
 use common_store_api_sdk::StoreClient;
 use common_tracing::tracing;
 use metasrv::init_meta_ut;

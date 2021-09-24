@@ -13,6 +13,5 @@
 //  limitations under the License.
 //
 
-mod store_runtime;
-pub use store_runtime::STORE_RUNTIME;
-pub use store_runtime::STORE_SYNC_CALL_TIMEOUT;
+mod dfs_api;
+pub use dfs_api::StorageApi;

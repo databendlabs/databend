@@ -17,8 +17,15 @@ common-planners = {path = "../planners"}
 common-runtime = {path = "../runtime"}
 common-streams = {path = "../streams"}
 common-tracing = {path = "../tracing"}
-common-store-api= {path = "../store-api"}
+common-kv-api = {path = "../kv-apis/api" }
+common-kv-api-vo = {path = "../kv-apis/vo" }
+common-kv-api-util = {path = "../kv-apis/util" }
+common-meta-api = {path = "../meta-apis/api" }
+common-meta-api-vo = {path = "../meta-apis/vo" }
+common-dfs-api = {path = "../dfs-apis/api" }
+common-dfs-api-vo = {path = "../dfs-apis/vo" }
 common-infallible = {path = "../infallible"}
+common-store-api-sdk-util = {path = "./util"}
 
 # Github dependencies
 

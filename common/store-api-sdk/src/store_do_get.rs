@@ -16,8 +16,8 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow_flight::Ticket;
+use common_dfs_api_vo::ReadAction;
 use common_planners::ScanPlan;
-use common_store_api::ReadAction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ScanPartitionsAction {

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_meta_api::MetaApi;
 use common_runtime::tokio;
-use common_store_api_sdk::MetaApi;
 use common_store_api_sdk::RpcClientTlsConfig;
 use common_store_api_sdk::StoreClient;
 use pretty_assertions::assert_eq;

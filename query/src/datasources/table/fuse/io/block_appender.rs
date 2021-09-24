@@ -22,9 +22,9 @@ use common_arrow::arrow::record_batch::RecordBatch;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
+use common_dfs_api_vo::BlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_store_api::BlockStream;
 use futures::StreamExt;
 use uuid::Uuid;
 

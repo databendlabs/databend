@@ -816,6 +816,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-dfs-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-datablocks",
+ "common-datavalues",
+ "common-dfs-api-vo",
+ "common-exception",
+ "common-planners",
+ "common-streams",
+ "futures",
+]
+
+[[package]]
+name = "common-dfs-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-datablocks",
+ "common-planners",
+ "futures",
+ "serde",
+]
+
+[[package]]
 name = "common-exception"
 version = "0.1.0"
 dependencies = [
@@ -870,14 +894,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-kv-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-kv-api-util",
+ "common-kv-api-vo",
+ "common-metatypes",
+ "futures",
+]
+
+[[package]]
+name = "common-kv-api-util"
+version = "0.1.0"
+dependencies = [
+ "common-runtime",
+ "common-tracing",
+ "lazy_static",
+]
+
+[[package]]
+name = "common-kv-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-metatypes",
+ "serde",
+]
+
+[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-exception",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-runtime",
- "common-store-api",
  "common-tracing",
  "kvlocal",
  "lazy_static",
@@ -887,6 +941,27 @@ dependencies = [
  "sha1",
  "sha2",
  "tempfile",
+]
+
+[[package]]
+name = "common-meta-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-meta-api-vo",
+ "common-metatypes",
+ "common-planners",
+ "futures",
+]
+
+[[package]]
+name = "common-meta-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-datavalues",
+ "common-metatypes",
+ "serde",
 ]
 
 [[package]]
@@ -998,25 +1073,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-store-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-metatypes",
- "common-planners",
- "common-runtime",
- "common-streams",
- "common-tracing",
- "futures",
- "lazy_static",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "common-store-api-sdk"
 version = "0.1.0"
 dependencies = [
@@ -1024,12 +1080,19 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
+ "common-dfs-api",
+ "common-dfs-api-vo",
  "common-exception",
  "common-infallible",
+ "common-kv-api",
+ "common-kv-api-util",
+ "common-kv-api-vo",
+ "common-meta-api",
+ "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-runtime",
- "common-store-api",
+ "common-store-api-sdk-util",
  "common-streams",
  "common-tracing",
  "futures",
@@ -1046,6 +1109,10 @@ dependencies = [
  "tonic-build",
  "trust-dns-resolver",
 ]
+
+[[package]]
+name = "common-store-api-sdk-util"
+version = "0.1.0"
 
 [[package]]
 name = "common-streams"
@@ -1496,17 +1563,22 @@ dependencies = [
  "common-clickhouse-srv",
  "common-datablocks",
  "common-datavalues",
+ "common-dfs-api",
+ "common-dfs-api-vo",
  "common-exception",
  "common-functions",
  "common-infallible",
  "common-io",
+ "common-kv-api",
+ "common-kv-api-vo",
  "common-management",
+ "common-meta-api",
+ "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-profling",
  "common-progress",
  "common-runtime",
- "common-store-api",
  "common-store-api-sdk",
  "common-streams",
  "common-tracing",
@@ -1572,9 +1644,15 @@ dependencies = [
  "common-building",
  "common-datablocks",
  "common-datavalues",
+ "common-dfs-api",
+ "common-dfs-api-vo",
  "common-exception",
  "common-functions",
  "common-infallible",
+ "common-kv-api",
+ "common-kv-api-vo",
+ "common-meta-api",
+ "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-profling",
@@ -2758,11 +2836,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-exception",
+ "common-kv-api",
+ "common-kv-api-util",
+ "common-kv-api-vo",
  "common-metatypes",
  "common-raft-store",
  "common-runtime",
  "common-sled-store",
- "common-store-api",
  "common-tracing",
  "pretty_assertions",
  "tempfile",
@@ -3089,6 +3169,9 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-infallible",
+ "common-kv-api",
+ "common-kv-api-vo",
+ "common-meta-api",
  "common-metatypes",
  "common-planners",
  "common-profling",

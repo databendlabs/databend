@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
+use common_kv_api::KVApi;
+use common_kv_api_vo::GetKVActionResult;
+use common_kv_api_vo::MGetKVActionResult;
+use common_kv_api_vo::PrefixListReply;
+use common_kv_api_vo::UpsertKVActionResult;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
-use common_store_api::kv_apis::kv_api::MGetKVActionResult;
-use common_store_api::kv_apis::kv_api::PrefixListReply;
-use common_store_api::GetKVActionResult;
-use common_store_api::KVApi;
-use common_store_api::UpsertKVActionResult;
 use mockall::predicate::*;
 use mockall::*;
 use sha2::Digest;
