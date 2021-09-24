@@ -2764,7 +2764,6 @@ dependencies = [
  "common-sled-store",
  "common-store-api",
  "common-tracing",
- "metasrv",
  "pretty_assertions",
  "tempfile",
 ]

@@ -20,8 +20,6 @@ common-sled-store = {path = "../common/sled-store"}
 common-store-api = {path = "../common/store-api"}
 common-tracing = {path = "../common/tracing"}
 
-metasrv = {path = "../metasrv"}
-
 
 # Crates.io dependencies
 async-trait = "0.1"
