@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,17 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::fmt;
 
 use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_exception::ErrorCode;
-use common_sled_store::SledOrderedSerde;
-use common_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
+
+use crate::SledOrderedSerde;
+use crate::SledSerde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StateMachineMetaKey {

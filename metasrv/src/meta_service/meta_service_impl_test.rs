@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use async_raft::State;
+use common_metatypes::Cmd;
+use common_metatypes::LogEntry;
 use common_runtime::tokio;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::Cmd;
 use crate::meta_service::GetReq;
-use crate::meta_service::LogEntry;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;

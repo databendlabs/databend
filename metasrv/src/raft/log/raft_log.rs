@@ -15,16 +15,14 @@
 use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
+use common_metatypes::LogEntry;
 use common_metatypes::LogIndex;
+use common_sled_store::AsKeySpace;
+use common_sled_store::SledTree;
 use common_tracing::tracing;
 
 use crate::configs;
-use crate::meta_service::LogEntry;
 use crate::raft::sled_key_spaces::Logs;
-use crate::sled_store::AsKeySpace;
-use crate::sled_store::SledSerde;
-use crate::sled_store::SledTree;
-use crate::sled_store::SledValueToKey;
 
 const TREE_RAFT_LOG: &str = "raft_log";
 
@@ -32,14 +30,6 @@ const TREE_RAFT_LOG: &str = "raft_log";
 /// It is part of MetaStore.
 pub struct RaftLog {
     pub(crate) inner: SledTree,
-}
-
-impl SledSerde for Entry<LogEntry> {}
-
-impl SledValueToKey<LogIndex> for Entry<LogEntry> {
-    fn to_key(&self) -> LogIndex {
-        self.log_id.index
-    }
 }
 
 impl RaftLog {

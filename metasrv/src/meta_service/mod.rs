@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_metatypes::Cmd;
-pub use common_metatypes::LogEntry;
 pub use errors::RetryableError;
 pub use errors::ShutdownError;
 pub use meta_service_impl::MetaServiceImpl;

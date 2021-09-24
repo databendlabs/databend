@@ -15,6 +15,7 @@
 use std::fmt;
 
 use async_raft::NodeId;
+use common_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -37,3 +38,6 @@ impl fmt::Display for Node {
         write!(f, "{}={}", self.name, self.address)
     }
 }
+
+/// For Node to be able to be stored in sled::Tree as a value.
+impl SledSerde for Node {}

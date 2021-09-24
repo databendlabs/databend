@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
 
-use crate::sled_store::sled_key_space::SledKeySpace;
+use crate::SledKeySpace;
 
 /// Extract key from a value of sled tree that includes its key.
 pub trait SledValueToKey<K> {
@@ -44,7 +44,7 @@ pub struct SledTree {
     /// See: https://github.com/drmingdrmer/sledtest/blob/500929ab0b89afe547143a38fde6fe85d88f1f80/src/ben_sync.rs
     sync: bool,
 
-    pub(crate) tree: sled::Tree,
+    pub tree: sled::Tree,
 }
 
 impl SledTree {

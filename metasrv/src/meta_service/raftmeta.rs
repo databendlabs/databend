@@ -35,8 +35,10 @@ use async_raft::SnapshotMeta;
 use async_raft::SnapshotPolicy;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
+use common_metatypes::Cmd;
 use common_metatypes::Database;
 use common_metatypes::KVValue;
+use common_metatypes::LogEntry;
 use common_metatypes::Node;
 use common_metatypes::NodeId;
 use common_metatypes::SeqValue;
@@ -47,14 +49,13 @@ use common_runtime::tokio::sync::Mutex;
 use common_runtime::tokio::sync::RwLock;
 use common_runtime::tokio::sync::RwLockWriteGuard;
 use common_runtime::tokio::task::JoinHandle;
+use common_sled_store::get_sled_db;
 use common_store_api_sdk::storage_api_impl::AppendResult;
 use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
 use crate::configs;
-use crate::meta_service::Cmd;
-use crate::meta_service::LogEntry;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::MetaServiceServer;
@@ -67,7 +68,6 @@ use crate::raft::state_machine::AppliedState;
 use crate::raft::state_machine::SerializableSnapshot;
 use crate::raft::state_machine::Snapshot;
 use crate::raft::state_machine::StateMachine;
-use crate::sled_store::get_sled_db;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///

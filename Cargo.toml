@@ -18,6 +18,7 @@ members = [
     "common/tracing",
     "common/profiling",
     "common/store-api",
+    "common/sled-store",
     "common/stoppable",
     "common/management",
     "common/io",

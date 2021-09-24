@@ -15,15 +15,14 @@
 use async_raft::storage::HardState;
 use common_exception::ErrorCode;
 use common_metatypes::NodeId;
+use common_sled_store::AsKeySpace;
+use common_sled_store::SledTree;
 use common_tracing::tracing;
 
 use crate::configs;
 use crate::raft::sled_key_spaces::RaftStateKV;
 use crate::raft::state::RaftStateKey;
 use crate::raft::state::RaftStateValue;
-use crate::sled_store::AsKeySpace;
-use crate::sled_store::SledSerde;
-use crate::sled_store::SledTree;
 
 /// Raft state stores everything else other than log and state machine, which includes:
 /// id: NodeId,
@@ -43,8 +42,6 @@ pub struct RaftState {
 }
 
 const TREE_RAFT_STATE: &str = "raft_state";
-
-impl SledSerde for HardState {}
 
 impl RaftState {
     pub fn is_open(&self) -> bool {

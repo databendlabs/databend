@@ -16,10 +16,10 @@ use async_raft::raft::Entry;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use async_raft::LogId;
+use common_metatypes::Cmd;
+use common_metatypes::LogEntry;
 use common_runtime::tokio;
 
-use crate::meta_service::Cmd;
-use crate::meta_service::LogEntry;
 use crate::raft::log::RaftLog;
 use crate::tests::service::new_sled_test_context;
 

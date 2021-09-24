@@ -14,6 +14,8 @@
 //
 
 use common_exception::ErrorCode;
+use common_metatypes::Cmd;
+use common_metatypes::LogEntry;
 use common_metatypes::Operation;
 use common_store_api_sdk::kv_api_impl::GetKVAction;
 use common_store_api_sdk::kv_api_impl::GetKVActionResult;
@@ -24,8 +26,6 @@ use common_store_api_sdk::kv_api_impl::PrefixListReply;
 use common_store_api_sdk::kv_api_impl::PrefixListReq;
 use common_store_api_sdk::kv_api_impl::UpsertKVAction;
 use common_store_api_sdk::kv_api_impl::UpsertKVActionResult;
-use metasrv::meta_service::Cmd;
-use metasrv::meta_service::LogEntry;
 use metasrv::raft::state_machine::AppliedState;
 
 use crate::executor::action_handler::RequestHandler;

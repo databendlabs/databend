@@ -12,10 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod log;
-pub mod sled_key_spaces;
-pub mod state;
-pub mod state_machine;
-
-#[cfg(test)]
-mod raft_types_test;
+pub mod fake_key_spaces;
+pub mod fake_state_machine_meta;
