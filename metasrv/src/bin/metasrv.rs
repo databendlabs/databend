@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         *metasrv::configs::config::DATABEND_COMMIT_VERSION
     );
 
-    init_sled_db(conf.meta_config.raft_dir.clone());
+    init_sled_db(conf.raft_config.raft_dir.clone());
 
     // Metric API service.
     {
