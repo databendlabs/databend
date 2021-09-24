@@ -17,12 +17,13 @@ use std::ops::RangeBounds;
 use async_raft::raft::Entry;
 use common_metatypes::LogEntry;
 use common_metatypes::LogIndex;
+use common_sled_store::sled;
 use common_sled_store::AsKeySpace;
 use common_sled_store::SledTree;
 use common_tracing::tracing;
 
-use crate::raft::config::RaftConfig;
-use crate::raft::sled_key_spaces::Logs;
+use crate::config::RaftConfig;
+use crate::sled_key_spaces::Logs;
 
 const TREE_RAFT_LOG: &str = "raft_log";
 

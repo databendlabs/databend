@@ -20,16 +20,16 @@ use async_raft::raft::MembershipConfig;
 use async_raft::storage::HardState;
 use async_raft::LogId;
 use async_raft::RaftStorage;
+use common_raft_store::state_machine::testing::pretty_snapshot;
+use common_raft_store::state_machine::testing::snapshot_logs;
+use common_raft_store::state_machine::SerializableSnapshot;
+use common_raft_store::state_machine::StateMachineMetaKey::LastMembership;
+use common_raft_store::state_machine::StateMachineMetaValue;
 use common_runtime::tokio;
 use common_tracing::tracing;
 use maplit::btreeset;
 
 use crate::meta_service::MetaRaftStore;
-use crate::raft::state_machine::testing::pretty_snapshot;
-use crate::raft::state_machine::testing::snapshot_logs;
-use crate::raft::state_machine::SerializableSnapshot;
-use crate::raft::state_machine::StateMachineMetaKey::LastMembership;
-use crate::raft::state_machine::StateMachineMetaValue;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

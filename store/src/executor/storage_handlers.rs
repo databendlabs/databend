@@ -16,12 +16,12 @@
 use common_exception::ErrorCode;
 use common_metatypes::Cmd;
 use common_metatypes::LogEntry;
+use common_raft_store::state_machine::AppliedState;
 use common_store_api_sdk::storage_api_impl::ReadPlanAction;
 use common_store_api_sdk::storage_api_impl::ReadPlanResult;
 use common_store_api_sdk::storage_api_impl::TruncateTableAction;
 use common_store_api_sdk::storage_api_impl::TruncateTableResult;
 use log::debug;
-use metasrv::raft::state_machine::AppliedState;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;

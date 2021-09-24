@@ -23,10 +23,11 @@ use common_metatypes::LogId;
 use common_metatypes::MatchSeq;
 use common_metatypes::Operation;
 use common_metatypes::RaftTxId;
+use common_sled_store::sled;
 use maplit::btreeset;
 use sled::IVec;
 
-use crate::raft::state_machine::SnapshotKeyValue;
+use crate::state_machine::SnapshotKeyValue;
 
 /// Logs and the expected snapshot for testing snapshot.
 pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
@@ -116,7 +117,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
     (logs, want)
 }
 
-pub fn pretty_snapshot(snap: &Vec<SnapshotKeyValue>) -> Vec<String> {
+pub fn pretty_snapshot(snap: &[SnapshotKeyValue]) -> Vec<String> {
     let mut res = vec![];
     for kv in snap.iter() {
         let k = kv[0].clone();
@@ -160,16 +161,18 @@ pub fn cases_incr_seq() -> Vec<(&'static str, Option<RaftTxId>, &'static str, u6
     ]
 }
 
-// test cases for Cmd::AddFile
-// case_name, txid, key, value, want_prev, want_result
-pub fn cases_add_file() -> Vec<(
+pub type AddFileCase = (
     &'static str,
     Option<RaftTxId>,
     &'static str,
     &'static str,
     Option<String>,
     Option<String>,
-)> {
+);
+
+// test cases for Cmd::AddFile
+// case_name, txid, key, value, want_prev, want_result
+pub fn cases_add_file() -> Vec<AddFileCase> {
     vec![
         (
             "add on none",
@@ -207,16 +210,18 @@ pub fn cases_add_file() -> Vec<(
     ]
 }
 
-// test cases for Cmd::SetFile
-// case_name, txid, key, value, want_prev, want_result
-pub fn cases_set_file() -> Vec<(
+pub type SetFileCase = (
     &'static str,
     Option<RaftTxId>,
     &'static str,
     &'static str,
     Option<String>,
     Option<String>,
-)> {
+);
+
+// test cases for Cmd::SetFile
+// case_name, txid, key, value, want_prev, want_result
+pub fn cases_set_file() -> Vec<SetFileCase> {
     vec![
         (
             "set on none",

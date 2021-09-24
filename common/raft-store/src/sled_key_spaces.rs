@@ -22,10 +22,10 @@ use common_metatypes::SeqValue;
 use common_sled_store::SeqNum;
 use common_sled_store::SledKeySpace;
 
-use crate::raft::state::RaftStateKey;
-use crate::raft::state::RaftStateValue;
-use crate::raft::state_machine::StateMachineMetaKey;
-use crate::raft::state_machine::StateMachineMetaValue;
+use crate::state::RaftStateKey;
+use crate::state::RaftStateValue;
+use crate::state_machine::StateMachineMetaKey;
+use crate::state_machine::StateMachineMetaValue;
 
 /// Types for raft log in SledTree
 pub struct Logs {}

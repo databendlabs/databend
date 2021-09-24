@@ -29,6 +29,7 @@ use common_metatypes::Cmd::DropTable;
 use common_metatypes::Database;
 use common_metatypes::LogEntry;
 use common_metatypes::Table;
+use common_raft_store::state_machine::AppliedState;
 use common_store_api_sdk::meta_api_impl::CreateDatabaseAction;
 use common_store_api_sdk::meta_api_impl::CreateDatabaseActionResult;
 use common_store_api_sdk::meta_api_impl::CreateTableAction;
@@ -46,7 +47,6 @@ use common_store_api_sdk::meta_api_impl::GetTableAction;
 use common_store_api_sdk::meta_api_impl::GetTableActionResult;
 use common_store_api_sdk::meta_api_impl::GetTableExtReq;
 use log::info;
-use metasrv::raft::state_machine::AppliedState;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
