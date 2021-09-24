@@ -27,7 +27,6 @@ use common_store_api_sdk::kv_api_impl::KVMetaAction;
 use common_store_api_sdk::kv_api_impl::MGetKVAction;
 use common_store_api_sdk::kv_api_impl::PrefixListReq;
 use common_store_api_sdk::kv_api_impl::UpsertKVAction;
-use metasrv::raft::state_machine::AppliedState;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
