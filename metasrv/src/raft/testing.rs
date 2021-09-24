@@ -14,7 +14,7 @@
 
 use common_sled_store::get_sled_db;
 
-use crate::configs::RaftConfig;
+use crate::raft::config::RaftConfig;
 
 pub struct RaftTestContext {
     pub raft_config: RaftConfig,

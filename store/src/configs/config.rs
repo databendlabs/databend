@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use lazy_static::lazy_static;
+use metasrv::raft::config::RaftConfig;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
@@ -82,7 +83,7 @@ pub struct Config {
 
     /// Config for the embedded metasrv.
     #[structopt(flatten)]
-    pub meta_config: metasrv::configs::RaftConfig,
+    pub meta_config: RaftConfig,
 
     #[structopt(
         long,
