@@ -17,13 +17,13 @@ use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
 use common_store_api_sdk::RpcClientTlsConfig;
 use common_store_api_sdk::StoreClient;
-use metasrv::init_meta_ut;
-use metasrv::tests::service::new_test_context;
-use metasrv::tests::start_metasrv_with_context;
-use metasrv::tests::tls_constants::TEST_CA_CERT;
-use metasrv::tests::tls_constants::TEST_CN_NAME;
-use metasrv::tests::tls_constants::TEST_SERVER_CERT;
-use metasrv::tests::tls_constants::TEST_SERVER_KEY;
+use kvsrv::init_meta_ut;
+use kvsrv::tests::service::new_test_context;
+use kvsrv::tests::start_kvsrv_with_context;
+use kvsrv::tests::tls_constants::TEST_CA_CERT;
+use kvsrv::tests::tls_constants::TEST_CN_NAME;
+use kvsrv::tests::tls_constants::TEST_SERVER_CERT;
+use kvsrv::tests::tls_constants::TEST_SERVER_KEY;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -36,7 +36,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
     tc.config.flight_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc.config.flight_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
-    let r = start_metasrv_with_context(&mut tc).await;
+    let r = start_kvsrv_with_context(&mut tc).await;
     assert!(r.is_ok());
 
     let addr = tc.config.flight_api_address.clone();
@@ -66,7 +66,7 @@ async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     tc.config.flight_tls_server_key = "../tests/data/certs/not_exist.key".to_owned();
     tc.config.flight_tls_server_cert = "../tests/data/certs/not_exist.pem".to_owned();
 
-    let r = start_metasrv_with_context(&mut tc).await;
+    let r = start_kvsrv_with_context(&mut tc).await;
     assert!(r.is_err());
     Ok(())
 }

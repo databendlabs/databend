@@ -19,7 +19,7 @@ use serde::Serialize;
 use crate::Cmd;
 use crate::RaftTxId;
 
-/// The application data request type which the `Metasrv` works with.
+/// The application data request type which the `kvsrv` works with.
 ///
 /// The client and the serial together provides external consistency:
 /// If a client failed to recv the response, it  re-send another RaftRequest with the same

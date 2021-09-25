@@ -33,9 +33,9 @@ use crate::meta_service::MetaRaftStore;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_restart() -> anyhow::Result<()> {
-    // - Create a MetaSrv
-    // - Update MetaSrv
+async fn test_kvsrv_restart() -> anyhow::Result<()> {
+    // - Create a kvsrv
+    // - Update kvsrv
     // - Close and reopen it
     // - Test state is restored
 
@@ -49,14 +49,14 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
     let mut tc = new_test_context();
     tc.config.raft_config.id = id;
 
-    tracing::info!("--- new Metasrv");
+    tracing::info!("--- new kvsrv");
     {
         let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
         assert_eq!(id, ms.id);
         assert!(!ms.is_open());
         assert_eq!(None, ms.read_hard_state().await?);
 
-        tracing::info!("--- update Metasrv");
+        tracing::info!("--- update kvsrv");
 
         ms.save_hard_state(&HardState {
             current_term: 10,
@@ -65,7 +65,7 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
         .await?;
     }
 
-    tracing::info!("--- reopen Metasrv");
+    tracing::info!("--- reopen kvsrv");
     {
         let ms = MetaRaftStore::open_create(&tc.config.raft_config, Some(()), None).await?;
         assert_eq!(id, ms.id);
@@ -83,8 +83,8 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
-    // - Create a Metasrv
+async fn test_kvsrv_get_membership_from_log() -> anyhow::Result<()> {
+    // - Create a kvsrv
     // - Append logs
     // - Get membership from log.
 
@@ -95,7 +95,7 @@ async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
     let mut tc = new_test_context();
     tc.config.raft_config.id = id;
 
-    tracing::info!("--- new Metasrv");
+    tracing::info!("--- new kvsrv");
     let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     let c0 = MembershipConfig {
@@ -185,8 +185,8 @@ async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_do_log_compaction_empty() -> anyhow::Result<()> {
-    // - Create a Metasrv
+async fn test_kvsrv_do_log_compaction_empty() -> anyhow::Result<()> {
+    // - Create a kvsrv
     // - Create a snapshot check snapshot state
 
     let (_log_guards, ut_span) = init_meta_ut!();
@@ -233,8 +233,8 @@ async fn test_metasrv_do_log_compaction_empty() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()> {
-    // - Create a Metasrv
+async fn test_kvsrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()> {
+    // - Create a kvsrv
     // - Apply logs
     // - Create a snapshot check snapshot state
 
@@ -308,8 +308,8 @@ async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::Result<()> {
-    // - Create a Metasrv
+async fn test_kvsrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::Result<()> {
+    // - Create a kvsrv
     // - Apply logs
     // - Create a snapshot check snapshot state
 
@@ -362,8 +362,8 @@ async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_do_log_compaction_current_snapshot() -> anyhow::Result<()> {
-    // - Create a Metasrv
+async fn test_kvsrv_do_log_compaction_current_snapshot() -> anyhow::Result<()> {
+    // - Create a kvsrv
     // - Apply logs
     // - Create a snapshot check snapshot state
 
@@ -414,11 +414,11 @@ async fn test_metasrv_do_log_compaction_current_snapshot() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
-    // - Create a Metasrv
+async fn test_kvsrv_install_snapshot() -> anyhow::Result<()> {
+    // - Create a kvsrv
     // - Feed logs
     // - Create a snapshot
-    // - Create a new Metasrv and restore it by install the snapshot
+    // - Create a new kvsrv and restore it by install the snapshot
 
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -444,7 +444,7 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
 
     let data = snap.snapshot.into_inner();
 
-    tracing::info!("--- reopen a new Metasrv to install snapshot");
+    tracing::info!("--- reopen a new kvsrv to install snapshot");
     {
         let mut tc = new_test_context();
         tc.config.raft_config.id = id;

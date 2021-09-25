@@ -33,7 +33,7 @@ use crate::meta_service::MetaNode;
 use crate::meta_service::RetryableError;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
-use crate::tests::service::MetaSrvTestContext;
+use crate::tests::service::KVSrvTestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
@@ -522,7 +522,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 async fn setup_cluster(
     voters: BTreeSet<NodeId>,
     non_voters: BTreeSet<NodeId>,
-) -> anyhow::Result<(u64, Vec<MetaSrvTestContext>)> {
+) -> anyhow::Result<(u64, Vec<KVSrvTestContext>)> {
     // TODO(xp): use setup_cluster if possible in tests. Get rid of boilerplate snippets.
     // leader is always node-0
     assert!(voters.contains(&0));
@@ -587,7 +587,7 @@ async fn setup_cluster(
     Ok((nlog, rst))
 }
 
-async fn setup_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
+async fn setup_leader() -> anyhow::Result<(NodeId, KVSrvTestContext)> {
     // Setup a cluster in which there is a leader and a non-voter.
     // asserts states are consistent
 
@@ -617,7 +617,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
 async fn setup_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
-) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
+) -> anyhow::Result<(NodeId, KVSrvTestContext)> {
     let mut tc = new_test_context();
     let addr = tc.config.raft_config.raft_api_addr();
 
@@ -767,7 +767,7 @@ fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(10000))
 }
 
-fn test_context_nodes(tcs: &Vec<MetaSrvTestContext>) -> Vec<Arc<MetaNode>> {
+fn test_context_nodes(tcs: &Vec<KVSrvTestContext>) -> Vec<Arc<MetaNode>> {
     tcs.iter()
         .map(|tc| tc.meta_nodes[0].clone())
         .collect::<Vec<_>>()

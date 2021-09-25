@@ -29,17 +29,17 @@ use crate::meta_service::MetaServiceClient;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
-pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
+pub async fn start_kvsrv() -> Result<(KVSrvTestContext, String)> {
     let mut tc = new_test_context();
 
-    start_metasrv_with_context(&mut tc).await?;
+    start_kvsrv_with_context(&mut tc).await?;
 
     let addr = tc.config.flight_api_address.clone();
 
     Ok((tc, addr))
 }
 
-pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
+pub async fn start_kvsrv_with_context(tc: &mut KVSrvTestContext) -> Result<()> {
     let srv = FlightServer::create(tc.config.clone());
     let (stop_tx, fin_rx) = srv.start().await?;
 
@@ -55,7 +55,7 @@ pub fn next_port() -> u32 {
     29000u32 + (common_base::uniq_usize() as u32)
 }
 
-pub struct MetaSrvTestContext {
+pub struct KVSrvTestContext {
     #[allow(dead_code)]
     temp_raft_dir: TempDir,
 
@@ -66,12 +66,12 @@ pub struct MetaSrvTestContext {
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
 
-    /// channel to send to stop Metasrv, and channel for waiting for shutdown to finish.
+    /// channel to send to stop kvsrv, and channel for waiting for shutdown to finish.
     pub channels: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
 }
 
 /// Create a new Config for test, with unique port assigned
-pub fn new_test_context() -> MetaSrvTestContext {
+pub fn new_test_context() -> KVSrvTestContext {
     let config_id = next_port();
 
     let mut config = configs::Config::empty();
@@ -114,7 +114,7 @@ pub fn new_test_context() -> MetaSrvTestContext {
 
     tracing::info!("new test context config: {:?}", config);
 
-    MetaSrvTestContext {
+    KVSrvTestContext {
         // The TempDir type creates a directory on the file system that is deleted once it goes out of scope
         // So hold the tmp_meta_dir and tmp_local_fs_dir until being dropped.
         temp_raft_dir,

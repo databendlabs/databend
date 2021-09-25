@@ -1,5 +1,5 @@
 [package]
-name = "metasrv"
+name = "kvsrv"
 version = "0.1.0"
 description = "distributed meta data service"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
@@ -8,8 +8,8 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "metasrv"
-path = "src/bin/metasrv.rs"
+name = "kvsrv"
+path = "src/bin/kvsrv.rs"
 
 [features]
 default = ["simd"]

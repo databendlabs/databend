@@ -39,7 +39,7 @@ impl FlightServer {
         Self { conf }
     }
 
-    /// Start metasrv and returns two channel to send shutdown signal and receive signal when shutdown finished.
+    /// Start kvsrv and returns two channel to send shutdown signal and receive signal when shutdown finished.
     pub async fn start(self) -> Result<(oneshot::Sender<()>, oneshot::Receiver<()>), ErrorCode> {
         // TODO(xp): move component startup from serve() to start().
         //           block as long as possible to reduce unknown startup time cost.
@@ -59,7 +59,7 @@ impl FlightServer {
                 // TODO(xp): handle errors.
                 // TODO(xp): move server building up actions out of serve(). errors should be caught.
                 let res = fut.await;
-                tracing::info!("Metasrv serve res: {:?}", res);
+                tracing::info!("kvsrv serve res: {:?}", res);
             }
             .instrument(tracing::debug_span!("spawn-rpc")),
         );
@@ -67,7 +67,7 @@ impl FlightServer {
         Ok((stop_tx, fin_rx))
     }
 
-    /// Start serving metasrv. It does not return until Metasrv is stopped.
+    /// Start serving kvsrv. It does not return until kvsrv is stopped.
     #[tracing::instrument(level = "debug", skip(self, stop_rx, fin_tx))]
     pub async fn serve(
         self,
@@ -126,23 +126,23 @@ impl FlightServer {
         let res = builder
             .add_service(flight_srv)
             .serve_with_shutdown(addr, async move {
-                tracing::info!("Metasrv start to wait for stop signal: {}", addr);
+                tracing::info!("kvsrv start to wait for stop signal: {}", addr);
                 let _ = stop_rx.await;
-                tracing::info!("Metasrv receives stop signal: {}", addr);
+                tracing::info!("kvsrv receives stop signal: {}", addr);
             })
             .await;
 
         let _ = mn.stop().await;
         let s = fin_tx.send(());
         tracing::info!(
-            "Metasrv sending signal of finishing shutdown {}: res: {:?}",
+            "kvsrv sending signal of finishing shutdown {}: res: {:?}",
             addr,
             s
         );
 
-        tracing::info!("Metasrv returning");
+        tracing::info!("kvsrv returning");
 
-        res.map_err_to_code(ErrorCode::MetaSrvError, || "Metasrv error")
+        res.map_err_to_code(ErrorCode::KVSrvError, || "kvsrv error")
     }
 
     async fn tls_config(conf: &Config) -> anyhow::Result<Option<ServerTlsConfig>> {

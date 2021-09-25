@@ -81,7 +81,7 @@ pub struct Config {
     #[structopt(long, env = "RPC_TLS_SERVER_KEY", default_value = "")]
     pub rpc_tls_server_key: String,
 
-    /// Config for the embedded metasrv.
+    /// Config for the embedded kvsrv.
     #[structopt(flatten)]
     pub meta_config: RaftConfig,
 

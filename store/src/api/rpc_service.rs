@@ -23,7 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
-use metasrv::meta_service::MetaNode;
+use kvsrv::meta_service::MetaNode;
 use tonic::transport;
 use tonic::transport::Identity;
 use tonic::transport::Server;
