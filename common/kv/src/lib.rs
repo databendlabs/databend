@@ -13,9 +13,16 @@
 // limitations under the License.
 //
 
-mod local_kv_store;
+//! Key-Value store backed with a local sled::Tree.
+//!
+//! `KV` talks the same API defined in `KVApi`.
+//!
+//! `KV` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
+//! a embedded raft `StateMachine`.
+
+mod kv;
 
 #[cfg(test)]
-mod local_kv_store_test;
+mod kv_test;
 
-pub use local_kv_store::LocalKVStore;
+pub use kv::KV;
