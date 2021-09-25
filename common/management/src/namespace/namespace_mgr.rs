@@ -149,7 +149,7 @@ impl NamespaceApi for NamespaceMgr {
             } => Ok(s),
             UpsertKVActionResult {
                 prev: Some((s, _)),
-                result: None,
+                result: _,
             } => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
                 "Namespace already exists, seq [{}]",
                 s
