@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::array::Float64Array;
 use common_arrow::arrow::array::Int16Array;
 use common_arrow::arrow::array::Int32Array;
 use common_arrow::arrow::array::Int64Array;
@@ -28,7 +29,7 @@ macro_rules! run_difference_constant_test {
             let schema =
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::$logic_type, false)]);
             let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
-                DataValue::$logic_type(Some(0_i8 as $primitive_type)),
+                DataValue::$logic_type(Some(10_i8 as $primitive_type)),
                 5,
             )]);
 
@@ -123,6 +124,22 @@ run_difference_constant_test!(
     Int64,
     Int64Array
 );
+run_difference_constant_test!(
+    test_running_difference_constant_f32,
+    f32,
+    Float32,
+    f64,
+    Float64,
+    Float64Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_f64,
+    f64,
+    Float64,
+    f64,
+    Float64,
+    Float64Array
+);
 
 macro_rules! run_difference_first_not_null_test {
     ($method_name:ident, $primitive_type:ty, $logic_type:ident, $result_primitive_type:ty, $result_logic_type:ident, $array_type:ident) => {
@@ -132,10 +149,10 @@ macro_rules! run_difference_first_not_null_test {
                 DataSchemaRefExt::create(vec![DataField::new("a", DataType::$logic_type, true)]);
             let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
                 Some(2_i8 as $primitive_type),
-                Some(3),
+                Some(3_i8 as $primitive_type),
                 None,
-                Some(4),
-                Some(10),
+                Some(4_i8 as $primitive_type),
+                Some(10_i8 as $primitive_type),
             ])]);
 
             // Ok.
@@ -152,10 +169,10 @@ macro_rules! run_difference_first_not_null_test {
                 let actual = actual_ref.as_any().downcast_ref::<$array_type>().unwrap();
                 let expected = $array_type::from([
                     Some(0_i8 as $result_primitive_type),
-                    Some(1),
+                    Some(1_i8 as $result_primitive_type),
                     None,
                     None,
-                    Some(6),
+                    Some(6_i8 as $result_primitive_type),
                 ]);
 
                 assert_eq!(&expected, actual);
@@ -251,6 +268,22 @@ run_difference_first_not_null_test!(
     i64,
     Int64,
     Int64Array
+);
+run_difference_first_not_null_test!(
+    test_running_difference_f32_first_not_null,
+    f32,
+    Float32,
+    f64,
+    Float64,
+    Float64Array
+);
+run_difference_first_not_null_test!(
+    test_running_difference_f64_first_not_null,
+    f64,
+    Float64,
+    f64,
+    Float64,
+    Float64Array
 );
 
 macro_rules! run_difference_first_null_test {

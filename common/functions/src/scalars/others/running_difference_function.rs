@@ -53,6 +53,7 @@ impl Function for RunningDifferenceFunction {
             | DataType::UInt64
             | DataType::Date32
             | DataType::DateTime32(_) => Ok(DataType::Int64),
+            DataType::Float32 | DataType::Float64 => Ok(DataType::Float64),
             _ => Result::Err(ErrorCode::IllegalDataType(
                 "Argument for function runningDifference must have numeric type",
             )),
@@ -75,6 +76,8 @@ impl Function for RunningDifferenceFunction {
             }
             DataType::Int64 => compute_i64(columns[0].column(), input_rows),
             DataType::UInt64 => compute_u64(columns[0].column(), input_rows),
+            DataType::Float32 => compute_f32(columns[0].column(), input_rows),
+            DataType::Float64 => compute_f64(columns[0].column(), input_rows),
             _ => Result::Err(ErrorCode::IllegalDataType(
                 format!(
                     "Argument for function runningDifference must have numeric type.: While processing runningDifference({})",
@@ -136,6 +139,8 @@ run_difference_compute!(compute_i32, i32, Int64, i64);
 run_difference_compute!(compute_u32, u32, Int64, i64);
 run_difference_compute!(compute_i64, i64, Int64, i64);
 run_difference_compute!(compute_u64, u64, Int64, i64);
+run_difference_compute!(compute_f32, f32, Float64, f64);
+run_difference_compute!(compute_f64, f64, Float64, f64);
 
 impl fmt::Display for RunningDifferenceFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

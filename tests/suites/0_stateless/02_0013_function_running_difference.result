@@ -1,5 +1,4 @@
-1	0	1	0	1	0	0
-3	2	3	2	3	2	0
-5	2	5	2	5	2	0
-10	5	10	5	10	5	0
-ERROR 1105 (HY000) at line 7: Code: 7, displayText = Argument for function runningDifference must have numeric type.
+0	0	0	0	0
+2	2	2	2	0
+2	2	2	2	0
+5	5	5	5	0
