@@ -44,7 +44,7 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
+    pub(in crate::sessions) cluster_cache: ClusterRef,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
@@ -53,14 +53,18 @@ pub struct DatabendQueryContextShared {
 }
 
 impl DatabendQueryContextShared {
-    pub fn try_create(conf: Config, session: Arc<Session>) -> Arc<DatabendQueryContextShared> {
+    pub fn try_create(
+        conf: Config,
+        session: Arc<Session>,
+        cluster_cache: ClusterRef,
+    ) -> Arc<DatabendQueryContextShared> {
         Arc::new(DatabendQueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
             session,
+            cluster_cache,
             runtime: Arc::new(RwLock::new(None)),
-            cluster_cache: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
@@ -79,18 +83,8 @@ impl DatabendQueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        // We only get the cluster once during the query.
-        let mut cluster_cache = self.cluster_cache.write();
-
-        match &*cluster_cache {
-            Some(cached) => Ok(cached.clone()),
-            None => {
-                let cluster = self.session.try_get_cluster()?;
-                *cluster_cache = Some(cluster.clone());
-                Ok(cluster)
-            }
-        }
+    pub fn get_cluster(&self) -> ClusterRef {
+        self.cluster_cache.clone()
     }
 
     pub fn get_current_database(&self) -> String {

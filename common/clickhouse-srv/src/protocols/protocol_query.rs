@@ -106,6 +106,7 @@ impl QueryClientInfo {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Default, Debug)]
 pub struct QueryRequest {
     pub(crate) query_id: String,

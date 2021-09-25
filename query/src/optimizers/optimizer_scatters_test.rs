@@ -19,7 +19,7 @@ use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;
 use crate::sql::PlanParser;
 use crate::tests::try_create_cluster_context;
-use crate::tests::ClusterNode;
+use crate::tests::ClusterDescriptor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scatter_optimizer() -> Result<()> {
@@ -204,8 +204,12 @@ async fn test_scatter_optimizer() -> Result<()> {
     ];
 
     for test in tests {
-        let ctx =
-            try_create_cluster_context(&[ClusterNode::create("Github", 1, "www.github.com:9090")])?;
+        let ctx = try_create_cluster_context(
+            ClusterDescriptor::new()
+                .with_node("Github", "www.github.com:9090")
+                .with_node("dummy_local", "127.0.0.1:9090")
+                .with_local_id("dummy_local"),
+        )?;
 
         let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
         let mut optimizer = ScattersOptimizer::create(ctx);

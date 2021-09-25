@@ -14,14 +14,14 @@
 
 #[cfg(test)]
 mod cluster_test;
+#[cfg(test)]
+mod config_test;
+#[cfg(test)]
+mod health_test;
+#[cfg(test)]
+mod logs_test;
 
 pub mod cluster;
 pub mod config;
-#[cfg(test)]
-mod config_test;
 pub mod health;
-#[cfg(test)]
-mod health_test;
 pub mod logs;
-#[cfg(test)]
-mod logs_test;

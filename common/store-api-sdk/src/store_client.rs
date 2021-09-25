@@ -26,7 +26,6 @@ use common_kv_api_util::STORE_SYNC_CALL_TIMEOUT;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
-use log::info;
 use prost::Message;
 use serde::de::DeserializeOwned;
 use tonic::codegen::InterceptedService;
@@ -44,6 +43,7 @@ use crate::RpcClientTlsConfig;
 
 #[derive(Clone)]
 pub struct StoreClient {
+    #[allow(dead_code)]
     token: Vec<u8>,
     pub(crate) timeout: Duration,
     pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,
@@ -162,7 +162,7 @@ impl StoreClient {
                 act
             ))),
             Some(resp) => {
-                info!("do_action: resp: {:}", flight_result_to_str(&resp));
+                log::debug!("do_action: resp: {:}", flight_result_to_str(&resp));
                 let v = serde_json::from_slice::<R>(&resp.body)?;
                 Ok(v)
             }

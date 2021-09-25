@@ -19,19 +19,14 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::catalogs::Table;
-use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::datasources::database::system::ConfigsTable;
-use crate::sessions::SessionManager;
+use crate::tests::try_create_context_with_config;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
     let config = Config::default();
-    let cluster = Cluster::empty();
-
-    let sessions = SessionManager::from_conf(config, cluster)?;
-    let test_session = sessions.create_session("TestSession")?;
-    let ctx = test_session.create_context();
+    let ctx = try_create_context_with_config(config)?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create();

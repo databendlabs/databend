@@ -13,15 +13,17 @@
 // limitations under the License.
 //
 
+use std::ops::Add;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::UNIX_EPOCH;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_kv_api::KVApi;
-use common_kv_api::SyncKVApi;
+use common_kv_api_vo::UpsertKVActionResult;
+use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
-use common_metatypes::SeqValue;
 
 use crate::namespace::NamespaceApi;
 use crate::namespace::NodeInfo;
@@ -32,109 +34,208 @@ pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";
 #[allow(dead_code)]
 pub struct NamespaceMgr {
     kv_api: Arc<dyn KVApi>,
+    lift_time: Duration,
+    namespace_prefix: String,
 }
 
 impl NamespaceMgr {
-    #[allow(dead_code)]
-    pub fn new(kv_api: Arc<dyn KVApi>) -> Self {
-        NamespaceMgr { kv_api }
+    pub fn new(
+        kv_api: Arc<dyn KVApi>,
+        tenant: &str,
+        namespace: &str,
+        lift_time: Duration,
+    ) -> Result<Self> {
+        Ok(NamespaceMgr {
+            kv_api,
+            lift_time,
+            namespace_prefix: format!(
+                "{}/{}/{}/databend_query",
+                NAMESPACE_API_KEY_PREFIX,
+                Self::escape_for_key(tenant)?,
+                Self::escape_for_key(namespace)?
+            ),
+        })
     }
 
-    pub fn key_prefix(&self, prefixes: &[String]) -> String {
-        let mut res = NAMESPACE_API_KEY_PREFIX.to_string();
-        for prefix in prefixes {
-            res.push('/');
-            res.push_str(prefix.as_str());
+    fn escape_for_key(key: &str) -> Result<String> {
+        let mut new_key = Vec::with_capacity(key.len());
+
+        fn hex(num: u8) -> u8 {
+            match num {
+                0..=9 => b'0' + num,
+                10..=15 => b'a' + (num - 10),
+                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
+            }
         }
-        res
+
+        for char in key.as_bytes() {
+            match char {
+                b'0'..=b'9' => new_key.push(*char),
+                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(*char),
+                _other => {
+                    new_key.push(b'%');
+                    new_key.push(hex(*char / 16));
+                    new_key.push(hex(*char % 16));
+                }
+            }
+        }
+
+        Ok(String::from_utf8(new_key)?)
+    }
+
+    fn unescape_for_key(key: &str) -> Result<String> {
+        let mut new_key = Vec::with_capacity(key.len());
+
+        fn unhex(num: u8) -> u8 {
+            match num {
+                b'0'..=b'9' => num - b'0',
+                b'a'..=b'f' => num - b'a',
+                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
+            }
+        }
+
+        let bytes = key.as_bytes();
+
+        let mut index = 0;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'%' => {
+                    let mut num = unhex(bytes[index + 1]) * 16;
+                    num += unhex(bytes[index + 2]);
+                    new_key.push(num);
+                    index += 3;
+                }
+                other => {
+                    new_key.push(other);
+                    index += 1;
+                }
+            }
+        }
+
+        Ok(String::from_utf8(new_key)?)
+    }
+
+    fn new_lift_time(&self) -> KVMeta {
+        let now = std::time::SystemTime::now();
+        let expire_at = now
+            .add(self.lift_time)
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        KVMeta {
+            expire_at: Some(expire_at.as_secs()),
+        }
     }
 }
 
+#[async_trait::async_trait]
 impl NamespaceApi for NamespaceMgr {
-    fn add_node(&self, tenant_id: String, namespace_id: String, node: NodeInfo) -> Result<u64> {
+    async fn add_node(&self, node: NodeInfo) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
-        let match_seq = MatchSeq::Exact(0);
+        let seq = MatchSeq::Exact(0);
+        let meta = Some(self.new_lift_time());
+        let value = Some(serde_json::to_vec(&node)?);
+        let node_key = format!(
+            "{}/{}",
+            self.namespace_prefix,
+            Self::escape_for_key(&node.id)?
+        );
+        let upsert_node = self.kv_api.upsert_kv(&node_key, seq, value, meta);
 
-        let key = self.key_prefix(&[tenant_id, namespace_id, node.id.clone()]);
-        let value = serde_json::to_vec(&node)?;
-
-        let res = self
-            .kv_api
-            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
-
-        match (res.prev, res.result) {
-            (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
-            (Some((s, _)), None) => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
+        match upsert_node.await? {
+            UpsertKVActionResult {
+                prev: None,
+                result: Some((s, _)),
+            } => Ok(s),
+            UpsertKVActionResult {
+                prev: Some((s, _)),
+                result: _,
+            } => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
                 "Namespace already exists, seq [{}]",
                 s
             ))),
-            r @ (_, _) => Err(ErrorCode::UnknownException(format!(
-                "upsert result not expected (using version 0, got {:?})",
-                r
-            ))),
+            catch_result @ UpsertKVActionResult { .. } => {
+                Err(ErrorCode::UnknownException(format!(
+                    "upsert result not expected (using version 0, got {:?})",
+                    catch_result
+                )))
+            }
         }
     }
 
-    fn get_nodes(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        _seq: Option<u64>,
-    ) -> Result<Vec<SeqValue<NodeInfo>>> {
-        let key = self.key_prefix(&[tenant_id, namespace_id]);
-        let values = self.kv_api.sync_prefix_list_kv(key.as_str())?;
-        let mut r = vec![];
-        for (_key, (s, val)) in values {
-            let u = serde_json::from_slice::<NodeInfo>(&val.value)
-                .map_err_to_code(ErrorCode::NamespaceIllegalNodeFormat, || "")?;
+    async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
+        let values = self.kv_api.prefix_list_kv(&self.namespace_prefix).await?;
 
-            r.push((s, u));
+        let mut nodes_info = Vec::with_capacity(values.len());
+        for (node_key, (_, value)) in values {
+            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.value)?;
+
+            let node_key = Self::unescape_for_key(&node_key)?;
+            node_info.id = node_key[self.namespace_prefix.len() + 1..].to_string();
+            nodes_info.push(node_info);
         }
-        Ok(r)
+
+        Ok(nodes_info)
     }
 
-    fn update_node(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        node: NodeInfo,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>> {
-        let key = self.key_prefix(&[tenant_id, namespace_id, node.id.clone()]);
-        let value = serde_json::to_vec(&node)?;
+    async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
+        let node_key = format!(
+            "{}/{}",
+            self.namespace_prefix,
+            Self::escape_for_key(&node_id)?
+        );
+        let upsert_node = self.kv_api.upsert_kv(&node_key, seq.into(), None, None);
 
-        let match_seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(s) => MatchSeq::Exact(s),
-        };
-        let res = self
-            .kv_api
-            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
-        match res.result {
-            Some((s, _)) => Ok(Some(s)),
-            None => Err(ErrorCode::NamespaceUnknownNode(format!(
-                "unknown node, or seq not match {:?}",
-                node
-            ))),
-        }
-    }
-
-    fn drop_node(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        node_id: String,
-        seq: Option<u64>,
-    ) -> Result<()> {
-        let key = self.key_prefix(&[tenant_id, namespace_id, node_id.clone()]);
-        let r = self.kv_api.sync_upsert_kv(&key, seq.into(), None, None)?;
-        if r.prev.is_some() && r.result.is_none() {
-            Ok(())
-        } else {
-            Err(ErrorCode::NamespaceUnknownNode(format!(
+        match upsert_node.await? {
+            UpsertKVActionResult {
+                prev: Some(_),
+                result: None,
+            } => Ok(()),
+            UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
                 "unknown node {:?}",
                 node_id
-            )))
+            ))),
+        }
+    }
+
+    async fn heartbeat(&self, node_id: String, seq: Option<u64>) -> Result<u64> {
+        let meta = Some(self.new_lift_time());
+        let node_key = format!(
+            "{}/{}",
+            self.namespace_prefix,
+            Self::escape_for_key(&node_id)?
+        );
+        match seq {
+            None => {
+                let seq = MatchSeq::GE(1);
+                let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
+
+                match upsert_meta.await? {
+                    UpsertKVActionResult {
+                        prev: Some(_),
+                        result: Some((s, _)),
+                    } => Ok(s),
+                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+                        "unknown node {:?}",
+                        node_id
+                    ))),
+                }
+            }
+            Some(exact) => {
+                let seq = MatchSeq::Exact(exact);
+                let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
+
+                match upsert_meta.await? {
+                    UpsertKVActionResult {
+                        prev: Some(_),
+                        result: Some((s, _)),
+                    } => Ok(s),
+                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+                        "unknown node {:?}",
+                        node_id
+                    ))),
+                }
+            }
         }
     }
 }

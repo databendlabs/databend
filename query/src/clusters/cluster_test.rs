@@ -16,67 +16,51 @@ use common_exception::Result;
 use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
-use crate::clusters::cluster::Cluster;
+use crate::clusters::cluster::ClusterDiscovery;
+use crate::configs::Config;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_add_node_with_local() -> Result<()> {
-    let cluster = Cluster::empty();
+async fn test_single_cluster_discovery() -> Result<()> {
+    let config = Config::default();
+    let cluster_discovery = ClusterDiscovery::create_global(config.clone()).await?;
+    cluster_discovery.register_to_metastore(&config).await?;
+    let discover_cluster = cluster_discovery.discover().await?;
 
-    cluster
-        .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))
-        .await?;
-    assert_eq!(
-        cluster.get_node_by_name(String::from("node1"))?.local,
-        false
-    );
-    cluster
-        .add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9090"))
-        .await?;
-    assert_eq!(cluster.get_node_by_name(String::from("node2"))?.local, true);
-    cluster
-        .add_node(&String::from("node3"), 5, &String::from("localhost:9090"))
-        .await?;
-    assert_eq!(cluster.get_node_by_name(String::from("node3"))?.local, true);
-    cluster
-        .add_node(&String::from("node4"), 5, &String::from("github.com:9001"))
-        .await?;
-    assert_eq!(
-        cluster.get_node_by_name(String::from("node4"))?.local,
-        false
-    );
-    cluster
-        .add_node(&String::from("node5"), 5, &String::from("github.com:9090"))
-        .await?;
-    assert_eq!(
-        cluster.get_node_by_name(String::from("node5"))?.local,
-        false
-    );
-
+    let discover_cluster_nodes = discover_cluster.get_nodes();
+    assert_eq!(discover_cluster_nodes.len(), 1);
+    assert_eq!(discover_cluster.is_empty(), true);
+    assert_eq!(discover_cluster.is_local(&discover_cluster_nodes[0]), true);
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_add_node_with_clone() -> Result<()> {
-    let cluster = Cluster::empty();
-
-    cluster
-        .add_node(&String::from("node1"), 5, &String::from("127.0.0.1:9001"))
-        .await?;
-    cluster
-        .add_node(&String::from("node2"), 5, &String::from("127.0.0.1:9002"))
-        .await?;
-    assert_eq!(cluster.get_nodes()?.len(), 2);
-
-    let cluster_clone = cluster.clone();
-    assert_eq!(cluster_clone.get_nodes()?.len(), 2);
-
-    cluster_clone.remove_node("node1".to_string())?;
-    assert_eq!(cluster.get_nodes()?.len(), 1);
-    assert_eq!(cluster_clone.get_nodes()?.len(), 1);
-
-    cluster.remove_node("node2".to_string())?;
-    assert_eq!(cluster.get_nodes()?.len(), 0);
-    assert_eq!(cluster_clone.get_nodes()?.len(), 0);
-
-    Ok(())
-}
+// TODO:(Winter) need store KVApi for cluster multiple nodes test
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_multiple_cluster_discovery() -> Result<()> {
+//     let mut config = Config::default();
+//     config.query.tenant = String::from("tenant_id");
+//     config.query.namespace = String::from("namespace_id");
+//
+//     let cluster_discovery_1 = ClusterDiscovery::create_global(config.clone()).await?;
+//     let cluster_discovery_2 = ClusterDiscovery::create_global(config.clone()).await?;
+//
+//     cluster_discovery_1.register_to_metastore(&config).await?;
+//     cluster_discovery_2.register_to_metastore(&config).await?;
+//
+//     let discover_cluster_1 = cluster_discovery_1.discover().await?;
+//     let discover_cluster_2 = cluster_discovery_2.discover().await?;
+//
+//     let discover_cluster_nodes_1 = discover_cluster_1.get_nodes();
+//     let discover_cluster_nodes_2 = discover_cluster_2.get_nodes();
+//
+//     assert_eq!(discover_cluster_nodes_1.len(), 2);
+//     assert_eq!(discover_cluster_nodes_2.len(), 2);
+//     assert_eq!(discover_cluster_1.is_empty(), false);
+//     assert_eq!(discover_cluster_2.is_empty(), false);
+//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) || discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), true);
+//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) && discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), false);
+//     assert_eq!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) || discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), true);
+//     assert_eq!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) && discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), false);
+//
+//     assert_eq!(discover_cluster_nodes_1, discover_cluster_nodes_2);
+//     Ok(())
+// }

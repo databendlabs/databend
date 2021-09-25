@@ -38,3 +38,5 @@ mysql_handler_port = 3308
 # Databend Query ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9002
+
+namespace = "test_cluster"

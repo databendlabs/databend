@@ -77,6 +77,15 @@ impl ErrorCode {
         }
     }
 
+    pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
+        Self {
+            code: self.code(),
+            display_text: format!("{}{}", self.display_text, msg.as_ref()),
+            cause: self.cause,
+            backtrace: self.backtrace,
+        }
+    }
+
     pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {
         self.backtrace.clone()
     }
@@ -168,6 +177,7 @@ build_exceptions! {
     AuthenticateFailure(51),
     TLSConfigurationFailure(52),
     UnknownSession(53),
+    UnexpectedError(54),
 
     // uncategorized
     UnexpectedResponseType(600),

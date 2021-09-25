@@ -162,7 +162,7 @@ where T: Ord
 #[derive(Clone)]
 pub struct AggregateWindowFunnelFunction<T> {
     display_name: String,
-    arguments: Vec<DataField>,
+    _arguments: Vec<DataField>,
     event_size: usize,
     window: u64,
     t: PhantomData<T>,
@@ -300,7 +300,7 @@ where
         let window = params[0].as_u64()?;
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
-            arguments,
+            _arguments: arguments,
             event_size,
             window,
             t: PhantomData,

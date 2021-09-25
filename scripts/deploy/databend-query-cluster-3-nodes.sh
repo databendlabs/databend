@@ -32,16 +32,4 @@ nohup target/debug/databend-query -c scripts/deploy/config/databend-query-node-3
 echo "Waiting on node-3..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9093
 
-curl http://127.0.0.1:8081/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster1","address":"127.0.0.1:9091", "priority":3, "cpus":8}'
-curl http://127.0.0.1:8081/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster2","address":"127.0.0.1:9092", "priority":3, "cpus":8}'
-curl http://127.0.0.1:8081/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster3","address":"127.0.0.1:9093", "priority":1, "cpus":8}'
-
-curl http://127.0.0.1:8082/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster1","address":"127.0.0.1:9091", "priority":3, "cpus":8}'
-curl http://127.0.0.1:8082/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster2","address":"127.0.0.1:9092", "priority":3, "cpus":8}'
-curl http://127.0.0.1:8082/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster3","address":"127.0.0.1:9093", "priority":1, "cpus":8}'
-
-curl http://127.0.0.1:8083/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster1","address":"127.0.0.1:9091", "priority":3, "cpus":8}'
-curl http://127.0.0.1:8083/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster2","address":"127.0.0.1:9092", "priority":3, "cpus":8}'
-curl http://127.0.0.1:8083/v1/cluster/add -X POST -H "Content-Type: application/json" -d '{"name":"cluster3","address":"127.0.0.1:9093", "priority":1, "cpus":8}'
-
 echo "All done..."

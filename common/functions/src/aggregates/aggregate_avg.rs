@@ -59,7 +59,7 @@ where T: std::ops::Add<Output = T> + DFPrimitiveType
 #[derive(Clone)]
 pub struct AggregateAvgFunction<T, SumT> {
     display_name: String,
-    arguments: Vec<DataField>,
+    _arguments: Vec<DataField>,
     t: PhantomData<T>,
     sum_t: PhantomData<SumT>,
 }
@@ -170,7 +170,7 @@ where
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
-            arguments,
+            _arguments: arguments,
             t: PhantomData,
             sum_t: PhantomData,
         }))

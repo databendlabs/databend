@@ -13,11 +13,12 @@
 // limitations under the License.
 //
 
-pub use namespace_api::NamespaceApi;
-pub use namespace_api::NodeInfo;
-
 #[cfg(test)]
 mod namespace_mgr_test;
 
 mod namespace_api;
 mod namespace_mgr;
+
+pub use namespace_api::NamespaceApi;
+pub use namespace_api::NodeInfo;
+pub use namespace_mgr::NamespaceMgr;

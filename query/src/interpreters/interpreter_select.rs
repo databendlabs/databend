@@ -21,6 +21,7 @@ use std::task::Context;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_management::NodeInfo;
 use common_planners::SelectPlan;
 use common_runtime::tokio::macros::support::Pin;
 use common_runtime::tokio::macros::support::Poll;
@@ -31,7 +32,6 @@ use futures::StreamExt;
 
 use crate::api::CancelAction;
 use crate::api::FlightAction;
-use crate::clusters::Node;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -75,7 +75,7 @@ impl Interpreter for SelectInterpreter {
     }
 }
 
-type Scheduled = HashMap<String, Arc<Node>>;
+type Scheduled = HashMap<String, Arc<NodeInfo>>;
 
 impl SelectInterpreter {
     async fn schedule_query(&self, scheduled: &mut Scheduled) -> Result<SendableDataBlockStream> {
@@ -85,13 +85,15 @@ impl SelectInterpreter {
         let scheduled_tasks = scheduler.reschedule(&optimized_plan)?;
         let remote_stage_actions = scheduled_tasks.get_tasks()?;
 
+        let config = self.ctx.get_config();
+        let cluster = self.ctx.get_cluster();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
         for (node, action) in remote_stage_actions {
-            let mut flight_client = node.get_flight_client(&self.ctx.get_config()).await?;
+            let mut flight_client = cluster.create_node_conn(&node.id, &config).await?;
             let executing_action = flight_client.execute_action(action.clone(), timeout);
 
             executing_action.await?;
-            scheduled.insert(node.name.clone(), node.clone());
+            scheduled.insert(node.id.clone(), node.clone());
         }
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
@@ -101,15 +103,15 @@ impl SelectInterpreter {
 
     async fn error_handler(scheduled: Scheduled, context: &DatabendQueryContextRef, timeout: u64) {
         let query_id = context.get_id();
+        let config = context.get_config();
+        let cluster = context.get_cluster();
+
         for (_stream_name, scheduled_node) in scheduled {
-            match scheduled_node
-                .get_flight_client(&context.get_config())
-                .await
-            {
+            match cluster.create_node_conn(&scheduled_node.id, &config).await {
                 Err(cause) => {
                     log::error!(
                         "Cannot cancel action for {}, cause: {}",
-                        scheduled_node.name,
+                        scheduled_node.id,
                         cause
                     );
                 }
@@ -119,7 +121,7 @@ impl SelectInterpreter {
                     if let Err(cause) = executing_action.await {
                         log::error!(
                             "Cannot cancel action for {}, cause:{}",
-                            scheduled_node.name,
+                            scheduled_node.id,
                             cause
                         );
                     }

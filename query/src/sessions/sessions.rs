@@ -29,7 +29,7 @@ use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
-use crate::clusters::ClusterRef;
+use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabaseEngine;
 use crate::sessions::session::Session;
@@ -37,7 +37,7 @@ use crate::sessions::session_ref::SessionRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
-    pub(in crate::sessions) cluster: ClusterRef,
+    pub(in crate::sessions) discovery: ClusterDiscoveryRef,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -47,7 +47,7 @@ pub struct SessionManager {
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn from_conf(conf: Config, cluster: ClusterRef) -> Result<SessionManagerRef> {
+    pub fn from_conf(conf: Config, discovery: ClusterDiscoveryRef) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
 
         catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
@@ -56,7 +56,7 @@ impl SessionManager {
         Ok(Arc::new(SessionManager {
             catalog,
             conf,
-            cluster,
+            discovery,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
@@ -66,8 +66,8 @@ impl SessionManager {
         &self.conf
     }
 
-    pub fn get_cluster(self: &Arc<Self>) -> ClusterRef {
-        self.cluster.clone()
+    pub fn get_cluster_discovery(self: &Arc<Self>) -> ClusterDiscoveryRef {
+        self.discovery.clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {

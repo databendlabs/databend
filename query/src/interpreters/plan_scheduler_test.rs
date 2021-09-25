@@ -23,7 +23,7 @@ use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::DatabendQueryContextRef;
 use crate::tests::try_create_cluster_context;
-use crate::tests::ClusterNode;
+use crate::tests::ClusterDescriptor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scheduler_plan_without_stage() -> Result<()> {
@@ -76,7 +76,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     }
 
     assert_eq!(remote_actions.len(), 2);
-    assert_eq!(remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[0].0.id, String::from("dummy_local"));
     assert_eq!(remote_actions[0].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[0].1.scatters_expression,
@@ -87,7 +87,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
         PlanNode::Empty(EmptyPlan::cluster())
     );
 
-    assert_eq!(remote_actions[1].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[1].0.id, String::from("dummy"));
     assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[1].1.scatters_expression,
@@ -156,10 +156,10 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         }
     }
     assert_eq!(remote_actions.len(), 3);
-    assert_eq!(remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[0].0.id, String::from("dummy_local"));
     assert_eq!(remote_actions[0].1.sinks, vec![
         String::from("dummy_local"),
-        String::from("dummy")
+        String::from("dummy"),
     ]);
     assert_eq!(
         remote_actions[0].1.scatters_expression,
@@ -173,14 +173,14 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
         PlanNode::Empty(EmptyPlan::create())
     );
 
-    assert_eq!(remote_actions[1].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[1].0.id, String::from("dummy_local"));
     assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[1].1.scatters_expression,
         Expression::create_literal(DataValue::UInt64(Some(0)))
     );
 
-    assert_eq!(remote_actions[2].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[2].0.id, String::from("dummy"));
     assert_eq!(remote_actions[2].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[2].1.scatters_expression,
@@ -258,10 +258,10 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     }
 
     assert_eq!(remote_actions.len(), 4);
-    assert_eq!(remote_actions[0].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[0].0.id, String::from("dummy_local"));
     assert_eq!(remote_actions[0].1.sinks, vec![
         String::from("dummy_local"),
-        String::from("dummy")
+        String::from("dummy"),
     ]);
     assert_eq!(
         remote_actions[0].1.scatters_expression,
@@ -272,10 +272,10 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         PlanNode::Empty(EmptyPlan::cluster())
     );
 
-    assert_eq!(remote_actions[2].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[2].0.id, String::from("dummy"));
     assert_eq!(remote_actions[2].1.sinks, vec![
         String::from("dummy_local"),
-        String::from("dummy")
+        String::from("dummy"),
     ]);
     assert_eq!(
         remote_actions[2].1.scatters_expression,
@@ -286,14 +286,14 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
         PlanNode::Empty(EmptyPlan::cluster())
     );
 
-    assert_eq!(remote_actions[1].0.name, String::from("dummy_local"));
+    assert_eq!(remote_actions[1].0.id, String::from("dummy_local"));
     assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[1].1.scatters_expression,
         Expression::create_literal(DataValue::UInt64(Some(1)))
     );
 
-    assert_eq!(remote_actions[3].0.name, String::from("dummy"));
+    assert_eq!(remote_actions[3].0.id, String::from("dummy"));
     assert_eq!(remote_actions[3].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[3].1.scatters_expression,
@@ -330,8 +330,10 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
 }
 
 async fn create_env() -> Result<DatabendQueryContextRef> {
-    try_create_cluster_context(&[
-        ClusterNode::create("dummy_local", 1, "localhost:9090"),
-        ClusterNode::create("dummy", 1, "github.com:9090"),
-    ])
+    try_create_cluster_context(
+        ClusterDescriptor::new()
+            .with_node("dummy_local", "localhost:9090")
+            .with_node("dummy", "github.com:9090")
+            .with_local_id("dummy_local"),
+    )
 }
