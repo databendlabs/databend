@@ -7,6 +7,17 @@ VERSION ?= latest
 setup:
 	bash ./scripts/setup/dev_setup.sh
 
+fmt:
+	cargo fmt
+
+lint:
+	cargo fmt
+	cargo clippy -- -D warnings
+
+miri:
+	cargo miri setup
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
+
 run: build
 	bash ./scripts/deploy/databend-query-standalone.sh release
 
@@ -14,6 +25,9 @@ run-debug: build-debug
 	bash ./scripts/deploy/databend-query-standalone.sh
 
 build:
+	bash ./scripts/build/build-release.sh
+
+build-native:
 	bash ./scripts/build/build-native.sh
 
 build-debug:
@@ -40,11 +54,11 @@ cross-compile-release:
 cli-build:
 	bash ./scripts/build/build-cli.sh
 
-unit-test:
-	bash ./scripts/ci/ci-run-unit-tests.sh
-
 cli-test:
 	bash ./scripts/ci/ci-run-cli-unit-tests.sh
+
+unit-test:
+	bash ./scripts/ci/ci-run-unit-tests.sh
 
 stateless-test:
 	bash ./scripts/build/build-debug.sh
@@ -60,19 +74,11 @@ stateless-cluster-test-tls:
 
 test: unit-test stateless-test
 
-fmt:
-	cargo fmt
-
-lint:
-	cargo fmt
-	cargo clippy -- -D warnings
-
-miri:
-	cargo miri setup
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
-
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
+
+docker_release:
+	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg version=$VERSION --push
 
 # experiment feature: take a look at docker/README.md for detailed multi architecture image build support
 dockerx:
@@ -97,8 +103,5 @@ clean:
 	cargo clean
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
 	rm -rf ./_local_fs/ ./_meta/ ./_logs/ ./common/stoppable/_logs/ ./query/_logs/ ./store/_logs/
-
-docker_release:
-	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg version=$VERSION --push
 
 .PHONY: setup test run build fmt lint docker clean
