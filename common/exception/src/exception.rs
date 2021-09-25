@@ -218,9 +218,9 @@ build_exceptions! {
     ConcurrentSnapshotInstall(2404),
     IllegalSnapshot(2405),
 
-    // MetaSrv server error
+    // KVSrv server error
 
-    MetaSrvError(2501),
+    KVSrvError(2501),
 
     // FS error
 

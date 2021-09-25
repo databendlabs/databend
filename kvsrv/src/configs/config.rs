@@ -41,15 +41,15 @@ lazy_static! {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
-    #[structopt(long, env = "METASRV_LOG_LEVEL", default_value = "INFO")]
+    #[structopt(long, env = "KVSRV_LOG_LEVEL", default_value = "INFO")]
     pub log_level: String,
 
-    #[structopt(long, env = "METASRV_LOG_DIR", default_value = "./_logs")]
+    #[structopt(long, env = "KVSRV_LOG_DIR", default_value = "./_logs")]
     pub log_dir: String,
 
     #[structopt(
         long,
-        env = "METASRV_METRIC_API_ADDRESS",
+        env = "KVSRV_METRIC_API_ADDRESS",
         default_value = "127.0.0.1:28001"
     )]
     pub metric_api_address: String,
@@ -65,7 +65,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "METASRV_FLIGHT_API_ADDRESS",
+        env = "KVSRV_FLIGHT_API_ADDRESS",
         default_value = "127.0.0.1:28003"
     )]
     pub flight_api_address: String,

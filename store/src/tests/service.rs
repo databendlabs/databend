@@ -19,9 +19,9 @@ use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_sled_store::get_sled_db;
 use common_tracing::tracing;
-use metasrv::meta_service::GetReq;
-use metasrv::meta_service::MetaNode;
-use metasrv::meta_service::MetaServiceClient;
+use kvsrv::meta_service::GetReq;
+use kvsrv::meta_service::MetaNode;
+use kvsrv::meta_service::MetaServiceClient;
 use tempfile::tempdir;
 use tempfile::TempDir;
 

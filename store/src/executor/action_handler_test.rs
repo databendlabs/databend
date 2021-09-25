@@ -38,8 +38,8 @@ use common_store_api_sdk::storage_api_impl::AppendResult;
 use common_store_api_sdk::storage_api_impl::TruncateTableAction;
 use common_store_api_sdk::storage_api_impl::TruncateTableResult;
 use common_tracing::tracing;
+use kvsrv::meta_service::MetaNode;
 use maplit::hashmap;
-use metasrv::meta_service::MetaNode;
 use pretty_assertions::assert_eq;
 
 use crate::dfs::Dfs;

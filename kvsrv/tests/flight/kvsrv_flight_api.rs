@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test arrow-flight API of metasrv
+//! Test arrow-flight API of kvsrv
 
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -25,13 +25,13 @@ use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
 use common_store_api_sdk::StoreClient;
 use common_tracing::tracing;
-use metasrv::init_meta_ut;
+use kvsrv::init_meta_ut;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
-    // - Start a metasrv server.
+    // - Start a kvsrv server.
     // - create db and create table
     // - restart
     // - Test read the db and read the table.
@@ -39,7 +39,7 @@ async fn test_restart() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (mut tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (mut tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
     let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -79,7 +79,7 @@ async fn test_restart() -> anyhow::Result<()> {
         );
     }
 
-    tracing::info!("--- stop Metasrv");
+    tracing::info!("--- stop kvsrv");
     {
         let (stop_tx, fin_rx) = tc.channels.take().unwrap();
         stop_tx
@@ -94,7 +94,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
         // restart by opening existent meta db
         tc.config.raft_config.boot = false;
-        metasrv::tests::start_metasrv_with_context(&mut tc).await?;
+        kvsrv::tests::start_kvsrv_with_context(&mut tc).await?;
     }
 
     tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
@@ -128,7 +128,7 @@ async fn test_generic_kv_mget() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -176,7 +176,7 @@ async fn test_generic_kv_list() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -224,7 +224,7 @@ async fn test_generic_kv_delete() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -292,7 +292,7 @@ async fn test_generic_kv_update() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -398,7 +398,7 @@ async fn test_generic_kv_update_meta() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_update_meta");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -504,7 +504,7 @@ async fn test_generic_kv_timeout() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_timeout");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -618,7 +618,7 @@ async fn test_generic_kv() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = kvsrv::tests::start_kvsrv().await?;
 
         let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 

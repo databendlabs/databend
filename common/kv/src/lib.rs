@@ -17,7 +17,7 @@
 //!
 //! `KV` talks the same API defined in `KVApi`.
 //!
-//! `KV` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
+//! `KV` behave exactly the same as a kvsrv without distributed logs(raft), since it is driven by
 //! a embedded raft `StateMachine`.
 
 mod kv;

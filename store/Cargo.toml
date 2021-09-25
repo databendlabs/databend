@@ -34,7 +34,8 @@ common-raft-store = {path = "../common/raft-store"}
 common-base = {path = "../common/base" }
 common-sled-store = {path = "../common/sled-store"}
 common-tracing = {path = "../common/tracing"}
-metasrv = {path = "../metasrv"}
+
+kvsrv = {path = "../kvsrv" }
 
 # Github dependencies
 

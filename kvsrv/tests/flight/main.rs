@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod metasrv_flight_api;
-pub mod metasrv_flight_tls;
+pub mod kvsrv_flight_api;
+pub mod kvsrv_flight_tls;

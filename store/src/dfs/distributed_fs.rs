@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_metatypes::Cmd;
 use common_metatypes::LogEntry;
 use common_tracing::tracing;
-use metasrv::meta_service::MetaNode;
+use kvsrv::meta_service::MetaNode;
 
 use crate::fs::FileSystem;
 use crate::fs::ListResult;

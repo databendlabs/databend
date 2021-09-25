@@ -78,7 +78,7 @@ use crate::meta_service::ShutdownError;
 ///   log
 ///   state_machine
 /// TODO(xp): MetaNode recovers persisted state when restarted.
-/// TODO(xp): move Metasrv to a standalone file.
+/// TODO(xp): move kvsrv to a standalone file.
 pub struct MetaRaftStore {
     /// The ID of the Raft node for which this storage instances is configured.
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
@@ -147,7 +147,7 @@ impl MetaRaftStore {
 }
 
 impl MetaRaftStore {
-    /// Open an existent `Metasrv` instance or create an new one:
+    /// Open an existent `kvsrv` instance or create an new one:
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
@@ -700,7 +700,7 @@ impl MetaNode {
                 config.snapshot_logs_since_last,
             ))
             .validate()
-            .expect("building raft Config from databend-metasrv config")
+            .expect("building raft Config from databend-kvsrv config")
     }
 
     /// Start the grpc service for raft communication and meta operation API.
@@ -737,14 +737,14 @@ impl MetaNode {
         Ok(())
     }
 
-    /// Start a Metasrv node from initialized store.
+    /// Start a kvsrv node from initialized store.
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
         let (mn, _is_open) = Self::open_create_boot(config, Some(()), None, None).await?;
         Ok(mn)
     }
 
-    /// Open or create a Metasrv node.
+    /// Open or create a kvsrv node.
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
@@ -872,7 +872,7 @@ impl MetaNode {
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    /// When a node is initialized with boot or boot_non_voter, start it with Metasrv::new().
+    /// When a node is initialized with boot or boot_non_voter, start it with kvsrv::new().
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot(
         node_id: NodeId,

@@ -30,8 +30,7 @@ members = [
 
     # Query
     "query",
-
-    "metasrv",
+    "kvsrv",
 
     # Store
     "store",

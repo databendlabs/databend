@@ -16,10 +16,10 @@ use std::collections::HashMap;
 
 use common_base::tokio;
 use common_tracing::tracing;
+use kvsrv::meta_service::GetReq;
+use kvsrv::meta_service::MetaNode;
+use kvsrv::meta_service::MetaServiceClient;
 use maplit::hashmap;
-use metasrv::meta_service::GetReq;
-use metasrv::meta_service::MetaNode;
-use metasrv::meta_service::MetaServiceClient;
 use pretty_assertions::assert_eq;
 use tempfile::tempdir;
 use tempfile::TempDir;

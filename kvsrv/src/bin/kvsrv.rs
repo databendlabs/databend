@@ -15,11 +15,11 @@
 use common_base::tokio;
 use common_sled_store::init_sled_db;
 use common_tracing::init_tracing_with_file;
+use kvsrv::api::FlightServer;
+use kvsrv::api::HttpService;
+use kvsrv::configs::Config;
+use kvsrv::metrics::MetricService;
 use log::info;
-use metasrv::api::FlightServer;
-use metasrv::api::HttpService;
-use metasrv::configs::Config;
-use metasrv::metrics::MetricService;
 use structopt::StructOpt;
 
 #[tokio::main]
@@ -31,15 +31,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .init();
 
     let _guards = init_tracing_with_file(
-        "databend-metasrv",
+        "databend-kvsrv",
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
     );
 
     info!("{:?}", conf.clone());
     info!(
-        "Databend-Metasrv v-{}",
-        *metasrv::configs::config::DATABEND_COMMIT_VERSION
+        "Databend-kvsrv v-{}",
+        *kvsrv::configs::config::DATABEND_COMMIT_VERSION
     );
 
     init_sled_db(conf.raft_config.raft_dir.clone());
@@ -66,10 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = FlightServer::create(conf.clone());
         info!(
-            "Databend-Metasrv API server listening on {}",
+            "Databend-kvsrv API server listening on {}",
             conf.flight_api_address
         );
-        let (_stop_tx, fin_rx) = srv.start().await.expect("Databend-Metasrv service error");
+        let (_stop_tx, fin_rx) = srv.start().await.expect("Databend-kvsrv service error");
         fin_rx.await?;
     }
 

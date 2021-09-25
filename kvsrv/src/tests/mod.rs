@@ -18,5 +18,5 @@ pub mod tls_constants;
 
 pub use service::assert_meta_connection;
 pub use service::next_port;
-pub use service::start_metasrv;
-pub use service::start_metasrv_with_context;
+pub use service::start_kvsrv;
+pub use service::start_kvsrv_with_context;
