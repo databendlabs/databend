@@ -16,9 +16,11 @@ common-exception = {path = "../common/exception"}
 common-metatypes = {path = "../common/metatypes"}
 common-raft-store = {path = "../common/raft-store"}
 common-runtime = {path = "../common/runtime"}
-common-sled-store = {path = "../common/sled-store"}
-common-store-api = {path = "../common/store-api"}
 common-tracing = {path = "../common/tracing"}
+common-kv-api = {path = "../common/kv-apis/api" }
+common-kv-api-vo = {path = "../common/kv-apis/vo" }
+common-kv-api-util = {path = "../common/kv-apis/util" }
+common-sled-store = {path = "../common/sled-store"}
 
 
 # Crates.io dependencies

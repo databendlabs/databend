@@ -18,13 +18,13 @@ use std::time::Duration;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
 use common_management::NodeInfo;
 use common_runtime::tokio;
 use common_runtime::tokio::time::sleep as tokio_async_sleep;
 use common_store_api_sdk::ConnectionFactory;
-use common_store_api_sdk::KVApi;
 use rand::thread_rng;
 use rand::Rng;
 

@@ -18,6 +18,7 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_dfs_api_vo::ReadPlanResult;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertIntoPlan;
@@ -27,7 +28,6 @@ use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
-use common_store_api::ReadPlanResult;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;

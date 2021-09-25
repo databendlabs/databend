@@ -21,6 +21,11 @@ common-arrow = {path = "../common/arrow"}
 common-datablocks = {path = "../common/datablocks"}
 common-datavalues = {path = "../common/datavalues"}
 common-exception = {path = "../common/exception"}
+common-store-api-sdk = {path = "../common/store-api-sdk" }
+common-kv-api = {path = "../common/kv-apis/api" }
+common-kv-api-vo = {path = "../common/kv-apis/vo" }
+common-meta-api = {path = "../common/meta-apis/api" }
+common-meta-api-vo = {path = "../common/meta-apis/vo" }
 common-functions = {path = "../common/functions"}
 common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}
@@ -29,7 +34,6 @@ common-profling = { path = "../common/profiling" }
 common-raft-store = {path = "../common/raft-store"}
 common-runtime = {path = "../common/runtime"}
 common-sled-store = {path = "../common/sled-store"}
-common-store-api-sdk = {path = "../common/store-api-sdk" }
 common-tracing = {path = "../common/tracing"}
 common-uniq-id = {path = "../common/uniq_id"}
 metasrv = {path = "../metasrv"}
@@ -77,6 +81,9 @@ flaky_test = "0.1"
 maplit = "1.0.2"
 tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 reqwest = { version = "0.11", features = ["json"] }
+
+common-dfs-api = {path = "../common/dfs-apis/api" }
+common-dfs-api-vo = {path = "../common/dfs-apis/vo" }
 
 [build-dependencies]
 common-building = {path = "../common/building"}

@@ -13,68 +13,13 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
-
-use common_datavalues::DataSchemaRef;
-use common_metatypes::Database;
+use common_meta_api_vo::*;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
-use common_metatypes::Table;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateDatabaseActionResult {
-    pub database_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetDatabaseActionResult {
-    pub database_id: u64,
-    pub db: String,
-    pub engine: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DropDatabaseActionResult {}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableActionResult {
-    pub table_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DropTableActionResult {}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableActionResult {
-    pub table_id: u64,
-    pub db: String,
-    pub name: String,
-    pub schema: DataSchemaRef,
-    pub engine: String,
-    pub options: HashMap<String, String>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DatabaseMetaSnapshot {
-    pub meta_ver: u64,
-    pub db_metas: Vec<(String, Database)>,
-    pub tbl_metas: Vec<(u64, Table)>,
-}
-pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum CommitTableReply {
-    // done
-    Success,
-    // recoverable, returns the current snapshot-id, which should be merged with
-    Conflict(String),
-    // fatal, not recoverable, returns the current snapshot-id
-    Failure(String),
-}
 
 #[async_trait::async_trait]
 pub trait MetaApi: Send + Sync {

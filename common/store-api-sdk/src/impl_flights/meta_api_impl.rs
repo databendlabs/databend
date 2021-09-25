@@ -14,22 +14,14 @@
 //
 
 use common_exception::ErrorCode;
+use common_meta_api::MetaApi;
+use common_meta_api_vo::*;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_store_api::CommitTableReply;
-pub use common_store_api::CreateDatabaseActionResult;
-pub use common_store_api::CreateTableActionResult;
-pub use common_store_api::DatabaseMetaReply;
-pub use common_store_api::DatabaseMetaSnapshot;
-pub use common_store_api::DropDatabaseActionResult;
-pub use common_store_api::DropTableActionResult;
-pub use common_store_api::GetDatabaseActionResult;
-pub use common_store_api::GetTableActionResult;
-use common_store_api::MetaApi;
 
 use crate::action_declare;
 use crate::store_do_action::StoreDoAction;

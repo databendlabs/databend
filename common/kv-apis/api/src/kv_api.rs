@@ -14,30 +14,12 @@
 //
 
 use async_trait::async_trait;
+use common_kv_api_vo::GetKVActionResult;
+use common_kv_api_vo::MGetKVActionResult;
+use common_kv_api_vo::PrefixListReply;
+use common_kv_api_vo::UpsertKVActionResult;
 use common_metatypes::KVMeta;
-use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
-use common_metatypes::SeqValue;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct UpsertKVActionResult {
-    /// prev is the value before upsert.
-    pub prev: Option<SeqValue<KVValue>>,
-    /// result is the value after upsert.
-    pub result: Option<SeqValue<KVValue>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetKVActionResult {
-    pub result: Option<SeqValue<KVValue>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct MGetKVActionResult {
-    pub result: Vec<Option<SeqValue<KVValue>>>,
-}
-
-pub type PrefixListReply = Vec<(String, SeqValue<KVValue>)>;
 
 #[async_trait]
 pub trait KVApi: Send + Sync {

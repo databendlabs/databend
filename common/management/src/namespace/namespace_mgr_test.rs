@@ -18,9 +18,9 @@ use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
 use common_exception::Result;
+use common_kv_api::KVApi;
+use common_kv_api_vo::GetKVActionResult;
 use common_runtime::tokio;
-use common_store_api::GetKVActionResult;
-use common_store_api::KVApi;
 use kvlocal::LocalKVStore;
 
 use super::*;
@@ -38,7 +38,9 @@ async fn test_successfully_add_node() -> Result<()> {
         .await?;
 
     match value {
-        GetKVActionResult { result: Some((1, value)) } => {
+        GetKVActionResult {
+            result: Some((1, value)),
+        } => {
             assert!(value.meta.unwrap().expire_at.unwrap() - current_time >= 60);
             assert_eq!(value.value, serde_json::to_vec(&node_info)?);
         }
@@ -99,9 +101,12 @@ async fn test_successfully_drop_node() -> Result<()> {
 async fn test_unknown_node_drop_node() -> Result<()> {
     let (_, namespace_api) = new_namespace_api().await?;
 
-    match namespace_api.drop_node(String::from("UNKNOWN_ID"), None).await {
+    match namespace_api
+        .drop_node(String::from("UNKNOWN_ID"), None)
+        .await
+    {
         Ok(_) => assert!(false, "Unknown node drop node must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 4008)
+        Err(cause) => assert_eq!(cause.code(), 4008),
     }
 
     Ok(())
