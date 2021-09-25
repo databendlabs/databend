@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_runtime::tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 

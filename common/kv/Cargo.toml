@@ -11,10 +11,10 @@ edition = "2021"
 
 [dependencies]
 # Workspace dependencies
+common-base = {path = "../base" }
 common-exception = {path = "../exception" }
 common-metatypes = {path = "../metatypes" }
 common-raft-store = {path = "../raft-store" }
-common-runtime = {path = "../runtime" }
 common-tracing = {path = "../tracing" }
 common-kv-api = {path = "../kv-apis/api" }
 common-kv-api-vo = {path = "../kv-apis/vo" }

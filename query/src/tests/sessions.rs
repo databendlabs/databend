@@ -14,8 +14,8 @@
 
 use std::env;
 
+use common_base::tokio::runtime::Runtime;
 use common_exception::Result;
-use common_runtime::tokio::runtime::Runtime;
 
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;

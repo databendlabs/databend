@@ -11,7 +11,7 @@ edition = "2021"
 common-exception = {path = "../exception"}
 common-metatypes = {path = "../metatypes"}
 common-planners = {path = "../planners"}
-common-runtime = {path = "../runtime"}
+common-base = {path = "../base" }
 common-sled-store = {path = "../sled-store"}
 common-dfs-api-vo = {path ="../dfs-apis/vo"}
 common-tracing = {path = "../tracing"}
@@ -30,5 +30,3 @@ maplit = "1.0.2"
 [dev-dependencies]
 pretty_assertions = "0.7"
 tempfile = "3.2.0"
-
-common-uniq-id = {path = "../uniq_id"}

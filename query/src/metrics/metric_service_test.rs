@@ -14,7 +14,7 @@
 
 use std::net::SocketAddr;
 
-use common_runtime::tokio;
+use common_base::tokio;
 use metrics::counter;
 
 use crate::metrics::MetricService;

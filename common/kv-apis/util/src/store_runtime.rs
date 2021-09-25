@@ -16,7 +16,7 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use common_runtime::Runtime;
+use common_base::Runtime;
 use common_tracing::tracing;
 use lazy_static::lazy_static;
 
@@ -24,7 +24,7 @@ pub const CONF_STORE_RT_TH_NUM: &str = "STORE_RT_TH_NUM";
 pub const CONF_STORE_SYNC_CALL_TIMEOUT_SEC: &str = "STORE_SYNC_CALL_TIMEOUT_SEC";
 
 lazy_static! {
-    pub static ref STORE_RUNTIME: common_runtime::Runtime = build_rt();
+    pub static ref STORE_RUNTIME: common_base::Runtime = build_rt();
     pub static ref STORE_SYNC_CALL_TIMEOUT: Option<Duration> = get_sync_call_timeout();
 }
 
@@ -49,11 +49,11 @@ fn build_rt() -> Runtime {
 
     if let Some(num) = th_num {
         tracing::info!("bring up store api runtime with {} thread", num);
-        common_runtime::Runtime::with_worker_threads(num)
+        common_base::Runtime::with_worker_threads(num)
             .expect("FATAL, initialize store runtime failure")
     } else {
         tracing::info!("bring up store api runtime with default worker threads");
-        common_runtime::Runtime::with_default_worker_threads()
+        common_base::Runtime::with_default_worker_threads()
             .expect("FATAL, initialize store runtime failure")
     }
 }

@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use async_raft::RaftMetrics;
 use async_raft::State;
+use common_base::tokio;
+use common_base::tokio::time::Duration;
 use common_metatypes::Cmd;
 use common_metatypes::LogEntry;
 use common_metatypes::MatchSeq;
 use common_metatypes::NodeId;
 use common_raft_store::state_machine::AppliedState;
-use common_runtime::tokio;
-use common_runtime::tokio::time::Duration;
 use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;

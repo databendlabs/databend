@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow_flight::FlightData;
+use common_base::Runtime;
 use common_cache::Cache;
 use common_cache::LruCache;
 use common_datavalues::DataSchema;
@@ -32,7 +33,6 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_runtime::Runtime;
 
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;

@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_base::tokio;
+use common_base::tokio::sync::oneshot;
+use common_base::tokio::sync::oneshot::Receiver;
+use common_base::tokio::sync::oneshot::Sender;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::oneshot;
-use common_runtime::tokio::sync::oneshot::Receiver;
-use common_runtime::tokio::sync::oneshot::Sender;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use tonic::transport;

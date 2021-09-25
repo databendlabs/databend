@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::tokio::net::TcpStream;
 use common_clickhouse_srv::connection::Connection;
 use common_clickhouse_srv::error_codes::NO_FREE_CONNECTION;
 use common_clickhouse_srv::errors::Error;
@@ -25,7 +26,6 @@ use common_clickhouse_srv::ClickHouseSession;
 use common_clickhouse_srv::QueryState;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio::net::TcpStream;
 
 pub struct RejectCHConnection;
 

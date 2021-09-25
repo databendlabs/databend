@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_runtime::tokio;
+use common_base::tokio;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;

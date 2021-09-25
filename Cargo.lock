@@ -730,6 +730,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-base"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-exception",
+ "common-tracing",
+ "ctrlc",
+ "futures",
+ "pprof",
+ "pretty_assertions",
+ "tokio",
+]
+
+[[package]]
 name = "common-building"
 version = "0.1.0"
 dependencies = [
@@ -898,13 +912,13 @@ name = "common-kv"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "common-base",
  "common-exception",
  "common-kv-api",
  "common-kv-api-util",
  "common-kv-api-vo",
  "common-metatypes",
  "common-raft-store",
- "common-runtime",
  "common-sled-store",
  "common-tracing",
  "pretty_assertions",
@@ -927,7 +941,7 @@ dependencies = [
 name = "common-kv-api-util"
 version = "0.1.0"
 dependencies = [
- "common-runtime",
+ "common-base",
  "common-tracing",
  "lazy_static",
 ]
@@ -945,12 +959,12 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "common-base",
  "common-exception",
  "common-kv",
  "common-kv-api",
  "common-kv-api-vo",
  "common-metatypes",
- "common-runtime",
  "common-tracing",
  "lazy_static",
  "mockall",
@@ -1009,37 +1023,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-profling"
-version = "0.1.0"
-dependencies = [
- "common-exception",
- "common-runtime",
- "pprof",
-]
-
-[[package]]
-name = "common-progress"
-version = "0.1.0"
-dependencies = [
- "common-exception",
- "pretty_assertions",
-]
-
-[[package]]
 name = "common-raft-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
+ "common-base",
  "common-dfs-api-vo",
  "common-exception",
  "common-metatypes",
  "common-planners",
- "common-runtime",
  "common-sled-store",
  "common-tracing",
- "common-uniq-id",
  "maplit",
  "pretty_assertions",
  "rand",
@@ -1051,25 +1047,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-runtime"
-version = "0.1.0"
-dependencies = [
- "common-exception",
- "tokio",
-]
-
-[[package]]
 name = "common-sled-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-raft",
  "byteorder",
+ "common-base",
  "common-exception",
  "common-metatypes",
- "common-runtime",
  "common-tracing",
- "common-uniq-id",
  "lazy_static",
  "pretty_assertions",
  "serde",
@@ -1079,23 +1066,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-stoppable"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-exception",
- "common-runtime",
- "common-tracing",
- "ctrlc",
- "futures",
-]
-
-[[package]]
 name = "common-store-api-sdk"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-arrow",
+ "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-dfs-api",
@@ -1109,7 +1085,6 @@ dependencies = [
  "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
- "common-runtime",
  "common-store-api-sdk-util",
  "common-streams",
  "common-tracing",
@@ -1137,12 +1112,11 @@ name = "common-streams"
 version = "0.1.0"
 dependencies = [
  "common-arrow",
+ "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-io",
- "common-progress",
- "common-runtime",
  "crossbeam 0.8.1",
  "futures",
  "pin-project-lite",
@@ -1163,10 +1137,6 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
-
-[[package]]
-name = "common-uniq-id"
-version = "0.1.0"
 
 [[package]]
 name = "console"
@@ -1576,6 +1546,7 @@ dependencies = [
  "chrono-tz 0.6.0",
  "clickhouse-rs",
  "common-arrow",
+ "common-base",
  "common-building",
  "common-cache",
  "common-clickhouse-srv",
@@ -1595,9 +1566,6 @@ dependencies = [
  "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
- "common-profling",
- "common-progress",
- "common-runtime",
  "common-store-api-sdk",
  "common-streams",
  "common-tracing",
@@ -1659,6 +1627,7 @@ dependencies = [
  "axum-server",
  "byteorder",
  "common-arrow",
+ "common-base",
  "common-building",
  "common-datablocks",
  "common-datavalues",
@@ -1673,13 +1642,10 @@ dependencies = [
  "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
- "common-profling",
  "common-raft-store",
- "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",
  "common-tracing",
- "common-uniq-id",
  "env_logger 0.9.0",
  "flaky_test",
  "futures",
@@ -3163,6 +3129,7 @@ dependencies = [
  "axum-server",
  "byteorder",
  "common-arrow",
+ "common-base",
  "common-building",
  "common-datablocks",
  "common-datavalues",
@@ -3174,13 +3141,10 @@ dependencies = [
  "common-meta-api",
  "common-metatypes",
  "common-planners",
- "common-profling",
  "common-raft-store",
- "common-runtime",
  "common-sled-store",
  "common-store-api-sdk",
  "common-tracing",
- "common-uniq-id",
  "env_logger 0.9.0",
  "flaky_test",
  "futures",

@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::oneshot;
+use common_base::tokio;
+use common_base::tokio::sync::oneshot;
 use common_tracing::tracing;
 use tempfile::tempdir;
 use tempfile::TempDir;
@@ -52,7 +52,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
 }
 
 pub fn next_port() -> u32 {
-    29000u32 + (common_uniq_id::uniq_usize() as u32)
+    29000u32 + (common_base::uniq_usize() as u32)
 }
 
 pub struct MetaSrvTestContext {

@@ -14,7 +14,7 @@ common-datavalues = {path = "../datavalues"}
 common-exception= {path = "../exception"}
 common-metatypes = {path = "../metatypes"}
 common-planners = {path = "../planners"}
-common-runtime = {path = "../runtime"}
+common-base = {path = "../base" }
 common-streams = {path = "../streams"}
 common-tracing = {path = "../tracing"}
 common-kv-api = {path = "../kv-apis/api" }

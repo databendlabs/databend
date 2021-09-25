@@ -17,11 +17,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
+use common_base::tokio;
 use common_exception::Result;
 use common_kv::KV;
 use common_kv_api::KVApi;
 use common_kv_api_vo::GetKVActionResult;
-use common_runtime::tokio;
 
 use super::*;
 use crate::namespace::namespace_mgr::NamespaceMgr;

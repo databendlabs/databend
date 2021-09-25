@@ -15,12 +15,12 @@
 use async_raft::raft::Entry;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
+use common_base::tokio;
 use common_metatypes::Cmd;
 use common_metatypes::KVValue;
 use common_metatypes::LogEntry;
 use common_metatypes::LogId;
 use common_metatypes::LogIndex;
-use common_runtime::tokio;
 
 use crate::get_sled_db;
 use crate::testing::fake_key_spaces::Files;
@@ -1443,5 +1443,5 @@ pub fn new_sled_test_context() -> SledTestContext {
 }
 
 pub fn next_port() -> u32 {
-    29000u32 + (common_uniq_id::uniq_usize() as u32)
+    29000u32 + (common_base::uniq_usize() as u32)
 }

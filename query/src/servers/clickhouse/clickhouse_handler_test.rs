@@ -19,9 +19,9 @@ use clickhouse_rs::types::Complex;
 use clickhouse_rs::Block;
 use clickhouse_rs::ClientHandle;
 use clickhouse_rs::Pool;
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
 
 use crate::servers::ClickHouseHandler;
 use crate::tests::SessionManagerBuilder;

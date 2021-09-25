@@ -16,7 +16,6 @@ use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
 use pprof::protos::Message;
 
 pub struct Profiling {

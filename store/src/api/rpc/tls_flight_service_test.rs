@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
-use common_runtime::tokio;
 use common_store_api_sdk::RpcClientTlsConfig;
 use common_store_api_sdk::StoreClient;
 use pretty_assertions::assert_eq;

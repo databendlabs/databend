@@ -17,6 +17,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_base::tokio::sync::Mutex;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_kv_api_util::STORE_RUNTIME;
@@ -31,7 +32,6 @@ use common_metatypes::Operation;
 use common_raft_store::config::RaftConfig;
 use common_raft_store::state_machine::AppliedState;
 use common_raft_store::state_machine::StateMachine;
-use common_runtime::tokio::sync::Mutex;
 pub use common_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 

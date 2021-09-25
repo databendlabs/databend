@@ -18,10 +18,10 @@ use std::sync::Barrier;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_runtime::tokio;
 use mysql::prelude::FromRow;
 use mysql::prelude::Queryable;
 use mysql::Conn;

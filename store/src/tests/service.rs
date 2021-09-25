@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::oneshot;
+use common_base::tokio;
+use common_base::tokio::sync::oneshot;
 use common_sled_store::get_sled_db;
 use common_tracing::tracing;
 use metasrv::meta_service::GetReq;
@@ -54,7 +54,7 @@ pub async fn start_store_server_with_context(tc: &mut StoreTestContext) -> Resul
 }
 
 pub fn next_port() -> u32 {
-    19000u32 + (common_uniq_id::uniq_usize() as u32)
+    19000u32 + (common_base::uniq_usize() as u32)
 }
 
 pub struct StoreTestContext {

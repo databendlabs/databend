@@ -152,7 +152,7 @@ impl Session {
         inner.client_host = host;
         inner.io_shutdown_tx = Some(tx);
 
-        common_runtime::tokio::spawn(async move {
+        common_base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
                 (io_shutdown)();
                 tx.send(()).ok();

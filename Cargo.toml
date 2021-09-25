@@ -2,6 +2,7 @@
 members = [
     # Common
     "common/arrow",
+    "common/base",
     "common/building",
     "common/cache",
     "common/clickhouse-srv",
@@ -21,16 +22,11 @@ members = [
     "common/meta-apis/api",
     "common/metatypes",
     "common/planners",
-    "common/profiling",
-    "common/progress",
     "common/raft-store",
-    "common/runtime",
     "common/sled-store",
-    "common/stoppable",
     "common/store-api-sdk",
     "common/streams",
     "common/tracing",
-    "common/uniq_id",
 
     # Query
     "query",

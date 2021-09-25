@@ -38,6 +38,7 @@ use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
+use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManagerRef;
@@ -52,7 +53,7 @@ pub struct DatabendQueryFlightService {
 
 impl DatabendQueryFlightService {
     pub fn create(
-        dispatcher: Arc<DatabendQueryFlightDispatcher>,
+        dispatcher: DatabendQueryFlightDispatcherRef,
         sessions: SessionManagerRef,
     ) -> Self {
         DatabendQueryFlightService {
@@ -63,16 +64,13 @@ impl DatabendQueryFlightService {
 }
 
 type Response<T> = Result<RawResponse<T>, Status>;
-type StreamRequest<T> = Request<Streaming<T>>;
+type StreamReq<T> = Request<Streaming<T>>;
 
 #[async_trait::async_trait]
 impl FlightService for DatabendQueryFlightService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
 
-    async fn handshake(
-        &self,
-        _: StreamRequest<HandshakeRequest>,
-    ) -> Response<Self::HandshakeStream> {
+    async fn handshake(&self, _: StreamReq<HandshakeRequest>) -> Response<Self::HandshakeStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement handshake.",
         ))
@@ -116,7 +114,7 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoPutStream = FlightStream<PutResult>;
 
-    async fn do_put(&self, _: StreamRequest<FlightData>) -> Response<Self::DoPutStream> {
+    async fn do_put(&self, _: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement do_put.",
         ))
@@ -124,7 +122,7 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoExchangeStream = FlightStream<FlightData>;
 
-    async fn do_exchange(&self, _: StreamRequest<FlightData>) -> Response<Self::DoExchangeStream> {
+    async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement do_exchange.",
         ))

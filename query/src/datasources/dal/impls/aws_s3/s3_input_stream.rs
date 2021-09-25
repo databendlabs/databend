@@ -21,7 +21,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use bytes::BufMut;
-use common_runtime::tokio::io::ErrorKind;
+use common_base::tokio::io::ErrorKind;
 use futures::ready;
 use futures::stream::Fuse;
 use futures::Future;

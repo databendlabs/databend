@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-use common_runtime::tokio;
+use common_base::tokio;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {

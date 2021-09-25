@@ -22,6 +22,7 @@ simd = ["common-arrow/simd"]
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
+common-base = { path = "../common/base" }
 common-management = { path = "../common/management" }
 common-cache = { path = "../common/cache"}
 common-datablocks = { path = "../common/datablocks" }
@@ -30,11 +31,8 @@ common-exception = { path = "../common/exception" }
 common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
-common-progress = { path = "../common/progress" }
-common-runtime = { path = "../common/runtime" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-profling = { path = "../common/profiling" }
 common-store-api-sdk= {path = "../common/store-api-sdk" }
 common-kv-api = { path = "../common/kv-apis/api" }
 common-kv-api-vo = { path = "../common/kv-apis/vo" }

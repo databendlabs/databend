@@ -15,6 +15,7 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use common_base::tokio;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_kv_api::SyncKVApi;
@@ -24,7 +25,6 @@ use common_kv_api_vo::UpsertKVActionResult;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
-use common_runtime::tokio;
 use common_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 

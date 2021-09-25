@@ -23,8 +23,7 @@ tempfile = "3.2.0"
 
 
 [dev-dependencies]
-common-uniq-id = {path = "../uniq_id"}
-common-runtime = {path = "../runtime"}
+common-base = {path = "../base" }
 common-metatypes = {path = "../metatypes"}
 
 pretty_assertions = "0.7"

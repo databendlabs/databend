@@ -30,12 +30,10 @@ common-functions = {path = "../common/functions"}
 common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}
 common-planners = {path = "../common/planners"}
-common-profling = { path = "../common/profiling" }
 common-raft-store = {path = "../common/raft-store"}
-common-runtime = {path = "../common/runtime"}
+common-base = {path = "../common/base" }
 common-sled-store = {path = "../common/sled-store"}
 common-tracing = {path = "../common/tracing"}
-common-uniq-id = {path = "../common/uniq_id"}
 metasrv = {path = "../metasrv"}
 
 # Github dependencies

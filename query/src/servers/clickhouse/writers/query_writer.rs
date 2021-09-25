@@ -17,6 +17,7 @@ use std::borrow::Cow;
 use chrono::Date;
 use chrono::DateTime;
 use chrono_tz::Tz;
+use common_base::ProgressValues;
 use common_clickhouse_srv::connection::Connection;
 use common_clickhouse_srv::errors::Error as CHError;
 use common_clickhouse_srv::errors::Result as CHResult;
@@ -28,7 +29,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_progress::ProgressValues;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 

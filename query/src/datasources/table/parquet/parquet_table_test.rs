@@ -15,10 +15,10 @@
 
 use std::env;
 
+use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
