@@ -16,7 +16,7 @@
 use std::io::Write;
 
 use common_exception::ErrorCode;
-use common_runtime::tokio::io::AsyncReadExt;
+use common_base::tokio::io::AsyncReadExt;
 use futures::Stream;
 use futures::StreamExt;
 use rusoto_core::ByteStream;

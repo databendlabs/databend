@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use common_planners::PlanNode;
-use common_runtime::tokio;
+use common_base::tokio;
 use metrics::histogram;
 use msql_srv::ErrorKind;
 use msql_srv::InitWriter;

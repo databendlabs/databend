@@ -18,7 +18,7 @@ use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_runtime::tokio::net::TcpStream;
+use common_base::tokio::net::TcpStream;
 use msql_srv::MysqlIntermediary;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;

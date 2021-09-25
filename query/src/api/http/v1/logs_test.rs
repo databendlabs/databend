@@ -20,7 +20,7 @@ use axum::http::{self};
 use axum::AddExtensionLayer;
 use axum::Router;
 use common_exception::Result;
-use common_runtime::tokio;
+use common_base::tokio;
 use pretty_assertions::assert_eq;
 use tower::ServiceExt;
 

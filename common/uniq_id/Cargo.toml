@@ -1,8 +1,0 @@
-[package]
-name = "common-uniq-id"
-version = "0.1.0"
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
-

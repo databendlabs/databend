@@ -17,7 +17,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_runtime::tokio::sync::broadcast;
+use tokio::sync::broadcast;
 use common_tracing::tracing;
 use futures::Future;
 

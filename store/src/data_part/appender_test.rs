@@ -28,7 +28,7 @@ mod test {
     use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
     use common_datablocks::DataBlock;
     use common_datavalues::prelude::*;
-    use common_runtime::tokio;
+    use common_base::tokio;
 
     use crate::data_part::appender::*;
     use crate::localfs::LocalFS;

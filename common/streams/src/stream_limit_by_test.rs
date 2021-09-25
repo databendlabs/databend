@@ -15,7 +15,7 @@
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_runtime::tokio;
+use common_base::tokio;
 use futures::stream::StreamExt;
 
 use crate::*;

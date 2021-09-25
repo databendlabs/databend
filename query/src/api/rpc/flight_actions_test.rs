@@ -18,7 +18,7 @@ use common_arrow::arrow_flight::Action;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_runtime::tokio;
+use common_base::tokio;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::ShuffleAction;

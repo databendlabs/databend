@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_runtime::tokio;
+use common_base::tokio;
 use common_tracing::tracing;
 use maplit::hashmap;
 use metasrv::meta_service::GetReq;

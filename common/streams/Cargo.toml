@@ -9,10 +9,10 @@ edition = "2021"
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = {path = "../arrow"}
+common-base = {path = "../base" }
 common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
-common-progress = {path = "../progress"}
 common-io = {path = "../io"}
 
 # Github dependencies
@@ -23,6 +23,4 @@ futures = "0.3"
 pin-project-lite = "^0.2"
 
 [dev-dependencies]
-common-runtime = {path = "../runtime"}
-
 pretty_assertions = "0.7"

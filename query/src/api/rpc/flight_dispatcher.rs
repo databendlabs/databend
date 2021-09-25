@@ -23,8 +23,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::RwLock;
-use common_runtime::tokio::sync::mpsc::Sender;
-use common_runtime::tokio::sync::*;
+use common_base::tokio::sync::mpsc::Sender;
+use common_base::tokio::sync::*;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -48,6 +48,8 @@ pub struct DatabendQueryFlightDispatcher {
     stages_notify: Arc<RwLock<HashMap<String, Arc<Notify>>>>,
     abort: Arc<AtomicBool>,
 }
+
+pub type DatabendQueryFlightDispatcherRef = Arc<DatabendQueryFlightDispatcher>;
 
 impl DatabendQueryFlightDispatcher {
     pub fn create() -> DatabendQueryFlightDispatcher {

@@ -28,7 +28,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_progress::ProgressValues;
+use common_base::ProgressValues;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 

@@ -36,7 +36,7 @@ pub use common_dfs_api_vo::TruncateTableResult;
 use common_exception::ErrorCode;
 use common_planners::PlanNode;
 use common_planners::ScanPlan;
-use common_runtime::tokio;
+use common_base::tokio;
 use common_streams::SendableDataBlockStream;
 use futures::SinkExt;
 use futures::StreamExt;

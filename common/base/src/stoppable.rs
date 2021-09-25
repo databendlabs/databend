@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
-use common_runtime::tokio::sync::broadcast;
+use tokio::sync::broadcast;
 
 /// A task that can be started and stopped.
 #[async_trait::async_trait]

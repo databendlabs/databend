@@ -22,8 +22,8 @@ use std::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::mpsc::Receiver;
+use common_base::tokio;
+use common_base::tokio::sync::mpsc::Receiver;
 use futures::future::Either;
 use metrics::counter;
 

@@ -21,7 +21,7 @@ use clickhouse_rs::ClientHandle;
 use clickhouse_rs::Pool;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
+use common_base::tokio;
 
 use crate::servers::ClickHouseHandler;
 use crate::tests::SessionManagerBuilder;

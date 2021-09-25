@@ -2,6 +2,7 @@
 members = [
     # Common
     "common/arrow",
+    "common/base",
     "common/building",
     "common/cache",
     "common/cache",
@@ -15,14 +16,10 @@ members = [
     "common/management",
     "common/metatypes",
     "common/planners",
-    "common/profiling",
-    "common/progress",
     "common/raft-store",
-    "common/runtime",
     "common/streams",
     "common/exception",
     "common/tracing",
-    "common/profiling",
     "common/kv-apis/util",
     "common/kv-apis/api",
     "common/kv-apis/vo",
@@ -30,11 +27,9 @@ members = [
     "common/dfs-apis/api",
     "common/dfs-apis/vo",
     "common/sled-store",
-    "common/stoppable",
     "common/store-api-sdk",
     "common/streams",
     "common/tracing",
-    "common/uniq_id",
 
     # Query
     "query",

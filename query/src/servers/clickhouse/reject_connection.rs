@@ -25,7 +25,7 @@ use common_clickhouse_srv::ClickHouseSession;
 use common_clickhouse_srv::QueryState;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio::net::TcpStream;
+use common_base::tokio::net::TcpStream;
 
 pub struct RejectCHConnection;
 

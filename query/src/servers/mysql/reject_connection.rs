@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_runtime::tokio::io::AsyncReadExt;
-use common_runtime::tokio::io::AsyncWriteExt;
-use common_runtime::tokio::net::TcpStream;
+use common_base::tokio::io::AsyncReadExt;
+use common_base::tokio::io::AsyncWriteExt;
+use common_base::tokio::net::TcpStream;
 use msql_srv::ErrorKind;
 
 pub struct RejectConnection;

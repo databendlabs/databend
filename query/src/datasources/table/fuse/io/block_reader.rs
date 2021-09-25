@@ -29,7 +29,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_planners::Part;
-use common_runtime::tokio::sync::mpsc::Sender;
+use common_base::tokio::sync::mpsc::Sender;
 use futures::StreamExt;
 
 use crate::datasources::dal::DataAccessor;

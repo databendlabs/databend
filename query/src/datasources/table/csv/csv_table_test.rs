@@ -19,7 +19,7 @@ use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
+use common_base::tokio;
 use futures::TryStreamExt;
 
 use crate::datasources::table::csv::csv_table::CsvTable;

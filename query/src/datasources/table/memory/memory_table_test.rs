@@ -21,7 +21,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_planners::*;
-use common_runtime::tokio;
+use common_base::tokio;
 use futures::TryStreamExt;
 
 use crate::datasources::table::memory::memory_table::MemoryTable;

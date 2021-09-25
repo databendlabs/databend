@@ -31,7 +31,7 @@ use common_metatypes::Operation;
 use common_raft_store::config::RaftConfig;
 use common_raft_store::state_machine::AppliedState;
 use common_raft_store::state_machine::StateMachine;
-use common_runtime::tokio::sync::Mutex;
+use common_base::tokio::sync::Mutex;
 pub use common_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 

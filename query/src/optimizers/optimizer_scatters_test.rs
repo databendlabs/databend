@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_runtime::tokio;
+use common_base::tokio;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;

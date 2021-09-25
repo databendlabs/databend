@@ -16,7 +16,7 @@ use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_runtime::tokio;
+use common_base::tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 

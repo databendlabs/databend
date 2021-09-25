@@ -22,7 +22,7 @@ use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCode;
 use common_planners::PlanNode;
-use common_runtime::tokio::sync::mpsc::Sender;
+use common_base::tokio::sync::mpsc::Sender;
 use common_store_api_sdk::storage_api_impl::AppendResult;
 use common_store_api_sdk::storage_api_impl::ReadAction;
 use common_store_api_sdk::RequestFor;

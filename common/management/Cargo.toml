@@ -9,9 +9,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+common-base= {path = "../base" }
 common-exception= {path = "../exception"}
 common-metatypes= {path = "../metatypes"}
-common-runtime= {path = "../runtime"}
 common-kv-api= {path = "../kv-apis/api" }
 common-kv-api-vo= {path = "../kv-apis/vo" }
 common-tracing= {path = "../tracing"}
@@ -28,5 +28,5 @@ tempfile = "3.2.0"
 
 [dev-dependencies]
 tempfile = "3.2.0"
-common-runtime = { path = "../runtime"}
+common-base = { path = "../base" }
 mockall = "0.10.2"

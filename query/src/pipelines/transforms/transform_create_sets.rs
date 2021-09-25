@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_planners::Expression;
-use common_runtime::tokio::task::JoinHandle;
+use common_base::tokio::task::JoinHandle;
 use common_streams::SendableDataBlockStream;
 use common_streams::SubQueriesStream;
 use futures::future::join_all;

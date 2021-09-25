@@ -20,7 +20,7 @@ use std::time::UNIX_EPOCH;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_kv_api_vo::GetKVActionResult;
-use common_runtime::tokio;
+use common_base::tokio;
 use kvlocal::LocalKVStore;
 
 use super::*;

@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::broadcast;
-use common_runtime::tokio::sync::oneshot;
-use common_runtime::tokio::sync::oneshot::error::TryRecvError;
-use common_runtime::tokio::time::Duration;
+use tokio;
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::error::TryRecvError;
+use tokio::time::Duration;
 use common_tracing::tracing;
 
 use crate::stop_handle::StopHandle;

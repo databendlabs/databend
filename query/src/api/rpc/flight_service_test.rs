@@ -23,7 +23,7 @@ use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_runtime::tokio;
+use common_base::tokio;
 use tonic::Request;
 
 use crate::api::rpc::flight_actions::FlightAction;

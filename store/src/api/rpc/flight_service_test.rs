@@ -30,7 +30,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ScanPlan;
-use common_runtime::tokio;
+use common_base::tokio;
 use common_store_api_sdk::StoreClient;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;

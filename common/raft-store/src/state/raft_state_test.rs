@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use async_raft::storage::HardState;
-use common_runtime::tokio;
+use common_base::tokio;
 
 use crate::init_raft_store_ut;
 use crate::state::RaftState;

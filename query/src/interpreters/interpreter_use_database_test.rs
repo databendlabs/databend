@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
+use common_base::tokio;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 

@@ -22,8 +22,8 @@ use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
 use common_management::NodeInfo;
-use common_runtime::tokio;
-use common_runtime::tokio::time::sleep as tokio_async_sleep;
+use common_base::tokio;
+use common_base::tokio::time::sleep as tokio_async_sleep;
 use common_store_api_sdk::ConnectionFactory;
 use rand::thread_rng;
 use rand::Rng;
@@ -62,10 +62,8 @@ impl ClusterDiscovery {
         }))
     }
 
-    fn create_provider(
-        cfg: &Config,
-        api: Arc<dyn KVApi>,
-    ) -> Result<(Duration, Arc<dyn NamespaceApi>)> {
+    fn create_provider(cfg: &Config, api: Arc<dyn KVApi>) -> Result<(Duration, Arc<dyn NamespaceApi>)> {
+        // TODO: generate if tenant or namespace is empty
         let tenant = &cfg.query.tenant;
         let namespace = &cfg.query.namespace;
         let lift_time = Duration::from_secs(60);
@@ -84,7 +82,6 @@ impl ClusterDiscovery {
                     res.push(Arc::new(node.clone()))
                 }
 
-                println!("Discover cluster nodes {:?}", res);
                 Ok(Cluster::create(res, self.local_id.clone()))
             }
         }
