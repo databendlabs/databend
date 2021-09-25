@@ -2,6 +2,10 @@
 # databend-query -c databend_query_config_spec.toml
 
 # Log
+[log]
+log_level = "DEBUG"
+log_dir = "./_logs"
+
 # Meta
 [meta]
 meta_address = "0.0.0.0:9191"
