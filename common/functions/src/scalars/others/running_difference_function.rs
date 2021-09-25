@@ -93,16 +93,16 @@ impl Function for RunningDifferenceFunction {
 }
 
 macro_rules! run_difference_compute {
-    ($method:ident, $result_type:ident, $target_type:ty, $func: ident) => {
-        fn $func(column: &DataColumn, input_rows: usize) -> Result<DataColumn> {
+    ($method_name:ident, $to_df_array:ident, $result_logic_type:ident, $result_primitive_type:ty) => {
+        fn $method_name(column: &DataColumn, input_rows: usize) -> Result<DataColumn> {
             if let DataColumn::Constant(_, _) = column {
                 Ok(DataColumn::Constant(
-                    DataValue::$result_type(Some(0i8 as $target_type)),
+                    DataValue::$result_logic_type(Some(0_i8 as $result_primitive_type)),
                     input_rows,
                 ))
             } else {
                 let series = column.to_array()?;
-                let array = series.$method()?.inner();
+                let array = series.$to_df_array()?.inner();
 
                 let mut result_vec = Vec::with_capacity(array.len());
                 for index in 0..array.len() {
@@ -110,12 +110,12 @@ macro_rules! run_difference_compute {
                         true => result_vec.push(None),
                         false => {
                             if index == 0 {
-                                result_vec.push(Some(0i8 as $target_type))
+                                result_vec.push(Some(0_i8 as $result_primitive_type))
                             } else if array.is_null(index - 1) {
                                 result_vec.push(None)
                             } else {
-                                let diff = array.value(index) as $target_type
-                                    - array.value(index - 1) as $target_type;
+                                let diff = array.value(index) as $result_primitive_type
+                                    - array.value(index - 1) as $result_primitive_type;
                                 result_vec.push(Some(diff))
                             }
                         }
@@ -128,14 +128,14 @@ macro_rules! run_difference_compute {
     };
 }
 
-run_difference_compute!(i8, Int16, i16, compute_i8);
-run_difference_compute!(u8, Int16, i16, compute_u8);
-run_difference_compute!(i16, Int32, i32, compute_i16);
-run_difference_compute!(u16, Int32, i32, compute_u16);
-run_difference_compute!(i32, Int64, i64, compute_i32);
-run_difference_compute!(u32, Int64, i64, compute_u32);
-run_difference_compute!(i64, Int64, i64, compute_i64);
-run_difference_compute!(u64, Int64, i64, compute_u64);
+run_difference_compute!(compute_i8, i8, Int16, i16);
+run_difference_compute!(compute_u8, u8, Int16, i16);
+run_difference_compute!(compute_i16, i16, Int32, i32);
+run_difference_compute!(compute_u16, u16, Int32, i32);
+run_difference_compute!(compute_i32, i32, Int64, i64);
+run_difference_compute!(compute_u32, u32, Int64, i64);
+run_difference_compute!(compute_i64, i64, Int64, i64);
+run_difference_compute!(compute_u64, u64, Int64, i64);
 
 impl fmt::Display for RunningDifferenceFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

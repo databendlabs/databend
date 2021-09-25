@@ -54,6 +54,7 @@ lazy_static! {
         ConditionalFunction::register(map.clone()).unwrap();
         DateFunction::register(map.clone()).unwrap();
         OtherFunction::register(map.clone()).unwrap();
+
         map
     };
 }

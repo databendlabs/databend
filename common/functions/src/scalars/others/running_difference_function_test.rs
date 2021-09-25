@@ -19,20 +19,123 @@ use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::*;
+use crate::scalars::RunningDifferenceFunction;
+
+macro_rules! run_difference_constant_test {
+    ($method_name:ident, $primitive_type:ty, $logic_type:ident, $result_primitive_type:ty, $result_logic_type:ident, $array_type:ident) => {
+        #[test]
+        fn $method_name() -> Result<()> {
+            let schema =
+                DataSchemaRefExt::create(vec![DataField::new("a", DataType::$logic_type, false)]);
+            let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+                DataValue::$logic_type(Some(0_i8 as $primitive_type)),
+                5,
+            )]);
+
+            // Ok.
+            {
+                let run_difference_function = RunningDifferenceFunction::try_create("a")?;
+                let columns = vec![DataColumnWithField::new(
+                    block.try_column_by_name("a")?.clone(),
+                    schema.field_with_name("a")?.clone(),
+                )];
+
+                // eval
+                let result = run_difference_function.eval(&columns, block.num_rows())?;
+                let actual_ref = result.get_array_ref().unwrap();
+                let actual = actual_ref.as_any().downcast_ref::<$array_type>().unwrap();
+                let expected = $array_type::from_slice([0i8 as $result_primitive_type; 5]);
+
+                assert_eq!(&expected, actual);
+
+                // result type
+                let args_type_array = [DataType::$logic_type; 1];
+                let result_type = run_difference_function.return_type(&args_type_array[..])?;
+                assert_eq!(result_type, DataType::$result_logic_type);
+            }
+
+            Ok(())
+        }
+    };
+}
+
+run_difference_constant_test!(
+    test_running_difference_constant_i8,
+    i8,
+    Int8,
+    i16,
+    Int16,
+    Int16Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_u8,
+    u8,
+    UInt8,
+    i16,
+    Int16,
+    Int16Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_i16,
+    i16,
+    Int16,
+    i32,
+    Int32,
+    Int32Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_u16,
+    u16,
+    UInt16,
+    i32,
+    Int32,
+    Int32Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_i32,
+    i32,
+    Int32,
+    i64,
+    Int64,
+    Int64Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_u32,
+    u32,
+    UInt32,
+    i64,
+    Int64,
+    Int64Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_i64,
+    i64,
+    Int64,
+    i64,
+    Int64,
+    Int64Array
+);
+run_difference_constant_test!(
+    test_running_difference_constant_u64,
+    u64,
+    UInt64,
+    i64,
+    Int64,
+    Int64Array
+);
 
 macro_rules! run_difference_first_not_null_test {
-    ($method:ident, $primitive_type:ty, $data_type:ident, $result_type:ty, $result_primitive_type:ident, $array_type:ident) => {
+    ($method_name:ident, $primitive_type:ty, $logic_type:ident, $result_primitive_type:ty, $result_logic_type:ident, $array_type:ident) => {
         #[test]
-        fn $method() -> Result<()> {
+        fn $method_name() -> Result<()> {
             let schema =
-                DataSchemaRefExt::create(vec![DataField::new("a", DataType::$data_type, true)]);
+                DataSchemaRefExt::create(vec![DataField::new("a", DataType::$logic_type, true)]);
             let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
                 Some(2_i8 as $primitive_type),
-                Some(3_i8 as $primitive_type),
+                Some(3),
                 None,
-                Some(4_i8 as $primitive_type),
-                Some(10_i8 as $primitive_type),
+                Some(4),
+                Some(10),
             ])]);
 
             // Ok.
@@ -48,19 +151,20 @@ macro_rules! run_difference_first_not_null_test {
                 let actual_ref = result.get_array_ref().unwrap();
                 let actual = actual_ref.as_any().downcast_ref::<$array_type>().unwrap();
                 let expected = $array_type::from([
-                    Some(0),
-                    Some(1_i8 as $result_type),
+                    Some(0_i8 as $result_primitive_type),
+                    Some(1),
                     None,
                     None,
-                    Some(6_i8 as $result_type),
+                    Some(6),
                 ]);
 
                 assert_eq!(&expected, actual);
 
                 // result type
-                let args_type_array = [DataType::$data_type; 1];
+                let args_type_array = [DataType::$logic_type; 1];
                 let result_type = run_difference_function.return_type(&args_type_array[..])?;
-                assert_eq!(result_type, DataType::$result_primitive_type);
+
+                assert_eq!(result_type, DataType::$result_logic_type);
             }
 
             Ok(())
@@ -150,17 +254,17 @@ run_difference_first_not_null_test!(
 );
 
 macro_rules! run_difference_first_null_test {
-    ($method:ident, $primitive_type:ty, $data_type:ident, $result_type:ty, $result_primitive_type:ident, $array_type:ident) => {
+    ($method_name:ident, $primitive_type:ty, $logic_type:ident, $result_primitive_type:ty, $result_logic_type:ident, $array_type:ident) => {
         #[test]
-        fn $method() -> Result<()> {
+        fn $method_name() -> Result<()> {
             let schema =
-                DataSchemaRefExt::create(vec![DataField::new("a", DataType::$data_type, true)]);
+                DataSchemaRefExt::create(vec![DataField::new("a", DataType::$logic_type, true)]);
             let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
                 None,
                 Some(1_i8 as $primitive_type),
                 None,
-                Some(3_i8 as $primitive_type),
-                Some(7_i8 as $primitive_type),
+                Some(3),
+                Some(7),
             ])]);
 
             // Ok.
@@ -175,15 +279,20 @@ macro_rules! run_difference_first_null_test {
                 let result = run_difference_function.eval(&columns, block.num_rows())?;
                 let actual_ref = result.get_array_ref().unwrap();
                 let actual = actual_ref.as_any().downcast_ref::<$array_type>().unwrap();
-                let expected =
-                    $array_type::from([None, None, None, None, Some(4_i8 as $result_type)]);
+                let expected = $array_type::from([
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(4_i8 as $result_primitive_type),
+                ]);
 
                 assert_eq!(&expected, actual);
 
                 // result type
-                let args_type_array = [DataType::$data_type; 1];
+                let args_type_array = [DataType::$logic_type; 1];
                 let result_type = run_difference_function.return_type(&args_type_array[..])?;
-                assert_eq!(result_type, DataType::$result_primitive_type);
+                assert_eq!(result_type, DataType::$result_logic_type);
             }
 
             Ok(())
@@ -287,10 +396,10 @@ fn test_running_difference_datetime32_first_not_null() -> Result<()> {
         DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), true)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
         Some(2_u32),
-        Some(3_u32),
+        Some(3),
         None,
-        Some(4_u32),
-        Some(10_u32),
+        Some(4),
+        Some(10),
     ])]);
 
     // Ok.
@@ -323,10 +432,10 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), true)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
         Some(2_u32),
-        Some(3_u32),
+        Some(3),
         None,
-        Some(4_u32),
-        Some(10_u32),
+        Some(4),
+        Some(10),
     ])]);
 
     // Ok.
