@@ -16,7 +16,7 @@ common-kv-api= {path = "../kv-apis/api" }
 common-kv-api-vo= {path = "../kv-apis/vo" }
 common-tracing= {path = "../tracing"}
 
-kvlocal = {path = "../../kvlocal" }
+common-kv = {path = "../kv" }
 
 async-trait = "0.1"
 lazy_static = "1.4.0"

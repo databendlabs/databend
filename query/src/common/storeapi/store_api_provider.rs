@@ -55,7 +55,7 @@ impl StoreApiProvider {
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
         let local = self.conf.kv_service_config.address.is_empty();
         if local {
-            let client = kvlocal::LocalKVStore::new_temp().await?;
+            let client = common_kv::KV::new_temp().await?;
             Ok(Arc::new(client))
         } else {
             let client = StoreClient::try_new(&self.conf).await?;
@@ -67,7 +67,7 @@ impl StoreApiProvider {
     pub fn sync_try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
         let local = self.conf.kv_service_config.address.is_empty();
         if local {
-            let client = kvlocal::LocalKVStore::sync_new_temp()?;
+            let client = common_kv::KV::sync_new_temp()?;
             Ok(Arc::new(client))
         } else {
             let client = StoreClient::sync_try_new(&self.conf)?;

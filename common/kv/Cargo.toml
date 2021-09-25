@@ -1,0 +1,32 @@
+[package]
+name = "common-kv"
+version = "0.1.0"
+description = "distributed meta data service"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+
+
+[dependencies]
+# Workspace dependencies
+common-exception = {path = "../exception" }
+common-metatypes = {path = "../metatypes" }
+common-raft-store = {path = "../raft-store" }
+common-runtime = {path = "../runtime" }
+common-tracing = {path = "../tracing" }
+common-kv-api = {path = "../kv-apis/api" }
+common-kv-api-vo = {path = "../kv-apis/vo" }
+common-kv-api-util = {path = "../kv-apis/util" }
+common-sled-store = {path = "../sled-store" }
+
+
+# Crates.io dependencies
+async-trait = "0.1"
+tempfile = "3.2.0"
+
+
+[dev-dependencies]
+pretty_assertions = "0.7"
+
