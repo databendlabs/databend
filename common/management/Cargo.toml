@@ -16,8 +16,6 @@ common-kv-api= {path = "../kv-apis/api" }
 common-kv-api-vo= {path = "../kv-apis/vo" }
 common-tracing= {path = "../tracing"}
 
-common-kv = {path = "../kv" }
-
 async-trait = "0.1"
 lazy_static = "1.4.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -26,7 +24,10 @@ sha2 = "0.9.8"
 sha1 = "0.6.0"
 tempfile = "3.2.0"
 
+
 [dev-dependencies]
-tempfile = "3.2.0"
 common-base = { path = "../base" }
+common-kv = {path = "../kv" }
+
 mockall = "0.10.2"
+tempfile = "3.2.0"
