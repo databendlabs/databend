@@ -17,7 +17,7 @@ path = "src/bin/databend-cli.rs"
 # Workspace dependencies
 databend-query = {path = "../query"}
 databend-store = {path = "../store"}
-clap = "2.33.3"
+clap = "3.0.0-beta.4"
 colored = "2.0.0"
 comfy-table = "4.1.1"
 dirs = "4.0.0"
@@ -34,6 +34,7 @@ tar = "0.4.37"
 thiserror = "1.0.29"
 ureq = { version = "2.2.0", features = ["json"] }
 nix = "0.22.1"
+log = "0.4"
 procfs = "0.10.1"
 [dev-dependencies]
 pretty_assertions = "0.7"

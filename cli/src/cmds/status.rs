@@ -17,7 +17,7 @@ use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::Path;
 use nix::unistd::Pid;
-
+use log::{info, warn};
 use databend_query::configs::Config as QueryConfig;
 use databend_store::configs::Config as StoreConfig;
 
@@ -87,9 +87,9 @@ pub trait LocalRuntime {
     }
     fn start(&mut self) -> Result<()> {
         if self.get_pid().is_some() {
-            CliError::Unknown(format!("current instance in path {} already started", self.get_path().expect("cannot retrieve executable path")))
+            return Err(CliError::Unknown(format!("current instance in path {} already started", self.get_path().expect("cannot retrieve executable path"))));
         }
-        let mut cmd = self.get_command().expect("cannot parse command");
+        let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
         self.verify()
@@ -97,7 +97,7 @@ pub trait LocalRuntime {
     fn get_pid(&self) -> Option<pid_t>;
     fn verify(&self)  -> Result<()> ;
     fn get_path(&self) -> Option<String>;
-    fn get_command(&self) -> Result<Command>;
+    fn generate_command(&mut self) -> Result<Command>;
     fn set_pid(&mut self, id: pid_t);
 }
 
@@ -109,25 +109,31 @@ impl LocalRuntime for LocalQueryConfig{
     }
 
     fn verify(&self) -> Result<()> {
-        for n in 0..= LocalRuntime::RETRIES {
-            match self.do_healthcheck() {
-                OK(_) => {
-                    Ok(())
-                }
-                Err(_) => {
-                    sleep(time::Duration::from_secs(5));
-                }
-            }
-        }
-        Err(CliError::Unknown(format!("local query instance did not get started")))
+        todo!()
     }
 
     fn get_path(&self) -> Option<String> {
         self.path.clone()
     }
 
-    fn get_command(&self) -> Result<Command> {
-        todo!()
+    // command build by
+    fn generate_command(&mut self) -> Result<Command> {
+        let mut conf = self.config.clone();
+        if !conf.config_file.is_empty() {
+            // logging debug
+            conf = databend_query::configs::Config::load_from_toml(conf.config_file.as_str()).expect("query instance configuration cannot load from toml");
+        }
+        conf = databend_query::configs::Config::load_from_env(&conf).expect("cannot parse env variable for query configuration");
+        if self.path.is_none() {
+            return Err(CliError::Unknown("cannot retrieve query instance execution path".parse().unwrap()));
+        }
+        self.config = conf.clone(); // update configurations
+        let mut command = Command::new(self.path.clone().unwrap());
+        // configure runtime by process local env settings
+        command.env(databend_query::configs::config::LOG_LEVEL, conf.log.log_level);
+        // logging debug
+        info!("executing command {:?}", command);
+        Ok(command)
     }
 
     fn set_pid(&mut self, id: pid_t) {
@@ -137,15 +143,8 @@ impl LocalRuntime for LocalQueryConfig{
 
 impl LocalQueryConfig {
     // retrieve the configured url for health check
-    pub fn get_health_endpoint(&self) -> Some<String> {
-        let endpoint = None;
-        if !self.config.config_file.is_empty() {
-            let conf = databend_query::configs::Config::load_from_toml(conf.config_file.as_str()).expect("cannot parse query config");
-        } else {
-            let query_config = self.config.clone().query;
-            if query_config.http_api_address
-        }
-
+    pub fn get_health_endpoint(&self) -> Option<String> {
+        todo!()
     }
 }
 

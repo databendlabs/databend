@@ -39,3 +39,5 @@ pub use processor::Processor;
 pub use status::Status;
 pub use versions::version::VersionCommand;
 pub use writer::Writer;
+pub use cluster::cluster::ClusterCommand;
+pub use cluster::create::CreateCommand;

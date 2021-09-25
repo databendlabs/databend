@@ -19,7 +19,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
-use crate::cmds::CommentCommand;
+use crate::cmds::{CommentCommand, ClusterCommand};
 use crate::cmds::Config;
 use crate::cmds::Env;
 use crate::cmds::HelpCommand;
@@ -71,6 +71,18 @@ impl Processor {
             Some("version") => {
                 let cmd = VersionCommand::create();
                 cmd.exec(&mut writer, "".parse().unwrap())
+            }
+            Some("cluster") => {
+                let cmd = ClusterCommand::create(self.env.conf.clone());
+                return cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("cluster"),
+                );
             }
             None => self.process_run_interactive(),
             _ => {
