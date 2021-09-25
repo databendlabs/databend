@@ -118,6 +118,8 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
             except CosServiceError as e:
                 if e.get_error_code() == 'NoSuchResource':
                     logging.info("continue on test")
+                elif e.get_error_code() == 'NoSuchKey':
+                    logging.info("continue on test")
                 else:
                     logging.info("other issue occured, {}".format(e.get_error_code()))
             except ConnectionError as ce:
