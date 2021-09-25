@@ -11,9 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod hashtable;
-mod storeapi;
+//! Key-Value store backed with a local sled::Tree.
+//!
+//! `KV` talks the same API defined in `KVApi`.
+//!
+//! `KV` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
+//! a embedded raft `StateMachine`.
 
-pub use hashtable::*;
-pub use storeapi::StoreApiProvider;
+mod kv;
+
+#[cfg(test)]
+mod kv_test;
+
+pub use kv::KV;

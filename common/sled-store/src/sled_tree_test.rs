@@ -15,12 +15,12 @@
 use async_raft::raft::Entry;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
+use common_base::tokio;
 use common_metatypes::Cmd;
 use common_metatypes::KVValue;
 use common_metatypes::LogEntry;
 use common_metatypes::LogId;
 use common_metatypes::LogIndex;
-use common_base::tokio;
 
 use crate::get_sled_db;
 use crate::testing::fake_key_spaces::Files;

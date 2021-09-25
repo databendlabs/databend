@@ -1,4 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 pub fn uniq_usize() -> usize {
     static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);

@@ -18,6 +18,7 @@ use std::fs::File;
 use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read;
+use common_base::tokio::task;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -27,7 +28,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
-use common_base::tokio::task;
 use common_streams::ParquetStream;
 use common_streams::SendableDataBlockStream;
 use crossbeam::channel::bounded;

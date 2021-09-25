@@ -15,11 +15,11 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_base::Progress;
+use common_base::Runtime;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::PlanNode;
-use common_base::Progress;
-use common_base::Runtime;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 

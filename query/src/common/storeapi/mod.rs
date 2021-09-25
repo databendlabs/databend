@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod hashtable;
-mod storeapi;
+mod config_converter;
+mod store_api_provider;
 
-pub use hashtable::*;
-pub use storeapi::StoreApiProvider;
+pub use store_api_provider::StoreApiProvider;

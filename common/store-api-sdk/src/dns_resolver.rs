@@ -21,10 +21,10 @@ use std::task;
 use std::task::Poll;
 use std::time::Duration;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;

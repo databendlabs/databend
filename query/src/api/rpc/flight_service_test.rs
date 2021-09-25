@@ -18,12 +18,12 @@ use std::sync::Arc;
 use common_arrow::arrow_flight::flight_service_server::FlightService;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::Ticket;
+use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_base::tokio;
 use tonic::Request;
 
 use crate::api::rpc::flight_actions::FlightAction;

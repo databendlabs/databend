@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_base::tokio;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::pipelines::processors::*;

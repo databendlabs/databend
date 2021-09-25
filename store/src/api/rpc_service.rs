@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
-use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_base::tokio::sync::oneshot::Receiver;
 use common_base::tokio::sync::oneshot::Sender;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use metasrv::meta_service::MetaNode;

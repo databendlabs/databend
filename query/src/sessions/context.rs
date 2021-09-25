@@ -18,6 +18,9 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
+use common_base::tokio::task::JoinHandle;
+use common_base::ProgressCallback;
+use common_base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -27,9 +30,6 @@ use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::Statistics;
-use common_base::ProgressCallback;
-use common_base::ProgressValues;
-use common_base::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use async_raft::State;
+use common_base::tokio;
 use common_metatypes::Cmd;
 use common_metatypes::LogEntry;
 use common_raft_store::state_machine::AppliedState;
-use common_base::tokio;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;

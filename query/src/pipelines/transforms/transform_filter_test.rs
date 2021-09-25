@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_base::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 

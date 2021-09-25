@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
-use common_base::tokio;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;

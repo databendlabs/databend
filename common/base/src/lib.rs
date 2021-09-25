@@ -21,20 +21,17 @@ mod progress_test;
 #[cfg(test)]
 mod stoppable_test;
 
-mod runtime;
 mod profiling;
 mod progress;
-
-pub use runtime::Dropper;
-pub use runtime::Runtime;
-pub use tokio;
+mod runtime;
 
 pub use profiling::Profiling;
-
 pub use progress::Progress;
 pub use progress::ProgressCallback;
 pub use progress::ProgressValues;
-
+pub use runtime::Dropper;
+pub use runtime::Runtime;
+pub use tokio;
 
 mod stop_handle;
 mod stoppable;
@@ -42,5 +39,4 @@ mod uniq_id;
 
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
-
 pub use uniq_id::uniq_usize;

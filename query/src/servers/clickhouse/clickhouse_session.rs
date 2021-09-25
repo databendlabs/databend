@@ -14,12 +14,12 @@
 
 use std::net::Shutdown;
 
+use common_base::tokio::net::TcpStream;
+use common_base::Runtime;
 use common_clickhouse_srv::ClickHouseServer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_base::tokio::net::TcpStream;
-use common_base::Runtime;
 
 use crate::servers::clickhouse::interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;

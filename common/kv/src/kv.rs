@@ -17,6 +17,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_base::tokio::sync::Mutex;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_kv_api_util::STORE_RUNTIME;
@@ -31,11 +32,11 @@ use common_metatypes::Operation;
 use common_raft_store::config::RaftConfig;
 use common_raft_store::state_machine::AppliedState;
 use common_raft_store::state_machine::StateMachine;
-use common_base::tokio::sync::Mutex;
 pub use common_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 
 /// Local storage that provides the API defined by `KVApi`.
+///
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
 /// For a local store, there is no distributed WAL involved,
 /// thus it just bypasses the raft log and operate directly on the `StateMachine`.
@@ -44,11 +45,11 @@ use common_tracing::tracing;
 /// - A sled::Db has to be a singleton, according to sled doc.
 /// - Every unit test has to generate a unique sled::Tree name to create a `LocalKVStore`.
 #[derive(Clone)]
-pub struct LocalKVStore {
+pub struct KV {
     inner: Arc<Mutex<StateMachine>>,
 }
 
-impl LocalKVStore {
+impl KV {
     /// Creates a KVApi impl backed with a `StateMachine`.
     ///
     /// A LocalKVStore is identified by the `name`.
@@ -59,7 +60,7 @@ impl LocalKVStore {
     /// - `databend_store::meta_service::raft_db::init_sled_db`
     /// - `databend_store::meta_service::raft_db::init_temp_sled_db`
     #[allow(dead_code)]
-    pub async fn new(name: &str) -> common_exception::Result<LocalKVStore> {
+    pub async fn new(name: &str) -> common_exception::Result<KV> {
         let mut config = RaftConfig::empty();
 
         config.sled_tree_prefix = format!("{}-local-kv-store", name);
@@ -69,23 +70,19 @@ impl LocalKVStore {
             config.no_sync = true;
         }
 
-        Ok(LocalKVStore {
+        Ok(KV {
             // StateMachine does not need to be replaced, thus we always use id=0
             inner: Arc::new(Mutex::new(StateMachine::open(&config, 0).await?)),
         })
     }
 
     /// Creates a KVApi impl with a random and unique name.
-    /// For use in testing, one should:
-    /// - call `databend_store::meta_service::raft_db::init_temp_sled_db()` to
-    ///   initialize sled::Db so that persistent data is cleaned up when process exits.
-    /// - create a unique LocalKVStore with this function.
-    ///
     #[allow(dead_code)]
-    pub async fn new_temp() -> common_exception::Result<LocalKVStore> {
-        // generate a unique id as part of the name of sled::Tree
+    pub async fn new_temp() -> common_exception::Result<KV> {
         let temp_dir = tempfile::tempdir()?;
         common_sled_store::init_temp_sled_db(temp_dir);
+
+        // generate a unique id as part of the name of sled::Tree
 
         static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
         let x = GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst);
@@ -96,13 +93,13 @@ impl LocalKVStore {
         Self::new(&name).await
     }
 
-    pub fn sync_new_temp() -> common_exception::Result<LocalKVStore> {
-        STORE_RUNTIME.block_on(LocalKVStore::new_temp(), None)?
+    pub fn sync_new_temp() -> common_exception::Result<KV> {
+        STORE_RUNTIME.block_on(KV::new_temp(), None)?
     }
 }
 
 #[async_trait]
-impl KVApi for LocalKVStore {
+impl KVApi for KV {
     async fn upsert_kv(
         &self,
         key: &str,

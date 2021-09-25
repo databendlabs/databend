@@ -17,7 +17,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
-use common_base::uniq_usize;
 use common_tracing::tracing;
 use tempfile::tempdir;
 use tempfile::TempDir;

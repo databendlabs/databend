@@ -15,10 +15,10 @@
 use std::task::Context;
 use std::task::Poll;
 
-use common_datablocks::DataBlock;
-use common_exception::Result;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
+use common_datablocks::DataBlock;
+use common_exception::Result;
 use futures::Stream;
 use pin_project_lite::pin_project;
 

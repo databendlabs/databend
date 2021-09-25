@@ -15,6 +15,7 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use common_base::tokio;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_kv_api::SyncKVApi;
@@ -24,14 +25,13 @@ use common_kv_api_vo::UpsertKVActionResult;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;
-use common_base::tokio;
 use common_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 
-use crate::local_kv_store::LocalKVStore;
+use crate::kv::KV;
 
 #[tokio::test]
-async fn test_local_kv_store() -> Result<()> {
+async fn test_kv_async_api() -> Result<()> {
     init_testing_sled_db();
 
     let now = SystemTime::now()
@@ -39,7 +39,7 @@ async fn test_local_kv_store() -> Result<()> {
         .unwrap()
         .as_secs();
 
-    let api = LocalKVStore::new_temp().await?;
+    let api = KV::new_temp().await?;
 
     tracing::info!("--- upsert");
 
@@ -189,7 +189,7 @@ async fn test_local_kv_store() -> Result<()> {
 }
 
 #[test]
-fn sync_test_local_kv_store() -> Result<()> {
+fn test_kv_sync_api() -> Result<()> {
     init_testing_sled_db();
 
     let now = SystemTime::now()
@@ -197,7 +197,7 @@ fn sync_test_local_kv_store() -> Result<()> {
         .unwrap()
         .as_secs();
 
-    let api = LocalKVStore::sync_new_temp()?;
+    let api = KV::sync_new_temp()?;
 
     tracing::info!("--- upsert");
 

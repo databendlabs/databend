@@ -37,7 +37,8 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_dispatcher::{DatabendQueryFlightDispatcher, DatabendQueryFlightDispatcherRef};
+use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
+use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManagerRef;
@@ -51,7 +52,10 @@ pub struct DatabendQueryFlightService {
 }
 
 impl DatabendQueryFlightService {
-    pub fn create(dispatcher: DatabendQueryFlightDispatcherRef, sessions: SessionManagerRef) -> Self {
+    pub fn create(
+        dispatcher: DatabendQueryFlightDispatcherRef,
+        sessions: SessionManagerRef,
+    ) -> Self {
         DatabendQueryFlightService {
             sessions,
             dispatcher,

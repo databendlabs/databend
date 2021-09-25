@@ -17,11 +17,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_base::tokio;
 use common_base::tokio::net::TcpListener;
 use common_base::tokio::sync::Notify;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Identity;
 use tonic::transport::Server;

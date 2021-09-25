@@ -15,8 +15,8 @@
 use axum::body::Body;
 use axum::extract::Query;
 use axum::response::IntoResponse;
-use common_base::Profiling;
 use common_base::tokio::time::Duration;
+use common_base::Profiling;
 use common_tracing::tracing;
 
 use crate::api::http::debug::PProfRequest;

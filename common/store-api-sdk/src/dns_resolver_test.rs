@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-use common_exception::Result;
 use common_base::tokio;
+use common_exception::Result;
 
 use crate::DNSResolver;
 

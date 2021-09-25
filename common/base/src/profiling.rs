@@ -14,7 +14,6 @@
 
 use std::time::Duration;
 
-use tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use pprof::protos::Message;

@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use crate::common::hash_table_entity::HashTableEntity;
+use crate::common::HashTableEntity;
 
 pub struct HashTableIter<Key, Entity: HashTableEntity<Key>> {
     idx: isize,

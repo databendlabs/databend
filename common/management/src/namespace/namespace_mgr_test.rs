@@ -17,11 +17,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
+use common_base::tokio;
 use common_exception::Result;
+use common_kv::KV;
 use common_kv_api::KVApi;
 use common_kv_api_vo::GetKVActionResult;
-use common_base::tokio;
-use kvlocal::LocalKVStore;
 
 use super::*;
 use crate::namespace::namespace_mgr::NamespaceMgr;
@@ -153,8 +153,8 @@ fn create_test_node_info() -> NodeInfo {
     }
 }
 
-async fn new_namespace_api() -> Result<(Arc<LocalKVStore>, NamespaceMgr)> {
-    let test_api = Arc::new(LocalKVStore::new_temp().await?);
+async fn new_namespace_api() -> Result<(Arc<KV>, NamespaceMgr)> {
+    let test_api = Arc::new(KV::new_temp().await?);
     let namespace_manager = NamespaceMgr::new(test_api.clone(), "", "", Duration::from_secs(60))?;
     Ok((test_api, namespace_manager))
 }

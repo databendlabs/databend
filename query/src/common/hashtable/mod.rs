@@ -11,11 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-mod local_kv_store;
+pub use hash_table::HashTable;
+pub use hash_table_entity::HashTableEntity;
+pub use hash_table_entity::KeyValueEntity;
+pub use hash_table_iter::HashTableIter;
+pub use hash_table_key::HashTableKeyable;
 
 #[cfg(test)]
-mod local_kv_store_test;
+mod hash_table_grower_test;
 
-pub use local_kv_store::LocalKVStore;
+mod hash_table;
+#[allow(clippy::missing_safety_doc, clippy::not_unsafe_ptr_arg_deref)]
+mod hash_table_entity;
+mod hash_table_grower;
+mod hash_table_iter;
+mod hash_table_key;
+
+pub type HashMap<Key, Value> = HashTable<Key, KeyValueEntity<Key, Value>>;
+pub type HashMapIterator<Key, Value> = HashTableIter<Key, KeyValueEntity<Key, Value>>;

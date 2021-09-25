@@ -43,7 +43,7 @@ common-dfs-api-vo = { path = "../common/dfs-apis/vo" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
-kvlocal = { path = "../kvlocal"}
+common-kv = { path = "../common/kv" }
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "9c706a3" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }

@@ -39,20 +39,23 @@ impl StoreApiProvider {
         StoreApiProvider { conf: conf.into() }
     }
 
+    /// Get meta async client, trait is defined in MetaApi.
     pub async fn try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
         let client = StoreClient::try_new(&self.conf).await?;
         Ok(Arc::new(client))
     }
 
+    /// Get meta client, operations trait is defined in MetaApi.
     pub fn sync_try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
         let client = StoreClient::sync_try_new(&self.conf)?;
         Ok(Arc::new(client))
     }
 
+    /// Get kv async client, operations trait defined in KVApi.
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
         let local = self.conf.kv_service_config.address.is_empty();
         if local {
-            let client = kvlocal::LocalKVStore::new_temp().await?;
+            let client = common_kv::KV::new_temp().await?;
             Ok(Arc::new(client))
         } else {
             let client = StoreClient::try_new(&self.conf).await?;
@@ -60,10 +63,11 @@ impl StoreApiProvider {
         }
     }
 
+    /// Get kv client, operations trait defined in KVApi.
     pub fn sync_try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
         let local = self.conf.kv_service_config.address.is_empty();
         if local {
-            let client = kvlocal::LocalKVStore::sync_new_temp()?;
+            let client = common_kv::KV::sync_new_temp()?;
             Ok(Arc::new(client))
         } else {
             let client = StoreClient::sync_try_new(&self.conf)?;
@@ -71,11 +75,13 @@ impl StoreApiProvider {
         }
     }
 
+    /// Get storage async client, operations trait defined in StorageApi.
     pub async fn try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
         let client = StoreClient::try_new(&self.conf).await?;
         Ok(Arc::new(client))
     }
 
+    /// Get storage client, operations trait defined in StorageApi.
     pub fn sync_try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
         let client = StoreClient::sync_try_new(&self.conf)?;
         Ok(Arc::new(client))

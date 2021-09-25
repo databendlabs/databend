@@ -26,9 +26,9 @@ mod test {
     use common_arrow::arrow::record_batch::RecordBatch;
     use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
     use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
+    use common_base::tokio;
     use common_datablocks::DataBlock;
     use common_datavalues::prelude::*;
-    use common_base::tokio;
 
     use crate::data_part::appender::*;
     use crate::localfs::LocalFS;

@@ -18,13 +18,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::Context;
 
+use common_base::tokio::macros::support::Pin;
+use common_base::tokio::macros::support::Poll;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_management::NodeInfo;
 use common_planners::SelectPlan;
-use common_base::tokio::macros::support::Pin;
-use common_base::tokio::macros::support::Poll;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::Stream;
