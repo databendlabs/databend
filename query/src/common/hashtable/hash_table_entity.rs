@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common::hash_table_key::HashTableKeyable;
+use crate::common::HashTableKeyable;
 
 pub trait HashTableEntity<Key>: Sized {
     unsafe fn is_zero(self: *mut Self) -> bool;
