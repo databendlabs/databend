@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use super::interval_function::MonthsArithmeticFunction;
+use super::interval_function::SecondsArithmeticFunction;
 use super::now::NowFunction;
 use super::RoundFunction;
 use super::ToStartOfISOYearFunction;
@@ -90,6 +93,93 @@ impl DateFunction {
             });
         }
 
+        {
+            //interval functions
+            map.insert("addYears".into(), |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    12, /* one year is 12 months */
+                )
+            });
+            map.insert("subtractYears".into(), |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    12, /* one year is 12 months */
+                )
+            });
+            map.insert("addMonths".into(), |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    1,
+                )
+            });
+            map.insert("subtractMonths".into(), |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    1,
+                )
+            });
+            map.insert("addDays".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    24 * 3600, /* one day is 24 * 3600 seconds */
+                )
+            });
+            map.insert("subtractDays".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    24 * 3600, /* one day is 24 * 3600 seconds */
+                )
+            });
+            map.insert("addHours".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    3600, /* one hour is 3600 seconds */
+                )
+            });
+            map.insert("subtractHours".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    3600, /* one hour is 3600 seconds */
+                )
+            });
+            map.insert("addMinutes".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    60, /* one minute is 60 seconds */
+                )
+            });
+            map.insert("subtractMinutes".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    60, /* one minute is 60 seconds */
+                )
+            });
+            map.insert("addSeconds".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    1,
+                )
+            });
+            map.insert("subtractSeconds".into(), |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    1,
+                )
+            });
+        }
         Ok(())
     }
 }
