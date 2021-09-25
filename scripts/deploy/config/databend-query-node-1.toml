@@ -2,9 +2,9 @@
 # databend-query -c databend_query_config_spec.toml
 
 # Log
-# [log]
-# log_level = "ERROR"
-# log_dir = "./_logs"
+[log]
+log_level = "ERROR"
+log_dir = "./_logs"
 
 # Meta
 [meta]
