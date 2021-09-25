@@ -2,10 +2,6 @@
 # databend-query -c databend_query_config_spec.toml
 
 # Log
-[log]
-log_level = "DEBUG"
-log_dir = "./_logs"
-
 # Meta
 [meta]
 meta_address = "0.0.0.0:9191"
@@ -40,3 +36,5 @@ mysql_handler_port = 3307
 # Databend Query ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001
+
+namespace = "test_cluster"
