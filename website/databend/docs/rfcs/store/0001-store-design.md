@@ -1,5 +1,5 @@
 ---
-id: databend-store-design
+id: databend-dfs-design
 title: DatabendStore Design Draft
 ---
 

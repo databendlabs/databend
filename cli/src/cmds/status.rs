@@ -17,8 +17,8 @@ use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::Path;
 
+use databend_dfs::configs::Config as StoreConfig;
 use databend_query::configs::Config as QueryConfig;
-use databend_store::configs::Config as StoreConfig;
 
 use crate::cmds::Config;
 use crate::error::Result;

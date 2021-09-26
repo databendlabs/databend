@@ -16,10 +16,10 @@ use common_base::tokio;
 use common_sled_store::init_sled_db;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
-use databend_store::api::HttpService;
-use databend_store::api::StoreServer;
-use databend_store::configs::Config;
-use databend_store::metrics::MetricService;
+use databend_dfs::api::HttpService;
+use databend_dfs::api::StoreServer;
+use databend_dfs::configs::Config;
+use databend_dfs::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
 
@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .init();
 
     let _guards = init_tracing_with_file(
-        "databend-store",
+        "databend-dfs",
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
     );
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf.clone());
     info!(
         "DatabendStore v-{}",
-        *databend_store::configs::config::DATABEND_COMMIT_VERSION
+        *databend_dfs::configs::config::DATABEND_COMMIT_VERSION
     );
 
     init_sled_db(conf.meta_config.raft_dir.clone());

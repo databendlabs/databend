@@ -81,7 +81,7 @@ impl KVApi for StoreClient {
     }
 }
 
-// Let take this API for a reference of the implementations of a store API
+// Let take this API for a reference of the implementations of a kv API
 
 // - GetKV
 

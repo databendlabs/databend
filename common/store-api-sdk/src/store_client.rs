@@ -158,7 +158,7 @@ impl StoreClient {
         let mut stream = self.client.clone().do_action(req).await?.into_inner();
         match stream.message().await? {
             None => Err(ErrorCode::EmptyData(format!(
-                "Can not receive data from store flight server, action: {:?}",
+                "Can not receive data from dfs flight server, action: {:?}",
                 act
             ))),
             Some(resp) => {

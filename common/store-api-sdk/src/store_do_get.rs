@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Actions for store do_get.
+/// Actions for dfs do_get.
 use std::convert::TryInto;
 
 use common_arrow::arrow_flight::Ticket;
@@ -24,7 +24,7 @@ pub struct ScanPartitionsAction {
     pub scan_plan: ScanPlan,
 }
 
-/// Pull a file. This is used to replicate data between store servers, which is only used internally.
+/// Pull a file. This is used to replicate data between dfs servers, which is only used internally.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct PullAction {
     pub key: String,

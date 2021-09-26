@@ -545,7 +545,7 @@ async fn setup_cluster(
         }
         let (_id, tc) = setup_non_voter(leader.clone(), *id).await?;
 
-        // Adding a node to store
+        // Adding a node
         nlog += 1;
         wait_for_log(&tc.meta_nodes[0], nlog).await?;
 
@@ -555,7 +555,7 @@ async fn setup_cluster(
     for id in non_voters.iter() {
         let (_id, tc) = setup_non_voter(leader.clone(), *id).await?;
 
-        // Adding a node to store
+        // Adding a node
         nlog += 1;
         wait_for_log(&tc.meta_nodes[0], nlog).await?;
 

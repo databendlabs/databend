@@ -17,7 +17,7 @@ use std::cmp::Ordering;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// The meta data of a record in meta-store kv
+/// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct KVMeta {
     /// expiration time in second since 1970

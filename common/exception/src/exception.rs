@@ -192,7 +192,7 @@ build_exceptions! {
     FileMetaNotFound(2001),
     FileDamaged(2002),
 
-    // store node errors
+    // dfs node errors
 
     UnknownNode(2101),
 

@@ -58,7 +58,7 @@ impl FileSystem for Dfs {
 
         self.local_fs.add(path, data).await?;
 
-        // update meta, other store nodes will be informed about this change and then pull the data to complete replication.
+        // update meta, other dfs nodes will be informed about this change and then pull the data to complete replication.
 
         let req = LogEntry {
             txid: None,

@@ -43,7 +43,7 @@ databend-cli cluster create --profile=<databend profile>
 
 Support three kinds of profile in alpha stage,
 
-1. local: local profile will run standalone `databend` cluster on local(one running databend-query instance and one running databend-store instance)
+1. local: local profile will run standalone `databend` cluster on local(one running databend-query instance and one running databend-dfs instance)
 2. demo: install a standalone `databend` instance on cloud(k8s or maybe fargate in later stage)
 3. cluster: install `databend` cluster on cloud( through `databend operator`)
 
@@ -90,8 +90,8 @@ databend-cli cluster view
 | query-1 | GKE | databend-query | running | enabled |
 | query-2 | GKE | databend-query | running | enabled |
 | query-3 | GKE | databend-query | pending | enabled |
-| store-1 | GKE | databend-store | running | enabled |
-| store-2 | GKE | databend-store | running | enabled |
+| dfs-1 | GKE | databend-dfs | running | enabled |
+| dfs-2 | GKE | databend-dfs | running | enabled |
 ```
 
 Check on disk utilization
@@ -99,8 +99,8 @@ Check on disk utilization
 ```bash
 databend-cli cluster df
 | NAME | COMPONENT | USED | ALWAYABLE | LOCATION |
-| local-disk-1 | Block| 10Gi | 90Gi | /mnt/databend-store |
-| s3-disk | Object| 100 Gi | 1000Gi | s3://bucket-1/mnt/databend-store |
+| local-disk-1 | Block| 10Gi | 90Gi | /mnt/databend-dfs |
+| s3-disk | Object| 100 Gi | 1000Gi | s3://bucket-1/mnt/databend-dfs |
 ```
 
 ### Cluster delete
@@ -121,10 +121,10 @@ show all databend-query logs
 databend-cli cluster log --component=query --all
 ```
 
-The command above would show all databend-store logs
+The command above would show all databend-dfs logs
 
 ```bash
-databend-cli cluster log --component=store --all
+databend-cli cluster log --component=dfs --all
 ```
 
 The command above would show databend operator logs

@@ -7,7 +7,7 @@ RUN make build
 
 FROM debian:buster
 COPY --from=builder /app/target/release/databend-query /databend-query
-COPY --from=builder /app/target/release/databend-store /databend-store
+COPY --from=builder /app/target/release/databend-dfs /databend-dfs
 COPY --from=builder /app/docker/databend-query-docker.toml /databend-query.toml
 COPY --from=builder /app/docker/bootstrap.sh /bootstrap.sh
 ENTRYPOINT ["/bootstrap.sh"]

@@ -163,7 +163,7 @@ impl Table for ConfigsTable {
             &mut values,
             &mut groups,
             &mut descs,
-            "store".to_string(),
+            "dfs".to_string(),
             store_config_value,
         );
 
