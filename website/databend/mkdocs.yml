@@ -180,6 +180,8 @@ nav:
           - toYYYYMMDD: sqlstatement/datetime-functions/toyyyymmdd.md
           - toYYYYMMDDhhmmss: sqlstatement/datetime-functions/toyyyymmddhhmmss.md
           - YESTERDAY: sqlstatement/datetime-functions/yesterday.md
+          - addYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS: sqlstatement/datetime-functions/addinterval.md
+          - subtractYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS: sqlstatement/datetime-functions/subtractinterval.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:
