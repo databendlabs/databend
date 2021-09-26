@@ -1,5 +1,5 @@
 [package]
-name = "databend-store"
+name = "databend-dfs"
 version = "0.1.0"
 description = "A Cloud Distributed MergeTree Storage Engine"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
@@ -8,8 +8,8 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "databend-store"
-path = "src/bin/databend-store.rs"
+name = "databend-dfs"
+path = "src/bin/databend-dfs.rs"
 
 [features]
 default = ["simd"]

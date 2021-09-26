@@ -37,11 +37,11 @@ use common_tracing::tracing;
 
 /// Local storage that provides the API defined by `KVApi`.
 ///
-/// It is just a wrapped `StateMachine`, which is the same one used by raft driven meta-store service.
-/// For a local store, there is no distributed WAL involved,
+/// It is just a wrapped `StateMachine`, which is the same one used by raft driven kvsrv.
+/// For a local kv, there is no distributed WAL involved,
 /// thus it just bypasses the raft log and operate directly on the `StateMachine`.
 ///
-/// Since `StateMachine` is backed with sled::Tree, this impl has the same limitation as meta-store:
+/// Since `StateMachine` is backed with sled::Tree, this impl has the same limitation as kvsrv:
 /// - A sled::Db has to be a singleton, according to sled doc.
 /// - Every unit test has to generate a unique sled::Tree name to create a `LocalKVStore`.
 #[derive(Clone)]
@@ -57,13 +57,13 @@ impl KV {
     ///
     /// One of the following has to be called to initialize a process-wise sled::Db,
     /// before using `LocalKVStore`:
-    /// - `databend_store::meta_service::raft_db::init_sled_db`
-    /// - `databend_store::meta_service::raft_db::init_temp_sled_db`
+    /// - `common_sled_store::init_sled_db`
+    /// - `common_sled_store::init_temp_sled_db`
     #[allow(dead_code)]
     pub async fn new(name: &str) -> common_exception::Result<KV> {
         let mut config = RaftConfig::empty();
 
-        config.sled_tree_prefix = format!("{}-local-kv-store", name);
+        config.sled_tree_prefix = format!("{}-local-kv", name);
 
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");

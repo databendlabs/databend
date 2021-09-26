@@ -14,8 +14,8 @@
 
 use std::cell::RefCell;
 
+use databend_dfs::configs::Config as StoreConfig;
 use databend_query::configs::Config as QueryConfig;
-use databend_store::configs::Config as StoreConfig;
 use tempfile::tempdir;
 
 use crate::cmds::status::LocalConfig;
@@ -33,7 +33,7 @@ macro_rules! default_local_config {
                 config: QueryConfig::default(),
             }],
             store_configs: Some(LocalStoreConfig {
-                pid: "test-store".to_string(),
+                pid: "test-dfs".to_string(),
                 config: StoreConfig::empty(),
             }),
         }

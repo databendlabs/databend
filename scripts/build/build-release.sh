@@ -6,5 +6,5 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 echo "Build(RELEASE) start..."
-cargo build --bin=databend-query --bin=databend-benchmark --bin=databend-store --release
+cargo build --bin=databend-query --bin=databend-benchmark --bin=databend-dfs --release
 echo "All done..."

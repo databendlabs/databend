@@ -33,7 +33,7 @@ async fn test_single_cluster_discovery() -> Result<()> {
     Ok(())
 }
 
-// TODO:(Winter) need store KVApi for cluster multiple nodes test
+// TODO:(Winter) need KVApi for cluster multiple nodes test
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_multiple_cluster_discovery() -> Result<()> {
 //     let mut config = Config::default();

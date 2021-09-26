@@ -55,7 +55,7 @@ impl ActionHandler {
             StoreDoAction::MGetKV(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
             _ => {
-                unimplemented!("non-kv API are no longer supported by kvsrv. Although they will be maintained for a while in databend-store")
+                unimplemented!("non-kv API are no longer supported by kvsrv. Although they will be maintained for a while in databend-dfs")
             }
         }
     }

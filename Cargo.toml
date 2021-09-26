@@ -32,8 +32,8 @@ members = [
     "query",
     "kvsrv",
 
-    # Store
-    "store",
+    # distributed file system
+    "dfs",
 
     # SQL Fuzz
     "query/fuzz",
