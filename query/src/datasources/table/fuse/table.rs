@@ -19,12 +19,11 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
-use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
@@ -32,9 +31,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::catalogs::Table;
+use crate::catalogs::TableInfo;
 use crate::datasources::dal::DataAccessor;
-//use crate::datasources::table::fuse::parse_storage_scheme;
-use crate::datasources::table::fuse::project_col_idx;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::read_table_snapshot;
@@ -48,49 +46,12 @@ use crate::datasources::table::fuse::TableStorageScheme;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable {
-    pub db: String,
-    pub name: String,
-    pub schema: DataSchemaRef,
-    // Storage scheme is fixed during the whole life of the table
-    // Local | FuseDFS | S3 | ... etc.
-    pub storage_scheme: TableStorageScheme,
-    pub local: bool,
+    pub(crate) tbl_info: TableInfo,
+    pub(crate) storage_scheme: TableStorageScheme,
 }
 
 impl FuseTable {
-    pub(crate) async fn save_segment(
-        &self,
-        location: &str,
-        data_accessor: &Arc<dyn DataAccessor>,
-        segment_info: SegmentInfo,
-    ) -> Result<()> {
-        let bytes = serde_json::to_vec(&segment_info)?;
-        data_accessor.put(location, bytes).await
-    }
-    pub(crate) async fn save_snapshot(
-        &self,
-        location: &str,
-        data_accessor: &Arc<dyn DataAccessor>,
-        snapshot: TableSnapshot,
-    ) -> Result<()> {
-        let bytes = serde_json::to_vec(&snapshot)?;
-        data_accessor.put(location, bytes).await
-    }
-    pub(crate) fn merge_seg(&self, new_seg: String, mut prev: TableSnapshot) -> TableSnapshot {
-        prev.segments.push(new_seg);
-        let new_id = Uuid::new_v4();
-        prev.snapshot_id = new_id;
-        prev
-    }
-}
-
-impl FuseTable {
-    pub fn try_create(
-        _db: String,
-        _name: String,
-        _schema: DataSchemaRef,
-        _options: TableOptions,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(_tbl_info: TableInfo) -> Result<Box<dyn Table>> {
         todo!()
     }
 
@@ -118,11 +79,15 @@ impl FuseTable {
 #[async_trait::async_trait]
 impl Table for FuseTable {
     fn name(&self) -> &str {
-        &self.name
+        &self.tbl_info.name
+    }
+
+    fn database(&self) -> &str {
+        &self.tbl_info.db
     }
 
     fn engine(&self) -> &str {
-        "fuse"
+        &self.tbl_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -130,41 +95,47 @@ impl Table for FuseTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.tbl_info.schema.clone())
+    }
+
+    fn get_id(&self) -> u64 {
+        self.tbl_info.table_id
     }
 
     fn is_local(&self) -> bool {
-        self.local
+        false
     }
 
     fn read_plan(
         &self,
         ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         // primary work to do: partition pruning/elimination
         let tbl_snapshot = self.table_snapshot(&ctx)?;
         if let Some(snapshot) = tbl_snapshot {
             let da = self.data_accessor(&ctx)?;
             let meta_reader = MetaInfoReader::new(da, ctx.clone());
-            let block_locations = range_filter(&snapshot, &scan.push_downs, meta_reader)?;
+            let block_locations = range_filter(&snapshot, &push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
             let plan = ReadDataSourcePlan {
-                db: scan.schema_name.clone(),
+                db: self.tbl_info.db.to_string(),
                 table: self.name().to_string(),
-                table_id: scan.table_id,
-                table_version: scan.table_version,
-                schema: self.schema()?,
+                table_id: self.tbl_info.table_id,
+                table_version: None,
+                schema: self.tbl_info.schema.clone(),
                 parts,
                 statistics,
                 description: "".to_string(),
-                scan_plan: Arc::new(scan.clone()),
+                scan_plan: Default::default(),
                 remote: true,
+                tbl_args: None,
+                push_downs,
             };
             Ok(plan)
         } else {
-            self.empty_read_source_plan(scan)
+            self.empty_read_source_plan()
         }
     }
 
@@ -173,10 +144,27 @@ impl Table for FuseTable {
         ctx: DatabendQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let projection = project_col_idx(
-            &source_plan.scan_plan.table_schema,
-            &source_plan.scan_plan.projected_schema,
-        )?;
+        let default_proj = || {
+            (0..self.tbl_info.schema.fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>()
+        };
+
+        let projection = if let Some(push_down) = &source_plan.push_downs {
+            if let Some(prj) = &push_down.projection {
+                prj.clone()
+            } else {
+                default_proj()
+            }
+        } else {
+            default_proj()
+            //            todo!()
+            // leave this to another PR
+            //project_col_idx(
+            //    &self.tbl_info.table_schema,
+            //    &source_plan.push_downs.projected_schema,
+            //)?;
+        };
 
         let (tx, rx) = common_base::tokio::sync::mpsc::channel(1024);
 
@@ -191,7 +179,7 @@ impl Table for FuseTable {
             .flatten()
         };
         let da = self.data_accessor(&ctx)?;
-        let arrow_schema = source_plan.scan_plan.table_schema.to_arrow();
+        let arrow_schema = self.tbl_info.schema.to_arrow();
         let _h = common_base::tokio::task::spawn_local(async move {
             // TODO error handling is buggy
             for part in &mut iter {
@@ -287,18 +275,20 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn empty_read_source_plan(&self, scan: &ScanPlan) -> Result<ReadDataSourcePlan> {
+    pub(crate) fn empty_read_source_plan(&self) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            db: scan.schema_name.clone(),
+            db: self.tbl_info.name.clone(),
             table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
-            schema: self.schema()?,
+            table_id: self.tbl_info.table_id,
+            table_version: None,
+            schema: self.tbl_info.schema.clone(),
             parts: vec![],
             statistics: Statistics::default(),
             description: "".to_string(),
-            scan_plan: Arc::new(scan.clone()),
+            scan_plan: Default::default(),
             remote: true,
+            tbl_args: None,
+            push_downs: None,
         })
     }
 
@@ -312,5 +302,32 @@ impl FuseTable {
     ) -> Result<Arc<dyn DataAccessor>> {
         let scheme = &self.storage_scheme;
         ctx.get_data_accessor(scheme)
+    }
+}
+
+impl FuseTable {
+    pub(crate) async fn save_segment(
+        &self,
+        location: &str,
+        data_accessor: &Arc<dyn DataAccessor>,
+        segment_info: SegmentInfo,
+    ) -> Result<()> {
+        let bytes = serde_json::to_vec(&segment_info)?;
+        data_accessor.put(location, bytes).await
+    }
+    pub(crate) async fn save_snapshot(
+        &self,
+        location: &str,
+        data_accessor: &Arc<dyn DataAccessor>,
+        snapshot: TableSnapshot,
+    ) -> Result<()> {
+        let bytes = serde_json::to_vec(&snapshot)?;
+        data_accessor.put(location, bytes).await
+    }
+    pub(crate) fn merge_seg(&self, new_seg: String, mut prev: TableSnapshot) -> TableSnapshot {
+        prev.segments.push(new_seg);
+        let new_id = Uuid::new_v4();
+        prev.snapshot_id = new_id;
+        prev
     }
 }

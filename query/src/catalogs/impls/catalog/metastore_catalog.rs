@@ -30,7 +30,6 @@ use crate::catalogs::impls::meta_backends::RemoteMeteStoreClient;
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::common::StoreApiProvider;
 use crate::configs::Config;
@@ -176,22 +175,6 @@ impl Catalog for MetaStoreCatalog {
     ) -> Result<Arc<TableMeta>> {
         let db = self.get_database(db_name)?;
         db.get_table_by_id(table_id, table_version)
-    }
-
-    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            let funcs = database.get_table_functions()?;
-            for func in funcs {
-                if func.raw().name() == func_name {
-                    return Ok(func);
-                }
-            }
-        }
-        Err(ErrorCode::UnknownTableFunction(format!(
-            "Unknown table function: '{}'",
-            func_name
-        )))
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {

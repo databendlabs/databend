@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -26,11 +25,11 @@ async fn test_settings_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     ctx.get_settings().set_max_threads(2)?;
 
-    let table = SettingsTable::create();
+    let table = SettingsTable::create(1, "system");
     let source_plan = table.read_plan(
         ctx.clone(),
-        &ScanPlan::empty(),
-        ctx.get_settings().get_max_threads()? as usize,
+        None,
+        Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;

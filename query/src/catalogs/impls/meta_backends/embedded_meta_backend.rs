@@ -25,10 +25,10 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::impls::LOCAL_TBL_ID_BEGIN;
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_backend::TableInfo;
+use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
+use crate::catalogs::TableInfo;
 
 struct InMemoryTableInfo {
     pub(crate) name2meta: HashMap<String, Arc<TableInfo>>,

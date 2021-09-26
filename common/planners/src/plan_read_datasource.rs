@@ -19,6 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 
+use crate::Expression;
 use crate::Extras;
 use crate::Partitions;
 use crate::ScanPlan;
@@ -27,16 +28,21 @@ use crate::Statistics;
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ReadDataSourcePlan {
+    // TODO encapsulate these 5 fields into TableInfo
     pub db: String,
     pub table: String,
     pub table_id: MetaId,
     pub table_version: Option<MetaVersion>,
     pub schema: DataSchemaRef,
+
     pub parts: Partitions,
     pub statistics: Statistics,
     pub description: String,
     pub scan_plan: Arc<ScanPlan>,
     pub remote: bool,
+
+    pub tbl_args: Option<Expression>,
+    pub push_downs: Option<Extras>,
 }
 
 impl ReadDataSourcePlan {
@@ -52,15 +58,12 @@ impl ReadDataSourcePlan {
             description: "".to_string(),
             scan_plan: Arc::new(ScanPlan::with_table_id(table_id, table_version)),
             remote: false,
+            tbl_args: None,
+            push_downs: None,
         }
     }
 
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
-    }
-
-    /// Get the push downs.
-    pub fn get_push_downs(&self) -> Extras {
-        self.scan_plan.push_downs.clone()
     }
 }

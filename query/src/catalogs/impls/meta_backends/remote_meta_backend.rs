@@ -36,7 +36,7 @@ use common_planners::DropTablePlan;
 
 use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_backend::TableInfo;
+use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
 
 type CatalogTable = common_metatypes::Table;

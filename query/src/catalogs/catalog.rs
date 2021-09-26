@@ -19,6 +19,7 @@ use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::Expression;
 
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
@@ -53,8 +54,15 @@ pub trait Catalog {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
+
     // Get function by name.
-    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>>;
+    fn get_table_function(
+        &self,
+        _func_name: &str,
+        _tbl_args: Option<Expression>,
+    ) -> Result<Arc<TableFunctionMeta>> {
+        unimplemented!()
+    }
 
     // Operation with database.
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;

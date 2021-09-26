@@ -13,37 +13,32 @@
 //  limitations under the License.
 //
 
-use common_datavalues::DataSchemaRef;
-use common_exception::Result;
-use common_planners::TableOptions;
-
 use crate::catalogs::Table;
+use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
 
+// TODO maybe we should introduce a
+// `Session::store_provider(...) -> Result<StoreApiProvider>`
+// such that, we no longer need to pass store_provider to Table's constructor
+// instead, table could access apis on demand in method read_plan  and read
 pub trait TableEngine: Send + Sync {
     fn try_create(
         &self,
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        options: TableOptions,
+        tbl_info: TableInfo,
         store_provider: StoreApiProvider,
-    ) -> Result<Box<dyn Table>>;
+    ) -> common_exception::Result<Box<dyn Table>>;
 }
 
 impl<T> TableEngine for T
 where
-    T: Fn(String, String, DataSchemaRef, TableOptions) -> Result<Box<dyn Table>>,
+    T: Fn(TableInfo) -> common_exception::Result<Box<dyn Table>>,
     T: Send + Sync,
 {
     fn try_create(
         &self,
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        options: TableOptions,
+        tbl_info: TableInfo,
         _store_provider: StoreApiProvider,
-    ) -> Result<Box<dyn Table>> {
-        self(db, name, schema, options)
+    ) -> common_exception::Result<Box<dyn Table>> {
+        self(tbl_info)
     }
 }

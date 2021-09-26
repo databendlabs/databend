@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_base::tokio;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
@@ -26,7 +27,9 @@ async fn test_datasource() -> Result<()> {
     let catalog = try_create_catalog()?;
 
     // Table check.
-    catalog.get_table("system", "numbers_mt")?;
+    let tbl_arg = Some(Expression::create_literal(DataValue::Int64(Some(1))));
+    //    catalog.get_table("system", "numbers_mt")?;
+    catalog.get_table_function("numbers_mt", tbl_arg)?;
     if let Err(e) = catalog.get_table("system", "numbersxx") {
         let expect = "Code: 25, displayText = Unknown table: \'numbersxx\'.";
         let actual = format!("{}", e);

@@ -65,3 +65,9 @@ impl ScanPlan {
         }
     }
 }
+
+impl Default for ScanPlan {
+    fn default() -> Self {
+        Self::empty()
+    }
+}

@@ -24,6 +24,7 @@ use common_infallible::Mutex;
 use common_planners::*;
 use futures::TryStreamExt;
 
+use crate::catalogs::TableInfo;
 use crate::datasources::table::memory::memory_table::MemoryTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -33,12 +34,14 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = MemoryTable::try_create(
-        "default".into(),
-        "a".into(),
-        schema.clone(),
-        TableOptions::default(),
-    )?;
+    let table = MemoryTable::try_create(TableInfo {
+        db: "default".into(),
+        name: "a".into(),
+        schema: schema.clone(),
+        engine: "Memory".to_string(),
+        table_option: TableOptions::default(),
+        table_id: 0,
+    })?;
 
     // append data.
     {
@@ -67,8 +70,8 @@ async fn test_memorytable() -> Result<()> {
     {
         let source_plan = table.read_plan(
             ctx.clone(),
-            &ScanPlan::empty(),
-            ctx.get_settings().get_max_threads()? as usize,
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
@@ -100,8 +103,8 @@ async fn test_memorytable() -> Result<()> {
 
         let source_plan = table.read_plan(
             ctx.clone(),
-            &ScanPlan::empty(),
-            ctx.get_settings().get_max_threads()? as usize,
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         let stream = table.read(ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

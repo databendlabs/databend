@@ -23,6 +23,7 @@ use common_infallible::Mutex;
 use common_planners::*;
 use futures::TryStreamExt;
 
+use crate::catalogs::TableInfo;
 use crate::datasources::table::null::null_table::NullTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -32,12 +33,14 @@ async fn test_null_table() -> Result<()> {
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = NullTable::try_create(
-        "default".into(),
-        "a".into(),
-        DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
-        TableOptions::default(),
-    )?;
+    let table = NullTable::try_create(TableInfo {
+        db: "default".into(),
+        name: "a".into(),
+        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
+        engine: "Null".to_string(),
+        table_option: TableOptions::default(),
+        table_id: 0,
+    })?;
 
     // append data.
     {
@@ -62,8 +65,8 @@ async fn test_null_table() -> Result<()> {
     {
         let source_plan = table.read_plan(
             ctx.clone(),
-            &ScanPlan::empty(),
-            ctx.get_settings().get_max_threads()? as usize,
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         assert_eq!(table.engine(), "Null");
 

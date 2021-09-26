@@ -24,9 +24,8 @@ use common_planners::DropTablePlan;
 
 use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_backend::TableInfo;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableInfo;
 use crate::catalogs::TableMeta;
 use crate::common::StoreApiProvider;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
@@ -69,13 +68,7 @@ impl DefaultDatabase {
             .ok_or_else(|| {
                 ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
             })?;
-        let tbl = provider.try_create(
-            table_info.db.clone(),
-            table_info.name.clone(),
-            table_info.schema.clone(),
-            table_info.table_option.clone(),
-            self.store_api_provider.clone(),
-        )?;
+        let tbl = provider.try_create(table_info.clone(), self.store_api_provider.clone())?;
         let stateful = tbl.is_stateful();
         let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);
         if stateful {
@@ -139,10 +132,6 @@ impl Database for DefaultDatabase {
             acc.push(tbl);
             Ok(acc)
         })
-    }
-
-    fn get_table_functions(&self) -> common_exception::Result<Vec<Arc<TableFunctionMeta>>> {
-        Ok(vec![])
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {

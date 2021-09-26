@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
+use common_planners::Expression;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -158,7 +159,7 @@ impl DatabendQueryContext {
         self.get_catalog().get_table(database, table)
     }
 
-    pub async fn get_table_by_id(
+    pub fn get_table_by_id(
         &self,
         database: &str,
         table_id: MetaId,
@@ -168,8 +169,13 @@ impl DatabendQueryContext {
             .get_table_by_id(database, table_id, table_ver)
     }
 
-    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        self.get_catalog().get_table_function(function_name)
+    pub fn get_table_function(
+        &self,
+        function_name: &str,
+        tbl_args: Option<Expression>,
+    ) -> Result<Arc<TableFunctionMeta>> {
+        self.get_catalog()
+            .get_table_function(function_name, tbl_args)
     }
 
     pub fn get_id(&self) -> String {

@@ -13,17 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
-use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -31,34 +29,31 @@ use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
+use crate::catalogs::TableInfo;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct NullTable {
-    db: String,
-    name: String,
-    schema: DataSchemaRef,
+    tbl_info: TableInfo,
 }
 
 impl NullTable {
-    pub fn try_create(
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        _options: TableOptions,
-    ) -> Result<Box<dyn Table>> {
-        let table = Self { db, name, schema };
-        Ok(Box::new(table))
+    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+        Ok(Box::new(Self { tbl_info }))
     }
 }
 
 #[async_trait::async_trait]
 impl Table for NullTable {
     fn name(&self) -> &str {
-        &self.name
+        &self.tbl_info.name
+    }
+
+    fn database(&self) -> &str {
+        &self.tbl_info.db
     }
 
     fn engine(&self) -> &str {
-        "Null"
+        &self.tbl_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -66,7 +61,11 @@ impl Table for NullTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.tbl_info.schema.clone())
+    }
+
+    fn get_id(&self) -> u64 {
+        self.tbl_info.table_id
     }
 
     fn is_local(&self) -> bool {
@@ -76,23 +75,27 @@ impl Table for NullTable {
     fn read_plan(
         &self,
         _ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        _push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
+        let tbl_info = &self.tbl_info;
+        let db = &tbl_info.db;
         Ok(ReadDataSourcePlan {
-            db: self.db.clone(),
+            db: db.to_string(),
             table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
-            schema: self.schema.clone(),
+            table_id: tbl_info.table_id,
+            table_version: None,
+            schema: tbl_info.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
             }],
             statistics: Statistics::new_exact(0, 0),
-            description: format!("(Read from Null Engine table  {}.{})", self.db, self.name),
-            scan_plan: Arc::new(scan.clone()),
+            description: format!("(Read from Null Engine table  {}.{})", db, self.name()),
+            scan_plan: Default::default(),
             remote: false,
+            tbl_args: None,
+            push_downs: None,
         })
     }
 
@@ -101,10 +104,10 @@ impl Table for NullTable {
         _ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::empty_with_schema(self.schema.clone());
+        let block = DataBlock::empty_with_schema(self.tbl_info.schema.clone());
 
         Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
+            self.tbl_info.schema.clone(),
             None,
             vec![block],
         )))

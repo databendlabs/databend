@@ -178,7 +178,7 @@ fn test_plan_parser() -> Result<()> {
 
         Test {
             name: "unimplemented-cte",
-            sql: "with t as ( select sum(number) n from system.numbers_mt(1000) )select * from t",
+            sql: "with t as ( select sum(number) n from numbers_mt(1000) )select * from t",
             expect: "",
             error: "Code: 2, displayText = CTE is not yet implement.",
         },

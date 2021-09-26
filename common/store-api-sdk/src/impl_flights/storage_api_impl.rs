@@ -35,8 +35,8 @@ pub use common_dfs_api_vo::ReadAction;
 pub use common_dfs_api_vo::ReadPlanResult;
 pub use common_dfs_api_vo::TruncateTableResult;
 use common_exception::ErrorCode;
+use common_planners::Extras;
 use common_planners::PlanNode;
-use common_planners::ScanPlan;
 use common_streams::SendableDataBlockStream;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -52,7 +52,10 @@ use crate::StoreDoGet;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ReadPlanAction {
-    pub scan_plan: ScanPlan,
+    // TODO table version/snapshot id
+    pub db_name: String,
+    pub tbl_name: String,
+    pub push_downs: Option<Extras>,
 }
 action_declare!(ReadPlanAction, ReadPlanResult, StoreDoAction::ReadPlan);
 
@@ -73,12 +76,14 @@ impl StorageApi for StoreClient {
         &self,
         db_name: String,
         tbl_name: String,
-        scan_plan: &ScanPlan,
+        push_downs: Option<Extras>,
     ) -> common_exception::Result<ReadPlanResult> {
-        let mut plan = scan_plan.clone();
-        plan.schema_name = format!("{}/{}", db_name, tbl_name);
-        let plan = ReadPlanAction { scan_plan: plan };
-        self.do_action(plan).await
+        let act = ReadPlanAction {
+            db_name,
+            tbl_name,
+            push_downs,
+        };
+        self.do_action(act).await
     }
 
     async fn read_partition(

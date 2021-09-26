@@ -20,7 +20,6 @@ use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 
 pub trait Database: Sync + Send {
@@ -43,9 +42,6 @@ pub trait Database: Sync + Send {
 
     /// Get all tables.
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>>;
-
-    /// Get database table functions.
-    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>>;
 
     /// DDL
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;

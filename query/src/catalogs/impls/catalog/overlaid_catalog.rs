@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -20,6 +21,7 @@ use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::Expression;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
@@ -27,6 +29,8 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
+use crate::datasources::table_func_engine::TableFuncEngine;
+use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
@@ -37,16 +41,20 @@ pub struct OverlaidCatalog {
     read_only: Arc<dyn Catalog + Send + Sync>,
     /// bottom layer, writing goes here
     bottom: Arc<dyn Catalog + Send + Sync>,
+    /// table function engine factories
+    func_engine_registry: TableFuncEngineRegistry,
 }
 
 impl OverlaidCatalog {
     pub fn create(
         upper_read_only: Arc<dyn Catalog + Send + Sync>,
         bottom: Arc<dyn Catalog + Send + Sync>,
+        func_engine_registry: HashMap<String, (u64, Arc<dyn TableFuncEngine>)>,
     ) -> Self {
         Self {
             read_only: upper_read_only,
             bottom,
+            func_engine_registry,
         }
     }
 }
@@ -118,10 +126,13 @@ impl Catalog for OverlaidCatalog {
     fn get_table_function(
         &self,
         func_name: &str,
+        tbl_args: Option<Expression>,
     ) -> common_exception::Result<Arc<TableFunctionMeta>> {
-        self.read_only
-            .get_table_function(func_name)
-            .or_else(|_e| self.bottom.get_table_function(func_name))
+        let (id, factory) = self.func_engine_registry.get(func_name).ok_or_else(|| {
+            ErrorCode::UnknownTable(format!("unknown table function {}", func_name))
+        })?;
+        let func = factory.try_create("", func_name, *id, tbl_args)?;
+        Ok(Arc::new(TableFunctionMeta::create(func.clone(), *id)))
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> common_exception::Result<()> {

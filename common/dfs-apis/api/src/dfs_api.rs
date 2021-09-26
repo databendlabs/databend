@@ -19,7 +19,7 @@ use common_dfs_api_vo::BlockStream;
 use common_dfs_api_vo::ReadAction;
 use common_dfs_api_vo::ReadPlanResult;
 use common_dfs_api_vo::TruncateTableResult;
-use common_planners::ScanPlan;
+use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 
 #[async_trait::async_trait]
@@ -28,7 +28,7 @@ pub trait StorageApi: Send + Sync {
         &self,
         db_name: String,
         tbl_name: String,
-        scan_plan: &ScanPlan,
+        push_downs: Option<Extras>,
     ) -> common_exception::Result<ReadPlanResult>;
 
     /// Get partition.

@@ -614,7 +614,11 @@ async fn test_scan_partition() -> anyhow::Result<()> {
         ..ScanPlan::empty()
     };
     let res = client
-        .read_plan(db_name.to_string(), tbl_name.to_string(), &plan)
+        .read_plan(
+            db_name.to_string(),
+            tbl_name.to_string(),
+            Some(plan.push_downs.clone()),
+        )
         .await;
 
     assert!(res.is_ok());

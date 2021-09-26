@@ -22,9 +22,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_backend::TableInfo;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
+use crate::catalogs::TableInfo;
 use crate::catalogs::TableMeta;
 use crate::datasources::database::example::ExampleTable;
 
@@ -65,6 +64,7 @@ impl ExampleDatabase {
             table_info.name.clone(),
             table_info.schema.clone(),
             table_info.table_option.clone(),
+            table_info.table_id,
         )?;
         let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);
         Ok(Arc::new(tbl_meta))
@@ -109,10 +109,6 @@ impl Database for ExampleDatabase {
             acc.push(tbl);
             Ok(acc)
         })
-    }
-
-    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
-        Ok(vec![])
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {

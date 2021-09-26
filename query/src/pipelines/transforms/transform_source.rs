@@ -42,8 +42,18 @@ impl SourceTransform {
     async fn read_table(&self, db: &str) -> Result<SendableDataBlockStream> {
         let table_id = self.source_plan.table_id;
         let table_ver = self.source_plan.table_version;
-        let table = self.ctx.get_table_by_id(db, table_id, table_ver).await?;
-        let table_stream = table.raw().read(self.ctx.clone(), &self.source_plan);
+        let table = if self.source_plan.tbl_args.is_none() {
+            self.ctx
+                .get_table_by_id(db, table_id, table_ver)?
+                .raw()
+                .clone()
+        } else {
+            let func_meta = self
+                .ctx
+                .get_table_function(&self.source_plan.table, self.source_plan.tbl_args.clone())?;
+            func_meta.raw().clone().as_table()
+        };
+        let table_stream = table.read(self.ctx.clone(), &self.source_plan);
         Ok(Box::pin(
             self.ctx.try_create_abortable(table_stream.await?)?,
         ))
