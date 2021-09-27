@@ -15,8 +15,37 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-pub fn uniq_usize() -> usize {
-    static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
+pub struct GlobalSequence;
 
-    GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst)
+impl GlobalSequence {
+    pub fn next() -> usize {
+        static GLOBAL_SEQ: AtomicUsize = AtomicUsize::new(0);
+
+        GLOBAL_SEQ.fetch_add(1, Ordering::SeqCst)
+    }
+}
+
+pub struct GlobalUniqName;
+
+impl GlobalUniqName {
+    pub fn unique() -> String {
+        let mut uuid = uuid::Uuid::new_v4().as_u128();
+        let mut unique_name = Vec::with_capacity(22);
+
+        loop {
+            let m = (uuid % 62) as u8;
+            uuid /= 62;
+
+            match m as u8 {
+                0..=9 => unique_name.push((b'0' + m) as char),
+                10..=35 => unique_name.push((b'a' + (m - 10)) as char),
+                36..=61 => unique_name.push((b'A' + (m - 36)) as char),
+                unreachable => unreachable!("Unreachable branch m = {}", unreachable),
+            }
+
+            if uuid == 0 {
+                return unique_name.iter().collect();
+            }
+        }
+    }
 }

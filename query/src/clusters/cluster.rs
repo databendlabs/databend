@@ -18,6 +18,7 @@ use std::time::Duration;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_base::tokio;
 use common_base::tokio::time::sleep as tokio_async_sleep;
+use common_base::GlobalUniqName;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_kv_api::KVApi;
@@ -51,7 +52,7 @@ impl ClusterDiscovery {
     }
 
     pub async fn create_global(cfg: Config) -> Result<ClusterDiscoveryRef> {
-        let local_id = global_unique_id();
+        let local_id = GlobalUniqName::unique();
         let store_client = ClusterDiscovery::create_store_client(&cfg).await?;
         let (lift_time, provider) = Self::create_provider(&cfg, store_client)?;
 
@@ -158,27 +159,6 @@ impl Cluster {
 
     pub fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
         self.nodes.to_vec()
-    }
-}
-
-fn global_unique_id() -> String {
-    let mut uuid = uuid::Uuid::new_v4().as_u128();
-    let mut unique_id = Vec::with_capacity(22);
-
-    loop {
-        let m = (uuid % 62) as u8;
-        uuid /= 62;
-
-        match m as u8 {
-            0..=9 => unique_id.push((b'0' + m) as char),
-            10..=35 => unique_id.push((b'a' + (m - 10)) as char),
-            36..=61 => unique_id.push((b'A' + (m - 36)) as char),
-            unreachable => unreachable!("Unreachable branch m = {}", unreachable),
-        }
-
-        if uuid == 0 {
-            return unique_id.iter().collect();
-        }
     }
 }
 
