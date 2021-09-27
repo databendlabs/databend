@@ -18,9 +18,11 @@ mod comparison;
 mod conditional;
 mod data_column;
 mod logic;
+mod nullable;
 
 pub use common::*;
 pub use comparison::*;
 pub use conditional::*;
 pub use data_column::*;
 pub use logic::*;
+pub use nullable::*;

@@ -17,6 +17,7 @@ use std::borrow::Cow;
 use chrono::Date;
 use chrono::DateTime;
 use chrono_tz::Tz;
+use common_base::ProgressValues;
 use common_clickhouse_srv::connection::Connection;
 use common_clickhouse_srv::errors::Error as CHError;
 use common_clickhouse_srv::errors::Result as CHResult;
@@ -32,24 +33,17 @@ use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 
 use crate::servers::clickhouse::interactive_worker_base::BlockItem;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct QueryWriter<'a> {
     client_version: u64,
     conn: &'a mut Connection,
-    ctx: DatabendQueryContextRef,
 }
 
 impl<'a> QueryWriter<'a> {
-    pub fn create(
-        version: u64,
-        conn: &'a mut Connection,
-        ctx: DatabendQueryContextRef,
-    ) -> QueryWriter {
+    pub fn create(version: u64, conn: &'a mut Connection) -> QueryWriter {
         QueryWriter {
-            client_version: version,
             conn,
-            ctx,
+            client_version: version,
         }
     }
 
@@ -63,8 +57,7 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    async fn write_progress(&mut self) -> Result<()> {
-        let values = self.ctx.get_and_reset_progress_value();
+    async fn write_progress(&mut self, values: ProgressValues) -> Result<()> {
         let progress = common_clickhouse_srv::types::Progress {
             rows: values.read_rows as u64,
             bytes: values.read_bytes as u64,
@@ -108,7 +101,7 @@ impl<'a> QueryWriter<'a> {
                 None => {
                     return Ok(());
                 }
-                Some(BlockItem::ProgressTicker) => self.write_progress().await?,
+                Some(BlockItem::ProgressTicker(values)) => self.write_progress(values).await?,
                 Some(BlockItem::Block(Err(error))) => {
                     self.write_error(error).await?;
                     return Ok(());
@@ -135,10 +128,10 @@ impl<'a> QueryWriter<'a> {
     async fn write_tail_data(&mut self, mut receiver: Receiver<BlockItem>) -> Result<()> {
         while let Some(item) = receiver.next().await {
             match item {
-                BlockItem::ProgressTicker => self.write_progress().await?,
                 BlockItem::Block(Ok(block)) => self.write_block(block).await?,
                 BlockItem::Block(Err(error)) => self.write_error(error).await?,
                 BlockItem::InsertSample(block) => self.write_block(block).await?,
+                BlockItem::ProgressTicker(values) => self.write_progress(values).await?,
             };
         }
 

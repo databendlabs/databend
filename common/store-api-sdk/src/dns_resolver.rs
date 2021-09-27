@@ -21,10 +21,10 @@ use std::task;
 use std::task::Poll;
 use std::time::Duration;
 
+use common_base::tokio;
+use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::task::JoinHandle;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
@@ -138,7 +138,7 @@ impl Future for DNSServiceFuture {
 pub struct ConnectionFactory;
 
 impl ConnectionFactory {
-    pub async fn create_flight_channel(
+    pub fn create_flight_channel(
         addr: impl ToString,
         timeout: Option<Duration>,
         rpc_client_config: Option<RpcClientTlsConfig>,
@@ -158,7 +158,7 @@ impl ConnectionFactory {
 
                 let mut endpoint = if let Some(conf) = rpc_client_config {
                     log::info!("tls rpc enabled");
-                    let client_tls_config = Self::client_tls_config(&conf).await.map_err(|e| {
+                    let client_tls_config = Self::client_tls_config(&conf).map_err(|e| {
                         ErrorCode::TLSConfigurationFailure(format!(
                             "loading client tls config failure: {} ",
                             e.to_string()
@@ -178,7 +178,7 @@ impl ConnectionFactory {
                     endpoint = endpoint.timeout(timeout);
                 }
 
-                match endpoint.connect_with_connector(inner_connector).await {
+                match endpoint.connect_with_connector_lazy(inner_connector) {
                     Ok(channel) => Result::Ok(channel),
                     Err(error) => Result::Err(ErrorCode::CannotConnectNode(format!(
                         "Cannot to RPC server: {:?} error: {}",
@@ -189,9 +189,8 @@ impl ConnectionFactory {
         }
     }
 
-    async fn client_tls_config(conf: &RpcClientTlsConfig) -> Result<ClientTlsConfig> {
-        let server_root_ca_cert =
-            tokio::fs::read(conf.rpc_tls_server_root_ca_cert.as_str()).await?;
+    fn client_tls_config(conf: &RpcClientTlsConfig) -> Result<ClientTlsConfig> {
+        let server_root_ca_cert = std::fs::read(conf.rpc_tls_server_root_ca_cert.as_str())?;
         let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
 
         let tls = ClientTlsConfig::new()

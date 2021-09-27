@@ -16,14 +16,14 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_kv_api::KVApi;
+use common_kv_api::SyncKVApi;
 use common_metatypes::MatchSeq;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
-use common_store_api::KVApi;
 
 use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
@@ -37,7 +37,6 @@ pub struct UserMgr {
 }
 
 impl UserMgr {
-    #[allow(dead_code)]
     pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
         UserMgr {
             kv_api,
@@ -46,17 +45,15 @@ impl UserMgr {
     }
 }
 
-#[async_trait]
 impl UserMgrApi for UserMgr {
-    async fn add_user(&mut self, user_info: UserInfo) -> common_exception::Result<u64> {
+    fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = format!("{}/{}", self.user_prefix, user_info.name);
         let value = serde_json::to_vec(&user_info)?;
 
         let res = self
             .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
-            .await?;
+            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
 
         match (res.prev, res.result) {
             (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
@@ -71,9 +68,9 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn get_user(&mut self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>> {
+    fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>> {
         let key = format!("{}/{}", self.user_prefix, username);
-        let res = self.kv_api.get_kv(&key).await?;
+        let res = self.kv_api.sync_get_kv(&key)?;
 
         let seq_value = res
             .result
@@ -85,11 +82,8 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn get_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>> {
-        let values = self
-            .kv_api
-            .prefix_list_kv(self.user_prefix.as_str())
-            .await?;
+    fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>> {
+        let values = self.kv_api.sync_prefix_list_kv(self.user_prefix.as_str())?;
         let mut r = vec![];
         for (_key, (s, val)) in values {
             let u = serde_json::from_slice::<UserInfo>(&val.value)
@@ -97,11 +91,12 @@ impl UserMgrApi for UserMgr {
 
             r.push((s, u));
         }
+
         Ok(r)
     }
 
-    async fn update_user(
-        &mut self,
+    fn update_user(
+        &self,
         username: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
@@ -112,7 +107,7 @@ impl UserMgrApi for UserMgr {
         }
         let partial_update = new_auth.is_none() || new_password.is_none();
         let user_info = if partial_update {
-            let user_val_seq = self.get_user(username.clone(), seq).await?;
+            let user_val_seq = self.get_user(username.clone(), seq)?;
             let user_info = user_val_seq.1;
             UserInfo::new(
                 username.clone(),
@@ -132,8 +127,7 @@ impl UserMgrApi for UserMgr {
         };
         let res = self
             .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
-            .await?;
+            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -143,9 +137,9 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn drop_user(&mut self, username: String, seq: Option<u64>) -> Result<()> {
+    fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
         let key = format!("{}/{}", self.user_prefix, username);
-        let res = self.kv_api.upsert_kv(&key, seq.into(), None, None).await?;
+        let res = self.kv_api.sync_upsert_kv(&key, seq.into(), None, None)?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {

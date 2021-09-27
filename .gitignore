@@ -9,9 +9,6 @@ target/*
 distro/*
 cli/e2e/databend-cli
 
-# cargo
-.cargo/
-
 # profile
 flamegraph.*
 perf.*

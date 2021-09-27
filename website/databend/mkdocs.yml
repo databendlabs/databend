@@ -180,11 +180,16 @@ nav:
           - toYYYYMMDD: sqlstatement/datetime-functions/toyyyymmdd.md
           - toYYYYMMDDhhmmss: sqlstatement/datetime-functions/toyyyymmddhhmmss.md
           - YESTERDAY: sqlstatement/datetime-functions/yesterday.md
+          - addYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS: sqlstatement/datetime-functions/addinterval.md
+          - subtractYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS: sqlstatement/datetime-functions/subtractinterval.md
       - Hash Functions:
           - SIPHASH: sqlstatement/hash-functions/siphash.md
       - Information Functions:
           - DATABASE: sqlstatement/information-functions/database.md
           - VERSION: sqlstatement/information-functions/version.md
+      - Nullable Functions:
+          - isNull: sqlstatement/nullable-functions/isnull.md
+          - isNotNull: sqlstatement/nullable-functions/isnotnull.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
       - Test Functions:

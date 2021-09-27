@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
-use common_runtime::tokio;
 use futures::stream::StreamExt;
 
 use crate::*;

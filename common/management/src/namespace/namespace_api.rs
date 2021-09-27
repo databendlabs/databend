@@ -15,23 +15,19 @@
 
 use std::convert::TryFrom;
 
-use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metatypes::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct NodeInfo {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
-    pub cpu_nums: u32,
+    pub cpu_nums: u64,
     #[serde(default)]
     pub version: u32,
     #[serde(default)]
-    pub ip: String,
-    #[serde(default)]
-    pub port: u32,
+    pub flight_address: String,
 }
 
 impl TryFrom<Vec<u8>> for NodeInfo {
@@ -48,39 +44,28 @@ impl TryFrom<Vec<u8>> for NodeInfo {
     }
 }
 
-#[async_trait]
-pub trait NamespaceApi {
+impl NodeInfo {
+    pub fn create(id: String, cpu_nums: u64, flight_address: String) -> NodeInfo {
+        NodeInfo {
+            id,
+            cpu_nums,
+            version: 0,
+            flight_address,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+pub trait NamespaceApi: Sync + Send {
     // Add a new node info to /tenant/namespace/node-name.
-    async fn add_node(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        node: NodeInfo,
-    ) -> Result<u64>;
+    async fn add_node(&self, node: NodeInfo) -> Result<u64>;
 
     // Get the tenant's namespace all nodes.
-    async fn get_nodes(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        seq: Option<u64>,
-    ) -> Result<Vec<SeqValue<NodeInfo>>>;
-
-    // Update the tenant's namespace node.
-    async fn update_node(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        node: NodeInfo,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>>;
+    async fn get_nodes(&self) -> Result<Vec<NodeInfo>>;
 
     // Drop the tenant's namespace one node by node.id.
-    async fn drop_node(
-        &self,
-        tenant_id: String,
-        namespace_id: String,
-        node_id: String,
-        seq: Option<u64>,
-    ) -> Result<()>;
+    async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()>;
+
+    // Keep the tenant's namespace node alive.
+    async fn heartbeat(&self, node_id: String, seq: Option<u64>) -> Result<u64>;
 }

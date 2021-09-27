@@ -178,7 +178,7 @@ impl Table for FuseTable {
             &source_plan.scan_plan.projected_schema,
         )?;
 
-        let (tx, rx) = common_runtime::tokio::sync::mpsc::channel(1024);
+        let (tx, rx) = common_base::tokio::sync::mpsc::channel(1024);
 
         let bite_size = 1; // TODO config
         let mut iter = {
@@ -192,7 +192,7 @@ impl Table for FuseTable {
         };
         let da = self.data_accessor(&ctx)?;
         let arrow_schema = source_plan.scan_plan.table_schema.to_arrow();
-        let _h = common_runtime::tokio::task::spawn_local(async move {
+        let _h = common_base::tokio::task::spawn_local(async move {
             // TODO error handling is buggy
             for part in &mut iter {
                 read_part(

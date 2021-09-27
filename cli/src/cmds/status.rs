@@ -18,8 +18,9 @@ use std::io::BufReader;
 use std::path::Path;
 use nix::unistd::Pid;
 use log::{info, warn};
-use databend_query::configs::Config as QueryConfig;
-use databend_store::configs::Config as StoreConfig;
+
+use databend_dfs::configs::Config as StoreConfig;
+use databend_query::configs::{Config as QueryConfig};
 
 use crate::cmds::Config;
 use crate::error::{Result, CliError};

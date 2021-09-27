@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
@@ -33,7 +33,7 @@ async fn test_clusters_table() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 4);
+    assert_eq!(block.num_columns(), 3);
 
     Ok(())
 }

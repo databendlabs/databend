@@ -469,7 +469,7 @@ download_databend() {
     fi
     echo "${HOME}/${BINDIR}"
     test ! -d "${HOME}/${BINDIR}" && install -d "${HOME}/${BINDIR}"
-    for binexe in databend-query databend-store; do
+    for binexe in databend-query databend-dfs; do
       #TODO(zhihanz) for windows we should add .exe suffix
       install "${srcdir}/${binexe}" "${HOME}/${BINDIR}/"
       ensure chmod +x "${HOME}/${BINDIR}/${binexe}"
@@ -563,7 +563,7 @@ path_hint() {
     # shellcheck disable=SC2016
     log_info '   For zsh : echo '\''export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'\'' >> ~/.zshrc'
     log_info ""
-    log_info "   To use databend-query or databend-store you'll need to restart your shell or run the following:"
+    log_info "   To use databend-query or databend-dfs you'll need to restart your shell or run the following:"
     # shellcheck disable=SC2016
     log_info '   export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'
 }

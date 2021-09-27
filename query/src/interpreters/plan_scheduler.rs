@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_management::NodeInfo;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::BroadcastPlan;
@@ -47,7 +48,6 @@ use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::catalogs::TablePtr;
-use crate::clusters::Node;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -75,19 +75,19 @@ pub struct PlanScheduler {
 
 impl PlanScheduler {
     pub fn try_create(context: DatabendQueryContextRef) -> Result<PlanScheduler> {
-        let cluster = context.try_get_cluster()?;
-        let cluster_nodes = cluster.get_nodes()?;
+        let cluster = context.get_cluster();
+        let cluster_nodes = cluster.get_nodes();
 
         let mut local_pos = 0;
         let mut nodes_plan = Vec::new();
         let mut cluster_nodes_name = Vec::with_capacity(cluster_nodes.len());
         for index in 0..cluster_nodes.len() {
-            if cluster_nodes[index].is_local() {
+            if cluster.is_local(cluster_nodes[index].as_ref()) {
                 local_pos = index;
             }
 
             nodes_plan.push(PlanNode::Empty(EmptyPlan::create()));
-            cluster_nodes_name.push(cluster_nodes[index].name.clone());
+            cluster_nodes_name.push(cluster_nodes[index].id.clone());
         }
 
         Ok(PlanScheduler {
@@ -105,10 +105,10 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
-        let cluster = context.try_get_cluster()?;
+        let cluster = context.get_cluster();
         let mut tasks = Tasks::create(context);
 
-        match cluster.is_empty()? {
+        match cluster.is_empty() {
             true => tasks.finalize(plan),
             false => {
                 self.visit_plan_node(plan, &mut tasks)?;
@@ -136,12 +136,12 @@ impl Tasks {
         Ok(self)
     }
 
-    pub fn get_tasks(&self) -> Result<Vec<(Arc<Node>, FlightAction)>> {
-        let cluster = self.context.try_get_cluster()?;
+    pub fn get_tasks(&self) -> Result<Vec<(Arc<NodeInfo>, FlightAction)>> {
+        let cluster = self.context.get_cluster();
 
         let mut tasks = Vec::new();
-        for cluster_node in &cluster.get_nodes()? {
-            if let Some(actions) = self.actions.get(&cluster_node.name) {
+        for cluster_node in &cluster.get_nodes() {
+            if let Some(actions) = self.actions.get(&cluster_node.id) {
                 for action in actions {
                     tasks.push((cluster_node.clone(), action.clone()));
                 }

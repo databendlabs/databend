@@ -17,14 +17,14 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::tokio::sync::mpsc::Sender;
+use common_base::tokio::sync::*;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::RwLock;
-use common_runtime::tokio::sync::mpsc::Sender;
-use common_runtime::tokio::sync::*;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -48,6 +48,8 @@ pub struct DatabendQueryFlightDispatcher {
     stages_notify: Arc<RwLock<HashMap<String, Arc<Notify>>>>,
     abort: Arc<AtomicBool>,
 }
+
+pub type DatabendQueryFlightDispatcherRef = Arc<DatabendQueryFlightDispatcher>;
 
 impl DatabendQueryFlightDispatcher {
     pub fn create() -> DatabendQueryFlightDispatcher {
@@ -80,7 +82,7 @@ impl DatabendQueryFlightDispatcher {
         }
     }
 
-    pub fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
+    pub async fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
         let action_sinks = action.get_sinks();
@@ -89,12 +91,15 @@ impl DatabendQueryFlightDispatcher {
 
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
-            1 => self.one_sink_action(session, &action),
-            _ => self.action_with_scatter::<BroadcastFlightScatter>(session, &action),
+            1 => self.one_sink_action(session, &action).await,
+            _ => {
+                self.action_with_scatter::<BroadcastFlightScatter>(session, &action)
+                    .await
+            }
         }
     }
 
-    pub fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
+    pub async fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
         let action_sinks = action.get_sinks();
@@ -103,13 +108,16 @@ impl DatabendQueryFlightDispatcher {
 
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
-            1 => self.one_sink_action(session, &action),
-            _ => self.action_with_scatter::<HashFlightScatter>(session, &action),
+            1 => self.one_sink_action(session, &action).await,
+            _ => {
+                self.action_with_scatter::<HashFlightScatter>(session, &action)
+                    .await
+            }
         }
     }
 
-    fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
-        let query_context = session.create_context();
+    async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
+        let query_context = session.create_context().await?;
         let action_context = DatabendQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
@@ -153,9 +161,15 @@ impl DatabendQueryFlightDispatcher {
         Ok(())
     }
 
-    fn action_with_scatter<T>(&self, session: SessionRef, action: &FlightAction) -> Result<()>
-    where T: FlightScatter + Send + 'static {
-        let query_context = session.create_context();
+    async fn action_with_scatter<T>(
+        &self,
+        session: SessionRef,
+        action: &FlightAction,
+    ) -> Result<()>
+    where
+        T: FlightScatter + Send + 'static,
+    {
+        let query_context = session.create_context().await?;
         let action_context = DatabendQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 

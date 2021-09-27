@@ -72,7 +72,7 @@ impl Node {
         };
 
         let channel =
-            ConnectionFactory::create_flight_channel(self.address.clone(), None, tls_conf).await;
+            ConnectionFactory::create_flight_channel(self.address.clone(), None, tls_conf);
         channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 }

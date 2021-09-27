@@ -45,11 +45,10 @@ impl ClickHouseSession for InteractiveWorker {
     ) -> common_clickhouse_srv::errors::Result<()> {
         let start = Instant::now();
 
-        let context = self.session.create_context();
-        context.attach_query_str(&ctx.state.query);
-        let mut query_writer = QueryWriter::create(ctx.client_revision, conn, context.clone());
+        let mut query_writer = QueryWriter::create(ctx.client_revision, conn);
 
-        let get_query_result = InteractiveWorkerBase::do_query(ctx, context);
+        let session = self.session.clone();
+        let get_query_result = InteractiveWorkerBase::do_query(ctx, session);
         if let Err(cause) = query_writer.write(get_query_result.await).await {
             let new_error = cause.add_message(&ctx.state.query);
             return Err(to_clickhouse_err(new_error));

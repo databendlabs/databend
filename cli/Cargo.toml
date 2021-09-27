@@ -16,8 +16,8 @@ path = "src/bin/databend-cli.rs"
 [dependencies]
 # Workspace dependencies
 databend-query = {path = "../query"}
-databend-store = {path = "../store"}
 clap = "3.0.0-beta.4"
+databend-dfs = {path = "../dfs" }
 colored = "2.0.0"
 comfy-table = "4.1.1"
 dirs = "4.0.0"

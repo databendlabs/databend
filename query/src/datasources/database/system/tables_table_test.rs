@@ -12,20 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
-use crate::configs::Config;
 use crate::datasources::database::system::TablesTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
-    let config = Config::default();
-
-    let ctx = crate::tests::try_create_context_with_conf(config)?;
+    let ctx = crate::tests::try_create_context()?;
     let table = TablesTable::create();
     let source_plan = table.read_plan(
         ctx.clone(),

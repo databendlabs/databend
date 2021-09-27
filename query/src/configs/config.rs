@@ -54,7 +54,7 @@ macro_rules! env_helper {
 }
 
 // Log env.
-const LOG_LEVEL: &str = "LOG_LEVEL";
+pub const LOG_LEVEL: &str = "LOG_LEVEL";
 const LOG_DIR: &str = "LOG_DIR";
 
 // Query env.
@@ -77,7 +77,6 @@ const QUERY_RPC_TLS_SERVER_CERT: &str = "QUERY_RPC_TLS_SERVER_CERT";
 const QUERY_RPC_TLS_SERVER_KEY: &str = "QUERY_RPC_TLS_SERVER_KEY";
 const QUERY_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT";
 const QUERY_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "QUERY_RPC_TLS_SERVICE_DOMAIN_NAME";
-const QUERY_DISABLE_LOCAL_DATABASE_ENGINE: &str = "QUERY_DISABLE_LOCAL_DATABASE_ENGINE";
 
 // Meta env.
 const META_ADDRESS: &str = "META_ADDRESS";
@@ -355,10 +354,6 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
-
-    #[structopt(long, env = "QUERY_DISABLE_LOCAL_DATABASE_ENGINE", default_value = "0")]
-    #[serde(default)]
-    pub disable_local_database_engine: String,
 }
 
 impl QueryConfig {
@@ -382,7 +377,6 @@ impl QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
-            disable_local_database_engine: "0".to_string(),
         }
     }
 }
@@ -558,13 +552,6 @@ impl Config {
             metric_api_address,
             String,
             QUERY_METRICS_API_ADDRESS
-        );
-        env_helper!(
-            mut_config,
-            query,
-            disable_local_database_engine,
-            String,
-            QUERY_DISABLE_LOCAL_DATABASE_ENGINE
         );
 
         // for api http service

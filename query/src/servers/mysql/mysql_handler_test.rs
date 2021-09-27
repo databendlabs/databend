@@ -18,10 +18,10 @@ use std::sync::Barrier;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_runtime::tokio;
 use mysql::prelude::FromRow;
 use mysql::prelude::Queryable;
 use mysql::Conn;
@@ -29,11 +29,12 @@ use mysql::FromRowError;
 use mysql::Row;
 
 use crate::servers::MySQLHandler;
-use crate::tests::try_create_session_mgr;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let mut handler = MySQLHandler::create(try_create_session_mgr(Some(1))?);
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -49,7 +50,8 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let mut handler = MySQLHandler::create(try_create_session_mgr(Some(1))?);
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -107,7 +109,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let mut handler = MySQLHandler::create(try_create_session_mgr(Some(1))?);
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;

@@ -19,9 +19,9 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use async_compat::CompatExt;
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
 use futures::Stream;
 use futures::StreamExt;
 use tokio::io::AsyncReadExt;

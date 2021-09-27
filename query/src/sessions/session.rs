@@ -22,7 +22,6 @@ use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
 use crate::catalogs::impls::DatabaseCatalog;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::DatabendQueryContext;
@@ -114,19 +113,36 @@ impl Session {
         }
     }
 
-    pub fn create_context(self: &Arc<Self>) -> DatabendQueryContextRef {
-        let mut state_guard = self.mutable_state.lock();
+    /// Create a query context for query.
+    /// For a query, execution environment(e.g cluster) should be immutable.
+    /// We can bind the environment to the context in create_context method.
+    pub async fn create_context(self: &Arc<Self>) -> Result<DatabendQueryContextRef> {
+        let context_shared = {
+            let mutable_state = self.mutable_state.lock();
+            mutable_state.context_shared.as_ref().map(Clone::clone)
+        };
 
-        if state_guard.context_shared.is_none() {
-            let config = self.config.clone();
-            let shared = DatabendQueryContextShared::try_create(config, self.clone());
-            state_guard.context_shared = Some(shared);
-        }
-
-        match &state_guard.context_shared {
+        Ok(match context_shared.as_ref() {
             Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
-            None => unreachable!(),
-        }
+            None => {
+                let config = self.config.clone();
+                let discovery = self.sessions.get_cluster_discovery();
+
+                let session = self.clone();
+                let cluster = discovery.discover().await?;
+                let shared = DatabendQueryContextShared::try_create(config, session, cluster);
+
+                let mut mutable_state = self.mutable_state.lock();
+
+                match mutable_state.context_shared.as_ref() {
+                    Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
+                    None => {
+                        mutable_state.context_shared = Some(shared.clone());
+                        DatabendQueryContext::from_shared(shared)
+                    }
+                }
+            }
+        })
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
@@ -136,7 +152,7 @@ impl Session {
         inner.client_host = host;
         inner.io_shutdown_tx = Some(tx);
 
-        common_runtime::tokio::spawn(async move {
+        common_base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
                 (io_shutdown)();
                 tx.send(()).ok();
@@ -156,10 +172,6 @@ impl Session {
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
         self.mutable_state.lock().session_settings.clone()
-    }
-
-    pub fn try_get_cluster(self: &Arc<Self>) -> Result<ClusterRef> {
-        Ok(self.sessions.get_cluster())
     }
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {

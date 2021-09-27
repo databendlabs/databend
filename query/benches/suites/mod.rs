@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_runtime::tokio;
 use criterion::Criterion;
 use databend_query::interpreters::SelectInterpreter;
 use databend_query::sql::PlanParser;
-use databend_query::tests::try_create_session_mgr;
+use databend_query::tests::SessionManagerBuilder;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
@@ -27,9 +27,9 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-    let session_manager = try_create_session_mgr(Some(1))?;
-    let executor_session = session_manager.create_session("Benches")?;
-    let ctx = executor_session.create_context();
+    let sessions = SessionManagerBuilder::create().build()?;
+    let executor_session = sessions.create_session("Benches")?;
+    let ctx = executor_session.create_context().await?;
 
     if let PlanNode::Select(plan) = PlanParser::create(ctx.clone()).build_from_sql(sql)? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;

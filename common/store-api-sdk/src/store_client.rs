@@ -21,10 +21,11 @@ use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_kv_api_util::STORE_RUNTIME;
+use common_kv_api_util::STORE_SYNC_CALL_TIMEOUT;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
-use log::info;
 use prost::Message;
 use serde::de::DeserializeOwned;
 use tonic::codegen::InterceptedService;
@@ -42,12 +43,13 @@ use crate::RpcClientTlsConfig;
 
 #[derive(Clone)]
 pub struct StoreClient {
+    #[allow(dead_code)]
     token: Vec<u8>,
     pub(crate) timeout: Duration,
     pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
-static AUTH_TOKEN_KEY: &str = "auth-token-bin";
+const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl StoreClient {
     pub async fn try_new(conf: &StoreClientConf) -> Result<StoreClient> {
@@ -58,6 +60,14 @@ impl StoreClient {
             conf.meta_service_config.tls_conf.clone(),
         )
         .await
+    }
+
+    pub fn sync_try_new(conf: &StoreClientConf) -> Result<StoreClient> {
+        let cfg = conf.clone();
+        STORE_RUNTIME.block_on(
+            async move { StoreClient::try_new(&cfg).await },
+            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
+        )?
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
@@ -75,7 +85,7 @@ impl StoreClient {
         // TODO configuration
         let timeout = Duration::from_secs(60);
 
-        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf).await;
+        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf);
 
         tracing::debug!("connecting to {}, res: {:?}", addr, res);
 
@@ -148,11 +158,11 @@ impl StoreClient {
         let mut stream = self.client.clone().do_action(req).await?.into_inner();
         match stream.message().await? {
             None => Err(ErrorCode::EmptyData(format!(
-                "Can not receive data from store flight server, action: {:?}",
+                "Can not receive data from dfs flight server, action: {:?}",
                 act
             ))),
             Some(resp) => {
-                info!("do_action: resp: {:}", flight_result_to_str(&resp));
+                log::debug!("do_action: resp: {:}", flight_result_to_str(&resp));
                 let v = serde_json::from_slice::<R>(&resp.body)?;
                 Ok(v)
             }

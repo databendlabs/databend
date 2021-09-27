@@ -406,10 +406,15 @@ fn test_arithmetic_date_interval() -> Result<()> {
             arg_names: vec!["date16", "interval-day-time"],
             func: ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
             columns: vec![
-                Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
+                Series::new(vec![
+                    to_days(2020, 2, 29) as u16,
+                    to_days(2021, 2, 28) as u16,
+                ])
+                .into(),
                 Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)]).into(),
             ],
-            expect: Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
+            expect: Series::new(vec![to_days(2020, 3, 1) as u16, to_days(2021, 3, 1) as u16])
+                .into(),
             error: "",
         },
     ];

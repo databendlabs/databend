@@ -18,6 +18,9 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
+use common_base::tokio::task::JoinHandle;
+use common_base::ProgressCallback;
+use common_base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -27,9 +30,6 @@ use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::Statistics;
-use common_progress::ProgressCallback;
-use common_progress::ProgressValues;
-use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
@@ -146,8 +146,8 @@ impl DatabendQueryContext {
         Ok(())
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        self.shared.try_get_cluster()
+    pub fn get_cluster(&self) -> ClusterRef {
+        self.shared.get_cluster()
     }
 
     pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {

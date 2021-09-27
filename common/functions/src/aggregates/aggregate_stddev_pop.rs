@@ -71,7 +71,7 @@ impl AggregateStddevPopState {
 #[derive(Clone)]
 pub struct AggregateStddevPopFunction<T> {
     display_name: String,
-    arguments: Vec<DataField>,
+    _arguments: Vec<DataField>,
     t: PhantomData<T>,
 }
 
@@ -202,7 +202,7 @@ where T: DFPrimitiveType + AsPrimitive<f64>
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
-            arguments,
+            _arguments: arguments,
             t: PhantomData,
         }))
     }

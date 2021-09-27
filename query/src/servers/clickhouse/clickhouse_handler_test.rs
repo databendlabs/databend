@@ -19,17 +19,17 @@ use clickhouse_rs::types::Complex;
 use clickhouse_rs::Block;
 use clickhouse_rs::ClientHandle;
 use clickhouse_rs::Pool;
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
 
 use crate::servers::ClickHouseHandler;
-use crate::tests::try_create_session_mgr;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
-    let sessions = try_create_session_mgr(Some(1))?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -45,8 +45,8 @@ async fn test_clickhouse_handler_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_insert_data() -> Result<()> {
-    let sessions = try_create_session_mgr(Some(1))?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -68,8 +68,8 @@ async fn test_clickhouse_insert_data() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reject_clickhouse_connection() -> Result<()> {
-    let sessions = try_create_session_mgr(Some(1))?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -97,8 +97,8 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_abort_clickhouse_server() -> Result<()> {
-    let sessions = try_create_session_mgr(Some(3))?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(3).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;

@@ -12,33 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_runtime::tokio;
+use axum::body::Body;
+use axum::handler::get;
+use axum::http::Request;
+use axum::http::StatusCode;
+use axum::http::{self};
+use axum::AddExtensionLayer;
+use axum::Router;
+use common_base::tokio;
+use common_exception::Result;
+use pretty_assertions::assert_eq;
+use tower::ServiceExt;
+
+use crate::api::http::v1::logs::logs_handler;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
-async fn test_logs() -> common_exception::Result<()> {
-    use axum::body::Body;
-    use axum::handler::get;
-    use axum::http::Request;
-    use axum::http::StatusCode;
-    use axum::http::{self};
-    use axum::AddExtensionLayer;
-    use axum::Router;
-    use pretty_assertions::assert_eq;
-    use tempfile::tempdir;
-    use tower::ServiceExt;
+async fn test_logs() -> Result<()> {
+    let sessions = SessionManagerBuilder::create().build()?;
 
-    use crate::api::http::v1::logs::logs_handler;
-    use crate::configs::Config; // for `app.oneshot()`
-
-    let mut conf = Config::default();
-    let tmp_dir = tempdir().unwrap();
-    conf.log.log_dir = tmp_dir.path().to_str().unwrap().to_string();
-
-    let cluster_router = Router::new()
+    let test_router = Router::new()
         .route("/v1/logs", get(logs_handler))
-        .layer(AddExtensionLayer::new(conf));
+        .layer(AddExtensionLayer::new(sessions));
     {
-        let response = cluster_router
+        let response = test_router
             .oneshot(
                 Request::builder()
                     .uri("/v1/logs")
@@ -51,6 +48,5 @@ async fn test_logs() -> common_exception::Result<()> {
 
         assert_eq!(response.status(), StatusCode::OK);
     }
-    tmp_dir.close()?;
     Ok(())
 }

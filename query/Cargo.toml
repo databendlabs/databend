@@ -22,6 +22,7 @@ simd = ["common-arrow/simd"]
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
+common-base = { path = "../common/base" }
 common-management = { path = "../common/management" }
 common-cache = { path = "../common/cache"}
 common-datablocks = { path = "../common/datablocks" }
@@ -30,17 +31,19 @@ common-exception = { path = "../common/exception" }
 common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
-common-progress = { path = "../common/progress" }
-common-runtime = { path = "../common/runtime" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-profling = { path = "../common/profiling" }
-common-store-api = { path = "../common/store-api" }
 common-store-api-sdk= {path = "../common/store-api-sdk" }
+common-kv-api = { path = "../common/kv-apis/api" }
+common-kv-api-vo = { path = "../common/kv-apis/vo" }
+common-meta-api = { path = "../common/meta-apis/api" }
+common-meta-api-vo = { path = "../common/meta-apis/vo" }
+common-dfs-api = { path = "../common/dfs-apis/api" }
+common-dfs-api-vo = { path = "../common/dfs-apis/vo" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
-kvlocal = { path = "../kvlocal"}
+common-kv = { path = "../common/kv" }
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "9c706a3" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }

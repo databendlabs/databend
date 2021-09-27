@@ -27,5 +27,6 @@ header:
     - "rust-toolchain"
     - "rustfmt.toml"
     - "**/*.proto"
+    - ".cargo"
 
   comment: on-failure

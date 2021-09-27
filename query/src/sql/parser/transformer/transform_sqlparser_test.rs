@@ -67,7 +67,7 @@ mod test {
         let parser = Parser {};
         let sqls = vec![
             "truncate table test",
-            "truncate table test.test",
+            "truncate table test_db.test",
             "DROP table table1",
             "DROP table IF EXISTS table1",
             "CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar(255) null)",
@@ -86,7 +86,7 @@ mod test {
             .collect();
         let expected = vec![
             r#"TRUNCATE TABLE test"#,
-            r#"TRUNCATE TABLE test.test"#,
+            r#"TRUNCATE TABLE test_db.test"#,
             r#"DROP TABLE table1"#,
             r#"DROP TABLE IF EXISTS table1"#,
             r#"CREATE TABLE t (c1 INTEGER NULL, c2 BIGINT NULL, c3 VARCHAR(255) NULL)"#,

@@ -6,7 +6,7 @@ Decoupling compute and storage allow databend to integrate into kubernetes easil
 With the support of kubernetes platform, databend benchmarking could achieve the following advantages:
 1. Stable benchmarking results, with containerization and cgroup, easy testing instance could have idempotence computing resource
 2. Elastic, can expand or shrink tests on demand and also supports to run test locally(minikube + DinD) or on the cloud
-3. For following tests, we need to test on TPC benchmark and integrate databend-store storage layer to test infrastructure, thus far kubernetes can help instance scaling easily
+3. For following tests, we need to test on TPC benchmark and integrate databend-dfs storage layer to test infrastructure, thus far kubernetes can help instance scaling easily
 
 ## Goals
 
