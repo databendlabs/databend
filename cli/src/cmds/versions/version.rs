@@ -30,7 +30,7 @@ impl VersionCommand {
         VersionCommand {}
     }
 
-    pub fn generate() ->App<'static, 'static> {
+    pub fn generate() ->App<'static> {
         return App::new("version")
             .setting(AppSettings::ColoredHelp)
             .about("Version info for local cli and remote cluster");

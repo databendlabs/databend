@@ -154,7 +154,7 @@ impl LocalQueryConfig {
 impl Status {
     pub fn read(conf: Config) -> Result<Self> {
         let status_path = format!("{}/.status.json", conf.databend_dir);
-
+        log::info!("{}", status_path.as_str());
         if !Path::new(status_path.as_str()).exists() {
             // Create.
             let file = File::create(status_path.as_str())?;

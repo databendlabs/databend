@@ -16,7 +16,7 @@ path = "src/bin/databend-cli.rs"
 [dependencies]
 # Workspace dependencies
 databend-query = {path = "../query"}
-clap = "2.33"
+clap = "3.0.0-beta.4"
 databend-dfs = {path = "../dfs" }
 colored = "2.0.0"
 comfy-table = "4.1.1"
@@ -38,6 +38,7 @@ log = "0.4"
 procfs = "0.10.1"
 structopt = "0.3"
 structopt-toml = "0.5.0"
+portpicker = "0.1.1"
 
 [dev-dependencies]
 pretty_assertions = "0.7"

@@ -42,7 +42,7 @@ impl Writer {
     }
 
     pub fn write_ok(&mut self, msg: &str) {
-        writeln!(self, "✅ {} {}", "[ok]".bold().green(), msg).unwrap();
+        writeln!(self, "{} {}", "[ok]".bold().green(), msg).unwrap();
     }
 
     pub fn write_err(&mut self, msg: &str) {

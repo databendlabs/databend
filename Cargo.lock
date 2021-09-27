@@ -1547,6 +1547,7 @@ dependencies = [
  "indicatif",
  "log",
  "nix 0.22.1",
+ "portpicker",
  "predicates 2.0.2",
  "pretty_assertions",
  "procfs",
@@ -1555,6 +1556,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "structopt",
+ "structopt-toml",
  "sysinfo 0.20.3",
  "tar",
  "tempfile",
@@ -4185,6 +4188,15 @@ dependencies = [
  "pnet_base",
  "pnet_packet",
  "pnet_sys",
+]
+
+[[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand",
 ]
 
 [[package]]

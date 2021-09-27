@@ -35,7 +35,7 @@ use serde_json::Value;
 #[derive(Clone)]
 pub struct ClusterCommand {
     conf: Config,
-    clap: App<'static, 'static>
+    clap: App<'static>
 }
 
 // Support to up and run databend cluster on different platforms
@@ -64,10 +64,10 @@ impl ClusterCommand {
         let clap = ClusterCommand::generate();
         ClusterCommand { conf, clap }
     }
-    pub fn generate() -> App<'static, 'static> {
+    pub fn generate() -> App<'static> {
         let app = App::new("cluster")
             .setting(AppSettings::ColoredHelp)
-            .setting(AppSettings::DisableVersion)
+            .setting(AppSettings::DisableVersionFlag)
             .about("Cluster life cycle management")
             .subcommand(
                 CreateCommand::generate()
@@ -107,7 +107,7 @@ impl Command for ClusterCommand {
     }
 
     fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().get_matches_from_safe(args.split(' ')) {
+        match self.clap.clone().try_get_matches_from(args.split(' ')) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow()));
             }

@@ -33,7 +33,7 @@ pub struct Config {
     pub download_url: String,
 
     pub tag_url: String,
-    pub clap: RefCell<ArgMatches<'static>>,
+    pub clap: RefCell<ArgMatches>,
 }
 
 impl Config {
@@ -42,36 +42,36 @@ impl Config {
             App::new("config")
                 .setting(AppSettings::ColoredHelp)
                 .arg(
-                    Arg::with_name("group")
+                    Arg::new("group")
                         .long("group")
-                        .help("Sets the group name for configuration")
+                        .about("Sets the group name for configuration")
                         .default_value("test")
                         .env("DATABEND_GROUP")
                         .global(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("databend_dir")
+                    Arg::new("databend_dir")
                         .long("databend_dir")
-                        .help("Sets the directory to store databend binaries(query and store)")
+                        .about("Sets the directory to store databend binaries(query and store)")
                         .default_value("~/.databend")
                         .env("databend_dir")
                         .global(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("download_url")
+                    Arg::new("download_url")
                         .long("download_url")
-                        .help("Sets the url to download databend binaries")
+                        .about("Sets the url to download databend binaries")
                         .default_value("https://github.com/datafuselabs/databend/releases/download")
                         .env("DOWNLOAD_URL")
                         .global(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("tag_url")
+                    Arg::new("tag_url")
                         .long("tag_url")
-                        .help("Sets the url to for databend tags")
+                        .about("Sets the url to for databend tags")
                         .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
                         .env("DOWNLOAD_URL")
                         .global(true)
