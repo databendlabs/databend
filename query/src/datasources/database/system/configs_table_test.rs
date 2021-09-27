@@ -40,7 +40,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 31);
+    assert_eq!(block.num_rows(), 30);
 
     let expected = vec![
         "+-----------------------------------+----------------+-------+-------------+",
@@ -51,7 +51,6 @@ async fn test_configs_table() -> Result<()> {
         "| api_tls_server_root_ca_cert       |                | query |             |",
         "| clickhouse_handler_host           | 127.0.0.1      | query |             |",
         "| clickhouse_handler_port           | 9000           | query |             |",
-        "| disable_local_database_engine     | 0              | query |             |",
         "| flight_api_address                | 127.0.0.1:9090 | query |             |",
         "| http_api_address                  | 127.0.0.1:8080 | query |             |",
         "| log_dir                           | ./_logs        | log   |             |",
