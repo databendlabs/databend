@@ -63,7 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // User manager and init the default users.
     let user_manager = User::create_global(conf.clone()).await?;
-    user_manager.init_default_user()?;
 
     // Cluster discovery.
     let cluster_discovery = ClusterDiscovery::create_global(conf.clone()).await?;

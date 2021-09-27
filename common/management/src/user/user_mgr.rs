@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_kv_api::KVApi;
 use common_kv_api::SyncKVApi;
+use common_kv_api_vo::UpsertKVActionResult;
 use common_metatypes::MatchSeq;
 use common_metatypes::MatchSeqExt;
 use common_metatypes::SeqValue;
@@ -55,16 +56,24 @@ impl UserMgrApi for UserMgr {
             .kv_api
             .sync_upsert_kv(&key, match_seq, Some(value), None)?;
 
-        match (res.prev, res.result) {
-            (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
-            (Some((s, _)), None) => Err(ErrorCode::UserAlreadyExists(format!(
-                "user already exists, seq [{}]",
+        match res {
+            UpsertKVActionResult {
+                prev: None,
+                result: Some((s, _)),
+            } => Ok(s),
+            UpsertKVActionResult {
+                prev: Some((s, _)),
+                result: _,
+            } => Err(ErrorCode::UserAlreadyExists(format!(
+                "User already exists, seq [{}]",
                 s
             ))),
-            r @ (_, _) => Err(ErrorCode::UnknownException(format!(
-                "upsert result not expected (using version 0, got {:?})",
-                r
-            ))),
+            catch_result @ UpsertKVActionResult { .. } => {
+                Err(ErrorCode::UnknownException(format!(
+                    "upsert result not expected (using version 0, got {:?})",
+                    catch_result
+                )))
+            }
         }
     }
 

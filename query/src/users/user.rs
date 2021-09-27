@@ -50,24 +50,16 @@ impl User {
         }))
     }
 
-    pub fn init_default_user(&self) -> Result<()> {
-        let user_name = "default";
-        let default_users = vec![
-            NewUser::new(user_name, "", AuthType::None),
-            NewUser::new(user_name, "default", AuthType::PlainText),
-            NewUser::new(user_name, "default", AuthType::DoubleSha1),
-            NewUser::new(user_name, "default", AuthType::Sha256),
-        ];
-
-        for user in default_users {
-            let _ = self.add_user_info(user.into())?;
-        }
-        Ok(())
-    }
-
     // Get user from the api provider.
     pub fn get_user_info(&self, user: &str) -> Result<UserInfo> {
-        Ok(self.api_provider.get_user(user.to_string(), None)?.1)
+        match user {
+            // TODO(BohuTANG): Mock, need removed.
+            "default" | "" | "root" => {
+                let user = NewUser::new(user, "", AuthType::None);
+                Ok(user.into())
+            }
+            _ => Ok(self.api_provider.get_user(user.to_string(), None)?.1),
+        }
     }
 
     // Add a new user info.
