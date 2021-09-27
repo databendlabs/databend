@@ -40,7 +40,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 31);
+    assert_eq!(block.num_rows(), 30);
 
     let expected = vec![
         "+-----------------------------------+----------------+-------+-------------+",
