@@ -15,8 +15,9 @@
 #[cfg(test)]
 mod user_mgr_test;
 
-mod user_auth;
+mod user;
 mod user_mgr;
 
+pub use user::NewUser;
 pub use user_mgr::UserManager;
 pub use user_mgr::UserManagerRef;

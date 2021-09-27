@@ -26,12 +26,10 @@ use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
 use mockall::predicate::*;
 use mockall::*;
-use sha2::Digest;
 
 use crate::user::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
-use crate::user::utils::NewUser;
 use crate::UserMgr;
 
 // and mock!
@@ -64,17 +62,6 @@ mock! {
         async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply>;
         }
 }
-#[test]
-fn test_user_info_converter() {
-    let name = "name";
-    let pass = "pass";
-    let auth_type = AuthType::Sha256;
-    let user = NewUser::new(name, pass, auth_type);
-    let user_info = UserInfo::from(&user);
-    assert_eq!(name, &user_info.name);
-    let digest: [u8; 32] = sha2::Sha256::digest(pass.as_bytes()).into();
-    assert_eq!(digest.to_vec(), user_info.password);
-}
 
 mod add {
     use common_metatypes::KVValue;
@@ -86,8 +73,11 @@ mod add {
         let test_user_name = "test_user";
         let test_password = "test_password";
         let auth_type = AuthType::Sha256;
-        let new_user = NewUser::new(test_user_name, test_password, auth_type.clone());
-        let user_info = UserInfo::from(new_user);
+        let user_info = UserInfo::new(
+            test_user_name.to_string(),
+            Vec::from(test_password),
+            auth_type.clone(),
+        );
         let value = Some(serde_json::to_vec(&user_info)?);
 
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
@@ -146,8 +136,11 @@ mod add {
             let api = Arc::new(api);
             let user_mgr = UserMgr::new(api, "tenant1");
 
-            let new_user = NewUser::new(test_user_name, test_password, auth_type.clone());
-            let user_info = UserInfo::from(new_user);
+            let user_info = UserInfo::new(
+                test_user_name.to_string(),
+                Vec::from(test_password),
+                auth_type.clone(),
+            );
 
             let res = user_mgr.add_user(user_info);
 
@@ -178,8 +171,11 @@ mod add {
             let kv = Arc::new(api);
 
             let user_mgr = UserMgr::new(kv, "tenant1");
-            let new_user = NewUser::new(test_user_name, test_password, auth_type);
-            let user_info = UserInfo::from(new_user);
+            let user_info = UserInfo::new(
+                test_user_name.to_string(),
+                Vec::from(test_password),
+                auth_type,
+            );
             let res = user_mgr.add_user(user_info);
 
             assert_eq!(
@@ -201,8 +197,11 @@ mod get {
         let test_user_name = "test";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
-        let user = NewUser::new(test_user_name, "pass", AuthType::Sha256);
-        let user_info = UserInfo::from(user);
+        let user_info = UserInfo::new(
+            test_user_name.to_string(),
+            Vec::from("pass"),
+            AuthType::Sha256,
+        );
         let value = serde_json::to_vec(&user_info)?;
 
         let mut kv = MockKV::new();
@@ -228,8 +227,11 @@ mod get {
         let test_user_name = "test";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
-        let user = NewUser::new(test_user_name, "pass", AuthType::Sha256);
-        let user_info = UserInfo::from(user);
+        let user_info = UserInfo::new(
+            test_user_name.to_string(),
+            Vec::from("pass"),
+            AuthType::Sha256,
+        );
         let value = serde_json::to_vec(&user_info)?;
 
         let mut kv = MockKV::new();
@@ -342,8 +344,7 @@ mod get_users {
             names.push(name.clone());
             let key = format!("{}/{}", "tenant1", name);
             keys.push(key);
-            let new_user = NewUser::new(&name, "pass", AuthType::Sha256);
-            let user_info = UserInfo::from(new_user);
+            let user_info = UserInfo::new(name, Vec::from("pass"), AuthType::Sha256);
             res.push((
                 "fake_key".to_string(),
                 (i, KVValue {
@@ -485,8 +486,11 @@ mod update {
         let old_pass = "old_key";
         let old_auth_type = AuthType::DoubleSha1;
 
-        let user = NewUser::new(test_user_name, old_pass, old_auth_type);
-        let user_info = UserInfo::from(user);
+        let user_info = UserInfo::new(
+            test_user_name.to_string(),
+            Vec::from(old_pass),
+            old_auth_type,
+        );
         let prev_value = serde_json::to_vec(&user_info)?;
 
         // get_kv should be called
@@ -509,9 +513,11 @@ mod update {
         // and then, update_kv should be called
 
         let new_pass = "new pass";
-        let new_user = NewUser::new(test_user_name, new_pass, AuthType::DoubleSha1);
-
-        let new_user_info = UserInfo::from(new_user);
+        let new_user_info = UserInfo::new(
+            test_user_name.to_string(),
+            Vec::from(new_pass),
+            AuthType::DoubleSha1,
+        );
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
 
         kv.expect_upsert_kv()
@@ -558,9 +564,11 @@ mod update {
         let new_pass = "new_pass";
         let new_auth_type = AuthType::Sha256;
 
-        let new_user = NewUser::new(test_user_name, new_pass, new_auth_type.clone());
-
-        let new_user_info = UserInfo::from(new_user);
+        let new_user_info = UserInfo::new(
+            test_user_name.to_string(),
+            Vec::from(new_pass),
+            new_auth_type.clone(),
+        );
         let new_value = serde_json::to_vec(&new_user_info)?;
 
         let mut kv = MockKV::new();

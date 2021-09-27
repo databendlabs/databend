@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_management::AuthType;
-use common_management::NewUser;
 use common_management::UserInfo;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
@@ -25,6 +24,7 @@ use sha2::Digest;
 
 use crate::common::StoreApiProvider;
 use crate::configs::Config;
+use crate::users::NewUser;
 
 pub type UserManagerRef = Arc<UserManager>;
 
@@ -69,6 +69,8 @@ impl UserManager {
         match user.auth_type {
             AuthType::None => Ok(true),
             AuthType::PlainText => Ok(user.password == password.as_ref()),
+            // MySQL already did x = sha1(x)
+            // so we just check double sha1(x)
             AuthType::DoubleSha1 => {
                 let mut m = sha1::Sha1::new();
                 m.update(password.as_ref());

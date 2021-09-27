@@ -15,28 +15,6 @@
 
 use common_management::AuthType;
 use common_management::UserInfo;
-use sha2::Digest;
-
-pub fn encode_password(password: impl AsRef<[u8]>, auth_type: &AuthType) -> Vec<u8> {
-    match auth_type {
-        AuthType::None => vec![],
-        AuthType::PlainText => password.as_ref().to_vec(),
-        AuthType::DoubleSha1 => {
-            let mut m = sha1::Sha1::new();
-            m.update(password.as_ref());
-
-            let bs = m.digest().bytes();
-            let mut m = sha1::Sha1::new();
-            m.update(&bs[..]);
-
-            m.digest().bytes().to_vec()
-        }
-        AuthType::Sha256 => {
-            let result = sha2::Sha256::digest(password.as_ref());
-            result[..].to_vec()
-        }
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct NewUser {
@@ -57,10 +35,9 @@ impl NewUser {
 
 impl From<&NewUser> for UserInfo {
     fn from(new_user: &NewUser) -> Self {
-        let encode_password = encode_password(&new_user.password, &new_user.auth_type);
         UserInfo {
             name: new_user.name.clone(),
-            password: encode_password,
+            password: Vec::from(new_user.password.clone()),
             auth_type: new_user.auth_type.clone(),
         }
     }
