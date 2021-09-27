@@ -22,7 +22,7 @@ use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use tar::Archive;
 
-use crate::cmds::{Config, Status};
+use crate::cmds::{Config, Status, FetchCommand};
 use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::{Result, CliError};
@@ -36,7 +36,10 @@ use std::process::exit;
 pub struct CreateCommand {
     conf: Config,
 }
-
+struct LocalBinaryPaths {
+    query: String,
+    store: String,
+}
 impl CreateCommand {
     pub fn create(conf: Config) -> Self {
         CreateCommand { conf }
@@ -56,12 +59,42 @@ impl CreateCommand {
             .arg(Arg::new("store_username").long("store-username").about("Set user name for dfs service authentication").env(databend_query::configs::config::STORE_USERNAME).default_value("root"))
             .arg(Arg::new("store_password").long("store-password").about("Set password for dfs service authentication").env(databend_query::configs::config::STORE_PASSWORD).default_value("root"))
             .arg(Arg::new("log_level").long("log-level").about("Set logging level").env(databend_query::configs::config::LOG_LEVEL).default_value("INFO"))
+            .arg(Arg::new("version").long("version").about("Set databend version to run").default_value("latest"))
     }
 
+    fn binary_path(&self, dir: String, version: String, name: String) -> Result<String> {
+        if version.is_empty() {
+            return Err(CliError::Unknown("cannot find binary path, current version is empty".to_string()));
+        }
+        let bin_path = format!("{}/{}/{}", dir, version, name);
+        if  !Path::new(bin_path.as_str()).exists() {
+            return Err(CliError::Unknown(format!("cannot find binary path in {}", bin_path)))
+        }
+        Ok(fs::canonicalize(&bin_path).unwrap().to_str().unwrap().to_string())
+    }
+
+    fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
+        let status = Status::read(self.conf.clone())?;
+
+        let mut paths = LocalBinaryPaths{ query: "".to_string(), store: "".to_string() };
+        if self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version.clone(), "databend-query".to_string()).is_err() {
+            // fetch latest version of databend binary if version not found
+            writer.write_ok(&*format!("Cannot find databend binary path in version {}, start to download", args.value_of("version").unwrap()));
+            FetchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
+        }
+       SwitchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
+        let status = Status::read(self.conf.clone())?;
+        paths.query = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version.clone(), "databend-query".to_string()).expect("cannot find query bin");
+        paths.store = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version, "databend-store".to_string()).expect("cannot find store bin");
+        println!("{}", paths.query);
+        return Ok(paths)
+    }
     fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()>{
         match self.local_exec_precheck(args) {
             Ok(_) => {
                 writer.write_ok("databend cluster precheck passed!");
+                /// ensuring needed dependencies
+                let bin_path = self.ensure_bin(writer, args);
                 Ok(())
             }
             Err(CliError::Unknown(s)) => {
@@ -94,6 +127,7 @@ impl CreateCommand {
         if args.value_of("store_address").is_some() && !args.value_of("store_address").unwrap().is_empty() && !portpicker::is_free(args.value_of("store_address").unwrap().parse().unwrap()) {
             return Err(CliError::Unknown(format!("clickhouse handler port {} is occupied by other program", args.value_of("clickhouse_handler_port").unwrap()).to_string()))
         }
+
         Ok(())
     }
 

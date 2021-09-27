@@ -129,6 +129,8 @@ impl FetchCommand {
                 match res {
                     Ok(_) => {
                         writer.write_ok(format!("Unpack {}", bin_unpack_dir).as_str());
+
+                        // switch to fetched version
                         let switch = SwitchCommand::create(self.conf.clone());
                         return switch.exec_match(writer, args);
                     }
