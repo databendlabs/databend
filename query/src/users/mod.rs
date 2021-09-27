@@ -18,6 +18,6 @@ mod user_mgr_test;
 mod user;
 mod user_mgr;
 
-pub use user::NewUser;
+pub use user::User;
 pub use user_mgr::UserManager;
 pub use user_mgr::UserManagerRef;

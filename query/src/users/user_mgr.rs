@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ use sha2::Digest;
 
 use crate::common::StoreApiProvider;
 use crate::configs::Config;
-use crate::users::NewUser;
+use crate::users::User;
 
 pub type UserManagerRef = Arc<UserManager>;
 
@@ -56,13 +56,14 @@ impl UserManager {
         match user {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let user = NewUser::new(user, "", AuthType::None);
+                let user = User::new(user, "", AuthType::None);
                 Ok(user.into())
             }
             _ => Ok(self.api_provider.get_user(user.to_string(), None)?.1),
         }
     }
 
+    // Auth the user and password for different Auth type.
     pub fn auth_user(&self, user: &str, password: impl AsRef<[u8]>) -> Result<bool> {
         let user = self.get_user(user)?;
 

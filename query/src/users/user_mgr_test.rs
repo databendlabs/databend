@@ -18,7 +18,7 @@ use common_management::AuthType;
 use pretty_assertions::assert_eq;
 
 use crate::configs::Config;
-use crate::users::NewUser;
+use crate::users::User;
 use crate::users::UserManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -32,7 +32,7 @@ async fn test_user_manager() -> Result<()> {
 
     // add.
     {
-        let user_info = NewUser::new(user, pwd, AuthType::PlainText);
+        let user_info = User::new(user, pwd, AuthType::PlainText);
         user_mgr.add_user(user_info.into())?;
     }
 

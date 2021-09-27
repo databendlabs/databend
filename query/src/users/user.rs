@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@ use common_management::AuthType;
 use common_management::UserInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct NewUser {
+pub struct User {
     name: String,
     password: String,
     auth_type: AuthType,
 }
 
-impl NewUser {
+impl User {
     pub fn new(name: impl Into<String>, password: impl Into<String>, auth_type: AuthType) -> Self {
-        NewUser {
+        User {
             name: name.into(),
             password: password.into(),
             auth_type,
@@ -33,18 +33,18 @@ impl NewUser {
     }
 }
 
-impl From<&NewUser> for UserInfo {
-    fn from(new_user: &NewUser) -> Self {
+impl From<&User> for UserInfo {
+    fn from(user: &User) -> Self {
         UserInfo {
-            name: new_user.name.clone(),
-            password: Vec::from(new_user.password.clone()),
-            auth_type: new_user.auth_type.clone(),
+            name: user.name.clone(),
+            password: Vec::from(user.password.clone()),
+            auth_type: user.auth_type.clone(),
         }
     }
 }
 
-impl From<NewUser> for UserInfo {
-    fn from(new_user: NewUser) -> Self {
-        UserInfo::from(&new_user)
+impl From<User> for UserInfo {
+    fn from(user: User) -> Self {
+        UserInfo::from(&user)
     }
 }
