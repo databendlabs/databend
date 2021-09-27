@@ -30,7 +30,7 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct PackageCommand {
     conf: Config,
-    clap: App<'static>,
+    clap: App<'static, 'static>,
 }
 
 impl PackageCommand {
@@ -38,7 +38,7 @@ impl PackageCommand {
         let clap = PackageCommand::generate();
         PackageCommand { conf, clap }
     }
-    pub fn generate() -> App<'static> {
+    pub fn generate() -> App<'static, 'static> {
         return App::new("package")
             .setting(AppSettings::ColoredHelp)
             .about("Package manage databend binary releases")
@@ -46,7 +46,7 @@ impl PackageCommand {
                 App::new("fetch")
                     .setting(AppSettings::ColoredHelp)
                     .about("Fetch the given version binary package")
-                    .arg(Arg::new("version").about("Version of databend package to fetch").default_value("latest")),
+                    .arg(Arg::with_name("version").help("Version of databend package to fetch").default_value("latest")),
             )
             .subcommand(
                 App::new("list")
@@ -57,7 +57,7 @@ impl PackageCommand {
                 App::new("switch")
                     .setting(AppSettings::ColoredHelp)
                     .about("Switch the active databend to a specified version")
-                    .arg(Arg::new("version").required(true).about(
+                    .arg(Arg::with_name("version").required(true).help(
                         "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
                     ))
             );
@@ -103,7 +103,7 @@ impl Command for PackageCommand {
     }
 
     fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
+        match self.clap.clone().get_matches_from_safe(args.split(' ')) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow()));
             }

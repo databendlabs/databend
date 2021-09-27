@@ -31,7 +31,7 @@ use std::time;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct Status {
-    path: String,
+    pub path: String,
     pub version: String,
     pub local_configs: LocalConfig,
 }

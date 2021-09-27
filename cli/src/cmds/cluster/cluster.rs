@@ -28,11 +28,14 @@ use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::{Result, CliError};
 use crate::cmds::cluster::create::CreateCommand;
-
+use databend_query::configs::QueryConfig;
+use databend_dfs::configs::Config as StoreConfig;
+use structopt::StructOpt;
+use serde_json::Value;
 #[derive(Clone)]
 pub struct ClusterCommand {
     conf: Config,
-    clap: App<'static>,
+    clap: App<'static, 'static>
 }
 
 // Support to up and run databend cluster on different platforms
@@ -42,6 +45,7 @@ pub enum ClusterProfile {
     Local,
     Cluster,
 }
+
 // Implement the trait
 impl FromStr for ClusterProfile {
     type Err = &'static str;
@@ -60,17 +64,15 @@ impl ClusterCommand {
         let clap = ClusterCommand::generate();
         ClusterCommand { conf, clap }
     }
-    pub fn generate() -> App<'static> {
-        return App::new("cluster")
+    pub fn generate() -> App<'static, 'static> {
+        let app = App::new("cluster")
             .setting(AppSettings::ColoredHelp)
-            .setting(AppSettings::DisableVersionFlag)
+            .setting(AppSettings::DisableVersion)
             .about("Cluster life cycle management")
             .subcommand(
-                App::new("create")
-                    .setting(AppSettings::ColoredHelp)
-                    .about("Create a databend cluster based on profile")
-                    .arg(Arg::new("profile").short("p".parse().unwrap()).long("profile").about("Profile for deployment, support local and cluster").possible_values(&["local", "cluster"])),
+                CreateCommand::generate()
             );
+        return app;
     }
 
     pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
@@ -105,7 +107,7 @@ impl Command for ClusterCommand {
     }
 
     fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
+        match self.clap.clone().get_matches_from_safe(args.split(' ')) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow()));
             }
