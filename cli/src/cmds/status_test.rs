@@ -38,6 +38,11 @@ macro_rules! default_local_config {
                 config: StoreConfig::empty(),
                 path: Some("~/.databend/test/databend-store".to_string())
             }),
+            meta_configs: Some(LocalStoreConfig {
+                pid: Some(345),
+                config: StoreConfig::empty(),
+                path: Some("~/.databend/test/databend-store".to_string())
+            })
         }
     };
 }
@@ -93,7 +98,7 @@ fn test_status() -> Result<()> {
         let mut expected_config = default_local_config!();
         expected_config.query_configs.push(LocalQueryConfig {
             config: QueryConfig::default(),
-            pid: Some(46),
+            pid: Some(123),
             path: None
         });
         // should have empty profile with set version

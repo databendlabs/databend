@@ -80,7 +80,7 @@ impl ClusterCommand {
                     let create = CreateCommand::create(self.conf.clone());
                     create.exec_match(writer, matches.subcommand_matches("create"))?;
                 }
-                _ => writer.write_err("unknown command, usage: package -h"),
+                _ => writer.write_err("unknown command, usage: cluster -h"),
             },
             None => {
                 println!("None")

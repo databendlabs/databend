@@ -36,11 +36,12 @@ pub struct Status {
     pub local_configs: LocalConfig,
 }
 
-/// TODO(zhihanz) metastore and extension configurations
+/// TODO(zhihanz) extension configurations
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalConfig {
     pub query_configs: Vec<LocalQueryConfig>,
     pub store_configs: Option<LocalStoreConfig>,
+    pub meta_configs: Option<LocalStoreConfig>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -62,6 +63,7 @@ impl LocalConfig {
         LocalConfig {
             query_configs: vec![],
             store_configs: None,
+            meta_configs: None,
         }
     }
 }

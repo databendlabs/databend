@@ -46,6 +46,9 @@ impl CreateCommand {
                         match val {
                             ClusterProfile::Local => {
                                 writer.write_ok(format!("local").as_str());
+                                // precheck
+
+                                // installer
                             }
                             ClusterProfile::Cluster => {
                                 todo!()
