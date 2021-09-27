@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod user;
+#[cfg(test)]
+mod user_mgr_test;
 
-pub use user::User;
-pub use user::UserRef;
+mod user_mgr;
+
+pub use user_mgr::UserManager;
+pub use user_mgr::UserManagerRef;

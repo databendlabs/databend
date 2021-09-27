@@ -25,7 +25,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
-use databend_query::users::User;
+use databend_query::users::UserManager;
 use log::info;
 
 #[tokio::main]
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // User manager and init the default users.
-    let user_manager = User::create_global(conf.clone()).await?;
+    let user_manager = UserManager::create_global(conf.clone()).await?;
 
     // Cluster discovery.
     let cluster_discovery = ClusterDiscovery::create_global(conf.clone()).await?;

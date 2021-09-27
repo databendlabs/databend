@@ -83,7 +83,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         let user_mgr = self.session.get_user_manager();
         let user = String::from_utf8_lossy(username);
 
-        if let Ok(user) = user_mgr.get_user_info(&user) {
+        if let Ok(user) = user_mgr.get_user(&user) {
             let encode_password = match auth_plugin {
                 "mysql_native_password" => {
                     if auth_data.is_empty() {

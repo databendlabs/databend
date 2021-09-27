@@ -34,13 +34,13 @@ use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabaseEngine;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use crate::users::UserRef;
+use crate::users::UserManagerRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: ClusterDiscoveryRef,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
-    pub(in crate::sessions) user: UserRef,
+    pub(in crate::sessions) user: UserManagerRef,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -52,7 +52,7 @@ impl SessionManager {
     pub fn from_conf(
         conf: Config,
         discovery: ClusterDiscoveryRef,
-        user: UserRef,
+        user: UserManagerRef,
     ) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
 
@@ -78,7 +78,7 @@ impl SessionManager {
     }
 
     // Get the user api provider.
-    pub fn get_user_manager(self: &Arc<Self>) -> UserRef {
+    pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
         self.user.clone()
     }
 

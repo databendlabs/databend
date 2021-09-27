@@ -28,7 +28,7 @@ use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
-use crate::users::UserRef;
+use crate::users::UserManagerRef;
 
 pub(in crate::sessions) struct MutableStatus {
     pub(in crate::sessions) abort: bool,
@@ -182,7 +182,7 @@ impl Session {
         self.sessions.get_catalog()
     }
 
-    pub fn get_user_manager(self: &Arc<Self>) -> UserRef {
+    pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
         self.sessions.get_user_manager()
     }
 }

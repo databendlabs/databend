@@ -25,13 +25,13 @@ use common_management::UserMgrApi;
 use crate::common::StoreApiProvider;
 use crate::configs::Config;
 
-pub type UserRef = Arc<User>;
+pub type UserManagerRef = Arc<UserManager>;
 
-pub struct User {
+pub struct UserManager {
     api_provider: Arc<dyn UserMgrApi>,
 }
 
-impl User {
+impl UserManager {
     async fn create_kv_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
         let store_api_provider = StoreApiProvider::new(cfg);
         match store_api_provider.try_get_kv_client().await {
@@ -40,18 +40,18 @@ impl User {
         }
     }
 
-    pub async fn create_global(cfg: Config) -> Result<UserRef> {
-        let client = User::create_kv_client(&cfg).await?;
+    pub async fn create_global(cfg: Config) -> Result<UserManagerRef> {
+        let client = UserManager::create_kv_client(&cfg).await?;
         let tenant = &cfg.query.tenant;
         let user_manager = UserMgr::new(client, tenant);
 
-        Ok(Arc::new(User {
+        Ok(Arc::new(UserManager {
             api_provider: Arc::new(user_manager),
         }))
     }
 
-    // Get user from the api provider.
-    pub fn get_user_info(&self, user: &str) -> Result<UserInfo> {
+    // Get one user from by tenant.
+    pub fn get_user(&self, user: &str) -> Result<UserInfo> {
         match user {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
@@ -62,8 +62,23 @@ impl User {
         }
     }
 
+    // Get the tenant all users list.
+    pub fn get_users(&self) -> Result<Vec<UserInfo>> {
+        let mut res = vec![];
+        let users = self.api_provider.get_users()?;
+        for user in users {
+            res.push(user.1);
+        }
+        Ok(res)
+    }
+
     // Add a new user info.
-    pub fn add_user_info(&self, user_info: UserInfo) -> Result<u64> {
+    pub fn add_user(&self, user_info: UserInfo) -> Result<u64> {
         self.api_provider.add_user(user_info)
+    }
+
+    // Drop a user by name.
+    pub fn drop_user(&self, user: &str) -> Result<()> {
+        self.api_provider.drop_user(user.to_string(), None)
     }
 }
