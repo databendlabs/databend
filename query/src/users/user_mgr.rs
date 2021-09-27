@@ -21,6 +21,7 @@ use common_management::NewUser;
 use common_management::UserInfo;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
+use sha2::Digest;
 
 use crate::common::StoreApiProvider;
 use crate::configs::Config;
@@ -59,6 +60,29 @@ impl UserManager {
                 Ok(user.into())
             }
             _ => Ok(self.api_provider.get_user(user.to_string(), None)?.1),
+        }
+    }
+
+    pub fn auth_user(&self, user: &str, password: impl AsRef<[u8]>) -> Result<bool> {
+        let user = self.get_user(user)?;
+
+        match user.auth_type {
+            AuthType::None => Ok(true),
+            AuthType::PlainText => Ok(user.password == password.as_ref()),
+            AuthType::DoubleSha1 => {
+                let mut m = sha1::Sha1::new();
+                m.update(password.as_ref());
+
+                let bs = m.digest().bytes();
+                let mut m = sha1::Sha1::new();
+                m.update(&bs[..]);
+
+                Ok(user.password == m.digest().bytes().to_vec())
+            }
+            AuthType::Sha256 => {
+                let result = sha2::Sha256::digest(password.as_ref());
+                Ok(user.password == result.to_vec())
+            }
         }
     }
 

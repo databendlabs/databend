@@ -98,8 +98,8 @@ impl ClickHouseSession for InteractiveWorker {
 
     fn authenticate(&self, user: &str, password: &[u8]) -> bool {
         let user_mgr = self.session.get_user_manager();
-        if let Ok(user) = user_mgr.get_user(user) {
-            return user.authenticate_user(password);
+        if let Ok(res) = user_mgr.auth_user(user, password) {
+            return res;
         }
         false
     }
