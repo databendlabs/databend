@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::GlobalSequence;
 use common_sled_store::get_sled_db;
 use common_sled_store::sled;
 
@@ -27,7 +28,7 @@ pub fn new_raft_test_context() -> RaftTestContext {
     // config for unit test of sled db, meta_sync() is true by default.
     let mut config = RaftConfig::empty();
 
-    config.sled_tree_prefix = format!("test-{}-", 30900 + common_base::uniq_usize());
+    config.sled_tree_prefix = format!("test-{}-", 30900 + GlobalSequence::next());
 
     RaftTestContext {
         raft_config: config,

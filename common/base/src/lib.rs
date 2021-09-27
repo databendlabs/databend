@@ -39,4 +39,5 @@ mod uniq_id;
 
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
-pub use uniq_id::uniq_usize;
+pub use uniq_id::GlobalSequence;
+pub use uniq_id::GlobalUniqName;

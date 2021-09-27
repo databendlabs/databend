@@ -741,6 +741,7 @@ dependencies = [
  "pprof",
  "pretty_assertions",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
