@@ -83,6 +83,7 @@ pub struct ColStats {
     pub min: DataValue,
     pub max: DataValue,
     pub null_count: usize,
+    pub row_count: usize,
 }
 
 #[allow(dead_code)]

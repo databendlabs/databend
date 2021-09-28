@@ -51,11 +51,13 @@ pub fn column_stats_reduce(
             let mut min_stats = Vec::with_capacity(stats.len());
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
+            let mut row_count = 0;
 
             for col_stats in stats {
                 min_stats.push(col_stats.min.clone());
                 max_stats.push(col_stats.max.clone());
                 null_count += col_stats.null_count;
+                row_count += col_stats.row_count;
             }
 
             let min =
@@ -70,6 +72,7 @@ pub fn column_stats_reduce(
                 min,
                 max,
                 null_count,
+                row_count,
             });
             Ok(acc)
         },
