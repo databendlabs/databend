@@ -16,6 +16,7 @@
 mod config_test;
 
 pub mod config;
+mod config_storage;
 
 pub use common_store_api_sdk::RpcClientTlsConfig;
 pub use config::Config;
