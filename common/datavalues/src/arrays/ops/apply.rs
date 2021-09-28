@@ -13,7 +13,6 @@
 // limitations under the License.
 use std::borrow::Cow;
 
-use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::arity::unary;
 
 use crate::prelude::*;
@@ -139,7 +138,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
     {
         let values = self.array.values().iter().map(f);
         let values = AlignedVec::<_>::from_trusted_len_iter(values);
-        let validity = self.array.validity().clone();
+        let validity = self.array.validity().cloned();
         to_primitive::<S>(values, validity)
     }
 
@@ -178,7 +177,7 @@ impl<'a> ArrayApply<'a, &'a [u8], Cow<'a, [u8]>> for DFStringArray {
         let av = AlignedVec::<_>::from_trusted_len_iter(values_iter);
 
         let (_, validity) = self.null_bits();
-        to_primitive::<S>(av, validity.clone())
+        to_primitive::<S>(av, validity.cloned())
     }
 
     fn branch_apply_cast_numeric_no_null<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
@@ -188,7 +187,7 @@ impl<'a> ArrayApply<'a, &'a [u8], Cow<'a, [u8]>> for DFStringArray {
     {
         let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.inner().iter().map(f));
         let (_, validity) = self.null_bits();
-        to_primitive::<S>(av, validity.clone())
+        to_primitive::<S>(av, validity.cloned())
     }
 
     fn apply<F>(&'a self, f: F) -> Self

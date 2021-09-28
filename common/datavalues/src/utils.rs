@@ -82,7 +82,7 @@ pub fn get_iter_capacity<T, I: Iterator<Item = T>>(iter: &I) -> usize {
     }
 }
 
-pub fn combine_validities(lhs: &Option<Bitmap>, rhs: &Option<Bitmap>) -> Option<Bitmap> {
+pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<Bitmap> {
     match (lhs, rhs) {
         (Some(lhs), None) => Some(lhs.clone()),
         (None, Some(rhs)) => Some(rhs.clone()),
