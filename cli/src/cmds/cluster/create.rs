@@ -85,7 +85,7 @@ impl CreateCommand {
        SwitchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
         let status = Status::read(self.conf.clone())?;
         paths.query = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version.clone(), "databend-query".to_string()).expect("cannot find query bin");
-        paths.store = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version, "databend-store".to_string()).expect("cannot find store bin");
+        paths.store = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version, "databend-dfs".to_string()).expect("cannot find store bin");
         return Ok(paths)
     }
 
