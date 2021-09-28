@@ -37,48 +37,59 @@ lazy_static! {
     };
 }
 
+pub const STORE_LOG_LEVEL: &str = "STORE_LOG_LEVEL";
+pub const STORE_LOG_DIR: &str = "STORE_LOG_DIR";
+pub const STORE_METRIC_API_ADDRESS: &str = "STORE_METRIC_API_ADDRESS";
+pub const STORE_HTTP_API_ADDRESS: &str = "STORE_HTTP_API_ADDRESS";
+pub const STORE_TLS_SERVER_CERT: &str = "STORE_TLS_SERVER_CERT";
+pub const STORE_TLS_SERVER_KEY: &str = "STORE_TLS_SERVER_KEY";
+pub const STORE_FLIGHT_API_ADDRESS: &str = "STORE_FLIGHT_API_ADDRESS";
+pub const STORE_RPC_TLS_SERVER_CERT: &str = "STORE_RPC_TLS_SERVER_CERT";
+pub const STORE_RPC_TLS_SERVER_KEY: &str = "STORE_RPC_TLS_SERVER_KEY";
+pub const STORE_LOCAL_FS_DIR: &str = "STORE_LOCAL_FS_DIR";
+
 #[derive(
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct Config {
-    #[structopt(long, env = "STORE_LOG_LEVEL", default_value = "INFO")]
+    #[structopt(long, env = STORE_LOG_LEVEL, default_value = "INFO")]
     pub log_level: String,
 
-    #[structopt(long, env = "STORE_LOG_DIR", default_value = "./_logs")]
+    #[structopt(long, env = STORE_LOG_DIR, default_value = "./_logs")]
     pub log_dir: String,
 
     #[structopt(
         long,
-        env = "STORE_METRIC_API_ADDRESS",
+        env = STORE_METRIC_API_ADDRESS,
         default_value = "127.0.0.1:7171"
     )]
     pub metric_api_address: String,
 
-    #[structopt(long, env = "HTTP_API_ADDRESS", default_value = "127.0.0.1:8181")]
+    #[structopt(long, env = STORE_HTTP_API_ADDRESS, default_value = "127.0.0.1:8181")]
     pub http_api_address: String,
 
-    #[structopt(long, env = "TLS_SERVER_CERT", default_value = "")]
+    #[structopt(long, env = STORE_TLS_SERVER_CERT, default_value = "")]
     pub tls_server_cert: String,
 
-    #[structopt(long, env = "TLS_SERVER_KEY", default_value = "")]
+    #[structopt(long, env = STORE_TLS_SERVER_KEY, default_value = "")]
     pub tls_server_key: String,
 
     #[structopt(
         long,
-        env = "STORE_FLIGHT_API_ADDRESS",
+        env = STORE_FLIGHT_API_ADDRESS,
         default_value = "127.0.0.1:9191"
     )]
     pub flight_api_address: String,
 
     #[structopt(
         long,
-        env = "RPC_TLS_SERVER_CERT",
+        env = STORE_RPC_TLS_SERVER_CERT,
         default_value = "",
         help = "Certificate for server to identify itself"
     )]
     pub rpc_tls_server_cert: String,
 
-    #[structopt(long, env = "RPC_TLS_SERVER_KEY", default_value = "")]
+    #[structopt(long, env = STORE_RPC_TLS_SERVER_KEY, default_value = "")]
     pub rpc_tls_server_key: String,
 
     /// Config for the embedded kvsrv.
@@ -87,7 +98,7 @@ pub struct Config {
 
     #[structopt(
         long,
-        env = "STORE_LOCAL_FS_DIR",
+        env = STORE_LOCAL_FS_DIR,
         help = "Dir for local fs storage",
         default_value = "./_local_fs"
     )]

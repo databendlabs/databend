@@ -18,6 +18,17 @@ use serde::Deserialize;
 use serde::Serialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+pub const KVSRV_API_HOST : &str = "KVSRV_API_HOST";
+pub const KVSRV_API_PORT : &str = "KVSRV_API_PORT";
+pub const KVSRV_RAFT_DIR : &str = "KVSRV_RAFT_DIR";
+pub const KVSRV_NO_SYNC : &str = "KVSRV_NO_SYNC";
+pub const KVSRV_SNAPSHOT_LOGS_SINCE_LAST : &str = "KVSRV_SNAPSHOT_LOGS_SINCE_LAST";
+pub const KVSRV_HEARTBEAT_INTERVAL: &str = "KVSRV_HEARTBEAT_INTERVAL";
+pub const KVSRV_INSTALL_SNAPSHOT_TIMEOUT: &str = "KVSRV_INSTALL_SNAPSHOT_TIMEOUT";
+pub const KVSRV_BOOT: &str = "KVSRV_BOOT";
+pub const KVSRV_SINGLE: &str = "KVSRV_SINGLE";
+pub const KVSRV_ID: &str = "KVSRV_ID";
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct RaftConfig {
@@ -27,7 +38,7 @@ pub struct RaftConfig {
 
     #[structopt(
         long,
-        env = "KVSRV_API_HOST",
+        env = KVSRV_API_HOST,
         default_value = "127.0.0.1",
         help = "The listening host for metadata communication"
     )]
@@ -35,7 +46,7 @@ pub struct RaftConfig {
 
     #[structopt(
         long,
-        env = "KVSRV_API_PORT",
+        env = KVSRV_API_PORT,
         default_value = "28004",
         help = "The listening port for metadata communication"
     )]
@@ -43,7 +54,7 @@ pub struct RaftConfig {
 
     #[structopt(
         long,
-        env = "KVSRV_RAFT_DIR",
+        env = KVSRV_RAFT_DIR,
         default_value = "./_meta",
         help = "The dir to store persisted meta state, including raft logs, state machine etc."
     )]
@@ -51,7 +62,7 @@ pub struct RaftConfig {
 
     #[structopt(
     long,
-    env = "KVSRV_NO_SYNC",
+    env = KVSRV_NO_SYNC,
     help = concat!("Whether to fsync meta to disk for every meta write(raft log, state machine etc).",
     " No-sync brings risks of data loss during a crash.",
     " You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING."
@@ -62,7 +73,7 @@ pub struct RaftConfig {
     // raft config
     #[structopt(
         long,
-        env = "KVSRV_SNAPSHOT_LOGS_SINCE_LAST",
+        env = KVSRV_SNAPSHOT_LOGS_SINCE_LAST,
         default_value = "1024",
         help = "The number of logs since the last snapshot to trigger next snapshot."
     )]
@@ -70,7 +81,7 @@ pub struct RaftConfig {
 
     #[structopt(
     long,
-    env = "KVSRV_HEARTBEAT_INTERVAL",
+    env = KVSRV_HEARTBEAT_INTERVAL,
     default_value = "1000",
     help = concat!("The interval in milli seconds at which a leader send heartbeat message to followers.",
     " Different value of this setting on leader and followers may cause unexpected behavior.")
@@ -79,7 +90,7 @@ pub struct RaftConfig {
 
     #[structopt(
     long,
-    env = "KVSRV_INSTALL_SNAPSHOT_TIMEOUT",
+    env = KVSRV_INSTALL_SNAPSHOT_TIMEOUT,
     default_value = "4000",
     help = concat!("The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.")
     )]
@@ -87,7 +98,7 @@ pub struct RaftConfig {
 
     #[structopt(
         long,
-        env = "KVSRV_BOOT",
+        env = KVSRV_BOOT,
         help = "Whether to boot up a new cluster. If already booted, it is ignored"
     )]
     pub boot: bool,

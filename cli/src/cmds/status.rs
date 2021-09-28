@@ -25,15 +25,19 @@ use databend_query::configs::{Config as QueryConfig};
 use crate::cmds::Config;
 use crate::error::{Result, CliError};
 use std::os::unix::raw::pid_t;
-use std::process::Command;
-use std::thread::sleep;
+use std::process::{Command, Stdio};
 use std::time;
+use crate::cmds::cluster::cluster::ClusterProfile;
+use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd};
+use reqwest::Client;
+use std::thread::sleep;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct Status {
     pub path: String,
     pub version: String,
     pub local_configs: LocalConfig,
+    pub current_profile: Option<String>,
 }
 
 /// TODO(zhihanz) extension configurations
@@ -44,18 +48,19 @@ pub struct LocalConfig {
     pub meta_configs: Option<LocalStoreConfig>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalQueryConfig {
     pub config: QueryConfig,
     pub pid: Option<pid_t>,
     pub path: Option<String>, // download location
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalStoreConfig {
     pub config: StoreConfig,
     pub pid: Option<pid_t>,
     pub path: Option<String>, // download location
+    pub log_dir: Option<String>,
 }
 
 impl LocalConfig {
@@ -95,13 +100,85 @@ pub trait LocalRuntime {
         let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
-        self.verify()
+        Ok(())
     }
     fn get_pid(&self) -> Option<pid_t>;
     fn verify(&self)  -> Result<()> ;
     fn get_path(&self) -> Option<String>;
     fn generate_command(&mut self) -> Result<Command>;
     fn set_pid(&mut self, id: pid_t);
+}
+
+impl LocalRuntime for LocalStoreConfig {
+    const RETRIES: u16 = 5;
+
+    fn get_pid(&self) -> Option<pid_t> {
+        self.pid
+    }
+
+    // will check health for endpoint through http request
+    fn verify(&self) -> Result<()> {
+        let (cli, url) = self.get_health_probe();
+        for _ in 0..LocalStoreConfig::RETRIES {
+            let resp = cli.get(url.as_str()).send();
+            if !resp.is_ok() || !resp.unwrap().status().is_success() {
+                sleep(time::Duration::from_secs(1));
+            } else {
+                return Ok(())
+            }
+        }
+        return Err(CliError::Unknown(format!("cannot fetch healthness status for store instance: {}", url)))
+    }
+
+    fn get_path(&self) -> Option<String> {
+        self.path.clone()
+    }
+
+    // bootstrap store command
+    fn generate_command(&mut self) -> Result<Command> {
+        let conf = self.config.clone();
+        if self.path.is_none() {
+            return Err(CliError::Unknown("cannot retrieve store binary execution path".parse().unwrap()));
+        }
+        let mut command = Command::new(self.path.clone().unwrap());
+        let log_dir = format!("{}/_local_logs", self.log_dir.as_ref().expect("cannot find log dir for store"));
+
+        if !Path::new(log_dir.as_str()).exists() {
+            std::fs::create_dir(Path::new(log_dir.as_str())).expect(format!("cannot create directory {}", log_dir).as_str());
+        }
+
+        let out_file = File::create(format!("{}/std_out.log", log_dir).as_str()).expect("couldn't create stdout file");
+        let err_file = File::create(format!("{}/std_err.log", log_dir).as_str()).expect("couldn't create stdout file");
+        // configure runtime by process local env settings
+        // TODO(zhihanz): configure on other needed env variables for raft metastore
+        command.env(databend_dfs::configs::config::STORE_LOG_LEVEL, conf.log_level)
+            .env(databend_dfs::configs::config::STORE_LOG_DIR, conf.log_dir)
+            .env(databend_dfs::configs::config::STORE_FLIGHT_API_ADDRESS, conf.flight_api_address)
+            .env(databend_dfs::configs::config::STORE_LOCAL_FS_DIR, conf.local_fs_dir)
+            .env(databend_dfs::configs::config::STORE_HTTP_API_ADDRESS, conf.http_api_address)
+            .env(databend_dfs::configs::config::STORE_METRIC_API_ADDRESS, conf.metric_api_address)
+            .env(databend_dfs::configs::config::STORE_RPC_TLS_SERVER_CERT, conf.rpc_tls_server_cert)
+            .env(databend_dfs::configs::config::STORE_RPC_TLS_SERVER_KEY, conf.rpc_tls_server_key)
+            .env(databend_dfs::configs::config::STORE_TLS_SERVER_CERT, conf.tls_server_cert)
+            .env(databend_dfs::configs::config::STORE_TLS_SERVER_KEY, conf.tls_server_key)
+            .env(common_raft_store::config::KVSRV_SINGLE, conf.meta_config.single.to_string())
+            .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
+            .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
+        // logging debug
+        info!("executing command {:?}", command);
+        match self.verify() {
+            Ok(_) => {
+                Ok(command)
+            }
+            Err(e) => {
+                return Err(e)
+            }
+        }
+    }
+
+    fn set_pid(&mut self, id: pid_t) {
+        self.pid = Some(id)
+    }
 }
 
 impl LocalRuntime for LocalQueryConfig{
@@ -151,6 +228,25 @@ impl LocalQueryConfig {
     }
 }
 
+impl LocalStoreConfig {
+    // retrieve the configured url for health check
+    // TODO(zhihanz): http TLS endpoint
+    pub fn get_health_probe(&self) -> (reqwest::blocking::Client, String) {
+        let client = reqwest::blocking::Client::builder()
+            .build()
+            .expect("Cannot build health probe for health check");
+
+        let url = {
+            if self.config.tls_server_key.is_empty() || self.config.tls_server_cert.is_empty() {
+                format!("http://{}/v1/health", self.config.http_api_address)
+            } else {
+                format!("")
+            }
+        };
+        return (client, url);
+    }
+}
+
 impl Status {
     pub fn read(conf: Config) -> Result<Self> {
         let status_path = format!("{}/.status.json", conf.databend_dir);
@@ -162,6 +258,7 @@ impl Status {
                 path: status_path.clone(),
                 version: "".to_string(),
                 local_configs: LocalConfig::empty(),
+                current_profile: None,
             };
             serde_json::to_writer(&file, &status)?;
         }
@@ -180,5 +277,8 @@ impl Status {
             .open(self.path.clone())?;
         serde_json::to_writer(&file, self)?;
         Ok(())
+    }
+    pub fn find_unused_local_port() -> String {
+        format!("0.0.0.0:{}", portpicker::pick_unused_port().expect("cannot find a non-occupied port"))
     }
 }

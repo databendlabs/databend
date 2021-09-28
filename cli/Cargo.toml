@@ -18,6 +18,7 @@ path = "src/bin/databend-cli.rs"
 databend-query = {path = "../query"}
 clap = "3.0.0-beta.4"
 databend-dfs = {path = "../dfs" }
+common-raft-store = {path = "../common/raft-store"}
 colored = "2.0.0"
 comfy-table = "4.1.1"
 dirs = "4.0.0"
@@ -39,6 +40,7 @@ procfs = "0.10.1"
 structopt = "0.3"
 structopt-toml = "0.5.0"
 portpicker = "0.1.1"
+reqwest = { version = "0.11", features = ["json", "native-tls", "blocking"] }
 
 [dev-dependencies]
 pretty_assertions = "0.7"

@@ -29,7 +29,7 @@ use crate::error::{Result, CliError};
 use crate::cmds::cluster::cluster::ClusterProfile;
 use databend_query::configs::{QueryConfig, StoreConfig};
 use databend_dfs::configs::Config as DfsConfig;
-use crate::cmds::status::{LocalConfig, LocalStoreConfig};
+use crate::cmds::status::{LocalConfig, LocalStoreConfig, LocalRuntime};
 use std::process::exit;
 
 #[derive(Clone)]
@@ -86,15 +86,83 @@ impl CreateCommand {
         let status = Status::read(self.conf.clone())?;
         paths.query = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version.clone(), "databend-query".to_string()).expect("cannot find query bin");
         paths.store = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version, "databend-store".to_string()).expect("cannot find store bin");
-        println!("{}", paths.query);
         return Ok(paths)
     }
+
+    fn generate_dfs_config() -> DfsConfig {
+        let mut config = DfsConfig::empty();
+        if !portpicker::is_free(config.metric_api_address.parse().unwrap()) {
+            config.metric_api_address = Status::find_unused_local_port()
+        }
+
+        if !portpicker::is_free(config.http_api_address.parse().unwrap()) {
+            config.http_api_address = Status::find_unused_local_port()
+        }
+        if !portpicker::is_free(config.flight_api_address.parse().unwrap()) {
+            config.flight_api_address = Status::find_unused_local_port()
+        }
+        return config
+    }
+    fn generate_local_meta_config(&self, args: &ArgMatches, bin_path: LocalBinaryPaths) -> Option<LocalStoreConfig> {
+        let mut config = DfsConfig::empty();
+
+        if args.value_of("meta_address").is_some() && args.value_of("meta_address").unwrap().is_empty() {
+            config.flight_api_address = args.value_of("meta_address").unwrap().to_string();
+        }
+        config.log_level = args.value_of("log_level").unwrap().to_string();
+        let log_base = format!("{}/logs", self.conf.clone().databend_dir);
+        if !Path::new(log_base.as_str()).exists() {
+            fs::create_dir(Path::new(log_base.as_str())).expect(format!("cannot create directory {}", log_base).as_str());
+        }
+        let meta_log_dir = format!("{}/local_meta_log", log_base);
+        if !Path::new(meta_log_dir.as_str()).exists() {
+            fs::create_dir(Path::new(meta_log_dir.as_str())).expect(format!("cannot create directory {}", meta_log_dir).as_str());
+        }
+        config.log_dir = meta_log_dir;
+
+        let data_base = format!("{}/data", self.conf.clone().databend_dir);
+        if !Path::new(data_base.as_str()).exists() {
+            fs::create_dir(Path::new(data_base.as_str())).expect(format!("cannot create directory {}", data_base).as_str());
+        }
+        let meta_data_dir = format!("{}/_meta_local_fs", data_base);
+        if !Path::new(meta_data_dir.as_str()).exists() {
+            fs::create_dir(Path::new(meta_data_dir.as_str())).expect(format!("cannot create directory {}", meta_data_dir).as_str());
+        }
+        config.local_fs_dir = meta_data_dir;
+        config.meta_config.single = true;
+        return Some(LocalStoreConfig{
+            config,
+            pid: None,
+            path: Some(bin_path.store),
+            log_dir: Some(log_base)
+        })
+    }
+
+    fn provision_local_meta_service(&self, writer: &mut Writer, args: &ArgMatches, bin_path: LocalBinaryPaths) -> Result<()> {
+        let mut meta_config = self.generate_local_meta_config(args, bin_path).expect("cannot generate metaservice config");
+        match meta_config.start() {
+            Ok(_) => {
+                assert!(meta_config.get_pid().is_some());
+                let mut status = Status::read(self.conf.clone())?;
+                status.local_configs.meta_configs = Some(meta_config.clone());
+                status.write()?;
+                writer.write_ok(format!("👏 successfully started meta service with rpc endpoint {}", meta_config.config.flight_api_address).as_str());
+                return Ok(())
+            }
+            Err(e) => {
+                return Err(e)
+            }
+        }
+
+    }
+
     fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()>{
         match self.local_exec_precheck(args) {
             Ok(_) => {
                 writer.write_ok("databend cluster precheck passed!");
                 /// ensuring needed dependencies
-                let bin_path = self.ensure_bin(writer, args);
+                let bin_path = self.ensure_bin(writer, args).expect("cannot find binary path");
+                self.provision_local_meta_service(writer, args, bin_path);
                 Ok(())
             }
             Err(CliError::Unknown(s)) => {
