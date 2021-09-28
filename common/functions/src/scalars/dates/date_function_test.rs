@@ -76,7 +76,7 @@ fn test_toyyyymm_date16_function() -> Result<()> {
 #[test]
 fn test_toyyyymm_date32_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u32])]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0i32])]);
 
     {
         let col = ToYYYYMMFunction::try_create("a")?;
@@ -96,9 +96,7 @@ fn test_toyyyymm_date32_function() -> Result<()> {
     }
 
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
-        0u32, 1u32, 2u32, 3u32,
-    ])]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0i32, 1, 2, 3])]);
 
     {
         let toyyyymm = ToYYYYMMFunction::try_create("a")?;
@@ -204,7 +202,7 @@ fn test_toyyyymm_constant_function() -> Result<()> {
     // date32
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
     let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
-        DataValue::UInt32(Some(0u32)),
+        DataValue::Int32(Some(0i32)),
         10,
     )]);
     {
@@ -275,7 +273,7 @@ fn test_toyyyymmdd_function() -> Result<()> {
 
     // date32
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u32])]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0i32])]);
 
     {
         let col = ToYYYYMMDDFunction::try_create("a")?;
@@ -348,7 +346,7 @@ fn test_toyyyymmdd_constant_function() -> Result<()> {
     // date32
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
     let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
-        DataValue::UInt32(Some(0u32)),
+        DataValue::Int32(Some(0i32)),
         10,
     )]);
     {
@@ -420,7 +418,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
 
     // date32
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u32])]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0i32])]);
 
     {
         let col = ToYYYYMMDDhhmmssFunction::try_create("a")?;
@@ -493,7 +491,7 @@ fn test_toyyyymmhhmmss_constant_function() -> Result<()> {
     // date32
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
     let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
-        DataValue::UInt32(Some(0u32)),
+        DataValue::Int32(Some(0i32)),
         10,
     )]);
     {

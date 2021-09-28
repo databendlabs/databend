@@ -54,6 +54,10 @@ impl SQLCommon {
                     "FLOAT32" => Ok(DataType::Float32),
                     "FLOAT64" => Ok(DataType::Float64),
                     "STRING" => Ok(DataType::String),
+                    "DATE16" => Ok(DataType::Date16),
+                    "DATE32" => Ok(DataType::Date32),
+                    "DATETIME" => Ok(DataType::DateTime32(None)),
+                    "DATETIME32" => Ok(DataType::DateTime32(None)),
 
                     _ => Result::Err(ErrorCode::IllegalDataType(format!(
                         "The SQL data type {:?} is not implemented",

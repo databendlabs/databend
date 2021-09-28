@@ -140,7 +140,7 @@ where
                 } else {
                     let result = columns[0].column()
                         .to_array()?
-                        .u32()?
+                        .i32()?
                         .apply_cast_numeric(|v| {
                             let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                             T::to_number(date_time, mode)
