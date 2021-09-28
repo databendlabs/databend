@@ -21,6 +21,13 @@ use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
+use crate::configs::StorageConfig;
+use crate::configs::DFS_STORAGE_ADDRESS;
+use crate::configs::DFS_STORAGE_PASSWORD;
+use crate::configs::DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT;
+use crate::configs::DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME;
+use crate::configs::DFS_STORAGE_USERNAME;
+
 lazy_static! {
     pub static ref DATABEND_COMMIT_VERSION: String = {
         let build_semver = option_env!("VERGEN_BUILD_SEMVER");
@@ -42,7 +49,7 @@ lazy_static! {
 }
 
 macro_rules! env_helper {
-    ($config:expr,$struct: tt, $field:tt, $field_type: ty, $env:expr) => {
+    ($config:expr, $struct: tt, $field:tt, $field_type: ty, $env:expr) => {
         let env_var = std::env::var_os($env)
             .unwrap_or($config.$struct.$field.to_string().into())
             .into_string()
@@ -85,13 +92,6 @@ const META_PASSWORD: &str = "META_PASSWORD";
 const META_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "META_RPC_TLS_SERVER_ROOT_CA_CERT";
 const META_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "META_RPC_TLS_SERVICE_DOMAIN_NAME";
 
-// Store env.
-const STORE_ADDRESS: &str = "STORE_ADDRESS";
-const STORE_USERNAME: &str = "STORE_USERNAME";
-const STORE_PASSWORD: &str = "STORE_PASSWORD";
-const STORE_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "STORE_RPC_TLS_SERVER_ROOT_CA_CERT";
-const STORE_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "STORE_RPC_TLS_SERVICE_DOMAIN_NAME";
-
 // Config file.
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
@@ -116,62 +116,6 @@ impl LogConfig {
             log_level: "INFO".to_string(),
             log_dir: "./_logs".to_string(),
         }
-    }
-}
-
-/// Store config group.
-/// serde(default) make the toml de to default working.
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-pub struct StoreConfig {
-    #[structopt(long, env = STORE_ADDRESS, default_value = "", help = "Store backend address")]
-    #[serde(default)]
-    pub store_address: String,
-
-    #[structopt(long, env = STORE_USERNAME, default_value = "", help = "Store backend user name")]
-    #[serde(default)]
-    pub store_username: String,
-
-    #[structopt(long, env = STORE_PASSWORD, default_value = "", help = "Store backend user password")]
-    #[serde(default)]
-    pub store_password: String,
-
-    #[structopt(
-        long,
-        env = "STORE_RPC_TLS_SERVER_ROOT_CA_CERT",
-        default_value = "",
-        help = "Certificate for client to identify store rpc server"
-    )]
-    #[serde(default)]
-    pub rpc_tls_store_server_root_ca_cert: String,
-
-    #[structopt(
-        long,
-        env = "STORE_RPC_TLS_SERVICE_DOMAIN_NAME",
-        default_value = "localhost"
-    )]
-    #[serde(default)]
-    pub rpc_tls_store_service_domain_name: String,
-}
-
-impl StoreConfig {
-    pub fn default() -> Self {
-        StoreConfig {
-            store_address: "".to_string(),
-            store_username: "root".to_string(),
-            store_password: "".to_string(),
-            rpc_tls_store_server_root_ca_cert: "".to_string(),
-            rpc_tls_store_service_domain_name: "localhost".to_string(),
-        }
-    }
-}
-
-impl fmt::Debug for StoreConfig {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{")?;
-        write!(f, "store_address: \"{}\", ", self.store_address)?;
-        write!(f, "store_user: \"{}\", ", self.store_username)?;
-        write!(f, "store_password: \"******\"")?;
-        write!(f, "}}")
     }
 }
 
@@ -395,7 +339,7 @@ pub struct Config {
 
     // Storage backend config.
     #[structopt(flatten)]
-    pub store: StoreConfig,
+    pub storage: StorageConfig,
 
     // Query engine config.
     #[structopt(flatten)]
@@ -411,7 +355,7 @@ impl Config {
         Config {
             log: LogConfig::default(),
             meta: MetaConfig::default(),
-            store: StoreConfig::default(),
+            storage: StorageConfig::default(),
             query: QueryConfig::default(),
             config_file: "".to_string(),
         }
@@ -472,25 +416,41 @@ impl Config {
             META_RPC_TLS_SERVICE_DOMAIN_NAME
         );
 
-        // Store.
-        env_helper!(mut_config, store, store_address, String, STORE_ADDRESS);
-        env_helper!(mut_config, store, store_username, String, STORE_USERNAME);
-        env_helper!(mut_config, store, store_password, String, STORE_PASSWORD);
-
-        // for store rpc client
+        // Storage.
         env_helper!(
-            mut_config,
-            store,
-            rpc_tls_store_server_root_ca_cert,
+            mut_config.storage,
+            dfs,
+            address,
             String,
-            STORE_RPC_TLS_SERVER_ROOT_CA_CERT
+            DFS_STORAGE_ADDRESS
         );
         env_helper!(
-            mut_config,
-            store,
-            rpc_tls_store_service_domain_name,
+            mut_config.storage,
+            dfs,
+            username,
             String,
-            STORE_RPC_TLS_SERVICE_DOMAIN_NAME
+            DFS_STORAGE_USERNAME
+        );
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            password,
+            String,
+            DFS_STORAGE_PASSWORD
+        );
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            rpc_tls_storage_server_root_ca_cert,
+            String,
+            DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT
+        );
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            rpc_tls_storage_service_domain_name,
+            String,
+            DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME
         );
 
         // Query.
@@ -617,18 +577,6 @@ impl Config {
     pub fn tls_query_cli_enabled(&self) -> bool {
         !self.query.rpc_tls_query_server_root_ca_cert.is_empty()
             && !self.query.rpc_tls_query_service_domain_name.is_empty()
-    }
-
-    pub fn tls_store_client_conf(&self) -> RpcClientTlsConfig {
-        RpcClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.store.rpc_tls_store_server_root_ca_cert.to_string(),
-            domain_name: self.store.rpc_tls_store_service_domain_name.to_string(),
-        }
-    }
-
-    pub fn tls_store_cli_enabled(&self) -> bool {
-        !self.store.rpc_tls_store_server_root_ca_cert.is_empty()
-            && !self.store.rpc_tls_store_service_domain_name.is_empty()
     }
 
     pub fn tls_meta_cli_enabled(&self) -> bool {

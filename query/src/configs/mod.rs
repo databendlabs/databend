@@ -23,4 +23,4 @@ pub use config::Config;
 pub use config::LogConfig;
 pub use config::MetaConfig;
 pub use config::QueryConfig;
-pub use config::StoreConfig;
+pub use config_storage::*;

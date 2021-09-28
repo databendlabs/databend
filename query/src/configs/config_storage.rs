@@ -20,11 +20,11 @@ use structopt_toml::StructOptToml;
 const DEFAULT_STORAGE_TYPE: &str = "DEFAULT_STORAGE_TYPE";
 
 // DFS Storage env.
-const DFS_STORAGE_ADDRESS: &str = "DFS_STORAGE_ADDRESS";
-const DFS_STORAGE_USERNAME: &str = "DFS_STORAGE_USERNAME";
-const DFS_STORAGE_PASSWORD: &str = "DFS_STORAGE_PASSWORD";
-const DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT";
-const DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME";
+pub const DFS_STORAGE_ADDRESS: &str = "DFS_STORAGE_ADDRESS";
+pub const DFS_STORAGE_USERNAME: &str = "DFS_STORAGE_USERNAME";
+pub const DFS_STORAGE_PASSWORD: &str = "DFS_STORAGE_PASSWORD";
+pub const DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT";
+pub const DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME";
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum StorageType {
@@ -87,7 +87,9 @@ impl fmt::Debug for DfsStorageConfig {
 
 /// Storage config group.
 /// serde(default) make the toml de to default working.
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
 pub struct StorageConfig {
     #[structopt(long, env = DEFAULT_STORAGE_TYPE, default_value = "", help = "Default storage type: dfs|disk|s3")]
     #[serde(default)]

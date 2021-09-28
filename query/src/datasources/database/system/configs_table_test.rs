@@ -40,7 +40,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 30);
+    assert_eq!(block.num_rows(), 25);
 
     let expected = vec![
         "+-----------------------------------+----------------+-------+-------------+",
@@ -70,11 +70,6 @@ async fn test_configs_table() -> Result<()> {
         "| rpc_tls_query_service_domain_name | localhost      | query |             |",
         "| rpc_tls_server_cert               |                | query |             |",
         "| rpc_tls_server_key                |                | query |             |",
-        "| rpc_tls_store_server_root_ca_cert |                | dfs   |             |",
-        "| rpc_tls_store_service_domain_name | localhost      | dfs   |             |",
-        "| store_address                     |                | dfs   |             |",
-        "| store_password                    |                | dfs   |             |",
-        "| store_username                    | root           | dfs   |             |",
         "| tenant                            |                | query |             |",
         "+-----------------------------------+----------------+-------+-------------+",
     ];

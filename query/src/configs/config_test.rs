@@ -19,7 +19,7 @@ use crate::configs::Config;
 use crate::configs::LogConfig;
 use crate::configs::MetaConfig;
 use crate::configs::QueryConfig;
-use crate::configs::StoreConfig;
+use crate::configs::StorageConfig;
 
 // Default.
 #[test]
@@ -27,7 +27,7 @@ fn test_default_config() -> Result<()> {
     let expect = Config {
         log: LogConfig::default(),
         meta: MetaConfig::default(),
-        store: StoreConfig::default(),
+        storage: StorageConfig::default(),
         query: QueryConfig::default(),
         config_file: "".to_string(),
     };
@@ -50,9 +50,9 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
-    std::env::set_var("STORE_ADDRESS", "1.2.3.4:1234");
-    std::env::set_var("STORE_USERNAME", "admin");
-    std::env::set_var("STORE_PASSWORD", "password!");
+    std::env::set_var("DFS_STORAGE_ADDRESS", "1.2.3.4:1234");
+    std::env::set_var("DFS_STORAGE_USERNAME", "admin");
+    std::env::set_var("DFS_STORAGE_PASSWORD", "password!");
     std::env::remove_var("CONFIG_FILE");
 
     let default = Config::default();
@@ -71,9 +71,9 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
-    assert_eq!("1.2.3.4:1234", configured.store.store_address);
-    assert_eq!("admin", configured.store.store_username);
-    assert_eq!("password!", configured.store.store_password);
+    assert_eq!("1.2.3.4:1234", configured.storage.dfs.address);
+    assert_eq!("admin", configured.storage.dfs.username);
+    assert_eq!("password!", configured.storage.dfs.password);
 
     // clean up
     std::env::remove_var("LOG_LEVEL");
@@ -88,9 +88,9 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
-    std::env::remove_var("STORE_ADDRESS");
-    std::env::remove_var("STORE_USERNAME");
-    std::env::remove_var("STORE_PASSWORD");
+    std::env::remove_var("DFS_STORAGE_ADDRESS");
+    std::env::remove_var("DFS_STORAGE_USERNAME");
+    std::env::remove_var("DFS_STORAGE_PASSWORD");
     Ok(())
 }
 
