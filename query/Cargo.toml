@@ -83,7 +83,7 @@ structopt = "0.3"
 structopt-toml = "0.5.0"
 threadpool = "1.8.1"
 tokio-stream = { version = "0.1", features = ["net"] }
-toml = "0.5.6"
+toml = "0.5.8"
 tonic = "0.5.2"
 walkdir = "2.3.2"
 axum = {version = "0.2.5", features=["headers"] }

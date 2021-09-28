@@ -52,6 +52,13 @@ const CONFIG_FILE: &str = "CONFIG_FILE";
 )]
 #[serde(default)]
 pub struct Config {
+    #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
+    pub config_file: String,
+
+    // Query engine config.
+    #[structopt(flatten)]
+    pub query: QueryConfig,
+
     #[structopt(flatten)]
     pub log: LogConfig,
 
@@ -62,24 +69,17 @@ pub struct Config {
     // Storage backend config.
     #[structopt(flatten)]
     pub storage: StorageConfig,
-
-    // Query engine config.
-    #[structopt(flatten)]
-    pub query: QueryConfig,
-
-    #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
-    pub config_file: String,
 }
 
 impl Config {
     /// Default configs.
     pub fn default() -> Self {
         Config {
+            config_file: "".to_string(),
+            query: QueryConfig::default(),
             log: LogConfig::default(),
             meta: MetaConfig::default(),
             storage: StorageConfig::default(),
-            query: QueryConfig::default(),
-            config_file: "".to_string(),
         }
     }
 

@@ -33,6 +33,53 @@ fn test_default_config() -> Result<()> {
     };
     let actual = Config::default();
     assert_eq!(actual, expect);
+
+    let tom_expect = "config_file = \"\"
+
+[query]
+tenant = \"\"
+namespace = \"\"
+num_cpus = 8
+mysql_handler_host = \"127.0.0.1\"
+mysql_handler_port = 3307
+max_active_sessions = 256
+clickhouse_handler_host = \"127.0.0.1\"
+clickhouse_handler_port = 9000
+flight_api_address = \"127.0.0.1:9090\"
+http_api_address = \"127.0.0.1:8080\"
+metric_api_address = \"127.0.0.1:7070\"
+api_tls_server_cert = \"\"
+api_tls_server_key = \"\"
+api_tls_server_root_ca_cert = \"\"
+rpc_tls_server_cert = \"\"
+rpc_tls_server_key = \"\"
+rpc_tls_query_server_root_ca_cert = \"\"
+rpc_tls_query_service_domain_name = \"localhost\"
+
+[log]
+log_level = \"INFO\"
+log_dir = \"./_logs\"
+
+[meta]
+meta_address = \"\"
+meta_username = \"root\"
+meta_password = \"\"
+rpc_tls_meta_server_root_ca_cert = \"\"
+rpc_tls_meta_service_domain_name = \"localhost\"
+
+[storage]
+default_storage = \"disk\"
+
+[storage.\"storage.dfs\"]
+address = \"\"
+username = \"\"
+password = \"\"
+rpc_tls_storage_server_root_ca_cert = \"\"
+rpc_tls_storage_service_domain_name = \"\"
+";
+
+    let tom_actual = toml::to_string(&actual).unwrap();
+    assert_eq!(tom_actual, tom_expect);
     Ok(())
 }
 
@@ -91,64 +138,6 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("DFS_STORAGE_ADDRESS");
     std::env::remove_var("DFS_STORAGE_USERNAME");
     std::env::remove_var("DFS_STORAGE_PASSWORD");
-    Ok(())
-}
-
-// From Args.
-#[test]
-#[ignore]
-fn test_args_config() -> Result<()> {
-    let actual = Config::load_from_args();
-    assert_eq!("INFO", actual.log.log_level);
-    Ok(())
-}
-
-// From file NotFound.
-#[test]
-#[ignore]
-fn test_config_file_not_found() -> Result<()> {
-    if let Err(e) = Config::load_from_toml("xx.toml") {
-        let expect = "Code: 23, displayText = File: xx.toml, err: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }.";
-        assert_eq!(expect, format!("{}", e));
-    }
-    Ok(())
-}
-
-// From file.
-#[test]
-#[ignore]
-fn test_file_config() -> Result<()> {
-    let toml_str = r#"
-[log_config]
-log_level = "ERROR"
-log_dir = "./_logs"
- "#;
-
-    let actual = Config::load_from_toml_str(toml_str)?;
-    assert_eq!("INFO", actual.log.log_level);
-
-    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
-    let env = Config::load_from_env(&actual)?;
-    assert_eq!("INFO", env.log.log_level);
-    std::env::remove_var("QUERY_LOG_LEVEL");
-    Ok(())
-}
-
-// From env, load config file and ignore the rest settings.
-#[test]
-#[ignore]
-fn test_env_file_config() -> Result<()> {
-    std::env::set_var("QUERY_LOG_LEVEL", "DEBUG");
-    let config_path = std::env::current_dir()
-        .unwrap()
-        .join("../scripts/deploy/config/databend-query-node-1.toml")
-        .display()
-        .to_string();
-    std::env::set_var("CONFIG_FILE", config_path);
-    let config = Config::load_from_env(&Config::default())?;
-    assert_eq!(config.log.log_level, "INFO");
-    std::env::remove_var("QUERY_LOG_LEVEL");
-    std::env::remove_var("CONFIG_FILE");
     Ok(())
 }
 

@@ -99,6 +99,7 @@ pub struct StorageConfig {
 
     // DFS storage backend config.
     #[structopt(flatten)]
+    #[serde(rename = "storage.dfs")]
     pub dfs: DfsStorageConfig,
 }
 
