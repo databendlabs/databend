@@ -71,6 +71,8 @@ impl ClusterCommand {
             .about("Cluster life cycle management")
             .subcommand(
                 CreateCommand::generate()
+            ).subcommand(
+            DeleteCommand::generate()
             );
         return app;
     }

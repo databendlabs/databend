@@ -13,3 +13,4 @@
 // limitations under the License.
 pub mod cluster;
 pub mod create;
+pub mod delete;

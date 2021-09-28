@@ -100,7 +100,14 @@ pub trait LocalRuntime {
         let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
-        Ok(())
+        match self.verify() {
+            Ok(_) => {
+                Ok(())
+            }
+            Err(e) => {
+                return Err(e)
+            }
+        }
     }
     fn get_pid(&self) -> Option<pid_t>;
     fn verify(&self)  -> Result<()> ;
@@ -166,14 +173,7 @@ impl LocalRuntime for LocalStoreConfig {
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
         info!("executing command {:?}", command);
-        match self.verify() {
-            Ok(_) => {
-                Ok(command)
-            }
-            Err(e) => {
-                return Err(e)
-            }
-        }
+        Ok(command)
     }
 
     fn set_pid(&mut self, id: pid_t) {

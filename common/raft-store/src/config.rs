@@ -105,7 +105,7 @@ pub struct RaftConfig {
 
     #[structopt(
     long,
-    env = "KVSRV_SINGLE",
+    env = KVSRV_SINGLE,
     help = concat!("Single node kvsrv. It creates a single node cluster if meta data is not initialized.",
     " Otherwise it opens the previous one.",
     " This is mainly for testing purpose.")
@@ -114,7 +114,7 @@ pub struct RaftConfig {
 
     #[structopt(
     long,
-    env = "KVSRV_ID",
+    env = KVSRV_ID,
     default_value = "0",
     help = concat!("The node id. Only used when this server is not initialized,",
     " e.g. --boot or --single for the first time.",
