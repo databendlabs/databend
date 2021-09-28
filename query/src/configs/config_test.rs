@@ -68,7 +68,7 @@ rpc_tls_meta_server_root_ca_cert = \"\"
 rpc_tls_meta_service_domain_name = \"localhost\"
 
 [storage]
-default_storage = \"disk\"
+storage_type = \"disk\"
 
 [storage.dfs]
 address = \"\"
@@ -106,6 +106,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
+    std::env::set_var("STORAGE_TYPE", "s3");
     std::env::set_var("DFS_STORAGE_ADDRESS", "1.2.3.4:1234");
     std::env::set_var("DFS_STORAGE_USERNAME", "admin");
     std::env::set_var("DFS_STORAGE_PASSWORD", "password!");
@@ -132,6 +133,8 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
+    assert_eq!("s3", configured.storage.storage_type);
+
     assert_eq!("1.2.3.4:1234", configured.storage.dfs.address);
     assert_eq!("admin", configured.storage.dfs.username);
     assert_eq!("password!", configured.storage.dfs.password);
@@ -156,6 +159,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
+    std::env::remove_var("STORAGE_TYPE");
     std::env::remove_var("DFS_STORAGE_ADDRESS");
     std::env::remove_var("DFS_STORAGE_USERNAME");
     std::env::remove_var("DFS_STORAGE_PASSWORD");

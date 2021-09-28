@@ -19,7 +19,7 @@ use structopt_toml::StructOptToml;
 
 use crate::configs::Config;
 
-const DEFAULT_STORAGE_TYPE: &str = "DEFAULT_STORAGE_TYPE";
+const STORAGE_TYPE: &str = "STORAGE_TYPE";
 
 // DFS Storage env.
 const DFS_STORAGE_ADDRESS: &str = "DFS_STORAGE_ADDRESS";
@@ -157,9 +157,9 @@ impl fmt::Debug for S3StorageConfig {
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct StorageConfig {
-    #[structopt(long, env = DEFAULT_STORAGE_TYPE, default_value = "", help = "Default storage type: dfs|disk|s3")]
+    #[structopt(long, env = STORAGE_TYPE, default_value = "", help = "Current storage type: dfs|disk|s3")]
     #[serde(default)]
-    pub default_storage: String,
+    pub storage_type: String,
 
     // DFS storage backend config.
     #[structopt(flatten)]
@@ -177,7 +177,7 @@ pub struct StorageConfig {
 impl StorageConfig {
     pub fn default() -> Self {
         StorageConfig {
-            default_storage: "disk".to_string(),
+            storage_type: "disk".to_string(),
             dfs: DfsStorageConfig::default(),
             disk: DiskStorageConfig::default(),
             s3: S3StorageConfig::default(),
@@ -185,6 +185,8 @@ impl StorageConfig {
     }
 
     pub fn load_from_env(mut_config: &mut Config) {
+        env_helper!(mut_config, storage, storage_type, String, STORAGE_TYPE);
+
         // DFS.
         env_helper!(
             mut_config.storage,
