@@ -17,6 +17,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
+use common_base::GlobalSequence;
 use common_tracing::tracing;
 use tempfile::tempdir;
 use tempfile::TempDir;
@@ -52,7 +53,7 @@ pub async fn start_kvsrv_with_context(tc: &mut KVSrvTestContext) -> Result<()> {
 }
 
 pub fn next_port() -> u32 {
-    29000u32 + (common_base::uniq_usize() as u32)
+    29000u32 + (GlobalSequence::next() as u32)
 }
 
 pub struct KVSrvTestContext {

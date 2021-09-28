@@ -34,7 +34,6 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::servers::server::mock::get_mock_user;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -81,9 +80,9 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         salt: &[u8],
         auth_data: &[u8],
     ) -> bool {
-        let user = String::from_utf8_lossy(username);
-
-        if let Ok(user) = get_mock_user(&user) {
+        let user_mgr = self.session.get_user_manager();
+        let user_name = String::from_utf8_lossy(username);
+        if let Ok(user) = user_mgr.get_user(user_name.as_ref()) {
             let encode_password = match auth_plugin {
                 "mysql_native_password" => {
                     if auth_data.is_empty() {
@@ -107,7 +106,10 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
                 }
                 _ => auth_data.to_vec(),
             };
-            return user.authenticate_user(encode_password);
+
+            if let Ok(res) = user_mgr.auth_user(user_name.as_ref(), encode_password) {
+                return res;
+            }
         }
 
         false

@@ -109,38 +109,3 @@ impl Drop for ShutdownHandle {
         }
     }
 }
-
-// TODO(winter & sundy), this is just a mock
-// Introduce user_mgr and block on to get user by user_name
-pub(crate) mod mock {
-    use common_exception::ErrorCode;
-    use common_exception::Result;
-    use common_management::AuthType;
-    use common_management::NewUser;
-    use common_management::UserInfo;
-
-    pub fn get_mock_user(user: &str) -> Result<UserInfo> {
-        match user {
-            "default" | "" | "root" => {
-                let user = NewUser::new(user, "", AuthType::None);
-                Ok(user.into())
-            }
-            "default_plain" => {
-                let user = NewUser::new(user, "default", AuthType::PlainText);
-                Ok(user.into())
-            }
-
-            "default_double_sha1" => {
-                let user = NewUser::new(user, "default", AuthType::DoubleSha1);
-                Ok(user.into())
-            }
-
-            "default_sha2" => {
-                let user = NewUser::new(user, "default", AuthType::Sha256);
-                Ok(user.into())
-            }
-
-            _ => Err(ErrorCode::UnknownUser(format!("User: {} not found", user))),
-        }
-    }
-}

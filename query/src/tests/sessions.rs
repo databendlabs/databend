@@ -21,11 +21,14 @@ use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;
+use crate::users::UserManager;
 
 async fn async_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
     let cluster_discovery = ClusterDiscovery::create_global(config.clone()).await?;
     cluster_discovery.register_to_metastore(&config).await?;
-    SessionManager::from_conf(config, cluster_discovery)
+
+    let user_manager = UserManager::create_global(config.clone()).await?;
+    SessionManager::from_conf(config, cluster_discovery, user_manager)
 }
 
 fn sync_try_create_sessions(config: Config) -> Result<SessionManagerRef> {

@@ -16,6 +16,7 @@ use async_raft::raft::Entry;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use common_base::tokio;
+use common_base::GlobalSequence;
 use common_metatypes::Cmd;
 use common_metatypes::KVValue;
 use common_metatypes::LogEntry;
@@ -1443,5 +1444,5 @@ pub fn new_sled_test_context() -> SledTestContext {
 }
 
 pub fn next_port() -> u32 {
-    29000u32 + (common_base::uniq_usize() as u32)
+    29000u32 + (GlobalSequence::next() as u32)
 }

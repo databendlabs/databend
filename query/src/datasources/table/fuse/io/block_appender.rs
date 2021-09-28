@@ -112,6 +112,8 @@ impl FuseTable {
 pub fn block_stats(data_block: &DataBlock) -> Result<HashMap<ColumnId, (DataType, ColStats)>> {
     // TODO column id is FAKED, this is OK as long as table schema is NOT changed, which is not realistic
     // we should extend DataField with column_id ...
+
+    let row_count = data_block.num_rows();
     (0..).into_iter().zip(data_block.columns().iter()).try_fold(
         HashMap::new(),
         |mut res, (idx, col)| {
@@ -136,11 +138,14 @@ pub fn block_stats(data_block: &DataBlock) -> Result<HashMap<ColumnId, (DataType
                     }
                 }
             };
+
             let col_stats = ColStats {
                 min,
                 max,
                 null_count,
+                row_count,
             };
+
             res.insert(idx, (data_type, col_stats));
             Ok(res)
         },
