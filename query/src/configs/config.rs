@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_store_api_sdk::RpcClientTlsConfig;
@@ -21,6 +19,8 @@ use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
+use crate::configs::LogConfig;
+use crate::configs::MetaConfig;
 use crate::configs::QueryConfig;
 use crate::configs::StorageConfig;
 
@@ -44,99 +44,8 @@ lazy_static! {
     };
 }
 
-// Log env.
-const LOG_LEVEL: &str = "LOG_LEVEL";
-const LOG_DIR: &str = "LOG_DIR";
-
-// Meta env.
-const META_ADDRESS: &str = "META_ADDRESS";
-const META_USERNAME: &str = "META_USERNAME";
-const META_PASSWORD: &str = "META_PASSWORD";
-const META_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "META_RPC_TLS_SERVER_ROOT_CA_CERT";
-const META_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "META_RPC_TLS_SERVICE_DOMAIN_NAME";
-
 // Config file.
 const CONFIG_FILE: &str = "CONFIG_FILE";
-
-/// Log config group.
-/// serde(default) make the toml de to default working.
-#[derive(
-    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
-)]
-pub struct LogConfig {
-    #[structopt(long, env = LOG_LEVEL, default_value = "INFO" , help = "Log level <DEBUG|INFO|ERROR>")]
-    #[serde(default)]
-    pub log_level: String,
-
-    #[structopt(required = false, long, env = LOG_DIR, default_value = "./_logs", help = "Log file dir")]
-    #[serde(default)]
-    pub log_dir: String,
-}
-
-impl LogConfig {
-    pub fn default() -> Self {
-        LogConfig {
-            log_level: "INFO".to_string(),
-            log_dir: "./_logs".to_string(),
-        }
-    }
-}
-
-/// Meta config group.
-/// serde(default) make the toml de to default working.
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-pub struct MetaConfig {
-    #[structopt(long, env = META_ADDRESS, default_value = "", help = "MetaStore backend address")]
-    #[serde(default)]
-    pub meta_address: String,
-
-    #[structopt(long, env = META_USERNAME, default_value = "", help = "MetaStore backend user name")]
-    #[serde(default)]
-    pub meta_username: String,
-
-    #[structopt(long, env = META_PASSWORD, default_value = "", help = "MetaStore backend user password")]
-    #[serde(default)]
-    pub meta_password: String,
-
-    #[structopt(
-        long,
-        env = "META_RPC_TLS_SERVER_ROOT_CA_CERT",
-        default_value = "",
-        help = "Certificate for client to identify meta rpc server"
-    )]
-    #[serde(default)]
-    pub rpc_tls_meta_server_root_ca_cert: String,
-
-    #[structopt(
-        long,
-        env = "META_RPC_TLS_SERVICE_DOMAIN_NAME",
-        default_value = "localhost"
-    )]
-    #[serde(default)]
-    pub rpc_tls_meta_service_domain_name: String,
-}
-
-impl MetaConfig {
-    pub fn default() -> Self {
-        MetaConfig {
-            meta_address: "".to_string(),
-            meta_username: "root".to_string(),
-            meta_password: "".to_string(),
-            rpc_tls_meta_server_root_ca_cert: "".to_string(),
-            rpc_tls_meta_service_domain_name: "localhost".to_string(),
-        }
-    }
-}
-
-impl fmt::Debug for MetaConfig {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{")?;
-        write!(f, "meta_address: \"{}\", ", self.meta_address)?;
-        write!(f, "meta_user: \"{}\", ", self.meta_username)?;
-        write!(f, "meta_password: \"******\"")?;
-        write!(f, "}}")
-    }
-}
 
 #[derive(
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
@@ -208,26 +117,12 @@ impl Config {
                 std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap(),
             );
         }
-        env_helper!(mut_config, log, log_level, String, LOG_LEVEL);
+
+        // Log.
+        LogConfig::load_from_env(&mut mut_config);
 
         // Meta.
-        env_helper!(mut_config, meta, meta_address, String, META_ADDRESS);
-        env_helper!(mut_config, meta, meta_username, String, META_USERNAME);
-        env_helper!(mut_config, meta, meta_password, String, META_PASSWORD);
-        env_helper!(
-            mut_config,
-            meta,
-            rpc_tls_meta_server_root_ca_cert,
-            String,
-            META_RPC_TLS_SERVER_ROOT_CA_CERT
-        );
-        env_helper!(
-            mut_config,
-            meta,
-            rpc_tls_meta_service_domain_name,
-            String,
-            META_RPC_TLS_SERVICE_DOMAIN_NAME
-        );
+        MetaConfig::load_from_env(&mut mut_config);
 
         // Storage.
         StorageConfig::load_from_env(&mut mut_config);

@@ -340,7 +340,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             },
             salt: scramble,
             // TODO: version
-            version: crate::configs::config::DATABEND_COMMIT_VERSION.to_string(),
+            version: crate::configs::DATABEND_COMMIT_VERSION.to_string(),
         }
     }
 }
