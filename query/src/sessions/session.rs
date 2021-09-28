@@ -28,12 +28,12 @@ use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
+use crate::users::UserManagerRef;
 
 pub(in crate::sessions) struct MutableStatus {
     pub(in crate::sessions) abort: bool,
     pub(in crate::sessions) current_database: String,
     pub(in crate::sessions) session_settings: Arc<Settings>,
-    #[allow(unused)]
     pub(in crate::sessions) client_host: Option<SocketAddr>,
     pub(in crate::sessions) io_shutdown_tx: Option<Sender<Sender<()>>>,
     pub(in crate::sessions) context_shared: Option<Arc<DatabendQueryContextShared>>,
@@ -180,5 +180,9 @@ impl Session {
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.sessions.get_catalog()
+    }
+
+    pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
+        self.sessions.get_user_manager()
     }
 }

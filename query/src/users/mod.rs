@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,10 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-
-pub(crate) mod user_api;
-pub(crate) mod user_mgr;
 
 #[cfg(test)]
 mod user_mgr_test;
+
+mod user;
+mod user_mgr;
+
+pub use user::User;
+pub use user_mgr::UserManager;
+pub use user_mgr::UserManagerRef;

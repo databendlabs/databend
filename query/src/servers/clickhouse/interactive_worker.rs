@@ -23,7 +23,6 @@ use metrics::histogram;
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
-use crate::servers::server::mock::get_mock_user;
 use crate::sessions::SessionRef;
 
 pub struct InteractiveWorker {
@@ -98,8 +97,9 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     fn authenticate(&self, user: &str, password: &[u8]) -> bool {
-        if let Ok(user) = get_mock_user(user) {
-            return user.authenticate_user(password);
+        let user_mgr = self.session.get_user_manager();
+        if let Ok(res) = user_mgr.auth_user(user, password) {
+            return res;
         }
         false
     }

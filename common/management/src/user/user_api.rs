@@ -44,14 +44,10 @@ impl UserInfo {
     }
 }
 
-pub trait UserMgrApi {
-    fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64>;
+pub trait UserMgrApi: Sync + Send {
+    fn add_user(&self, user_info: UserInfo) -> Result<u64>;
 
-    fn get_user(
-        &self,
-        username: String,
-        seq: Option<u64>,
-    ) -> common_exception::Result<SeqValue<UserInfo>>;
+    fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>>;
 
     fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>>;
 

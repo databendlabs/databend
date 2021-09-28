@@ -33,3 +33,4 @@ pub mod pipelines;
 pub mod servers;
 pub mod sessions;
 pub mod sql;
+pub mod users;

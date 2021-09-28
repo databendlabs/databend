@@ -34,11 +34,13 @@ use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabaseEngine;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::users::UserManagerRef;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: ClusterDiscoveryRef,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
+    pub(in crate::sessions) user: UserManagerRef,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -47,7 +49,11 @@ pub struct SessionManager {
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn from_conf(conf: Config, discovery: ClusterDiscoveryRef) -> Result<SessionManagerRef> {
+    pub fn from_conf(
+        conf: Config,
+        discovery: ClusterDiscoveryRef,
+        user: UserManagerRef,
+    ) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
 
         catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
@@ -57,6 +63,7 @@ impl SessionManager {
             catalog,
             conf,
             discovery,
+            user,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
@@ -68,6 +75,11 @@ impl SessionManager {
 
     pub fn get_cluster_discovery(self: &Arc<Self>) -> ClusterDiscoveryRef {
         self.discovery.clone()
+    }
+
+    // Get the user api provider.
+    pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
+        self.user.clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
