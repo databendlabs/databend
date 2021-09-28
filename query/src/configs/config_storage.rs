@@ -17,14 +17,16 @@ use std::fmt;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
+use crate::configs::Config;
+
 const DEFAULT_STORAGE_TYPE: &str = "DEFAULT_STORAGE_TYPE";
 
 // DFS Storage env.
-pub const DFS_STORAGE_ADDRESS: &str = "DFS_STORAGE_ADDRESS";
-pub const DFS_STORAGE_USERNAME: &str = "DFS_STORAGE_USERNAME";
-pub const DFS_STORAGE_PASSWORD: &str = "DFS_STORAGE_PASSWORD";
-pub const DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT";
-pub const DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME";
+const DFS_STORAGE_ADDRESS: &str = "DFS_STORAGE_ADDRESS";
+const DFS_STORAGE_USERNAME: &str = "DFS_STORAGE_USERNAME";
+const DFS_STORAGE_PASSWORD: &str = "DFS_STORAGE_PASSWORD";
+const DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT";
+const DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME";
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum StorageType {
@@ -106,5 +108,43 @@ impl StorageConfig {
             default_storage: "disk".to_string(),
             dfs: DfsStorageConfig::default(),
         }
+    }
+
+    pub fn load_from_env(mut_config: &mut Config) {
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            address,
+            String,
+            DFS_STORAGE_ADDRESS
+        );
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            username,
+            String,
+            DFS_STORAGE_USERNAME
+        );
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            password,
+            String,
+            DFS_STORAGE_PASSWORD
+        );
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            rpc_tls_storage_server_root_ca_cert,
+            String,
+            DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT
+        );
+        env_helper!(
+            mut_config.storage,
+            dfs,
+            rpc_tls_storage_service_domain_name,
+            String,
+            DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME
+        );
     }
 }
