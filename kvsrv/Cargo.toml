@@ -72,7 +72,7 @@ axum-server = { version = "0.2", features = ["tls-rustls"] }
 common-kv-api = {path = "../common/kv-apis/api" }
 common-meta-api = {path = "../common/meta-apis/api" }
 
-pretty_assertions = "0.7"
+pretty_assertions = "1.0"
 test-env-log = "0.2.7"
 flaky_test = "0.1"
 maplit = "1.0.2"
