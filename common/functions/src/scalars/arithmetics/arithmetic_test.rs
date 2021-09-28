@@ -176,9 +176,9 @@ fn test_arithmetic_date_interval() -> Result<()> {
         date_time.timestamp() as u32
     };
 
-    let to_days = |y: i32, m: u32, d: u32| -> u32 {
+    let to_days = |y: i32, m: u32, d: u32| -> i32 {
         let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms(0, 0, 1);
-        (date_time.timestamp() / (24 * 3600)) as u32
+        (date_time.timestamp() / (24 * 3600)) as i32
     };
 
     let daytime_to_ms = |days: i64, hour: i64, minute: i64, second: i64| -> i64 {
