@@ -70,12 +70,21 @@ rpc_tls_meta_service_domain_name = \"localhost\"
 [storage]
 default_storage = \"disk\"
 
-[storage.\"storage.dfs\"]
+[storage.dfs]
 address = \"\"
 username = \"\"
 password = \"\"
 rpc_tls_storage_server_root_ca_cert = \"\"
 rpc_tls_storage_service_domain_name = \"\"
+
+[storage.disk]
+data_path = \"\"
+
+[storage.s3]
+region = \"\"
+key = \"\"
+secret = \"\"
+bucket = \"\"
 ";
 
     let tom_actual = toml::to_string(&actual).unwrap();
@@ -100,6 +109,11 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("DFS_STORAGE_ADDRESS", "1.2.3.4:1234");
     std::env::set_var("DFS_STORAGE_USERNAME", "admin");
     std::env::set_var("DFS_STORAGE_PASSWORD", "password!");
+    std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
+    std::env::set_var("S3_STORAGE_REGION", "us.region");
+    std::env::set_var("S3_STORAGE_KEY", "us.key");
+    std::env::set_var("S3_STORAGE_SECRET", "us.secret");
+    std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
     std::env::remove_var("CONFIG_FILE");
 
     let default = Config::default();
@@ -122,6 +136,13 @@ fn test_env_config() -> Result<()> {
     assert_eq!("admin", configured.storage.dfs.username);
     assert_eq!("password!", configured.storage.dfs.password);
 
+    assert_eq!("/tmp/test", configured.storage.disk.data_path);
+
+    assert_eq!("us.region", configured.storage.s3.region);
+    assert_eq!("us.key", configured.storage.s3.key);
+    assert_eq!("us.secret", configured.storage.s3.secret);
+    assert_eq!("us.bucket", configured.storage.s3.bucket);
+
     // clean up
     std::env::remove_var("LOG_LEVEL");
     std::env::remove_var("QUERY_TENANT");
@@ -138,6 +159,11 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("DFS_STORAGE_ADDRESS");
     std::env::remove_var("DFS_STORAGE_USERNAME");
     std::env::remove_var("DFS_STORAGE_PASSWORD");
+    std::env::remove_var("DISK_STORAGE_DATA_PATH");
+    std::env::remove_var("S3_STORAGE_REGION");
+    std::env::remove_var("S3_STORAGE_KEY");
+    std::env::remove_var("S3_STORAGE_SECRET");
+    std::env::remove_var("S3_STORAGE_BUCKET");
     Ok(())
 }
 

@@ -28,6 +28,15 @@ const DFS_STORAGE_PASSWORD: &str = "DFS_STORAGE_PASSWORD";
 const DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "DFS_STORAGE_RPC_TLS_SERVER_ROOT_CA_CERT";
 const DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME";
 
+// Disk Storage env.
+const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
+
+// S3 Storage env.
+const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";
+const S3_STORAGE_KEY: &str = "S3_STORAGE_KEY";
+const S3_STORAGE_SECRET: &str = "S3_STORAGE_SECRET";
+const S3_STORAGE_BUCKET: &str = "S3_STORAGE_BUCKET";
+
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum StorageType {
     Dfs,
@@ -87,6 +96,61 @@ impl fmt::Debug for DfsStorageConfig {
     }
 }
 
+#[derive(
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+)]
+pub struct DiskStorageConfig {
+    #[structopt(long, env = DFS_STORAGE_ADDRESS, default_value = "", help = "Disk storage backend address")]
+    #[serde(default)]
+    pub data_path: String,
+}
+
+impl DiskStorageConfig {
+    pub fn default() -> Self {
+        DiskStorageConfig {
+            data_path: "".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+pub struct S3StorageConfig {
+    #[structopt(long, env = S3_STORAGE_REGION, default_value = "", help = "Region for S3 storage")]
+    #[serde(default)]
+    pub region: String,
+
+    #[structopt(long, env = S3_STORAGE_KEY, default_value = "", help = "Access key for S3 storage")]
+    #[serde(default)]
+    pub key: String,
+
+    #[structopt(long, env = S3_STORAGE_SECRET, default_value = "", help = "Secret key for S3 storage")]
+    #[serde(default)]
+    pub secret: String,
+
+    #[structopt(long, env = S3_STORAGE_BUCKET, default_value = "", help = "S3 Bucket to use for storage")]
+    #[serde(default)]
+    pub bucket: String,
+}
+
+impl S3StorageConfig {
+    pub fn default() -> Self {
+        S3StorageConfig {
+            region: "".to_string(),
+            key: "".to_string(),
+            secret: "".to_string(),
+            bucket: "".to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for S3StorageConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{")?;
+        write!(f, "s3.storage.region: \"{}\", ", self.region)?;
+        write!(f, "}}")
+    }
+}
+
 /// Storage config group.
 /// serde(default) make the toml de to default working.
 #[derive(
@@ -99,8 +163,15 @@ pub struct StorageConfig {
 
     // DFS storage backend config.
     #[structopt(flatten)]
-    #[serde(rename = "storage.dfs")]
     pub dfs: DfsStorageConfig,
+
+    // Disk storage backend config.
+    #[structopt(flatten)]
+    pub disk: DiskStorageConfig,
+
+    // S3 storage backend config.
+    #[structopt(flatten)]
+    pub s3: S3StorageConfig,
 }
 
 impl StorageConfig {
@@ -108,10 +179,13 @@ impl StorageConfig {
         StorageConfig {
             default_storage: "disk".to_string(),
             dfs: DfsStorageConfig::default(),
+            disk: DiskStorageConfig::default(),
+            s3: S3StorageConfig::default(),
         }
     }
 
     pub fn load_from_env(mut_config: &mut Config) {
+        // DFS.
         env_helper!(
             mut_config.storage,
             dfs,
@@ -147,5 +221,20 @@ impl StorageConfig {
             String,
             DFS_STORAGE_RPC_TLS_SERVICE_DOMAIN_NAME
         );
+
+        // DISK.
+        env_helper!(
+            mut_config.storage,
+            disk,
+            data_path,
+            String,
+            DISK_STORAGE_DATA_PATH
+        );
+
+        // S3.
+        env_helper!(mut_config.storage, s3, region, String, S3_STORAGE_REGION);
+        env_helper!(mut_config.storage, s3, key, String, S3_STORAGE_KEY);
+        env_helper!(mut_config.storage, s3, secret, String, S3_STORAGE_SECRET);
+        env_helper!(mut_config.storage, s3, bucket, String, S3_STORAGE_BUCKET);
     }
 }
