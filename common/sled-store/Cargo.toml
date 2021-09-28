@@ -26,5 +26,5 @@ tempfile = "3.2.0"
 common-base = {path = "../base" }
 common-metatypes = {path = "../metatypes"}
 
-pretty_assertions = "0.7"
+pretty_assertions = "1.0"
 

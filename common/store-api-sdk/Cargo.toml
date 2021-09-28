@@ -44,7 +44,7 @@ trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
 async-trait = "0.1"
 
 [dev-dependencies]
-pretty_assertions = "0.7"
+pretty_assertions = "1.0"
 
 [build-dependencies]
 tonic-build = "0.5.2"
