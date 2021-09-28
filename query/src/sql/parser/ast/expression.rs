@@ -98,10 +98,10 @@ pub enum TypeName {
     Varchar(Option<u64>),
     Decimal(Option<u64>, Option<u64>),
     Float(Option<u64>),
-    Int,
-    TinyInt,
-    SmallInt,
-    BigInt,
+    Int(Option<u64>),
+    TinyInt(Option<u64>),
+    SmallInt(Option<u64>),
+    BigInt(Option<u64>),
     Real,
     Double,
     Boolean,
@@ -263,17 +263,29 @@ impl Display for TypeName {
                     write!(f, "({})", p)?;
                 }
             }
-            TypeName::Int => {
+            TypeName::Int(display) => {
                 write!(f, "INTEGER")?;
+                if let Some(d) = display {
+                    write!(f, "({})", d)?;
+                }
             }
-            TypeName::TinyInt => {
+            TypeName::TinyInt(display) => {
                 write!(f, "TINYINT")?;
+                if let Some(d) = display {
+                    write!(f, "({})", d)?;
+                }
             }
-            TypeName::SmallInt => {
+            TypeName::SmallInt(display) => {
                 write!(f, "SMALLINT")?;
+                if let Some(d) = display {
+                    write!(f, "({})", d)?;
+                }
             }
-            TypeName::BigInt => {
+            TypeName::BigInt(display) => {
                 write!(f, "BIGINT")?;
+                if let Some(d) = display {
+                    write!(f, "({})", d)?;
+                }
             }
             TypeName::Real => {
                 write!(f, "REAL")?;

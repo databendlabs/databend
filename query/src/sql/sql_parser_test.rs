@@ -123,7 +123,7 @@ fn create_table() -> Result<()> {
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
-        columns: vec![make_column_def("c1", DataType::Int)],
+        columns: vec![make_column_def("c1", DataType::Int(None))],
         engine: "CSV".to_string(),
         options: vec![SqlOption {
             name: Ident::new("LOCATION".to_string()),
@@ -138,8 +138,8 @@ fn create_table() -> Result<()> {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![
-            make_column_def("c1", DataType::Int),
-            make_column_def("c2", DataType::BigInt),
+            make_column_def("c1", DataType::Int(None)),
+            make_column_def("c2", DataType::BigInt(None)),
             make_column_def("c3", DataType::Varchar(Some(255))),
         ],
         engine: "Parquet".to_string(),
