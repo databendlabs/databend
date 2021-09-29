@@ -15,7 +15,6 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_arrow::arrow::array::Array;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;

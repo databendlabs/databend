@@ -23,10 +23,10 @@ impl SQLCommon {
     /// Maps the SQL type to the corresponding Arrow `DataType`
     pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataType> {
         match sql_type {
-            SQLDataType::BigInt => Ok(DataType::Int64),
-            SQLDataType::Int => Ok(DataType::Int32),
-            SQLDataType::TinyInt => Ok(DataType::Int8),
-            SQLDataType::SmallInt => Ok(DataType::Int16),
+            SQLDataType::BigInt(_) => Ok(DataType::Int64),
+            SQLDataType::Int(_) => Ok(DataType::Int32),
+            SQLDataType::TinyInt(_) => Ok(DataType::Int8),
+            SQLDataType::SmallInt(_) => Ok(DataType::Int16),
             SQLDataType::Char(_) => Ok(DataType::String),
             SQLDataType::Varchar(_) => Ok(DataType::String),
             SQLDataType::String => Ok(DataType::String),
