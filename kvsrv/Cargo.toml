@@ -8,8 +8,8 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "kvsrv"
-path = "src/bin/kvsrv.rs"
+name = "databend-kv"
+path = "src/bin/databend-kv.rs"
 
 [features]
 default = ["simd"]
@@ -18,11 +18,8 @@ simd = ["common-arrow/simd"]
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../common/arrow"}
-common-datablocks = {path = "../common/datablocks"}
-common-datavalues = {path = "../common/datavalues"}
 common-exception = {path = "../common/exception"}
 common-functions = {path = "../common/functions"}
-common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}
 common-planners = {path = "../common/planners"}
 common-raft-store = {path = "../common/raft-store"}
