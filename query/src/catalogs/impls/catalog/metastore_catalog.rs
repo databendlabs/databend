@@ -73,13 +73,18 @@ impl MetaStoreCatalog {
             Arc::new(RemoteMeteStoreClient::create(store_client_provider))
         };
 
-        let plan = CreateDatabasePlan {
-            if_not_exists: true,
-            db: "default".to_string(),
-            engine: DEFAULT_DB_ENGINE.to_string(),
-            options: Default::default(),
-        };
-        meta_backend.create_database(plan)?;
+        // TODO(BohuTANG): now only for local_mode
+        // need meta backend works with databend-kv,
+        // then we can remove the local_mode check.
+        if local_mode {
+            let plan = CreateDatabasePlan {
+                if_not_exists: true,
+                db: "default".to_string(),
+                engine: DEFAULT_DB_ENGINE.to_string(),
+                options: Default::default(),
+            };
+            meta_backend.create_database(plan)?;
+        }
 
         let db_engine_registry = Arc::new(DatabaseEngineRegistry::new());
         let table_engine_registry = Arc::new(TableEngineRegistry::new());
