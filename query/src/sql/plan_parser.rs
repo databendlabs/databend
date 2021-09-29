@@ -766,10 +766,10 @@ impl PlanParser {
                         |mut acc, f_arg| {
                             let item = match f_arg {
                                 FunctionArg::Named { arg, .. } => {
-                                    self.sql_to_rex(&arg, empty_schema.as_ref(), None)?
+                                    self.sql_to_rex(arg, empty_schema.as_ref(), None)?
                                 }
                                 FunctionArg::Unnamed(arg) => {
-                                    self.sql_to_rex(&arg, empty_schema.as_ref(), None)?
+                                    self.sql_to_rex(arg, empty_schema.as_ref(), None)?
                                 }
                             };
                             acc.push(item);
