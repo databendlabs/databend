@@ -32,7 +32,7 @@ log_dir = "./_logs"
 
 # Meta service.
 [meta]
-#meta_address = "0.0.0.0:9191"
+meta_address = "0.0.0.0:28003"
 meta_username = "root"
 meta_password = "root"
 

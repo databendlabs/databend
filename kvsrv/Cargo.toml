@@ -8,7 +8,7 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "kvsrv"
+name = "databend-kv"
 path = "src/bin/kvsrv.rs"
 
 [features]
