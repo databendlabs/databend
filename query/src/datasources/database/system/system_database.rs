@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -23,22 +22,20 @@ use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
-use crate::catalogs::impls::SYS_TBL_ID_BEGIN;
-use crate::catalogs::impls::SYS_TBL_ID_END;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
-use crate::catalogs::TableFunction;
-use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
+use crate::catalogs::SYS_TBL_ID_BEGIN;
+use crate::catalogs::SYS_TBL_ID_END;
 use crate::datasources::database::system;
 
 pub struct SystemDatabase {
+    name: String,
     tables: InMemoryMetas,
-    table_functions: HashMap<String, Arc<TableFunctionMeta>>,
 }
 
 impl SystemDatabase {
-    pub fn create() -> Self {
+    pub fn create(name: impl Into<String>) -> Self {
         let mut id = SYS_TBL_ID_BEGIN;
         let mut next_id = || -> u64 {
             // 10000 table ids reserved for system tables
@@ -51,64 +48,41 @@ impl SystemDatabase {
                 r
             }
         };
+
+        let name = name.into();
+
         // Table list.
         let table_list: Vec<Arc<dyn Table>> = vec![
-            Arc::new(system::OneTable::create()),
-            Arc::new(system::FunctionsTable::create()),
-            Arc::new(system::ContributorsTable::create()),
-            Arc::new(system::CreditsTable::create()),
-            Arc::new(system::EnginesTable::create()),
-            Arc::new(system::SettingsTable::create()),
-            Arc::new(system::NumbersTable::create("numbers")),
-            Arc::new(system::NumbersTable::create("numbers_mt")),
-            Arc::new(system::NumbersTable::create("numbers_local")),
-            Arc::new(system::TablesTable::create()),
-            Arc::new(system::ClustersTable::create()),
-            Arc::new(system::DatabasesTable::create()),
-            Arc::new(system::TracingTable::create()),
-            Arc::new(system::ProcessesTable::create()),
-            Arc::new(system::ConfigsTable::create()),
+            Arc::new(system::OneTable::create(next_id(), &name)),
+            Arc::new(system::FunctionsTable::create(next_id(), &name)),
+            Arc::new(system::ContributorsTable::create(next_id(), &name)),
+            Arc::new(system::CreditsTable::create(next_id(), &name)),
+            Arc::new(system::EnginesTable::create(next_id(), &name)),
+            Arc::new(system::SettingsTable::create(next_id(), &name)),
+            Arc::new(system::TablesTable::create(next_id(), &name)),
+            Arc::new(system::ClustersTable::create(next_id(), &name)),
+            Arc::new(system::DatabasesTable::create(next_id(), &name)),
+            Arc::new(system::TracingTable::create(next_id(), &name)),
+            Arc::new(system::ProcessesTable::create(next_id(), &name)),
+            Arc::new(system::ConfigsTable::create(next_id(), &name)),
         ];
-        let tbl_meta_list = table_list
-            .iter()
-            .map(|t| TableMeta::create(t.clone(), next_id()));
+
+        let tbl_meta_list = table_list.into_iter().map(|t| {
+            let id = t.get_id();
+            TableMeta::create(t, id)
+        });
         let mut tables = InMemoryMetas::create();
         for tbl in tbl_meta_list.into_iter() {
             tables.insert(tbl);
         }
 
-        // Table function list.
-        let table_function_list: Vec<Arc<dyn TableFunction>> = vec![
-            Arc::new(system::NumbersTable::create("numbers")),
-            Arc::new(system::NumbersTable::create("numbers_mt")),
-            Arc::new(system::NumbersTable::create("numbers_local")),
-        ];
-        let mut table_functions = HashMap::default();
-        for tbl_func in table_function_list.iter() {
-            let name = tbl_func.name();
-            table_functions.insert(
-                name.to_string(),
-                Arc::new(TableFunctionMeta::create(
-                    tbl_func.clone(),
-                    tables
-                        .name2meta
-                        .get(name)
-                        .expect("prelude function miss-assemblied")
-                        .meta_id(),
-                )),
-            );
-        }
-
-        SystemDatabase {
-            tables,
-            table_functions,
-        }
+        SystemDatabase { name, tables }
     }
 }
 
 impl Database for SystemDatabase {
     fn name(&self) -> &str {
-        "system"
+        &self.name
     }
 
     fn engine(&self) -> &str {
@@ -145,10 +119,6 @@ impl Database for SystemDatabase {
 
     fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
         Ok(self.tables.name2meta.values().cloned().collect())
-    }
-
-    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
-        Ok(self.table_functions.values().cloned().collect())
     }
 
     fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {

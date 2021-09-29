@@ -21,37 +21,28 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
-use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
+use crate::catalogs::TableInfo;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct MemoryTable {
-    db: String,
-    name: String,
-    schema: DataSchemaRef,
+    tbl_info: TableInfo,
     blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl MemoryTable {
-    pub fn try_create(
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        _options: TableOptions,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
         let table = Self {
-            db,
-            name,
-            schema,
+            tbl_info,
             blocks: Arc::new(RwLock::new(vec![])),
         };
         Ok(Box::new(table))
@@ -61,11 +52,15 @@ impl MemoryTable {
 #[async_trait::async_trait]
 impl Table for MemoryTable {
     fn name(&self) -> &str {
-        &self.name
+        &self.tbl_info.name
+    }
+
+    fn database(&self) -> &str {
+        &self.tbl_info.db
     }
 
     fn engine(&self) -> &str {
-        "Memory"
+        &self.tbl_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -73,7 +68,11 @@ impl Table for MemoryTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.tbl_info.schema.clone())
+    }
+
+    fn get_id(&self) -> u64 {
+        self.tbl_info.table_id
     }
 
     fn is_local(&self) -> bool {
@@ -87,28 +86,32 @@ impl Table for MemoryTable {
     fn read_plan(
         &self,
         ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         let blocks = self.blocks.read();
         let rows = blocks.iter().map(|block| block.num_rows()).sum();
         let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
+        let tbl_info = &self.tbl_info;
+        let db = &tbl_info.db;
         Ok(ReadDataSourcePlan {
-            db: self.db.clone(),
+            db: db.to_string(),
             table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
-            schema: self.schema.clone(),
+            table_id: tbl_info.table_id,
+            table_version: None,
+            schema: tbl_info.schema.clone(),
             parts: generate_parts(
                 0,
                 ctx.get_settings().get_max_threads()?,
                 blocks.len() as u64,
             ),
             statistics: Statistics::new_exact(rows, bytes),
-            description: format!("(Read from Memory Engine table  {}.{})", self.db, self.name),
-            scan_plan: Arc::new(scan.clone()),
+            description: format!("(Read from Memory Engine table  {}.{})", db, self.name()),
+            scan_plan: Default::default(),
             remote: false,
+            tbl_args: None,
+            push_downs,
         })
     }
 
@@ -135,8 +138,7 @@ impl Table for MemoryTable {
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-        // NOTE, currently, schema contains ENGINE... TOBE fixed
-        if insert_plan.schema().as_ref().fields() != self.schema.as_ref().fields() {
+        if insert_plan.schema().as_ref().fields() != self.tbl_info.schema.as_ref().fields() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
         }
 

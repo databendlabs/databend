@@ -15,42 +15,43 @@
 
 use std::any::Any;
 use std::sync::mpsc::channel;
-use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_dfs_api_vo::ReadPlanResult;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
-use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
 use crate::datasources::table_engine::TableEngine;
 use crate::sessions::DatabendQueryContextRef;
 
 #[allow(dead_code)]
 pub struct RemoteTable {
-    pub(crate) db: String,
-    pub(crate) name: String,
-    pub(crate) schema: DataSchemaRef,
+    pub(crate) tbl_info: TableInfo,
     pub(crate) store_api_provider: StoreApiProvider,
 }
 
 #[async_trait::async_trait]
 impl Table for RemoteTable {
     fn name(&self) -> &str {
-        &self.name
+        &self.tbl_info.name
+    }
+
+    fn database(&self) -> &str {
+        &self.tbl_info.db
     }
 
     fn engine(&self) -> &str {
-        "remote"
+        &self.tbl_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -58,7 +59,11 @@ impl Table for RemoteTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.tbl_info.schema.clone())
+    }
+
+    fn get_id(&self) -> u64 {
+        self.tbl_info.table_id
     }
 
     fn is_local(&self) -> bool {
@@ -68,21 +73,20 @@ impl Table for RemoteTable {
     fn read_plan(
         &self,
         ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        // Change this method to async at current stage might be harsh
         let (tx, rx) = channel();
         let cli_provider = self.store_api_provider.clone();
-        let db_name = self.db.clone();
-        let tbl_name = self.name.clone();
+        let db_name = self.tbl_info.db.clone();
+        let tbl_name = self.tbl_info.name.clone();
         {
-            let scan = scan.clone();
+            let push_downs = push_downs.clone();
             ctx.execute_task(async move {
                 match cli_provider.try_get_storage_client().await {
                     Ok(client) => {
                         let parts_info = client
-                            .read_plan(db_name, tbl_name, &scan)
+                            .read_plan(db_name, tbl_name, push_downs)
                             .await
                             .map_err(ErrorCode::from);
                         let _ = tx.send(parts_info);
@@ -96,7 +100,7 @@ impl Table for RemoteTable {
 
         rx.recv()
             .map_err(ErrorCode::from_std_error)?
-            .map(|v| self.partitions_to_plan(v, scan.clone()))
+            .map(|v| self.partitions_to_plan(v, push_downs))
     }
 
     async fn read(
@@ -140,23 +144,19 @@ impl Table for RemoteTable {
 }
 
 impl RemoteTable {
-    pub fn create(
-        db: impl Into<String>,
-        name: impl Into<String>,
-        schema: DataSchemaRef,
-        store_api_provider: StoreApiProvider,
-        _options: TableOptions,
-    ) -> Box<dyn Table> {
+    pub fn create(tbl_info: TableInfo, store_api_provider: StoreApiProvider) -> Box<dyn Table> {
         let table = Self {
-            db: db.into(),
-            name: name.into(),
-            schema,
+            tbl_info,
             store_api_provider,
         };
         Box::new(table)
     }
 
-    fn partitions_to_plan(&self, res: ReadPlanResult, scan_plan: ScanPlan) -> ReadDataSourcePlan {
+    fn partitions_to_plan(
+        &self,
+        res: ReadPlanResult,
+        push_downs: Option<Extras>,
+    ) -> ReadDataSourcePlan {
         let mut partitions = vec![];
         let mut statistics = Statistics {
             read_rows: 0,
@@ -177,32 +177,29 @@ impl RemoteTable {
         }
 
         ReadDataSourcePlan {
-            db: self.db.clone(),
-            table: self.name.clone(),
-            table_id: scan_plan.table_id,
-            table_version: scan_plan.table_version,
-            schema: self.schema.clone(),
+            db: self.tbl_info.db.clone(),
+            table: self.tbl_info.name.clone(),
+            table_id: self.tbl_info.table_id,
+            table_version: None,
+            schema: self.tbl_info.schema.clone(),
             parts: partitions,
             statistics,
             description: "".to_string(),
-            scan_plan: Arc::new(scan_plan),
+            scan_plan: Default::default(),
             remote: true,
+            tbl_args: None,
+            push_downs,
         }
     }
 }
 
-pub struct RemoteTableFactory {}
-
+pub struct RemoteTableFactory;
 impl TableEngine for RemoteTableFactory {
     fn try_create(
         &self,
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        options: TableOptions,
-        store_api_provider: StoreApiProvider,
+        tbl_info: TableInfo,
+        store_provider: StoreApiProvider,
     ) -> Result<Box<dyn Table>> {
-        let tbl = RemoteTable::create(db, name, schema, store_api_provider, options);
-        Ok(tbl)
+        Ok(RemoteTable::create(tbl_info, store_provider))
     }
 }

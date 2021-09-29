@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
@@ -23,17 +22,8 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_planners::TableOptions;
 
-#[derive(Debug)]
-pub struct TableInfo {
-    pub db: String,
-    pub table_id: u64,
-    pub name: String,
-    pub schema: DataSchemaRef,
-    pub engine: String,
-    pub table_option: TableOptions,
-}
+use crate::catalogs::TableInfo;
 
 #[derive(Clone)]
 pub struct DatabaseInfo {

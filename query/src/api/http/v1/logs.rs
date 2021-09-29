@@ -23,7 +23,6 @@ use axum::response::Html;
 use axum::response::IntoResponse;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_planners::ScanPlan;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
@@ -74,8 +73,8 @@ async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataB
     let tracing_table = tracing_table_meta.raw();
     let tracing_table_read_plan = tracing_table.read_plan(
         context.clone(),
-        &ScanPlan::empty(),
-        context.get_settings().get_max_threads()? as usize,
+        None,
+        Some(context.get_settings().get_max_threads()? as usize),
     )?;
 
     tracing_table

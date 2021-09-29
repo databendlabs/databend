@@ -781,8 +781,18 @@ impl PlanScheduler {
     }
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
-        let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
-        let table = table_meta.raw();
+        let table = if plan.tbl_args.is_none() {
+            let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
+            table_meta.raw().clone()
+        } else {
+            let meta = self
+                .query_context
+                .get_table_function(&plan.table, plan.tbl_args.clone())?;
+            meta.raw().clone().as_table()
+        };
+
+        // let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
+        // let table = table_meta.raw();
 
         match table.is_local() {
             true => self.visit_local_data_source(plan),
@@ -842,7 +852,11 @@ impl PlanScheduler {
         let context = self.query_context.clone();
         let settings = context.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
-        table.read_plan(context, node, max_threads * nodes.len())
+        table.read_plan(
+            context,
+            Some(node.push_downs.clone()),
+            Some(max_threads * nodes.len()),
+        )
     }
 
     fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<Partitions> {

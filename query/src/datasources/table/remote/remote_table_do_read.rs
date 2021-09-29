@@ -48,7 +48,7 @@ impl RemoteTable {
             }
         });
 
-        let schema = self.schema.clone();
+        let schema = self.tbl_info.schema.clone();
         let parts = futures::stream::iter(iter);
         let streams = parts.then(move |parts| {
             let client = client.clone();

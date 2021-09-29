@@ -20,33 +20,28 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 use common_planners::Statistics;
-use common_planners::TableOptions;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::catalogs::TableInfo;
 use crate::datasources::common::count_lines;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table::csv::csv_table_stream::CsvTableStream;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct CsvTable {
-    db: String,
-    name: String,
-    schema: DataSchemaRef,
+    tbl_info: TableInfo,
     file: String,
     has_header: bool,
 }
 
 impl CsvTable {
-    pub fn try_create(
-        db: String,
-        name: String,
-        schema: DataSchemaRef,
-        options: TableOptions,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+        let options = &tbl_info.table_option;
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
@@ -58,9 +53,7 @@ impl CsvTable {
         };
 
         Ok(Box::new(Self {
-            db,
-            name,
-            schema,
+            tbl_info,
             file,
             has_header,
         }))
@@ -70,11 +63,15 @@ impl CsvTable {
 #[async_trait::async_trait]
 impl Table for CsvTable {
     fn name(&self) -> &str {
-        &self.name
+        &self.tbl_info.name
+    }
+
+    fn database(&self) -> &str {
+        &self.tbl_info.db
     }
 
     fn engine(&self) -> &str {
-        "CSV"
+        &self.tbl_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -82,7 +79,11 @@ impl Table for CsvTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.tbl_info.schema.clone())
+    }
+
+    fn get_id(&self) -> u64 {
+        self.tbl_info.table_id
     }
 
     fn is_local(&self) -> bool {
@@ -92,28 +93,32 @@ impl Table for CsvTable {
     fn read_plan(
         &self,
         ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        _push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = count_lines(File::open(file.clone())?)?;
 
+        let db = &self.tbl_info.db;
+        let name = &self.tbl_info.name;
         Ok(ReadDataSourcePlan {
-            db: self.db.clone(),
-            table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
-            schema: self.schema.clone(),
+            db: db.to_owned(),
+            table: name.to_owned(),
+            table_id: self.tbl_info.table_id,
+            table_version: None,
+            schema: self.tbl_info.schema.clone(),
             parts: generate_parts(
                 start_line as u64,
                 ctx.get_settings().get_max_threads()?,
                 lines_count as u64,
             ),
             statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", self.db, self.name),
-            scan_plan: Arc::new(scan.clone()),
+            description: format!("(Read from CSV Engine table  {}.{})", db, name),
+            scan_plan: Arc::new(ScanPlan::empty()),
             remote: false,
+            tbl_args: None,
+            push_downs: None,
         })
     }
 
@@ -124,7 +129,7 @@ impl Table for CsvTable {
     ) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(CsvTableStream::try_create(
             ctx,
-            self.schema.clone(),
+            self.tbl_info.schema.clone(),
             self.file.clone(),
         )?))
     }

@@ -43,6 +43,7 @@ use crate::datasources::dal::DataAccessor;
 use crate::datasources::dal::Local;
 use crate::datasources::dal::StorageScheme;
 use crate::datasources::dal::S3;
+use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -158,7 +159,7 @@ impl DatabendQueryContext {
         self.get_catalog().get_table(database, table)
     }
 
-    pub async fn get_table_by_id(
+    pub fn get_table_by_id(
         &self,
         database: &str,
         table_id: MetaId,
@@ -168,8 +169,13 @@ impl DatabendQueryContext {
             .get_table_by_id(database, table_id, table_ver)
     }
 
-    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        self.get_catalog().get_table_function(function_name)
+    pub fn get_table_function(
+        &self,
+        function_name: &str,
+        tbl_args: TableArgs,
+    ) -> Result<Arc<TableFunctionMeta>> {
+        self.get_catalog()
+            .get_table_function(function_name, tbl_args)
     }
 
     pub fn get_id(&self) -> String {

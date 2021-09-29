@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
@@ -23,11 +22,11 @@ use crate::datasources::database::system::ContributorsTable;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_contributors_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
-    let table = ContributorsTable::create();
+    let table = ContributorsTable::create(1, "system");
     let source_plan = table.read_plan(
         ctx.clone(),
-        &ScanPlan::empty(),
-        ctx.get_settings().get_max_threads()? as usize,
+        None,
+        Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;

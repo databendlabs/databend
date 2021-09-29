@@ -13,14 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
@@ -34,6 +33,7 @@ pub struct ExampleTable {
     db: String,
     name: String,
     schema: DataSchemaRef,
+    table_id: u64,
 }
 
 impl ExampleTable {
@@ -43,8 +43,14 @@ impl ExampleTable {
         name: String,
         schema: DataSchemaRef,
         _options: TableOptions,
+        table_id: u64,
     ) -> Result<Box<dyn Table>> {
-        let table = Self { db, name, schema };
+        let table = Self {
+            db,
+            name,
+            schema,
+            table_id,
+        };
         Ok(Box::new(table))
     }
 }
@@ -53,6 +59,10 @@ impl ExampleTable {
 impl Table for ExampleTable {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn database(&self) -> &str {
+        self.db.as_str()
     }
 
     fn engine(&self) -> &str {
@@ -67,6 +77,10 @@ impl Table for ExampleTable {
         Ok(self.schema.clone())
     }
 
+    fn get_id(&self) -> u64 {
+        self.table_id
+    }
+
     fn is_local(&self) -> bool {
         true
     }
@@ -74,14 +88,14 @@ impl Table for ExampleTable {
     fn read_plan(
         &self,
         _ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        _push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
+            table_id: self.table_id,
+            table_version: None,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),
@@ -92,8 +106,10 @@ impl Table for ExampleTable {
                 "(Read from Example Null Engine table  {}.{})",
                 self.db, self.name
             ),
-            scan_plan: Arc::new(scan.clone()),
+            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
             remote: false,
+            tbl_args: None,
+            push_downs: None,
         })
     }
 

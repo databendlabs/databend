@@ -1,16 +1,17 @@
-// Copyright 2020 Datafuse Labs.
+//  Copyright 2021 Datafuse Labs.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+//
 
 use common_base::tokio;
 use common_datavalues::prelude::*;
@@ -18,13 +19,13 @@ use common_exception::Result;
 use common_planners::*;
 use futures::TryStreamExt;
 
-use crate::catalogs::Table;
-use crate::datasources::database::system::NumbersTable;
+use super::NumbersTable;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {
+    let tbl_args = Some(vec![Expression::create_literal(DataValue::UInt64(Some(8)))]);
     let ctx = crate::tests::try_create_context()?;
-    let table = NumbersTable::create("numbers_mt");
+    let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
     let scan = &ScanPlan {
         schema_name: "scan_test".to_string(),
@@ -40,7 +41,8 @@ async fn test_number_table() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let source_plan = table.read_plan(ctx.clone(), scan, partitions)?;
+    let source_plan =
+        table.read_plan(ctx.clone(), Some(scan.push_downs.clone()), Some(partitions))?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;

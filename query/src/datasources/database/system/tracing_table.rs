@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
@@ -21,9 +20,9 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -34,13 +33,17 @@ use crate::datasources::database::system::TracingTableStream;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct TracingTable {
+    table_id: u64,
+    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl TracingTable {
-    pub fn create() -> Self {
+    pub fn create(table_id: u64, db_name: &str) -> Self {
         // {"v":0,"name":"databend-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"databend","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
         TracingTable {
+            table_id,
+            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("v", DataType::Int64, false),
                 DataField::new("name", DataType::String, false),
@@ -60,6 +63,10 @@ impl Table for TracingTable {
         "tracing"
     }
 
+    fn database(&self) -> &str {
+        self.db_name.as_str()
+    }
+
     fn engine(&self) -> &str {
         "SystemTracing"
     }
@@ -72,6 +79,10 @@ impl Table for TracingTable {
         Ok(self.schema.clone())
     }
 
+    fn get_id(&self) -> u64 {
+        self.table_id
+    }
+
     fn is_local(&self) -> bool {
         true
     }
@@ -79,14 +90,14 @@ impl Table for TracingTable {
     fn read_plan(
         &self,
         _ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        _push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
+            table_id: self.table_id,
+            table_version: None,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),
@@ -94,8 +105,10 @@ impl Table for TracingTable {
             }],
             statistics: Statistics::default(),
             description: "(Read from system.tracing table)".to_string(),
-            scan_plan: Arc::new(scan.clone()),
+            scan_plan: Default::default(),
             remote: false,
+            tbl_args: None,
+            push_downs: None,
         })
     }
 
@@ -117,11 +130,13 @@ impl Table for TracingTable {
 
         // Default limit.
         let mut limit = 100000000_usize;
-        let extras = source_plan.get_push_downs();
-        tracing::debug!("read extras:{:?}", extras);
+        let push_downs = &source_plan.push_downs;
+        tracing::debug!("read push_down:{:?}", push_downs);
 
-        if let Some(limit_push_down) = extras.limit {
-            limit = limit_push_down;
+        if let Some(extras) = push_downs {
+            if let Some(limit_push_down) = extras.limit {
+                limit = limit_push_down;
+            }
         }
 
         Ok(Box::pin(TracingTableStream::try_create(

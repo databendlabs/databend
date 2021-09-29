@@ -84,8 +84,9 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                                         PlanNode::Scan(ref dummy_scan_plan) => table
                                             .read_plan(
                                                 self.ctx.clone(),
-                                                dummy_scan_plan,
-                                                self.ctx.get_settings().get_max_threads()? as usize,
+                                                Some(dummy_scan_plan.push_downs.clone()),
+                                                Some(self.ctx.get_settings().get_max_threads()?
+                                                    as usize),
                                             )
                                             .map(PlanNode::ReadSource),
                                         _unreachable_plan => {

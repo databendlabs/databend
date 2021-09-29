@@ -12,16 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 
 use crate::catalogs::Catalog;
 use crate::pipelines::transforms::SourceTransform;
@@ -30,7 +25,6 @@ use crate::tests::try_create_catalog;
 
 pub struct NumberTestData {
     ctx: DatabendQueryContextRef,
-    db: &'static str,
     table: &'static str,
 }
 
@@ -38,32 +32,30 @@ impl NumberTestData {
     pub fn create(ctx: DatabendQueryContextRef) -> Self {
         NumberTestData {
             ctx,
-            db: "system",
             table: "numbers_mt",
         }
     }
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
         let catalog = try_create_catalog()?;
-        catalog.get_table(self.db, self.table)?.raw().schema()
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
+        catalog
+            .get_table_function(self.table, tbl_arg)?
+            .raw()
+            .schema()
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
         let catalog = try_create_catalog()?;
-        let table_meta = catalog.get_table(self.db, self.table)?;
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
+            numbers,
+        )))]);
+        let table_meta = catalog.get_table_function(self.table, tbl_arg)?;
         let table = table_meta.raw();
         table.read_plan(
             self.ctx.clone(),
-            &ScanPlan {
-                schema_name: self.db.to_string(),
-                table_id: table_meta.meta_id(),
-                table_version: table_meta.meta_ver(),
-                table_schema: Arc::new(DataSchema::empty()),
-                table_args: Some(Expression::create_literal(DataValue::Int64(Some(numbers)))),
-                projected_schema: Arc::new(DataSchema::empty()),
-                push_downs: Extras::default(),
-            },
-            self.ctx.get_settings().get_max_threads()? as usize,
+            None,
+            Some(self.ctx.get_settings().get_max_threads()? as usize),
         )
     }
 
