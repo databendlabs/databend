@@ -293,14 +293,14 @@ impl IntervalFunctionFactory {
         let milliseconds_per_day = 24 * 3600 * 1000;
         let res = Self::interval_operation(
             interval.column().to_array()?.i64()?,
-            date32.column().to_array()?.u32()?,
-            |ms: &i64, days: &u32| {
+            date32.column().to_array()?.i32()?,
+            |ms: &i64, days: &i32| {
                 let r = match op {
                     DataValueArithmeticOperator::Plus => {
-                        (*days as i64 + *ms / milliseconds_per_day) as u32
+                        (*days as i64 + *ms / milliseconds_per_day) as i32
                     }
                     DataValueArithmeticOperator::Minus => {
-                        (*days as i64 - *ms / milliseconds_per_day) as u32
+                        (*days as i64 - *ms / milliseconds_per_day) as i32
                     }
                     _ => unreachable!(),
                 };
@@ -419,14 +419,14 @@ impl IntervalFunctionFactory {
     crate::define_month_plus_minus_date!(month_u8_plus_minus_date16, u8, u16);
 
     // date32 functions
-    crate::define_month_plus_minus_date!(month_i64_plus_minus_date32, i64, u32);
-    crate::define_month_plus_minus_date!(month_i32_plus_minus_date32, i32, u32);
-    crate::define_month_plus_minus_date!(month_i16_plus_minus_date32, i16, u32);
-    crate::define_month_plus_minus_date!(month_i8_plus_minus_date32, i8, u32);
-    crate::define_month_plus_minus_date!(month_u64_plus_minus_date32, u64, u32);
-    crate::define_month_plus_minus_date!(month_u32_plus_minus_date32, u32, u32);
-    crate::define_month_plus_minus_date!(month_u16_plus_minus_date32, u16, u32);
-    crate::define_month_plus_minus_date!(month_u8_plus_minus_date32, u8, u32);
+    crate::define_month_plus_minus_date!(month_i64_plus_minus_date32, i64, i32);
+    crate::define_month_plus_minus_date!(month_i32_plus_minus_date32, i32, i32);
+    crate::define_month_plus_minus_date!(month_i16_plus_minus_date32, i16, i32);
+    crate::define_month_plus_minus_date!(month_i8_plus_minus_date32, i8, i32);
+    crate::define_month_plus_minus_date!(month_u64_plus_minus_date32, u64, i32);
+    crate::define_month_plus_minus_date!(month_u32_plus_minus_date32, u32, i32);
+    crate::define_month_plus_minus_date!(month_u16_plus_minus_date32, u16, i32);
+    crate::define_month_plus_minus_date!(month_u8_plus_minus_date32, u8, i32);
 
     crate::define_month_plus_minus_datetime32!(month_i64_plus_minus_datetime32, i64);
     crate::define_month_plus_minus_datetime32!(month_i32_plus_minus_datetime32, i32);
@@ -498,14 +498,14 @@ impl IntervalFunctionFactory {
     crate::define_time_secs_plus_minus_date!(time_secs_u8_plus_minus_date16, u8, u16);
 
     // date32 functions
-    crate::define_time_secs_plus_minus_date!(time_secs_i64_plus_minus_date32, i64, u32);
-    crate::define_time_secs_plus_minus_date!(time_secs_i32_plus_minus_date32, i32, u32);
-    crate::define_time_secs_plus_minus_date!(time_secs_i16_plus_minus_date32, i16, u32);
-    crate::define_time_secs_plus_minus_date!(time_secs_i8_plus_minus_date32, i8, u32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u64_plus_minus_date32, u64, u32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u32_plus_minus_date32, u32, u32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u16_plus_minus_date32, u16, u32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u8_plus_minus_date32, u8, u32);
+    crate::define_time_secs_plus_minus_date!(time_secs_i64_plus_minus_date32, i64, i32);
+    crate::define_time_secs_plus_minus_date!(time_secs_i32_plus_minus_date32, i32, i32);
+    crate::define_time_secs_plus_minus_date!(time_secs_i16_plus_minus_date32, i16, i32);
+    crate::define_time_secs_plus_minus_date!(time_secs_i8_plus_minus_date32, i8, i32);
+    crate::define_time_secs_plus_minus_date!(time_secs_u64_plus_minus_date32, u64, i32);
+    crate::define_time_secs_plus_minus_date!(time_secs_u32_plus_minus_date32, u32, i32);
+    crate::define_time_secs_plus_minus_date!(time_secs_u16_plus_minus_date32, u16, i32);
+    crate::define_time_secs_plus_minus_date!(time_secs_u8_plus_minus_date32, u8, i32);
 
     crate::define_time_secs_plus_minus_datetime32!(time_secs_i64_plus_minus_datetime32, i64);
     crate::define_time_secs_plus_minus_datetime32!(time_secs_i32_plus_minus_datetime32, i32);

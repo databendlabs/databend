@@ -134,13 +134,13 @@ where
             },
             DataType::Date32 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
-                    let date_time = Utc.timestamp(v.as_u64()? as i64 * 24 * 3600, 0_u32);
+                    let date_time = Utc.timestamp(v.as_i64()?  * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time, mode);
                     Ok(DataColumn::Constant(constant_result, input_rows))
                 } else {
                     let result = columns[0].column()
                         .to_array()?
-                        .u32()?
+                        .i32()?
                         .apply_cast_numeric(|v| {
                             let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                             T::to_number(date_time, mode)
@@ -151,7 +151,7 @@ where
             },
             DataType::DateTime32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
-                    let date_time = Utc.timestamp(v.as_u64()? as i64, 0_u32);
+                    let date_time = Utc.timestamp(v.as_i64()?, 0_u32);
                     let constant_result = T::to_constant_value(date_time, mode);
                     Ok(DataColumn::Constant(constant_result, input_rows))
                 } else {

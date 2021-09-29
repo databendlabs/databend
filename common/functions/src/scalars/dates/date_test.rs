@@ -93,9 +93,6 @@ fn do_test(t: Test) -> Result<()> {
     //Eq check
     let v = func.eval(&columns, rows)?;
     let expect: DataColumn = t.expect.into();
-    for val in v.to_values()? {
-        println!("{}", val);
-    }
     assert_eq!(&expect, &v);
     Ok(())
 }

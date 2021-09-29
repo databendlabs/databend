@@ -37,7 +37,7 @@ pub enum DataType {
     /// in days (16 bits), it's physical type is UInt16
     Date16,
     /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in days (32 bits), it's physical type is UInt32
+    /// in days (32 bits), it's physical type is Int32
     Date32,
 
     /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
@@ -91,7 +91,7 @@ impl DataType {
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
             Date16 => ArrowDataType::UInt16,
-            Date32 => ArrowDataType::UInt32,
+            Date32 => ArrowDataType::Int32,
             // we don't use DataType::Extension because extension types are not supported in parquet
             DateTime32(_) => ArrowDataType::UInt32,
             List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),

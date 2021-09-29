@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
@@ -49,8 +50,14 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::DateTime32(None))
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        match args[0] {
+            DataType::DateTime32(_) => Ok(DataType::DateTime32(None)),
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "Function {} must have a DateTime type as argument, but got {}",
+                self.display_name, args[0],
+            ))),
+        }
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
