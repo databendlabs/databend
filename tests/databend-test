@@ -184,7 +184,7 @@ def run_tests_array(all_tests_with_params):
             else:
                 status = "{0:72}".format(name + ": ")
 
-            if args.skip and any(s in name for s in args.skip):
+            if args.skip and any([re.search(r, case) for r in args.skip]):
                 status += MSG_SKIPPED + " - skip\n"
                 skipped_total += 1
             else:
