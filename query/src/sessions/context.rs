@@ -26,7 +26,6 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
-use common_planners::Expression;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -44,6 +43,7 @@ use crate::datasources::dal::DataAccessor;
 use crate::datasources::dal::Local;
 use crate::datasources::dal::StorageScheme;
 use crate::datasources::dal::S3;
+use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -172,7 +172,7 @@ impl DatabendQueryContext {
     pub fn get_table_function(
         &self,
         function_name: &str,
-        tbl_args: Option<Expression>,
+        tbl_args: TableArgs,
     ) -> Result<Arc<TableFunctionMeta>> {
         self.get_catalog()
             .get_table_function(function_name, tbl_args)

@@ -21,7 +21,6 @@ use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
-use common_planners::Expression;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
@@ -29,6 +28,7 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
+use crate::datasources::table_func_engine::TableArgs;
 use crate::datasources::table_func_engine::TableFuncEngine;
 use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 
@@ -126,7 +126,7 @@ impl Catalog for OverlaidCatalog {
     fn get_table_function(
         &self,
         func_name: &str,
-        tbl_args: Option<Expression>,
+        tbl_args: TableArgs,
     ) -> common_exception::Result<Arc<TableFunctionMeta>> {
         let (id, factory) = self.func_engine_registry.get(func_name).ok_or_else(|| {
             ErrorCode::UnknownTable(format!("unknown table function {}", func_name))

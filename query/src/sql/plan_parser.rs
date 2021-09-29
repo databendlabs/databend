@@ -772,7 +772,7 @@ impl PlanParser {
 
                     let func_meta = self
                         .ctx
-                        .get_table_function(&table_name, table_args.clone())?;
+                        .get_table_function(&table_name, table_args.clone().map(|v| vec![v]))?;
                     meta_id = func_meta.meta_id();
                     meta_version = func_meta.meta_ver();
                     let table_function = func_meta.raw().clone();

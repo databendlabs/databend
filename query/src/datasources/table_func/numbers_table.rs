@@ -34,6 +34,7 @@ use super::numbers_stream::NumbersStream;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::common::generate_parts;
+use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct NumbersTable {
@@ -49,17 +50,21 @@ impl NumbersTable {
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
-        table_args: Option<Expression>,
+        table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut total = None;
-        if let Some(Expression::Literal { value, .. }) = &table_args {
-            total = Some(value.as_u64()?);
+        if let Some(args) = &table_args {
+            if args.len() == 1 {
+                let arg = &args[0];
+                if let Expression::Literal { value, .. } = arg {
+                    total = Some(value.as_u64()?);
+                }
+            }
         }
 
         let total = total.ok_or_else(|| {
-            eprintln!("NumbersTable: creation failed");
             ErrorCode::BadArguments(format!(
-                "Must have one number argument for table: system.{}",
+                "Must have exactly one number argument for table function.{}",
                 &table_func_name
             ))
         })?;
@@ -127,9 +132,9 @@ impl Table for NumbersTable {
         ctx.try_set_statistics(&statistics)?;
         ctx.add_total_rows_approx(statistics.read_rows);
 
-        let tbl_arg = Some(Expression::create_literal(DataValue::UInt64(Some(
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::UInt64(Some(
             self.total,
-        ))));
+        )))]);
 
         Ok(ReadDataSourcePlan {
             db: self.db_name.clone(),

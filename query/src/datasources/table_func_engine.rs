@@ -20,24 +20,21 @@ use common_planners::Expression;
 
 use crate::catalogs::TableFunction;
 
+pub type TableArgs = Option<Vec<Expression>>;
+
 pub trait TableFuncEngine: Send + Sync {
     fn try_create(
         &self,
         db_name: &str,
         tbl_func_name: &str,
         tbl_id: MetaId,
-        arg: Option<Expression>,
+        arg: TableArgs,
     ) -> common_exception::Result<Arc<dyn TableFunction>>;
 }
 
 impl<T> TableFuncEngine for T
 where
-    T: Fn(
-        &str,
-        &str,
-        MetaId,
-        Option<Expression>,
-    ) -> common_exception::Result<Arc<dyn TableFunction>>,
+    T: Fn(&str, &str, MetaId, TableArgs) -> common_exception::Result<Arc<dyn TableFunction>>,
     T: Send + Sync,
 {
     fn try_create(
@@ -45,7 +42,7 @@ where
         db_name: &str,
         tbl_func_name: &str,
         tbl_id: MetaId,
-        arg: Option<Expression>,
+        arg: TableArgs,
     ) -> common_exception::Result<Arc<dyn TableFunction>> {
         self(db_name, tbl_func_name, tbl_id, arg)
     }

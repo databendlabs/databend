@@ -19,13 +19,13 @@ use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
-use common_planners::Expression;
 
 use crate::catalogs::Database;
 use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
+use crate::datasources::table_func_engine::TableArgs;
 
 /// Catalog is the global view of all the databases of the user.
 /// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
@@ -59,7 +59,7 @@ pub trait Catalog {
     fn get_table_function(
         &self,
         _func_name: &str,
-        _tbl_args: Option<Expression>,
+        _tbl_args: TableArgs,
     ) -> Result<Arc<TableFunctionMeta>> {
         unimplemented!()
     }

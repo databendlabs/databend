@@ -38,7 +38,7 @@ impl NumberTestData {
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
         let catalog = try_create_catalog()?;
-        let tbl_arg = Some(Expression::create_literal(DataValue::Int64(Some(1))));
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
         catalog
             .get_table_function(self.table, tbl_arg)?
             .raw()
@@ -47,7 +47,9 @@ impl NumberTestData {
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
         let catalog = try_create_catalog()?;
-        let tbl_arg = Some(Expression::create_literal(DataValue::Int64(Some(numbers))));
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
+            numbers,
+        )))]);
         let table_meta = catalog.get_table_function(self.table, tbl_arg)?;
         let table = table_meta.raw();
         table.read_plan(

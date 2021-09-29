@@ -27,8 +27,7 @@ async fn test_datasource() -> Result<()> {
     let catalog = try_create_catalog()?;
 
     // Table check.
-    let tbl_arg = Some(Expression::create_literal(DataValue::Int64(Some(1))));
-    //    catalog.get_table("system", "numbers_mt")?;
+    let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
     catalog.get_table_function("numbers_mt", tbl_arg)?;
     if let Err(e) = catalog.get_table("system", "numbersxx") {
         let expect = "Code: 25, displayText = Unknown table: \'numbersxx\'.";

@@ -41,7 +41,7 @@ pub struct ReadDataSourcePlan {
     pub scan_plan: Arc<ScanPlan>,
     pub remote: bool,
 
-    pub tbl_args: Option<Expression>,
+    pub tbl_args: Option<Vec<Expression>>,
     pub push_downs: Option<Extras>,
 }
 
