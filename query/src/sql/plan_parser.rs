@@ -747,7 +747,7 @@ impl PlanParser {
                     db_name = name.0[0].to_string();
                     table_name = name.0[1].to_string();
                 }
-                let mut table_args = None;
+                let table_args = None;
                 let meta_id;
                 let meta_version;
                 let table;
@@ -761,18 +761,23 @@ impl PlanParser {
                     }
 
                     let empty_schema = Arc::new(DataSchema::empty());
-                    match &args[0] {
-                        FunctionArg::Named { arg, .. } => {
-                            table_args = Some(self.sql_to_rex(arg, empty_schema.as_ref(), None)?);
-                        }
-                        FunctionArg::Unnamed(arg) => {
-                            table_args = Some(self.sql_to_rex(arg, empty_schema.as_ref(), None)?);
-                        }
-                    }
+                    let table_args = args.iter().try_fold(
+                        Vec::with_capacity(args.len()),
+                        |mut acc, f_arg| {
+                            let item = match f_arg {
+                                FunctionArg::Named { arg, .. } => {
+                                    self.sql_to_rex(&arg, empty_schema.as_ref(), None)?
+                                }
+                                FunctionArg::Unnamed(arg) => {
+                                    self.sql_to_rex(&arg, empty_schema.as_ref(), None)?
+                                }
+                            };
+                            acc.push(item);
+                            Ok::<_, ErrorCode>(acc)
+                        },
+                    )?;
 
-                    let func_meta = self
-                        .ctx
-                        .get_table_function(&table_name, table_args.clone().map(|v| vec![v]))?;
+                    let func_meta = self.ctx.get_table_function(&table_name, Some(table_args))?;
                     meta_id = func_meta.meta_id();
                     meta_version = func_meta.meta_ver();
                     let table_function = func_meta.raw().clone();
