@@ -33,8 +33,8 @@ const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
 
 // S3 Storage env.
 const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";
-const S3_STORAGE_KEY: &str = "S3_STORAGE_KEY";
-const S3_STORAGE_SECRET: &str = "S3_STORAGE_SECRET";
+const S3_STORAGE_ACCESS_KEY_ID: &str = "S3_STORAGE_ACCESS_KEY_ID";
+const S3_STORAGE_SECRET_ACCESS_KEY: &str = "S3_STORAGE_SECRET_ACCESS_KEY";
 const S3_STORAGE_BUCKET: &str = "S3_STORAGE_BUCKET";
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -119,13 +119,13 @@ pub struct S3StorageConfig {
     #[serde(default)]
     pub region: String,
 
-    #[structopt(long, env = S3_STORAGE_KEY, default_value = "", help = "Access key for S3 storage")]
+    #[structopt(long, env = S3_STORAGE_ACCESS_KEY_ID, default_value = "", help = "Access key for S3 storage")]
     #[serde(default)]
-    pub key: String,
+    pub access_key_id: String,
 
-    #[structopt(long, env = S3_STORAGE_SECRET, default_value = "", help = "Secret key for S3 storage")]
+    #[structopt(long, env = S3_STORAGE_SECRET_ACCESS_KEY, default_value = "", help = "Secret key for S3 storage")]
     #[serde(default)]
-    pub secret: String,
+    pub secret_access_key: String,
 
     #[structopt(long, env = S3_STORAGE_BUCKET, default_value = "", help = "S3 Bucket to use for storage")]
     #[serde(default)]
@@ -136,8 +136,8 @@ impl S3StorageConfig {
     pub fn default() -> Self {
         S3StorageConfig {
             region: "".to_string(),
-            key: "".to_string(),
-            secret: "".to_string(),
+            access_key_id: "".to_string(),
+            secret_access_key: "".to_string(),
             bucket: "".to_string(),
         }
     }
@@ -235,8 +235,20 @@ impl StorageConfig {
 
         // S3.
         env_helper!(mut_config.storage, s3, region, String, S3_STORAGE_REGION);
-        env_helper!(mut_config.storage, s3, key, String, S3_STORAGE_KEY);
-        env_helper!(mut_config.storage, s3, secret, String, S3_STORAGE_SECRET);
+        env_helper!(
+            mut_config.storage,
+            s3,
+            access_key_id,
+            String,
+            S3_STORAGE_ACCESS_KEY_ID
+        );
+        env_helper!(
+            mut_config.storage,
+            s3,
+            secret_access_key,
+            String,
+            S3_STORAGE_SECRET_ACCESS_KEY
+        );
         env_helper!(mut_config.storage, s3, bucket, String, S3_STORAGE_BUCKET);
     }
 }

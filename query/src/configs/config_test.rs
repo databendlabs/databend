@@ -82,8 +82,8 @@ data_path = \"\"
 
 [storage.s3]
 region = \"\"
-key = \"\"
-secret = \"\"
+access_key_id = \"\"
+secret_access_key = \"\"
 bucket = \"\"
 ";
 
@@ -112,8 +112,8 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("DFS_STORAGE_PASSWORD", "password!");
     std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
     std::env::set_var("S3_STORAGE_REGION", "us.region");
-    std::env::set_var("S3_STORAGE_KEY", "us.key");
-    std::env::set_var("S3_STORAGE_SECRET", "us.secret");
+    std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
+    std::env::set_var("S3_STORAGE_SECRET_ACCESS_KEY", "us.key");
     std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
     std::env::remove_var("CONFIG_FILE");
 
@@ -142,8 +142,8 @@ fn test_env_config() -> Result<()> {
     assert_eq!("/tmp/test", configured.storage.disk.data_path);
 
     assert_eq!("us.region", configured.storage.s3.region);
-    assert_eq!("us.key", configured.storage.s3.key);
-    assert_eq!("us.secret", configured.storage.s3.secret);
+    assert_eq!("us.key.id", configured.storage.s3.access_key_id);
+    assert_eq!("us.key", configured.storage.s3.secret_access_key);
     assert_eq!("us.bucket", configured.storage.s3.bucket);
 
     // clean up
@@ -165,8 +165,8 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("DFS_STORAGE_PASSWORD");
     std::env::remove_var("DISK_STORAGE_DATA_PATH");
     std::env::remove_var("S3_STORAGE_REGION");
-    std::env::remove_var("S3_STORAGE_KEY");
-    std::env::remove_var("S3_STORAGE_SECRET");
+    std::env::remove_var("S3_STORAGE_ACCESS_KEY_ID");
+    std::env::remove_var("S3_STORAGE_SECRET_ACCESS_KEY");
     std::env::remove_var("S3_STORAGE_BUCKET");
     Ok(())
 }
