@@ -16,6 +16,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_metatypes::MetaId;
+
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::datasources::table_func::NumbersTable;
@@ -24,7 +26,7 @@ use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 
 pub fn prelude_func_engines() -> TableFuncEngineRegistry {
     let mut id = SYS_TBL_FUNC_ID_BEGIN;
-    let mut next_id = || -> u64 {
+    let mut next_id = || -> MetaId {
         if id >= SYS_TBL_FUC_ID_END {
             panic!("function table id used up")
         } else {

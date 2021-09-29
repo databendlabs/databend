@@ -16,6 +16,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_metatypes::MetaId;
+
 use crate::datasources::table_func_engine::TableFuncEngine;
 
-pub type TableFuncEngineRegistry = HashMap<String, (u64, Arc<dyn TableFuncEngine>)>;
+pub type TableFuncEngineRegistry = HashMap<String, (MetaId, Arc<dyn TableFuncEngine>)>;

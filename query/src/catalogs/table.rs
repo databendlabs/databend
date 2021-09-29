@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_metatypes::MetaId;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
@@ -33,7 +34,7 @@ pub trait Table: Sync + Send {
     fn engine(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
     fn schema(&self) -> Result<DataSchemaRef>;
-    fn get_id(&self) -> u64; // should we use MetaId?
+    fn get_id(&self) -> MetaId;
     fn is_local(&self) -> bool;
 
     // Some tables may have internal states, like MemoryTable

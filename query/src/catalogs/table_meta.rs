@@ -21,9 +21,7 @@ use common_metatypes::MetaVersion;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 
-//#[deprecated]
 pub type TableMeta = Meta<Arc<dyn Table>>;
-//#[deprecated]
 pub type TableFunctionMeta = Meta<Arc<dyn TableFunction>>;
 
 /// The wrapper of the T with meta version.
