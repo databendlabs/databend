@@ -19,8 +19,6 @@ use crate::RpcClientTlsConfig;
 pub struct StoreClientConf {
     pub meta_service_config: ClientConf,
     pub kv_service_config: ClientConf,
-    // deprecated, should be replace by FuseDFS config
-    pub block_service_config: ClientConf,
 }
 
 #[derive(Clone, Debug, Default)]

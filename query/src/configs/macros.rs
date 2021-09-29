@@ -12,22 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod macros;
-
-#[cfg(test)]
-mod config_test;
-
-mod config;
-mod config_log;
-mod config_meta;
-mod config_query;
-mod config_storage;
-
-pub use common_store_api_sdk::RpcClientTlsConfig;
-pub use config::Config;
-pub use config::DATABEND_COMMIT_VERSION;
-pub use config_log::LogConfig;
-pub use config_meta::MetaConfig;
-pub use config_query::QueryConfig;
-pub use config_storage::StorageConfig;
+macro_rules! env_helper {
+    ($config:expr, $struct: tt, $field:tt, $field_type: ty, $env:expr) => {
+        let env_var = std::env::var_os($env)
+            .unwrap_or($config.$struct.$field.to_string().into())
+            .into_string()
+            .expect(format!("cannot convert {} to string", $env).as_str());
+        $config.$struct.$field = env_var
+            .parse::<$field_type>()
+            .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
+    };
+}

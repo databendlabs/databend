@@ -23,22 +23,6 @@ use crate::configs::Config;
 // we provide a converter for it -- just copy things around
 impl From<&Config> for StoreClientConf {
     fn from(conf: &Config) -> Self {
-        let tls_conf = if conf.tls_store_cli_enabled() {
-            Some(RpcClientTlsConfig {
-                rpc_tls_server_root_ca_cert: conf.store.rpc_tls_store_server_root_ca_cert.clone(),
-                domain_name: conf.store.rpc_tls_store_service_domain_name.clone(),
-            })
-        } else {
-            None
-        };
-
-        let config = ClientConf {
-            address: conf.store.store_address.clone(),
-            username: conf.store.store_username.clone(),
-            password: conf.store.store_password.clone(),
-            tls_conf,
-        };
-
         let meta_tls_conf = if conf.tls_meta_cli_enabled() {
             Some(RpcClientTlsConfig {
                 rpc_tls_server_root_ca_cert: conf.meta.rpc_tls_meta_server_root_ca_cert.clone(),
@@ -58,7 +42,6 @@ impl From<&Config> for StoreClientConf {
         StoreClientConf {
             // kv service is configured by conf.meta
             kv_service_config: meta_config.clone(),
-            block_service_config: config,
             // copy meta config from query config
             meta_service_config: meta_config,
         }

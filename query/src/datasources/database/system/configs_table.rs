@@ -156,17 +156,6 @@ impl Table for ConfigsTable {
             meta_config_value,
         );
 
-        let store_config = config.store;
-        let store_config_value = serde_json::to_value(store_config)?;
-        ConfigsTable::extract_config(
-            &mut names,
-            &mut values,
-            &mut groups,
-            &mut descs,
-            "dfs".to_string(),
-            store_config_value,
-        );
-
         let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();
         let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
