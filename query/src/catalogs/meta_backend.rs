@@ -17,14 +17,13 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api_vo::DatabaseInfo;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-
-use crate::catalogs::TableInfo;
 
 pub trait MetaBackend: Send + Sync {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>>;

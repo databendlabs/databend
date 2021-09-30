@@ -13,8 +13,9 @@
 //  limitations under the License.
 //
 
+use common_meta_api_vo::TableInfo;
+
 use crate::catalogs::Table;
-use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
 
 // TODO maybe we should introduce a

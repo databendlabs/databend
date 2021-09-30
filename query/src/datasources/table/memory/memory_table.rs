@@ -21,6 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_api_vo::TableInfo;
 use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -29,7 +30,6 @@ use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
-use crate::catalogs::TableInfo;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
 use crate::sessions::DatabendQueryContextRef;

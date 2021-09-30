@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api_vo::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
@@ -31,7 +32,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::catalogs::Table;
-use crate::catalogs::TableInfo;
 use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;

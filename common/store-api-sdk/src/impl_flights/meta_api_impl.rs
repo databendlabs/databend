@@ -67,11 +67,7 @@ impl MetaApi for StoreClient {
     }
 
     /// Get table.
-    async fn get_table(
-        &self,
-        db: String,
-        table: String,
-    ) -> common_exception::Result<GetTableActionResult> {
+    async fn get_table(&self, db: String, table: String) -> common_exception::Result<TableInfo> {
         self.do_action(GetTableAction { db, table }).await
     }
 
@@ -79,7 +75,7 @@ impl MetaApi for StoreClient {
         &self,
         tbl_id: MetaId,
         tbl_ver: Option<MetaVersion>,
-    ) -> common_exception::Result<GetTableActionResult> {
+    ) -> common_exception::Result<TableInfo> {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
     }
 
@@ -150,22 +146,14 @@ pub struct GetTableAction {
     pub db: String,
     pub table: String,
 }
-action_declare!(
-    GetTableAction,
-    GetTableActionResult,
-    StoreDoAction::GetTable
-);
+action_declare!(GetTableAction, TableInfo, StoreDoAction::GetTable);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableExtReq {
     pub tbl_id: MetaId,
     pub tbl_ver: Option<MetaVersion>,
 }
-action_declare!(
-    GetTableExtReq,
-    GetTableActionResult,
-    StoreDoAction::GetTableExt
-);
+action_declare!(GetTableExtReq, TableInfo, StoreDoAction::GetTableExt);
 
 // - get database meta
 

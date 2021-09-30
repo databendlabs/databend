@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_meta_api_vo::DatabaseInfo;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -36,7 +37,6 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
 
 type CatalogTable = common_metatypes::Table;
@@ -83,7 +83,7 @@ impl RemoteMeteStoreClient {
             table_id: t_id,
             name: t_name.to_owned(),
             schema: Arc::new(schema),
-            table_option: tbl.table_options.clone(),
+            options: tbl.table_options.clone(),
             engine: tbl.table_engine.clone(),
         };
         Ok(info)
@@ -111,7 +111,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             name: reply.name.clone(),
             schema: reply.schema,
             engine: reply.engine,
-            table_option: reply.options,
+            options: reply.options,
         };
         Ok(Arc::new(table_info))
     }
@@ -144,7 +144,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             name: reply.name.clone(),
             schema: reply.schema.clone(),
             engine: reply.engine.clone(),
-            table_option: reply.options.clone(),
+            options: reply.options.clone(),
         };
 
         let mut cache = self.table_meta_cache.lock();
