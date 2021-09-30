@@ -33,7 +33,7 @@ pub struct DatabaseInfo {
 
 pub trait MetaBackend: Send + Sync {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>>;
-    fn exist_table(&self, db_name: &str, table_name: &str) -> Result<bool>;
+
     fn get_table_by_id(
         &self,
         db_name: &str,

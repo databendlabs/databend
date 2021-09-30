@@ -96,14 +96,6 @@ impl MetaBackend for EmbeddedMetaBackend {
         }
     }
 
-    fn exist_table(&self, db_name: &str, table_name: &str) -> common_exception::Result<bool> {
-        let res = self.get_table(db_name, table_name);
-        match res {
-            Ok(_) => Ok(true),
-            _ => Ok(false),
-        }
-    }
-
     fn get_table_by_id(
         &self,
         db_name: &str,
