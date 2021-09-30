@@ -8,8 +8,8 @@ publish = false
 edition = "2021"
 
 [[bin]]
-name = "kvsrv"
-path = "src/bin/kvsrv.rs"
+name = "databend-meta"
+path = "src/bin/metasrv.rs"
 
 [features]
 default = ["simd"]
@@ -31,6 +31,7 @@ common-sled-store = {path = "../common/sled-store"}
 common-store-api-sdk = {path = "../common/store-api-sdk"}
 common-tracing = {path = "../common/tracing"}
 common-kv-api-vo = {path = "../common/kv-apis/vo" }
+common-meta-api-vo = {path = "../common/meta-apis/vo" }
 
 # Github dependencies
 

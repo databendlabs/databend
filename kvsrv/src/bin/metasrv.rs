@@ -31,14 +31,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .init();
 
     let _guards = init_tracing_with_file(
-        "databend-kvsrv",
+        "databend-meta",
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
     );
 
     info!("{:?}", conf.clone());
     info!(
-        "Databend-kvsrv v-{}",
+        "Databend-meta v-{}",
         *kvsrv::configs::config::DATABEND_COMMIT_VERSION
     );
 
@@ -66,10 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let srv = FlightServer::create(conf.clone());
         info!(
-            "Databend-kvsrv API server listening on {}",
+            "Databend-meta API server listening on {}",
             conf.flight_api_address
         );
-        let (_stop_tx, fin_rx) = srv.start().await.expect("Databend-kvsrv service error");
+        let (_stop_tx, fin_rx) = srv.start().await.expect("Databend-meta service error");
         fin_rx.await?;
     }
 
