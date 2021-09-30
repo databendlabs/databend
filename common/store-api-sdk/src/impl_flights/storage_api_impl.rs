@@ -44,17 +44,6 @@ pub use crate::impl_flights::storage_api_impl_utils::get_meta;
 use crate::StoreClient;
 use crate::StoreDoGet;
 
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-// pub struct TruncateTableAction {
-//     pub db: String,
-//     pub table: String,
-// }
-// action_declare!(
-//     TruncateTableAction,
-//     TruncateTableResult,
-//     StoreDoAction::TruncateTable
-// );
-
 #[async_trait::async_trait]
 impl StorageApi for StoreClient {
     async fn read_partition(
@@ -136,12 +125,4 @@ impl StorageApi for StoreClient {
             None => Err(ErrorCode::UnknownException("Put result is empty")),
         }
     }
-
-    // async fn truncate(
-    //     &self,
-    //     db: String,
-    //     table: String,
-    // ) -> common_exception::Result<TruncateTableResult> {
-    //     self.do_action(TruncateTableAction { db, table }).await
-    // }
 }

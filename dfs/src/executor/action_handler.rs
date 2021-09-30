@@ -106,10 +106,6 @@ impl ActionHandler {
             StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetTables(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
-            // StoreDoAction::TruncateTable(a) => s.serialize(self.handle(a).await?),
-
-            // part
-            // StoreDoAction::ReadPlan(a) => s.serialize(self.handle(a).await?),
 
             // general-purpose kv
             StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),

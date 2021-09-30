@@ -92,8 +92,6 @@ pub enum Cmd {
         /// Meta data of a value.
         value_meta: Option<KVMeta>,
     },
-    // /// Truncate Table
-    // TruncateTable { db_name: String, table_name: String },
 }
 
 impl fmt::Display for Cmd {
@@ -159,12 +157,7 @@ impl fmt::Display for Cmd {
                     "upsert_kv: {}({:?}) = {:?} ({:?})",
                     key, seq, value, value_meta
                 )
-            } // Cmd::TruncateTable {
-              //     db_name,
-              //     table_name,
-              // } => {
-              //     write!(f, "truncate table:{}-{}", db_name, table_name)
-              // }
+            }
         }
     }
 }
