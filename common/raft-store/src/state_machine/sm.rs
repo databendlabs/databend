@@ -566,21 +566,7 @@ impl StateMachine {
 
                 tracing::debug!("applied UpsertKV: {} {:?}", key, result);
                 Ok((prev, result).into())
-            } // Cmd::TruncateTable {
-              //     ref db_name,
-              //     ref table_name,
-              // } => {
-              //     let db = self.databases.get_mut(db_name).unwrap();
-              //     let tbl_id = db.tables.get(table_name);
-              //     if let Some(tbl_id) = tbl_id {
-              //         let _tbl_id = tbl_id.to_owned();
-              //         let pre_data_parts_count = self.get_data_parts_count(db_name, table_name);
-              //         tracing::debug!("applied TruncateTable: {}", table_name);
-              //         Ok((Some(pre_data_parts_count), Some(0_usize)).into())
-              //     } else {
-              //         Ok((None::<usize>, None::<usize>).into())
-              //     }
-              // }
+            }
         }
     }
 

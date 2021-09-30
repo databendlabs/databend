@@ -113,7 +113,7 @@ impl Table for RemoteTable {
         _ctx: DatabendQueryContextRef,
         _plan: TruncateTablePlan,
     ) -> Result<()> {
-        Ok(())
+        todo!()
     }
 }
 
@@ -125,46 +125,6 @@ impl RemoteTable {
         };
         Box::new(table)
     }
-
-    // fn partitions_to_plan(
-    //     &self,
-    //     res: ReadPlanResult,
-    //     push_downs: Option<Extras>,
-    // ) -> ReadDataSourcePlan {
-    //     let mut partitions = vec![];
-    //     let mut statistics = Statistics {
-    //         read_rows: 0,
-    //         read_bytes: 0,
-    //         is_exact: false,
-    //     };
-    //
-    //     if let Some(parts) = res {
-    //         for part in parts {
-    //             partitions.push(Part {
-    //                 name: part.part.name,
-    //                 version: 0,
-    //             });
-    //             statistics.read_rows += part.stats.read_rows;
-    //             statistics.read_bytes += part.stats.read_bytes;
-    //             statistics.is_exact &= part.stats.is_exact;
-    //         }
-    //     }
-    //
-    //     ReadDataSourcePlan {
-    //         db: self.tbl_info.db.clone(),
-    //         table: self.tbl_info.name.clone(),
-    //         table_id: self.tbl_info.table_id,
-    //         table_version: None,
-    //         schema: self.tbl_info.schema.clone(),
-    //         parts: partitions,
-    //         statistics,
-    //         description: "".to_string(),
-    //         scan_plan: Default::default(),
-    //         remote: true,
-    //         tbl_args: None,
-    //         push_downs,
-    //     }
-    // }
 }
 
 pub struct RemoteTableFactory;

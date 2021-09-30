@@ -68,7 +68,6 @@ pub enum StoreDoAction {
     GetTableExt(GetTableExtReq),
     GetTables(GetTablesAction),
     GetDatabases(GetDatabasesAction),
-    // TruncateTable(TruncateTableAction),
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
