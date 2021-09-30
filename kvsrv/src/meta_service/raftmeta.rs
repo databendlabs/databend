@@ -57,8 +57,6 @@ use common_raft_store::state_machine::SerializableSnapshot;
 use common_raft_store::state_machine::Snapshot;
 use common_raft_store::state_machine::StateMachine;
 use common_sled_store::get_sled_db;
-use common_store_api_sdk::storage_api_impl::AppendResult;
-use common_store_api_sdk::storage_api_impl::DataPartInfo;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
@@ -1044,39 +1042,6 @@ impl MetaNode {
 
         let sm = self.sto.state_machine.read().await;
         sm.get_table(tid)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_data_parts(
-        &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> Option<Vec<DataPartInfo>> {
-        let sm = self.sto.state_machine.read().await;
-        sm.get_data_parts(db_name, table_name)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn append_data_parts(
-        &self,
-        db_name: &str,
-        table_name: &str,
-        append_res: &AppendResult,
-    ) {
-        let mut sm = self.sto.state_machine.write().await;
-        sm.append_data_parts(db_name, table_name, append_res)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn remove_table_data_parts(&self, db_name: &str, table_name: &str) {
-        let mut sm = self.sto.state_machine.write().await;
-        sm.remove_table_data_parts(db_name, table_name)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn remove_db_data_parts(&self, db_name: &str) {
-        let mut sm = self.sto.state_machine.write().await;
-        sm.remove_db_data_parts(db_name)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

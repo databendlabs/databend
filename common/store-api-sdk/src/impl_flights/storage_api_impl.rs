@@ -32,60 +32,31 @@ pub use common_dfs_api_vo::AppendResult;
 pub use common_dfs_api_vo::BlockStream;
 pub use common_dfs_api_vo::DataPartInfo;
 pub use common_dfs_api_vo::ReadAction;
-pub use common_dfs_api_vo::ReadPlanResult;
-pub use common_dfs_api_vo::TruncateTableResult;
 use common_exception::ErrorCode;
-use common_planners::Extras;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use futures::SinkExt;
 use futures::StreamExt;
 use tonic::Request;
 
-use crate::action_declare;
 use crate::impl_flights::storage_api_impl_utils;
 pub use crate::impl_flights::storage_api_impl_utils::get_meta;
-use crate::RequestFor;
 use crate::StoreClient;
-use crate::StoreDoAction;
 use crate::StoreDoGet;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct ReadPlanAction {
-    // TODO table version/snapshot id
-    pub db_name: String,
-    pub tbl_name: String,
-    pub push_downs: Option<Extras>,
-}
-action_declare!(ReadPlanAction, ReadPlanResult, StoreDoAction::ReadPlan);
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct TruncateTableAction {
-    pub db: String,
-    pub table: String,
-}
-action_declare!(
-    TruncateTableAction,
-    TruncateTableResult,
-    StoreDoAction::TruncateTable
-);
+// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+// pub struct TruncateTableAction {
+//     pub db: String,
+//     pub table: String,
+// }
+// action_declare!(
+//     TruncateTableAction,
+//     TruncateTableResult,
+//     StoreDoAction::TruncateTable
+// );
 
 #[async_trait::async_trait]
 impl StorageApi for StoreClient {
-    async fn read_plan(
-        &self,
-        db_name: String,
-        tbl_name: String,
-        push_downs: Option<Extras>,
-    ) -> common_exception::Result<ReadPlanResult> {
-        let act = ReadPlanAction {
-            db_name,
-            tbl_name,
-            push_downs,
-        };
-        self.do_action(act).await
-    }
-
     async fn read_partition(
         &self,
         schema: DataSchemaRef,
@@ -166,11 +137,11 @@ impl StorageApi for StoreClient {
         }
     }
 
-    async fn truncate(
-        &self,
-        db: String,
-        table: String,
-    ) -> common_exception::Result<TruncateTableResult> {
-        self.do_action(TruncateTableAction { db, table }).await
-    }
+    // async fn truncate(
+    //     &self,
+    //     db: String,
+    //     table: String,
+    // ) -> common_exception::Result<TruncateTableResult> {
+    //     self.do_action(TruncateTableAction { db, table }).await
+    // }
 }

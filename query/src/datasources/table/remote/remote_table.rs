@@ -14,18 +14,14 @@
 //
 
 use std::any::Any;
-use std::sync::mpsc::channel;
 
 use common_datavalues::DataSchemaRef;
-use common_dfs_api_vo::ReadPlanResult;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api_vo::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
-use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
@@ -72,35 +68,11 @@ impl Table for RemoteTable {
 
     fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
-        push_downs: Option<Extras>,
+        _ctx: DatabendQueryContextRef,
+        _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        let (tx, rx) = channel();
-        let cli_provider = self.store_api_provider.clone();
-        let db_name = self.tbl_info.db.clone();
-        let tbl_name = self.tbl_info.name.clone();
-        {
-            let push_downs = push_downs.clone();
-            ctx.execute_task(async move {
-                match cli_provider.try_get_storage_client().await {
-                    Ok(client) => {
-                        let parts_info = client
-                            .read_plan(db_name, tbl_name, push_downs)
-                            .await
-                            .map_err(ErrorCode::from);
-                        let _ = tx.send(parts_info);
-                    }
-                    Err(e) => {
-                        let _ = tx.send(Err(e));
-                    }
-                }
-            })?;
-        }
-
-        rx.recv()
-            .map_err(ErrorCode::from_std_error)?
-            .map(|v| self.partitions_to_plan(v, push_downs))
+        todo!()
     }
 
     async fn read(
@@ -136,9 +108,11 @@ impl Table for RemoteTable {
         Ok(())
     }
 
-    async fn truncate(&self, _ctx: DatabendQueryContextRef, plan: TruncateTablePlan) -> Result<()> {
-        let client = self.store_api_provider.try_get_storage_client().await?;
-        client.truncate(plan.db.clone(), plan.table.clone()).await?;
+    async fn truncate(
+        &self,
+        _ctx: DatabendQueryContextRef,
+        _plan: TruncateTablePlan,
+    ) -> Result<()> {
         Ok(())
     }
 }
@@ -152,45 +126,45 @@ impl RemoteTable {
         Box::new(table)
     }
 
-    fn partitions_to_plan(
-        &self,
-        res: ReadPlanResult,
-        push_downs: Option<Extras>,
-    ) -> ReadDataSourcePlan {
-        let mut partitions = vec![];
-        let mut statistics = Statistics {
-            read_rows: 0,
-            read_bytes: 0,
-            is_exact: false,
-        };
-
-        if let Some(parts) = res {
-            for part in parts {
-                partitions.push(Part {
-                    name: part.part.name,
-                    version: 0,
-                });
-                statistics.read_rows += part.stats.read_rows;
-                statistics.read_bytes += part.stats.read_bytes;
-                statistics.is_exact &= part.stats.is_exact;
-            }
-        }
-
-        ReadDataSourcePlan {
-            db: self.tbl_info.db.clone(),
-            table: self.tbl_info.name.clone(),
-            table_id: self.tbl_info.table_id,
-            table_version: None,
-            schema: self.tbl_info.schema.clone(),
-            parts: partitions,
-            statistics,
-            description: "".to_string(),
-            scan_plan: Default::default(),
-            remote: true,
-            tbl_args: None,
-            push_downs,
-        }
-    }
+    // fn partitions_to_plan(
+    //     &self,
+    //     res: ReadPlanResult,
+    //     push_downs: Option<Extras>,
+    // ) -> ReadDataSourcePlan {
+    //     let mut partitions = vec![];
+    //     let mut statistics = Statistics {
+    //         read_rows: 0,
+    //         read_bytes: 0,
+    //         is_exact: false,
+    //     };
+    //
+    //     if let Some(parts) = res {
+    //         for part in parts {
+    //             partitions.push(Part {
+    //                 name: part.part.name,
+    //                 version: 0,
+    //             });
+    //             statistics.read_rows += part.stats.read_rows;
+    //             statistics.read_bytes += part.stats.read_bytes;
+    //             statistics.is_exact &= part.stats.is_exact;
+    //         }
+    //     }
+    //
+    //     ReadDataSourcePlan {
+    //         db: self.tbl_info.db.clone(),
+    //         table: self.tbl_info.name.clone(),
+    //         table_id: self.tbl_info.table_id,
+    //         table_version: None,
+    //         schema: self.tbl_info.schema.clone(),
+    //         parts: partitions,
+    //         statistics,
+    //         description: "".to_string(),
+    //         scan_plan: Default::default(),
+    //         remote: true,
+    //         tbl_args: None,
+    //         push_downs,
+    //     }
+    // }
 }
 
 pub struct RemoteTableFactory;

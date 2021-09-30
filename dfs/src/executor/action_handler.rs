@@ -105,10 +105,10 @@ impl ActionHandler {
             StoreDoAction::DropTable(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::TruncateTable(a) => s.serialize(self.handle(a).await?),
+            // StoreDoAction::TruncateTable(a) => s.serialize(self.handle(a).await?),
 
             // part
-            StoreDoAction::ReadPlan(a) => s.serialize(self.handle(a).await?),
+            // StoreDoAction::ReadPlan(a) => s.serialize(self.handle(a).await?),
 
             // general-purpose kv
             StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
@@ -140,9 +140,6 @@ impl ActionHandler {
             .append_data(format!("{}/{}", &db_name, &table_name), Box::pin(parts))
             .await?;
 
-        self.meta_node
-            .append_data_parts(&db_name, &table_name, &res)
-            .await;
         Ok(res)
     }
 

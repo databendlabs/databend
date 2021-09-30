@@ -20,7 +20,6 @@ use std::time::UNIX_EPOCH;
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
-use common_dfs_api_vo::AppendResult;
 use common_dfs_api_vo::DataPartInfo;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
@@ -37,8 +36,6 @@ use common_metatypes::Operation;
 use common_metatypes::SeqValue;
 use common_metatypes::Slot;
 use common_metatypes::Table;
-use common_planners::Part;
-use common_planners::Statistics;
 use common_sled_store::get_sled_db;
 use common_sled_store::sled;
 use common_sled_store::AsKeySpace;
@@ -454,7 +451,6 @@ impl StateMachine {
             Cmd::DropDatabase { ref name } => {
                 let prev = self.databases.get(name).cloned();
                 if prev.is_some() {
-                    self.remove_db_data_parts(name);
                     self.databases.remove(name);
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                     tracing::debug!("applied DropDatabase: {}", name);
@@ -506,9 +502,6 @@ impl StateMachine {
                     let tbl_id = tbl_id.to_owned();
                     db.tables.remove(table_name);
                     let prev = self.tables.remove(&tbl_id);
-
-                    self.remove_table_data_parts(db_name, table_name);
-
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     Ok((prev, None).into())
@@ -573,24 +566,21 @@ impl StateMachine {
 
                 tracing::debug!("applied UpsertKV: {} {:?}", key, result);
                 Ok((prev, result).into())
-            }
-
-            Cmd::TruncateTable {
-                ref db_name,
-                ref table_name,
-            } => {
-                let db = self.databases.get_mut(db_name).unwrap();
-                let tbl_id = db.tables.get(table_name);
-                if let Some(tbl_id) = tbl_id {
-                    let _tbl_id = tbl_id.to_owned();
-                    let pre_data_parts_count = self.get_data_parts_count(db_name, table_name);
-                    self.remove_table_data_parts(db_name, table_name);
-                    tracing::debug!("applied TruncateTable: {}", table_name);
-                    Ok((Some(pre_data_parts_count), Some(0_usize)).into())
-                } else {
-                    Ok((None::<usize>, None::<usize>).into())
-                }
-            }
+            } // Cmd::TruncateTable {
+              //     ref db_name,
+              //     ref table_name,
+              // } => {
+              //     let db = self.databases.get_mut(db_name).unwrap();
+              //     let tbl_id = db.tables.get(table_name);
+              //     if let Some(tbl_id) = tbl_id {
+              //         let _tbl_id = tbl_id.to_owned();
+              //         let pre_data_parts_count = self.get_data_parts_count(db_name, table_name);
+              //         tracing::debug!("applied TruncateTable: {}", table_name);
+              //         Ok((Some(pre_data_parts_count), Some(0_usize)).into())
+              //     } else {
+              //         Ok((None::<usize>, None::<usize>).into())
+              //     }
+              // }
         }
     }
 
@@ -724,114 +714,6 @@ impl StateMachine {
         };
 
         Ok(Self::unexpired(sv))
-    }
-
-    pub fn get_data_parts(&self, db_name: &str, table_name: &str) -> Option<Vec<DataPartInfo>> {
-        let db = self.databases.get(db_name);
-        if let Some(db) = db {
-            let table_id = db.tables.get(table_name);
-            if let Some(table_id) = table_id {
-                return self.table_parts.get(table_id).map(Clone::clone);
-            }
-        }
-        None
-    }
-
-    pub fn get_data_parts_count(&self, db_name: &str, table_name: &str) -> usize {
-        let db = self.databases.get(db_name);
-        if let Some(db) = db {
-            let table_id = db.tables.get(table_name);
-            if let Some(table_id) = table_id {
-                let parts_vec = self.table_parts.get(table_id);
-                if let Some(parts_vec) = parts_vec {
-                    return parts_vec.len();
-                } else {
-                    return 0;
-                }
-            }
-        }
-        0
-    }
-
-    pub fn append_data_parts(
-        &mut self,
-        db_name: &str,
-        table_name: &str,
-        append_res: &AppendResult,
-    ) {
-        let part_infos = append_res
-            .parts
-            .iter()
-            .map(|p| {
-                let loc = &p.location;
-                DataPartInfo {
-                    part: Part {
-                        name: loc.clone(),
-                        version: 0,
-                    },
-                    stats: Statistics::new_exact(p.rows, p.disk_bytes),
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let db = self.databases.get(db_name);
-        if let Some(db) = db {
-            let table_id = db.tables.get(table_name);
-            if let Some(table_id) = table_id {
-                for part in part_infos {
-                    let table = self.tables.get_mut(table_id).unwrap();
-                    table.parts.insert(part.part.name.clone());
-                    // These comments are intentionally left here.
-                    // As rustc not smart enough, it says:
-                    // for part in part_infos {
-                    //     ---- move occurs because `part` has type `DataPartInfo`, which does not implement the `Copy` trait
-                    //     .and_modify(|v| v.push(part))
-                    //                 ---        ---- variable moved due to use in closure
-                    //                 |
-                    //                 value moved into closure here
-                    //     .or_insert_with(|| vec![part]);
-                    //                     ^^      ---- use occurs due to use in closure
-                    //                     |
-                    //                     value used here after move
-                    // But obviously the two methods can't happen at the same time.
-                    // ============== previous =============
-                    // self.table_parts
-                    //     .entry(*table_id)
-                    //     .and_modify(|v| v.push(part))
-                    //     .or_insert_with(|| vec![part]);
-                    // ============ previous end ===========
-                    match self.table_parts.get_mut(table_id) {
-                        Some(p) => {
-                            p.push(part);
-                        }
-                        None => {
-                            self.table_parts.insert(*table_id, vec![part]);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn remove_table_data_parts(&mut self, db_name: &str, table_name: &str) {
-        let db = self.databases.get(db_name);
-        if let Some(db) = db {
-            let table_id = db.tables.get(table_name);
-            if let Some(table_id) = table_id {
-                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
-                self.table_parts.remove(table_id);
-            }
-        }
-    }
-
-    pub fn remove_db_data_parts(&mut self, db_name: &str) {
-        let db = self.databases.get(db_name);
-        if let Some(db) = db {
-            for table_id in db.tables.values() {
-                self.tables.entry(*table_id).and_modify(|t| t.parts.clear());
-                self.table_parts.remove(table_id);
-            }
-        }
     }
 
     pub fn mget_kv(

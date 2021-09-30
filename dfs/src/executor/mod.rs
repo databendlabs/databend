@@ -21,4 +21,3 @@ pub use action_handler::ReplySerializer;
 mod action_handler_test;
 mod kv_handlers;
 mod meta_handlers;
-mod storage_handlers;
