@@ -132,7 +132,8 @@ impl Database for DefaultDatabase {
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
         // TODO validate table parameters by using TableFactory
-        self.meta_store_client.create_table(plan)
+        self.meta_store_client.create_table(plan)?;
+        Ok(())
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {

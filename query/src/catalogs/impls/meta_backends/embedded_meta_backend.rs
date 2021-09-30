@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
+use common_meta_api_vo::CreateDatabaseReply;
+use common_meta_api_vo::CreateTableReply;
 use common_meta_api_vo::DatabaseInfo;
 use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
@@ -163,7 +165,7 @@ impl MetaBackend for EmbeddedMetaBackend {
         Ok(res)
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<CreateTableReply> {
         let clone = plan.clone();
         let db_name = clone.db.as_str();
         let table_name = clone.table.as_str();
@@ -189,7 +191,8 @@ impl MetaBackend for EmbeddedMetaBackend {
             Some((_db_info, metas)) => {
                 if metas.name2meta.get(table_name).is_some() {
                     if plan.if_not_exists {
-                        return Ok(());
+                        // TODO(xp): just let it passed, gonna be removed
+                        return Ok(CreateTableReply { table_id: 0 });
                     } else {
                         return Err(ErrorCode::TableAlreadyExists(format!(
                             "Table: '{}.{}' already exists.",
@@ -201,7 +204,8 @@ impl MetaBackend for EmbeddedMetaBackend {
             }
         }
 
-        Ok(())
+        // TODO(xp): just let it passed, gonna be removed
+        Ok(CreateTableReply { table_id: 0 })
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
@@ -252,14 +256,18 @@ impl MetaBackend for EmbeddedMetaBackend {
         Ok(())
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> common_exception::Result<()> {
+    fn create_database(
+        &self,
+        plan: CreateDatabasePlan,
+    ) -> common_exception::Result<CreateDatabaseReply> {
         let db_name = plan.db.as_str();
 
         let mut db = self.databases.write();
 
         if db.get(db_name).is_some() {
             return if plan.if_not_exists {
-                Ok(())
+                // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+                Ok(CreateDatabaseReply { database_id: 0 })
             } else {
                 Err(ErrorCode::DatabaseAlreadyExists(format!(
                     "Database: '{}' already exists.",
@@ -279,7 +287,9 @@ impl MetaBackend for EmbeddedMetaBackend {
             plan.db,
             (Arc::new(database_info), InMemoryTableInfo::create()),
         );
-        Ok(())
+
+        // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+        Ok(CreateDatabaseReply { database_id: 0 })
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {

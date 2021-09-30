@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -90,7 +91,7 @@ impl Catalog for SystemCatalog {
         db.get_table_by_id(table_id, table_version)
     }
 
-    fn create_database(&self, _plan: CreateDatabasePlan) -> Result<()> {
+    fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         Err(ErrorCode::UnImplement("Cannot create system database"))
     }
 

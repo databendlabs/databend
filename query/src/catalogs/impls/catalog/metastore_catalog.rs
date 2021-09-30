@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_meta_api_vo::DatabaseInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
@@ -173,7 +174,7 @@ impl Catalog for MetaStoreCatalog {
         db.get_table_by_id(table_id, table_version)
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         if self.db_engine_registry.contains(&plan.engine) {
             // TODO check if plan is valid (add validate method to database_factory)
             self.meta_backend.create_database(plan)

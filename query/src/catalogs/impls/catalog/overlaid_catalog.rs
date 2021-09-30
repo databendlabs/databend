@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -133,7 +134,10 @@ impl Catalog for OverlaidCatalog {
         Ok(Arc::new(TableFunctionMeta::create(func.clone(), *id)))
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> common_exception::Result<()> {
+    fn create_database(
+        &self,
+        plan: CreateDatabasePlan,
+    ) -> common_exception::Result<CreateDatabaseReply> {
         // create db in BOTTOM layer only
         self.bottom.create_database(plan)
     }
