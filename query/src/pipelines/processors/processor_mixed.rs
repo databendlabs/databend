@@ -28,87 +28,41 @@ use log::error;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
+use crate::pipelines::processors::processor_merge::MergeProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::DatabendQueryContextRef;
 
 // M inputs--> N outputs Mixed processor
 struct MixedWorker {
     ctx: DatabendQueryContextRef,
-    inputs: Vec<Arc<dyn Processor>>,
     n: usize,
     shared_num: AtomicUsize,
     started: AtomicBool,
     receivers: Vec<Option<mpsc::Receiver<Result<DataBlock>>>>,
+    merger: MergeProcessor,
 }
 
 impl MixedWorker {
-    pub fn prepare_inputstream(&self) -> Result<SendableDataBlockStream> {
-        let inputs = self.inputs.len();
-        match inputs {
-            0 => Result::Err(ErrorCode::IllegalTransformConnectionState(
-                "Mixed processor inputs cannot be zero",
-            )),
-            _ => {
-                let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(inputs);
-                for i in 0..inputs {
-                    let input = self.inputs[i].clone();
-                    let sender = sender.clone();
-                    self.ctx.execute_task(async move {
-                        let mut stream = match input.execute().await {
-                            Err(e) => {
-                                if let Err(error) = sender.send(Result::Err(e)).await {
-                                    error!("Mixed processor cannot push data: {}", error);
-                                }
-                                return;
-                            }
-                            Ok(stream) => stream,
-                        };
-
-                        while let Some(item) = stream.next().await {
-                            match item {
-                                Ok(item) => {
-                                    if let Err(error) = sender.send(Ok(item)).await {
-                                        // Stop pulling data
-                                        error!("Mixed processor cannot push data: {}", error);
-                                        return;
-                                    }
-                                }
-                                Err(error) => {
-                                    // Stop pulling data
-                                    if let Err(error) = sender.send(Err(error)).await {
-                                        error!("Mixed processor cannot push data: {}", error);
-                                    }
-                                    return;
-                                }
-                            }
-                        }
-                    })?;
-                }
-                Ok(Box::pin(ReceiverStream::new(receiver)))
-            }
-        }
-    }
-
     pub fn start(&mut self) -> Result<()> {
         if self.started.load(Ordering::Relaxed) {
             return Ok(());
         }
 
-        let inputs = self.inputs.len();
-        let outputs = self.n;
+        let inputs_len = self.merger.inputs().len();
+        let outputs_len = self.n;
 
-        let mut senders = Vec::with_capacity(outputs);
+        let mut senders = Vec::with_capacity(outputs_len);
         for _i in 0..self.n {
-            let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(inputs);
+            let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(inputs_len);
             senders.push(sender);
             self.receivers.push(Some(receiver));
         }
 
-        let mut stream = self.prepare_inputstream()?;
+        let mut stream = self.merger.merge()?;
         self.ctx.execute_task(async move {
             let index = AtomicUsize::new(0);
             while let Some(item) = stream.next().await {
-                let i = index.fetch_add(1, Ordering::Relaxed) % outputs;
+                let i = index.fetch_add(1, Ordering::Relaxed) % outputs_len;
                 // TODO: USE try_reserve when the channel is blocking
                 if let Err(error) = senders[i].send(item).await {
                     error!("Mixed processor cannot push data: {}", error);
@@ -129,12 +83,12 @@ pub struct MixedProcessor {
 impl MixedProcessor {
     pub fn create(ctx: DatabendQueryContextRef, n: usize) -> Self {
         let worker = MixedWorker {
-            ctx,
-            inputs: vec![],
+            ctx: ctx.clone(),
             n,
             started: AtomicBool::new(false),
             shared_num: AtomicUsize::new(0),
             receivers: vec![],
+            merger: MergeProcessor::create(ctx),
         };
 
         let index = worker.shared_num.fetch_add(1, Ordering::Relaxed);
@@ -166,13 +120,12 @@ impl Processor for MixedProcessor {
 
     fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
         let mut worker = self.worker.write();
-        worker.inputs.push(input);
-        Ok(())
+        worker.merger.connect_to(input)
     }
 
     fn inputs(&self) -> Vec<Arc<dyn Processor>> {
         let worker = self.worker.read();
-        worker.inputs.clone()
+        worker.merger.inputs()
     }
 
     fn as_any(&self) -> &dyn Any {
