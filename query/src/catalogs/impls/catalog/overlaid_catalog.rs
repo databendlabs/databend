@@ -89,23 +89,21 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
-        if !self.read_only.exists_database(db_name)? {
-            self.bottom.exists_database(db_name)
-        } else {
-            Ok(true)
-        }
-    }
-
     fn get_table(
         &self,
         db_name: &str,
         table_name: &str,
     ) -> common_exception::Result<Arc<TableMeta>> {
-        if self.read_only.exists_database(db_name)? {
-            self.read_only.get_table(db_name, table_name)
-        } else {
-            self.bottom.get_table(db_name, table_name)
+        let res = self.read_only.get_table(db_name, table_name);
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownDatabase("").code() {
+                    self.bottom.get_table(db_name, table_name)
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 

@@ -96,14 +96,6 @@ impl MetaBackend for EmbeddedMetaBackend {
         }
     }
 
-    fn exist_table(&self, db_name: &str, table_name: &str) -> common_exception::Result<bool> {
-        let res = self.get_table(db_name, table_name);
-        match res {
-            Ok(_) => Ok(true),
-            _ => Ok(false),
-        }
-    }
-
     fn get_table_by_id(
         &self,
         db_name: &str,
@@ -149,10 +141,6 @@ impl MetaBackend for EmbeddedMetaBackend {
             res.push(db.clone());
         }
         Ok(res)
-    }
-
-    fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
-        Ok(self.databases.read().get(db_name).is_some())
     }
 
     fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
@@ -294,18 +282,26 @@ impl MetaBackend for EmbeddedMetaBackend {
 
     fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
         let db_name = plan.db.as_str();
-        if !self.exists_database(db_name)? {
-            return if plan.if_exists {
-                Ok(())
-            } else {
-                Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: '{}'",
-                    db_name
-                )))
-            };
+
+        let removed = {
+            let mut dbs = self.databases.write();
+            dbs.remove(db_name)
+        };
+
+        if removed.is_some() {
+            return Ok(());
         }
-        self.databases.write().remove(db_name);
-        Ok(())
+
+        // removed.is_none()
+
+        if plan.if_exists {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database: '{}'",
+                db_name
+            )))
+        }
     }
 
     fn name(&self) -> String {

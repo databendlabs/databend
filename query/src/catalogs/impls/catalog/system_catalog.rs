@@ -75,10 +75,6 @@ impl Catalog for SystemCatalog {
         Ok(db.clone())
     }
 
-    fn exists_database(&self, db_name: &str) -> Result<bool> {
-        Ok(self.dbs.contains_key(db_name))
-    }
-
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
         let db = self.get_database(db_name)?;
         db.get_table(table_name)

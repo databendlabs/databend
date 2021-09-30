@@ -116,16 +116,6 @@ impl MetaBackend for RemoteMeteStoreClient {
         Ok(Arc::new(table_info))
     }
 
-    fn exist_table(&self, db_name: &str, _table_name: &str) -> Result<bool> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            if database.name == db_name {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
     fn get_table_by_id(
         &self,
         db_name: &str,
@@ -209,16 +199,6 @@ impl MetaBackend for RemoteMeteStoreClient {
                 Ok(res)
             }
         }
-    }
-
-    fn exists_database(&self, db_name: &str) -> Result<bool> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            if database.name == db_name {
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
