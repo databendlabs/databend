@@ -347,9 +347,9 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
         let res = self.meta_node.get_databases().await;
         Ok(res
             .iter()
-            .map(|(_name, db)| DatabaseInfo {
+            .map(|(name, db)| DatabaseInfo {
                 database_id: db.database_id,
-                db: "".to_string(),
+                db: name.to_string(),
                 engine: db.database_engine.to_string(),
             })
             .collect::<Vec<_>>())

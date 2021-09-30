@@ -1273,7 +1273,7 @@ async fn test_flight_get_databases() -> anyhow::Result<()> {
     assert_eq!(res[0], DatabaseInfo {
         database_id: 1,
         engine: "Local".to_string(),
-        db: "".to_string()
+        db: "db1".to_string()
     });
 
     Ok(())
