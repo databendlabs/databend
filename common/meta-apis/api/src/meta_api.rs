@@ -51,7 +51,7 @@ pub trait MetaApi: Send + Sync {
         table: String,
     ) -> common_exception::Result<GetTableActionResult>;
 
-    async fn get_table_ext(
+    async fn get_table_by_id(
         &self,
         table_id: MetaId,
         db_ver: Option<MetaVersion>,
