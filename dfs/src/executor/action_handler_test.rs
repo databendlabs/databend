@@ -231,13 +231,13 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
     struct T {
         db_name: &'static str,
         if_exists: bool,
-        want: Result<DropDatabaseReply, ErrorCode>,
+        want: Result<(), ErrorCode>,
     }
 
     /// helper to build a T
     fn case(db_name: &'static str, if_exists: bool, want: Result<(), &str>) -> T {
         let want = match want {
-            Ok(..) => Ok(DropDatabaseReply {}),
+            Ok(..) => Ok(()),
             Err(err_str) => Err(ErrorCode::UnknownDatabase(err_str)),
         };
 

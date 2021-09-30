@@ -122,7 +122,7 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<DropDatabaseAction> for ActionHandler {
-    async fn handle(&self, act: DropDatabaseAction) -> common_exception::Result<DropDatabaseReply> {
+    async fn handle(&self, act: DropDatabaseAction) -> common_exception::Result<()> {
         let db_name = &act.plan.db;
         let if_exists = act.plan.if_exists;
         let cr = LogEntry {
@@ -141,7 +141,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
         match rst {
             AppliedState::DataBase { prev, .. } => {
                 if prev.is_some() || if_exists {
-                    Ok(DropDatabaseReply {})
+                    Ok(())
                 } else {
                     Err(ErrorCode::UnknownDatabase(format!(
                         "database not found: {:}",

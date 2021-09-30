@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_meta_api_vo::CreateDatabaseReply;
 use common_meta_api_vo::CreateTableReply;
 use common_meta_api_vo::DatabaseInfo;
-use common_meta_api_vo::DropDatabaseReply;
 use common_meta_api_vo::DropTableReply;
 use common_meta_api_vo::GetDatabasesReply;
 use common_meta_api_vo::GetTablesReply;
@@ -35,7 +34,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<DropDatabaseReply>;
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 
     async fn get_database(&self, db: &str) -> Result<DatabaseInfo>;
 

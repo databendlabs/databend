@@ -42,7 +42,7 @@ pub trait RequestFor {
 
 #[macro_export]
 macro_rules! action_declare {
-    ($req:ident, $reply:ident, $enum_ctor:expr) => {
+    ($req:ident, $reply:tt, $enum_ctor:expr) => {
         impl RequestFor for $req {
             type Reply = $reply;
         }

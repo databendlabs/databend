@@ -43,10 +43,7 @@ impl MetaApi for StoreClient {
     }
 
     /// Drop database call.
-    async fn drop_database(
-        &self,
-        plan: DropDatabasePlan,
-    ) -> common_exception::Result<DropDatabaseReply> {
+    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
         self.do_action(DropDatabaseAction { plan }).await
     }
 
@@ -113,11 +110,7 @@ action_declare!(GetDatabaseAction, DatabaseInfo, StoreDoAction::GetDatabase);
 pub struct DropDatabaseAction {
     pub plan: DropDatabasePlan,
 }
-action_declare!(
-    DropDatabaseAction,
-    DropDatabaseReply,
-    StoreDoAction::DropDatabase
-);
+action_declare!(DropDatabaseAction, (), StoreDoAction::DropDatabase);
 
 // == table actions ==
 // - create table
