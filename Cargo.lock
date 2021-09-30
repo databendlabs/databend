@@ -994,7 +994,6 @@ version = "0.1.0"
 dependencies = [
  "common-datavalues",
  "common-metatypes",
- "common-planners",
  "serde",
 ]
 

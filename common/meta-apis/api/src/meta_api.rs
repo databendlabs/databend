@@ -53,7 +53,8 @@ pub trait MetaApi: Send + Sync {
         db_ver: Option<MetaVersion>,
     ) -> common_exception::Result<TableInfo>;
 
-    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply>;
-
-    async fn get_tables(&self, db: String) -> common_exception::Result<GetTablesReply>;
+    async fn get_database_meta(
+        &self,
+        current_ver: Option<u64>,
+    ) -> common_exception::Result<DatabaseMetaReply>;
 }
