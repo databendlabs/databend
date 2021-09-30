@@ -66,7 +66,7 @@ pub struct Config {
     #[structopt(
         long,
         env = "METASRV_FLIGHT_API_ADDRESS",
-        default_value = "127.0.0.1:28003"
+        default_value = "127.0.0.1:9191"
     )]
     pub flight_api_address: String,
 
