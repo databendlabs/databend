@@ -103,10 +103,6 @@ impl Database for DefaultDatabase {
         self.build_table_instance(table_info.as_ref())
     }
 
-    fn exists_table(&self, table_name: &str) -> common_exception::Result<bool> {
-        self.meta_store_client.exist_table(self.name(), table_name)
-    }
-
     fn get_table_by_id(
         &self,
         table_id: MetaId,
