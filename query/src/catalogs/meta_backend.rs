@@ -26,6 +26,18 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 pub trait MetaBackend: Send + Sync {
+    // database
+
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+
+    fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>>;
+
+    fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
+
+    // table
+
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>>;
 
     fn get_table_by_id(
@@ -35,19 +47,11 @@ pub trait MetaBackend: Send + Sync {
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>>;
 
-    fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>>;
-
-    fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
-
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>>;
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
-
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
-
-    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 
     fn name(&self) -> String;
 }
