@@ -108,7 +108,8 @@ impl Database for ExampleDatabase {
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.meta_store_client.create_table(plan)
+        self.meta_store_client.create_table(plan)?;
+        Ok(())
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
