@@ -36,11 +36,8 @@ meta_password = "root"
 
 # Storage config.
 [storage]
-# dfs|disk|s3
+# disk|s3
 storage_type = ""
-
-# DFS storage.
-[storage.dfs]
 
 # DISK storage.
 [storage.disk]

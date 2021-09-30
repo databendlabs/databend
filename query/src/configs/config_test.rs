@@ -70,13 +70,6 @@ rpc_tls_meta_service_domain_name = \"localhost\"
 [storage]
 storage_type = \"disk\"
 
-[storage.dfs]
-address = \"\"
-username = \"\"
-password = \"\"
-rpc_tls_storage_server_root_ca_cert = \"\"
-rpc_tls_storage_service_domain_name = \"\"
-
 [storage.disk]
 data_path = \"\"
 
@@ -107,9 +100,6 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
     std::env::set_var("STORAGE_TYPE", "s3");
-    std::env::set_var("DFS_STORAGE_ADDRESS", "1.2.3.4:1234");
-    std::env::set_var("DFS_STORAGE_USERNAME", "admin");
-    std::env::set_var("DFS_STORAGE_PASSWORD", "password!");
     std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
     std::env::set_var("S3_STORAGE_REGION", "us.region");
     std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
@@ -135,10 +125,6 @@ fn test_env_config() -> Result<()> {
 
     assert_eq!("s3", configured.storage.storage_type);
 
-    assert_eq!("1.2.3.4:1234", configured.storage.dfs.address);
-    assert_eq!("admin", configured.storage.dfs.username);
-    assert_eq!("password!", configured.storage.dfs.password);
-
     assert_eq!("/tmp/test", configured.storage.disk.data_path);
 
     assert_eq!("us.region", configured.storage.s3.region);
@@ -160,9 +146,6 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
     std::env::remove_var("STORAGE_TYPE");
-    std::env::remove_var("DFS_STORAGE_ADDRESS");
-    std::env::remove_var("DFS_STORAGE_USERNAME");
-    std::env::remove_var("DFS_STORAGE_PASSWORD");
     std::env::remove_var("DISK_STORAGE_DATA_PATH");
     std::env::remove_var("S3_STORAGE_REGION");
     std::env::remove_var("S3_STORAGE_ACCESS_KEY_ID");
