@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 
-use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_api_vo::*;
 use common_metatypes::MetaId;
@@ -90,15 +89,6 @@ impl MetaApi for StoreClient {
     ) -> common_exception::Result<DatabaseMetaReply> {
         self.do_action(GetDatabaseMetaAction { ver_lower_bound })
             .await
-    }
-
-    async fn commit_table(
-        &self,
-        _table_id: MetaId,
-        _prev_snapshot: String,
-        _new_snapshot: String,
-    ) -> common_exception::Result<CommitTableReply> {
-        Err(ErrorCode::UnImplement("commit_table not implemented"))
     }
 }
 
