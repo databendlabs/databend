@@ -437,7 +437,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
                 table: tbl_name.to_string(),
             };
             let res = client.drop_table(plan.clone()).await.unwrap();
-            assert_eq!(DropTableActionResult {}, res, "drop table {}", tbl_name)
+            assert_eq!((), res, "drop table {}", tbl_name)
         }
 
         {
