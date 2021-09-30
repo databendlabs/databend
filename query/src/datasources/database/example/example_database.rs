@@ -63,7 +63,7 @@ impl ExampleDatabase {
             table_info.db.clone(),
             table_info.name.clone(),
             table_info.schema.clone(),
-            table_info.table_option.clone(),
+            table_info.options.clone(),
             table_info.table_id,
         )?;
         let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);

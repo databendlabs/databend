@@ -39,7 +39,7 @@ async fn test_memorytable() -> Result<()> {
         name: "a".into(),
         schema: schema.clone(),
         engine: "Memory".to_string(),
-        table_option: TableOptions::default(),
+        options: TableOptions::default(),
         table_id: 0,
     })?;
 

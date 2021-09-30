@@ -43,7 +43,7 @@ pub struct ParquetTable {
 
 impl ParquetTable {
     pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
-        let options = &tbl_info.table_option;
+        let options = &tbl_info.options;
         let file = options.get("location").cloned();
         return match file {
             Some(file) => {

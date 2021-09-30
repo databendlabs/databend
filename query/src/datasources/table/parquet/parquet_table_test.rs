@@ -44,7 +44,7 @@ async fn test_parquet_table() -> Result<()> {
         name: "test_parquet".to_string(),
         schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
         engine: "test_parquet".into(),
-        table_option: options,
+        options: options,
     };
     let table = ParquetTable::try_create(tbl_info)?;
 

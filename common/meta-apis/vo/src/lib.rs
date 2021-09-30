@@ -44,7 +44,7 @@ pub struct CreateTableActionResult {
 pub struct DropTableActionResult {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableActionResult {
+pub struct TableInfo {
     pub table_id: u64,
     pub db: String,
     pub name: String,

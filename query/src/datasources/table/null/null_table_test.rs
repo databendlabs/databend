@@ -38,7 +38,7 @@ async fn test_null_table() -> Result<()> {
         name: "a".into(),
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
         engine: "Null".to_string(),
-        table_option: TableOptions::default(),
+        options: TableOptions::default(),
         table_id: 0,
     })?;
 

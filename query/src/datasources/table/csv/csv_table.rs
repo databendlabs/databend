@@ -41,7 +41,7 @@ pub struct CsvTable {
 
 impl CsvTable {
     pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
-        let options = &tbl_info.table_option;
+        let options = &tbl_info.options;
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {

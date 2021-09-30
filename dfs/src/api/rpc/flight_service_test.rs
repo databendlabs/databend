@@ -100,7 +100,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
             assert_eq!(1, res.table_id, "table id is 1");
 
             let got = client.get_table(db_name.into(), table_name.into()).await?;
-            let want = GetTableActionResult {
+            let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
                 name: table_name.into(),
@@ -298,7 +298,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 .get_table(db_name.into(), tbl_name.into())
                 .await
                 .unwrap();
-            let want = GetTableActionResult {
+            let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
                 name: tbl_name.into(),
@@ -319,7 +319,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
                 .get_table(db_name.into(), tbl_name.into())
                 .await
                 .unwrap();
-            let want = GetTableActionResult {
+            let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
                 name: tbl_name.into(),
@@ -346,7 +346,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             // get_table returns the old table
 
             let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
-            let want = GetTableActionResult {
+            let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
                 name: tbl_name.into(),
@@ -428,7 +428,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
                 .get_table(db_name.into(), tbl_name.into())
                 .await
                 .unwrap();
-            let want = GetTableActionResult {
+            let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
                 name: tbl_name.into(),

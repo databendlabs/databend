@@ -265,7 +265,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableAction> for ActionHandler {
-    async fn handle(&self, act: GetTableAction) -> common_exception::Result<GetTableActionResult> {
+    async fn handle(&self, act: GetTableAction) -> common_exception::Result<TableInfo> {
         let db_name = &act.db;
         let table_name = &act.table;
 
@@ -289,7 +289,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                 .map_err(|e| {
                     ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
                 })?;
-                let rst = GetTableActionResult {
+                let rst = TableInfo {
                     table_id: table.table_id,
                     db: db_name.clone(),
                     name: table_name.clone(),
@@ -306,7 +306,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableExtReq> for ActionHandler {
-    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<GetTableActionResult> {
+    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<TableInfo> {
         // TODO duplicated code
         let table_id = act.tbl_id;
         let result = self.meta_node.get_table(&table_id).await;
@@ -319,7 +319,7 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                 .map_err(|e| {
                     ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
                 })?;
-                let rst = GetTableActionResult {
+                let rst = TableInfo {
                     table_id: table.table_id,
                     // TODO rm these filed
                     db: "".to_owned(),

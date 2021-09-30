@@ -173,7 +173,7 @@ impl MetaBackend for EmbeddedMetaBackend {
             table_id: self.next_db_id(),
             name: plan.table,
             schema: plan.schema,
-            table_option: plan.options,
+            options: plan.options,
             engine: plan.engine,
         };
 

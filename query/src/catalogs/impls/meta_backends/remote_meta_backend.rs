@@ -61,6 +61,26 @@ impl RemoteMeteStoreClient {
             store_api_provider: apis_provider,
         }
     }
+
+    fn to_table_info(&self, db_name: &str, t_name: &str, tbl: &CatalogTable) -> Result<TableInfo> {
+        let schema_bin = &tbl.schema;
+        let t_id = tbl.table_id;
+        let arrow_schema = ArrowSchema::try_from(&FlightData {
+            data_header: schema_bin.clone(),
+            ..Default::default()
+        })?;
+        let schema = DataSchema::from(arrow_schema);
+
+        let info = TableInfo {
+            db: db_name.to_owned(),
+            table_id: t_id,
+            name: t_name.to_owned(),
+            schema: Arc::new(schema),
+            options: tbl.table_options.clone(),
+            engine: tbl.table_engine.clone(),
+        };
+        Ok(info)
+    }
 }
 
 impl MetaBackend for RemoteMeteStoreClient {
@@ -84,7 +104,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             name: reply.name.clone(),
             schema: reply.schema,
             engine: reply.engine,
-            table_option: reply.options,
+            options: reply.options,
         };
         Ok(Arc::new(table_info))
     }
@@ -117,7 +137,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             name: reply.name.clone(),
             schema: reply.schema.clone(),
             engine: reply.engine.clone(),
-            table_option: reply.options.clone(),
+            options: reply.options.clone(),
         };
 
         let mut cache = self.table_meta_cache.lock();
