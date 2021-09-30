@@ -21,6 +21,7 @@ use common_cache::Cache;
 use common_cache::LruCache;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_meta_api_vo::DatabaseInfo;
 use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
@@ -199,16 +200,16 @@ impl MetaBackend for RemoteMeteStoreClient {
         Ok(())
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         let cli_provider = self.store_api_provider.clone();
-        let _r = self.rt.block_on(
+        let r = self.rt.block_on(
             async move {
                 let cli = cli_provider.try_get_meta_client().await?;
                 cli.create_database(plan).await
             },
             self.rpc_time_out,
         )??;
-        Ok(())
+        Ok(r)
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {

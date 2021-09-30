@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_meta_api_vo::DatabaseInfo;
 use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
@@ -28,7 +29,7 @@ use common_planners::DropTablePlan;
 pub trait MetaBackend: Send + Sync {
     // database
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 

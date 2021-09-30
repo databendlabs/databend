@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_meta_api_vo::DatabaseInfo;
 use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
@@ -252,14 +253,18 @@ impl MetaBackend for EmbeddedMetaBackend {
         Ok(())
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> common_exception::Result<()> {
+    fn create_database(
+        &self,
+        plan: CreateDatabasePlan,
+    ) -> common_exception::Result<CreateDatabaseReply> {
         let db_name = plan.db.as_str();
 
         let mut db = self.databases.write();
 
         if db.get(db_name).is_some() {
             return if plan.if_not_exists {
-                Ok(())
+                // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+                Ok(CreateDatabaseReply { database_id: 0 })
             } else {
                 Err(ErrorCode::DatabaseAlreadyExists(format!(
                     "Database: '{}' already exists.",
@@ -279,7 +284,9 @@ impl MetaBackend for EmbeddedMetaBackend {
             plan.db,
             (Arc::new(database_info), InMemoryTableInfo::create()),
         );
-        Ok(())
+
+        // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+        Ok(CreateDatabaseReply { database_id: 0 })
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
