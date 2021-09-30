@@ -58,7 +58,10 @@ pub struct DatabaseMetaSnapshot {
     pub db_metas: Vec<(String, Database)>,
     pub tbl_metas: Vec<(u64, Table)>,
 }
+
 pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
+pub type GetDatabasesReply = Vec<DatabaseInfo>;
+pub type GetTablesReply = Vec<TableInfo>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum CommitTableReply {
