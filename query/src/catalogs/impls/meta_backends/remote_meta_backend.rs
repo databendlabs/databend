@@ -13,18 +13,12 @@
 // limitations under the License.
 //
 
-
-
 use std::sync::Arc;
 use std::time::Duration;
-
-
 
 use common_base::Runtime;
 use common_cache::Cache;
 use common_cache::LruCache;
-
-
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_meta_api_vo::DatabaseInfo;
