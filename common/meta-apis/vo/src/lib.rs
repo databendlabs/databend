@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateDatabaseActionResult {
+pub struct CreateDatabaseReply {
     pub database_id: u64,
 }
 
@@ -30,15 +30,15 @@ pub struct DatabaseInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DropDatabaseActionResult {}
+pub struct DropDatabaseReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableActionResult {
+pub struct CreateTableReply {
     pub table_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DropTableActionResult {}
+pub struct DropTableReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableInfo {

@@ -90,7 +90,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
 
     struct D {
         plan: CreateDatabasePlan,
-        want: common_exception::Result<CreateDatabaseActionResult>,
+        want: common_exception::Result<CreateDatabaseReply>,
     }
 
     /// helper to build a D
@@ -102,7 +102,7 @@ async fn test_action_handler_add_database() -> anyhow::Result<()> {
             options: Default::default(),
         };
         let want = match want {
-            Ok(want_db_id) => Ok(CreateDatabaseActionResult {
+            Ok(want_db_id) => Ok(CreateDatabaseReply {
                 database_id: want_db_id,
             }),
             Err(err) => Err(err), // Result<i64,_> to Result<StoreDoActionResult, _>
@@ -231,13 +231,13 @@ async fn test_action_handler_drop_database() -> anyhow::Result<()> {
     struct T {
         db_name: &'static str,
         if_exists: bool,
-        want: Result<DropDatabaseActionResult, ErrorCode>,
+        want: Result<DropDatabaseReply, ErrorCode>,
     }
 
     /// helper to build a T
     fn case(db_name: &'static str, if_exists: bool, want: Result<(), &str>) -> T {
         let want = match want {
-            Ok(..) => Ok(DropDatabaseActionResult {}),
+            Ok(..) => Ok(DropDatabaseReply {}),
             Err(err_str) => Err(ErrorCode::UnknownDatabase(err_str)),
         };
 
@@ -310,7 +310,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
 
     struct D {
         plan: CreateDatabasePlan,
-        want: common_exception::Result<CreateDatabaseActionResult>,
+        want: common_exception::Result<CreateDatabaseReply>,
     }
 
     /// helper to build a D
@@ -322,7 +322,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
             options: Default::default(),
         };
         let want = match want {
-            Ok(want_db_id) => Ok(CreateDatabaseActionResult {
+            Ok(want_db_id) => Ok(CreateDatabaseReply {
                 database_id: want_db_id,
             }),
             Err(err) => Err(err), // Result<i64,_> to Result<StoreDoActionResult, _>
@@ -333,7 +333,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
 
     struct T {
         plan: CreateTablePlan,
-        want: common_exception::Result<CreateTableActionResult>,
+        want: common_exception::Result<CreateTableReply>,
     }
 
     /// helper to build a T
@@ -357,7 +357,7 @@ async fn test_action_handler_create_table() -> anyhow::Result<()> {
             options: Default::default(),
         };
         let want = match want {
-            Ok(want_table_id) => Ok(CreateTableActionResult {
+            Ok(want_table_id) => Ok(CreateTableReply {
                 table_id: want_table_id,
             }),
             Err(err) => Err(err),
@@ -548,7 +548,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
         db_name: &'static str,
         table_name: &'static str,
         if_exists: bool,
-        want: Result<DropTableActionResult, ErrorCode>,
+        want: Result<DropTableReply, ErrorCode>,
     }
 
     /// helper to build a T
@@ -559,7 +559,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
         want: Result<(), &str>,
     ) -> T {
         let want = match want {
-            Ok(..) => Ok(DropTableActionResult {}),
+            Ok(..) => Ok(DropTableReply {}),
             Err(err_str) => Err(ErrorCode::UnknownTable(err_str)),
         };
 

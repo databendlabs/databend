@@ -14,11 +14,11 @@
 //
 
 use common_exception::Result;
-use common_meta_api_vo::CreateDatabaseActionResult;
-use common_meta_api_vo::CreateTableActionResult;
+use common_meta_api_vo::CreateDatabaseReply;
+use common_meta_api_vo::CreateTableReply;
 use common_meta_api_vo::DatabaseInfo;
-use common_meta_api_vo::DropDatabaseActionResult;
-use common_meta_api_vo::DropTableActionResult;
+use common_meta_api_vo::DropDatabaseReply;
+use common_meta_api_vo::DropTableReply;
 use common_meta_api_vo::GetDatabasesReply;
 use common_meta_api_vo::GetTablesReply;
 use common_meta_api_vo::TableInfo;
@@ -33,10 +33,9 @@ use common_planners::DropTablePlan;
 pub trait MetaApi: Send + Sync {
     // database
 
-    async fn create_database(&self, plan: CreateDatabasePlan)
-        -> Result<CreateDatabaseActionResult>;
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<DropDatabaseActionResult>;
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<DropDatabaseReply>;
 
     async fn get_database(&self, db: &str) -> Result<DatabaseInfo>;
 
@@ -44,9 +43,9 @@ pub trait MetaApi: Send + Sync {
 
     // table
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableActionResult>;
+    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply>;
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<DropTableActionResult>;
+    async fn drop_table(&self, plan: DropTablePlan) -> Result<DropTableReply>;
 
     async fn get_table(&self, db: &str, table: &str) -> Result<TableInfo>;
 

@@ -33,7 +33,7 @@ impl MetaApi for StoreClient {
     async fn create_database(
         &self,
         plan: CreateDatabasePlan,
-    ) -> common_exception::Result<CreateDatabaseActionResult> {
+    ) -> common_exception::Result<CreateDatabaseReply> {
         self.do_action(CreateDatabaseAction { plan }).await
     }
 
@@ -46,7 +46,7 @@ impl MetaApi for StoreClient {
     async fn drop_database(
         &self,
         plan: DropDatabasePlan,
-    ) -> common_exception::Result<DropDatabaseActionResult> {
+    ) -> common_exception::Result<DropDatabaseReply> {
         self.do_action(DropDatabaseAction { plan }).await
     }
 
@@ -54,15 +54,12 @@ impl MetaApi for StoreClient {
     async fn create_table(
         &self,
         plan: CreateTablePlan,
-    ) -> common_exception::Result<CreateTableActionResult> {
+    ) -> common_exception::Result<CreateTableReply> {
         self.do_action(CreateTableAction { plan }).await
     }
 
     /// Drop table call.
-    async fn drop_table(
-        &self,
-        plan: DropTablePlan,
-    ) -> common_exception::Result<DropTableActionResult> {
+    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<DropTableReply> {
         self.do_action(DropTableAction { plan }).await
     }
 
@@ -101,7 +98,7 @@ pub struct CreateDatabaseAction {
 }
 action_declare!(
     CreateDatabaseAction,
-    CreateDatabaseActionResult,
+    CreateDatabaseReply,
     StoreDoAction::CreateDatabase
 );
 
@@ -118,7 +115,7 @@ pub struct DropDatabaseAction {
 }
 action_declare!(
     DropDatabaseAction,
-    DropDatabaseActionResult,
+    DropDatabaseReply,
     StoreDoAction::DropDatabase
 );
 
@@ -130,7 +127,7 @@ pub struct CreateTableAction {
 }
 action_declare!(
     CreateTableAction,
-    CreateTableActionResult,
+    CreateTableReply,
     StoreDoAction::CreateTable
 );
 
@@ -139,11 +136,7 @@ action_declare!(
 pub struct DropTableAction {
     pub plan: DropTablePlan,
 }
-action_declare!(
-    DropTableAction,
-    DropTableActionResult,
-    StoreDoAction::DropTable
-);
+action_declare!(DropTableAction, DropTableReply, StoreDoAction::DropTable);
 
 // - get table
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

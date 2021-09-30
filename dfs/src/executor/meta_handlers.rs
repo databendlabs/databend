@@ -51,7 +51,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
     async fn handle(
         &self,
         act: CreateDatabaseAction,
-    ) -> common_exception::Result<CreateDatabaseActionResult> {
+    ) -> common_exception::Result<CreateDatabaseReply> {
         let plan = act.plan;
         let db_name = &plan.db;
         let if_not_exists = plan.if_not_exists;
@@ -79,7 +79,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
             AppliedState::DataBase { prev, result } => {
                 if let Some(prev) = prev {
                     if if_not_exists {
-                        Ok(CreateDatabaseActionResult {
+                        Ok(CreateDatabaseReply {
                             database_id: prev.database_id,
                         })
                     } else {
@@ -89,7 +89,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
                         )))
                     }
                 } else {
-                    Ok(CreateDatabaseActionResult {
+                    Ok(CreateDatabaseReply {
                         database_id: result.unwrap().database_id,
                     })
                 }
@@ -122,10 +122,7 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<DropDatabaseAction> for ActionHandler {
-    async fn handle(
-        &self,
-        act: DropDatabaseAction,
-    ) -> common_exception::Result<DropDatabaseActionResult> {
+    async fn handle(&self, act: DropDatabaseAction) -> common_exception::Result<DropDatabaseReply> {
         let db_name = &act.plan.db;
         let if_exists = act.plan.if_exists;
         let cr = LogEntry {
@@ -144,7 +141,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
         match rst {
             AppliedState::DataBase { prev, .. } => {
                 if prev.is_some() || if_exists {
-                    Ok(DropDatabaseActionResult {})
+                    Ok(DropDatabaseReply {})
                 } else {
                     Err(ErrorCode::UnknownDatabase(format!(
                         "database not found: {:}",
@@ -160,10 +157,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
 // table
 #[async_trait::async_trait]
 impl RequestHandler<CreateTableAction> for ActionHandler {
-    async fn handle(
-        &self,
-        act: CreateTableAction,
-    ) -> common_exception::Result<CreateTableActionResult> {
+    async fn handle(&self, act: CreateTableAction) -> common_exception::Result<CreateTableReply> {
         let plan = act.plan;
         let db_name = &plan.db;
         let table_name = &plan.table;
@@ -202,7 +196,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             AppliedState::Table { prev, result } => {
                 if let Some(prev) = prev {
                     if if_not_exists {
-                        Ok(CreateTableActionResult {
+                        Ok(CreateTableReply {
                             table_id: prev.table_id,
                         })
                     } else {
@@ -212,7 +206,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
                         )))
                     }
                 } else {
-                    Ok(CreateTableActionResult {
+                    Ok(CreateTableReply {
                         table_id: result.unwrap().table_id,
                     })
                 }
@@ -224,10 +218,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<DropTableAction> for ActionHandler {
-    async fn handle(
-        &self,
-        act: DropTableAction,
-    ) -> common_exception::Result<DropTableActionResult> {
+    async fn handle(&self, act: DropTableAction) -> common_exception::Result<DropTableReply> {
         let db_name = &act.plan.db;
         let table_name = &act.plan.table;
         let if_exists = act.plan.if_exists;
@@ -250,7 +241,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         match rst {
             AppliedState::Table { prev, .. } => {
                 if prev.is_some() || if_exists {
-                    Ok(DropTableActionResult {})
+                    Ok(DropTableReply {})
                 } else {
                     Err(ErrorCode::UnknownTable(format!(
                         "table not found: {:}",
