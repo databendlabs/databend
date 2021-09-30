@@ -265,6 +265,7 @@ build_exceptions! {
 
     // DAL error
     DALTransportError(7000),
+    UnknownStorageScheme(7001),
 
 
     // datasource error

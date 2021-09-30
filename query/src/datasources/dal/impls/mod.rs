@@ -19,6 +19,8 @@ mod builders;
 mod fuse_dfs;
 mod local;
 mod schemes;
+#[cfg(test)]
+mod schemes_test;
 
 pub use aws_s3::S3;
 pub use local::Local;

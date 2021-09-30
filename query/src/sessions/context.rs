@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::convert::TryFrom;
 use std::future::Future;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
@@ -237,12 +238,13 @@ impl DatabendQueryContext {
 
     pub fn get_data_accessor(
         &self,
-        storage_scheme: &StorageScheme,
+        _storage_scheme: &StorageScheme,
     ) -> Result<Arc<dyn DataAccessor>> {
-        match storage_scheme {
+        let conf = self.get_config();
+        let scheme = StorageScheme::try_from(conf.storage.storage_type.as_str())?;
+        match scheme {
             StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
-            StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
-            _ => todo!(),
+            StorageScheme::Disk => Ok(Arc::new(Local::new("/tmp"))),
         }
     }
 }

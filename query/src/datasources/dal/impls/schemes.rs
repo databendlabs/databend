@@ -13,9 +13,31 @@
 //  limitations under the License.
 //
 
-#[derive(Clone, Debug)]
+use std::convert::TryFrom;
+
+use common_exception::ErrorCode;
+
+use crate::datasources::dal::impls::schemes::StorageScheme::Disk;
+use crate::datasources::dal::impls::schemes::StorageScheme::S3;
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum StorageScheme {
-    LocalFs,
-    FuseDfs,
+    Disk,
     S3,
+}
+
+impl TryFrom<&str> for StorageScheme {
+    type Error = common_exception::ErrorCode;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let v = value.to_uppercase();
+        match v.as_str() {
+            "DISK" => Ok(Disk),
+            "S3" => Ok(S3),
+            _ => Err(ErrorCode::UnknownStorageScheme(format!(
+                "unknown storage scheme {}",
+                value
+            ))),
+        }
+    }
 }

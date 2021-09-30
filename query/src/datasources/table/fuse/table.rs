@@ -33,6 +33,7 @@ use uuid::Uuid;
 use crate::catalogs::Table;
 use crate::catalogs::TableInfo;
 use crate::datasources::dal::DataAccessor;
+use crate::datasources::dal::StorageScheme;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::read_table_snapshot;
@@ -42,12 +43,11 @@ use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::MetaInfoReader;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
-use crate::datasources::table::fuse::TableStorageScheme;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable {
     pub(crate) tbl_info: TableInfo,
-    pub(crate) storage_scheme: TableStorageScheme,
+    pub(crate) storage_scheme: StorageScheme,
 }
 
 impl FuseTable {
