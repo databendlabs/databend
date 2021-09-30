@@ -13,7 +13,15 @@
 //  limitations under the License.
 //
 
-use common_meta_api_vo::*;
+use common_exception::Result;
+use common_meta_api_vo::CreateDatabaseActionResult;
+use common_meta_api_vo::CreateTableActionResult;
+use common_meta_api_vo::DatabaseInfo;
+use common_meta_api_vo::DropDatabaseActionResult;
+use common_meta_api_vo::DropTableActionResult;
+use common_meta_api_vo::GetDatabasesReply;
+use common_meta_api_vo::GetTablesReply;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -23,37 +31,30 @@ use common_planners::DropTablePlan;
 
 #[async_trait::async_trait]
 pub trait MetaApi: Send + Sync {
-    async fn create_database(
-        &self,
-        plan: CreateDatabasePlan,
-    ) -> common_exception::Result<CreateDatabaseActionResult>;
+    // database
 
-    async fn get_database(&self, db: &str) -> common_exception::Result<DatabaseInfo>;
+    async fn create_database(&self, plan: CreateDatabasePlan)
+        -> Result<CreateDatabaseActionResult>;
 
-    async fn drop_database(
-        &self,
-        plan: DropDatabasePlan,
-    ) -> common_exception::Result<DropDatabaseActionResult>;
+    async fn get_database(&self, db: &str) -> Result<DatabaseInfo>;
 
-    async fn create_table(
-        &self,
-        plan: CreateTablePlan,
-    ) -> common_exception::Result<CreateTableActionResult>;
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<DropDatabaseActionResult>;
 
-    async fn drop_table(
-        &self,
-        plan: DropTablePlan,
-    ) -> common_exception::Result<DropTableActionResult>;
+    // table
 
-    async fn get_table(&self, db: String, table: String) -> common_exception::Result<TableInfo>;
+    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableActionResult>;
+
+    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply>;
+
+    async fn get_tables(&self, db: String) -> common_exception::Result<GetTablesReply>;
+
+    async fn drop_table(&self, plan: DropTablePlan) -> Result<DropTableActionResult>;
+
+    async fn get_table(&self, db: String, table: String) -> Result<TableInfo>;
 
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
         db_ver: Option<MetaVersion>,
-    ) -> common_exception::Result<TableInfo>;
-
-    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply>;
-
-    async fn get_tables(&self, db: String) -> common_exception::Result<GetTablesReply>;
+    ) -> Result<TableInfo>;
 }

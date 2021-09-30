@@ -62,13 +62,3 @@ pub struct DatabaseMetaSnapshot {
 pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
 pub type GetDatabasesReply = Vec<DatabaseInfo>;
 pub type GetTablesReply = Vec<TableInfo>;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum CommitTableReply {
-    // done
-    Success,
-    // recoverable, returns the current snapshot-id, which should be merged with
-    Conflict(String),
-    // fatal, not recoverable, returns the current snapshot-id
-    Failure(String),
-}
