@@ -79,12 +79,13 @@ impl MetaApi for StoreClient {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
     }
 
-    async fn get_database_meta(
-        &self,
-        ver_lower_bound: Option<u64>,
-    ) -> common_exception::Result<DatabaseMetaReply> {
-        self.do_action(GetDatabaseMetaAction { ver_lower_bound })
-            .await
+    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply> {
+        self.do_action(GetDatabasesAction {}).await
+    }
+
+    /// Get tables.
+    async fn get_tables(&self, db: String) -> common_exception::Result<GetTablesReply> {
+        self.do_action(GetTablesAction { db }).await
     }
 }
 
@@ -146,6 +147,7 @@ pub struct GetTableAction {
     pub db: String,
     pub table: String,
 }
+
 action_declare!(GetTableAction, TableInfo, StoreDoAction::GetTable);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -155,15 +157,21 @@ pub struct GetTableExtReq {
 }
 action_declare!(GetTableExtReq, TableInfo, StoreDoAction::GetTableExt);
 
-// - get database meta
-
+// - get tables
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetDatabaseMetaAction {
-    pub ver_lower_bound: Option<u64>,
+pub struct GetTablesAction {
+    pub db: String,
 }
 
+action_declare!(GetTablesAction, GetTablesReply, StoreDoAction::GetTables);
+
+// -get databases
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct GetDatabasesAction;
+
 action_declare!(
-    GetDatabaseMetaAction,
-    DatabaseMetaReply,
-    StoreDoAction::GetDatabaseMeta
+    GetDatabasesAction,
+    GetDatabasesReply,
+    StoreDoAction::GetDatabases
 );
