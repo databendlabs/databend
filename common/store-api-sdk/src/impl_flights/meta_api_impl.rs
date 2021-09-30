@@ -75,7 +75,7 @@ impl MetaApi for StoreClient {
         self.do_action(GetTableAction { db, table }).await
     }
 
-    async fn get_table_ext(
+    async fn get_table_by_id(
         &self,
         tbl_id: MetaId,
         tbl_ver: Option<MetaVersion>,

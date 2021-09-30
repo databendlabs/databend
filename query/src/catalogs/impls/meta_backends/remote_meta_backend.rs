@@ -133,7 +133,7 @@ impl MetaBackend for RemoteMeteStoreClient {
         let reply = self.rt.block_on(
             async move {
                 let client = cli.try_get_meta_client().await?;
-                client.get_table_ext(table_id, table_version).await
+                client.get_table_by_id(table_id, table_version).await
             },
             self.rpc_time_out,
         )??;
