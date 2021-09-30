@@ -211,16 +211,6 @@ impl MetaBackend for RemoteMeteStoreClient {
         }
     }
 
-    fn exists_database(&self, db_name: &str) -> Result<bool> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            if database.name == db_name {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
         let cli = self.store_api_provider.clone();
         let reply = self.rt.block_on(

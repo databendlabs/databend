@@ -45,8 +45,6 @@ pub trait MetaBackend: Send + Sync {
 
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
 
-    fn exists_database(&self, db_name: &str) -> Result<bool>;
-
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>>;
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
@@ -56,5 +54,6 @@ pub trait MetaBackend: Send + Sync {
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+
     fn name(&self) -> String;
 }

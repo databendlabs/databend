@@ -41,10 +41,9 @@ pub trait Catalog {
 
     // Get all the databases.
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+
     // Get the database by name.
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
-    // Check the database exists or not.
-    fn exists_database(&self, db_name: &str) -> Result<bool>;
 
     // Get one table by db and table name.
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
