@@ -20,10 +20,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_api_vo::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
-use crate::catalogs::TableInfo;
 use crate::datasources::table::null::null_table::NullTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -38,7 +38,7 @@ async fn test_null_table() -> Result<()> {
         name: "a".into(),
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
         engine: "Null".to_string(),
-        table_option: TableOptions::default(),
+        options: TableOptions::default(),
         table_id: 0,
     })?;
 

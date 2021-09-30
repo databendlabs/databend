@@ -437,7 +437,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
     struct T {
         db_name: &'static str,
         table_name: &'static str,
-        want: Result<GetTableActionResult, ErrorCode>,
+        want: Result<TableInfo, ErrorCode>,
     }
 
     /// helper to build a T
@@ -449,7 +449,7 @@ async fn test_action_handler_get_table() -> anyhow::Result<()> {
         )]));
 
         let want = match want {
-            Ok(want_table_id) => Ok(GetTableActionResult {
+            Ok(want_table_id) => Ok(TableInfo {
                 table_id: want_table_id,
                 db: db_name.to_string(),
                 name: table_name.to_string(),
