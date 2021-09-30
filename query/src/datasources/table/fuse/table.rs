@@ -33,7 +33,6 @@ use uuid::Uuid;
 use crate::catalogs::Table;
 use crate::catalogs::TableInfo;
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::StorageScheme;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::read_table_snapshot;
@@ -47,7 +46,6 @@ use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable {
     pub(crate) tbl_info: TableInfo,
-    pub(crate) storage_scheme: StorageScheme,
 }
 
 impl FuseTable {
@@ -300,8 +298,7 @@ impl FuseTable {
         &self,
         ctx: &DatabendQueryContextRef,
     ) -> Result<Arc<dyn DataAccessor>> {
-        let scheme = &self.storage_scheme;
-        ctx.get_data_accessor(scheme)
+        ctx.get_data_accessor()
     }
 }
 

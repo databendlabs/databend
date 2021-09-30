@@ -236,10 +236,7 @@ impl DatabendQueryContext {
         self.shared.session.get_sessions_manager()
     }
 
-    pub fn get_data_accessor(
-        &self,
-        _storage_scheme: &StorageScheme,
-    ) -> Result<Arc<dyn DataAccessor>> {
+    pub fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
         let conf = self.get_config();
         let scheme = StorageScheme::try_from(conf.storage.storage_type.as_str())?;
         match scheme {
