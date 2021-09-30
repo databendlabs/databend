@@ -1008,34 +1008,6 @@ impl MetaNode {
         sm.get_database(name)
     }
 
-    //    #[tracing::instrument(level = "debug", skip(self))]
-    //    pub async fn get_database_meta(
-    //        &self,
-    //        lower_bound: Option<u64>,
-    //    ) -> common_exception::Result<Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)>> {
-    //        // inconsistent get: from local state machine
-    //
-    //        let sm = self.sto.state_machine.read().await;
-    //        let ver = sm.get_database_meta_ver()?;
-    //        let res = if ver <= lower_bound {
-    //            None
-    //        } else {
-    //            let dbs = sm
-    //                .get_databases()
-    //                .iter()
-    //                .map(|(k, v)| (k.clone(), v.clone()))
-    //                .collect::<Vec<_>>();
-    //            let tbls = sm
-    //                .tables
-    //                .iter()
-    //                .map(|(k, v)| (*k, v.clone()))
-    //                .collect::<Vec<_>>();
-    //            Some((ver.unwrap_or(0), dbs, tbls))
-    //        };
-    //
-    //        Ok(res)
-    //    }
-    //
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_databases(&self) -> Vec<(String, Database)> {
         let sm = self.sto.state_machine.read().await;
