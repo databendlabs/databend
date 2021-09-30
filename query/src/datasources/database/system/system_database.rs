@@ -101,10 +101,6 @@ impl Database for SystemDatabase {
         Ok(table.clone())
     }
 
-    fn exists_table(&self, table_name: &str) -> Result<bool> {
-        Ok(self.tables.name2meta.get(table_name).is_some())
-    }
-
     fn get_table_by_id(
         &self,
         table_id: MetaId,

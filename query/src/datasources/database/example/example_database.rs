@@ -90,10 +90,6 @@ impl Database for ExampleDatabase {
         self.build_table_instance(table_info.as_ref())
     }
 
-    fn exists_table(&self, table_name: &str) -> Result<bool> {
-        self.meta_store_client.exist_table(self.name(), table_name)
-    }
-
     fn get_table_by_id(
         &self,
         _table_id: MetaId,
