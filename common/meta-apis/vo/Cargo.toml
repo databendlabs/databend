@@ -12,6 +12,5 @@ edition = "2021"
 
 common-metatypes = {path= "../../metatypes"}
 common-datavalues= {path= "../../datavalues"}
-common-planners = {path = "../../planners"}
 
 serde = { version = "1.0", features = ["derive"] }
