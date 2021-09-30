@@ -26,6 +26,7 @@ use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 
+use crate::configs::S3StorageConfig;
 use crate::datasources::dal::impls::aws_s3::S3InputStream;
 use crate::datasources::dal::Bytes;
 use crate::datasources::dal::DataAccessor;
@@ -44,7 +45,7 @@ impl S3 {
         S3 { client, bucket }
     }
 
-    pub fn fake_new() -> Self {
+    pub fn try_create(_storage_config: &S3StorageConfig) -> Result<Self, ErrorCode> {
         todo!()
     }
 

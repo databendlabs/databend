@@ -240,7 +240,7 @@ impl DatabendQueryContext {
         let conf = self.get_config();
         let scheme = StorageScheme::try_from(conf.storage.storage_type.as_str())?;
         match scheme {
-            StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
+            StorageScheme::S3 => Ok(Arc::new(S3::try_create(&conf.storage.s3)?)),
             StorageScheme::Disk => Ok(Arc::new(Local::new("/tmp"))),
         }
     }

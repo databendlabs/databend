@@ -14,6 +14,7 @@
 //
 
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 use common_exception::ErrorCode;
 
@@ -26,10 +27,8 @@ pub enum StorageScheme {
     S3,
 }
 
-impl TryFrom<&str> for StorageScheme {
-    type Error = common_exception::ErrorCode;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+impl StorageScheme {
+    fn parse(value: &str) -> Result<StorageScheme, ErrorCode> {
         let v = value.to_uppercase();
         match v.as_str() {
             "DISK" => Ok(Disk),
@@ -39,5 +38,21 @@ impl TryFrom<&str> for StorageScheme {
                 value
             ))),
         }
+    }
+}
+
+impl TryFrom<&str> for StorageScheme {
+    type Error = common_exception::ErrorCode;
+
+    fn try_from(v: &str) -> Result<Self, Self::Error> {
+        StorageScheme::parse(v)
+    }
+}
+
+impl FromStr for StorageScheme {
+    type Err = common_exception::ErrorCode;
+
+    fn from_str(v: &str) -> Result<Self, Self::Err> {
+        StorageScheme::parse(v)
     }
 }
