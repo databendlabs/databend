@@ -48,9 +48,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
 
     let client = StoreClient::with_tls_conf(addr.as_str(), "root", "xxx", Some(tls_conf)).await?;
 
-    let r = client
-        .get_table("do not care".to_owned(), "do not care".to_owned())
-        .await;
+    let r = client.get_table("do not care", "do not care").await;
     assert!(r.is_err());
 
     Ok(())

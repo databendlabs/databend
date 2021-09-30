@@ -98,7 +98,7 @@ async fn test_flight_restart() -> anyhow::Result<()> {
             let res = client.create_table(plan.clone()).await?;
             assert_eq!(1, res.table_id, "table id is 1");
 
-            let got = client.get_table(db_name.into(), table_name.into()).await?;
+            let got = client.get_table(db_name, table_name).await?;
             let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
@@ -293,10 +293,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             let res = client.create_table(plan.clone()).await.unwrap();
             assert_eq!(1, res.table_id, "table id is 1");
 
-            let got = client
-                .get_table(db_name.into(), tbl_name.into())
-                .await
-                .unwrap();
+            let got = client.get_table(db_name, tbl_name).await.unwrap();
             let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
@@ -314,10 +311,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
             let res = client.create_table(plan.clone()).await.unwrap();
             assert_eq!(1, res.table_id, "new table id");
 
-            let got = client
-                .get_table(db_name.into(), tbl_name.into())
-                .await
-                .unwrap();
+            let got = client.get_table(db_name, tbl_name).await.unwrap();
             let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
@@ -344,7 +338,7 @@ async fn test_flight_create_get_table() -> anyhow::Result<()> {
 
             // get_table returns the old table
 
-            let got = client.get_table("db1".into(), "tb2".into()).await.unwrap();
+            let got = client.get_table("db1", "tb2").await.unwrap();
             let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
@@ -423,10 +417,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
             let res = client.create_table(plan.clone()).await.unwrap();
             assert_eq!(1, res.table_id, "table id is 1");
 
-            let got = client
-                .get_table(db_name.into(), tbl_name.into())
-                .await
-                .unwrap();
+            let got = client.get_table(db_name, tbl_name).await.unwrap();
             let want = TableInfo {
                 table_id: 1,
                 db: db_name.into(),
@@ -450,7 +441,7 @@ async fn test_flight_drop_table() -> anyhow::Result<()> {
         }
 
         {
-            let res = client.get_table(db_name.into(), tbl_name.into()).await;
+            let res = client.get_table(db_name, tbl_name).await;
             let status = res.err().unwrap();
             assert_eq!(
                 format!("Code: 25, displayText = table not found: {}.", tbl_name),
@@ -1190,7 +1181,7 @@ async fn test_flight_get_tables() -> anyhow::Result<()> {
     let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // not such db
-    let res = client.get_tables("none".to_string()).await;
+    let res = client.get_tables("none").await;
     assert!(res.is_err());
     assert_eq!(
         res.unwrap_err().code(),
@@ -1207,7 +1198,7 @@ async fn test_flight_get_tables() -> anyhow::Result<()> {
 
     client.create_database(plan).await?;
 
-    let res = client.get_tables("db1".to_string()).await?;
+    let res = client.get_tables("db1").await?;
     assert!(res.is_empty());
 
     // with tables
@@ -1227,7 +1218,7 @@ async fn test_flight_get_tables() -> anyhow::Result<()> {
     };
     client.create_table(plan.clone()).await?;
 
-    let tbls = client.get_tables("db1".to_string()).await;
+    let tbls = client.get_tables("db1").await;
     assert!(tbls.is_ok());
     let tbls = tbls?;
     assert_eq!(1, tbls.len());

@@ -38,7 +38,13 @@ pub trait MetaBackend: Send + Sync {
 
     // table
 
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>>;
+
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>>;
 
     fn get_table_by_id(
         &self,
@@ -46,12 +52,6 @@ pub trait MetaBackend: Send + Sync {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>>;
-
-    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>>;
-
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
-
-    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 
     fn name(&self) -> String;
 }
