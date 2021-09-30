@@ -16,8 +16,6 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
-use common_metatypes::Database;
-use common_metatypes::Table;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseActionResult {
@@ -52,13 +50,5 @@ pub struct TableInfo {
     pub options: HashMap<String, String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DatabaseMetaSnapshot {
-    pub meta_ver: u64,
-    pub db_metas: Vec<(String, Database)>,
-    pub tbl_metas: Vec<(u64, Table)>,
-}
-
-pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
 pub type GetDatabasesReply = Vec<DatabaseInfo>;
 pub type GetTablesReply = Vec<TableInfo>;

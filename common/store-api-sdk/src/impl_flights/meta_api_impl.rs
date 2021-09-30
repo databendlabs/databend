@@ -67,8 +67,12 @@ impl MetaApi for StoreClient {
     }
 
     /// Get table.
-    async fn get_table(&self, db: String, table: String) -> common_exception::Result<TableInfo> {
-        self.do_action(GetTableAction { db, table }).await
+    async fn get_table(&self, db: &str, table: &str) -> common_exception::Result<TableInfo> {
+        self.do_action(GetTableAction {
+            db: db.to_string(),
+            table: table.to_string(),
+        })
+        .await
     }
 
     async fn get_table_by_id(
@@ -84,8 +88,8 @@ impl MetaApi for StoreClient {
     }
 
     /// Get tables.
-    async fn get_tables(&self, db: String) -> common_exception::Result<GetTablesReply> {
-        self.do_action(GetTablesAction { db }).await
+    async fn get_tables(&self, db: &str) -> common_exception::Result<GetTablesReply> {
+        self.do_action(GetTablesAction { db: db.to_string() }).await
     }
 }
 

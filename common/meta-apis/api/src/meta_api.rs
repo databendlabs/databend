@@ -36,21 +36,21 @@ pub trait MetaApi: Send + Sync {
     async fn create_database(&self, plan: CreateDatabasePlan)
         -> Result<CreateDatabaseActionResult>;
 
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<DropDatabaseActionResult>;
+
     async fn get_database(&self, db: &str) -> Result<DatabaseInfo>;
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<DropDatabaseActionResult>;
+    async fn get_databases(&self) -> Result<GetDatabasesReply>;
 
     // table
 
     async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableActionResult>;
 
-    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply>;
-
-    async fn get_tables(&self, db: String) -> common_exception::Result<GetTablesReply>;
-
     async fn drop_table(&self, plan: DropTablePlan) -> Result<DropTableActionResult>;
 
-    async fn get_table(&self, db: String, table: String) -> Result<TableInfo>;
+    async fn get_table(&self, db: &str, table: &str) -> Result<TableInfo>;
+
+    async fn get_tables(&self, db: &str) -> Result<GetTablesReply>;
 
     async fn get_table_by_id(
         &self,

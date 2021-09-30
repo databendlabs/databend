@@ -72,7 +72,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             self.rt.block_on(
                 async move {
                     let client = cli_provider.try_get_meta_client().await?;
-                    client.get_table(db_name, tbl_name).await
+                    client.get_table(&db_name, &tbl_name).await
                 },
                 self.rpc_time_out,
             )??
@@ -167,7 +167,7 @@ impl MetaBackend for RemoteMeteStoreClient {
         let tbls = self.rt.block_on(
             async move {
                 let client = cli.try_get_meta_client().await?;
-                client.get_tables(db_name).await
+                client.get_tables(&db_name).await
             },
             self.rpc_time_out,
         )??;
