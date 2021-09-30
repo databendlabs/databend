@@ -1271,8 +1271,9 @@ async fn test_flight_get_databases() -> anyhow::Result<()> {
     let res = client.get_databases().await?;
     assert_eq!(1, res.len());
     assert_eq!(res[0], DatabaseInfo {
-        name: "db1".to_string(),
-        engine: "Local".to_string()
+        database_id: 1,
+        engine: "Local".to_string(),
+        db: "".to_string()
     });
 
     Ok(())

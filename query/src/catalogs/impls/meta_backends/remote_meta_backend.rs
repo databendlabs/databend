@@ -13,18 +13,18 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
-use std::convert::TryFrom;
+
+
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow_flight::FlightData;
+
+
 use common_base::Runtime;
 use common_cache::Cache;
 use common_cache::LruCache;
-use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
+
+
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_meta_api_vo::DatabaseInfo;
@@ -37,10 +37,8 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
 
-type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
 #[derive(Clone)]
@@ -68,26 +66,6 @@ impl RemoteMeteStoreClient {
             table_meta_cache: Arc::new(Mutex::new(LruCache::new(100))),
             store_api_provider: apis_provider,
         }
-    }
-
-    fn to_table_info(&self, db_name: &str, t_name: &str, tbl: &CatalogTable) -> Result<TableInfo> {
-        let schema_bin = &tbl.schema;
-        let t_id = tbl.table_id;
-        let arrow_schema = ArrowSchema::try_from(&FlightData {
-            data_header: schema_bin.clone(),
-            ..Default::default()
-        })?;
-        let schema = DataSchema::from(arrow_schema);
-
-        let info = TableInfo {
-            db: db_name.to_owned(),
-            table_id: t_id,
-            name: t_name.to_owned(),
-            schema: Arc::new(schema),
-            table_option: tbl.table_options.clone(),
-            engine: tbl.table_engine.clone(),
-        };
-        Ok(info)
     }
 }
 

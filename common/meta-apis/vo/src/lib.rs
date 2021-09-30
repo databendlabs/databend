@@ -61,12 +61,6 @@ pub struct DatabaseMetaSnapshot {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct DatabaseInfo {
-    pub name: String,
-    pub engine: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TableInfo {
     pub db: String,
     pub table_id: u64,
