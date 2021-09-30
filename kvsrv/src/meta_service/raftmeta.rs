@@ -1010,32 +1010,68 @@ impl MetaNode {
         sm.get_database(name)
     }
 
+    //    #[tracing::instrument(level = "debug", skip(self))]
+    //    pub async fn get_database_meta(
+    //        &self,
+    //        lower_bound: Option<u64>,
+    //    ) -> common_exception::Result<Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)>> {
+    //        // inconsistent get: from local state machine
+    //
+    //        let sm = self.sto.state_machine.read().await;
+    //        let ver = sm.get_database_meta_ver()?;
+    //        let res = if ver <= lower_bound {
+    //            None
+    //        } else {
+    //            let dbs = sm
+    //                .get_databases()
+    //                .iter()
+    //                .map(|(k, v)| (k.clone(), v.clone()))
+    //                .collect::<Vec<_>>();
+    //            let tbls = sm
+    //                .tables
+    //                .iter()
+    //                .map(|(k, v)| (*k, v.clone()))
+    //                .collect::<Vec<_>>();
+    //            Some((ver.unwrap_or(0), dbs, tbls))
+    //        };
+    //
+    //        Ok(res)
+    //    }
+    //
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_database_meta(
-        &self,
-        lower_bound: Option<u64>,
-    ) -> common_exception::Result<Option<(u64, Vec<(String, Database)>, Vec<(u64, Table)>)>> {
-        // inconsistent get: from local state machine
-
+    pub async fn get_databases(&self) -> Vec<(String, Database)> {
         let sm = self.sto.state_machine.read().await;
-        let ver = sm.get_database_meta_ver()?;
-        let res = if ver <= lower_bound {
-            None
-        } else {
-            let dbs = sm
-                .get_databases()
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<Vec<_>>();
-            let tbls = sm
+        sm.get_databases()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>()
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_tables(
+        &self,
+        db_name: &str,
+    ) -> common_exception::Result<Vec<(u64, String, Table)>> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.state_machine.read().await;
+        if let Some(db) = sm.get_database(db_name) {
+            let tbls = db
                 .tables
                 .iter()
-                .map(|(k, v)| (*k, v.clone()))
-                .collect::<Vec<_>>();
-            Some((ver.unwrap_or(0), dbs, tbls))
-        };
-
-        Ok(res)
+                .try_fold(Vec::new(), |mut acc, (tbl_name, tbl_id)| {
+                    let tbl = sm.tables.get(tbl_id).ok_or_else(|| {
+                        ErrorCode::IllegalMetaState(format!(" table of id {}, not found", tbl_id))
+                    })?;
+                    acc.push((*tbl_id, tbl_name.to_string(), tbl.clone()));
+                    Ok::<_, ErrorCode>(acc)
+                })?;
+            Ok(tbls)
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "unknown database {}",
+                db_name
+            )))
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

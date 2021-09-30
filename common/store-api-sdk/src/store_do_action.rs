@@ -30,11 +30,12 @@ use crate::impl_flights::meta_api_impl::CreateTableAction;
 use crate::impl_flights::meta_api_impl::DropDatabaseAction;
 use crate::impl_flights::meta_api_impl::DropTableAction;
 use crate::impl_flights::meta_api_impl::GetDatabaseAction;
-use crate::impl_flights::meta_api_impl::GetDatabaseMetaAction;
+use crate::impl_flights::meta_api_impl::GetDatabasesAction;
 use crate::impl_flights::meta_api_impl::GetTableAction;
+use crate::impl_flights::meta_api_impl::GetTableExtReq;
+use crate::impl_flights::meta_api_impl::GetTablesAction;
 use crate::impl_flights::storage_api_impl::ReadPlanAction;
 use crate::impl_flights::storage_api_impl::TruncateTableAction;
-use crate::meta_api_impl::GetTableExtReq;
 use crate::protobuf::FlightStoreRequest;
 
 pub trait RequestFor {
@@ -67,7 +68,8 @@ pub enum StoreDoAction {
     DropTable(DropTableAction),
     GetTable(GetTableAction),
     GetTableExt(GetTableExtReq),
-    GetDatabaseMeta(GetDatabaseMetaAction),
+    GetTables(GetTablesAction),
+    GetDatabases(GetDatabasesAction),
     ReadPlan(ReadPlanAction),
     TruncateTable(TruncateTableAction),
 

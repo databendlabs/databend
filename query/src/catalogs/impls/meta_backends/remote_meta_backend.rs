@@ -13,18 +13,12 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow_flight::FlightData;
 use common_base::Runtime;
 use common_cache::Cache;
 use common_cache::LruCache;
-use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_meta_api_vo::DatabaseInfo;
@@ -39,7 +33,6 @@ use common_planners::DropTablePlan;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::common::StoreApiProvider;
 
-type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
 #[derive(Clone)]
@@ -178,66 +171,27 @@ impl MetaBackend for RemoteMeteStoreClient {
 
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
         let cli_provider = self.store_api_provider.clone();
-        let db = self.rt.block_on(
+        let dbs = self.rt.block_on(
             async move {
                 let client = cli_provider.try_get_meta_client().await?;
-                client.get_database_meta(None).await
+                client.get_databases().await
             },
             self.rpc_time_out,
         )??;
-
-        match db {
-            None => Ok(vec![]),
-            Some(snapshot) => {
-                let mut res = vec![];
-                let db_metas = snapshot.db_metas;
-                for (name, database) in db_metas {
-                    res.push(Arc::new(DatabaseInfo {
-                        database_id: database.database_id,
-                        db: name,
-                        engine: database.database_engine,
-                    }));
-                }
-                Ok(res)
-            }
-        }
+        Ok(dbs.into_iter().map(Arc::new).collect())
     }
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
         let cli = self.store_api_provider.clone();
-        let reply = self.rt.block_on(
+        let db_name = db_name.to_owned();
+        let tbls = self.rt.block_on(
             async move {
                 let client = cli.try_get_meta_client().await?;
-                // always take the latest snapshot
-                client.get_database_meta(None).await
+                client.get_tables(db_name).await
             },
             self.rpc_time_out,
         )??;
-
-        match reply {
-            None => Ok(vec![]),
-            Some(snapshot) => {
-                let id_tbls = snapshot.tbl_metas.into_iter().collect::<HashMap<_, _>>();
-                let dbs = snapshot.db_metas;
-                let mut res = vec![];
-                for (db, database) in dbs {
-                    if db == db_name {
-                        for (t_name, t_id) in database.tables {
-                            let tbl = id_tbls.get(&t_id).ok_or_else(|| {
-                                ErrorCode::IllegalMetaState(format!(
-                                    "db meta inconsistent with table meta, table of id {}, not found",
-                                    t_id
-                                ))
-                            })?;
-
-                            let tbl_info = self.to_table_info(&db, &t_name, tbl)?;
-                            res.push(Arc::new(tbl_info));
-                        }
-                    }
-                }
-                Ok(res)
-            }
-        }
+        Ok(tbls.into_iter().map(Arc::new).collect())
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
