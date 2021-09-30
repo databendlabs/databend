@@ -2837,6 +2837,7 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-vo",
  "common-meta-api",
+ "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-raft-store",

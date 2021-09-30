@@ -14,6 +14,7 @@
 
 mod action_handler;
 mod kv_handlers;
+mod meta_handlers;
 
 pub use action_handler::ActionHandler;
 pub use action_handler::ReplySerializer;
