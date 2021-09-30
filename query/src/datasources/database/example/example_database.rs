@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
@@ -23,7 +24,6 @@ use common_planners::DropTablePlan;
 
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
-use crate::catalogs::TableInfo;
 use crate::catalogs::TableMeta;
 use crate::datasources::database::example::ExampleTable;
 

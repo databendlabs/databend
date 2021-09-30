@@ -21,10 +21,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_api_vo::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
-use crate::catalogs::TableInfo;
 use crate::datasources::table::memory::memory_table::MemoryTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -14,16 +14,12 @@
 //
 
 pub use catalog::Catalog;
-use common_datavalues::DataSchemaRef;
-use common_planners::TableOptions;
 pub use database::Database;
 pub use impls::util::in_memory_metas::InMemoryMetas;
 pub use meta_id_ranges::*;
-//pub use meta_backend::MetaBackend;
 pub use table::Table;
 pub use table::TablePtr;
 pub use table_function::TableFunction;
-//pub use database_engine::DatabaseEngine;
 pub use table_meta::Meta;
 pub use table_meta::TableFunctionMeta;
 pub use table_meta::TableMeta;
@@ -39,13 +35,3 @@ mod table_meta;
 
 pub mod impls;
 pub mod meta_backend;
-
-#[derive(Debug, Clone)]
-pub struct TableInfo {
-    pub db: String,
-    pub table_id: u64,
-    pub name: String,
-    pub schema: DataSchemaRef,
-    pub engine: String,
-    pub table_option: TableOptions,
-}

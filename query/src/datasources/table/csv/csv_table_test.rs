@@ -19,10 +19,10 @@ use common_base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_api_vo::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
-use crate::catalogs::TableInfo;
 use crate::datasources::table::csv::csv_table::CsvTable;
 
 #[tokio::test]

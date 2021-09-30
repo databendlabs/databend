@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
 use common_meta_api_vo::DatabaseInfo;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -28,7 +29,6 @@ use common_planners::DropTablePlan;
 
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
-use crate::catalogs::TableInfo;
 
 struct InMemoryTableInfo {
     pub(crate) name2meta: HashMap<String, Arc<TableInfo>>,

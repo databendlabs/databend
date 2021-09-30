@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_dfs_api_vo::ReadPlanResult;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api_vo::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
@@ -29,7 +30,6 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
 use crate::datasources::table_engine::TableEngine;
 use crate::sessions::DatabendQueryContextRef;

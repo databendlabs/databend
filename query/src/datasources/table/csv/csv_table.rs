@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api_vo::TableInfo;
 use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
@@ -27,7 +28,6 @@ use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::catalogs::TableInfo;
 use crate::datasources::common::count_lines;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table::csv::csv_table_stream::CsvTableStream;

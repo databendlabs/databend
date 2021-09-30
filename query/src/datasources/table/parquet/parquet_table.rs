@@ -22,6 +22,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api_vo::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -33,7 +34,6 @@ use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
 use crate::catalogs::Table;
-use crate::catalogs::TableInfo;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct ParquetTable {

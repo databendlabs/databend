@@ -36,10 +36,10 @@ use common_store_api_sdk::meta_api_impl::CreateTableAction;
 use common_store_api_sdk::meta_api_impl::DropDatabaseAction;
 use common_store_api_sdk::meta_api_impl::DropTableAction;
 use common_store_api_sdk::meta_api_impl::GetDatabaseAction;
-use common_store_api_sdk::meta_api_impl::GetDatabaseMetaAction;
 use common_store_api_sdk::meta_api_impl::GetDatabasesAction;
 use common_store_api_sdk::meta_api_impl::GetTableAction;
 use common_store_api_sdk::meta_api_impl::GetTableExtReq;
+use common_store_api_sdk::meta_api_impl::GetTablesAction;
 use log::info;
 
 use crate::executor::action_handler::RequestHandler;
@@ -339,27 +339,11 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetDatabaseMetaAction> for ActionHandler {
+impl RequestHandler<GetDatabasesAction> for ActionHandler {
     async fn handle(
         &self,
-        req: GetDatabaseMetaAction,
-    ) -> common_exception::Result<DatabaseMetaReply> {
-        let res = self
-            .meta_node
-            .get_database_meta(req.ver_lower_bound)
-            .await?;
-
-        Ok(res.map(|(v, dbs, tbls)| DatabaseMetaSnapshot {
-            meta_ver: v,
-            db_metas: dbs,
-            tbl_metas: tbls,
-        }))
-    }
-}
-
-#[async_trait::async_trait]
-impl RequestHandler<GetDatabasesAction> for ActionHandler {
-    async fn handle(&self, _req: GetDatabasesAction) -> common_exception::Result<DatabasesReply> {
+        _req: GetDatabasesAction,
+    ) -> common_exception::Result<GetDatabasesReply> {
         let res = self.meta_node.get_databases().await;
         Ok(res
             .iter()
@@ -368,5 +352,39 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
                 engine: db.database_engine.to_string(),
             })
             .collect::<Vec<_>>())
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<GetTablesAction> for ActionHandler {
+    async fn handle(&self, req: GetTablesAction) -> common_exception::Result<GetTablesReply> {
+        let res = self.meta_node.get_tables(req.db.as_str()).await?;
+        Ok(res
+            .iter()
+            .try_fold(Vec::new(), |mut acc, (id, name, tbl)| {
+                let arrow_schema = ArrowSchema::try_from(&FlightData {
+                    data_header: tbl.schema.clone(),
+                    ..Default::default()
+                })
+                .map_err(|e| {
+                    ErrorCode::IllegalSchema(format!(
+                        "invalid schema of table id {}, error: {}",
+                        *id,
+                        e.to_string()
+                    ))
+                })?;
+
+                let tbl_info = TableInfo {
+                    db: req.db.to_string(),
+                    table_id: *id,
+                    name: name.to_string(),
+                    schema: Arc::new(arrow_schema.into()),
+                    engine: tbl.table_engine.to_string(),
+                    table_option: Default::default(),
+                };
+
+                acc.push(tbl_info);
+                Ok::<_, ErrorCode>(acc)
+            })?)
     }
 }
