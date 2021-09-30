@@ -56,7 +56,7 @@ impl MetaApi for StoreClient {
     }
 
     /// Drop table call.
-    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<DropTableReply> {
+    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
         self.do_action(DropTableAction { plan }).await
     }
 
@@ -129,7 +129,7 @@ action_declare!(
 pub struct DropTableAction {
     pub plan: DropTablePlan,
 }
-action_declare!(DropTableAction, DropTableReply, StoreDoAction::DropTable);
+action_declare!(DropTableAction, (), StoreDoAction::DropTable);
 
 // - get table
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

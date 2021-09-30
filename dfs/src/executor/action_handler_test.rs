@@ -548,7 +548,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
         db_name: &'static str,
         table_name: &'static str,
         if_exists: bool,
-        want: Result<DropTableReply, ErrorCode>,
+        want: Result<(), ErrorCode>,
     }
 
     /// helper to build a T
@@ -559,7 +559,7 @@ async fn test_action_handler_drop_table() -> anyhow::Result<()> {
         want: Result<(), &str>,
     ) -> T {
         let want = match want {
-            Ok(..) => Ok(DropTableReply {}),
+            Ok(..) => Ok(()),
             Err(err_str) => Err(ErrorCode::UnknownTable(err_str)),
         };
 

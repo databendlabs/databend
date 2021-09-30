@@ -35,9 +35,6 @@ pub struct CreateTableReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DropTableReply {}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableInfo {
     pub table_id: u64,
     pub db: String,

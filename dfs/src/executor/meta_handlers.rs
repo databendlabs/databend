@@ -218,7 +218,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<DropTableAction> for ActionHandler {
-    async fn handle(&self, act: DropTableAction) -> common_exception::Result<DropTableReply> {
+    async fn handle(&self, act: DropTableAction) -> common_exception::Result<()> {
         let db_name = &act.plan.db;
         let table_name = &act.plan.table;
         let if_exists = act.plan.if_exists;
@@ -241,7 +241,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         match rst {
             AppliedState::Table { prev, .. } => {
                 if prev.is_some() || if_exists {
-                    Ok(DropTableReply {})
+                    Ok(())
                 } else {
                     Err(ErrorCode::UnknownTable(format!(
                         "table not found: {:}",
