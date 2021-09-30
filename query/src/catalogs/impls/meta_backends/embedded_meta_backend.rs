@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
+use common_meta_api_vo::DatabaseInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -25,7 +26,6 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
 use crate::catalogs::TableInfo;
@@ -269,7 +269,9 @@ impl MetaBackend for EmbeddedMetaBackend {
         }
 
         let database_info = DatabaseInfo {
-            name: db_name.to_string(),
+            // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+            database_id: 0,
+            db: db_name.to_string(),
             engine: plan.engine.clone(),
         };
 

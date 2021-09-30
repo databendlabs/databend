@@ -25,7 +25,7 @@ pub struct CreateDatabaseActionResult {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetDatabaseActionResult {
+pub struct DatabaseInfo {
     pub database_id: u64,
     pub db: String,
     pub engine: String,

@@ -37,7 +37,7 @@ impl MetaApi for StoreClient {
         self.do_action(CreateDatabaseAction { plan }).await
     }
 
-    async fn get_database(&self, db: &str) -> common_exception::Result<GetDatabaseActionResult> {
+    async fn get_database(&self, db: &str) -> common_exception::Result<DatabaseInfo> {
         self.do_action(GetDatabaseAction { db: db.to_string() })
             .await
     }
@@ -109,11 +109,7 @@ action_declare!(
 pub struct GetDatabaseAction {
     pub db: String,
 }
-action_declare!(
-    GetDatabaseAction,
-    GetDatabaseActionResult,
-    StoreDoAction::GetDatabase
-);
+action_declare!(GetDatabaseAction, DatabaseInfo, StoreDoAction::GetDatabase);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropDatabaseAction {

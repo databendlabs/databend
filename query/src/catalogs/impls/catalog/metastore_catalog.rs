@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_api_vo::DatabaseInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -27,7 +28,6 @@ use common_planners::DropDatabasePlan;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
 use crate::catalogs::impls::meta_backends::RemoteMeteStoreClient;
-use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
 use crate::catalogs::TableMeta;
@@ -123,7 +123,7 @@ impl MetaStoreCatalog {
                 ))
             })?;
 
-        let name = db_info.name.clone();
+        let name = db_info.db.clone();
         let db = provider.create(&self.conf, db_info)?;
         self.db_instances.write().insert(name, db.clone());
         Ok(db)

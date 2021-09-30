@@ -27,6 +27,7 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_api_vo::DatabaseInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -34,7 +35,6 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::TableInfo;
 use crate::common::StoreApiProvider;
@@ -168,7 +168,8 @@ impl MetaBackend for RemoteMeteStoreClient {
         };
 
         let database_info = DatabaseInfo {
-            name: db_name.to_owned(),
+            database_id: db.database_id,
+            db: db_name.to_owned(),
             engine: db.engine,
         };
 
@@ -192,7 +193,8 @@ impl MetaBackend for RemoteMeteStoreClient {
                 let db_metas = snapshot.db_metas;
                 for (name, database) in db_metas {
                     res.push(Arc::new(DatabaseInfo {
-                        name,
+                        database_id: database.database_id,
+                        db: name,
                         engine: database.database_engine,
                     }));
                 }
