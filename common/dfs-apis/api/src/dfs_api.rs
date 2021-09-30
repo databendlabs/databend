@@ -17,20 +17,10 @@ use common_datavalues::DataSchemaRef;
 use common_dfs_api_vo::AppendResult;
 use common_dfs_api_vo::BlockStream;
 use common_dfs_api_vo::ReadAction;
-use common_dfs_api_vo::ReadPlanResult;
-use common_dfs_api_vo::TruncateTableResult;
-use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 
 #[async_trait::async_trait]
 pub trait StorageApi: Send + Sync {
-    async fn read_plan(
-        &self,
-        db_name: String,
-        tbl_name: String,
-        push_downs: Option<Extras>,
-    ) -> common_exception::Result<ReadPlanResult>;
-
     /// Get partition.
     async fn read_partition(
         &self,
@@ -46,9 +36,9 @@ pub trait StorageApi: Send + Sync {
         mut block_stream: BlockStream,
     ) -> common_exception::Result<AppendResult>;
 
-    async fn truncate(
-        &self,
-        db: String,
-        table: String,
-    ) -> common_exception::Result<TruncateTableResult>;
+    // async fn truncate(
+    //     &self,
+    //     db: String,
+    //     table: String,
+    // ) -> common_exception::Result<TruncateTableResult>;
 }

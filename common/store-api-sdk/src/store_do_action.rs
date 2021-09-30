@@ -32,8 +32,6 @@ use crate::impl_flights::meta_api_impl::DropTableAction;
 use crate::impl_flights::meta_api_impl::GetDatabaseAction;
 use crate::impl_flights::meta_api_impl::GetDatabaseMetaAction;
 use crate::impl_flights::meta_api_impl::GetTableAction;
-use crate::impl_flights::storage_api_impl::ReadPlanAction;
-use crate::impl_flights::storage_api_impl::TruncateTableAction;
 use crate::meta_api_impl::GetTableExtReq;
 use crate::protobuf::FlightStoreRequest;
 
@@ -68,8 +66,7 @@ pub enum StoreDoAction {
     GetTable(GetTableAction),
     GetTableExt(GetTableExtReq),
     GetDatabaseMeta(GetDatabaseMetaAction),
-    ReadPlan(ReadPlanAction),
-    TruncateTable(TruncateTableAction),
+    // TruncateTable(TruncateTableAction),
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
