@@ -101,16 +101,13 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetDatabaseAction> for ActionHandler {
-    async fn handle(
-        &self,
-        act: GetDatabaseAction,
-    ) -> common_exception::Result<GetDatabaseActionResult> {
+    async fn handle(&self, act: GetDatabaseAction) -> common_exception::Result<DatabaseInfo> {
         let db_name = act.db;
         let db = self.meta_node.get_database(&db_name).await;
 
         match db {
             Some(db) => {
-                let rst = GetDatabaseActionResult {
+                let rst = DatabaseInfo {
                     database_id: db.database_id,
                     db: db_name,
                     engine: db.database_engine,

@@ -28,7 +28,7 @@ pub trait MetaApi: Send + Sync {
         plan: CreateDatabasePlan,
     ) -> common_exception::Result<CreateDatabaseActionResult>;
 
-    async fn get_database(&self, db: &str) -> common_exception::Result<GetDatabaseActionResult>;
+    async fn get_database(&self, db: &str) -> common_exception::Result<DatabaseInfo>;
 
     async fn drop_database(
         &self,

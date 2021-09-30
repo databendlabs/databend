@@ -161,13 +161,13 @@ async fn test_action_handler_get_database() -> anyhow::Result<()> {
 
     struct T {
         db_name: &'static str,
-        want: Result<GetDatabaseActionResult, ErrorCode>,
+        want: Result<DatabaseInfo, ErrorCode>,
     }
 
     /// helper to build a T
     fn case(db_name: &'static str, want: Result<u64, &str>) -> T {
         let want = match want {
-            Ok(want_db_id) => Ok(GetDatabaseActionResult {
+            Ok(want_db_id) => Ok(DatabaseInfo {
                 database_id: want_db_id,
                 db: db_name.to_string(),
                 engine: "Local".to_string(),
