@@ -37,6 +37,7 @@ use common_store_api_sdk::meta_api_impl::DropDatabaseAction;
 use common_store_api_sdk::meta_api_impl::DropTableAction;
 use common_store_api_sdk::meta_api_impl::GetDatabaseAction;
 use common_store_api_sdk::meta_api_impl::GetDatabaseMetaAction;
+use common_store_api_sdk::meta_api_impl::GetDatabasesAction;
 use common_store_api_sdk::meta_api_impl::GetTableAction;
 use common_store_api_sdk::meta_api_impl::GetTableExtReq;
 use log::info;
@@ -353,5 +354,19 @@ impl RequestHandler<GetDatabaseMetaAction> for ActionHandler {
             db_metas: dbs,
             tbl_metas: tbls,
         }))
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<GetDatabasesAction> for ActionHandler {
+    async fn handle(&self, _req: GetDatabasesAction) -> common_exception::Result<DatabasesReply> {
+        let res = self.meta_node.get_databases().await;
+        Ok(res
+            .iter()
+            .map(|(name, db)| DatabaseInfo {
+                name: name.to_string(),
+                engine: db.database_engine.to_string(),
+            })
+            .collect::<Vec<_>>())
     }
 }

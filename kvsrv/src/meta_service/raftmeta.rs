@@ -1039,6 +1039,15 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_databases(&self) -> Vec<(String, Database)> {
+        let sm = self.sto.state_machine.read().await;
+        sm.get_databases()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>()
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_table(&self, tid: &u64) -> Option<Table> {
         // inconsistent get: from local state machine
 

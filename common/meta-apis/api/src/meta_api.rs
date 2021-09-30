@@ -61,4 +61,6 @@ pub trait MetaApi: Send + Sync {
         &self,
         current_ver: Option<u64>,
     ) -> common_exception::Result<DatabaseMetaReply>;
+
+    async fn get_databases(&self) -> common_exception::Result<DatabasesReply>;
 }

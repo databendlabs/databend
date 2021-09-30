@@ -90,6 +90,10 @@ impl MetaApi for StoreClient {
         self.do_action(GetDatabaseMetaAction { ver_lower_bound })
             .await
     }
+
+    async fn get_databases(&self) -> common_exception::Result<DatabasesReply> {
+        self.do_action(GetDatabasesAction {}).await
+    }
 }
 
 // == database actions ==
@@ -178,4 +182,15 @@ action_declare!(
     GetDatabaseMetaAction,
     DatabaseMetaReply,
     StoreDoAction::GetDatabaseMeta
+);
+
+// -get databases
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct GetDatabasesAction;
+
+action_declare!(
+    GetDatabasesAction,
+    DatabasesReply,
+    StoreDoAction::GetDatabases
 );

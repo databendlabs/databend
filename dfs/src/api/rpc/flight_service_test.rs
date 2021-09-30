@@ -1350,3 +1350,34 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_get_databases() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_store_ut!();
+    let _ent = ut_span.enter();
+    let (_tc, addr) = crate::tests::start_store_server().await?;
+    let client = StoreClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    // empty db meta
+    let res = client.get_databases().await?;
+    assert!(res.is_empty());
+
+    // create-db operation will increases meta_version
+    let plan = CreateDatabasePlan {
+        if_not_exists: false,
+        db: "db1".to_string(),
+        engine: "Local".to_string(),
+        options: Default::default(),
+    };
+
+    client.create_database(plan).await?;
+
+    let res = client.get_databases().await?;
+    assert_eq!(1, res.len());
+    assert_eq!(res[0], DatabaseInfo {
+        name: "db1".to_string(),
+        engine: "Local".to_string()
+    });
+
+    Ok(())
+}

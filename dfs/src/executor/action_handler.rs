@@ -99,6 +99,7 @@ impl ActionHandler {
             StoreDoAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
             StoreDoAction::GetDatabaseMeta(a) => s.serialize(self.handle(a).await?),
+            StoreDoAction::GetDatabases(a) => s.serialize(self.handle(a).await?),
 
             // table
             StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?),
