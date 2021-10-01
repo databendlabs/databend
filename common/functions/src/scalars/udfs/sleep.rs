@@ -41,7 +41,7 @@ impl SleepFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::no_features().deterministic()
+            FunctionFeatures::no_features()
         )
     }
 }
@@ -108,10 +108,6 @@ impl Function for SleepFunction {
                 Ok(DataColumn::Constant(DataValue::UInt8(Some(0)), *rows))
             }
         }
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }
 

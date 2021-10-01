@@ -37,7 +37,7 @@ impl CrashMeFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::no_features().deterministic()
+            FunctionFeatures::no_features()
         )
     }
 }
@@ -61,10 +61,6 @@ impl Function for CrashMeFunction {
 
     fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         panic!("crash me function");
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }
 

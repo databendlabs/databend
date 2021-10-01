@@ -37,6 +37,7 @@ use std::collections::HashMap;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 
+#[derive(Clone)]
 pub struct FunctionFeatures {
     is_deterministic: bool,
 }
@@ -51,6 +52,11 @@ impl FunctionFeatures {
     pub fn deterministic(mut self) -> FunctionFeatures {
         self.is_deterministic = true;
         self
+    }
+
+    // If function returns the same result when same arguments, it is deterministic function.
+    pub fn is_deterministic(&self) -> bool {
+        self.is_deterministic
     }
 }
 
@@ -121,6 +127,16 @@ impl FunctionFactory {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
             None => Err(ErrorCode::UnknownFunction(format!("Unsupported Function: {}", origin_name))),
             Some(desc) => (desc.function_creator)(&origin_name)
+        }
+    }
+
+    pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {
+        let origin_name = name.as_ref();
+        let lowercase_name = origin_name.to_lowercase();
+        match self.case_insensitive_desc.get(&lowercase_name) {
+            // TODO(Winter): we should write similar function names into error message if function name is not found.
+            None => Err(ErrorCode::UnknownFunction(format!("Unsupported Function: {}", origin_name))),
+            Some(desc) => Ok(desc.features.clone())
         }
     }
 
