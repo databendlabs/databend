@@ -89,10 +89,6 @@ impl Table for NumbersTable {
         &self.table_name
     }
 
-    fn database(&self) -> &str {
-        &self.db_name
-    }
-
     fn get_id(&self) -> u64 {
         self.table_id
     }

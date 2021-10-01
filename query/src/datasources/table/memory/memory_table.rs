@@ -55,10 +55,6 @@ impl Table for MemoryTable {
         &self.tbl_info.name
     }
 
-    fn database(&self) -> &str {
-        &self.tbl_info.db
-    }
-
     fn engine(&self) -> &str {
         &self.tbl_info.engine
     }

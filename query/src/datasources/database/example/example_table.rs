@@ -61,10 +61,6 @@ impl Table for ExampleTable {
         &self.name
     }
 
-    fn database(&self) -> &str {
-        self.db.as_str()
-    }
-
     fn engine(&self) -> &str {
         "ExampleNull"
     }

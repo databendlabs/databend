@@ -34,16 +34,14 @@ use crate::sessions::DatabendQueryContextRef;
 
 pub struct TracingTable {
     table_id: u64,
-    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl TracingTable {
-    pub fn create(table_id: u64, db_name: &str) -> Self {
+    pub fn create(table_id: u64) -> Self {
         // {"v":0,"name":"databend-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"databend","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
         TracingTable {
             table_id,
-            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("v", DataType::Int64, false),
                 DataField::new("name", DataType::String, false),
@@ -61,10 +59,6 @@ impl TracingTable {
 impl Table for TracingTable {
     fn name(&self) -> &str {
         "tracing"
-    }
-
-    fn database(&self) -> &str {
-        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {

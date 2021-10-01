@@ -29,15 +29,13 @@ use crate::sessions::DatabendQueryContextRef;
 
 pub struct ContributorsTable {
     table_id: u64,
-    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl ContributorsTable {
-    pub fn create(table_id: u64, db_name: &str) -> Self {
+    pub fn create(table_id: u64) -> Self {
         ContributorsTable {
             table_id,
-            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]),
         }
     }
@@ -47,10 +45,6 @@ impl ContributorsTable {
 impl Table for ContributorsTable {
     fn name(&self) -> &str {
         "contributors"
-    }
-
-    fn database(&self) -> &str {
-        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {

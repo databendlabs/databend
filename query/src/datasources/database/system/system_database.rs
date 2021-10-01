@@ -53,18 +53,18 @@ impl SystemDatabase {
 
         // Table list.
         let table_list: Vec<Arc<dyn Table>> = vec![
-            Arc::new(system::OneTable::create(next_id(), &name)),
-            Arc::new(system::FunctionsTable::create(next_id(), &name)),
-            Arc::new(system::ContributorsTable::create(next_id(), &name)),
-            Arc::new(system::CreditsTable::create(next_id(), &name)),
-            Arc::new(system::EnginesTable::create(next_id(), &name)),
-            Arc::new(system::SettingsTable::create(next_id(), &name)),
-            Arc::new(system::TablesTable::create(next_id(), &name)),
-            Arc::new(system::ClustersTable::create(next_id(), &name)),
-            Arc::new(system::DatabasesTable::create(next_id(), &name)),
-            Arc::new(system::TracingTable::create(next_id(), &name)),
-            Arc::new(system::ProcessesTable::create(next_id(), &name)),
-            Arc::new(system::ConfigsTable::create(next_id(), &name)),
+            Arc::new(system::OneTable::create(next_id())),
+            Arc::new(system::FunctionsTable::create(next_id())),
+            Arc::new(system::ContributorsTable::create(next_id())),
+            Arc::new(system::CreditsTable::create(next_id())),
+            Arc::new(system::EnginesTable::create(next_id())),
+            Arc::new(system::SettingsTable::create(next_id())),
+            Arc::new(system::TablesTable::create(next_id())),
+            Arc::new(system::ClustersTable::create(next_id())),
+            Arc::new(system::DatabasesTable::create(next_id())),
+            Arc::new(system::TracingTable::create(next_id())),
+            Arc::new(system::ProcessesTable::create(next_id())),
+            Arc::new(system::ConfigsTable::create(next_id())),
         ];
 
         let tbl_meta_list = table_list.into_iter().map(|t| {

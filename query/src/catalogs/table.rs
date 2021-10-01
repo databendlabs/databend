@@ -30,7 +30,6 @@ use crate::sessions::DatabendQueryContextRef;
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
     fn name(&self) -> &str;
-    fn database(&self) -> &str;
     fn engine(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
     fn schema(&self) -> Result<DataSchemaRef>;

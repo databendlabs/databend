@@ -22,7 +22,7 @@ use crate::datasources::database::system::FunctionsTable;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_functions_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
-    let table = FunctionsTable::create(1, "system");
+    let table = FunctionsTable::create(1);
     let source_plan = table.read_plan(
         ctx.clone(),
         None,

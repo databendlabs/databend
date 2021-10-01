@@ -30,15 +30,13 @@ use crate::sessions::DatabendQueryContextRef;
 
 pub struct EnginesTable {
     table_id: u64,
-    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl EnginesTable {
-    pub fn create(table_id: u64, db_name: &str) -> Self {
+    pub fn create(table_id: u64) -> Self {
         EnginesTable {
             table_id,
-            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::String, false),
                 DataField::new("description", DataType::String, false),
@@ -51,10 +49,6 @@ impl EnginesTable {
 impl Table for EnginesTable {
     fn name(&self) -> &str {
         "engines"
-    }
-
-    fn database(&self) -> &str {
-        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {

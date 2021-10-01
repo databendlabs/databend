@@ -29,15 +29,13 @@ use crate::sessions::DatabendQueryContextRef;
 
 pub struct OneTable {
     tbl_id: u64,
-    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl OneTable {
-    pub fn create(tbl_id: u64, db_name: &str) -> Self {
+    pub fn create(tbl_id: u64) -> Self {
         OneTable {
             tbl_id,
-            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]),
         }
     }
@@ -47,10 +45,6 @@ impl OneTable {
 impl Table for OneTable {
     fn name(&self) -> &str {
         "one"
-    }
-
-    fn database(&self) -> &str {
-        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {
