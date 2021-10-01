@@ -65,6 +65,10 @@ impl FunctionFeatures {
     pub fn is_deterministic(&self) -> bool {
         self.is_deterministic
     }
+
+    pub fn get_negative_function(&self) -> Option<String> {
+        self.folding_combinator.get("not").cloned()
+    }
 }
 
 pub struct FunctionDescription {
