@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
-use common_planners::Expressions;
 use common_planners::Recursion;
 
 pub struct RequireColumnsVisitor {
@@ -43,22 +42,4 @@ impl ExpressionVisitor for RequireColumnsVisitor {
             _ => Ok(Recursion::Continue(self)),
         }
     }
-}
-
-pub fn create_scalar_function(op: &str, args: Expressions) -> Expression {
-    let op = op.to_string();
-    Expression::ScalarFunction { op, args }
-}
-
-pub fn create_unary_expression(op: &str, mut args: Expressions) -> Expression {
-    let op = op.to_string();
-    let expr = Box::new(args.remove(0));
-    Expression::UnaryExpression { op, expr }
-}
-
-pub fn create_binary_expression(op: &str, mut args: Expressions) -> Expression {
-    let op = op.to_string();
-    let left = Box::new(args.remove(0));
-    let right = Box::new(args.remove(0));
-    Expression::BinaryExpression { op, left, right }
 }

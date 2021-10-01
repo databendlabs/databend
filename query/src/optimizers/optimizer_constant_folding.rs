@@ -27,7 +27,6 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
-use crate::optimizers::utils::*;
 use crate::optimizers::Optimizer;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::DatabendQueryContextRef;
@@ -125,12 +124,22 @@ impl PlanRewriter for ConstantFoldingImpl {
                     .collect::<Result<Vec<_>>>()?;
 
                 let origin_name = origin.column_name();
-                Self::rewrite_function(op, new_args, origin_name, create_scalar_function)
+                Self::rewrite_function(
+                    op,
+                    new_args,
+                    origin_name,
+                    Expression::create_scalar_function,
+                )
             }
             Expression::UnaryExpression { op, expr } => {
                 let origin_name = origin.column_name();
                 let new_expr = vec![self.rewrite_expr(schema, expr)?];
-                Self::rewrite_function(op, new_expr, origin_name, create_unary_expression)
+                Self::rewrite_function(
+                    op,
+                    new_expr,
+                    origin_name,
+                    Expression::create_unary_expression,
+                )
             }
             Expression::BinaryExpression { op, left, right } => {
                 let new_left = self.rewrite_expr(schema, left)?;
@@ -138,7 +147,12 @@ impl PlanRewriter for ConstantFoldingImpl {
 
                 let origin_name = origin.column_name();
                 let new_exprs = vec![new_left, new_right];
-                Self::rewrite_function(op, new_exprs, origin_name, create_binary_expression)
+                Self::rewrite_function(
+                    op,
+                    new_exprs,
+                    origin_name,
+                    Expression::create_binary_expression,
+                )
             }
             Expression::Cast { expr, data_type } => {
                 let new_expr = self.rewrite_expr(schema, expr)?;

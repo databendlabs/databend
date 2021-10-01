@@ -26,7 +26,6 @@ use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use lazy_static::lazy_static;
 
-use crate::optimizers::utils::*;
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -72,7 +71,7 @@ impl ExprTransformImpl {
         let new_op = INVERSE_OPERATOR.get(op);
         match new_op {
             Some(v) => f(v, args),
-            None => create_unary_expression("NOT", vec![origin.clone()]),
+            None => Expression::create_unary_expression("NOT", vec![origin.clone()]),
         }
     }
 
@@ -103,7 +102,7 @@ impl ExprTransformImpl {
                     vec![left.as_ref().clone(), right.as_ref().clone()],
                     origin,
                     is_negated,
-                    create_binary_expression,
+                    Expression::create_binary_expression,
                 ),
             },
             Expression::UnaryExpression { op, expr } => match op.as_str() {
@@ -113,7 +112,7 @@ impl ExprTransformImpl {
                     vec![expr.as_ref().clone()],
                     origin,
                     is_negated,
-                    create_unary_expression,
+                    Expression::create_unary_expression,
                 ),
             },
             Expression::ScalarFunction { op, args } => Self::inverse_expr(
@@ -121,13 +120,13 @@ impl ExprTransformImpl {
                 args.clone(),
                 origin,
                 is_negated,
-                create_scalar_function,
+                Expression::create_scalar_function,
             ),
             _ => {
                 if !is_negated {
                     origin.clone()
                 } else {
-                    create_unary_expression("NOT", vec![origin.clone()])
+                    Expression::create_unary_expression("NOT", vec![origin.clone()])
                 }
             }
         }
