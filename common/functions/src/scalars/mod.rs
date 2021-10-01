@@ -39,7 +39,6 @@ pub use expressions::*;
 pub use function::Function;
 pub use function_alias::AliasFunction;
 pub use function_column::ColumnFunction;
-pub use function_factory::FactoryFuncRef;
 pub use function_factory::FunctionFactory;
 pub use function_literal::LiteralFunction;
 pub use hashes::*;

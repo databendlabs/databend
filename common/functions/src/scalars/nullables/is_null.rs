@@ -21,6 +21,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone)]
 pub struct IsNullFunction {
@@ -32,6 +33,12 @@ impl IsNullFunction {
         Ok(Box::new(IsNullFunction {
             _display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::no_features().deterministic()
+        )
     }
 }
 

@@ -14,17 +14,15 @@
 
 use common_exception::Result;
 
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::SipHashFunction;
+use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct HashesFunction;
 
 impl HashesFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert("siphash".into(), SipHashFunction::try_create);
-        map.insert("siphash64".into(), SipHashFunction::try_create);
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("siphash", SipHashFunction::desc());
+        factory.register("siphash64", SipHashFunction::desc());
     }
 }

@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone)]
 pub struct SipHashFunction {
@@ -34,6 +35,12 @@ impl SipHashFunction {
         Ok(Box::new(SipHashFunction {
             display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::no_features().deterministic()
+        )
     }
 }
 

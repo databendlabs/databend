@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone, Debug)]
 pub struct WeekFunction<T, R> {
@@ -35,6 +36,8 @@ pub struct WeekFunction<T, R> {
 }
 
 pub trait WeekResultFunction<R> {
+    const IS_DETERMINISTIC: bool;
+
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>, mode: Option<u64>) -> R;
     fn to_constant_value(_value: DateTime<Utc>, mode: Option<u64>) -> DataValue;
@@ -44,6 +47,8 @@ pub trait WeekResultFunction<R> {
 pub struct ToStartOfWeek;
 
 impl WeekResultFunction<u32> for ToStartOfWeek {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -76,6 +81,16 @@ where
             t: PhantomData,
             r: PhantomData,
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        let mut features = FunctionFeatures::no_features();
+
+        if T::IS_DETERMINISTIC {
+            features = features.deterministic();
+        }
+
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 

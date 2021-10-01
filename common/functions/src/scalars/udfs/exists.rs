@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone)]
 pub struct ExistsFunction;
@@ -30,6 +31,12 @@ pub struct ExistsFunction;
 impl ExistsFunction {
     pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ExistsFunction {}))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::no_features().deterministic()
+        )
     }
 }
 

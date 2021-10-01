@@ -26,8 +26,8 @@ use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::Function;
+use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
@@ -35,19 +35,17 @@ pub struct ArithmeticFunction {
 }
 
 impl ArithmeticFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert("+".into(), ArithmeticPlusFunction::try_create_func);
-        map.insert("plus".into(), ArithmeticPlusFunction::try_create_func);
-        map.insert("-".into(), ArithmeticMinusFunction::try_create_func);
-        map.insert("minus".into(), ArithmeticMinusFunction::try_create_func);
-        map.insert("*".into(), ArithmeticMulFunction::try_create_func);
-        map.insert("multiply".into(), ArithmeticMulFunction::try_create_func);
-        map.insert("/".into(), ArithmeticDivFunction::try_create_func);
-        map.insert("divide".into(), ArithmeticDivFunction::try_create_func);
-        map.insert("%".into(), ArithmeticModuloFunction::try_create_func);
-        map.insert("modulo".into(), ArithmeticModuloFunction::try_create_func);
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("+", ArithmeticPlusFunction::desc());
+        factory.register("plus", ArithmeticPlusFunction::desc());
+        factory.register("-", ArithmeticMinusFunction::desc());
+        factory.register("minus", ArithmeticMinusFunction::desc());
+        factory.register("*", ArithmeticMulFunction::desc());
+        factory.register("multiply", ArithmeticMulFunction::desc());
+        factory.register("/", ArithmeticDivFunction::desc());
+        factory.register("divide", ArithmeticDivFunction::desc());
+        factory.register("%", ArithmeticModuloFunction::desc());
+        factory.register("modulo", ArithmeticModuloFunction::desc());
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {

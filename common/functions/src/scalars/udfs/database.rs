@@ -21,6 +21,7 @@ use common_datavalues::DataType;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone)]
 pub struct DatabaseFunction {}
@@ -29,6 +30,12 @@ pub struct DatabaseFunction {}
 impl DatabaseFunction {
     pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(DatabaseFunction {}))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::no_features()
+        )
     }
 }
 

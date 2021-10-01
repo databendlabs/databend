@@ -17,11 +17,18 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::LogicFunction;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 pub struct LogicAndFunction;
 
 impl LogicAndFunction {
     pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         LogicFunction::try_create_func(DataValueLogicOperator::And)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::no_features().deterministic()
+        )
     }
 }

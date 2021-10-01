@@ -21,11 +21,11 @@ use common_datavalues::DataType;
 use common_datavalues::DataValueLogicOperator;
 use common_exception::Result;
 
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::Function;
 use crate::scalars::LogicAndFunction;
 use crate::scalars::LogicNotFunction;
 use crate::scalars::LogicOrFunction;
+use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct LogicFunction {
@@ -33,12 +33,10 @@ pub struct LogicFunction {
 }
 
 impl LogicFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert("and".into(), LogicAndFunction::try_create_func);
-        map.insert("or".into(), LogicOrFunction::try_create_func);
-        map.insert("not".into(), LogicNotFunction::try_create_func);
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("and", LogicAndFunction::desc());
+        factory.register("or", LogicOrFunction::desc());
+        factory.register("not", LogicNotFunction::desc());
     }
 
     pub fn try_create_func(op: DataValueLogicOperator) -> Result<Box<dyn Function>> {

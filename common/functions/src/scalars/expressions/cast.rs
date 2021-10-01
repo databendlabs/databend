@@ -22,6 +22,7 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 
+
 #[derive(Clone)]
 pub struct CastFunction {
     _display_name: String,

@@ -33,52 +33,104 @@ use crate::scalars::OtherFunction;
 use crate::scalars::StringFunction;
 use crate::scalars::ToCastFunction;
 use crate::scalars::UdfFunction;
+use std::collections::HashMap;
 
-pub struct FunctionFactory;
-pub type FactoryFunc = fn(name: &str) -> Result<Box<dyn Function>>;
+pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 
-type Key = UniCase<String>;
-pub type FactoryFuncRef = Arc<RwLock<IndexMap<Key, FactoryFunc>>>;
+pub struct FunctionFeatures {
+    is_deterministic: bool,
+}
+
+impl FunctionFeatures {
+    pub fn no_features() -> FunctionFeatures {
+        FunctionFeatures {
+            is_deterministic: false,
+        }
+    }
+
+    pub fn deterministic(mut self) -> FunctionFeatures {
+        self.is_deterministic = true;
+        self
+    }
+}
+
+pub struct FunctionDescription {
+    features: FunctionFeatures,
+    function_creator: FactoryCreator,
+    // TODO(Winter): function document, this is very interesting.
+    // TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION `function_name` query syntax.
+}
+
+impl FunctionDescription {
+    pub fn creator(creator: FactoryCreator) -> FunctionDescription {
+        FunctionDescription {
+            function_creator: creator,
+            features: FunctionFeatures::no_features(),
+        }
+    }
+
+    pub fn features(mut self, features: FunctionFeatures) -> FunctionDescription {
+        self.features = features;
+        self
+    }
+}
+
+pub struct FunctionFactory {
+    case_insensitive_desc: HashMap<String, FunctionDescription>,
+}
 
 lazy_static! {
-    static ref FACTORY: FactoryFuncRef = {
-        let map: FactoryFuncRef = Arc::new(RwLock::new(IndexMap::new()));
-        ArithmeticFunction::register(map.clone()).unwrap();
-        ComparisonFunction::register(map.clone()).unwrap();
-        LogicFunction::register(map.clone()).unwrap();
-        NullableFunction::register(map.clone()).unwrap();
-        StringFunction::register(map.clone()).unwrap();
-        UdfFunction::register(map.clone()).unwrap();
-        HashesFunction::register(map.clone()).unwrap();
-        ToCastFunction::register(map.clone()).unwrap();
-        ConditionalFunction::register(map.clone()).unwrap();
-        DateFunction::register(map.clone()).unwrap();
-        OtherFunction::register(map.clone()).unwrap();
+    static ref FUNCTION_FACTORY: Arc<FunctionFactory> = {
+        let mut function_factory = FunctionFactory::create();
+        ArithmeticFunction::register(&mut function_factory);
+        ComparisonFunction::register(&mut function_factory);
+        LogicFunction::register(&mut function_factory);
+        NullableFunction::register(&mut function_factory);
+        StringFunction::register(&mut function_factory);
+        UdfFunction::register(&mut function_factory);
+        HashesFunction::register(&mut function_factory);
+        ToCastFunction::register(&mut function_factory);
+        ConditionalFunction::register(&mut function_factory);
+        DateFunction::register(&mut function_factory);
+        OtherFunction::register(&mut function_factory);
 
-        map
+        Arc::new(function_factory)
     };
 }
 
 impl FunctionFactory {
-    pub fn get(name: impl AsRef<str>) -> Result<Box<dyn Function>> {
-        let name = name.as_ref();
-        let map = FACTORY.read();
-        let key: Key = name.into();
-        let creator = map
-            .get(&key)
-            .ok_or_else(|| ErrorCode::UnknownFunction(format!("Unsupported Function: {}", name)))?;
-        (creator)(name)
+    pub(in crate::scalars::function_factory) fn create() -> FunctionFactory {
+        FunctionFactory {
+            case_insensitive_desc: Default::default()
+        }
     }
 
-    pub fn check(name: impl AsRef<str>) -> bool {
-        let name = name.as_ref();
-        let key: Key = name.into();
-        let map = FACTORY.read();
-        map.contains_key(&key)
+    pub fn instance() -> &'static FunctionFactory {
+        FUNCTION_FACTORY.as_ref()
     }
 
-    pub fn registered_names() -> Vec<String> {
-        let map = FACTORY.read();
-        map.keys().into_iter().map(|x| x.to_string()).collect()
+    pub fn register(&mut self, name: &str, desc: FunctionDescription) {
+        let case_insensitive_desc = &mut self.case_insensitive_desc;
+        case_insensitive_desc.insert(name.to_lowercase(), desc);
+    }
+
+    pub fn get(&self, name: impl AsRef<str>) -> Result<Box<dyn Function>> {
+        let origin_name = name.as_ref();
+        let lowercase_name = origin_name.to_lowercase();
+        match self.case_insensitive_desc.get(&lowercase_name) {
+            // TODO(Winter): we should write similar function names into error message if function name is not found.
+            None => Err(ErrorCode::UnknownFunction(format!("Unsupported Function: {}", origin_name))),
+            Some(desc) => (desc.function_creator)(&origin_name)
+        }
+    }
+
+    pub fn check(&self, name: impl AsRef<str>) -> bool {
+        let origin_name = name.as_ref();
+        let lowercase_name = origin_name.to_lowercase();
+        self.case_insensitive_desc.contains_key(&lowercase_name)
+    }
+
+    pub fn registered_names(&self) -> Vec<String> {
+        self.case_insensitive_desc.keys().cloned().collect::<Vec<_>>()
     }
 }

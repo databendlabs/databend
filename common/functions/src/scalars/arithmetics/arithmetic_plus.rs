@@ -17,11 +17,18 @@ use common_exception::Result;
 
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 pub struct ArithmeticPlusFunction;
 
 impl ArithmeticPlusFunction {
     pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::no_features().deterministic()
+        )
     }
 }

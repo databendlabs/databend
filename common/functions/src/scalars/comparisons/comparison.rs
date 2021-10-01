@@ -27,8 +27,8 @@ use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
 use crate::scalars::ComparisonNotLikeFunction;
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::Function;
+use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -36,22 +36,16 @@ pub struct ComparisonFunction {
 }
 
 impl ComparisonFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-
-        map.insert("=".into(), ComparisonEqFunction::try_create_func);
-        map.insert("<".into(), ComparisonLtFunction::try_create_func);
-        map.insert(">".into(), ComparisonGtFunction::try_create_func);
-        map.insert("<=".into(), ComparisonLtEqFunction::try_create_func);
-        map.insert(">=".into(), ComparisonGtEqFunction::try_create_func);
-        map.insert("!=".into(), ComparisonNotEqFunction::try_create_func);
-        map.insert("<>".into(), ComparisonNotEqFunction::try_create_func);
-        map.insert("like".into(), ComparisonLikeFunction::try_create_func);
-        map.insert(
-            "not like".into(),
-            ComparisonNotLikeFunction::try_create_func,
-        );
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("=", ComparisonEqFunction::desc());
+        factory.register("<", ComparisonLtFunction::desc());
+        factory.register(">", ComparisonGtFunction::desc());
+        factory.register("<=", ComparisonLtEqFunction::desc());
+        factory.register(">=", ComparisonGtEqFunction::desc());
+        factory.register("!=", ComparisonNotEqFunction::desc());
+        factory.register("<>", ComparisonNotEqFunction::desc());
+        factory.register("like", ComparisonLikeFunction::desc());
+        factory.register("not like", ComparisonNotLikeFunction::desc());
     }
 
     pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function>> {

@@ -91,7 +91,7 @@ impl ActionFunction {
 
         match self.func_name.as_str() {
             "cast" => CastFunction::create(self.func_name.clone(), self.return_type.clone()),
-            _ => FunctionFactory::get(&self.func_name),
+            _ => FunctionFactory::instance().get(&self.func_name),
         }
     }
 

@@ -20,7 +20,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
+// TODO: try move it to simple function?
 #[derive(Clone)]
 pub struct NowFunction {
     display_name: String,
@@ -31,6 +33,12 @@ impl NowFunction {
         Ok(Box::new(NowFunction {
             display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::no_features()
+        )
     }
 }
 impl Function for NowFunction {

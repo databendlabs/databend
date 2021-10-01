@@ -23,6 +23,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone, Debug)]
 pub struct SimpleFunction<T> {
@@ -31,6 +32,8 @@ pub struct SimpleFunction<T> {
 }
 
 pub trait NoArgDateFunction {
+    const IS_DETERMINISTIC: bool;
+
     fn execute() -> u16;
 }
 
@@ -38,6 +41,8 @@ pub trait NoArgDateFunction {
 pub struct Today;
 
 impl NoArgDateFunction for Today {
+    const IS_DETERMINISTIC: bool = false;
+
     fn execute() -> u16 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
@@ -51,6 +56,8 @@ impl NoArgDateFunction for Today {
 pub struct Yesterday;
 
 impl NoArgDateFunction for Yesterday {
+    const IS_DETERMINISTIC: bool = false;
+
     fn execute() -> u16 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
@@ -64,6 +71,8 @@ impl NoArgDateFunction for Yesterday {
 pub struct Tomorrow;
 
 impl NoArgDateFunction for Tomorrow {
+    const IS_DETERMINISTIC: bool = false;
+
     fn execute() -> u16 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
@@ -81,6 +90,16 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        let mut features = FunctionFeatures::no_features();
+
+        if T::IS_DETERMINISTIC {
+            features = features.deterministic();
+        }
+
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 

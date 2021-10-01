@@ -50,7 +50,7 @@ impl ConstantFoldingImpl {
 
     fn rewrite_function<F>(op: &str, args: Expressions, name: String, f: F) -> Result<Expression>
     where F: Fn(&str, Expressions) -> Expression {
-        let function = FunctionFactory::get(op)?;
+        let function = FunctionFactory::instance().get(op)?;
 
         if function.is_deterministic() && ConstantFoldingImpl::constants_arguments(&args) {
             let op = op.to_string();

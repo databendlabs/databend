@@ -14,17 +14,14 @@
 
 use common_exception::Result;
 
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::SubstringFunction;
+use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct StringFunction;
 
 impl StringFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert("substring".into(), SubstringFunction::try_create);
-
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("substring", SubstringFunction::desc())
     }
 }

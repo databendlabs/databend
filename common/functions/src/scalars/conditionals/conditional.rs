@@ -14,18 +14,14 @@
 
 use common_exception::Result;
 
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::IfFunction;
+use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct ConditionalFunction;
 
 impl ConditionalFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-
-        map.insert("if".into(), IfFunction::try_create_func);
-
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("if", IfFunction::desc());
     }
 }

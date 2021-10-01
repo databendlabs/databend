@@ -108,7 +108,7 @@ impl Table for FunctionsTable {
         _ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let func_names = FunctionFactory::registered_names();
+        let func_names = FunctionFactory::instance().registered_names();
         let aggr_func_names = AggregateFunctionFactory::registered_names();
 
         let names: Vec<&[u8]> = func_names
