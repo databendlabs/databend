@@ -30,15 +30,13 @@ use crate::sessions::DatabendQueryContextRef;
 
 pub struct ConfigsTable {
     table_id: u64,
-    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl ConfigsTable {
-    pub fn create(table_id: u64, db_name: &str) -> Self {
+    pub fn create(table_id: u64) -> Self {
         ConfigsTable {
             table_id,
-            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::String, false),
                 DataField::new("value", DataType::String, false),
@@ -73,10 +71,6 @@ impl ConfigsTable {
 impl Table for ConfigsTable {
     fn name(&self) -> &str {
         "configs"
-    }
-
-    fn database(&self) -> &str {
-        &self.db_name
     }
 
     fn engine(&self) -> &str {

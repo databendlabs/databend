@@ -19,6 +19,7 @@ use super::interval_function::MonthsArithmeticFunction;
 use super::interval_function::SecondsArithmeticFunction;
 use super::now::NowFunction;
 use super::RoundFunction;
+use super::ToMonthFunction;
 use super::ToStartOfISOYearFunction;
 use super::ToStartOfMonthFunction;
 use super::ToStartOfQuarterFunction;
@@ -98,6 +99,7 @@ impl DateFunction {
         factory.register("toStartOfQuarter", ToStartOfQuarterFunction::desc());
         factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
         factory.register("toStartOfMonth", ToStartOfMonthFunction::desc());
+        factory.register("toMonth", ToMonthFunction::desc());
 
         // rounders
         factory.register("toStartOfSecond", Self::round_function_creator(1));

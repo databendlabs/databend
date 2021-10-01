@@ -35,15 +35,13 @@ use crate::sessions::ProcessInfo;
 
 pub struct ProcessesTable {
     table_id: u64,
-    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl ProcessesTable {
-    pub fn create(table_id: u64, db_name: &str) -> Self {
+    pub fn create(table_id: u64) -> Self {
         ProcessesTable {
             table_id,
-            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("id", DataType::String, false),
                 DataField::new("type", DataType::String, false),
@@ -72,10 +70,6 @@ impl ProcessesTable {
 impl Table for ProcessesTable {
     fn name(&self) -> &str {
         "processes"
-    }
-
-    fn database(&self) -> &str {
-        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {

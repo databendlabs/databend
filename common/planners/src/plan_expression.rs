@@ -332,6 +332,24 @@ impl Expression {
             )),
         }
     }
+
+    pub fn create_scalar_function(op: &str, args: Expressions) -> Expression {
+        let op = op.to_string();
+        Expression::ScalarFunction { op, args }
+    }
+
+    pub fn create_unary_expression(op: &str, mut args: Expressions) -> Expression {
+        let op = op.to_string();
+        let expr = Box::new(args.remove(0));
+        Expression::UnaryExpression { op, expr }
+    }
+
+    pub fn create_binary_expression(op: &str, mut args: Expressions) -> Expression {
+        let op = op.to_string();
+        let left = Box::new(args.remove(0));
+        let right = Box::new(args.remove(0));
+        Expression::BinaryExpression { op, left, right }
+    }
 }
 
 // Also used as expression column name
