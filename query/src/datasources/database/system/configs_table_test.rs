@@ -28,7 +28,7 @@ async fn test_configs_table() -> Result<()> {
     let ctx = try_create_context_with_config(config)?;
     ctx.get_settings().set_max_threads(8)?;
 
-    let table = ConfigsTable::create(1, "system");
+    let table = ConfigsTable::create(1);
     let source_plan = table.read_plan(
         ctx.clone(),
         None,

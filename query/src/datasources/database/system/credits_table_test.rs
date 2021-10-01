@@ -22,7 +22,7 @@ use crate::datasources::database::system::CreditsTable;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_credits_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
-    let table = CreditsTable::create(1, "system");
+    let table = CreditsTable::create(1);
     let source_plan = table.read_plan(
         ctx.clone(),
         None,

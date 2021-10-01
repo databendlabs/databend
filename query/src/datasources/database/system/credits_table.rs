@@ -29,15 +29,13 @@ use crate::sessions::DatabendQueryContextRef;
 
 pub struct CreditsTable {
     table_id: u64,
-    db_name: String,
     schema: DataSchemaRef,
 }
 
 impl CreditsTable {
-    pub fn create(table_id: u64, db_name: &str) -> Self {
+    pub fn create(table_id: u64) -> Self {
         CreditsTable {
             table_id,
-            db_name: db_name.to_string(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::String, false),
                 DataField::new("version", DataType::String, false),
@@ -51,10 +49,6 @@ impl CreditsTable {
 impl Table for CreditsTable {
     fn name(&self) -> &str {
         "credits"
-    }
-
-    fn database(&self) -> &str {
-        self.db_name.as_str()
     }
 
     fn engine(&self) -> &str {

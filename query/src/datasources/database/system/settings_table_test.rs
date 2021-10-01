@@ -25,7 +25,7 @@ async fn test_settings_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     ctx.get_settings().set_max_threads(2)?;
 
-    let table = SettingsTable::create(1, "system");
+    let table = SettingsTable::create(1);
     let source_plan = table.read_plan(
         ctx.clone(),
         None,
