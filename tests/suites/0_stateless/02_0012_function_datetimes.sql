@@ -124,3 +124,10 @@ select '===subtractMinutes===';
 select '===addSeconds===';
 select addSeconds(toDateTime(1582970400), cast(61, INT32)); -- 2020-2-29T10:00:00 + 61 seconds
 select '===addSeconds===';
+
+select '===toMonth===';
+select toMonth(toDateTime(1633081817));
+select toMonth(toDate(18901));
+select toMonth(toDateTime(1633081817))  =  10;
+select toMonth(toDate(18901))  =  10;
+select '===toMonth===';

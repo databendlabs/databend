@@ -167,6 +167,22 @@ impl NumberResultFunction<u16> for ToStartOfMonth {
     }
 }
 
+#[derive(Clone)]
+pub struct ToMonth;
+
+impl NumberResultFunction<u8> for ToMonth {
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt8)
+    }
+    fn to_number(value: DateTime<Utc>) -> u8 {
+        value.month() as u8
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt8(Some(Self::to_number(value)))
+    }
+}
+
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
@@ -287,3 +303,5 @@ pub type ToStartOfISOYearFunction = NumberFunction<ToStartOfISOYear, u16>;
 pub type ToStartOfYearFunction = NumberFunction<ToStartOfYear, u16>;
 pub type ToStartOfQuarterFunction = NumberFunction<ToStartOfQuarter, u16>;
 pub type ToStartOfMonthFunction = NumberFunction<ToStartOfMonth, u16>;
+
+pub type ToMonthFunction = NumberFunction<ToMonth, u8>;

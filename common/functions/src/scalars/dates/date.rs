@@ -19,6 +19,7 @@ use super::interval_function::MonthsArithmeticFunction;
 use super::interval_function::SecondsArithmeticFunction;
 use super::now::NowFunction;
 use super::RoundFunction;
+use super::ToMonthFunction;
 use super::ToStartOfISOYearFunction;
 use super::ToStartOfMonthFunction;
 use super::ToStartOfQuarterFunction;
@@ -59,7 +60,7 @@ impl DateFunction {
         );
         map.insert("toStartOfWeek".into(), ToStartOfWeekFunction::try_create);
         map.insert("toStartOfMonth".into(), ToStartOfMonthFunction::try_create);
-
+        map.insert("toMonth".into(), ToMonthFunction::try_create);
         // rounders
         {
             map.insert("toStartOfSecond".into(), |display_name| {
