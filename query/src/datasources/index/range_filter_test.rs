@@ -12,23 +12,3 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-
-#[cfg(test)]
-mod index_min_max_test;
-#[cfg(test)]
-mod index_sparse_test;
-#[cfg(test)]
-mod range_filter_test;
-
-mod index_min_max;
-mod index_sparse;
-pub mod range_filter;
-
-pub use index_min_max::MinMaxIndex;
-pub use index_sparse::SparseIndex;
-pub use index_sparse::SparseIndexValue;
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum IndexSchemaVersion {
-    V1,
-}

@@ -125,6 +125,7 @@ pub use plan_expression_common::unwrap_alias_exprs;
 pub use plan_expression_function::add;
 pub use plan_expression_function::avg;
 pub use plan_expression_function::modular;
+pub use plan_expression_function::neg;
 pub use plan_expression_function::not;
 pub use plan_expression_function::sum;
 pub use plan_expression_literal::lit;
