@@ -28,7 +28,9 @@ impl LogicNotFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            // We should need remove expression if negative function is empty
             FunctionFeatures::no_features().deterministic()
+                .negative_function("")
         )
     }
 }

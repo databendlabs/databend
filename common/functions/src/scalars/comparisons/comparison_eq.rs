@@ -28,7 +28,7 @@ impl ComparisonEqFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::no_features().deterministic()
+            FunctionFeatures::no_features().deterministic().negative_function("<>")
         )
     }
 }

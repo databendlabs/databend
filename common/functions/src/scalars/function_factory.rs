@@ -40,17 +40,24 @@ pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send +
 #[derive(Clone)]
 pub struct FunctionFeatures {
     is_deterministic: bool,
+    folding_combinator: HashMap<String, String>,
 }
 
 impl FunctionFeatures {
     pub fn no_features() -> FunctionFeatures {
         FunctionFeatures {
             is_deterministic: false,
+            folding_combinator: HashMap::new(),
         }
     }
 
     pub fn deterministic(mut self) -> FunctionFeatures {
         self.is_deterministic = true;
+        self
+    }
+
+    pub fn negative_function(mut self, negative_name: &str) -> FunctionFeatures {
+        self.folding_combinator.insert(String::from("not"), negative_name.to_string());
         self
     }
 
