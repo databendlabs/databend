@@ -47,8 +47,8 @@ lazy_static! {
         map.insert(">=", "<");
         map.insert("LIKE", "NOT LIKE");
         map.insert("NOT LIKE", "LIKE");
-        map.insert("isnull", "isnotnull");
-        map.insert("isnotnull", "isnull");
+        map.insert("isnull", "isNotNull");
+        map.insert("isnotnull", "isNull");
 
         map
     };
@@ -117,7 +117,7 @@ impl ExprTransformImpl {
                 ),
             },
             Expression::ScalarFunction { op, args } => Self::inverse_expr(
-                op.as_str(),
+                op.to_lowercase().as_str(),
                 args.clone(),
                 origin,
                 is_negated,
@@ -184,7 +184,7 @@ impl ExprTransformImpl {
 
 impl Optimizer for ExprTransformOptimizer {
     fn name(&self) -> &str {
-        "TruthTransformer"
+        "ExprTransform"
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {

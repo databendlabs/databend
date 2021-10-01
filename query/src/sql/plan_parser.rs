@@ -1054,9 +1054,9 @@ impl PlanParser {
                     }
                 }
 
-                let op = e.name.to_string().to_lowercase();
+                let op = e.name.to_string();
                 if AggregateFunctionFactory::check(&op) {
-                    let args = match op.as_str() {
+                    let args = match op.to_lowercase().as_str() {
                         "count" => args
                             .iter()
                             .map(|c| match c {

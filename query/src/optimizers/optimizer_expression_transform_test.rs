@@ -29,7 +29,7 @@ mod tests {
 
         let tests: Vec<Test> = vec![
             Test {
-                name: "Not and expression",
+                name: "And expression",
                 query: "select number from numbers_mt(10) where not(number>1 and number<=3)",
                 expect: "\
                 Projection: number:UInt64\
@@ -41,27 +41,27 @@ mod tests {
                 query: "select number from numbers_mt(10) where not(number>=5 or number<3 and toBoolean(number))",
                 expect: "\
                 Projection: number:UInt64\
-                \n  Filter: ((number < 5) and ((number >= 3) or (NOT toboolean(number))))\
+                \n  Filter: ((number < 5) and ((number >= 3) or (NOT toBoolean(number))))\
                 \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             },
             Test {
-                name: "Not and with like and isNotNull expression",
-                query: "select * from system.databases where not (isNotNull(name) and name like '%sys%')",
+                name: "Like and isNotNull expression",
+                query: "select * from system.databases where not (isNotNull(name) and name LIKE '%sys%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: (isnull(name) or (name NOT LIKE %sys%))\
+                \n  Filter: (isNull(name) or (name NOT LIKE %sys%))\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0]",
             },
             Test {
-                name: "Not and with not like and isNull expression",
+                name: "Not like and isNull expression",
                 query: "select * from system.databases where not (name is null or name not like 'a%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: ((isnotnull name) and (name LIKE a%))\
+                \n  Filter: ((isNotNull name) and (name LIKE a%))\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0]",
             },
             Test {
-                name: "Not eq expression",
+                name: "Equal expression",
                 query: "select number from numbers_mt(10) where not(number=1) and number<5",
                 expect: "\
                 Projection: number:UInt64\
@@ -69,11 +69,19 @@ mod tests {
                 \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             },
             Test {
-                name: "Not ne expression",
+                name: "Not equal expression",
                 query: "select number from numbers_mt(10) where not(number!=1) or number<5",
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number = 1) or (number < 5))\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Not expression",
+                query: "select number from numbers_mt(10) where not(NOT toBoolean(number))",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: toBoolean(number)\
                 \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             },
         ];

@@ -23,6 +23,7 @@ use common_planners::Recursion;
 pub struct RequireColumnsVisitor {
     pub required_columns: HashSet<String>,
 }
+
 impl RequireColumnsVisitor {
     pub fn default() -> Self {
         Self {
