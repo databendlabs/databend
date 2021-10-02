@@ -23,6 +23,8 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -35,6 +37,11 @@ impl RunningDifferenceFunction {
         Ok(Box::new(RunningDifferenceFunction {
             display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
     }
 }
 
@@ -84,10 +91,6 @@ impl Function for RunningDifferenceFunction {
                     columns[0].field().name(),
                 ))),
         }
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 
     fn num_arguments(&self) -> usize {

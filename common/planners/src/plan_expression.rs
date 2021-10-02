@@ -263,13 +263,13 @@ impl Expression {
                     left.to_data_type(input_schema)?,
                     right.to_data_type(input_schema)?,
                 ];
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
 
             Expression::UnaryExpression { op, expr } => {
                 let arg_types = vec![expr.to_data_type(input_schema)?];
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
 
@@ -278,7 +278,7 @@ impl Expression {
                 for arg in args {
                     arg_types.push(arg.to_data_type(input_schema)?);
                 }
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
             Expression::AggregateFunction { .. } => {

@@ -97,7 +97,7 @@ impl ExpressionChain {
             } => {
                 self.add_expr(nested_expr)?;
 
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
 
                 let function = ActionFunction {
@@ -119,7 +119,7 @@ impl ExpressionChain {
                 self.add_expr(left)?;
                 self.add_expr(right)?;
 
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = vec![
                     left.to_data_type(&self.schema)?,
                     right.to_data_type(&self.schema)?,
@@ -145,7 +145,7 @@ impl ExpressionChain {
                     self.add_expr(expr)?;
                 }
 
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type(&self.schema))

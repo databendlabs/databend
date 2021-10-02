@@ -12,21 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
 use super::running_difference_function::RunningDifferenceFunction;
-use crate::scalars::FactoryFuncRef;
+use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct OtherFunction {}
 
 impl OtherFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert(
-            "runningDifference".into(),
-            RunningDifferenceFunction::try_create,
-        );
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("runningDifference", RunningDifferenceFunction::desc());
     }
 }

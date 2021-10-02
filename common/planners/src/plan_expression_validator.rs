@@ -90,7 +90,7 @@ fn validate_function_arg(func: Box<dyn Function>, args: &[Expression]) -> Result
 pub fn validate_expression(expr: &Expression) -> Result<()> {
     let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
         Expression::ScalarFunction { op, args } => {
-            let func = FunctionFactory::get(op)?;
+            let func = FunctionFactory::instance().get(op)?;
             validate_function_arg(func, args)
         }
 

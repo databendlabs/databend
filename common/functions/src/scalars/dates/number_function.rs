@@ -24,6 +24,8 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone, Debug)]
@@ -34,6 +36,8 @@ pub struct NumberFunction<T, R> {
 }
 
 pub trait NumberResultFunction<R> {
+    const IS_DETERMINISTIC: bool;
+
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>) -> R;
     fn to_constant_value(_value: DateTime<Utc>) -> DataValue;
@@ -43,6 +47,8 @@ pub trait NumberResultFunction<R> {
 pub struct ToYYYYMM;
 
 impl NumberResultFunction<u32> for ToYYYYMM {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
     }
@@ -59,6 +65,8 @@ impl NumberResultFunction<u32> for ToYYYYMM {
 pub struct ToYYYYMMDD;
 
 impl NumberResultFunction<u32> for ToYYYYMMDD {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
     }
@@ -75,6 +83,8 @@ impl NumberResultFunction<u32> for ToYYYYMMDD {
 pub struct ToYYYYMMDDhhmmss;
 
 impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt64)
     }
@@ -97,6 +107,8 @@ impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
 pub struct ToStartOfYear;
 
 impl NumberResultFunction<u16> for ToStartOfYear {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -114,6 +126,8 @@ impl NumberResultFunction<u16> for ToStartOfYear {
 pub struct ToStartOfISOYear;
 
 impl NumberResultFunction<u16> for ToStartOfISOYear {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -136,6 +150,8 @@ impl NumberResultFunction<u16> for ToStartOfISOYear {
 pub struct ToStartOfQuarter;
 
 impl NumberResultFunction<u16> for ToStartOfQuarter {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -154,6 +170,8 @@ impl NumberResultFunction<u16> for ToStartOfQuarter {
 pub struct ToStartOfMonth;
 
 impl NumberResultFunction<u16> for ToStartOfMonth {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -171,6 +189,8 @@ impl NumberResultFunction<u16> for ToStartOfMonth {
 pub struct ToMonth;
 
 impl NumberResultFunction<u8> for ToMonth {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
     }
@@ -195,6 +215,16 @@ where
             t: PhantomData,
             r: PhantomData,
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        let mut features = FunctionFeatures::default();
+
+        if T::IS_DETERMINISTIC {
+            features = features.deterministic();
+        }
+
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 

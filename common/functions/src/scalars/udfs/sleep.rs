@@ -24,6 +24,8 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -36,6 +38,11 @@ impl SleepFunction {
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
     }
 }
 
@@ -101,10 +108,6 @@ impl Function for SleepFunction {
                 Ok(DataColumn::Constant(DataValue::UInt8(Some(0)), *rows))
             }
         }
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }
 

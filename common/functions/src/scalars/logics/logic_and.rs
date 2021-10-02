@@ -15,6 +15,8 @@
 use common_datavalues::DataValueLogicOperator;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::LogicFunction;
 
@@ -23,5 +25,13 @@ pub struct LogicAndFunction;
 impl LogicAndFunction {
     pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         LogicFunction::try_create_func(DataValueLogicOperator::And)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .negative_function("or"),
+        )
     }
 }
