@@ -12,120 +12,154 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
-use indexmap::IndexMap;
 use lazy_static::lazy_static;
-use unicase::UniCase;
 
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
-pub struct AggregateFunctionFactory;
-pub type FactoryFunc = fn(
-    name: &str,
-    params: Vec<DataValue>,
-    arguments: Vec<DataField>,
-) -> Result<AggregateFunctionRef>;
+pub type AggregateFunctionCreator =
+    Box<dyn Fn(&str, Vec<DataValue>, Vec<DataField>) -> Result<AggregateFunctionRef> + Sync + Send>;
 
-pub type FactoryCombinatorFunc = fn(
-    name: &str,
-    params: Vec<DataValue>,
-    arguments: Vec<DataField>,
-    nested_func: FactoryFunc,
-) -> Result<AggregateFunctionRef>;
-
-type Key = UniCase<String>;
-pub type FactoryFuncRef = Arc<RwLock<IndexMap<Key, FactoryFunc>>>;
-pub type FactoryCombinatorFuncRef = Arc<RwLock<IndexMap<Key, FactoryCombinatorFunc>>>;
+pub type AggregateFunctionCombinatorCreator = Box<
+    dyn Fn(
+            &str,
+            Vec<DataValue>,
+            Vec<DataField>,
+            &AggregateFunctionCreator,
+        ) -> Result<AggregateFunctionRef>
+        + Sync
+        + Send,
+>;
 
 lazy_static! {
-    static ref FACTORY: FactoryFuncRef = {
-        let map: FactoryFuncRef = Arc::new(RwLock::new(IndexMap::new()));
-        Aggregators::register(map.clone()).unwrap();
-
-        map
-    };
-    static ref COMBINATOR_FACTORY: FactoryCombinatorFuncRef = {
-        let map: FactoryCombinatorFuncRef = Arc::new(RwLock::new(IndexMap::new()));
-        Aggregators::register_combinator(map.clone()).unwrap();
-        map
+    static ref FACTORY: Arc<AggregateFunctionFactory> = {
+        let mut factory = AggregateFunctionFactory::create();
+        Aggregators::register(&mut factory);
+        Aggregators::register_combinator(&mut factory);
+        Arc::new(factory)
     };
 }
 
+pub struct AggregateFunctionDescription {
+    aggregate_function_creator: AggregateFunctionCreator,
+    // TODO(Winter): function document, this is very interesting.
+    // TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION `function_name` query syntax.
+}
+
+impl AggregateFunctionDescription {
+    pub fn creator(creator: AggregateFunctionCreator) -> AggregateFunctionDescription {
+        AggregateFunctionDescription {
+            aggregate_function_creator: creator,
+        }
+    }
+}
+
+pub struct CombinatorDescription {
+    creator: AggregateFunctionCombinatorCreator,
+    // TODO(Winter): function document, this is very interesting.
+    // TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION `function_name` query syntax.
+}
+
+impl CombinatorDescription {
+    pub fn creator(creator: AggregateFunctionCombinatorCreator) -> CombinatorDescription {
+        CombinatorDescription { creator }
+    }
+}
+
+pub struct AggregateFunctionFactory {
+    case_insensitive_desc: HashMap<String, AggregateFunctionDescription>,
+    case_insensitive_combinator_desc: Vec<(String, CombinatorDescription)>,
+}
+
 impl AggregateFunctionFactory {
+    pub(in crate::aggregates::aggregate_function_factory) fn create() -> AggregateFunctionFactory {
+        AggregateFunctionFactory {
+            case_insensitive_desc: Default::default(),
+            case_insensitive_combinator_desc: Default::default(),
+        }
+    }
+
+    pub fn instance() -> &'static AggregateFunctionFactory {
+        FACTORY.as_ref()
+    }
+
+    pub fn register(&mut self, name: &str, desc: AggregateFunctionDescription) {
+        let case_insensitive_desc = &mut self.case_insensitive_desc;
+        case_insensitive_desc.insert(name.to_lowercase(), desc);
+    }
+
+    pub fn register_combinator(&mut self, name: &str, desc: CombinatorDescription) {
+        let case_insensitive_combinator_desc = &mut self.case_insensitive_combinator_desc;
+        case_insensitive_combinator_desc.push((name.to_lowercase(), desc));
+    }
+
     pub fn get(
+        &self,
         name: impl AsRef<str>,
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
-        let name = name.as_ref();
-        let not_found_error = || -> ErrorCode {
-            ErrorCode::UnknownAggregateFunction(format!("Unsupported AggregateFunction: {}", name))
-        };
+        let origin = name.as_ref();
+        let lowercase_name = origin.to_lowercase();
 
-        let key: Key = name.into();
-        let map = FACTORY.read();
-        match map.get(&key) {
-            Some(creator) => (creator)(name, params, arguments),
-            None => {
-                // find suffix
-                let lower_name = name.to_lowercase();
-                let combinator = COMBINATOR_FACTORY.read();
-                if let Some((k, &combinator_creator)) = combinator
-                    .iter()
-                    .find(|(c, _)| lower_name.ends_with(&c.to_lowercase()))
-                {
-                    let nested_name = lower_name
-                        .strip_suffix(&k.to_lowercase())
-                        .ok_or_else(not_found_error)?;
-                    let nested_key: Key = nested_name.into();
+        let aggregate_functions_map = &self.case_insensitive_desc;
+        if let Some(desc) = aggregate_functions_map.get(&lowercase_name) {
+            return (desc.aggregate_function_creator)(origin, params, arguments);
+        }
 
-                    return map
-                        .get(&nested_key)
-                        .map(|nested_creator| {
-                            combinator_creator(nested_name, params, arguments, *nested_creator)
-                        })
-                        .unwrap_or_else(|| Err(not_found_error()));
+        // find suffix
+        for (suffix, desc) in &self.case_insensitive_combinator_desc {
+            if let Some(nested_name) = lowercase_name.strip_suffix(suffix) {
+                let aggregate_functions_map = &self.case_insensitive_desc;
+
+                match aggregate_functions_map.get(nested_name) {
+                    None => {
+                        break;
+                    }
+                    Some(nested_desc) => {
+                        return (desc.creator)(
+                            nested_name,
+                            params,
+                            arguments,
+                            &nested_desc.aggregate_function_creator,
+                        );
+                    }
                 }
-
-                Err(not_found_error())
             }
         }
+
+        Err(ErrorCode::UnknownAggregateFunction(format!(
+            "Unsupported AggregateFunction: {}",
+            origin
+        )))
     }
 
-    pub fn check(name: impl AsRef<str>) -> bool {
-        let name = name.as_ref();
-        let key: Key = name.into();
+    pub fn check(&self, name: impl AsRef<str>) -> bool {
+        let origin = name.as_ref();
+        let lowercase_name = origin.to_lowercase();
 
-        let map = FACTORY.read();
-
-        if map.contains_key(&key) {
+        if self.case_insensitive_desc.contains_key(&lowercase_name) {
             return true;
         }
 
         // find suffix
-        let lower_name = name.to_lowercase();
-        let combinator = COMBINATOR_FACTORY.read();
-
-        for (k, _) in combinator.iter() {
-            if let Some(nested_name) = lower_name.strip_suffix(&k.to_lowercase()) {
-                let nk: Key = nested_name.into();
-                if map.contains_key(&nk) {
-                    return true;
-                }
+        for (suffix, _) in &self.case_insensitive_combinator_desc {
+            if lowercase_name.strip_suffix(suffix).is_some() {
+                return true;
             }
         }
+
         false
     }
 
-    pub fn registered_names() -> Vec<String> {
-        let map = FACTORY.read();
-        map.keys().into_iter().map(|x| x.to_string()).collect()
+    pub fn registered_names(&self) -> Vec<String> {
+        self.case_insensitive_desc.keys().cloned().collect()
     }
 }

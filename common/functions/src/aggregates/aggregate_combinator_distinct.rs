@@ -24,7 +24,9 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::FactoryFunc;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::CombinatorDescription;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateCountFunction;
 use crate::aggregates::AggregateFunction;
@@ -86,19 +88,19 @@ impl AggregateDistinctCombinator {
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        AggregateDistinctCombinator::try_create(
-            nested_name,
-            params,
-            arguments,
-            AggregateCountFunction::try_create,
-        )
+        let creator: AggregateFunctionCreator = Box::new(AggregateCountFunction::try_create);
+        AggregateDistinctCombinator::try_create(nested_name, params, arguments, &creator)
+    }
+
+    pub fn uniq_desc() -> AggregateFunctionDescription {
+        AggregateFunctionDescription::creator(Box::new(Self::try_create_uniq))
     }
 
     pub fn try_create(
         nested_name: &str,
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
-        nested_creator: FactoryFunc,
+        nested_creator: &AggregateFunctionCreator,
     ) -> Result<Arc<dyn AggregateFunction>> {
         let name = format!("DistinctCombinator({})", nested_name);
         assert_variadic_arguments(&name, arguments.len(), (1, 32))?;
@@ -115,6 +117,10 @@ impl AggregateDistinctCombinator {
             nested,
             name,
         }))
+    }
+
+    pub fn combinator_desc() -> CombinatorDescription {
+        CombinatorDescription::creator(Box::new(Self::try_create))
     }
 }
 

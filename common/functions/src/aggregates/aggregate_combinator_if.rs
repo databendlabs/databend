@@ -24,7 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::FactoryFunc;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
+use crate::aggregates::aggregate_function_factory::CombinatorDescription;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddrs;
@@ -42,7 +43,7 @@ impl AggregateIfCombinator {
         nested_name: &str,
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
-        nested_creator: FactoryFunc,
+        nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
         let name = format!("IfCombinator({})", nested_name);
         let argument_len = arguments.len();
@@ -73,6 +74,10 @@ impl AggregateIfCombinator {
             nested_name: nested_name.to_owned(),
             nested,
         }))
+    }
+
+    pub fn combinator_desc() -> CombinatorDescription {
+        CombinatorDescription::creator(Box::new(Self::try_create))
     }
 }
 

@@ -31,7 +31,10 @@ impl ContextFunction {
         ctx: DatabendQueryContextRef,
     ) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
-        if !FunctionFactory::instance().check(name) && !AggregateFunctionFactory::check(name) {
+        let function_factory = FunctionFactory::instance();
+        let aggregate_function_factory = AggregateFunctionFactory::instance();
+
+        if !function_factory.check(name) && !aggregate_function_factory.check(name) {
             return Result::Err(ErrorCode::UnknownFunction(format!(
                 "Unsupported function: {:?}",
                 name

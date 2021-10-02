@@ -101,7 +101,8 @@ impl ActionFunction {
                 "Action must be aggregated function",
             ));
         }
-        AggregateFunctionFactory::get(
+
+        AggregateFunctionFactory::instance().get(
             &self.func_name,
             self.params.clone(),
             self.arg_fields.clone(),
