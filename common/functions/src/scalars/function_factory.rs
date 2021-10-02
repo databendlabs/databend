@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
-use indexmap::IndexMap;
 use lazy_static::lazy_static;
-use unicase::UniCase;
 
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::ComparisonFunction;
@@ -33,7 +31,6 @@ use crate::scalars::OtherFunction;
 use crate::scalars::StringFunction;
 use crate::scalars::ToCastFunction;
 use crate::scalars::UdfFunction;
-use std::collections::HashMap;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 
@@ -44,7 +41,7 @@ pub struct FunctionFeatures {
 }
 
 impl FunctionFeatures {
-    pub fn no_features() -> FunctionFeatures {
+    pub fn default() -> FunctionFeatures {
         FunctionFeatures {
             is_deterministic: false,
             folding_combinator: HashMap::new(),
@@ -57,7 +54,8 @@ impl FunctionFeatures {
     }
 
     pub fn negative_function(mut self, negative_name: &str) -> FunctionFeatures {
-        self.folding_combinator.insert(String::from("not"), negative_name.to_string());
+        self.folding_combinator
+            .insert(String::from("not"), negative_name.to_string());
         self
     }
 
@@ -82,7 +80,7 @@ impl FunctionDescription {
     pub fn creator(creator: FactoryCreator) -> FunctionDescription {
         FunctionDescription {
             function_creator: creator,
-            features: FunctionFeatures::no_features(),
+            features: FunctionFeatures::default(),
         }
     }
 
@@ -118,7 +116,7 @@ lazy_static! {
 impl FunctionFactory {
     pub(in crate::scalars::function_factory) fn create() -> FunctionFactory {
         FunctionFactory {
-            case_insensitive_desc: Default::default()
+            case_insensitive_desc: Default::default(),
         }
     }
 
@@ -136,8 +134,11 @@ impl FunctionFactory {
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => Err(ErrorCode::UnknownFunction(format!("Unsupported Function: {}", origin_name))),
-            Some(desc) => (desc.function_creator)(&origin_name)
+            None => Err(ErrorCode::UnknownFunction(format!(
+                "Unsupported Function: {}",
+                origin_name
+            ))),
+            Some(desc) => (desc.function_creator)(origin_name),
         }
     }
 
@@ -146,8 +147,11 @@ impl FunctionFactory {
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => Err(ErrorCode::UnknownFunction(format!("Unsupported Function: {}", origin_name))),
-            Some(desc) => Ok(desc.features.clone())
+            None => Err(ErrorCode::UnknownFunction(format!(
+                "Unsupported Function: {}",
+                origin_name
+            ))),
+            Some(desc) => Ok(desc.features.clone()),
         }
     }
 
@@ -158,6 +162,9 @@ impl FunctionFactory {
     }
 
     pub fn registered_names(&self) -> Vec<String> {
-        self.case_insensitive_desc.keys().cloned().collect::<Vec<_>>()
+        self.case_insensitive_desc
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
     }
 }

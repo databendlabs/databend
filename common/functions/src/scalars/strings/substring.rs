@@ -20,8 +20,9 @@ use common_arrow::arrow::compute;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
-use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone)]
 pub struct SubstringFunction {
@@ -36,9 +37,8 @@ impl SubstringFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::no_features().deterministic()
-        )
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
     }
 }
 

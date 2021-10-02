@@ -24,8 +24,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
-use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone, Debug)]
 pub struct NumberFunction<T, R> {
@@ -203,10 +204,10 @@ impl NumberResultFunction<u8> for ToMonth {
 }
 
 impl<T, R> NumberFunction<T, R>
-    where
-        T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
-        R: DFPrimitiveType + Clone,
-        DFPrimitiveArray<R>: IntoSeries,
+where
+    T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
+    R: DFPrimitiveType + Clone,
+    DFPrimitiveArray<R>: IntoSeries,
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(NumberFunction::<T, R> {
@@ -217,7 +218,7 @@ impl<T, R> NumberFunction<T, R>
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::no_features();
+        let mut features = FunctionFeatures::default();
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();

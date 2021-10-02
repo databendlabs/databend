@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::udfs::exists::ExistsFunction;
 use crate::scalars::CrashMeFunction;
 use crate::scalars::DatabaseFunction;
@@ -21,7 +20,6 @@ use crate::scalars::SleepFunction;
 use crate::scalars::ToTypeNameFunction;
 use crate::scalars::UdfExampleFunction;
 use crate::scalars::VersionFunction;
-use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct UdfFunction;

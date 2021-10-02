@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::IsNotNullFunction;
 use crate::scalars::IsNullFunction;
-use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct NullableFunction;

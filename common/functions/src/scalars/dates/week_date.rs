@@ -25,8 +25,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
-use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone, Debug)]
 pub struct WeekFunction<T, R> {
@@ -84,7 +85,7 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::no_features();
+        let mut features = FunctionFeatures::default();
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();

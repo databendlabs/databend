@@ -19,8 +19,9 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
-use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 // TODO: try move it to simple function?
 #[derive(Clone)]
@@ -36,9 +37,8 @@ impl NowFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::no_features()
-        )
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
     }
 }
 impl Function for NowFunction {

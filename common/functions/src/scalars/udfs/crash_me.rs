@@ -20,8 +20,9 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
-use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 #[derive(Clone)]
 pub struct CrashMeFunction {
@@ -36,9 +37,8 @@ impl CrashMeFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::no_features()
-        )
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
     }
 }
 

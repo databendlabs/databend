@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use common_datavalues::DataType;
-use common_exception::Result;
 
+use crate::scalars::function_factory::FactoryCreator;
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
-use crate::scalars::function_factory::{FunctionFactory, FactoryCreator, FunctionDescription, FunctionFeatures};
 
 #[derive(Clone)]
 pub struct ToCastFunction;
@@ -27,7 +29,7 @@ impl ToCastFunction {
         });
 
         FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::no_features().deterministic())
+            .features(FunctionFeatures::default().deterministic())
     }
 
     pub fn register(factory: &mut FunctionFactory) {
@@ -49,7 +51,13 @@ impl ToCastFunction {
 
         // aliases
         factory.register("toDate", Self::cast_function_creator(DataType::Date16));
-        factory.register("toDateTime", Self::cast_function_creator(DataType::DateTime32(None)));
-        factory.register("toDateTime32", Self::cast_function_creator(DataType::DateTime32(None)));
+        factory.register(
+            "toDateTime",
+            Self::cast_function_creator(DataType::DateTime32(None)),
+        );
+        factory.register(
+            "toDateTime32",
+            Self::cast_function_creator(DataType::DateTime32(None)),
+        );
     }
 }

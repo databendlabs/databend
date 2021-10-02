@@ -21,11 +21,11 @@ use common_datavalues::DataType;
 use common_datavalues::DataValueLogicOperator;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::Function;
 use crate::scalars::LogicAndFunction;
 use crate::scalars::LogicNotFunction;
 use crate::scalars::LogicOrFunction;
-use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct LogicFunction {

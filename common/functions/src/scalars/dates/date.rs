@@ -31,7 +31,10 @@ use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
-use crate::scalars::function_factory::{FunctionFactory, FactoryCreator, FunctionDescription, FunctionFeatures};
+use crate::scalars::function_factory::FactoryCreator;
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -43,48 +46,54 @@ impl DateFunction {
             RoundFunction::try_create(display_name, round)
         });
 
-        FunctionDescription::creator(creator)
-            .features(FunctionFeatures::no_features().deterministic())
+        FunctionDescription::creator(creator).features(FunctionFeatures::default().deterministic())
     }
 
     fn month_arithmetic_function_creator(factor: i64) -> FunctionDescription {
         /* one year is 12 months */
         let function_creator: FactoryCreator = match factor.is_positive() {
-            true => Box::new(move |display_name| MonthsArithmeticFunction::try_create(
-                display_name,
-                DataValueArithmeticOperator::Plus,
-                factor,
-            )),
-            false => Box::new(move |display_name| MonthsArithmeticFunction::try_create(
-                display_name,
-                DataValueArithmeticOperator::Minus,
-                -factor,
-            )),
+            true => Box::new(move |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    factor,
+                )
+            }),
+            false => Box::new(move |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    -factor,
+                )
+            }),
         };
 
         FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::no_features().deterministic())
+            .features(FunctionFeatures::default().deterministic())
     }
 
     fn seconds_arithmetic_function_creator(factor: i64) -> FunctionDescription {
         /* one day is 24 * 3600 seconds */
         let function_creator: FactoryCreator = match factor.is_positive() {
-            true => Box::new(move |display_name| SecondsArithmeticFunction::try_create(
-                display_name,
-                DataValueArithmeticOperator::Plus,
-                factor,
-            )),
-            false => Box::new(move |display_name| SecondsArithmeticFunction::try_create(
-                display_name,
-                DataValueArithmeticOperator::Minus,
-                -factor,
-            )),
+            true => Box::new(move |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    factor,
+                )
+            }),
+            false => Box::new(move |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    -factor,
+                )
+            }),
         };
 
         FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::no_features().deterministic())
+            .features(FunctionFeatures::default().deterministic())
     }
-
 
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("today", TodayFunction::desc());
@@ -106,7 +115,10 @@ impl DateFunction {
         factory.register("toStartOfMinute", Self::round_function_creator(60));
         factory.register("toStartOfFiveMinutes", Self::round_function_creator(5 * 60));
         factory.register("toStartOfTenMinutes", Self::round_function_creator(10 * 60));
-        factory.register("toStartOfFifteenMinutes", Self::round_function_creator(15 * 60));
+        factory.register(
+            "toStartOfFifteenMinutes",
+            Self::round_function_creator(15 * 60),
+        );
         factory.register("timeSlot", Self::round_function_creator(30 * 60));
         factory.register("toStartOfHour", Self::round_function_creator(60 * 60));
         factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
@@ -114,16 +126,37 @@ impl DateFunction {
         //interval functions
         factory.register("addYears", Self::month_arithmetic_function_creator(12));
         factory.register("addMonths", Self::month_arithmetic_function_creator(1));
-        factory.register("addDays", Self::seconds_arithmetic_function_creator(24 * 3600));
+        factory.register(
+            "addDays",
+            Self::seconds_arithmetic_function_creator(24 * 3600),
+        );
         factory.register("addHours", Self::seconds_arithmetic_function_creator(3600));
         factory.register("addMinutes", Self::seconds_arithmetic_function_creator(60));
         factory.register("addSeconds", Self::seconds_arithmetic_function_creator(1));
 
-        factory.register("subtractYears", Self::month_arithmetic_function_creator(-12));
-        factory.register("subtractMonths", Self::month_arithmetic_function_creator(-1));
-        factory.register("subtractDays", Self::seconds_arithmetic_function_creator(-(24 * 3600)));
-        factory.register("subtractHours", Self::seconds_arithmetic_function_creator(-3600));
-        factory.register("subtractMinutes", Self::seconds_arithmetic_function_creator(-60));
-        factory.register("subtractSeconds", Self::seconds_arithmetic_function_creator(-1));
+        factory.register(
+            "subtractYears",
+            Self::month_arithmetic_function_creator(-12),
+        );
+        factory.register(
+            "subtractMonths",
+            Self::month_arithmetic_function_creator(-1),
+        );
+        factory.register(
+            "subtractDays",
+            Self::seconds_arithmetic_function_creator(-(24 * 3600)),
+        );
+        factory.register(
+            "subtractHours",
+            Self::seconds_arithmetic_function_creator(-3600),
+        );
+        factory.register(
+            "subtractMinutes",
+            Self::seconds_arithmetic_function_creator(-60),
+        );
+        factory.register(
+            "subtractSeconds",
+            Self::seconds_arithmetic_function_creator(-1),
+        );
     }
 }

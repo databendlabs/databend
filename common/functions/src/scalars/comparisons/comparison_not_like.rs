@@ -15,9 +15,10 @@
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ComparisonFunction;
 use crate::scalars::Function;
-use crate::scalars::function_factory::{FunctionDescription, FunctionFeatures};
 
 pub struct ComparisonNotLikeFunction;
 
@@ -28,8 +29,9 @@ impl ComparisonNotLikeFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::no_features().deterministic()
-                .negative_function("like")
+            FunctionFeatures::default()
+                .deterministic()
+                .negative_function("like"),
         )
     }
 }

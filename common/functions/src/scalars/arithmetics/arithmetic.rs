@@ -21,13 +21,13 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::scalars::dates::IntervalFunctionFactory;
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
-use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {

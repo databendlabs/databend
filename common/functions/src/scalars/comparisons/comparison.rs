@@ -19,6 +19,7 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -28,7 +29,6 @@ use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
 use crate::scalars::ComparisonNotLikeFunction;
 use crate::scalars::Function;
-use crate::scalars::function_factory::FunctionFactory;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
