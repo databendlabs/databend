@@ -28,6 +28,7 @@ use num::traits::AsPrimitive;
 
 use super::AggregateFunctionRef;
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
@@ -386,4 +387,8 @@ pub fn try_create_aggregate_window_funnel_function(
         "AggregateWindowFunnelFunction does not support type '{:?}'",
         data_type
     )))
+}
+
+pub fn aggregate_window_funnel_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_window_funnel_function))
 }

@@ -310,7 +310,7 @@ impl Expression {
                 for arg in args.iter() {
                     fields.push(arg.to_data_field(schema)?);
                 }
-                AggregateFunctionFactory::get(&func_name, params.clone(), fields)
+                AggregateFunctionFactory::instance().get(&func_name, params.clone(), fields)
             }
             _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",

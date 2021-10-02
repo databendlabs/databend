@@ -17,6 +17,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
+use crate::aggregates::aggregate_function_factory::AggregateFunctionFactory;
 use crate::aggregates::*;
 
 #[test]
@@ -121,8 +122,8 @@ fn test_aggregate_combinator_function() -> Result<()> {
         let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
-            let func =
-                AggregateFunctionFactory::get(t.func_name, t.params.clone(), t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr = arena.alloc_layout(func.state_layout());
             func.init_state(addr.into());
             func.accumulate(addr.into(), &t.arrays, rows)?;
@@ -253,8 +254,8 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
-            let func =
-                AggregateFunctionFactory::get(t.func_name, t.params.clone(), t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
 

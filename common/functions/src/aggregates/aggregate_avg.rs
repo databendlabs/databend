@@ -26,6 +26,7 @@ use num::cast::AsPrimitive;
 use num::NumCast;
 
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
@@ -198,4 +199,8 @@ pub fn try_create_aggregate_avg_function(
             data_type
         )))
     })
+}
+
+pub fn aggregate_avg_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_avg_function))
 }

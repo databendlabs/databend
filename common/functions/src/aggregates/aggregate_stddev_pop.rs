@@ -24,6 +24,7 @@ use common_io::prelude::*;
 use num::cast::AsPrimitive;
 
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
@@ -227,4 +228,8 @@ pub fn try_create_aggregate_stddev_pop_function(
             data_type
         )))
     })
+}
+
+pub fn aggregate_stddev_pop_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_stddev_pop_function))
 }
