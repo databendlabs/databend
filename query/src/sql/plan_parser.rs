@@ -1012,13 +1012,13 @@ impl PlanParser {
                     expr: Box::new(self.sql_to_rex(expr, schema, select)?),
                 }),
             },
-            sqlparser::ast::Expr::IsNull(expr) => Ok(Expression::UnaryExpression {
+            sqlparser::ast::Expr::IsNull(expr) => Ok(Expression::ScalarFunction {
                 op: "isnull".to_owned(),
-                expr: Box::new(self.sql_to_rex(expr, schema, select)?),
+                args: vec![self.sql_to_rex(expr, schema, select)?],
             }),
-            sqlparser::ast::Expr::IsNotNull(expr) => Ok(Expression::UnaryExpression {
+            sqlparser::ast::Expr::IsNotNull(expr) => Ok(Expression::ScalarFunction {
                 op: "isnotnull".to_owned(),
-                expr: Box::new(self.sql_to_rex(expr, schema, select)?),
+                args: vec![self.sql_to_rex(expr, schema, select)?],
             }),
             sqlparser::ast::Expr::Exists(q) => Ok(Expression::ScalarFunction {
                 op: "EXISTS".to_lowercase(),

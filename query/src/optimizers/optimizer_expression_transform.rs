@@ -44,8 +44,8 @@ lazy_static! {
         map.insert("<=", ">");
         map.insert(">", "<=");
         map.insert(">=", "<");
-        map.insert("LIKE", "NOT LIKE");
-        map.insert("NOT LIKE", "LIKE");
+        map.insert("like", "NOT LIKE");
+        map.insert("not like", "LIKE");
         map.insert("isnull", "isNotNull");
         map.insert("isnotnull", "isNull");
 
@@ -78,8 +78,8 @@ impl ExprTransformImpl {
     fn truth_transformer(origin: &Expression, is_negated: bool) -> Expression {
         match origin {
             // TODO: support in and not in.
-            Expression::BinaryExpression { op, left, right } => match op.as_str() {
-                "AND" => {
+            Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
+                "and" => {
                     let new_left = Self::truth_transformer(left, is_negated);
                     let new_right = Self::truth_transformer(right, is_negated);
                     if is_negated {
@@ -88,7 +88,7 @@ impl ExprTransformImpl {
                         new_left.and(new_right)
                     }
                 }
-                "OR" => {
+                "or" => {
                     let new_left = Self::truth_transformer(left, is_negated);
                     let new_right = Self::truth_transformer(right, is_negated);
                     if is_negated {
@@ -105,16 +105,6 @@ impl ExprTransformImpl {
                     Expression::create_binary_expression,
                 ),
             },
-            Expression::UnaryExpression { op, expr } => match op.as_str() {
-                "NOT" => Self::truth_transformer(expr, !is_negated),
-                other => Self::inverse_expr(
-                    other,
-                    vec![expr.as_ref().clone()],
-                    origin,
-                    is_negated,
-                    Expression::create_unary_expression,
-                ),
-            },
             Expression::ScalarFunction { op, args } => Self::inverse_expr(
                 op.to_lowercase().as_str(),
                 args.clone(),
@@ -122,6 +112,9 @@ impl ExprTransformImpl {
                 is_negated,
                 Expression::create_scalar_function,
             ),
+            Expression::UnaryExpression { op, expr } if op.to_lowercase().eq("not") => {
+                Self::truth_transformer(expr, !is_negated)
+            }
             _ => {
                 if !is_negated {
                     origin.clone()
