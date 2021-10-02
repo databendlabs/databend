@@ -57,7 +57,7 @@ mod tests {
                 query: "select * from system.databases where not (name is null or name not like 'a%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: ((isNotNull name) and (name LIKE a%))\
+                \n  Filter: (isNotNull(name) and (name LIKE a%))\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0]",
             },
             Test {
