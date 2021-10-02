@@ -422,6 +422,6 @@ pub fn aggregate_arg_min_function_desc() -> AggregateFunctionDescription {
 
 pub fn aggregate_arg_max_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(
-        try_create_aggregate_arg_minmax_function::<true>,
+        try_create_aggregate_arg_minmax_function::<false>,
     ))
 }

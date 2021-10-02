@@ -95,9 +95,18 @@ impl AggregateFunctionFactory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn register_combinator(&mut self, name: &str, desc: CombinatorDescription) {
+    pub fn register_combinator(&mut self, suffix: &str, desc: CombinatorDescription) {
+        for (exists_suffix, _) in &self.case_insensitive_combinator_desc {
+            if exists_suffix.eq_ignore_ascii_case(suffix) {
+                panic!(
+                    "Logical error: {} combinator suffix already exists.",
+                    suffix
+                );
+            }
+        }
+
         let case_insensitive_combinator_desc = &mut self.case_insensitive_combinator_desc;
-        case_insensitive_combinator_desc.push((name.to_lowercase(), desc));
+        case_insensitive_combinator_desc.push((suffix.to_lowercase(), desc));
     }
 
     pub fn get(
@@ -151,8 +160,10 @@ impl AggregateFunctionFactory {
 
         // find suffix
         for (suffix, _) in &self.case_insensitive_combinator_desc {
-            if lowercase_name.strip_suffix(suffix).is_some() {
-                return true;
+            if let Some(nested_name) = lowercase_name.strip_suffix(suffix) {
+                if self.case_insensitive_desc.contains_key(nested_name) {
+                    return true;
+                }
             }
         }
 
