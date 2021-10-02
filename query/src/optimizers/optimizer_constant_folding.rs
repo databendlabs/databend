@@ -53,7 +53,7 @@ impl ConstantFoldingImpl {
         let factory = FunctionFactory::instance();
         let function_features = factory.get_features(op)?;
 
-        if function_features.is_deterministic() && Self::constants_arguments(&args) {
+        if function_features.is_deterministic && Self::constants_arguments(&args) {
             let op = op.to_string();
             return ConstantFoldingImpl::execute_expression(
                 Expression::ScalarFunction { op, args },

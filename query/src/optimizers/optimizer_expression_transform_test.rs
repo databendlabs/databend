@@ -49,7 +49,7 @@ mod tests {
                 query: "select * from system.databases where not (isNotNull(name) and name LIKE '%sys%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: (isNull(name) or (name NOT LIKE %sys%))\
+                \n  Filter: (isnull(name) or (name not like %sys%))\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0]",
             },
             Test {
@@ -57,7 +57,7 @@ mod tests {
                 query: "select * from system.databases where not (name is null or name not like 'a%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: (isNotNull(name) and (name LIKE a%))\
+                \n  Filter: (isnotnull(name) and (name like a%))\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0]",
             },
             Test {
