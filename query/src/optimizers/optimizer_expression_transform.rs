@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -24,7 +23,6 @@ use common_planners::Expressions;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
-use lazy_static::lazy_static;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContextRef;
@@ -35,24 +33,6 @@ struct ExprTransformImpl {
     before_group_by_schema: Option<DataSchemaRef>,
 }
 
-lazy_static! {
-    static ref INVERSE_OPERATOR: HashMap<&'static str, &'static str> = {
-        let mut map = HashMap::new();
-        map.insert("=", "<>");
-        map.insert("<>", "=");
-        map.insert("<", ">=");
-        map.insert("<=", ">");
-        map.insert(">", "<=");
-        map.insert(">=", "<");
-        map.insert("like", "NOT LIKE");
-        map.insert("not like", "LIKE");
-        map.insert("isnull", "isNotNull");
-        map.insert("isnotnull", "isNull");
-
-        map
-    };
-}
-
 impl ExprTransformImpl {
     fn inverse_expr<F>(
         op: &str,
@@ -60,41 +40,45 @@ impl ExprTransformImpl {
         origin: &Expression,
         is_negated: bool,
         f: F,
-    ) -> Expression
+    ) -> Result<Expression>
     where
         F: Fn(&str, Expressions) -> Expression,
     {
         if !is_negated {
-            return origin.clone();
+            return Ok(origin.clone());
         }
 
-        let new_op = INVERSE_OPERATOR.get(op);
-        match new_op {
-            Some(v) => f(v, args),
-            None => Expression::create_unary_expression("NOT", vec![origin.clone()]),
+        let factory = FunctionFactory::instance();
+        let function_features = factory.get_features(op)?;
+
+        match function_features.negative_function_name.as_ref() {
+            Some(v) => Ok(f(v, args)),
+            None => Ok(Expression::create_unary_expression("NOT", vec![
+                origin.clone()
+            ])),
         }
     }
 
-    fn truth_transformer(origin: &Expression, is_negated: bool) -> Expression {
+    fn truth_transformer(origin: &Expression, is_negated: bool) -> Result<Expression> {
         match origin {
             // TODO: support in and not in.
             Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
                 "and" => {
-                    let new_left = Self::truth_transformer(left, is_negated);
-                    let new_right = Self::truth_transformer(right, is_negated);
+                    let new_left = Self::truth_transformer(left, is_negated)?;
+                    let new_right = Self::truth_transformer(right, is_negated)?;
                     if is_negated {
-                        new_left.or(new_right)
+                        Ok(new_left.or(new_right))
                     } else {
-                        new_left.and(new_right)
+                        Ok(new_left.and(new_right))
                     }
                 }
                 "or" => {
-                    let new_left = Self::truth_transformer(left, is_negated);
-                    let new_right = Self::truth_transformer(right, is_negated);
+                    let new_left = Self::truth_transformer(left, is_negated)?;
+                    let new_right = Self::truth_transformer(right, is_negated)?;
                     if is_negated {
-                        new_left.and(new_right)
+                        Ok(new_left.and(new_right))
                     } else {
-                        new_left.or(new_right)
+                        Ok(new_left.or(new_right))
                     }
                 }
                 other => Self::inverse_expr(
@@ -117,9 +101,11 @@ impl ExprTransformImpl {
             }
             _ => {
                 if !is_negated {
-                    origin.clone()
+                    Ok(origin.clone())
                 } else {
-                    Expression::create_unary_expression("NOT", vec![origin.clone()])
+                    Ok(Expression::create_unary_expression("NOT", vec![
+                        origin.clone()
+                    ]))
                 }
             }
         }
@@ -128,7 +114,7 @@ impl ExprTransformImpl {
 
 impl PlanRewriter for ExprTransformImpl {
     fn rewrite_expr(&mut self, _schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
-        Ok(Self::truth_transformer(expr, false))
+        Self::truth_transformer(expr, false)
     }
 
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
