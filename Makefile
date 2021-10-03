@@ -61,14 +61,17 @@ unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 
 stateless-test:
+	rm -rf ./_meta/
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 stateless-cluster-test:
+	rm -rf ./_meta/
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
 stateless-cluster-test-tls:
+	rm -rf ./_meta/
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
