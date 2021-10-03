@@ -19,6 +19,7 @@
 # IN THE SOFTWARE.
 
 import json
+import subprocess
 from setuptools import setup, find_packages
 
 # Load package.json contents
@@ -68,3 +69,34 @@ setup(
     },
     zip_safe = False
 )
+
+subprocess.check_output(["cargo", "install", "cargo-license"])
+data = subprocess.check_output(
+    [
+        "cargo",
+        "license",
+        "--json",
+    ]
+)
+data = json.loads(data)
+
+result = """---
+id: credits
+title: Credits
+---
+
+# Credits
+
+"""
+result += "[Databend](https://github.com/datafuselabs/databend) is developed and built with the following software:\n\n"
+result += "(automatically generated via [cargo-license](https://crates.io/crates/cargo-license))\n\n"
+for item in data:
+    name = item["name"]
+    version = item["version"]
+    license = item["license"]
+    repository = item["repository"]
+    result += "------------------\n\n"
+    result += f"### {name} {version}\n\n* repository: [{repository}]({repository})\n* license: {license}\n\n"
+
+with open("docs/policies/credits.md", "w") as f:
+    f.write(result)
