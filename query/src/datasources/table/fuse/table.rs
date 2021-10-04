@@ -17,7 +17,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::BlockLocation;
-use common_catalog::SegmentInfo;
 use common_catalog::TableSnapshot;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -215,28 +214,32 @@ impl Table for FuseTable {
 
         // 2. Append blocks to storage
         let segment_info = self.append_blocks(ctx.clone(), block_stream).await?;
+
         let seg_loc = {
             let uuid = Uuid::new_v4().to_simple().to_string();
             segment_info_location(&uuid)
         };
-        self.save_segment(&seg_loc, &data_accessor, segment_info)
-            .await?;
+
+        {
+            let bytes = serde_json::to_vec(&segment_info)?;
+            data_accessor.put(&seg_loc, bytes).await?;
+        }
 
         // 3. new snapshot
         let tbl_snapshot = self
             .table_snapshot(&ctx)?
             .unwrap_or_else(TableSnapshot::new);
         let _snapshot_id = tbl_snapshot.snapshot_id;
-        let new_snapshot = tbl_snapshot.append_segment(seg_log);
+        let new_snapshot = tbl_snapshot.append_segment(seg_loc);
         let _new_snapshot_id = new_snapshot.snapshot_id;
 
-        let snapshot_loc = {
+        {
             let uuid = Uuid::new_v4().to_simple().to_string();
-            snapshot_location(&uuid)
-        };
+            let snapshot_loc = snapshot_location(&uuid);
 
-        self.save_snapshot(&snapshot_loc, &data_accessor, new_snapshot)
-            .await?;
+            let bytes = serde_json::to_vec(&new_snapshot)?;
+            data_accessor.put(&snapshot_loc, bytes).await?;
+        }
 
         // 4. commit
         let _table_id = insert_plan.tbl_id;
@@ -298,26 +301,5 @@ impl FuseTable {
     ) -> Result<Arc<dyn DataAccessor>> {
         let scheme = &self.storage_scheme;
         ctx.get_data_accessor(scheme)
-    }
-}
-
-impl FuseTable {
-    pub(crate) async fn save_segment(
-        &self,
-        location: &str,
-        data_accessor: &Arc<dyn DataAccessor>,
-        segment_info: SegmentInfo,
-    ) -> Result<()> {
-        let bytes = serde_json::to_vec(&segment_info)?;
-        data_accessor.put(location, bytes).await
-    }
-    pub(crate) async fn save_snapshot(
-        &self,
-        location: &str,
-        data_accessor: &Arc<dyn DataAccessor>,
-        snapshot: TableSnapshot,
-    ) -> Result<()> {
-        let bytes = serde_json::to_vec(&snapshot)?;
-        data_accessor.put(location, bytes).await
     }
 }
