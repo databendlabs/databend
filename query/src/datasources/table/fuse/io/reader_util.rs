@@ -15,6 +15,7 @@
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncReadExt;
@@ -30,7 +31,7 @@ pub fn do_read(
 ) -> Result<Vec<u8>> {
     let (tx, rx) = channel();
     let location = loc.to_string();
-    ctx.execute_task(async move {
+    ctx.try_spawn(async move {
         let input_stream = da.get_input_stream(&location, None);
         match input_stream.await {
             Ok(mut input) => {

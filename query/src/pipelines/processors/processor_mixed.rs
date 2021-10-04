@@ -19,6 +19,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::tokio::sync::mpsc;
+use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -59,7 +60,7 @@ impl MixedWorker {
         }
 
         let mut stream = self.merger.merge()?;
-        self.ctx.execute_task(async move {
+        self.ctx.try_spawn(async move {
             let index = AtomicUsize::new(0);
             while let Some(item) = stream.next().await {
                 let i = index.fetch_add(1, Ordering::Relaxed) % outputs_len;

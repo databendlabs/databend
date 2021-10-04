@@ -19,6 +19,7 @@ use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_kv_api_util::STORE_RUNTIME;

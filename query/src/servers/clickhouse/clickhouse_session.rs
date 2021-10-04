@@ -16,6 +16,7 @@ use std::net::Shutdown;
 
 use common_base::tokio::net::TcpStream;
 use common_base::Runtime;
+use common_base::TrySpawn;
 use common_clickhouse_srv::ClickHouseServer;
 use common_exception::ErrorCode;
 use common_exception::Result;

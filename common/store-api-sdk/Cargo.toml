@@ -9,23 +9,23 @@ edition = "2021"
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = {path = "../arrow"}
+common-base = {path = "../base" }
 common-datablocks= {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
-common-exception= {path = "../exception"}
-common-metatypes = {path = "../metatypes"}
-common-planners = {path = "../planners"}
-common-base = {path = "../base" }
-common-streams = {path = "../streams"}
-common-tracing = {path = "../tracing"}
-common-kv-api = {path = "../kv-apis/api" }
-common-kv-api-vo = {path = "../kv-apis/vo" }
-common-kv-api-util = {path = "../kv-apis/util" }
-common-meta-api = {path = "../meta-apis/api" }
-common-meta-api-vo = {path = "../meta-apis/vo" }
 common-dfs-api = {path = "../dfs-apis/api" }
 common-dfs-api-vo = {path = "../dfs-apis/vo" }
+common-exception= {path = "../exception"}
 common-infallible = {path = "../infallible"}
+common-kv-api = {path = "../kv-apis/api" }
+common-kv-api-util = {path = "../kv-apis/util" }
+common-kv-api-vo = {path = "../kv-apis/vo" }
+common-meta-api = {path = "../meta-apis/api" }
+common-meta-api-vo = {path = "../meta-apis/vo" }
+common-metatypes = {path = "../metatypes"}
+common-planners = {path = "../planners"}
 common-store-api-sdk-util = {path = "./util"}
+common-streams = {path = "../streams"}
+common-tracing = {path = "../tracing"}
 
 # Github dependencies
 

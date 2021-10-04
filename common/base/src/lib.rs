@@ -31,6 +31,7 @@ pub use progress::ProgressCallback;
 pub use progress::ProgressValues;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
+pub use runtime::TrySpawn;
 pub use tokio;
 pub use uuid;
 
