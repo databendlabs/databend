@@ -41,7 +41,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // common used when there is no group by for aggregate function
     fn accumulate(&self, _place: StateAddr, _arrays: &[Series], _input_rows: usize) -> Result<()>;
 
-    // used when we need to caclulate with group keys
+    // used when we need to calculate with group keys
     fn accumulate_keys(
         &self,
         _places: &[StateAddr],
