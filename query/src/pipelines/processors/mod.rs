@@ -15,6 +15,8 @@
 #[cfg(test)]
 mod pipe_test;
 #[cfg(test)]
+mod processor_dag_test;
+#[cfg(test)]
 mod pipeline_builder_test;
 #[cfg(test)]
 mod pipeline_display_test;
@@ -36,6 +38,8 @@ mod processor;
 mod processor_empty;
 mod processor_merge;
 mod processor_mixed;
+mod processor_dag;
+
 
 pub use pipe::Pipe;
 pub use pipeline::Pipeline;
