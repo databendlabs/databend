@@ -49,6 +49,12 @@ impl TableSnapshot {
     pub fn new() -> Self {
         todo!()
     }
+
+    pub fn append_segment(mut self, location: Location) -> TableSnapshot {
+        self.segments.push(location);
+        self.snapshot_id = Uuid::new_v4();
+        self
+    }
 }
 
 impl Default for TableSnapshot {

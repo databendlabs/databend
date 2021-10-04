@@ -227,7 +227,7 @@ impl Table for FuseTable {
             .table_snapshot(&ctx)?
             .unwrap_or_else(TableSnapshot::new);
         let _snapshot_id = tbl_snapshot.snapshot_id;
-        let new_snapshot: TableSnapshot = self.merge_seg(seg_loc, tbl_snapshot);
+        let new_snapshot = tbl_snapshot.append_segment(seg_log);
         let _new_snapshot_id = new_snapshot.snapshot_id;
 
         let snapshot_loc = {
@@ -319,11 +319,5 @@ impl FuseTable {
     ) -> Result<()> {
         let bytes = serde_json::to_vec(&snapshot)?;
         data_accessor.put(location, bytes).await
-    }
-    pub(crate) fn merge_seg(&self, new_seg: String, mut prev: TableSnapshot) -> TableSnapshot {
-        prev.segments.push(new_seg);
-        let new_id = Uuid::new_v4();
-        prev.snapshot_id = new_id;
-        prev
     }
 }
