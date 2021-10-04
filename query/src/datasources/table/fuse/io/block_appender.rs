@@ -19,6 +19,12 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
+use common_catalog::BlockLocation;
+use common_catalog::BlockMeta;
+use common_catalog::ColStats;
+use common_catalog::ColumnId;
+use common_catalog::SegmentInfo;
+use common_catalog::Stats;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
@@ -31,13 +37,7 @@ use uuid::Uuid;
 use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::block_location;
 use crate::datasources::table::fuse::column_stats_reduce;
-use crate::datasources::table::fuse::BlockLocation;
-use crate::datasources::table::fuse::BlockMeta;
-use crate::datasources::table::fuse::ColStats;
-use crate::datasources::table::fuse::ColumnId;
 use crate::datasources::table::fuse::FuseTable;
-use crate::datasources::table::fuse::SegmentInfo;
-use crate::datasources::table::fuse::Stats;
 use crate::sessions::DatabendQueryContextRef;
 
 impl FuseTable {

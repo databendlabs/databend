@@ -16,6 +16,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::BlockLocation;
+use common_catalog::SegmentInfo;
+use common_catalog::TableSnapshot;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,10 +41,7 @@ use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::read_table_snapshot;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
-use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::MetaInfoReader;
-use crate::datasources::table::fuse::SegmentInfo;
-use crate::datasources::table::fuse::TableSnapshot;
 use crate::datasources::table::fuse::TableStorageScheme;
 use crate::sessions::DatabendQueryContextRef;
 
