@@ -111,7 +111,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "lazy_static",
- "lexical-core 0.8.0",
+ "lexical-core 0.8.2",
  "multiversion",
  "num-traits",
  "packed_simd_2",
@@ -823,7 +823,7 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-io",
- "lexical-core 0.8.0",
+ "lexical-core 0.8.2",
  "num",
  "ordered-float 2.8.0",
  "pretty_assertions",
@@ -2917,9 +2917,9 @@ dependencies = [
 
 [[package]]
 name = "lexical-core"
-version = "0.8.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32c80337884d5044fe54e9c1b8d64b92de67e10d9312e472a8ff6d6ea849daf"
+checksum = "6a3926d8f156019890be4abe5fd3785e0cff1001e06f59c597641fd513a5a284"
 dependencies = [
  "lexical-parse-float",
  "lexical-parse-integer",
