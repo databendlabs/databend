@@ -15,13 +15,13 @@
 #[cfg(test)]
 mod pipe_test;
 #[cfg(test)]
-mod processor_dag_test;
-#[cfg(test)]
 mod pipeline_builder_test;
 #[cfg(test)]
 mod pipeline_display_test;
 #[cfg(test)]
 mod pipeline_walker_test;
+#[cfg(test)]
+mod processor_dag_test;
 #[cfg(test)]
 mod processor_empty_test;
 #[cfg(test)]
@@ -35,11 +35,11 @@ mod pipeline_builder;
 mod pipeline_display;
 mod pipeline_walker;
 mod processor;
+#[allow(dead_code)]
+mod processor_dag;
 mod processor_empty;
 mod processor_merge;
 mod processor_mixed;
-mod processor_dag;
-
 
 pub use pipe::Pipe;
 pub use pipeline::Pipeline;

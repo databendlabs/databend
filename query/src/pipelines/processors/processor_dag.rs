@@ -1,16 +1,44 @@
-use petgraph::prelude::{StableGraph, NodeIndex};
-use crate::pipelines::processors::Processor;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use common_planners::{PlanNode, SelectPlan, ExpressionPlan, ReadDataSourcePlan, ProjectionPlan, FilterPlan, HavingPlan, SortPlan, LimitPlan, LimitByPlan, RemotePlan, AggregatorPartialPlan, AggregatorFinalPlan};
-use common_exception::{Result, ErrorCode};
-use petgraph::Direction;
-use crate::sessions::DatabendQueryContextRef;
-use crate::pipelines::transforms::{SourceTransform, ExpressionTransform, ProjectionTransform, FilterTransform, SortPartialTransform, SortMergeTransform, LimitTransform, LimitByTransform, RemoteTransform, AggregatorPartialTransform, GroupByPartialTransform, AggregatorFinalTransform, GroupByFinalTransform};
-use common_cache::CountableMeter;
-use crate::pipelines::processors::processor::ProcessorRef;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::ExpressionPlan;
+use common_planners::FilterPlan;
+use common_planners::HavingPlan;
+use common_planners::LimitByPlan;
+use common_planners::LimitPlan;
+use common_planners::PlanNode;
+use common_planners::ProjectionPlan;
+use common_planners::ReadDataSourcePlan;
+use common_planners::RemotePlan;
+use common_planners::SelectPlan;
+use common_planners::SortPlan;
+use petgraph::dot::Config;
+use petgraph::dot::Dot;
+use petgraph::prelude::NodeIndex;
+use petgraph::prelude::StableGraph;
+
 use crate::api::FlightTicket;
-use std::fmt::{Debug, Formatter};
-use petgraph::dot::{Config, Dot};
+use crate::pipelines::processors::processor::ProcessorRef;
+use crate::pipelines::processors::Processor;
+use crate::pipelines::transforms::AggregatorFinalTransform;
+use crate::pipelines::transforms::AggregatorPartialTransform;
+use crate::pipelines::transforms::ExpressionTransform;
+use crate::pipelines::transforms::FilterTransform;
+use crate::pipelines::transforms::GroupByFinalTransform;
+use crate::pipelines::transforms::GroupByPartialTransform;
+use crate::pipelines::transforms::LimitByTransform;
+use crate::pipelines::transforms::LimitTransform;
+use crate::pipelines::transforms::ProjectionTransform;
+use crate::pipelines::transforms::RemoteTransform;
+use crate::pipelines::transforms::SortMergeTransform;
+use crate::pipelines::transforms::SortPartialTransform;
+use crate::pipelines::transforms::SourceTransform;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ProcessorsDAG {
     graph: StableGraph<Arc<dyn Processor>, ()>,
@@ -24,7 +52,11 @@ impl ProcessorsDAG {
 
 impl Debug for ProcessorsDAG {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", Dot::with_config(&self.graph, &[Config::EdgeNoLabel]))
+        write!(
+            f,
+            "{:?}",
+            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
+        )
     }
 }
 
@@ -112,11 +144,15 @@ impl ProcessorDAGBuilder {
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
-        let limit = self.limit.clone();
+        let limit = self.limit;
         self.add_simple_graph_node(move || {
             let schema = plan.schema();
             let order_by_desc = plan.order_by.clone();
-            Ok(Arc::new(SortPartialTransform::try_create(schema, order_by_desc, limit.clone())?))
+            Ok(Arc::new(SortPartialTransform::try_create(
+                schema,
+                order_by_desc,
+                limit,
+            )?))
         })
     }
 
@@ -124,11 +160,15 @@ impl ProcessorDAGBuilder {
         // processor 1: [sorted blocks ...] ---> merge to one sorted block
         // processor 2: [sorted blocks ...] ---> merge to one sorted block
         // processor 3: [sorted blocks ...] ---> merge to one sorted block
-        let limit = self.limit.clone();
+        let limit = self.limit;
         self.add_simple_graph_node(move || {
             let schema = plan.schema();
             let order_by_desc = plan.order_by.clone();
-            Ok(Arc::new(SortMergeTransform::try_create(schema, order_by_desc, limit.clone())?))
+            Ok(Arc::new(SortMergeTransform::try_create(
+                schema,
+                order_by_desc,
+                limit,
+            )?))
         })
     }
 
@@ -138,11 +178,15 @@ impl ProcessorDAGBuilder {
         // processor2 sorted block ----> processor  --> merge to one sorted block
         //                             /
         // processor3 sorted block --
-        let limit = self.limit.clone();
+        let limit = self.limit;
         self.add_merge_graph_node(|| {
             let schema = plan.schema();
             let order_by_desc = plan.order_by.clone();
-            Ok(Arc::new(SortMergeTransform::try_create(schema, order_by_desc, limit.clone())?))
+            Ok(Arc::new(SortMergeTransform::try_create(
+                schema,
+                order_by_desc,
+                limit,
+            )?))
         })
     }
 
@@ -151,7 +195,9 @@ impl ProcessorDAGBuilder {
         self.add_simple_graph_node(|| {
             let schema = node.schema();
             let predicate = node.predicate.clone();
-            Ok(Arc::new(FilterTransform::try_create(schema, predicate, false)?))
+            Ok(Arc::new(FilterTransform::try_create(
+                schema, predicate, false,
+            )?))
         })
     }
 
@@ -160,7 +206,9 @@ impl ProcessorDAGBuilder {
         self.add_simple_graph_node(|| {
             let schema = node.schema();
             let predicate = node.predicate.clone();
-            Ok(Arc::new(FilterTransform::try_create(schema, predicate, true)?))
+            Ok(Arc::new(FilterTransform::try_create(
+                schema, predicate, true,
+            )?))
         })
     }
 
@@ -170,7 +218,9 @@ impl ProcessorDAGBuilder {
             let exprs = plan.exprs.clone();
             let input = plan.input.schema();
             let output = plan.schema.clone();
-            Ok(Arc::new(ExpressionTransform::try_create(input, output, exprs)?))
+            Ok(Arc::new(ExpressionTransform::try_create(
+                input, output, exprs,
+            )?))
         })
     }
 
@@ -180,7 +230,9 @@ impl ProcessorDAGBuilder {
             let exprs = node.expr.clone();
             let input = node.input.schema();
             let output = node.schema.clone();
-            Ok(Arc::new(ProjectionTransform::try_create(input, output, exprs)?))
+            Ok(Arc::new(ProjectionTransform::try_create(
+                input, output, exprs,
+            )?))
         })
     }
 
@@ -236,7 +288,9 @@ impl ProcessorDAGBuilder {
 
     fn visit_remote_source(&mut self, plan: &RemotePlan) -> Result<()> {
         if !self.top_processors.is_empty() {
-            return Err(ErrorCode::LogicalError("Logical error: index not empty(while add remote source)."));
+            return Err(ErrorCode::LogicalError(
+                "Logical error: index not empty(while add remote source).",
+            ));
         }
 
         for fetch_node in &plan.fetch_nodes {
@@ -253,7 +307,8 @@ impl ProcessorDAGBuilder {
                 /* fetch_stream_schema */ plan.schema.clone(),
             )?;
 
-            self.top_processors.push(self.graph.add_node(Arc::new(remote_transform)));
+            self.top_processors
+                .push(self.graph.add_node(Arc::new(remote_transform)));
         }
 
         Ok(())
@@ -267,14 +322,17 @@ impl ProcessorDAGBuilder {
         let max_threads = std::cmp::min(max_threads, plan.parts.len());
 
         if !self.top_processors.is_empty() {
-            return Err(ErrorCode::LogicalError("Logical error: index not empty(while add source)."));
+            return Err(ErrorCode::LogicalError(
+                "Logical error: index not empty(while add source).",
+            ));
         }
 
         for _source_index in 0..std::cmp::max(max_threads, 1) {
             let source_plan = plan.clone();
             let source_ctx = self.ctx.clone();
             let source_transform = SourceTransform::try_create(source_ctx, source_plan)?;
-            self.top_processors.push(self.graph.add_node(Arc::new(source_transform)));
+            self.top_processors
+                .push(self.graph.add_node(Arc::new(source_transform)));
         }
 
         Ok(())
@@ -288,7 +346,8 @@ impl ProcessorDAGBuilder {
         let from_index = self.graph.add_node(node);
 
         for index in 0..self.top_processors.len() {
-            self.graph.add_edge(from_index.clone(), self.top_processors[index], ());
+            self.graph
+                .add_edge(from_index, self.top_processors[index], ());
         }
 
         self.top_processors.clear();
@@ -300,11 +359,11 @@ impl ProcessorDAGBuilder {
         for index in 0..self.top_processors.len() {
             let node = f()?;
             let from_index = self.graph.add_node(node);
-            self.graph.add_edge(from_index.clone(), self.top_processors[index], ());
+            self.graph
+                .add_edge(from_index, self.top_processors[index], ());
             self.top_processors[index] = from_index;
         }
 
         Ok(())
     }
 }
-

@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use std::fmt::{Debug, Formatter};
 
 /// Formatter settings for PlanStep debug.
 pub struct FormatterSettings {

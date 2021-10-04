@@ -16,16 +16,61 @@ use common_base::tokio;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use petgraph::dot::{Dot, Config};
-use crate::pipelines::processors::*;
 use crate::pipelines::processors::processor_dag::ProcessorDAGBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_processors_dag() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
-    let plan = crate::tests::parse_query("SELECT * FROM numbers(1000)")?;
+    struct TestCase {
+        name: &'static str,
+        query: &'static str,
+        expect: &'static str,
+    }
 
-    let dag_builder = ProcessorDAGBuilder::create(ctx);
-    println!("{:?}", dag_builder.build(&plan)?);
+    let tests = vec![TestCase {
+        name: "Simple query",
+        query: "SELECT * FROM numbers(1000)",
+        expect: "digraph {\
+            \n    0 [ label = \"SourceTransform\" ]\
+            \n    1 [ label = \"SourceTransform\" ]\
+            \n    2 [ label = \"SourceTransform\" ]\
+            \n    3 [ label = \"SourceTransform\" ]\
+            \n    4 [ label = \"SourceTransform\" ]\
+            \n    5 [ label = \"SourceTransform\" ]\
+            \n    6 [ label = \"SourceTransform\" ]\
+            \n    7 [ label = \"SourceTransform\" ]\
+            \n    8 [ label = \"ProjectionTransform\" ]\
+            \n    9 [ label = \"ProjectionTransform\" ]\
+            \n    10 [ label = \"ProjectionTransform\" ]\
+            \n    11 [ label = \"ProjectionTransform\" ]\
+            \n    12 [ label = \"ProjectionTransform\" ]\
+            \n    13 [ label = \"ProjectionTransform\" ]\
+            \n    14 [ label = \"ProjectionTransform\" ]\
+            \n    15 [ label = \"ProjectionTransform\" ]\
+            \n    8 -> 0 [ ]\
+            \n    9 -> 1 [ ]\
+            \n    10 -> 2 [ ]\
+            \n    11 -> 3 [ ]\
+            \n    12 -> 4 [ ]\
+            \n    13 -> 5 [ ]\
+            \n    14 -> 6 [ ]\
+            \n    15 -> 7 [ ]\
+            \n}\n",
+    }];
+
+    for test in tests {
+        let ctx = crate::tests::try_create_context()?;
+
+        let query_plan = crate::tests::parse_query(test.query)?;
+        let processors_graph_builder = ProcessorDAGBuilder::create(ctx);
+
+        let processors_graph = processors_graph_builder.build(&query_plan)?;
+        assert_eq!(
+            format!("{:?}", processors_graph),
+            test.expect,
+            "{:#?}",
+            test.name
+        );
+    }
+
     Ok(())
 }
