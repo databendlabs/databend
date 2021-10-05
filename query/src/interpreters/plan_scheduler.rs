@@ -849,11 +849,12 @@ impl PlanScheduler {
 impl PlanScheduler {
     fn cluster_source(&mut self, node: &ScanPlan, table: TablePtr) -> Result<ReadDataSourcePlan> {
         let nodes = self.cluster_nodes.clone();
-        let context = self.query_context.clone();
-        let settings = context.get_settings();
+        let ctx = self.query_context.clone();
+        let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
+
         table.read_plan(
-            context,
+            ctx,
             Some(node.push_downs.clone()),
             Some(max_threads * nodes.len()),
         )

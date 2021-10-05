@@ -14,6 +14,7 @@
 
 use std::future::Future;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -65,6 +66,32 @@ pub trait TrySpawn {
             None => rx.recv().map_err(ErrorCode::from_std_error)?,
         };
         Ok(reply)
+    }
+}
+
+impl<S: TrySpawn> TrySpawn for Arc<S> {
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        self.as_ref().try_spawn(task)
+    }
+
+    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        self.as_ref().spawn(task)
+    }
+
+    fn block_on<F>(&self, f: F, timeout: Option<Duration>) -> Result<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.as_ref().block_on(f, timeout)
     }
 }
 

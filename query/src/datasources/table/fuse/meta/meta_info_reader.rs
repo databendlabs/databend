@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::table::fuse::read_segment;
+use crate::datasources::dal::ObjectAccessor;
 use crate::sessions::DatabendQueryContextRef;
 
 // TODO cache
@@ -56,6 +56,6 @@ impl MetaInfoReader {
     }
     #[allow(dead_code)]
     pub fn read_segment_info(&self, location: &str) -> Result<SegmentInfo> {
-        read_segment(self.da.clone(), &self.ctx, location)
+        ObjectAccessor::new(self.da.clone()).blocking_read_obj(&self.ctx, location)
     }
 }

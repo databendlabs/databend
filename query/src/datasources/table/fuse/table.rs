@@ -110,10 +110,12 @@ impl Table for FuseTable {
         // primary work to do: partition pruning/elimination
         let tbl_snapshot = self.table_snapshot(&ctx)?;
         if let Some(snapshot) = tbl_snapshot {
-            let da = self.data_accessor(&ctx)?;
+            let da = ctx.get_data_accessor(&self.storage_scheme)?;
+
             let meta_reader = MetaInfoReader::new(da, ctx.clone());
             let block_locations = range_filter(&snapshot, &push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
+
             let plan = ReadDataSourcePlan {
                 db: self.tbl_info.db.to_string(),
                 table: self.name().to_string(),

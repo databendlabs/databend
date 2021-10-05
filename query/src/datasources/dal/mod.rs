@@ -20,6 +20,7 @@ pub use blob_accessor::AsyncSeekableReader;
 pub use blob_accessor::Bytes;
 pub use blob_accessor::DataAccessor;
 pub use blob_accessor::InputStream;
+pub use blob_accessor::ObjectAccessor;
 pub use blob_accessor::SeekableReader;
 pub use impls::Local;
 pub use impls::StorageScheme;

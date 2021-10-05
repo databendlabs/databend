@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 
-mod fuse;
+pub mod fuse;
 mod prelude;
 
 mod csv;

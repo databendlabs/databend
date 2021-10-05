@@ -20,10 +20,8 @@ mod snapshot_reader;
 
 mod block_appender;
 mod block_reader;
-mod reader_util;
 
 pub use block_appender::*;
 pub use block_reader::*;
-pub use reader_util::*;
 pub use segment_reader::*;
 pub use snapshot_reader::*;

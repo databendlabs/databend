@@ -19,20 +19,9 @@ use common_catalog::SegmentInfo;
 use common_exception::Result;
 
 use crate::datasources::dal::DataAccessor;
-use crate::datasources::table::fuse::do_read_obj;
-use crate::datasources::table::fuse::do_read_obj_async;
-use crate::sessions::DatabendQueryContextRef;
-
-#[allow(dead_code)]
-pub fn read_segment(
-    da: Arc<dyn DataAccessor>,
-    ctx: &DatabendQueryContextRef,
-    loc: &str,
-) -> Result<SegmentInfo> {
-    do_read_obj(da, ctx, loc)
-}
+use crate::datasources::dal::ObjectAccessor;
 
 #[allow(dead_code)]
 pub async fn read_segment_async(da: Arc<dyn DataAccessor>, loc: &str) -> Result<SegmentInfo> {
-    do_read_obj_async(da, loc).await
+    ObjectAccessor::new(da).read_obj(loc).await
 }
