@@ -767,6 +767,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-catalog"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-datavalues",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "common-clickhouse-srv"
 version = "0.3.2"
 dependencies = [
@@ -1615,6 +1627,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
+ "common-catalog",
  "common-clickhouse-srv",
  "common-datablocks",
  "common-datavalues",

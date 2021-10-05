@@ -16,11 +16,10 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+use common_catalog::ColStats;
+use common_catalog::ColumnId;
 use common_datavalues::DataType;
 use common_exception::Result;
-
-use crate::datasources::table::fuse::ColStats;
-use crate::datasources::table::fuse::ColumnId;
 
 pub fn column_stats_reduce(
     stats: Vec<HashMap<ColumnId, (DataType, ColStats)>>,
