@@ -25,8 +25,8 @@ use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 
-use crate::datasources::dal::blob_accessor::DataAccessor;
-use crate::datasources::dal::S3;
+use crate::DataAccessor;
+use crate::S3;
 
 struct TestFixture {
     region: Region,

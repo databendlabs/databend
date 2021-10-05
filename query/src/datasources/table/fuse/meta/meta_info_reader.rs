@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_arrow::parquet::read::read_metadata;
 use common_catalog::RawBlockStats;
 use common_catalog::SegmentInfo;
+use common_dal::DataAccessor;
+use common_dal::ObjectAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::ObjectAccessor;
 use crate::sessions::DatabendQueryContextRef;
 
 // TODO cache

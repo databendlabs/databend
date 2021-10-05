@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_catalog::BlockLocation;
 use common_catalog::TableSnapshot;
+use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,7 +35,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::catalogs::Table;
-use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::read_table_snapshot;
@@ -212,7 +212,7 @@ impl Table for FuseTable {
             }
         };
 
-        let data_accessor = self.data_accessor(&ctx)?;
+        let da = self.data_accessor(&ctx)?;
 
         // 2. Append blocks to storage
         let segment_info = self.append_blocks(ctx.clone(), block_stream).await?;
@@ -224,7 +224,7 @@ impl Table for FuseTable {
 
         {
             let bytes = serde_json::to_vec(&segment_info)?;
-            data_accessor.put(&seg_loc, bytes).await?;
+            da.put(&seg_loc, bytes).await?;
         }
 
         // 3. new snapshot
@@ -240,7 +240,7 @@ impl Table for FuseTable {
             let snapshot_loc = snapshot_location(&uuid);
 
             let bytes = serde_json::to_vec(&new_snapshot)?;
-            data_accessor.put(&snapshot_loc, bytes).await?;
+            da.put(&snapshot_loc, bytes).await?;
         }
 
         // 4. commit

@@ -812,6 +812,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-dal"
+version = "0.1.0"
+dependencies = [
+ "async-compat",
+ "async-trait",
+ "bytes",
+ "common-base",
+ "common-exception",
+ "futures",
+ "pretty_assertions",
+ "rand",
+ "rusoto_core",
+ "rusoto_s3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
@@ -1565,6 +1583,7 @@ dependencies = [
  "common-cache",
  "common-catalog",
  "common-clickhouse-srv",
+ "common-dal",
  "common-datablocks",
  "common-datavalues",
  "common-dfs-api",

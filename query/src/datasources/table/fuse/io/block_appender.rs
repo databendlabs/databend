@@ -25,6 +25,7 @@ use common_catalog::ColStats;
 use common_catalog::ColumnId;
 use common_catalog::SegmentInfo;
 use common_catalog::Stats;
+use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
@@ -34,7 +35,6 @@ use common_exception::Result;
 use futures::StreamExt;
 use uuid::Uuid;
 
-use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::block_location;
 use crate::datasources::table::fuse::column_stats_reduce;
 use crate::datasources::table::fuse::FuseTable;

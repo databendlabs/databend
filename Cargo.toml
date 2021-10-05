@@ -7,6 +7,7 @@ members = [
     "common/cache",
     "common/catalog",
     "common/clickhouse-srv",
+    "common/dal",
     "common/datablocks",
     "common/datavalues",
     "common/dfs-apis/api",

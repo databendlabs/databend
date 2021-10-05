@@ -17,10 +17,9 @@ use std::sync::Arc;
 
 use common_base::TrySpawn;
 use common_catalog::TableSnapshot;
+use common_dal::DataAccessor;
+use common_dal::ObjectAccessor;
 use common_exception::Result;
-
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::ObjectAccessor;
 
 pub fn read_table_snapshot<S: TrySpawn>(
     da: Arc<dyn DataAccessor>,

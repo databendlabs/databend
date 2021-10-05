@@ -16,10 +16,9 @@
 use std::sync::Arc;
 
 use common_catalog::SegmentInfo;
+use common_dal::DataAccessor;
+use common_dal::ObjectAccessor;
 use common_exception::Result;
-
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::ObjectAccessor;
 
 #[allow(dead_code)]
 pub async fn read_segment_async(da: Arc<dyn DataAccessor>, loc: &str) -> Result<SegmentInfo> {

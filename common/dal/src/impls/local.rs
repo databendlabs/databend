@@ -27,10 +27,10 @@ use futures::StreamExt;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-use crate::datasources::dal::Bytes;
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::InputStream;
-use crate::datasources::dal::SeekableReader;
+use crate::Bytes;
+use crate::DataAccessor;
+use crate::InputStream;
+use crate::SeekableReader;
 
 pub struct Local {
     root: PathBuf,
