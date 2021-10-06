@@ -32,7 +32,7 @@ members = [
 
     # Query
     "query",
-    "kvsrv",
+    "metasrv",
 
     # SQL Fuzz
     "query/fuzz",

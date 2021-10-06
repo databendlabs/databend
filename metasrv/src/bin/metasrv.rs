@@ -15,11 +15,11 @@
 use common_base::tokio;
 use common_sled_store::init_sled_db;
 use common_tracing::init_tracing_with_file;
-use kvsrv::api::FlightServer;
-use kvsrv::api::HttpService;
-use kvsrv::configs::Config;
-use kvsrv::metrics::MetricService;
 use log::info;
+use metasrv::api::FlightServer;
+use metasrv::api::HttpService;
+use metasrv::configs::Config;
+use metasrv::metrics::MetricService;
 use structopt::StructOpt;
 
 #[tokio::main]
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf.clone());
     info!(
         "Databend-meta v-{}",
-        *kvsrv::configs::config::DATABEND_COMMIT_VERSION
+        *metasrv::configs::config::DATABEND_COMMIT_VERSION
     );
 
     init_sled_db(conf.raft_config.raft_dir.clone());

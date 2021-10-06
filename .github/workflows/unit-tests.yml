@@ -75,6 +75,6 @@ jobs:
             _local_fs/
             _logs/
             _meta/
-            kvsrv/_logs/
+            metasrv/_logs/
             query/_logs/
             store/_logs/
