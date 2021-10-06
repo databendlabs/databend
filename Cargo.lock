@@ -1006,29 +1006,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-meta-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-exception",
- "common-meta-api-vo",
- "common-metatypes",
- "common-planners",
- "futures",
-]
-
-[[package]]
-name = "common-meta-api-vo"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-metatypes",
- "common-planners",
- "serde",
-]
-
-[[package]]
-name = "common-meta-sdk"
+name = "common-meta"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1042,8 +1020,6 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-util",
  "common-kv-api-vo",
- "common-meta-api",
- "common-meta-api-vo",
  "common-metatypes",
  "common-planners",
  "common-streams",
@@ -1586,9 +1562,7 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-vo",
  "common-management",
- "common-meta-api",
- "common-meta-api-vo",
- "common-meta-sdk",
+ "common-meta",
  "common-metatypes",
  "common-planners",
  "common-streams",
@@ -3099,9 +3073,7 @@ dependencies = [
  "common-infallible",
  "common-kv-api",
  "common-kv-api-vo",
- "common-meta-api",
- "common-meta-api-vo",
- "common-meta-sdk",
+ "common-meta",
  "common-metatypes",
  "common-planners",
  "common-raft-store",

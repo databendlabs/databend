@@ -15,7 +15,7 @@
 
 use common_flight_rpc::FlightClientConf;
 use common_flight_rpc::FlightClientTlsConfig;
-use common_meta_sdk::StoreClientConf;
+use common_meta::StoreClientConf;
 
 use crate::configs::Config;
 

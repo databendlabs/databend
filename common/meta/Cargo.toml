@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-sdk"
+name = "common-meta"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -18,8 +18,6 @@ common-infallible = {path = "../infallible"}
 common-kv-api = {path = "../kv-apis/api" }
 common-kv-api-util = {path = "../kv-apis/util" }
 common-kv-api-vo = {path = "../kv-apis/vo" }
-common-meta-api = {path = "../meta-apis/api" }
-common-meta-api-vo = {path = "../meta-apis/vo" }
 common-metatypes = {path = "../metatypes"}
 common-planners = {path = "../planners"}
 common-streams = {path = "../streams"}

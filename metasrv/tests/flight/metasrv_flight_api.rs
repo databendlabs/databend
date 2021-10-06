@@ -20,7 +20,7 @@ use std::time::UNIX_EPOCH;
 use common_base::tokio;
 use common_kv_api::KVApi;
 use common_kv_api_vo::UpsertKVActionResult;
-use common_meta_sdk::StoreClient;
+use common_meta::StoreClient;
 use common_metatypes::KVMeta;
 use common_metatypes::KVValue;
 use common_metatypes::MatchSeq;

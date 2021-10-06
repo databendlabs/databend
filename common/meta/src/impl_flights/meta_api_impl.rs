@@ -13,8 +13,6 @@
 // limitations under the License.
 //
 
-use common_meta_api::MetaApi;
-use common_meta_api_vo::*;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -23,7 +21,14 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::action_declare;
+use crate::meta_api::MetaApi;
 use crate::store_do_action::StoreDoAction;
+use crate::vo::CreateDatabaseReply;
+use crate::vo::CreateTableReply;
+use crate::vo::DatabaseInfo;
+use crate::vo::GetDatabasesReply;
+use crate::vo::GetTablesReply;
+use crate::vo::TableInfo;
 use crate::RequestFor;
 use crate::StoreClient;
 

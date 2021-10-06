@@ -36,11 +36,9 @@ common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-meta-sdk= {path = "../common/meta-sdk" }
+common-meta = {path = "../common/meta" }
 common-kv-api = { path = "../common/kv-apis/api" }
 common-kv-api-vo = { path = "../common/kv-apis/vo" }
-common-meta-api = { path = "../common/meta-apis/api" }
-common-meta-api-vo = { path = "../common/meta-apis/vo" }
 common-io = { path = "../common/io" }
 common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }

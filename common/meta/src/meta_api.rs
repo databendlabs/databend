@@ -14,18 +14,19 @@
 //
 
 use common_exception::Result;
-use common_meta_api_vo::CreateDatabaseReply;
-use common_meta_api_vo::CreateTableReply;
-use common_meta_api_vo::DatabaseInfo;
-use common_meta_api_vo::GetDatabasesReply;
-use common_meta_api_vo::GetTablesReply;
-use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+
+use crate::vo::CreateDatabaseReply;
+use crate::vo::CreateTableReply;
+use crate::vo::DatabaseInfo;
+use crate::vo::GetDatabasesReply;
+use crate::vo::GetTablesReply;
+use crate::vo::TableInfo;
 
 #[async_trait::async_trait]
 pub trait MetaApi: Send + Sync {

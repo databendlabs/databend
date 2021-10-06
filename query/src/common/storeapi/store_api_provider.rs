@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_kv_api::KVApi;
-use common_meta_api::MetaApi;
-use common_meta_sdk::StoreClient;
-use common_meta_sdk::StoreClientConf;
+use common_meta::meta_api::MetaApi;
+use common_meta::StoreClient;
+use common_meta::StoreClientConf;
 
 // Since there is a pending dependency issue,
 // StoreApiProvider is temporarily moved from store-api-sdk
