@@ -178,6 +178,7 @@ build_exceptions! {
     TLSConfigurationFailure(52),
     UnknownSession(53),
     UnexpectedError(54),
+    DateTimeParseError(55),
 
     // uncategorized
     UnexpectedResponseType(600),

@@ -82,8 +82,8 @@ impl ArrayCast for DFNullArray {
             DataType::List(_) => Ok(DFListArray::full_null(self.len()).into_series()),
 
             _ => Err(ErrorCode::BadDataValueType(format!(
-                "Unsupported cast_with_type operation for {:?}",
-                self,
+                "Unsupported cast_with_type from array: {:?} into data_type: {:?}",
+                self, data_type,
             ))),
         }
     }
