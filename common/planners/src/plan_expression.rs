@@ -263,13 +263,13 @@ impl Expression {
                     left.to_data_type(input_schema)?,
                     right.to_data_type(input_schema)?,
                 ];
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
 
             Expression::UnaryExpression { op, expr } => {
                 let arg_types = vec![expr.to_data_type(input_schema)?];
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
 
@@ -278,7 +278,7 @@ impl Expression {
                 for arg in args {
                     arg_types.push(arg.to_data_type(input_schema)?);
                 }
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
             Expression::AggregateFunction { .. } => {
@@ -310,7 +310,7 @@ impl Expression {
                 for arg in args.iter() {
                     fields.push(arg.to_data_field(schema)?);
                 }
-                AggregateFunctionFactory::get(&func_name, params.clone(), fields)
+                AggregateFunctionFactory::instance().get(&func_name, params.clone(), fields)
             }
             _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",
@@ -331,6 +331,24 @@ impl Expression {
                 "Expression must be aggregated function",
             )),
         }
+    }
+
+    pub fn create_scalar_function(op: &str, args: Expressions) -> Expression {
+        let op = op.to_string();
+        Expression::ScalarFunction { op, args }
+    }
+
+    pub fn create_unary_expression(op: &str, mut args: Expressions) -> Expression {
+        let op = op.to_string();
+        let expr = Box::new(args.remove(0));
+        Expression::UnaryExpression { op, expr }
+    }
+
+    pub fn create_binary_expression(op: &str, mut args: Expressions) -> Expression {
+        let op = op.to_string();
+        let left = Box::new(args.remove(0));
+        let right = Box::new(args.remove(0));
+        Expression::BinaryExpression { op, left, right }
     }
 }
 

@@ -16,8 +16,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_api_vo::DatabaseInfo;
 
-use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
@@ -50,7 +50,7 @@ impl DatabaseEngine for DefaultDatabaseFactory {
     fn create(&self, conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let client_provider = StoreApiProvider::new(conf);
         let db = DefaultDatabase::new(
-            &db_info.name,
+            &db_info.db,
             &db_info.engine,
             self.meta_backend.clone(),
             self.table_factory_registry.clone(),

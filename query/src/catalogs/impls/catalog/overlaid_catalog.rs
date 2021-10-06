@@ -13,9 +13,11 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -27,6 +29,9 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
+use crate::datasources::table_func_engine::TableArgs;
+use crate::datasources::table_func_engine::TableFuncEngine;
+use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
@@ -37,16 +42,20 @@ pub struct OverlaidCatalog {
     read_only: Arc<dyn Catalog + Send + Sync>,
     /// bottom layer, writing goes here
     bottom: Arc<dyn Catalog + Send + Sync>,
+    /// table function engine factories
+    func_engine_registry: TableFuncEngineRegistry,
 }
 
 impl OverlaidCatalog {
     pub fn create(
         upper_read_only: Arc<dyn Catalog + Send + Sync>,
         bottom: Arc<dyn Catalog + Send + Sync>,
+        func_engine_registry: HashMap<String, (u64, Arc<dyn TableFuncEngine>)>,
     ) -> Self {
         Self {
             read_only: upper_read_only,
             bottom,
+            func_engine_registry,
         }
     }
 }
@@ -81,23 +90,21 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
-        if !self.read_only.exists_database(db_name)? {
-            self.bottom.exists_database(db_name)
-        } else {
-            Ok(true)
-        }
-    }
-
     fn get_table(
         &self,
         db_name: &str,
         table_name: &str,
     ) -> common_exception::Result<Arc<TableMeta>> {
-        if self.read_only.exists_database(db_name)? {
-            self.read_only.get_table(db_name, table_name)
-        } else {
-            self.bottom.get_table(db_name, table_name)
+        let res = self.read_only.get_table(db_name, table_name);
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownDatabase("").code() {
+                    self.bottom.get_table(db_name, table_name)
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 
@@ -118,13 +125,19 @@ impl Catalog for OverlaidCatalog {
     fn get_table_function(
         &self,
         func_name: &str,
+        tbl_args: TableArgs,
     ) -> common_exception::Result<Arc<TableFunctionMeta>> {
-        self.read_only
-            .get_table_function(func_name)
-            .or_else(|_e| self.bottom.get_table_function(func_name))
+        let (id, factory) = self.func_engine_registry.get(func_name).ok_or_else(|| {
+            ErrorCode::UnknownTable(format!("unknown table function {}", func_name))
+        })?;
+        let func = factory.try_create("", func_name, *id, tbl_args)?;
+        Ok(Arc::new(TableFunctionMeta::create(func.clone(), *id)))
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> common_exception::Result<()> {
+    fn create_database(
+        &self,
+        plan: CreateDatabasePlan,
+    ) -> common_exception::Result<CreateDatabaseReply> {
         // create db in BOTTOM layer only
         self.bottom.create_database(plan)
     }

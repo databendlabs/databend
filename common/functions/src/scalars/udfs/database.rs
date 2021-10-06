@@ -20,6 +20,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -29,6 +31,11 @@ pub struct DatabaseFunction {}
 impl DatabaseFunction {
     pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(DatabaseFunction {}))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
     }
 }
 
@@ -51,10 +58,6 @@ impl Function for DatabaseFunction {
 
     fn num_arguments(&self) -> usize {
         1
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }
 

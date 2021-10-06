@@ -13,20 +13,19 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow_flight::FlightData;
 use common_base::Runtime;
+use common_base::TrySpawn;
 use common_cache::Cache;
 use common_cache::LruCache;
-use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_api_vo::CreateDatabaseReply;
+use common_meta_api_vo::CreateTableReply;
+use common_meta_api_vo::DatabaseInfo;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -34,12 +33,9 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_backend::TableInfo;
 use crate::common::StoreApiProvider;
 
-type CatalogTable = common_metatypes::Table;
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
 #[derive(Clone)]
@@ -68,26 +64,6 @@ impl RemoteMeteStoreClient {
             store_api_provider: apis_provider,
         }
     }
-
-    fn to_table_info(&self, db_name: &str, t_name: &str, tbl: &CatalogTable) -> Result<TableInfo> {
-        let schema_bin = &tbl.schema;
-        let t_id = tbl.table_id;
-        let arrow_schema = ArrowSchema::try_from(&FlightData {
-            data_header: schema_bin.clone(),
-            ..Default::default()
-        })?;
-        let schema = DataSchema::from(arrow_schema);
-
-        let info = TableInfo {
-            db: db_name.to_owned(),
-            table_id: t_id,
-            name: t_name.to_owned(),
-            schema: Arc::new(schema),
-            table_option: tbl.table_options.clone(),
-            engine: tbl.table_engine.clone(),
-        };
-        Ok(info)
-    }
 }
 
 impl MetaBackend for RemoteMeteStoreClient {
@@ -99,7 +75,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             self.rt.block_on(
                 async move {
                     let client = cli_provider.try_get_meta_client().await?;
-                    client.get_table(db_name, tbl_name).await
+                    client.get_table(&db_name, &tbl_name).await
                 },
                 self.rpc_time_out,
             )??
@@ -111,19 +87,9 @@ impl MetaBackend for RemoteMeteStoreClient {
             name: reply.name.clone(),
             schema: reply.schema,
             engine: reply.engine,
-            table_option: reply.options,
+            options: reply.options,
         };
         Ok(Arc::new(table_info))
-    }
-
-    fn exist_table(&self, db_name: &str, _table_name: &str) -> Result<bool> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            if database.name == db_name {
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 
     fn get_table_by_id(
@@ -143,7 +109,7 @@ impl MetaBackend for RemoteMeteStoreClient {
         let reply = self.rt.block_on(
             async move {
                 let client = cli.try_get_meta_client().await?;
-                client.get_table_ext(table_id, table_version).await
+                client.get_table_by_id(table_id, table_version).await
             },
             self.rpc_time_out,
         )??;
@@ -154,7 +120,7 @@ impl MetaBackend for RemoteMeteStoreClient {
             name: reply.name.clone(),
             schema: reply.schema.clone(),
             engine: reply.engine.clone(),
-            table_option: reply.options.clone(),
+            options: reply.options.clone(),
         };
 
         let mut cache = self.table_meta_cache.lock();
@@ -178,7 +144,8 @@ impl MetaBackend for RemoteMeteStoreClient {
         };
 
         let database_info = DatabaseInfo {
-            name: db_name.to_owned(),
+            database_id: db.database_id,
+            db: db_name.to_owned(),
             engine: db.engine,
         };
 
@@ -187,88 +154,40 @@ impl MetaBackend for RemoteMeteStoreClient {
 
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
         let cli_provider = self.store_api_provider.clone();
-        let db = self.rt.block_on(
+        let dbs = self.rt.block_on(
             async move {
                 let client = cli_provider.try_get_meta_client().await?;
-                client.get_database_meta(None).await
+                client.get_databases().await
             },
             self.rpc_time_out,
         )??;
-
-        match db {
-            None => Ok(vec![]),
-            Some(snapshot) => {
-                let mut res = vec![];
-                let db_metas = snapshot.db_metas;
-                for (name, database) in db_metas {
-                    res.push(Arc::new(DatabaseInfo {
-                        name,
-                        engine: database.database_engine,
-                    }));
-                }
-                Ok(res)
-            }
-        }
-    }
-
-    fn exists_database(&self, db_name: &str) -> Result<bool> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            if database.name == db_name {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        Ok(dbs.into_iter().map(Arc::new).collect())
     }
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
         let cli = self.store_api_provider.clone();
-        let reply = self.rt.block_on(
+        let db_name = db_name.to_owned();
+        let tbls = self.rt.block_on(
             async move {
                 let client = cli.try_get_meta_client().await?;
-                // always take the latest snapshot
-                client.get_database_meta(None).await
+                client.get_tables(&db_name).await
             },
             self.rpc_time_out,
         )??;
-
-        match reply {
-            None => Ok(vec![]),
-            Some(snapshot) => {
-                let id_tbls = snapshot.tbl_metas.into_iter().collect::<HashMap<_, _>>();
-                let dbs = snapshot.db_metas;
-                let mut res = vec![];
-                for (db, database) in dbs {
-                    if db == db_name {
-                        for (t_name, t_id) in database.tables {
-                            let tbl = id_tbls.get(&t_id).ok_or_else(|| {
-                                ErrorCode::IllegalMetaState(format!(
-                                    "db meta inconsistent with table meta, table of id {}, not found",
-                                    t_id
-                                ))
-                            })?;
-
-                            let tbl_info = self.to_table_info(&db, &t_name, tbl)?;
-                            res.push(Arc::new(tbl_info));
-                        }
-                    }
-                }
-                Ok(res)
-            }
-        }
+        Ok(tbls.into_iter().map(Arc::new).collect())
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
+    fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
         // TODO validate plan by table engine first
         let cli = self.store_api_provider.clone();
-        let _r = self.rt.block_on(
+        let r = self.rt.block_on(
             async move {
                 let client = cli.try_get_meta_client().await?;
                 client.create_table(plan).await
             },
             self.rpc_time_out,
         )??;
-        Ok(())
+        Ok(r)
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
@@ -283,16 +202,16 @@ impl MetaBackend for RemoteMeteStoreClient {
         Ok(())
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         let cli_provider = self.store_api_provider.clone();
-        let _r = self.rt.block_on(
+        let r = self.rt.block_on(
             async move {
                 let cli = cli_provider.try_get_meta_client().await?;
                 cli.create_database(plan).await
             },
             self.rpc_time_out,
         )??;
-        Ok(())
+        Ok(r)
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {

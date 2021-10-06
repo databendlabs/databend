@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_api_vo::CreateDatabaseReply;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -25,6 +26,7 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
+use crate::datasources::table_func_engine::TableArgs;
 
 /// Catalog is the global view of all the databases of the user.
 /// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
@@ -40,24 +42,32 @@ pub trait Catalog {
 
     // Get all the databases.
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+
     // Get the database by name.
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
-    // Check the database exists or not.
-    fn exists_database(&self, db_name: &str) -> Result<bool>;
 
     // Get one table by db and table name.
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
+
     fn get_table_by_id(
         &self,
         db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;
+
     // Get function by name.
-    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>>;
+    fn get_table_function(
+        &self,
+        _func_name: &str,
+        _tbl_args: TableArgs,
+    ) -> Result<Arc<TableFunctionMeta>> {
+        unimplemented!()
+    }
 
     // Operation with database.
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
+
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 
     // Get all db engines.

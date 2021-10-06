@@ -19,6 +19,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_api_vo::CreateDatabaseReply;
+use common_meta_api_vo::DatabaseInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -27,10 +29,8 @@ use common_planners::DropDatabasePlan;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
 use crate::catalogs::impls::meta_backends::RemoteMeteStoreClient;
-use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::common::StoreApiProvider;
 use crate::configs::Config;
@@ -124,7 +124,7 @@ impl MetaStoreCatalog {
                 ))
             })?;
 
-        let name = db_info.name.clone();
+        let name = db_info.db.clone();
         let db = provider.create(&self.conf, db_info)?;
         self.db_instances.write().insert(name, db.clone());
         Ok(db)
@@ -159,10 +159,6 @@ impl Catalog for MetaStoreCatalog {
         self.build_db_instance(&db_info)
     }
 
-    fn exists_database(&self, db_name: &str) -> Result<bool> {
-        self.meta_backend.exists_database(db_name)
-    }
-
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
         let db = self.get_database(db_name)?;
         db.get_table(table_name)
@@ -178,23 +174,7 @@ impl Catalog for MetaStoreCatalog {
         db.get_table_by_id(table_id, table_version)
     }
 
-    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            let funcs = database.get_table_functions()?;
-            for func in funcs {
-                if func.raw().name() == func_name {
-                    return Ok(func);
-                }
-            }
-        }
-        Err(ErrorCode::UnknownTableFunction(format!(
-            "Unknown table function: '{}'",
-            func_name
-        )))
-    }
-
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()> {
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         if self.db_engine_registry.contains(&plan.engine) {
             // TODO check if plan is valid (add validate method to database_factory)
             self.meta_backend.create_database(plan)

@@ -790,10 +790,10 @@ impl TransformerSqlparser {
                 Ok(TypeName::Decimal(prec.to_owned(), scale.to_owned()))
             }
             SqlparserDataType::Float(length) => Ok(TypeName::Float(length.to_owned())),
-            SqlparserDataType::Int => Ok(TypeName::Int),
-            SqlparserDataType::TinyInt => Ok(TypeName::TinyInt),
-            SqlparserDataType::SmallInt => Ok(TypeName::SmallInt),
-            SqlparserDataType::BigInt => Ok(TypeName::BigInt),
+            SqlparserDataType::Int(zerofill) => Ok(TypeName::Int(zerofill.to_owned())),
+            SqlparserDataType::TinyInt(zerofill) => Ok(TypeName::TinyInt(zerofill.to_owned())),
+            SqlparserDataType::SmallInt(zerofill) => Ok(TypeName::SmallInt(zerofill.to_owned())),
+            SqlparserDataType::BigInt(zerofill) => Ok(TypeName::BigInt(zerofill.to_owned())),
             SqlparserDataType::Real => Ok(TypeName::Real),
             SqlparserDataType::Double => Ok(TypeName::Double),
             SqlparserDataType::Boolean => Ok(TypeName::Boolean),

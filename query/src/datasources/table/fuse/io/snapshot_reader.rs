@@ -15,20 +15,18 @@
 
 use std::sync::Arc;
 
+use common_base::TrySpawn;
+use common_catalog::TableSnapshot;
+use common_dal::DataAccessor;
+use common_dal::ObjectAccessor;
 use common_exception::Result;
 
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::table::fuse::do_read_obj;
-use crate::datasources::table::fuse::do_read_obj_async;
-use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatabendQueryContextRef;
-
-pub fn read_table_snapshot(
+pub fn read_table_snapshot<S: TrySpawn>(
     da: Arc<dyn DataAccessor>,
-    ctx: &DatabendQueryContextRef,
+    ctx: &S,
     loc: &str,
 ) -> Result<TableSnapshot> {
-    do_read_obj(da, ctx, loc)
+    ObjectAccessor::new(da).blocking_read_obj(ctx, loc)
 }
 
 #[allow(dead_code)]
@@ -36,5 +34,5 @@ pub async fn read_table_snapshot_async(
     da: Arc<dyn DataAccessor>,
     loc: &str,
 ) -> Result<TableSnapshot> {
-    do_read_obj_async(da, loc).await
+    ObjectAccessor::new(da).read_obj(loc).await
 }

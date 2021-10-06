@@ -16,34 +16,26 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
-use common_metatypes::Database;
-use common_metatypes::Table;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateDatabaseActionResult {
+pub struct CreateDatabaseReply {
     pub database_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetDatabaseActionResult {
+pub struct DatabaseInfo {
     pub database_id: u64,
     pub db: String,
     pub engine: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DropDatabaseActionResult {}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableActionResult {
+pub struct CreateTableReply {
     pub table_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct DropTableActionResult {}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableActionResult {
+pub struct TableInfo {
     pub table_id: u64,
     pub db: String,
     pub name: String,
@@ -52,20 +44,5 @@ pub struct GetTableActionResult {
     pub options: HashMap<String, String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DatabaseMetaSnapshot {
-    pub meta_ver: u64,
-    pub db_metas: Vec<(String, Database)>,
-    pub tbl_metas: Vec<(u64, Table)>,
-}
-pub type DatabaseMetaReply = Option<DatabaseMetaSnapshot>;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum CommitTableReply {
-    // done
-    Success,
-    // recoverable, returns the current snapshot-id, which should be merged with
-    Conflict(String),
-    // fatal, not recoverable, returns the current snapshot-id
-    Failure(String),
-}
+pub type GetDatabasesReply = Vec<DatabaseInfo>;
+pub type GetTablesReply = Vec<TableInfo>;

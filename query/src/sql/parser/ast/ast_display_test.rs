@@ -50,7 +50,7 @@ mod test {
                     name: "column".to_owned(),
                     quote: None,
                 },
-                data_type: TypeName::Int,
+                data_type: TypeName::Int(None),
                 nullable: false,
                 default_value: Some(Literal::Number("123".to_owned())),
             }],
@@ -183,7 +183,7 @@ mod test {
                 args: vec![
                     Expr::Cast {
                         expr: Box::new(Expr::Wildcard),
-                        target_type: TypeName::Int,
+                        target_type: TypeName::Int(None),
                     },
                     Expr::Between {
                         expr: Box::new(Expr::Wildcard),

@@ -15,35 +15,39 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_meta_api_vo::CreateDatabaseReply;
+use common_meta_api_vo::CreateTableReply;
+use common_meta_api_vo::DatabaseInfo;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
-use common_planners::TableOptions;
-
-#[derive(Debug)]
-pub struct TableInfo {
-    pub db: String,
-    pub table_id: u64,
-    pub name: String,
-    pub schema: DataSchemaRef,
-    pub engine: String,
-    pub table_option: TableOptions,
-}
-
-#[derive(Clone)]
-pub struct DatabaseInfo {
-    pub name: String,
-    pub engine: String,
-}
 
 pub trait MetaBackend: Send + Sync {
+    // database
+
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
+
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+
+    fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>>;
+
+    fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
+
+    // table
+
+    fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply>;
+
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>>;
-    fn exist_table(&self, db_name: &str, table_name: &str) -> Result<bool>;
+
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>>;
+
     fn get_table_by_id(
         &self,
         db_name: &str,
@@ -51,20 +55,5 @@ pub trait MetaBackend: Send + Sync {
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>>;
 
-    fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>>;
-
-    fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
-
-    fn exists_database(&self, db_name: &str) -> Result<bool>;
-
-    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>>;
-
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
-
-    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
-
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<()>;
-
-    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
     fn name(&self) -> String;
 }

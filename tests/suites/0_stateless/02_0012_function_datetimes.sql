@@ -124,3 +124,31 @@ select '===subtractMinutes===';
 select '===addSeconds===';
 select addSeconds(toDateTime(1582970400), cast(61, INT32)); -- 2020-2-29T10:00:00 + 61 seconds
 select '===addSeconds===';
+
+select '===toMonth===';
+select toMonth(toDateTime(1633081817));
+select toMonth(toDate(18901));
+select toMonth(toDateTime(1633081817))  =  10;
+select toMonth(toDate(18901))  =  10;
+select '===toMonth===';
+
+select '===toDayOfYear===';
+select toDayOfYear(toDateTime(1633173324));
+select toDayOfYear(toDate(18902));
+select toDayOfYear(toDateTime(1633173324))  =  275;
+select toDayOfYear(toDate(18902))  =  275;
+select '===toDayOfYear===';
+
+select '===toDayOfMonth===';
+select toDayOfMonth(toDateTime(1633173324));
+select toDayOfMonth(toDate(18902));
+select toDayOfMonth(toDateTime(1633173324))  =  2;
+select toDayOfMonth(toDate(18902))  =  2;
+select '===toDayOfMonth===';
+
+select '===toDayOfWeek===';
+select toDayOfWeek(toDateTime(1633173324));
+select toDayOfWeek(toDate(18902));
+select toDayOfWeek(toDateTime(1633173324))  =  6;
+select toDayOfWeek(toDate(18902))  =  6;
+select '===toDayOfWeek===';

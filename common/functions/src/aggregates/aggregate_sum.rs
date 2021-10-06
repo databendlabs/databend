@@ -27,6 +27,7 @@ use num::traits::AsPrimitive;
 
 use super::AggregateFunctionRef;
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::with_match_primitive_type;
@@ -214,4 +215,8 @@ pub fn try_create_aggregate_sum_function(
             data_type
         )))
     })
+}
+
+pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_sum_function))
 }

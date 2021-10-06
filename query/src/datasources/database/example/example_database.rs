@@ -16,15 +16,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_backend::TableInfo;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::datasources::database::example::ExampleTable;
 
@@ -64,7 +63,8 @@ impl ExampleDatabase {
             table_info.db.clone(),
             table_info.name.clone(),
             table_info.schema.clone(),
-            table_info.table_option.clone(),
+            table_info.options.clone(),
+            table_info.table_id,
         )?;
         let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);
         Ok(Arc::new(tbl_meta))
@@ -90,10 +90,6 @@ impl Database for ExampleDatabase {
         self.build_table_instance(table_info.as_ref())
     }
 
-    fn exists_table(&self, table_name: &str) -> Result<bool> {
-        self.meta_store_client.exist_table(self.name(), table_name)
-    }
-
     fn get_table_by_id(
         &self,
         _table_id: MetaId,
@@ -111,12 +107,9 @@ impl Database for ExampleDatabase {
         })
     }
 
-    fn get_table_functions(&self) -> Result<Vec<Arc<TableFunctionMeta>>> {
-        Ok(vec![])
-    }
-
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.meta_store_client.create_table(plan)
+        self.meta_store_client.create_table(plan)?;
+        Ok(())
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {

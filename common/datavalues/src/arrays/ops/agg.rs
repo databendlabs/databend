@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::ops::Add;
 use std::ops::AddAssign;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::compute::aggregate;
 use common_arrow::arrow::compute::aggregate::sum_primitive;
 use common_arrow::arrow::types::simd::Simd;

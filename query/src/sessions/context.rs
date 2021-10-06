@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -39,10 +40,7 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::Local;
-use crate::datasources::dal::StorageScheme;
-use crate::datasources::dal::S3;
+use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -71,20 +69,10 @@ impl DatabendQueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!(
                 "DatabendQuery v-{}",
-                *crate::configs::config::DATABEND_COMMIT_VERSION
+                *crate::configs::DATABEND_COMMIT_VERSION
             ),
             shared,
         })
-    }
-
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    /// The task will run in the current context thread_pool not the global.
-    pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 
     /// Set progress callback to context.
@@ -158,7 +146,7 @@ impl DatabendQueryContext {
         self.get_catalog().get_table(database, table)
     }
 
-    pub async fn get_table_by_id(
+    pub fn get_table_by_id(
         &self,
         database: &str,
         table_id: MetaId,
@@ -168,8 +156,13 @@ impl DatabendQueryContext {
             .get_table_by_id(database, table_id, table_ver)
     }
 
-    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        self.get_catalog().get_table_function(function_name)
+    pub fn get_table_function(
+        &self,
+        function_name: &str,
+        tbl_args: TableArgs,
+    ) -> Result<Arc<TableFunctionMeta>> {
+        self.get_catalog()
+            .get_table_function(function_name, tbl_args)
     }
 
     pub fn get_id(&self) -> String {
@@ -228,16 +221,17 @@ impl DatabendQueryContext {
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.shared.session.get_sessions_manager()
     }
+}
 
-    pub fn get_data_accessor(
-        &self,
-        storage_scheme: &StorageScheme,
-    ) -> Result<Arc<dyn DataAccessor>> {
-        match storage_scheme {
-            StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
-            StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
-            _ => todo!(),
-        }
+impl TrySpawn for DatabendQueryContext {
+    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+    /// The task will run in the current context thread_pool not the global.
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 }
 

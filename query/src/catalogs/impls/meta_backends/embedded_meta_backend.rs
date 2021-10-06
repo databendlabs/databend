@@ -18,6 +18,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
+use common_meta_api_vo::CreateDatabaseReply;
+use common_meta_api_vo::CreateTableReply;
+use common_meta_api_vo::DatabaseInfo;
+use common_meta_api_vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -25,10 +29,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::impls::LOCAL_TBL_ID_BEGIN;
-use crate::catalogs::meta_backend::DatabaseInfo;
 use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_backend::TableInfo;
+use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
 
 struct InMemoryTableInfo {
     pub(crate) name2meta: HashMap<String, Arc<TableInfo>>,
@@ -96,14 +98,6 @@ impl MetaBackend for EmbeddedMetaBackend {
         }
     }
 
-    fn exist_table(&self, db_name: &str, table_name: &str) -> common_exception::Result<bool> {
-        let res = self.get_table(db_name, table_name);
-        match res {
-            Ok(_) => Ok(true),
-            _ => Ok(false),
-        }
-    }
-
     fn get_table_by_id(
         &self,
         db_name: &str,
@@ -151,10 +145,6 @@ impl MetaBackend for EmbeddedMetaBackend {
         Ok(res)
     }
 
-    fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
-        Ok(self.databases.read().get(db_name).is_some())
-    }
-
     fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let mut res = vec![];
         let lock = self.databases.read();
@@ -175,7 +165,7 @@ impl MetaBackend for EmbeddedMetaBackend {
         Ok(res)
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<CreateTableReply> {
         let clone = plan.clone();
         let db_name = clone.db.as_str();
         let table_name = clone.table.as_str();
@@ -185,7 +175,7 @@ impl MetaBackend for EmbeddedMetaBackend {
             table_id: self.next_db_id(),
             name: plan.table,
             schema: plan.schema,
-            table_option: plan.options,
+            options: plan.options,
             engine: plan.engine,
         };
 
@@ -201,7 +191,8 @@ impl MetaBackend for EmbeddedMetaBackend {
             Some((_db_info, metas)) => {
                 if metas.name2meta.get(table_name).is_some() {
                     if plan.if_not_exists {
-                        return Ok(());
+                        // TODO(xp): just let it passed, gonna be removed
+                        return Ok(CreateTableReply { table_id: 0 });
                     } else {
                         return Err(ErrorCode::TableAlreadyExists(format!(
                             "Table: '{}.{}' already exists.",
@@ -213,7 +204,8 @@ impl MetaBackend for EmbeddedMetaBackend {
             }
         }
 
-        Ok(())
+        // TODO(xp): just let it passed, gonna be removed
+        Ok(CreateTableReply { table_id: 0 })
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
@@ -264,14 +256,18 @@ impl MetaBackend for EmbeddedMetaBackend {
         Ok(())
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> common_exception::Result<()> {
+    fn create_database(
+        &self,
+        plan: CreateDatabasePlan,
+    ) -> common_exception::Result<CreateDatabaseReply> {
         let db_name = plan.db.as_str();
 
         let mut db = self.databases.write();
 
         if db.get(db_name).is_some() {
             return if plan.if_not_exists {
-                Ok(())
+                // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+                Ok(CreateDatabaseReply { database_id: 0 })
             } else {
                 Err(ErrorCode::DatabaseAlreadyExists(format!(
                     "Database: '{}' already exists.",
@@ -281,7 +277,9 @@ impl MetaBackend for EmbeddedMetaBackend {
         }
 
         let database_info = DatabaseInfo {
-            name: db_name.to_string(),
+            // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+            database_id: 0,
+            db: db_name.to_string(),
             engine: plan.engine.clone(),
         };
 
@@ -289,23 +287,33 @@ impl MetaBackend for EmbeddedMetaBackend {
             plan.db,
             (Arc::new(database_info), InMemoryTableInfo::create()),
         );
-        Ok(())
+
+        // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+        Ok(CreateDatabaseReply { database_id: 0 })
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
         let db_name = plan.db.as_str();
-        if !self.exists_database(db_name)? {
-            return if plan.if_exists {
-                Ok(())
-            } else {
-                Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: '{}'",
-                    db_name
-                )))
-            };
+
+        let removed = {
+            let mut dbs = self.databases.write();
+            dbs.remove(db_name)
+        };
+
+        if removed.is_some() {
+            return Ok(());
         }
-        self.databases.write().remove(db_name);
-        Ok(())
+
+        // removed.is_none()
+
+        if plan.if_exists {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database: '{}'",
+                db_name
+            )))
+        }
     }
 
     fn name(&self) -> String {

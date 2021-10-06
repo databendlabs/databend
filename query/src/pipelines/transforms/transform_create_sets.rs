@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_base::tokio::task::JoinHandle;
+use common_base::TrySpawn;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -92,7 +93,7 @@ impl CreateSetsTransform {
         let mut join_tasks = vec![];
         for index in 0..data_puller.sub_queries_num() {
             let future = data_puller.take_subquery_data(index)?;
-            join_tasks.push(context.execute_task(future)?);
+            join_tasks.push(context.try_spawn(future)?);
         }
 
         Ok(join_all(join_tasks))

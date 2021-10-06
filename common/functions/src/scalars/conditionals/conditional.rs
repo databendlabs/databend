@@ -12,20 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
-use crate::scalars::FactoryFuncRef;
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::IfFunction;
 
 #[derive(Clone)]
 pub struct ConditionalFunction;
 
 impl ConditionalFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-
-        map.insert("if".into(), IfFunction::try_create_func);
-
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("if", IfFunction::desc());
     }
 }

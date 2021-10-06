@@ -12,6 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use clusters_table::ClustersTable;
+pub use configs_table::ConfigsTable;
+pub use contributors_table::ContributorsTable;
+pub use credits_table::CreditsTable;
+pub use databases_table::DatabasesTable;
+pub use engines_table::EnginesTable;
+pub use functions_table::FunctionsTable;
+pub use one_table::OneTable;
+pub use processes_table::ProcessesTable;
+pub use settings_table::SettingsTable;
+pub use system_database::SystemDatabase;
+pub use tables_table::TablesTable;
+pub use tracing_table::TracingTable;
+pub use tracing_table_stream::TracingTableStream;
+
 #[cfg(test)]
 mod clusters_table_test;
 #[cfg(test)]
@@ -27,8 +42,6 @@ mod engines_table_test;
 #[cfg(test)]
 mod functions_table_test;
 #[cfg(test)]
-mod numbers_table_test;
-#[cfg(test)]
 mod settings_table_test;
 #[cfg(test)]
 mod tables_table_test;
@@ -42,8 +55,6 @@ mod credits_table;
 mod databases_table;
 mod engines_table;
 mod functions_table;
-mod numbers_stream;
-mod numbers_table;
 mod one_table;
 mod processes_table;
 mod settings_table;
@@ -52,20 +63,4 @@ mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;
 
-pub use clusters_table::ClustersTable;
-pub use configs_table::ConfigsTable;
-pub use contributors_table::ContributorsTable;
-pub use credits_table::CreditsTable;
-pub use databases_table::DatabasesTable;
-pub use engines_table::EnginesTable;
-pub use functions_table::FunctionsTable;
-pub use numbers_stream::NumbersStream;
-pub use numbers_table::NumbersTable;
-pub use one_table::OneTable;
-pub use processes_table::ProcessesTable;
-pub use settings_table::SettingsTable;
-pub use system_database::SystemDatabase;
-//pub use system_databases::SystemDatabases;
-pub use tables_table::TablesTable;
-pub use tracing_table::TracingTable;
-pub use tracing_table_stream::TracingTableStream;
+// TODO introduce A "base" type VTable, to de-duplicate codes of system tables

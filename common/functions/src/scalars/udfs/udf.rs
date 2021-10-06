@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::udfs::exists::ExistsFunction;
 use crate::scalars::CrashMeFunction;
 use crate::scalars::DatabaseFunction;
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::SleepFunction;
 use crate::scalars::ToTypeNameFunction;
 use crate::scalars::UdfExampleFunction;
@@ -27,15 +25,13 @@ use crate::scalars::VersionFunction;
 pub struct UdfFunction;
 
 impl UdfFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert("example".into(), UdfExampleFunction::try_create);
-        map.insert("totypename".into(), ToTypeNameFunction::try_create);
-        map.insert("database".into(), DatabaseFunction::try_create);
-        map.insert("version".into(), VersionFunction::try_create);
-        map.insert("sleep".into(), SleepFunction::try_create);
-        map.insert("crashme".into(), CrashMeFunction::try_create);
-        map.insert("exists".into(), ExistsFunction::try_create);
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("example", UdfExampleFunction::desc());
+        factory.register("totypename", ToTypeNameFunction::desc());
+        factory.register("database", DatabaseFunction::desc());
+        factory.register("version", VersionFunction::desc());
+        factory.register("sleep", SleepFunction::desc());
+        factory.register("crashme", CrashMeFunction::desc());
+        factory.register("exists", ExistsFunction::desc());
     }
 }

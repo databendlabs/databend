@@ -10,6 +10,7 @@ edition = "2021"
 
 [dependencies]
 
+common-base = {path= "../../base" }
 common-metatypes = {path= "../../metatypes" }
 common-exception = {path = "../../exception" }
 common-kv-api-util= { path = "../util" }

@@ -110,6 +110,8 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
         remote: false,
+        tbl_args: None,
+        push_downs: None,
     });
 
     let filter_plan = PlanBuilder::from(&source_plan)
@@ -167,6 +169,8 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
         remote: false,
+        tbl_args: None,
+        push_downs: None,
     });
 
     let group_exprs = &[col("a"), col("c")];

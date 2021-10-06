@@ -20,6 +20,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -32,6 +34,11 @@ impl IfFunction {
         Ok(Box::new(IfFunction {
             _display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic())
     }
 }
 

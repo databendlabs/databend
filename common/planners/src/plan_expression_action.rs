@@ -91,7 +91,7 @@ impl ActionFunction {
 
         match self.func_name.as_str() {
             "cast" => CastFunction::create(self.func_name.clone(), self.return_type.clone()),
-            _ => FunctionFactory::get(&self.func_name),
+            _ => FunctionFactory::instance().get(&self.func_name),
         }
     }
 
@@ -101,7 +101,8 @@ impl ActionFunction {
                 "Action must be aggregated function",
             ));
         }
-        AggregateFunctionFactory::get(
+
+        AggregateFunctionFactory::instance().get(
             &self.func_name,
             self.params.clone(),
             self.arg_fields.clone(),

@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", conf);
     info!(
         "DatabendQuery v-{}",
-        *databend_query::configs::config::DATABEND_COMMIT_VERSION,
+        *databend_query::configs::DATABEND_COMMIT_VERSION,
     );
 
     // User manager and init the default users.

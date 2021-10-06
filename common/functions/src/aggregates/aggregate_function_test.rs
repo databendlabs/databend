@@ -183,8 +183,8 @@ fn test_aggregate_function() -> Result<()> {
         let rows = t.arrays[0].len();
 
         let func = || -> Result<()> {
-            let func =
-                AggregateFunctionFactory::get(t.func_name, t.params.clone(), t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
 
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
@@ -367,8 +367,8 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         let rows = t.arrays[0].len();
 
         let func = || -> Result<()> {
-            let func =
-                AggregateFunctionFactory::get(t.func_name, t.params.clone(), t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
 

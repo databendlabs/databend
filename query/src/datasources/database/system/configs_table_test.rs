@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -29,18 +28,18 @@ async fn test_configs_table() -> Result<()> {
     let ctx = try_create_context_with_config(config)?;
     ctx.get_settings().set_max_threads(8)?;
 
-    let table = ConfigsTable::create();
+    let table = ConfigsTable::create(1);
     let source_plan = table.read_plan(
         ctx.clone(),
-        &ScanPlan::empty(),
-        ctx.get_settings().get_max_threads()? as usize,
+        None,
+        Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 30);
+    assert_eq!(block.num_rows(), 25);
 
     let expected = vec![
         "+-----------------------------------+----------------+-------+-------------+",
@@ -70,11 +69,6 @@ async fn test_configs_table() -> Result<()> {
         "| rpc_tls_query_service_domain_name | localhost      | query |             |",
         "| rpc_tls_server_cert               |                | query |             |",
         "| rpc_tls_server_key                |                | query |             |",
-        "| rpc_tls_store_server_root_ca_cert |                | dfs   |             |",
-        "| rpc_tls_store_service_domain_name | localhost      | dfs   |             |",
-        "| store_address                     |                | dfs   |             |",
-        "| store_password                    |                | dfs   |             |",
-        "| store_username                    | root           | dfs   |             |",
         "| tenant                            |                | query |             |",
         "+-----------------------------------+----------------+-------+-------------+",
     ];

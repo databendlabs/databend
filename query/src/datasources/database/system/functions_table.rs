@@ -13,16 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
+use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -31,12 +30,14 @@ use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct FunctionsTable {
+    table_id: u64,
     schema: DataSchemaRef,
 }
 
 impl FunctionsTable {
-    pub fn create() -> Self {
+    pub fn create(table_id: u64) -> Self {
         FunctionsTable {
+            table_id,
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::String, false),
                 DataField::new("is_aggregate", DataType::Boolean, false),
@@ -63,6 +64,10 @@ impl Table for FunctionsTable {
         Ok(self.schema.clone())
     }
 
+    fn get_id(&self) -> u64 {
+        self.table_id
+    }
+
     fn is_local(&self) -> bool {
         true
     }
@@ -70,14 +75,14 @@ impl Table for FunctionsTable {
     fn read_plan(
         &self,
         _ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        _push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
+            table_id: self.table_id,
+            table_version: None,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),
@@ -85,8 +90,10 @@ impl Table for FunctionsTable {
             }],
             statistics: Statistics::default(),
             description: "(Read from system.functions table)".to_string(),
-            scan_plan: Arc::new(scan.clone()),
+            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
             remote: false,
+            tbl_args: None,
+            push_downs: None,
         })
     }
 
@@ -95,8 +102,10 @@ impl Table for FunctionsTable {
         _ctx: DatabendQueryContextRef,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let func_names = FunctionFactory::registered_names();
-        let aggr_func_names = AggregateFunctionFactory::registered_names();
+        let function_factory = FunctionFactory::instance();
+        let aggregate_function_factory = AggregateFunctionFactory::instance();
+        let func_names = function_factory.registered_names();
+        let aggr_func_names = aggregate_function_factory.registered_names();
 
         let names: Vec<&[u8]> = func_names
             .iter()

@@ -25,17 +25,16 @@ use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
-use common_planners::ExpressionVisitor;
 use common_planners::FilterPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
-use common_planners::Recursion;
 use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
+use crate::optimizers::RequireColumnsVisitor;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct ProjectionPushDownOptimizer {}
@@ -132,32 +131,10 @@ impl PlanRewriter for ProjectionPushDownImpl {
                     description: plan.description.to_string(),
                     scan_plan: plan.scan_plan.clone(),
                     remote: plan.remote,
+                    tbl_args: plan.tbl_args.clone(),
+                    push_downs: plan.push_downs.clone(),
                 })
             })
-    }
-}
-
-struct RequireColumnsVisitor {
-    required_columns: HashSet<String>,
-}
-impl RequireColumnsVisitor {
-    pub fn new() -> Self {
-        Self {
-            required_columns: HashSet::new(),
-        }
-    }
-}
-
-impl ExpressionVisitor for RequireColumnsVisitor {
-    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
-        match expr {
-            Expression::Column(c) => {
-                let mut v = self;
-                v.required_columns.insert(c.clone());
-                Ok(Recursion::Continue(v))
-            }
-            _ => Ok(Recursion::Continue(self)),
-        }
     }
 }
 
@@ -182,7 +159,7 @@ impl ProjectionPushDownImpl {
     // Recursively walk an expression tree, collecting the unique set of column names
     // referenced in the expression
     fn collect_column_names_from_expr(&mut self, expr: &Expression) -> Result<()> {
-        let mut visitor = RequireColumnsVisitor::new();
+        let mut visitor = RequireColumnsVisitor::default();
         visitor = expr.accept(visitor)?;
         for k in visitor.required_columns {
             self.required_columns.insert(k);

@@ -24,6 +24,8 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone, Debug)]
@@ -34,6 +36,8 @@ pub struct NumberFunction<T, R> {
 }
 
 pub trait NumberResultFunction<R> {
+    const IS_DETERMINISTIC: bool;
+
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>) -> R;
     fn to_constant_value(_value: DateTime<Utc>) -> DataValue;
@@ -43,6 +47,8 @@ pub trait NumberResultFunction<R> {
 pub struct ToYYYYMM;
 
 impl NumberResultFunction<u32> for ToYYYYMM {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
     }
@@ -59,6 +65,8 @@ impl NumberResultFunction<u32> for ToYYYYMM {
 pub struct ToYYYYMMDD;
 
 impl NumberResultFunction<u32> for ToYYYYMMDD {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
     }
@@ -75,6 +83,8 @@ impl NumberResultFunction<u32> for ToYYYYMMDD {
 pub struct ToYYYYMMDDhhmmss;
 
 impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt64)
     }
@@ -97,6 +107,8 @@ impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
 pub struct ToStartOfYear;
 
 impl NumberResultFunction<u16> for ToStartOfYear {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -114,6 +126,8 @@ impl NumberResultFunction<u16> for ToStartOfYear {
 pub struct ToStartOfISOYear;
 
 impl NumberResultFunction<u16> for ToStartOfISOYear {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -136,6 +150,8 @@ impl NumberResultFunction<u16> for ToStartOfISOYear {
 pub struct ToStartOfQuarter;
 
 impl NumberResultFunction<u16> for ToStartOfQuarter {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -154,6 +170,8 @@ impl NumberResultFunction<u16> for ToStartOfQuarter {
 pub struct ToStartOfMonth;
 
 impl NumberResultFunction<u16> for ToStartOfMonth {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -164,6 +182,78 @@ impl NumberResultFunction<u16> for ToStartOfMonth {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value) as u16))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToMonth;
+
+impl NumberResultFunction<u8> for ToMonth {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt8)
+    }
+    fn to_number(value: DateTime<Utc>) -> u8 {
+        value.month() as u8
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt8(Some(Self::to_number(value)))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToDayOfYear;
+
+impl NumberResultFunction<u16> for ToDayOfYear {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt16)
+    }
+    fn to_number(value: DateTime<Utc>) -> u16 {
+        value.ordinal() as u16
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt16(Some(Self::to_number(value)))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToDayOfMonth;
+
+impl NumberResultFunction<u8> for ToDayOfMonth {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt8)
+    }
+    fn to_number(value: DateTime<Utc>) -> u8 {
+        value.day() as u8
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt8(Some(Self::to_number(value)))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToDayOfWeek;
+
+impl NumberResultFunction<u8> for ToDayOfWeek {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt8)
+    }
+    fn to_number(value: DateTime<Utc>) -> u8 {
+        value.weekday().number_from_monday() as u8
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt8(Some(Self::to_number(value)))
     }
 }
 
@@ -180,6 +270,16 @@ where
             r: PhantomData,
         }))
     }
+
+    pub fn desc() -> FunctionDescription {
+        let mut features = FunctionFeatures::default();
+
+        if T::IS_DETERMINISTIC {
+            features = features.deterministic();
+        }
+
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+    }
 }
 
 impl<T, R> Function for NumberFunction<T, R>
@@ -192,12 +292,12 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        T::return_type()
-    }
-
     fn num_arguments(&self) -> usize {
         1
+    }
+
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+        T::return_type()
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -223,7 +323,7 @@ where
                         );
                     Ok(result.into())
                 }
-            },
+            }
             DataType::Date32 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_i64()? * 24 * 3600, 0_u32);
@@ -240,7 +340,7 @@ where
                         );
                     Ok(result.into())
                 }
-            },
+            }
             DataType::DateTime32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64()? as i64, 0_u32);
@@ -257,7 +357,7 @@ where
                         );
                     Ok(result.into())
                 }
-            },
+            }
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                 "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
                 other,
@@ -287,3 +387,8 @@ pub type ToStartOfISOYearFunction = NumberFunction<ToStartOfISOYear, u16>;
 pub type ToStartOfYearFunction = NumberFunction<ToStartOfYear, u16>;
 pub type ToStartOfQuarterFunction = NumberFunction<ToStartOfQuarter, u16>;
 pub type ToStartOfMonthFunction = NumberFunction<ToStartOfMonth, u16>;
+
+pub type ToMonthFunction = NumberFunction<ToMonth, u8>;
+pub type ToDayOfYearFunction = NumberFunction<ToDayOfYear, u16>;
+pub type ToDayOfMonthFunction = NumberFunction<ToDayOfMonth, u8>;
+pub type ToDayOfWeekFunction = NumberFunction<ToDayOfWeek, u8>;
