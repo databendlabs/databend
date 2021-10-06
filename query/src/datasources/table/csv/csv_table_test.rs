@@ -14,6 +14,7 @@
 //
 
 use std::env;
+use std::sync::Arc;
 
 use common_base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
@@ -62,8 +63,9 @@ async fn test_csv_table() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
+    let io_ctx = ctx.get_single_node_table_io_context()?;
     let source_plan = table.read_plan(
-        ctx.clone(),
+        Arc::new(io_ctx),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
     )?;
@@ -134,8 +136,9 @@ async fn test_csv_table_parse_error() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
+    let io_ctx = ctx.get_single_node_table_io_context()?;
     let source_plan = table.read_plan(
-        ctx.clone(),
+        Arc::new(io_ctx),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
     )?;

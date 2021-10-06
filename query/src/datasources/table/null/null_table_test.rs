@@ -63,8 +63,9 @@ async fn test_null_table() -> Result<()> {
 
     // read.
     {
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let source_plan = table.read_plan(
-            ctx.clone(),
+            Arc::new(io_ctx),
             None,
             Some(ctx.get_settings().get_max_threads()? as usize),
         )?;

@@ -14,8 +14,11 @@
 
 //! `catalog` defines catalog related data types, such as table or database.
 
+mod table_io_context;
 mod table_snapshot;
 
+pub use table_io_context::IOContext;
+pub use table_io_context::TableIOContext;
 pub use table_snapshot::BlockLocation;
 pub use table_snapshot::BlockMeta;
 pub use table_snapshot::ColStats;
