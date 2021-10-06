@@ -17,7 +17,6 @@ use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::path::Path;
 
-use databend_dfs::configs::Config as StoreConfig;
 use databend_query::configs::Config as QueryConfig;
 
 use crate::cmds::Config;
@@ -44,7 +43,6 @@ pub struct LocalQueryConfig {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalStoreConfig {
-    pub config: StoreConfig,
     pub pid: String,
 }
 
