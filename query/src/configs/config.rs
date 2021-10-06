@@ -14,7 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_sdk::RpcClientTlsConfig;
+use common_flight_rpc::FlightClientTlsConfig;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -133,8 +133,8 @@ impl Config {
         Ok(mut_config)
     }
 
-    pub fn tls_query_client_conf(&self) -> RpcClientTlsConfig {
-        RpcClientTlsConfig {
+    pub fn tls_query_client_conf(&self) -> FlightClientTlsConfig {
+        FlightClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.query.rpc_tls_query_server_root_ca_cert.to_string(),
             domain_name: self.query.rpc_tls_query_service_domain_name.to_string(),
         }

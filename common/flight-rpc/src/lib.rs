@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use client_conf::FlightClientConf;
+pub use client_conf::FlightClientTlsConfig;
 pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
 pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
-pub use rpc_client_conf::ClientConf;
-pub use rpc_client_conf::RpcClientTlsConfig;
 
+mod client_conf;
 mod dns_resolver;
 mod flight_token;
-mod rpc_client_conf;
 
 #[cfg(test)]
 mod dns_resolver_test;

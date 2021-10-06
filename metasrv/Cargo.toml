@@ -22,6 +22,7 @@ common-datablocks = {path = "../common/datablocks"}
 common-datavalues = {path = "../common/datavalues"}
 common-exception = {path = "../common/exception"}
 common-functions = {path = "../common/functions"}
+common-flight-rpc = {path = "../common/flight-rpc"}
 common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}
 common-planners = {path = "../common/planners"}

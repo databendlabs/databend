@@ -21,11 +21,11 @@ use common_base::tokio::time::sleep as tokio_async_sleep;
 use common_base::GlobalUniqName;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flight_rpc::ConnectionFactory;
 use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
 use common_management::NodeInfo;
-use common_meta_sdk::ConnectionFactory;
 use rand::thread_rng;
 use rand::Rng;
 

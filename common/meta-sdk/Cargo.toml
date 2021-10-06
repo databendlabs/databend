@@ -12,6 +12,7 @@ common-arrow = {path = "../arrow"}
 common-base = {path = "../base" }
 common-datablocks= {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
+common-flight-rpc = {path = "../flight-rpc"}
 common-exception= {path = "../exception"}
 common-infallible = {path = "../infallible"}
 common-kv-api = {path = "../kv-apis/api" }

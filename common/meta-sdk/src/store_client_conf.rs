@@ -13,24 +13,10 @@
 //  limitations under the License.
 //
 
-use crate::RpcClientTlsConfig;
+use common_flight_rpc::FlightClientConf;
 
 #[derive(Clone, Debug, Default)]
 pub struct StoreClientConf {
-    pub meta_service_config: ClientConf,
-    pub kv_service_config: ClientConf,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ClientConf {
-    pub address: String,
-    pub username: String,
-    pub password: String,
-    pub tls_conf: Option<RpcClientTlsConfig>,
-}
-
-impl ClientConf {
-    pub fn local_mode(&self) -> bool {
-        self.address.is_empty()
-    }
+    pub meta_service_config: FlightClientConf,
+    pub kv_service_config: FlightClientConf,
 }

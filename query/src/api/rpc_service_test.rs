@@ -23,8 +23,6 @@ use common_base::tokio::net::TcpListener;
 use common_base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_sdk::ConnectionFactory;
-use common_meta_sdk::RpcClientTlsConfig;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::api::rpc::DatabendQueryFlightDispatcher;
@@ -35,6 +33,8 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 use crate::tests::SessionManagerBuilder;
+use common_flight_rpc::ConnectionFactory;
+use common_flight_rpc::FlightClientTlsConfig;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
@@ -50,7 +50,7 @@ async fn test_tls_rpc_server() -> Result<()> {
     let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
     listener_address = rpc_service.start(listener_address).await?;
 
-    let tls_conf = Some(RpcClientTlsConfig {
+    let tls_conf = Some(FlightClientTlsConfig {
         rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     });
@@ -94,7 +94,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
     // setup, invalid cert locations
-    let client_conf = RpcClientTlsConfig {
+    let client_conf = FlightClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/nowhere.pem".to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     };
