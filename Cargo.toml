@@ -11,6 +11,7 @@ members = [
     "common/datablocks",
     "common/datavalues",
     "common/exception",
+    "common/flight-rpc",
     "common/functions",
     "common/infallible",
     "common/io",

@@ -878,6 +878,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-flight-rpc"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-arrow",
+ "common-base",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-infallible",
+ "common-kv-api",
+ "common-kv-api-util",
+ "common-kv-api-vo",
+ "common-meta-api",
+ "common-meta-api-vo",
+ "common-metatypes",
+ "common-planners",
+ "common-streams",
+ "common-tracing",
+ "futures",
+ "hyper",
+ "jwt-simple",
+ "lazy_static",
+ "log",
+ "pretty_assertions",
+ "prost",
+ "serde",
+ "serde_json",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "trust-dns-resolver",
+]
+
+[[package]]
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
