@@ -23,6 +23,8 @@ use common_base::tokio::net::TcpListener;
 use common_base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flight_rpc::ConnectionFactory;
+use common_flight_rpc::FlightClientTlsConfig;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::api::rpc::DatabendQueryFlightDispatcher;
@@ -33,8 +35,6 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 use crate::tests::SessionManagerBuilder;
-use common_flight_rpc::ConnectionFactory;
-use common_flight_rpc::FlightClientTlsConfig;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {

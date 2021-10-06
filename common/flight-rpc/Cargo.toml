@@ -10,19 +10,7 @@ edition = "2021"
 # Workspace dependencies
 common-arrow = {path = "../arrow"}
 common-base = {path = "../base" }
-common-datablocks= {path = "../datablocks"}
-common-datavalues = {path = "../datavalues"}
 common-exception= {path = "../exception"}
-common-infallible = {path = "../infallible"}
-common-kv-api = {path = "../kv-apis/api" }
-common-kv-api-util = {path = "../kv-apis/util" }
-common-kv-api-vo = {path = "../kv-apis/vo" }
-common-meta-api = {path = "../meta-apis/api" }
-common-meta-api-vo = {path = "../meta-apis/vo" }
-common-metatypes = {path = "../metatypes"}
-common-planners = {path = "../planners"}
-common-streams = {path = "../streams"}
-common-tracing = {path = "../tracing"}
 
 # Github dependencies
 
@@ -44,7 +32,6 @@ async-trait = "0.1"
 pretty_assertions = "1.0"
 
 [build-dependencies]
-tonic-build = "0.5.2"
 
 [features]
 mocks = []
