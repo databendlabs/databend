@@ -34,23 +34,12 @@ where T: DFPrimitiveType
         let iter = iter.into_iter();
 
         let arr: PrimitiveArray<T> = match iter.size_hint() {
-            (a, Some(b)) if a == b => {
-                // 2021-02-07: ~40% faster than builder.
-                // It is unsafe because we cannot be certain that the iterators length can be trusted.
-                // For most iterators that report the same upper bound as lower bound it is, but still
-                // somebody can create an iterator that incorrectly gives those bounds.
-                // This will not lead to UB, but will panic.
-                unsafe {
-                    let arr = PrimitiveArray::from_trusted_len_iter_unchecked(iter);
-                    assert_eq!(arr.len(), a);
-                    arr
-                }
-            }
-            _ => {
-                // 2021-02-07: ~1.5% slower than builder. Will still use this as it is more idiomatic and will
-                // likely improve over time.
-                iter.collect()
-            }
+            (a, Some(b)) if a == b => unsafe {
+                let arr = PrimitiveArray::from_trusted_len_iter_unchecked(iter);
+                assert_eq!(arr.len(), a);
+                arr
+            },
+            _ => iter.collect(),
         };
         arr.into()
     }
@@ -92,13 +81,23 @@ impl FromIterator<bool> for NoNull<DFBooleanArray> {
 }
 
 // FromIterator for StringType variants.Array
-
 impl<Ptr> FromIterator<Option<Ptr>> for DFStringArray
 where Ptr: AsRef<[u8]>
 {
     fn from_iter<I: IntoIterator<Item = Option<Ptr>>>(iter: I) -> Self {
-        // 2021-02-07: this was ~30% faster than with the builder.
-        let arr = LargeBinaryArray::from_iter(iter);
+        let iter = iter.into_iter();
+        let arr: LargeBinaryArray = match iter.size_hint() {
+            (a, Some(b)) if a == b => {
+                // 2021-02-07: ~40% faster than builder.
+                unsafe {
+                    let arr = LargeBinaryArray::from_trusted_len_iter_unchecked(iter);
+                    assert_eq!(arr.len(), a);
+                    arr
+                }
+            }
+            _ => iter.collect(),
+        };
+
         arr.into()
     }
 }
