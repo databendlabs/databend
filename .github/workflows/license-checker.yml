@@ -10,23 +10,13 @@ on:
 
 jobs:
   check-license:
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
-      - name: Test
-        run: |
-          curl -i -X POST \
-          'https://api.github.com/repos/datafuselabs/databend/pulls/2068/reviews' \
-          -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' \
-          -d '{
-            "body": "Hello, world!\n",
-            "event": "COMMENT"
-            }' \
-          --fail
       - name: Check License Header
         uses: apache/skywalking-eyes@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           log: info
