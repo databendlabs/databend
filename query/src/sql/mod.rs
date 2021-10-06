@@ -17,6 +17,7 @@ mod plan_parser_test;
 #[cfg(test)]
 mod sql_parser_test;
 
+mod foo;
 mod metrics;
 mod parser;
 mod plan_parser;
