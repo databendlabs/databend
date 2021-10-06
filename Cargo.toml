@@ -20,12 +20,11 @@ members = [
     "common/kv-apis/vo",
     "common/kv",
     "common/management",
-    "common/meta-apis/api",
     "common/metatypes",
     "common/planners",
     "common/raft-store",
     "common/sled-store",
-    "common/meta-sdk",
+    "common/meta",
     "common/streams",
     "common/tracing",
 

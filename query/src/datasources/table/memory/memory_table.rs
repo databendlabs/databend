@@ -21,7 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_api_vo::TableInfo;
+use common_meta::vo::TableInfo;
 use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;

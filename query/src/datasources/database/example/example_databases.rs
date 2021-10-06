@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_api_vo::DatabaseInfo;
+use common_meta::vo::DatabaseInfo;
 
 use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
 use crate::catalogs::meta_backend::MetaBackend;

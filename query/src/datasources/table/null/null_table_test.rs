@@ -20,7 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_meta_api_vo::TableInfo;
+use common_meta::vo::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 

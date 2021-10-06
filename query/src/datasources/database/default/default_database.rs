@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
-use common_meta_api_vo::TableInfo;
+use common_meta::vo::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateTablePlan;

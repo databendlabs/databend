@@ -23,7 +23,9 @@ mod impl_flights;
 mod store_client;
 #[macro_use]
 mod store_do_action;
+pub mod meta_api;
 mod store_client_conf;
+pub mod vo;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]

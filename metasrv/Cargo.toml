@@ -29,10 +29,9 @@ common-planners = {path = "../common/planners"}
 common-raft-store = {path = "../common/raft-store"}
 common-base = {path = "../common/base" }
 common-sled-store = {path = "../common/sled-store"}
-common-meta-sdk = {path = "../common/meta-sdk"}
+common-meta = {path = "../common/meta" }
 common-tracing = {path = "../common/tracing"}
 common-kv-api-vo = {path = "../common/kv-apis/vo" }
-common-meta-api-vo = {path = "../common/meta-apis/vo" }
 
 # Github dependencies
 
@@ -72,7 +71,6 @@ axum-server = { version = "0.2", features = ["tls-rustls"] }
 [dev-dependencies]
 
 common-kv-api = {path = "../common/kv-apis/api" }
-common-meta-api = {path = "../common/meta-apis/api" }
 
 pretty_assertions = "1.0"
 test-env-log = "0.2.7"
