@@ -13,7 +13,6 @@ common-metatypes = {path = "../metatypes"}
 common-planners = {path = "../planners"}
 common-base = {path = "../base" }
 common-sled-store = {path = "../sled-store"}
-common-dfs-api-vo = {path ="../dfs-apis/vo"}
 common-tracing = {path = "../tracing"}
 
 anyhow = "1.0.44"

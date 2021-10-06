@@ -29,7 +29,6 @@ use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
-use common_dfs_api_vo::BlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
@@ -38,6 +37,10 @@ use uuid::Uuid;
 use crate::datasources::table::fuse::block_location;
 use crate::datasources::table::fuse::column_stats_reduce;
 use crate::datasources::table::fuse::FuseTable;
+
+// TODO A better name, we already have a SendableDataBlockStream
+pub type BlockStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
 impl FuseTable {
     pub async fn append_blocks(&self, mut stream: BlockStream) -> Result<SegmentInfo> {

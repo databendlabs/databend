@@ -10,8 +10,6 @@ members = [
     "common/dal",
     "common/datablocks",
     "common/datavalues",
-    "common/dfs-apis/api",
-    "common/dfs-apis/vo",
     "common/exception",
     "common/functions",
     "common/infallible",

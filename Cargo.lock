@@ -863,30 +863,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-dfs-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-datablocks",
- "common-datavalues",
- "common-dfs-api-vo",
- "common-exception",
- "common-planners",
- "common-streams",
- "futures",
-]
-
-[[package]]
-name = "common-dfs-api-vo"
-version = "0.1.0"
-dependencies = [
- "common-datablocks",
- "common-planners",
- "futures",
- "serde",
-]
-
-[[package]]
 name = "common-exception"
 version = "0.1.0"
 dependencies = [
@@ -1063,7 +1039,6 @@ dependencies = [
  "async-raft",
  "async-trait",
  "common-base",
- "common-dfs-api-vo",
  "common-exception",
  "common-metatypes",
  "common-planners",
@@ -1107,8 +1082,6 @@ dependencies = [
  "common-base",
  "common-datablocks",
  "common-datavalues",
- "common-dfs-api",
- "common-dfs-api-vo",
  "common-exception",
  "common-infallible",
  "common-kv-api",
@@ -1586,8 +1559,6 @@ dependencies = [
  "common-dal",
  "common-datablocks",
  "common-datavalues",
- "common-dfs-api",
- "common-dfs-api-vo",
  "common-exception",
  "common-functions",
  "common-infallible",

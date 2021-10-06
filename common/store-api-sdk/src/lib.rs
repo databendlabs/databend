@@ -19,13 +19,11 @@ pub use flight_token::FlightClaim;
 pub use flight_token::FlightToken;
 pub use impl_flights::kv_api_impl;
 pub use impl_flights::meta_api_impl;
-pub use impl_flights::storage_api_impl;
 pub use store_client::StoreClient;
 pub use store_client_conf::ClientConf;
 pub use store_client_conf::StoreClientConf;
 pub use store_do_action::RequestFor;
 pub use store_do_action::StoreDoAction;
-pub use store_do_get::StoreDoGet;
 
 mod common;
 mod dns_resolver;
@@ -35,7 +33,6 @@ mod store_client;
 #[macro_use]
 mod store_do_action;
 mod store_client_conf;
-mod store_do_get;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]

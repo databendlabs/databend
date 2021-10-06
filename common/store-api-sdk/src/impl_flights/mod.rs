@@ -15,7 +15,3 @@
 
 pub mod kv_api_impl;
 pub mod meta_api_impl;
-pub mod storage_api_impl;
-pub mod storage_api_impl_utils;
-#[cfg(test)]
-mod storage_api_impl_utils_test;
