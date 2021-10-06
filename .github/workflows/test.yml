@@ -20,5 +20,4 @@ jobs:
           -H "Authorization: Bearer $GITHUB_TOKEN" \
           -H "Content-Type: application/json" \
           --data '{"event": "COMMENT", "body": "Hello, world!\n"}' \
-          --fail \
           "https://api.github.com/repos/datafuselabs/databend/pulls/2068/reviews"
