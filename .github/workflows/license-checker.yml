@@ -16,12 +16,12 @@ jobs:
       - uses: actions/checkout@v2
       - name: Test
         run: |
-          curl --request POST \
-          --url 'https://api.github.com/repos/datafuselabs/databend/pulls/2068/reviews' \
-          --header 'authorization: token ${{ secrets.GITHUB_TOKEN }}' \
-          --header 'content-type: application/json' \
-          --data '{
-            "body": "Hello, world!\n"
+          curl -i -X POST \
+          'https://api.github.com/repos/datafuselabs/databend/pulls/2068/reviews' \
+          -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' \
+          -d '{
+            "body": "Hello, world!\n",
+            "event": "COMMENT"
             }' \
           --fail
       - name: Check License Header
