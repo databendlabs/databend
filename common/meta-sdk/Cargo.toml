@@ -1,5 +1,5 @@
 [package]
-name = "common-store-api-sdk"
+name = "common-meta-sdk"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
@@ -21,7 +21,6 @@ common-meta-api = {path = "../meta-apis/api" }
 common-meta-api-vo = {path = "../meta-apis/vo" }
 common-metatypes = {path = "../metatypes"}
 common-planners = {path = "../planners"}
-common-store-api-sdk-util = {path = "./util"}
 common-streams = {path = "../streams"}
 common-tracing = {path = "../tracing"}
 

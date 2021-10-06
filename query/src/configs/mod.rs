@@ -24,7 +24,6 @@ mod config_meta;
 mod config_query;
 mod config_storage;
 
-pub use common_store_api_sdk::RpcClientTlsConfig;
 pub use config::Config;
 pub use config::DATABEND_COMMIT_VERSION;
 pub use config_log::LogConfig;

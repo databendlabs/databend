@@ -1006,6 +1006,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-sdk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-arrow",
+ "common-base",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-infallible",
+ "common-kv-api",
+ "common-kv-api-util",
+ "common-kv-api-vo",
+ "common-meta-api",
+ "common-meta-api-vo",
+ "common-metatypes",
+ "common-planners",
+ "common-streams",
+ "common-tracing",
+ "futures",
+ "hyper",
+ "jwt-simple",
+ "lazy_static",
+ "log",
+ "pretty_assertions",
+ "prost",
+ "serde",
+ "serde_json",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "trust-dns-resolver",
+]
+
+[[package]]
 name = "common-metatypes"
 version = "0.1.0"
 dependencies = [
@@ -1072,46 +1107,6 @@ dependencies = [
  "sled",
  "tempfile",
 ]
-
-[[package]]
-name = "common-store-api-sdk"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-arrow",
- "common-base",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-infallible",
- "common-kv-api",
- "common-kv-api-util",
- "common-kv-api-vo",
- "common-meta-api",
- "common-meta-api-vo",
- "common-metatypes",
- "common-planners",
- "common-store-api-sdk-util",
- "common-streams",
- "common-tracing",
- "futures",
- "hyper",
- "jwt-simple",
- "lazy_static",
- "log",
- "pretty_assertions",
- "prost",
- "serde",
- "serde_json",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "trust-dns-resolver",
-]
-
-[[package]]
-name = "common-store-api-sdk-util"
-version = "0.1.0"
 
 [[package]]
 name = "common-streams"
@@ -1569,9 +1564,9 @@ dependencies = [
  "common-management",
  "common-meta-api",
  "common-meta-api-vo",
+ "common-meta-sdk",
  "common-metatypes",
  "common-planners",
- "common-store-api-sdk",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -3081,11 +3076,11 @@ dependencies = [
  "common-kv-api-vo",
  "common-meta-api",
  "common-meta-api-vo",
+ "common-meta-sdk",
  "common-metatypes",
  "common-planners",
  "common-raft-store",
  "common-sled-store",
- "common-store-api-sdk",
  "common-tracing",
  "env_logger 0.9.0",
  "flaky_test",

@@ -14,7 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_store_api_sdk::RpcClientTlsConfig;
+use common_meta_sdk::RpcClientTlsConfig;
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;

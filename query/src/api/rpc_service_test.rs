@@ -23,8 +23,8 @@ use common_base::tokio::net::TcpListener;
 use common_base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_store_api_sdk::ConnectionFactory;
-use common_store_api_sdk::RpcClientTlsConfig;
+use common_meta_sdk::ConnectionFactory;
+use common_meta_sdk::RpcClientTlsConfig;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::api::rpc::DatabendQueryFlightDispatcher;

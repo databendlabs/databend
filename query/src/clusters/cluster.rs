@@ -25,7 +25,7 @@ use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
 use common_management::NodeInfo;
-use common_store_api_sdk::ConnectionFactory;
+use common_meta_sdk::ConnectionFactory;
 use rand::thread_rng;
 use rand::Rng;
 

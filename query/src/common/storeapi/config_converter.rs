@@ -13,9 +13,9 @@
 //  limitations under the License.
 //
 
-use common_store_api_sdk::ClientConf;
-use common_store_api_sdk::RpcClientTlsConfig;
-use common_store_api_sdk::StoreClientConf;
+use common_meta_sdk::ClientConf;
+use common_meta_sdk::RpcClientTlsConfig;
+use common_meta_sdk::StoreClientConf;
 
 use crate::configs::Config;
 

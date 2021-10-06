@@ -15,8 +15,8 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
-use common_store_api_sdk::RpcClientTlsConfig;
-use common_store_api_sdk::StoreClient;
+use common_meta_sdk::RpcClientTlsConfig;
+use common_meta_sdk::StoreClient;
 use metasrv::init_meta_ut;
 use metasrv::tests::service::new_test_context;
 use metasrv::tests::start_metasrv_with_context;

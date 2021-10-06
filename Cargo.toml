@@ -24,7 +24,7 @@ members = [
     "common/planners",
     "common/raft-store",
     "common/sled-store",
-    "common/store-api-sdk",
+    "common/meta-sdk",
     "common/streams",
     "common/tracing",
 
