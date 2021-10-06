@@ -1,5 +1,8 @@
 name: License checker
 
+permissions:
+  pull-requests: write
+
 on:
   push:
     branches:
@@ -13,7 +16,6 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
       - name: Check License Header
