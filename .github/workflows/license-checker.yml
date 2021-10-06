@@ -18,7 +18,7 @@ jobs:
         run: |
           curl --request POST \
           --url 'https://api.github.com/repos/datafuselabs/databend/pulls/2068/reviews' \
-          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          --header 'authorization: token ${{ secrets.GITHUB_TOKEN }}' \
           --header 'content-type: application/json' \
           --data '{
             "body": "Hello, world!\n"
