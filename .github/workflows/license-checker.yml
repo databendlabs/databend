@@ -14,12 +14,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Check License Header
-        uses: apache/skywalking-eyes@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          log: info
       - name: Test
         run: |
           curl --request POST \
@@ -30,3 +24,9 @@ jobs:
             "body": "Hello, world!\n"
             }' \
           --fail
+      - name: Check License Header
+        uses: apache/skywalking-eyes@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          log: info
