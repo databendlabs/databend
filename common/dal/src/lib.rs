@@ -11,16 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-pub mod fuse;
-mod prelude;
+mod data_accessor;
+mod impls;
+mod schemes;
 
-mod csv;
-mod memory;
-mod null;
-mod parquet;
-// deprecating
-mod remote;
-
-pub use prelude::register_prelude_tbl_engines;
+pub use data_accessor::AsyncSeekableReader;
+pub use data_accessor::Bytes;
+pub use data_accessor::DataAccessor;
+pub use data_accessor::DataAccessorBuilder;
+pub use data_accessor::DefaultDataAccessorBuilder;
+pub use data_accessor::InputStream;
+pub use data_accessor::ObjectAccessor;
+pub use data_accessor::SeekableReader;
+pub use impls::aws_s3::S3InputStream;
+pub use impls::aws_s3::S3;
+pub use impls::local::Local;
+pub use schemes::StorageScheme;

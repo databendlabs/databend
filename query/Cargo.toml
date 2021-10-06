@@ -26,6 +26,7 @@ common-base = { path = "../common/base" }
 common-management = { path = "../common/management" }
 common-cache = { path = "../common/cache"}
 common-catalog = { path = "../common/catalog"}
+common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }

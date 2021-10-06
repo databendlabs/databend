@@ -25,6 +25,7 @@ use common_catalog::ColStats;
 use common_catalog::ColumnId;
 use common_catalog::SegmentInfo;
 use common_catalog::Stats;
+use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
@@ -34,18 +35,12 @@ use common_exception::Result;
 use futures::StreamExt;
 use uuid::Uuid;
 
-use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::block_location;
 use crate::datasources::table::fuse::column_stats_reduce;
 use crate::datasources::table::fuse::FuseTable;
-use crate::sessions::DatabendQueryContextRef;
 
 impl FuseTable {
-    pub async fn append_blocks(
-        &self,
-        ctx: DatabendQueryContextRef,
-        mut stream: BlockStream,
-    ) -> Result<SegmentInfo> {
+    pub async fn append_blocks(&self, mut stream: BlockStream) -> Result<SegmentInfo> {
         let mut block_metas = vec![];
         let mut blocks_stats = vec![];
         let mut summary_row_count = 0u64;
@@ -60,7 +55,7 @@ impl FuseTable {
             let row_count = block.num_rows() as u64;
             let block_in_memory_size = block.memory_size() as u64;
 
-            let data_accessor = self.data_accessor(&ctx)?;
+            let data_accessor = self.data_accessor()?;
 
             let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
             let location = block_location(&part_uuid);

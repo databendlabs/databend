@@ -11,16 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-pub mod fuse;
-mod prelude;
-
-mod csv;
-mod memory;
-mod null;
-mod parquet;
-// deprecating
-mod remote;
-
-pub use prelude::register_prelude_tbl_engines;
+pub mod aws_s3;
+pub mod local;

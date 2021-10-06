@@ -26,11 +26,11 @@ use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 
-use crate::datasources::dal::impls::aws_s3::S3InputStream;
-use crate::datasources::dal::Bytes;
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::InputStream;
-use crate::datasources::dal::SeekableReader;
+use crate::Bytes;
+use crate::DataAccessor;
+use crate::InputStream;
+use crate::S3InputStream;
+use crate::SeekableReader;
 
 pub struct S3 {
     client: S3Client,
