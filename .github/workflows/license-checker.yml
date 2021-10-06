@@ -1,8 +1,5 @@
 name: License checker
 
-permissions:
-  pull-requests: write
-
 on:
   push:
     branches:
