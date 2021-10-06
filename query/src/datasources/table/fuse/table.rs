@@ -19,6 +19,8 @@ use std::sync::Arc;
 use common_catalog::BlockLocation;
 use common_catalog::TableSnapshot;
 use common_dal::DataAccessor;
+use common_dal::DataAccessorBuilder;
+use common_dal::DefaultDataAccessorBuilder;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -110,9 +112,9 @@ impl Table for FuseTable {
         // primary work to do: partition pruning/elimination
         let tbl_snapshot = self.table_snapshot(&ctx)?;
         if let Some(snapshot) = tbl_snapshot {
-            let da = ctx.get_data_accessor(&self.storage_scheme)?;
+            let da = self.data_accessor()?;
 
-            let meta_reader = MetaInfoReader::new(da, ctx.clone());
+            let meta_reader = MetaInfoReader::new(da, ctx);
             let block_locations = range_filter(&snapshot, &push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
 
@@ -175,7 +177,7 @@ impl Table for FuseTable {
             })
             .flatten()
         };
-        let da = self.data_accessor(&ctx)?;
+        let da = self.data_accessor()?;
         let arrow_schema = self.tbl_info.schema.to_arrow();
         let _h = common_base::tokio::task::spawn_local(async move {
             // TODO error handling is buggy
@@ -212,10 +214,10 @@ impl Table for FuseTable {
             }
         };
 
-        let da = self.data_accessor(&ctx)?;
+        let da = self.data_accessor()?;
 
         // 2. Append blocks to storage
-        let segment_info = self.append_blocks(ctx.clone(), block_stream).await?;
+        let segment_info = self.append_blocks(block_stream).await?;
 
         let seg_loc = {
             let uuid = Uuid::new_v4().to_simple().to_string();
@@ -269,7 +271,7 @@ impl FuseTable {
     fn table_snapshot(&self, ctx: &DatabendQueryContextRef) -> Result<Option<TableSnapshot>> {
         let schema = self.schema()?;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
-            let r = read_table_snapshot(self.data_accessor(ctx)?, ctx, loc)?;
+            let r = read_table_snapshot(self.data_accessor()?, ctx, loc)?;
             Ok(Some(r))
         } else {
             Ok(None)
@@ -297,11 +299,8 @@ impl FuseTable {
         todo!()
     }
 
-    pub(crate) fn data_accessor(
-        &self,
-        ctx: &DatabendQueryContextRef,
-    ) -> Result<Arc<dyn DataAccessor>> {
-        let scheme = &self.storage_scheme;
-        ctx.get_data_accessor(scheme)
+    pub(crate) fn data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
+        // TODO(xp): temp impl, a DataAccessor should be built by the caller that uses `Table`, not `Table` itself
+        DefaultDataAccessorBuilder::build(&self.storage_scheme)
     }
 }

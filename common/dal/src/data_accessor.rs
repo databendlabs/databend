@@ -27,6 +27,10 @@ use futures::AsyncReadExt;
 use futures::AsyncSeek;
 use serde::de::DeserializeOwned;
 
+use crate::Local;
+use crate::StorageScheme;
+use crate::S3;
+
 pub type Bytes = Vec<u8>;
 
 pub trait AsyncSeekableReader: futures::AsyncRead + futures::AsyncSeek {}
@@ -110,3 +114,21 @@ impl ObjectAccessor {
         rx.recv().map_err(ErrorCode::from_std_error)?
     }
 }
+
+/// Methods to build a DataAccessor.
+///
+/// It also provides a simple default implementation.
+pub trait DataAccessorBuilder {
+    fn build(scheme: &StorageScheme) -> Result<Arc<dyn DataAccessor>> {
+        match scheme {
+            StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
+            StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
+            _ => todo!(),
+        }
+    }
+}
+
+/// A default DataAccessorBuilder impl.
+pub struct DefaultDataAccessorBuilder {}
+
+impl DataAccessorBuilder for DefaultDataAccessorBuilder {}

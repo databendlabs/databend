@@ -19,6 +19,8 @@ mod schemes;
 pub use data_accessor::AsyncSeekableReader;
 pub use data_accessor::Bytes;
 pub use data_accessor::DataAccessor;
+pub use data_accessor::DataAccessorBuilder;
+pub use data_accessor::DefaultDataAccessorBuilder;
 pub use data_accessor::InputStream;
 pub use data_accessor::ObjectAccessor;
 pub use data_accessor::SeekableReader;

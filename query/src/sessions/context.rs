@@ -22,10 +22,6 @@ use common_base::tokio::task::JoinHandle;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_dal::DataAccessor;
-use common_dal::Local;
-use common_dal::StorageScheme;
-use common_dal::S3;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -224,17 +220,6 @@ impl DatabendQueryContext {
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.shared.session.get_sessions_manager()
-    }
-
-    pub fn get_data_accessor(
-        &self,
-        storage_scheme: &StorageScheme,
-    ) -> Result<Arc<dyn DataAccessor>> {
-        match storage_scheme {
-            StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
-            StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
-            _ => todo!(),
-        }
     }
 }
 
