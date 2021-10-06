@@ -167,11 +167,8 @@ where
         }
 
         if left.null_count() == 0 && right.null_count() == 0 {
-            left.inner()
-                .values()
-                .as_slice()
-                .iter()
-                .zip(right.inner().values().as_slice().iter())
+            left.into_no_null_iter()
+                .zip(right.into_no_null_iter())
                 .for_each(|(left_val, right_val)| {
                     state.add(left_val.as_(), right_val.as_());
                 });
@@ -204,11 +201,8 @@ where
         }
 
         if left.null_count() == 0 && right.null_count() == 0 {
-            left.inner()
-                .values()
-                .as_slice()
-                .iter()
-                .zip(right.inner().values().as_slice().iter())
+            left.into_no_null_iter()
+                .zip(right.into_no_null_iter())
                 .zip(places.iter())
                 .for_each(|((left_val, right_val), place)| {
                     let place = place.next(offset);
