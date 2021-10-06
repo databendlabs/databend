@@ -30,17 +30,17 @@ use crate::meta_service::MetaServiceClient;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
-pub async fn start_kvsrv() -> Result<(KVSrvTestContext, String)> {
+pub async fn start_metasrv() -> Result<(KVSrvTestContext, String)> {
     let mut tc = new_test_context();
 
-    start_kvsrv_with_context(&mut tc).await?;
+    start_metasrv_with_context(&mut tc).await?;
 
     let addr = tc.config.flight_api_address.clone();
 
     Ok((tc, addr))
 }
 
-pub async fn start_kvsrv_with_context(tc: &mut KVSrvTestContext) -> Result<()> {
+pub async fn start_metasrv_with_context(tc: &mut KVSrvTestContext) -> Result<()> {
     let srv = FlightServer::create(tc.config.clone());
     let (stop_tx, fin_rx) = srv.start().await?;
 

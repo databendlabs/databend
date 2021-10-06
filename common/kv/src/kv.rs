@@ -38,11 +38,11 @@ use common_tracing::tracing;
 
 /// Local storage that provides the API defined by `KVApi`.
 ///
-/// It is just a wrapped `StateMachine`, which is the same one used by raft driven kvsrv.
+/// It is just a wrapped `StateMachine`, which is the same one used by raft driven metasrv.
 /// For a local kv, there is no distributed WAL involved,
 /// thus it just bypasses the raft log and operate directly on the `StateMachine`.
 ///
-/// Since `StateMachine` is backed with sled::Tree, this impl has the same limitation as kvsrv:
+/// Since `StateMachine` is backed with sled::Tree, this impl has the same limitation as metasrv:
 /// - A sled::Db has to be a singleton, according to sled doc.
 /// - Every unit test has to generate a unique sled::Tree name to create a `LocalKVStore`.
 #[derive(Clone)]
