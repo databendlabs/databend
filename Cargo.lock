@@ -3787,9 +3787,9 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bdc07b440fb1395d98238d62d526962d0433146685c50f3799c6630cc4753ec"
+checksum = "a58d579bfb3d87f18d348d15f7fce0ac4229b0df16e81c4668fe13bfd1f0d0c9"
 dependencies = [
  "async-stream",
  "bitpacking",
