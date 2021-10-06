@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::TableIOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -45,7 +46,7 @@ pub trait Table: Sync + Send {
     // Get the read source plan.
     fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan>;

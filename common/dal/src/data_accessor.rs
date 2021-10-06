@@ -118,8 +118,8 @@ impl ObjectAccessor {
 /// Methods to build a DataAccessor.
 ///
 /// It also provides a simple default implementation.
-pub trait DataAccessorBuilder {
-    fn build(scheme: &StorageScheme) -> Result<Arc<dyn DataAccessor>> {
+pub trait DataAccessorBuilder: Sync + Send {
+    fn build(&self, scheme: &StorageScheme) -> Result<Arc<dyn DataAccessor>> {
         match scheme {
             StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
             StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),

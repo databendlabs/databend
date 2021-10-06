@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
 use common_datavalues::series::SeriesFrom;
@@ -94,7 +96,7 @@ impl Table for ProcessesTable {
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {

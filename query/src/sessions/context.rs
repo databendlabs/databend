@@ -21,7 +21,10 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
+use common_base::Runtime;
 use common_base::TrySpawn;
+use common_catalog::TableIOContext;
+use common_dal::DefaultDataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -220,6 +223,43 @@ impl DatabendQueryContext {
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.shared.session.get_sessions_manager()
+    }
+
+    pub fn get_shared_runtime(&self) -> Result<Arc<Runtime>> {
+        self.shared.try_get_runtime()
+    }
+
+    /// Build a TableIOContext for single node service.
+    pub fn get_single_node_table_io_context(&self) -> Result<TableIOContext> {
+        let nodes = vec!["".to_string()];
+        let settings = self.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+
+        Ok(TableIOContext::new(
+            self.get_shared_runtime()?,
+            Arc::new(DefaultDataAccessorBuilder {}),
+            max_threads,
+            nodes,
+        ))
+    }
+
+    /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
+    pub fn get_cluster_table_io_context(&self) -> Result<TableIOContext> {
+        let cluster = self.get_cluster();
+        let cluster_nodes = cluster.get_nodes();
+        let nodes = cluster_nodes
+            .iter()
+            .map(|x| x.id.clone())
+            .collect::<Vec<_>>();
+        let settings = self.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+
+        Ok(TableIOContext::new(
+            self.get_shared_runtime()?,
+            Arc::new(DefaultDataAccessorBuilder {}),
+            max_threads,
+            nodes,
+        ))
     }
 }
 

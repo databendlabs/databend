@@ -17,10 +17,13 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::BlockLocation;
+use common_catalog::IOContext;
+use common_catalog::TableIOContext;
 use common_catalog::TableSnapshot;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorBuilder;
 use common_dal::DefaultDataAccessorBuilder;
+use common_dal::ObjectAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,7 +42,6 @@ use uuid::Uuid;
 use crate::catalogs::Table;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
-use crate::datasources::table::fuse::read_table_snapshot;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
 use crate::datasources::table::fuse::MetaInfoReader;
@@ -105,16 +107,16 @@ impl Table for FuseTable {
 
     fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         // primary work to do: partition pruning/elimination
-        let tbl_snapshot = self.table_snapshot(&ctx)?;
+        let tbl_snapshot = self.table_snapshot(io_ctx.clone())?;
         if let Some(snapshot) = tbl_snapshot {
             let da = self.data_accessor()?;
 
-            let meta_reader = MetaInfoReader::new(da, ctx);
+            let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
             let block_locations = range_filter(&snapshot, &push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
 
@@ -230,8 +232,9 @@ impl Table for FuseTable {
         }
 
         // 3. new snapshot
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let tbl_snapshot = self
-            .table_snapshot(&ctx)?
+            .table_snapshot(Arc::new(io_ctx))?
             .unwrap_or_else(TableSnapshot::new);
         let _snapshot_id = tbl_snapshot.snapshot_id;
         let new_snapshot = tbl_snapshot.append_segment(seg_loc);
@@ -268,10 +271,11 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
-    fn table_snapshot(&self, ctx: &DatabendQueryContextRef) -> Result<Option<TableSnapshot>> {
+    fn table_snapshot(&self, io_ctx: Arc<TableIOContext>) -> Result<Option<TableSnapshot>> {
         let schema = self.schema()?;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
-            let r = read_table_snapshot(self.data_accessor()?, ctx, loc)?;
+            let da = io_ctx.get_data_accessor(&self.storage_scheme)?;
+            let r = ObjectAccessor::new(da).blocking_read_obj(&io_ctx.get_runtime(), loc)?;
             Ok(Some(r))
         } else {
             Ok(None)
@@ -301,6 +305,6 @@ impl FuseTable {
 
     pub(crate) fn data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
         // TODO(xp): temp impl, a DataAccessor should be built by the caller that uses `Table`, not `Table` itself
-        DefaultDataAccessorBuilder::build(&self.storage_scheme)
+        DefaultDataAccessorBuilder {}.build(&self.storage_scheme)
     }
 }

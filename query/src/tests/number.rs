@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -52,8 +54,9 @@ impl NumberTestData {
         )))]);
         let table_meta = catalog.get_table_function(self.table, tbl_arg)?;
         let table = table_meta.raw();
+        let io_ctx = self.ctx.get_single_node_table_io_context()?;
         table.read_plan(
-            self.ctx.clone(),
+            Arc::new(io_ctx),
             None,
             Some(self.ctx.get_settings().get_max_threads()? as usize),
         )

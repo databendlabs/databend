@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -74,7 +76,7 @@ impl Table for TablesTable {
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {

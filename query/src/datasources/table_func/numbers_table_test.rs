@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -41,8 +43,12 @@ async fn test_number_table() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let source_plan =
-        table.read_plan(ctx.clone(), Some(scan.push_downs.clone()), Some(partitions))?;
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let source_plan = table.read_plan(
+        Arc::new(io_ctx),
+        Some(scan.push_downs.clone()),
+        Some(partitions),
+    )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;

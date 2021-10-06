@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_arrow::parquet::read::read_metadata;
+use common_base::Runtime;
 use common_catalog::RawBlockStats;
 use common_catalog::SegmentInfo;
 use common_dal::DataAccessor;
@@ -23,16 +24,14 @@ use common_dal::ObjectAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sessions::DatabendQueryContextRef;
-
 // TODO cache
 pub struct MetaInfoReader {
     da: Arc<dyn DataAccessor>,
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<Runtime>,
 }
 
 impl MetaInfoReader {
-    pub fn new(da: Arc<dyn DataAccessor>, ctx: DatabendQueryContextRef) -> Self {
+    pub fn new(da: Arc<dyn DataAccessor>, ctx: Arc<Runtime>) -> Self {
         MetaInfoReader { da, ctx }
     }
 }

@@ -772,7 +772,9 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-dal",
  "common-datavalues",
+ "common-exception",
  "pretty_assertions",
  "serde",
  "serde_json",
