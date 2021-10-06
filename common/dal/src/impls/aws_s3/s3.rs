@@ -14,12 +14,16 @@
 //
 
 use std::io::Write;
+use std::str::FromStr;
 
 use common_base::tokio::io::AsyncReadExt;
 use common_exception::ErrorCode;
+use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
+use rusoto_core::credential::StaticProvider;
 use rusoto_core::ByteStream;
+use rusoto_core::HttpClient;
 use rusoto_core::Region;
 use rusoto_s3::GetObjectRequest;
 use rusoto_s3::PutObjectRequest;
@@ -42,6 +46,56 @@ impl S3 {
     pub fn new(region: Region, bucket: String) -> Self {
         let client = S3Client::new(region);
         S3 { client, bucket }
+    }
+    ///
+    /// region mapping (rusoto_core::Region)
+    ///  Region::ApEast1 => "ap-east-1",
+    ///  Region::ApNortheast1 => "ap-northeast-1",
+    ///  Region::ApNortheast2 => "ap-northeast-2",
+    ///  Region::ApNortheast3 => "ap-northeast-3",
+    ///  Region::ApSouth1 => "ap-south-1",
+    ///  Region::ApSoutheast1 => "ap-southeast-1",
+    ///  Region::ApSoutheast2 => "ap-southeast-2",
+    ///  Region::CaCentral1 => "ca-central-1",
+    ///  Region::EuCentral1 => "eu-central-1",
+    ///  Region::EuWest1 => "eu-west-1",
+    ///  Region::EuWest2 => "eu-west-2",
+    ///  Region::EuWest3 => "eu-west-3",
+    ///  Region::EuNorth1 => "eu-north-1",
+    ///  Region::EuSouth1 => "eu-south-1",
+    ///  Region::MeSouth1 => "me-south-1",
+    ///  Region::SaEast1 => "sa-east-1",
+    ///  Region::UsEast1 => "us-east-1",
+    ///  Region::UsEast2 => "us-east-2",
+    ///  Region::UsWest1 => "us-west-1",
+    ///  Region::UsWest2 => "us-west-2",
+    ///  Region::UsGovEast1 => "us-gov-east-1",
+    ///  Region::UsGovWest1 => "us-gov-west-1",
+    ///  Region::CnNorth1 => "cn-north-1",
+    ///  Region::CnNorthwest1 => "cn-northwest-1",
+    ///  Region::AfSouth1 => "af-south-1",
+    pub fn with_credentials(
+        region: &str,
+        bucket: String,
+        access_key_id: String,
+        secret_accesses_key: String,
+    ) -> Result<Self> {
+        let region = Region::from_str(region).map_err(|e| {
+            ErrorCode::DALTransportError(format!(
+                "invalid region {}, error details {}",
+                region,
+                e.to_string()
+            ))
+        })?;
+        let provider = StaticProvider::new(access_key_id, secret_accesses_key, None, None);
+        let client = HttpClient::new().map_err(|e| {
+            ErrorCode::DALTransportError(format!(
+                "failed to create http client of s3, {}",
+                e.to_string()
+            ))
+        })?;
+        let client = S3Client::new_with(client, provider, region);
+        Ok(S3 { client, bucket })
     }
 
     pub fn fake_new() -> Self {

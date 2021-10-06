@@ -40,7 +40,7 @@ impl TestFixture {
         let random_bytes: Vec<u8> = (0..size).map(|_| rand::random::<u8>()).collect();
         Self {
             region: Region::UsEast2,
-            bucket_name: "poc-databend".to_string(),
+            bucket_name: "poc-datafuse".to_string(),
             test_key: key,
             content: random_bytes,
         }
@@ -73,6 +73,28 @@ async fn test_s3_input_stream_api() -> common_exception::Result<()> {
     let s3 = S3::new(fixture.region.clone(), fixture.bucket_name.clone());
     let mut input = s3.get_input_stream(&test_key, None).await?;
     let mut buffer = vec![];
+    input.read_to_end(&mut buffer).await?;
+    assert_eq!(fixture.content, buffer);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
+async fn test_s3_cli_with_credentials() -> common_exception::Result<()> {
+    let test_key = "test_s3_input_stream".to_string();
+    let fixture = TestFixture::new(1024 * 10, test_key.clone());
+    fixture.gen_test_obj().await?;
+    let key = std::env::var("AWS_ACCESS_KEY_ID").unwrap();
+    let secret = std::env::var("AWS_SECRET_ACCESS_KEY").unwrap();
+
+    let s3 = S3::with_credentials(
+        fixture.region.name(),
+        fixture.bucket_name.clone(),
+        key,
+        secret,
+    )?;
+    let mut buffer = vec![];
+    let mut input = s3.get_input_stream(&test_key, None).await?;
     input.read_to_end(&mut buffer).await?;
     assert_eq!(fixture.content, buffer);
     Ok(())
