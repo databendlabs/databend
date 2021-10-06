@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -76,16 +77,6 @@ impl DatabendQueryContext {
             ),
             shared,
         })
-    }
-
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    /// The task will run in the current context thread_pool not the global.
-    pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 
     /// Set progress callback to context.
@@ -244,6 +235,18 @@ impl DatabendQueryContext {
             StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
             _ => todo!(),
         }
+    }
+}
+
+impl TrySpawn for DatabendQueryContext {
+    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+    /// The task will run in the current context thread_pool not the global.
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 }
 

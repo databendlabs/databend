@@ -23,6 +23,51 @@ use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
+/// Methods to spawn tasks.
+pub trait TrySpawn {
+    /// Tries to spawn a new asynchronous task, returning a tokio::JoinHandle for it.
+    ///
+    /// It allows to return an error before spawning the task.
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static;
+
+    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+    ///
+    /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
+    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        self.try_spawn(task).unwrap()
+    }
+
+    /// Blocks until a task is finished.
+    ///
+    /// The default impl is a poor man's `runtime::block_on`.
+    /// This is mainly used to wrap an async function into sync function.
+    fn block_on<F>(&self, f: F, timeout: Option<Duration>) -> Result<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let (tx, rx) = channel();
+        let _jh = self.spawn(async move {
+            let r = f.await;
+            let _ = tx.send(r);
+        });
+        let reply = match timeout {
+            Some(to) => rx
+                .recv_timeout(to)
+                .map_err(|timeout_err| ErrorCode::Timeout(timeout_err.to_string()))?,
+            None => rx.recv().map_err(ErrorCode::from_std_error)?,
+        };
+        Ok(reply)
+    }
+}
+
 /// Tokio Runtime wrapper.
 /// If a runtime is in an asynchronous context, shutdown it first.
 pub struct Runtime {
@@ -67,36 +112,15 @@ impl Runtime {
         let builder = runtime.enable_all().worker_threads(workers);
         Self::create(builder)
     }
+}
 
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    /// Same as tokio::runtime.spawn.
-    pub fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+impl TrySpawn for Runtime {
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.handle.spawn(task)
-    }
-
-    // Poor man's runtime::block_on
-    // This mainly used for make async function to sync.
-    pub fn block_on<F>(&self, f: F, timeout: Option<Duration>) -> Result<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let (tx, rx) = channel();
-        let _jh = self.spawn(async move {
-            let r = f.await;
-            let _ = tx.send(r);
-        });
-        let reply = match timeout {
-            Some(to) => rx
-                .recv_timeout(to)
-                .map_err(|timeout_err| ErrorCode::Timeout(timeout_err.to_string()))?,
-            None => rx.recv().map_err(ErrorCode::from_std_error)?,
-        };
-        Ok(reply)
+        Ok(self.handle.spawn(task))
     }
 }
 

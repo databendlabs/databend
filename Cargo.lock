@@ -945,6 +945,7 @@ name = "common-kv-api"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "common-base",
  "common-exception",
  "common-kv-api-util",
  "common-kv-api-vo",

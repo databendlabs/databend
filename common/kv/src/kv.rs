@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::tokio::sync::Mutex;
+use common_base::TrySpawn;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_kv_api_util::STORE_RUNTIME;

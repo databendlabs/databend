@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_base::tokio::sync::mpsc::Sender;
 use common_base::tokio::sync::*;
+use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -137,7 +138,7 @@ impl DatabendQueryFlightDispatcher {
         let tx_ref = self.streams.read().get(&stream_name).map(|x| x.tx.clone());
         let tx = tx_ref.ok_or_else(|| ErrorCode::NotFoundStream("Not found stream"))?;
 
-        query_context.execute_task(async move {
+        query_context.try_spawn(async move {
             let _session = session;
             wait_start(stage_name, stages_notify).await;
 
@@ -211,7 +212,7 @@ impl DatabendQueryFlightDispatcher {
             action.get_sinks().len(),
         )?;
 
-        query_context.execute_task(async move {
+        query_context.try_spawn(async move {
             let _session = session;
             wait_start(stage_name, stages_notify).await;
 
