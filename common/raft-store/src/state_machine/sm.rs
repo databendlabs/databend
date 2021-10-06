@@ -20,7 +20,6 @@ use std::time::UNIX_EPOCH;
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
-use common_dfs_api_vo::DataPartInfo;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_metatypes::Cmd;
@@ -121,9 +120,6 @@ pub struct StateMachine {
 
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
-
-    /// table parts, table id -> data parts
-    pub table_parts: HashMap<u64, Vec<DataPartInfo>>,
 }
 
 /// Initialize state machine for the first time it is brought online.
@@ -231,7 +227,6 @@ impl StateMachine {
             replication: Replication::Mirror(1),
             databases: BTreeMap::new(),
             tables: BTreeMap::new(),
-            table_parts: HashMap::new(),
         };
 
         let inited = {

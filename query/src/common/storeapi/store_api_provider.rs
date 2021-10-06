@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_dfs_api::StorageApi;
 use common_exception::Result;
 use common_kv_api::KVApi;
 use common_meta_api::MetaApi;
@@ -73,17 +72,5 @@ impl StoreApiProvider {
             let client = StoreClient::sync_try_new(&self.conf)?;
             Ok(Arc::new(client))
         }
-    }
-
-    /// Get storage async client, operations trait defined in StorageApi.
-    pub async fn try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
-        let client = StoreClient::try_new(&self.conf).await?;
-        Ok(Arc::new(client))
-    }
-
-    /// Get storage client, operations trait defined in StorageApi.
-    pub fn sync_try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
-        let client = StoreClient::sync_try_new(&self.conf)?;
-        Ok(Arc::new(client))
     }
 }

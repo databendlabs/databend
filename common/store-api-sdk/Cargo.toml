@@ -12,8 +12,6 @@ common-arrow = {path = "../arrow"}
 common-base = {path = "../base" }
 common-datablocks= {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
-common-dfs-api = {path = "../dfs-apis/api" }
-common-dfs-api-vo = {path = "../dfs-apis/vo" }
 common-exception= {path = "../exception"}
 common-infallible = {path = "../infallible"}
 common-kv-api = {path = "../kv-apis/api" }
