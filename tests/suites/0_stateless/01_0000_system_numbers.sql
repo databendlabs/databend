@@ -22,3 +22,5 @@ SELECT argMax(b, a) from (select number + 5 as a, number - 5 as b from numbers_m
  SELECT std(number) between  2886.751 and 2886.752 from numbers_mt(10000);
  SELECT stddev(number) between  2886.751 and 2886.752 from numbers_mt(10000);
  SELECT stddev_pop(number) between  2886.751 and 2886.752 from numbers_mt(10000);
+ SELECT covar_samp(number, number) from (select * from numbers_mt(5) order by number asc);
+ SELECT covar_pop(number, number) from (select * from numbers_mt(5) order by number asc);

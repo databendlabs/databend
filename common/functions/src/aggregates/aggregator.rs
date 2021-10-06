@@ -15,6 +15,8 @@
 use crate::aggregates::aggregate_arg_min_max::aggregate_arg_max_function_desc;
 use crate::aggregates::aggregate_arg_min_max::aggregate_arg_min_function_desc;
 use crate::aggregates::aggregate_avg::aggregate_avg_function_desc;
+use crate::aggregates::aggregate_covariance::aggregate_covariance_population_desc;
+use crate::aggregates::aggregate_covariance::aggregate_covariance_sample_desc;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFactory;
 use crate::aggregates::aggregate_min_max::aggregate_max_function_desc;
 use crate::aggregates::aggregate_min_max::aggregate_min_function_desc;
@@ -42,6 +44,8 @@ impl Aggregators {
         factory.register("stddev_pop", aggregate_stddev_pop_function_desc());
         factory.register("windowFunnel", aggregate_window_funnel_function_desc());
         factory.register("uniq", AggregateDistinctCombinator::uniq_desc());
+        factory.register("covar_samp", aggregate_covariance_sample_desc());
+        factory.register("covar_pop", aggregate_covariance_population_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

@@ -31,3 +31,4 @@ ordered-float = "2.8"
 bumpalo = "3.7.1"
 common-datablocks = {path = "../datablocks"}
 pretty_assertions = "1.0"
+float-cmp = "0.9.0"
