@@ -22,13 +22,14 @@ common-datablocks = {path = "../common/datablocks"}
 common-datavalues = {path = "../common/datavalues"}
 common-exception = {path = "../common/exception"}
 common-functions = {path = "../common/functions"}
+common-flight-rpc = {path = "../common/flight-rpc"}
 common-infallible = {path = "../common/infallible"}
 common-metatypes = {path = "../common/metatypes"}
 common-planners = {path = "../common/planners"}
 common-raft-store = {path = "../common/raft-store"}
 common-base = {path = "../common/base" }
 common-sled-store = {path = "../common/sled-store"}
-common-store-api-sdk = {path = "../common/store-api-sdk"}
+common-meta-sdk = {path = "../common/meta-sdk"}
 common-tracing = {path = "../common/tracing"}
 common-kv-api-vo = {path = "../common/kv-apis/vo" }
 common-meta-api-vo = {path = "../common/meta-apis/vo" }

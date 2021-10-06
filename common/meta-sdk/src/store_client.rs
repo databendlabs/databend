@@ -22,6 +22,8 @@ use common_arrow::arrow_flight::HandshakeRequest;
 use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flight_rpc::ConnectionFactory;
+use common_flight_rpc::FlightClientTlsConfig;
 use common_kv_api_util::STORE_RUNTIME;
 use common_kv_api_util::STORE_SYNC_CALL_TIMEOUT;
 use common_tracing::tracing;
@@ -35,12 +37,9 @@ use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::common::flight_result_to_str;
 use crate::store_client_conf::StoreClientConf;
 use crate::store_do_action::RequestFor;
 use crate::store_do_action::StoreDoAction;
-use crate::ConnectionFactory;
-use crate::RpcClientTlsConfig;
 
 #[derive(Clone)]
 pub struct StoreClient {
@@ -81,7 +80,7 @@ impl StoreClient {
         addr: &str,
         username: &str,
         password: &str,
-        conf: Option<RpcClientTlsConfig>,
+        conf: Option<FlightClientTlsConfig>,
     ) -> Result<Self> {
         // TODO configuration
         let timeout = Duration::from_secs(60);
@@ -163,7 +162,6 @@ impl StoreClient {
                 act
             ))),
             Some(resp) => {
-                log::debug!("do_action: resp: {:}", flight_result_to_str(&resp));
                 let v = serde_json::from_slice::<R>(&resp.body)?;
                 Ok(v)
             }

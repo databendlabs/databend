@@ -35,7 +35,7 @@ use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use trust_dns_resolver::TokioAsyncResolver;
 
-use crate::common::RpcClientTlsConfig;
+use crate::FlightClientTlsConfig;
 
 pub struct DNSResolver {
     inner: TokioAsyncResolver,
@@ -141,7 +141,7 @@ impl ConnectionFactory {
     pub fn create_flight_channel(
         addr: impl ToString,
         timeout: Option<Duration>,
-        rpc_client_config: Option<RpcClientTlsConfig>,
+        rpc_client_config: Option<FlightClientTlsConfig>,
     ) -> Result<Channel> {
         match format!("http://{}", addr.to_string()).parse::<Uri>() {
             Err(error) => Result::Err(ErrorCode::BadAddressFormat(format!(
@@ -189,7 +189,7 @@ impl ConnectionFactory {
         }
     }
 
-    fn client_tls_config(conf: &RpcClientTlsConfig) -> Result<ClientTlsConfig> {
+    fn client_tls_config(conf: &FlightClientTlsConfig) -> Result<ClientTlsConfig> {
         let server_root_ca_cert = std::fs::read(conf.rpc_tls_server_root_ca_cert.as_str())?;
         let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
 

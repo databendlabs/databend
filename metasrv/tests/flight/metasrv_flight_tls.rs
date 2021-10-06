@@ -14,9 +14,9 @@
 
 use common_base::tokio;
 use common_exception::ErrorCode;
+use common_flight_rpc::FlightClientTlsConfig;
 use common_meta_api::MetaApi;
-use common_store_api_sdk::RpcClientTlsConfig;
-use common_store_api_sdk::StoreClient;
+use common_meta_sdk::StoreClient;
 use metasrv::init_meta_ut;
 use metasrv::tests::service::new_test_context;
 use metasrv::tests::start_metasrv_with_context;
@@ -41,7 +41,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
 
     let addr = tc.config.flight_api_address.clone();
 
-    let tls_conf = RpcClientTlsConfig {
+    let tls_conf = FlightClientTlsConfig {
         rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     };
@@ -74,7 +74,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tls_conf = RpcClientTlsConfig {
+    let tls_conf = FlightClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/not_exist.pem".to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     };

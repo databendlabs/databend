@@ -13,9 +13,9 @@
 //  limitations under the License.
 //
 
-use common_store_api_sdk::ClientConf;
-use common_store_api_sdk::RpcClientTlsConfig;
-use common_store_api_sdk::StoreClientConf;
+use common_flight_rpc::FlightClientConf;
+use common_flight_rpc::FlightClientTlsConfig;
+use common_meta_sdk::StoreClientConf;
 
 use crate::configs::Config;
 
@@ -24,7 +24,7 @@ use crate::configs::Config;
 impl From<&Config> for StoreClientConf {
     fn from(conf: &Config) -> Self {
         let meta_tls_conf = if conf.tls_meta_cli_enabled() {
-            Some(RpcClientTlsConfig {
+            Some(FlightClientTlsConfig {
                 rpc_tls_server_root_ca_cert: conf.meta.rpc_tls_meta_server_root_ca_cert.clone(),
                 domain_name: conf.meta.rpc_tls_meta_service_domain_name.clone(),
             })
@@ -32,7 +32,7 @@ impl From<&Config> for StoreClientConf {
             None
         };
 
-        let meta_config = ClientConf {
+        let meta_config = FlightClientConf {
             address: conf.meta.meta_address.clone(),
             username: conf.meta.meta_username.clone(),
             password: conf.meta.meta_password.clone(),

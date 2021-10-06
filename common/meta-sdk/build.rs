@@ -12,22 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow_flight;
+use std::env;
+use std::path::Path;
 
-pub fn flight_result_to_str(r: &arrow_flight::Result) -> String {
-    match std::str::from_utf8(&r.body) {
-        Ok(v) => v.to_string(),
-        Err(_e) => format!("{:?}", r.body),
-    }
+fn main() {
+    build_proto();
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RpcClientTlsConfig {
-    pub rpc_tls_server_root_ca_cert: String,
-    pub domain_name: String,
-}
-impl RpcClientTlsConfig {
-    pub fn enabled(&self) -> bool {
-        !self.rpc_tls_server_root_ca_cert.is_empty() && !self.domain_name.is_empty()
+fn build_proto() {
+    let manifest_dir =
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env variable unset");
+
+    let proto_dir = Path::new(&manifest_dir).join("proto");
+    let protos = [&Path::new(&proto_dir).join(Path::new("metaflight.proto"))];
+
+    for proto in protos.iter() {
+        println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());
     }
+    tonic_build::configure()
+        .compile(&protos, &[&proto_dir])
+        .unwrap();
 }

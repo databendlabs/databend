@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_store_api_sdk::RequestFor;
-use common_store_api_sdk::StoreDoAction;
+use common_meta_sdk::RequestFor;
+use common_meta_sdk::StoreDoAction;
 use serde::Serialize;
 
 use crate::meta_service::MetaNode;

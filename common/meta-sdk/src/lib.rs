@@ -12,22 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common::RpcClientTlsConfig;
-pub use dns_resolver::ConnectionFactory;
-pub use dns_resolver::DNSResolver;
-pub use flight_token::FlightClaim;
-pub use flight_token::FlightToken;
 pub use impl_flights::kv_api_impl;
 pub use impl_flights::meta_api_impl;
 pub use store_client::StoreClient;
-pub use store_client_conf::ClientConf;
 pub use store_client_conf::StoreClientConf;
 pub use store_do_action::RequestFor;
 pub use store_do_action::StoreDoAction;
 
-mod common;
-mod dns_resolver;
-mod flight_token;
 mod impl_flights;
 mod store_client;
 #[macro_use]
@@ -37,9 +28,5 @@ mod store_client_conf;
 // ProtoBuf generated files.
 #[allow(clippy::all)]
 pub mod protobuf {
-    tonic::include_proto!("queryflight");
-    tonic::include_proto!("storeflight");
+    tonic::include_proto!("metaflight");
 }
-
-#[cfg(test)]
-mod dns_resolver_test;

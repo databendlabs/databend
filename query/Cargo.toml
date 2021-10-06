@@ -30,12 +30,13 @@ common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
+common-flight-rpc = { path = "../common/flight-rpc" }
 common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-store-api-sdk= {path = "../common/store-api-sdk" }
+common-meta-sdk= {path = "../common/meta-sdk" }
 common-kv-api = { path = "../common/kv-apis/api" }
 common-kv-api-vo = { path = "../common/kv-apis/vo" }
 common-meta-api = { path = "../common/meta-apis/api" }

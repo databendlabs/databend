@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod macros;
+pub use client_conf::FlightClientConf;
+pub use client_conf::FlightClientTlsConfig;
+pub use dns_resolver::ConnectionFactory;
+pub use dns_resolver::DNSResolver;
+pub use flight_token::FlightClaim;
+pub use flight_token::FlightToken;
+
+mod client_conf;
+mod dns_resolver;
+mod flight_token;
 
 #[cfg(test)]
-mod config_test;
-
-mod config;
-mod config_log;
-mod config_meta;
-mod config_query;
-mod config_storage;
-
-pub use config::Config;
-pub use config::DATABEND_COMMIT_VERSION;
-pub use config_log::LogConfig;
-pub use config_meta::MetaConfig;
-pub use config_query::QueryConfig;
-pub use config_storage::StorageConfig;
+mod dns_resolver_test;
