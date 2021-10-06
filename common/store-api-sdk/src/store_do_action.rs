@@ -34,7 +34,7 @@ use crate::impl_flights::meta_api_impl::GetDatabasesAction;
 use crate::impl_flights::meta_api_impl::GetTableAction;
 use crate::impl_flights::meta_api_impl::GetTableExtReq;
 use crate::impl_flights::meta_api_impl::GetTablesAction;
-use crate::protobuf::FlightStoreRequest;
+use crate::protobuf::FlightMetaRequest;
 
 pub trait RequestFor {
     type Reply;
@@ -86,7 +86,7 @@ impl TryInto<StoreDoAction> for Request<Action> {
         let mut buf = Cursor::new(&action.body);
 
         // Decode FlightRequest from buffer.
-        let request: FlightStoreRequest = FlightStoreRequest::decode(&mut buf)
+        let request: FlightMetaRequest = FlightMetaRequest::decode(&mut buf)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         // Decode DoActionAction from flight request body.
@@ -102,7 +102,7 @@ impl TryInto<Request<Action>> for &StoreDoAction {
     type Error = ErrorCode;
 
     fn try_into(self) -> common_exception::Result<Request<Action>> {
-        let flight_request = FlightStoreRequest {
+        let flight_request = FlightMetaRequest {
             body: serde_json::to_string(&self)?,
         };
         let mut buf = vec![];

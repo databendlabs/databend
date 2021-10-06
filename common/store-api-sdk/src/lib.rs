@@ -37,8 +37,7 @@ mod store_client_conf;
 // ProtoBuf generated files.
 #[allow(clippy::all)]
 pub mod protobuf {
-    tonic::include_proto!("queryflight");
-    tonic::include_proto!("storeflight");
+    tonic::include_proto!("metaflight");
 }
 
 #[cfg(test)]
