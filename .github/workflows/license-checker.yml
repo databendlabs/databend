@@ -20,3 +20,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           log: info
+      - name: Test
+        run: |
+          curl --request POST \
+          --url 'https://api.github.com/repos/datafuselabs/databend/pulls/2068/reviews' \
+          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          --header 'content-type: application/json' \
+          --data '{
+            "body": "Hello, world!\n"
+            }' \
+          --fail
