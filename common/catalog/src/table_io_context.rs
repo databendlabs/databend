@@ -19,6 +19,7 @@ use common_dal::DataAccessor;
 use common_dal::DataAccessorBuilder;
 use common_dal::StorageScheme;
 use common_exception::ErrorCode;
+use common_metatypes::NodeInfo;
 
 /// Methods for a table to get resource handles it needs to read/write.
 ///
@@ -36,14 +37,17 @@ pub trait IOContext {
     fn get_max_threads(&self) -> usize;
 
     /// Get a vec of `query` nodes.
-    fn get_query_nodes(&self) -> Vec<String>;
+    fn get_query_nodes(&self) -> Vec<Arc<NodeInfo>>;
+
+    /// Get a vec of `query` node ids.
+    fn get_query_node_ids(&self) -> Vec<String>;
 }
 
 pub struct TableIOContext {
     runtime: Arc<Runtime>,
     data_accessor_builder: Arc<dyn DataAccessorBuilder>,
     max_threads: usize,
-    query_nodes: Vec<String>,
+    query_nodes: Vec<Arc<NodeInfo>>,
 }
 
 impl TableIOContext {
@@ -51,7 +55,7 @@ impl TableIOContext {
         rt: Arc<Runtime>,
         dab: Arc<dyn DataAccessorBuilder>,
         max_threads: usize,
-        query_nodes: Vec<String>,
+        query_nodes: Vec<Arc<NodeInfo>>,
     ) -> TableIOContext {
         TableIOContext {
             runtime: rt,
@@ -78,7 +82,11 @@ impl IOContext for TableIOContext {
         self.max_threads
     }
 
-    fn get_query_nodes(&self) -> Vec<String> {
+    fn get_query_nodes(&self) -> Vec<Arc<NodeInfo>> {
         self.query_nodes.clone()
+    }
+
+    fn get_query_node_ids(&self) -> Vec<String> {
+        self.query_nodes.iter().map(|x| x.id.clone()).collect()
     }
 }
