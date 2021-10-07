@@ -32,7 +32,8 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
-use crate::dispatch_unsigned_numeric_types;
+use crate::with_match_date_date_time_types;
+use crate::with_match_unsigned_numeric_types;
 
 struct AggregateWindowFunnelState<T> {
     pub events_list: Vec<(T, u8)>,
@@ -381,7 +382,8 @@ pub fn try_create_aggregate_window_funnel_function(
     }
 
     let data_type = arguments[0].data_type();
-    dispatch_unsigned_numeric_types! {creator, data_type.clone(), display_name, params, arguments}
+    with_match_date_date_time_types! {creator, data_type.clone(), display_name, params, arguments}
+    with_match_unsigned_numeric_types! {creator, data_type.clone(), display_name, params, arguments}
 
     Err(ErrorCode::BadDataValueType(format!(
         "AggregateWindowFunnelFunction does not support type '{:?}'",
