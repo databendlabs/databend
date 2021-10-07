@@ -61,7 +61,7 @@ impl Debug for ProcessorsDAG {
 }
 
 // TODO(Winter): import distributed processors in DAG. We can use edge to describe them. e.g. enum EdgeAttrs { Local, Remote }
-pub struct ProcessorDAGBuilder {
+pub struct ProcessorsDAGBuilder {
     ctx: DatabendQueryContextRef,
     graph: StableGraph<Arc<dyn Processor>, ()>,
     top_processors: Vec<NodeIndex>,
@@ -70,9 +70,9 @@ pub struct ProcessorDAGBuilder {
     limit: Option<usize>,
 }
 
-impl ProcessorDAGBuilder {
-    pub fn create(ctx: DatabendQueryContextRef) -> ProcessorDAGBuilder {
-        ProcessorDAGBuilder {
+impl ProcessorsDAGBuilder {
+    pub fn create(ctx: DatabendQueryContextRef) -> ProcessorsDAGBuilder {
+        ProcessorsDAGBuilder {
             ctx,
             graph: Default::default(),
             top_processors: vec![],
@@ -340,7 +340,7 @@ impl ProcessorDAGBuilder {
 }
 
 // Some DAG API implement
-impl ProcessorDAGBuilder {
+impl ProcessorsDAGBuilder {
     fn add_merge_graph_node<F: Fn() -> Result<ProcessorRef>>(&mut self, f: F) -> Result<()> {
         let node = f()?;
         let to_index = self.graph.add_node(node);

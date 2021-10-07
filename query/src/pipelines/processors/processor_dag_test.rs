@@ -16,7 +16,7 @@ use common_base::tokio;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use crate::pipelines::processors::processor_dag::ProcessorDAGBuilder;
+use crate::pipelines::processors::processor_dag::ProcessorsDAGBuilder;
 use futures::{FutureExt, Future, Stream, StreamExt};
 use std::pin::Pin;
 use std::task::Context;
@@ -65,7 +65,7 @@ async fn test_processors_dag() -> Result<()> {
         let ctx = crate::tests::try_create_context()?;
 
         let query_plan = crate::tests::parse_query(test.query)?;
-        let processors_graph_builder = ProcessorDAGBuilder::create(ctx);
+        let processors_graph_builder = ProcessorsDAGBuilder::create(ctx);
 
         let processors_graph = processors_graph_builder.build(&query_plan)?;
         assert_eq!(

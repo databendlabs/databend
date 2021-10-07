@@ -25,7 +25,7 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
-use crate::pipelines::processors::PipelineBuilder;
+use crate::pipelines::processors::{PipelineBuilder, ProcessorsDAGBuilder};
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct ExplainInterpreter {
@@ -66,9 +66,11 @@ impl ExplainInterpreter {
 
     fn explain_graph(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
+        let plan = Optimizers::without_scatters(self.ctx.clone()).optimize(&self.explain.input)?;
+        let builder = ProcessorsDAGBuilder::create(self.ctx.clone());
+        let query_processor_graph = builder.build(&plan)?;
         let formatted_plan = Series::new(
-            format!("{}", plan.display_graphviz())
+            format!("{}", query_processor_graph.display_graphviz())
                 .lines()
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
@@ -91,10 +93,10 @@ impl ExplainInterpreter {
     fn explain_pipeline(&self) -> Result<DataBlock> {
         let schema = self.schema();
         let plan = Optimizers::without_scatters(self.ctx.clone()).optimize(&self.explain.input)?;
-        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
-        let pipeline = pipeline_builder.build(&plan)?;
+        let builder = ProcessorsDAGBuilder::create(self.ctx.clone());
+        let query_processor_graph = builder.build(&plan)?;
         let formatted_pipeline = Series::new(
-            format!("{:?}", pipeline)
+            format!("{}", query_processor_graph.display_indent())
                 .lines()
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),

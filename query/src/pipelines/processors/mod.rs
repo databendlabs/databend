@@ -55,3 +55,5 @@ pub use processor::Processor;
 pub use processor_empty::EmptyProcessor;
 pub use processor_merge::MergeProcessor;
 pub use processor_mixed::MixedProcessor;
+pub use processor_dag::ProcessorsDAG;
+pub use processor_dag::ProcessorsDAGBuilder;
