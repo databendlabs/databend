@@ -14,6 +14,8 @@
 
 use std::convert::TryFrom;
 use std::fmt;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 use async_raft::NodeId;
 use common_exception::exception::ErrorCode;
@@ -80,5 +82,11 @@ impl NodeInfo {
             version: 0,
             flight_address,
         }
+    }
+
+    pub fn ip_port(&self) -> Result<(String, u16)> {
+        let addr = SocketAddr::from_str(&self.flight_address)?;
+
+        Ok((addr.ip().to_string(), addr.port()))
     }
 }
