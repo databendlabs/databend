@@ -171,6 +171,7 @@ nav:
               - maxIf: sqlstatement/aggregate-functions/aggregate-max-if.md
               - sumIf: sqlstatement/aggregate-functions/aggregate-sum-if.md
               - STDDEV_POP: sqlstatement/aggregate-functions/aggregate-stddev-pop.md
+              - COVAR_SAMP: sqlstatement/aggregate-functions/aggregate-covar-samp.md
               - windowFunnel: sqlstatement/aggregate-functions/aggregate-windowfunnel.md
           - Conditional Functions:
               - IF: sqlstatement/conditional-functions/if.md
