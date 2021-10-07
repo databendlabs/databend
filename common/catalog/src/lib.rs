@@ -17,6 +17,9 @@
 mod table_io_context;
 mod table_snapshot;
 
+#[cfg(test)]
+mod table_io_context_test;
+
 pub use table_io_context::IOContext;
 pub use table_io_context::TableIOContext;
 pub use table_snapshot::BlockLocation;

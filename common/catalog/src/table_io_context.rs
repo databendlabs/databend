@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_base::Runtime;
@@ -41,6 +42,24 @@ pub trait IOContext {
 
     /// Get a vec of `query` node ids.
     fn get_query_node_ids(&self) -> Vec<String>;
+
+    /// Get user defined context data
+    fn get_user_data_any(&self) -> Option<Arc<dyn Any + Send + Sync + 'static>>;
+
+    /// Get user defined data as type T
+    fn get_user_data<T: Send + Sync + 'static>(&self) -> Result<Option<Arc<T>>, ErrorCode> {
+        let ud = self.get_user_data_any();
+        match ud {
+            None => Ok(None),
+            Some(x) => {
+                let v = x.downcast::<T>();
+                match v {
+                    Ok(x) => Ok(Some(x)),
+                    Err(_) => Err(ErrorCode::InvalidCast("invalid cast")),
+                }
+            }
+        }
+    }
 }
 
 pub struct TableIOContext {
@@ -48,6 +67,7 @@ pub struct TableIOContext {
     data_accessor_builder: Arc<dyn DataAccessorBuilder>,
     max_threads: usize,
     query_nodes: Vec<Arc<NodeInfo>>,
+    user_data: Option<Arc<dyn Any + Send + Sync + 'static>>,
 }
 
 impl TableIOContext {
@@ -56,12 +76,14 @@ impl TableIOContext {
         dab: Arc<dyn DataAccessorBuilder>,
         max_threads: usize,
         query_nodes: Vec<Arc<NodeInfo>>,
+        user_data: Option<Arc<dyn Any + Send + Sync + 'static>>,
     ) -> TableIOContext {
         TableIOContext {
             runtime: rt,
             data_accessor_builder: dab,
             max_threads,
             query_nodes,
+            user_data,
         }
     }
 }
@@ -88,5 +110,9 @@ impl IOContext for TableIOContext {
 
     fn get_query_node_ids(&self) -> Vec<String> {
         self.query_nodes.iter().map(|x| x.id.clone()).collect()
+    }
+
+    fn get_user_data_any(&self) -> Option<Arc<dyn Any + Send + Sync + 'static>> {
+        self.user_data.clone()
     }
 }
