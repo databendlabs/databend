@@ -16,7 +16,7 @@
 use common_flight_rpc::FlightClientConf;
 
 #[derive(Clone, Debug, Default)]
-pub struct StoreClientConf {
+pub struct MetaFlightClientConf {
     pub meta_service_config: FlightClientConf,
     pub kv_service_config: FlightClientConf,
 }

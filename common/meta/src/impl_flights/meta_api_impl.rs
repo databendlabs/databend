@@ -22,18 +22,18 @@ use common_planners::DropTablePlan;
 
 use crate::action_declare;
 use crate::meta_api::MetaApi;
-use crate::store_do_action::StoreDoAction;
-use crate::vo::CreateDatabaseReply;
-use crate::vo::CreateTableReply;
-use crate::vo::DatabaseInfo;
-use crate::vo::GetDatabasesReply;
-use crate::vo::GetTablesReply;
-use crate::vo::TableInfo;
+use crate::meta_flight_action::MetaFlightAction;
+use crate::meta_flight_reply::CreateDatabaseReply;
+use crate::meta_flight_reply::CreateTableReply;
+use crate::meta_flight_reply::DatabaseInfo;
+use crate::meta_flight_reply::GetDatabasesReply;
+use crate::meta_flight_reply::GetTablesReply;
+use crate::meta_flight_reply::TableInfo;
+use crate::MetaFlightClient;
 use crate::RequestFor;
-use crate::StoreClient;
 
 #[async_trait::async_trait]
-impl MetaApi for StoreClient {
+impl MetaApi for MetaFlightClient {
     /// Create database call.
     async fn create_database(
         &self,
@@ -42,14 +42,18 @@ impl MetaApi for StoreClient {
         self.do_action(CreateDatabaseAction { plan }).await
     }
 
+    /// Drop database call.
+    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
+        self.do_action(DropDatabaseAction { plan }).await
+    }
+
     async fn get_database(&self, db: &str) -> common_exception::Result<DatabaseInfo> {
         self.do_action(GetDatabaseAction { db: db.to_string() })
             .await
     }
 
-    /// Drop database call.
-    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
-        self.do_action(DropDatabaseAction { plan }).await
+    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply> {
+        self.do_action(GetDatabasesAction {}).await
     }
 
     /// Create table call.
@@ -74,21 +78,17 @@ impl MetaApi for StoreClient {
         .await
     }
 
+    /// Get tables.
+    async fn get_tables(&self, db: &str) -> common_exception::Result<GetTablesReply> {
+        self.do_action(GetTablesAction { db: db.to_string() }).await
+    }
+
     async fn get_table_by_id(
         &self,
         tbl_id: MetaId,
         tbl_ver: Option<MetaVersion>,
     ) -> common_exception::Result<TableInfo> {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
-    }
-
-    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply> {
-        self.do_action(GetDatabasesAction {}).await
-    }
-
-    /// Get tables.
-    async fn get_tables(&self, db: &str) -> common_exception::Result<GetTablesReply> {
-        self.do_action(GetTablesAction { db: db.to_string() }).await
     }
 }
 
@@ -101,7 +101,7 @@ pub struct CreateDatabaseAction {
 action_declare!(
     CreateDatabaseAction,
     CreateDatabaseReply,
-    StoreDoAction::CreateDatabase
+    MetaFlightAction::CreateDatabase
 );
 
 // - get database
@@ -109,13 +109,17 @@ action_declare!(
 pub struct GetDatabaseAction {
     pub db: String,
 }
-action_declare!(GetDatabaseAction, DatabaseInfo, StoreDoAction::GetDatabase);
+action_declare!(
+    GetDatabaseAction,
+    DatabaseInfo,
+    MetaFlightAction::GetDatabase
+);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropDatabaseAction {
     pub plan: DropDatabasePlan,
 }
-action_declare!(DropDatabaseAction, (), StoreDoAction::DropDatabase);
+action_declare!(DropDatabaseAction, (), MetaFlightAction::DropDatabase);
 
 // == table actions ==
 // - create table
@@ -126,7 +130,7 @@ pub struct CreateTableAction {
 action_declare!(
     CreateTableAction,
     CreateTableReply,
-    StoreDoAction::CreateTable
+    MetaFlightAction::CreateTable
 );
 
 // - drop table
@@ -134,7 +138,7 @@ action_declare!(
 pub struct DropTableAction {
     pub plan: DropTablePlan,
 }
-action_declare!(DropTableAction, (), StoreDoAction::DropTable);
+action_declare!(DropTableAction, (), MetaFlightAction::DropTable);
 
 // - get table
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -143,14 +147,14 @@ pub struct GetTableAction {
     pub table: String,
 }
 
-action_declare!(GetTableAction, TableInfo, StoreDoAction::GetTable);
+action_declare!(GetTableAction, TableInfo, MetaFlightAction::GetTable);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableExtReq {
     pub tbl_id: MetaId,
     pub tbl_ver: Option<MetaVersion>,
 }
-action_declare!(GetTableExtReq, TableInfo, StoreDoAction::GetTableExt);
+action_declare!(GetTableExtReq, TableInfo, MetaFlightAction::GetTableExt);
 
 // - get tables
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -158,7 +162,7 @@ pub struct GetTablesAction {
     pub db: String,
 }
 
-action_declare!(GetTablesAction, GetTablesReply, StoreDoAction::GetTables);
+action_declare!(GetTablesAction, GetTablesReply, MetaFlightAction::GetTables);
 
 // -get databases
 
@@ -168,5 +172,5 @@ pub struct GetDatabasesAction;
 action_declare!(
     GetDatabasesAction,
     GetDatabasesReply,
-    StoreDoAction::GetDatabases
+    MetaFlightAction::GetDatabases
 );

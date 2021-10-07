@@ -21,12 +21,12 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::vo::CreateDatabaseReply;
-use crate::vo::CreateTableReply;
-use crate::vo::DatabaseInfo;
-use crate::vo::GetDatabasesReply;
-use crate::vo::GetTablesReply;
-use crate::vo::TableInfo;
+use crate::meta_flight_reply::CreateDatabaseReply;
+use crate::meta_flight_reply::CreateTableReply;
+use crate::meta_flight_reply::DatabaseInfo;
+use crate::meta_flight_reply::GetDatabasesReply;
+use crate::meta_flight_reply::GetTablesReply;
+use crate::meta_flight_reply::TableInfo;
 
 #[async_trait::async_trait]
 pub trait MetaApi: Send + Sync {

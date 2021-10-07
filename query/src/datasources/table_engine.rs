@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_meta::vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 
 use crate::catalogs::Table;
 use crate::common::StoreApiProvider;

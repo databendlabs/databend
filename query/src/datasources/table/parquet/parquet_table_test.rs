@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta::vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 

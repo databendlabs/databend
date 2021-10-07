@@ -47,7 +47,7 @@ macro_rules! action_declare {
             type Reply = $reply;
         }
 
-        impl From<$req> for StoreDoAction {
+        impl From<$req> for MetaFlightAction {
             fn from(act: $req) -> Self {
                 $enum_ctor(act)
             }
@@ -57,7 +57,7 @@ macro_rules! action_declare {
 
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum StoreDoAction {
+pub enum MetaFlightAction {
     // database meta
     CreateDatabase(CreateDatabaseAction),
     GetDatabase(GetDatabaseAction),
@@ -78,10 +78,10 @@ pub enum StoreDoAction {
 }
 
 /// Try convert tonic::Request<Action> to DoActionAction.
-impl TryInto<StoreDoAction> for Request<Action> {
+impl TryInto<MetaFlightAction> for Request<Action> {
     type Error = tonic::Status;
 
-    fn try_into(self) -> Result<StoreDoAction, Self::Error> {
+    fn try_into(self) -> Result<MetaFlightAction, Self::Error> {
         let action = self.into_inner();
         let mut buf = Cursor::new(&action.body);
 
@@ -91,14 +91,14 @@ impl TryInto<StoreDoAction> for Request<Action> {
 
         // Decode DoActionAction from flight request body.
         let json_str = request.body.as_str();
-        let action = serde_json::from_str::<StoreDoAction>(json_str)
+        let action = serde_json::from_str::<MetaFlightAction>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
     }
 }
 
 /// Try convert DoActionAction to tonic::Request<Action>.
-impl TryInto<Request<Action>> for &StoreDoAction {
+impl TryInto<Request<Action>> for &MetaFlightAction {
     type Error = ErrorCode;
 
     fn try_into(self) -> common_exception::Result<Request<Action>> {

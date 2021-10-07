@@ -15,13 +15,13 @@
 
 use common_flight_rpc::FlightClientConf;
 use common_flight_rpc::FlightClientTlsConfig;
-use common_meta::StoreClientConf;
+use common_meta::MetaFlightClientConf;
 
 use crate::configs::Config;
 
 // since `store-api-sdk` should not depends on query
 // we provide a converter for it -- just copy things around
-impl From<&Config> for StoreClientConf {
+impl From<&Config> for MetaFlightClientConf {
     fn from(conf: &Config) -> Self {
         let meta_tls_conf = if conf.tls_meta_cli_enabled() {
             Some(FlightClientTlsConfig {
@@ -39,7 +39,7 @@ impl From<&Config> for StoreClientConf {
             tls_conf: meta_tls_conf,
         };
 
-        StoreClientConf {
+        MetaFlightClientConf {
             // kv service is configured by conf.meta
             kv_service_config: meta_config.clone(),
             // copy meta config from query config

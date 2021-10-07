@@ -16,7 +16,7 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_flight_rpc::FlightClientTlsConfig;
 use common_meta::meta_api::MetaApi;
-use common_meta::StoreClient;
+use common_meta::MetaFlightClient;
 use metasrv::init_meta_ut;
 use metasrv::tests::service::new_test_context;
 use metasrv::tests::start_metasrv_with_context;
@@ -46,7 +46,8 @@ async fn test_tls_server() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let client = StoreClient::with_tls_conf(addr.as_str(), "root", "xxx", Some(tls_conf)).await?;
+    let client =
+        MetaFlightClient::with_tls_conf(addr.as_str(), "root", "xxx", Some(tls_conf)).await?;
 
     let r = client.get_table("do not care", "do not care").await;
     assert!(r.is_err());
@@ -79,7 +80,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = StoreClient::with_tls_conf("addr", "root", "xxx", Some(tls_conf)).await;
+    let r = MetaFlightClient::with_tls_conf("addr", "root", "xxx", Some(tls_conf)).await;
 
     assert!(r.is_err());
     if let Err(e) = r {
