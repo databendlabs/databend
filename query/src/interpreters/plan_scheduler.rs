@@ -20,7 +20,7 @@ use std::sync::Arc;
 use common_catalog::IOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_management::NodeInfo;
+use common_metatypes::NodeInfo;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::BroadcastPlan;

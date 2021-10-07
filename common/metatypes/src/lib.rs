@@ -21,6 +21,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 pub use cluster::Node;
+pub use cluster::NodeInfo;
 pub use cluster::Slot;
 pub use cmd::Cmd;
 pub use common_sled_store::KVMeta;
