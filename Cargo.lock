@@ -914,6 +914,7 @@ dependencies = [
  "common-infallible",
  "common-io",
  "dyn-clone",
+ "float-cmp 0.9.0",
  "indexmap",
  "lazy_static",
  "num",

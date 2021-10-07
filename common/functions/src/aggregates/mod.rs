@@ -29,6 +29,7 @@ mod aggregate_min_max;
 mod aggregate_window_funnel;
 
 // mod aggregate_min_max;
+mod aggregate_covariance;
 mod aggregate_stddev_pop;
 mod aggregate_sum;
 mod aggregator;
@@ -42,6 +43,7 @@ pub use aggregate_avg::AggregateAvgFunction;
 pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
 pub use aggregate_combinator_if::AggregateIfCombinator;
 pub use aggregate_count::AggregateCountFunction;
+pub use aggregate_covariance::AggregateCovarianceFunction;
 pub use aggregate_function::AggregateFunction;
 pub use aggregate_function::AggregateFunctionRef;
 pub use aggregate_function_factory::AggregateFunctionFactory;

@@ -42,6 +42,53 @@ macro_rules! with_match_primitive_type {
 }
 
 #[macro_export]
+macro_rules! with_match_primitive_types {
+    (
+    $type0:expr, $type1:expr, | $_a:tt $T0:ident, $_b:tt $T1:ident | $body:tt,  $nbody:tt
+) => {{
+        macro_rules! __with_types__ {
+            ( $_a $T0:ident, $_b $T1:ident ) => {
+                $body
+            };
+        }
+
+        macro_rules! __match_type__ {
+            ($t:ident) => {
+                match $type1 {
+                    Int8 => __with_types__! { $t, i8 },
+                    Int16 => __with_types__! { $t, i16 },
+                    Int32 => __with_types__! { $t, i32 },
+                    Int64 => __with_types__! { $t, i64 },
+                    UInt8 => __with_types__! { $t, u8 },
+                    UInt16 => __with_types__! { $t, u16 },
+                    UInt32 => __with_types__! { $t, u32 },
+                    UInt64 => __with_types__! { $t, u64 },
+                    Float32 => __with_types__! { $t, f32 },
+                    Float64 => __with_types__! { $t, f64 },
+                    _ => $nbody,
+                }
+            };
+        }
+
+        use common_datavalues::prelude::DataType::*;
+
+        match $type0 {
+            Int8 => __match_type__! { i8 },
+            Int16 => __match_type__! { i16 },
+            Int32 => __match_type__! { i32 },
+            Int64 => __match_type__! { i64 },
+            UInt8 => __match_type__! { u8 },
+            UInt16 => __match_type__! { u16 },
+            UInt32 => __match_type__! { u32 },
+            UInt64 => __match_type__! { u64 },
+            Float32 => __match_type__! { f32 },
+            Float64 => __match_type__! { f64 },
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! with_match_date_date_time_types {
     ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
         use common_datavalues::prelude::DataType;
