@@ -1046,9 +1046,11 @@ name = "common-metatypes"
 version = "0.1.0"
 dependencies = [
  "async-raft",
+ "common-exception",
  "common-sled-store",
  "pretty_assertions",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

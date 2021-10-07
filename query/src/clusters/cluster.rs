@@ -25,7 +25,7 @@ use common_flight_rpc::ConnectionFactory;
 use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
-use common_management::NodeInfo;
+use common_metatypes::NodeInfo;
 use rand::thread_rng;
 use rand::Rng;
 

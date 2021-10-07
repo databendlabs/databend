@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryFrom;
 use std::fmt;
 
 use async_raft::NodeId;
+use common_exception::exception::ErrorCode;
+use common_exception::exception::Result;
 use common_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
@@ -41,3 +44,41 @@ impl fmt::Display for Node {
 
 /// For Node to be able to be stored in sled::Tree as a value.
 impl SledSerde for Node {}
+
+/// Query node
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct NodeInfo {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub cpu_nums: u64,
+    #[serde(default)]
+    pub version: u32,
+    #[serde(default)]
+    pub flight_address: String,
+}
+
+impl TryFrom<Vec<u8>> for NodeInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: Vec<u8>) -> Result<Self> {
+        match serde_json::from_slice(&value) {
+            Ok(user_info) => Ok(user_info),
+            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+                "Cannot deserialize namespace from bytes. cause {}",
+                serialize_error
+            ))),
+        }
+    }
+}
+
+impl NodeInfo {
+    pub fn create(id: String, cpu_nums: u64, flight_address: String) -> NodeInfo {
+        NodeInfo {
+            id,
+            cpu_nums,
+            version: 0,
+            flight_address,
+        }
+    }
+}
