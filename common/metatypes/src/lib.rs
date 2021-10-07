@@ -49,6 +49,8 @@ mod raft_txid;
 mod raft_types;
 
 #[cfg(test)]
+mod cluster_test;
+#[cfg(test)]
 mod match_seq_test;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
