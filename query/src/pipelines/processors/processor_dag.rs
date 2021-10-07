@@ -41,7 +41,7 @@ use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct ProcessorsDAG {
-    graph: StableGraph<Arc<dyn Processor>, ()>,
+    pub(in crate::pipelines::processors) graph: StableGraph<Arc<dyn Processor>, ()>,
 }
 
 impl ProcessorsDAG {
@@ -343,25 +343,24 @@ impl ProcessorDAGBuilder {
 impl ProcessorDAGBuilder {
     fn add_merge_graph_node<F: Fn() -> Result<ProcessorRef>>(&mut self, f: F) -> Result<()> {
         let node = f()?;
-        let from_index = self.graph.add_node(node);
+        let to_index = self.graph.add_node(node);
 
         for index in 0..self.top_processors.len() {
             self.graph
-                .add_edge(from_index, self.top_processors[index], ());
+                .add_edge(self.top_processors[index], to_index, ());
         }
 
         self.top_processors.clear();
-        self.top_processors.push(from_index);
+        self.top_processors.push(to_index);
         Ok(())
     }
 
     fn add_simple_graph_node<F: Fn() -> Result<ProcessorRef>>(&mut self, f: F) -> Result<()> {
         for index in 0..self.top_processors.len() {
             let node = f()?;
-            let from_index = self.graph.add_node(node);
-            self.graph
-                .add_edge(from_index, self.top_processors[index], ());
-            self.top_processors[index] = from_index;
+            let to_index = self.graph.add_node(node);
+            self.graph.add_edge(self.top_processors[index], to_index, ());
+            self.top_processors[index] = to_index;
         }
 
         Ok(())

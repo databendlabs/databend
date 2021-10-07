@@ -23,11 +23,14 @@ mod pipeline_walker_test;
 #[cfg(test)]
 mod processor_dag_test;
 #[cfg(test)]
+mod processor_dag_display_test;
+#[cfg(test)]
 mod processor_empty_test;
 #[cfg(test)]
 mod processor_merge_test;
 #[cfg(test)]
 mod processor_mixed_test;
+
 
 mod pipe;
 mod pipeline;
@@ -37,6 +40,9 @@ mod pipeline_walker;
 mod processor;
 #[allow(dead_code)]
 mod processor_dag;
+#[allow(dead_code)]
+mod processor_dag_display;
+
 mod processor_empty;
 mod processor_merge;
 mod processor_mixed;

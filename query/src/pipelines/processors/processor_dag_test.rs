@@ -17,6 +17,10 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::pipelines::processors::processor_dag::ProcessorDAGBuilder;
+use futures::{FutureExt, Future, Stream, StreamExt};
+use std::pin::Pin;
+use std::task::Context;
+use common_base::tokio::macros::support::Poll;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_processors_dag() -> Result<()> {
@@ -74,3 +78,39 @@ async fn test_processors_dag() -> Result<()> {
 
     Ok(())
 }
+//
+// pub struct S {
+//     pub count: usize,
+// }
+//
+// impl S {
+//     pub async fn get_and_inc(&mut self) -> usize {
+//         self.count += 1;
+//         self.count
+//     }
+// }
+//
+// struct StreamFuture<Fut: Future>(Pin<Box<Fut>>);
+//
+// impl<Fut: Future> Stream for StreamFuture<Fut> {
+//     type Item = Fut::Output;
+//
+//     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+//         self.0.poll_unpin(cx).map(|s| Some(s))
+//     }
+// }
+//
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_s() {
+//     let mut s = S { count: 0 };
+//     let future = s.get_and_inc();
+//     let mut ss = StreamFuture(Box::pin(future));
+//     println!("first: {:?}", ss.next().await);
+//     println!("seconds: {:?}", ss.next().await);
+// }
+// fn main() {
+//     let mut s = S { count: 0 };
+//     let future = s.get_and_inc();
+//
+// }
+

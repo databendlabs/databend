@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::Result;
+use common_exception::{Result, ErrorCode};
 use common_streams::SendableDataBlockStream;
 
 /// Formatter settings for PlanStep debug.
@@ -50,6 +50,13 @@ pub trait Processor: Sync + Send {
 
 // TODO(Winter): this is bad code.
 impl Debug for dyn Processor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+// TODO(Winter): this is bad code.
+impl Display for dyn Processor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
