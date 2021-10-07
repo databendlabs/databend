@@ -17,9 +17,10 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_management::NodeInfo;
+use common_metatypes::NodeInfo;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::BroadcastPlan;
@@ -848,14 +849,14 @@ impl PlanScheduler {
 
 impl PlanScheduler {
     fn cluster_source(&mut self, node: &ScanPlan, table: TablePtr) -> Result<ReadDataSourcePlan> {
-        let nodes = self.cluster_nodes.clone();
-        let context = self.query_context.clone();
-        let settings = context.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
+        let io_ctx = self.query_context.get_cluster_table_io_context()?;
+
+        let io_ctx = Arc::new(io_ctx);
+
         table.read_plan(
-            context,
+            io_ctx.clone(),
             Some(node.push_downs.clone()),
-            Some(max_threads * nodes.len()),
+            Some(io_ctx.get_max_threads() * io_ctx.get_query_nodes().len()),
         )
     }
 

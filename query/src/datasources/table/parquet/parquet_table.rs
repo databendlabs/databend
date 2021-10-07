@@ -15,14 +15,16 @@
 use std::any::Any;
 use std::convert::TryInto;
 use std::fs::File;
+use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read;
 use common_base::tokio::task;
+use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -118,7 +120,7 @@ impl Table for ParquetTable {
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {

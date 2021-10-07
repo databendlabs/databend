@@ -21,6 +21,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 pub use cluster::Node;
+pub use cluster::NodeInfo;
 pub use cluster::Slot;
 pub use cmd::Cmd;
 pub use common_sled_store::KVMeta;
@@ -47,6 +48,8 @@ mod log_entry;
 mod raft_txid;
 mod raft_types;
 
+#[cfg(test)]
+mod cluster_test;
 #[cfg(test)]
 mod match_seq_test;
 

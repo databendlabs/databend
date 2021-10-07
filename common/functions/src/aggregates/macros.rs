@@ -89,7 +89,23 @@ macro_rules! with_match_primitive_types {
 }
 
 #[macro_export]
-macro_rules! dispatch_unsigned_numeric_types {
+macro_rules! with_match_date_date_time_types {
+    ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
+        use common_datavalues::prelude::DataType;
+        match $data_type {
+            DataType::Date16 => {
+                $dispatch! { u16, DataType::UInt16, $($args),* }
+            },
+            DataType::DateTime32(_) => {
+                $dispatch! { u32, DataType::UInt32, $($args),* }
+            },
+            _ => {},
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! with_match_unsigned_numeric_types {
     ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
         $dispatch! { u8, $data_type,      $($args),* }
         $dispatch! { u16, $data_type,     $($args),* }

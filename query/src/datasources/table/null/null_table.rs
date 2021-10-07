@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -70,7 +72,7 @@ impl Table for NullTable {
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {

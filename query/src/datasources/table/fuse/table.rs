@@ -16,10 +16,18 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::BlockLocation;
+use common_catalog::IOContext;
+use common_catalog::TableIOContext;
+use common_catalog::TableSnapshot;
+use common_dal::DataAccessor;
+use common_dal::DataAccessorBuilder;
+use common_dal::DefaultDataAccessorBuilder;
+use common_dal::ObjectAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
@@ -32,16 +40,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::catalogs::Table;
-use crate::datasources::dal::DataAccessor;
 use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
-use crate::datasources::table::fuse::read_table_snapshot;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
-use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::MetaInfoReader;
-use crate::datasources::table::fuse::SegmentInfo;
-use crate::datasources::table::fuse::TableSnapshot;
 use crate::datasources::table::fuse::TableStorageScheme;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -104,17 +107,19 @@ impl Table for FuseTable {
 
     fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         // primary work to do: partition pruning/elimination
-        let tbl_snapshot = self.table_snapshot(&ctx)?;
+        let tbl_snapshot = self.table_snapshot(io_ctx.clone())?;
         if let Some(snapshot) = tbl_snapshot {
-            let da = self.data_accessor(&ctx)?;
-            let meta_reader = MetaInfoReader::new(da, ctx.clone());
+            let da = self.data_accessor()?;
+
+            let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
             let block_locations = range_filter(&snapshot, &push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
+
             let plan = ReadDataSourcePlan {
                 db: self.tbl_info.db.to_string(),
                 table: self.name().to_string(),
@@ -174,7 +179,7 @@ impl Table for FuseTable {
             })
             .flatten()
         };
-        let da = self.data_accessor(&ctx)?;
+        let da = self.data_accessor()?;
         let arrow_schema = self.tbl_info.schema.to_arrow();
         let _h = common_base::tokio::task::spawn_local(async move {
             // TODO error handling is buggy
@@ -211,32 +216,37 @@ impl Table for FuseTable {
             }
         };
 
-        let data_accessor = self.data_accessor(&ctx)?;
+        let da = self.data_accessor()?;
 
         // 2. Append blocks to storage
-        let segment_info = self.append_blocks(ctx.clone(), block_stream).await?;
+        let segment_info = self.append_blocks(block_stream).await?;
+
         let seg_loc = {
             let uuid = Uuid::new_v4().to_simple().to_string();
             segment_info_location(&uuid)
         };
-        self.save_segment(&seg_loc, &data_accessor, segment_info)
-            .await?;
+
+        {
+            let bytes = serde_json::to_vec(&segment_info)?;
+            da.put(&seg_loc, bytes).await?;
+        }
 
         // 3. new snapshot
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let tbl_snapshot = self
-            .table_snapshot(&ctx)?
+            .table_snapshot(Arc::new(io_ctx))?
             .unwrap_or_else(TableSnapshot::new);
         let _snapshot_id = tbl_snapshot.snapshot_id;
-        let new_snapshot: TableSnapshot = self.merge_seg(seg_loc, tbl_snapshot);
+        let new_snapshot = tbl_snapshot.append_segment(seg_loc);
         let _new_snapshot_id = new_snapshot.snapshot_id;
 
-        let snapshot_loc = {
+        {
             let uuid = Uuid::new_v4().to_simple().to_string();
-            snapshot_location(&uuid)
-        };
+            let snapshot_loc = snapshot_location(&uuid);
 
-        self.save_snapshot(&snapshot_loc, &data_accessor, new_snapshot)
-            .await?;
+            let bytes = serde_json::to_vec(&new_snapshot)?;
+            da.put(&snapshot_loc, bytes).await?;
+        }
 
         // 4. commit
         let _table_id = insert_plan.tbl_id;
@@ -261,10 +271,11 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
-    fn table_snapshot(&self, ctx: &DatabendQueryContextRef) -> Result<Option<TableSnapshot>> {
+    fn table_snapshot(&self, io_ctx: Arc<TableIOContext>) -> Result<Option<TableSnapshot>> {
         let schema = self.schema()?;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
-            let r = read_table_snapshot(self.data_accessor(ctx)?, ctx, loc)?;
+            let da = io_ctx.get_data_accessor(&self.storage_scheme)?;
+            let r = ObjectAccessor::new(da).blocking_read_obj(&io_ctx.get_runtime(), loc)?;
             Ok(Some(r))
         } else {
             Ok(None)
@@ -292,38 +303,8 @@ impl FuseTable {
         todo!()
     }
 
-    pub(crate) fn data_accessor(
-        &self,
-        ctx: &DatabendQueryContextRef,
-    ) -> Result<Arc<dyn DataAccessor>> {
-        let scheme = &self.storage_scheme;
-        ctx.get_data_accessor(scheme)
-    }
-}
-
-impl FuseTable {
-    pub(crate) async fn save_segment(
-        &self,
-        location: &str,
-        data_accessor: &Arc<dyn DataAccessor>,
-        segment_info: SegmentInfo,
-    ) -> Result<()> {
-        let bytes = serde_json::to_vec(&segment_info)?;
-        data_accessor.put(location, bytes).await
-    }
-    pub(crate) async fn save_snapshot(
-        &self,
-        location: &str,
-        data_accessor: &Arc<dyn DataAccessor>,
-        snapshot: TableSnapshot,
-    ) -> Result<()> {
-        let bytes = serde_json::to_vec(&snapshot)?;
-        data_accessor.put(location, bytes).await
-    }
-    pub(crate) fn merge_seg(&self, new_seg: String, mut prev: TableSnapshot) -> TableSnapshot {
-        prev.segments.push(new_seg);
-        let new_id = Uuid::new_v4();
-        prev.snapshot_id = new_id;
-        prev
+    pub(crate) fn data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
+        // TODO(xp): temp impl, a DataAccessor should be built by the caller that uses `Table`, not `Table` itself
+        DefaultDataAccessorBuilder {}.build(&self.storage_scheme)
     }
 }

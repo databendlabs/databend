@@ -14,11 +14,12 @@
 //
 
 use std::env;
+use std::sync::Arc;
 
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -48,8 +49,9 @@ async fn test_parquet_table() -> Result<()> {
     };
     let table = ParquetTable::try_create(tbl_info)?;
 
+    let io_ctx = ctx.get_single_node_table_io_context()?;
     let source_plan = table.read_plan(
-        ctx.clone(),
+        Arc::new(io_ctx),
         None,
         Some(ctx.get_settings().get_max_threads()? as usize),
     )?;

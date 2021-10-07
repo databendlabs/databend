@@ -21,6 +21,10 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
+use common_base::Runtime;
+use common_base::TrySpawn;
+use common_catalog::TableIOContext;
+use common_dal::DefaultDataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -39,10 +43,6 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::dal::Local;
-use crate::datasources::dal::StorageScheme;
-use crate::datasources::dal::S3;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
@@ -76,16 +76,6 @@ impl DatabendQueryContext {
             ),
             shared,
         })
-    }
-
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    /// The task will run in the current context thread_pool not the global.
-    pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 
     /// Set progress callback to context.
@@ -235,15 +225,53 @@ impl DatabendQueryContext {
         self.shared.session.get_sessions_manager()
     }
 
-    pub fn get_data_accessor(
-        &self,
-        storage_scheme: &StorageScheme,
-    ) -> Result<Arc<dyn DataAccessor>> {
-        match storage_scheme {
-            StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
-            StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
-            _ => todo!(),
-        }
+    pub fn get_shared_runtime(&self) -> Result<Arc<Runtime>> {
+        self.shared.try_get_runtime()
+    }
+
+    /// Build a TableIOContext for single node service.
+    pub fn get_single_node_table_io_context(&self) -> Result<TableIOContext> {
+        let nodes = vec!["".to_string()];
+        let settings = self.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+
+        Ok(TableIOContext::new(
+            self.get_shared_runtime()?,
+            Arc::new(DefaultDataAccessorBuilder {}),
+            max_threads,
+            nodes,
+        ))
+    }
+
+    /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
+    pub fn get_cluster_table_io_context(&self) -> Result<TableIOContext> {
+        let cluster = self.get_cluster();
+        let cluster_nodes = cluster.get_nodes();
+        let nodes = cluster_nodes
+            .iter()
+            .map(|x| x.id.clone())
+            .collect::<Vec<_>>();
+        let settings = self.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+
+        Ok(TableIOContext::new(
+            self.get_shared_runtime()?,
+            Arc::new(DefaultDataAccessorBuilder {}),
+            max_threads,
+            nodes,
+        ))
+    }
+}
+
+impl TrySpawn for DatabendQueryContext {
+    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+    /// The task will run in the current context thread_pool not the global.
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 }
 

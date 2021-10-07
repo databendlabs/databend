@@ -95,7 +95,7 @@ pub struct RaftConfig {
     #[structopt(
     long,
     env = "KVSRV_SINGLE",
-    help = concat!("Single node kvsrv. It creates a single node cluster if meta data is not initialized.",
+    help = concat!("Single node metasrv. It creates a single node cluster if meta data is not initialized.",
     " Otherwise it opens the previous one.",
     " This is mainly for testing purpose.")
     )]

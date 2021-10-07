@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_meta_api_vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -68,8 +68,9 @@ async fn test_memorytable() -> Result<()> {
 
     // read.
     {
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let source_plan = table.read_plan(
-            ctx.clone(),
+            Arc::new(io_ctx),
             None,
             Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
@@ -101,8 +102,9 @@ async fn test_memorytable() -> Result<()> {
         };
         table.truncate(ctx.clone(), truncate_plan).await?;
 
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let source_plan = table.read_plan(
-            ctx.clone(),
+            Arc::new(io_ctx),
             None,
             Some(ctx.get_settings().get_max_threads()? as usize),
         )?;

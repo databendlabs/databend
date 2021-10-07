@@ -5,12 +5,13 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
+    "common/catalog",
     "common/clickhouse-srv",
+    "common/dal",
     "common/datablocks",
     "common/datavalues",
-    "common/dfs-apis/api",
-    "common/dfs-apis/vo",
     "common/exception",
+    "common/flight-rpc",
     "common/functions",
     "common/infallible",
     "common/io",
@@ -19,21 +20,17 @@ members = [
     "common/kv-apis/vo",
     "common/kv",
     "common/management",
-    "common/meta-apis/api",
     "common/metatypes",
     "common/planners",
     "common/raft-store",
     "common/sled-store",
-    "common/store-api-sdk",
+    "common/meta",
     "common/streams",
     "common/tracing",
 
     # Query
     "query",
-    "kvsrv",
-
-    # distributed file system
-    #"dfs",
+    "metasrv",
 
     # SQL Fuzz
     "query/fuzz",

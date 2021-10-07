@@ -15,12 +15,11 @@
 
 use std::sync::Arc;
 
-use common_dfs_api::StorageApi;
 use common_exception::Result;
 use common_kv_api::KVApi;
-use common_meta_api::MetaApi;
-use common_store_api_sdk::StoreClient;
-use common_store_api_sdk::StoreClientConf;
+use common_meta::meta_api::MetaApi;
+use common_meta::MetaFlightClient;
+use common_meta::MetaFlightClientConf;
 
 // Since there is a pending dependency issue,
 // StoreApiProvider is temporarily moved from store-api-sdk
@@ -31,23 +30,23 @@ use common_store_api_sdk::StoreClientConf;
 pub struct StoreApiProvider {
     // do not depend on query::configs::Config in case of moving back to sdk
     // also @see config_converter.rs
-    conf: StoreClientConf,
+    conf: MetaFlightClientConf,
 }
 
 impl StoreApiProvider {
-    pub fn new(conf: impl Into<StoreClientConf>) -> Self {
+    pub fn new(conf: impl Into<MetaFlightClientConf>) -> Self {
         StoreApiProvider { conf: conf.into() }
     }
 
     /// Get meta async client, trait is defined in MetaApi.
     pub async fn try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
-        let client = StoreClient::try_new(&self.conf).await?;
+        let client = MetaFlightClient::try_new(&self.conf).await?;
         Ok(Arc::new(client))
     }
 
     /// Get meta client, operations trait is defined in MetaApi.
     pub fn sync_try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
-        let client = StoreClient::sync_try_new(&self.conf)?;
+        let client = MetaFlightClient::sync_try_new(&self.conf)?;
         Ok(Arc::new(client))
     }
 
@@ -58,7 +57,7 @@ impl StoreApiProvider {
             let client = common_kv::KV::new_temp().await?;
             Ok(Arc::new(client))
         } else {
-            let client = StoreClient::try_new(&self.conf).await?;
+            let client = MetaFlightClient::try_new(&self.conf).await?;
             Ok(Arc::new(client))
         }
     }
@@ -70,20 +69,8 @@ impl StoreApiProvider {
             let client = common_kv::KV::sync_new_temp()?;
             Ok(Arc::new(client))
         } else {
-            let client = StoreClient::sync_try_new(&self.conf)?;
+            let client = MetaFlightClient::sync_try_new(&self.conf)?;
             Ok(Arc::new(client))
         }
-    }
-
-    /// Get storage async client, operations trait defined in StorageApi.
-    pub async fn try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
-        let client = StoreClient::try_new(&self.conf).await?;
-        Ok(Arc::new(client))
-    }
-
-    /// Get storage client, operations trait defined in StorageApi.
-    pub fn sync_try_get_storage_client(&self) -> Result<Arc<dyn StorageApi>> {
-        let client = StoreClient::sync_try_new(&self.conf)?;
-        Ok(Arc::new(client))
     }
 }

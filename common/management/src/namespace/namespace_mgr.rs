@@ -24,9 +24,9 @@ use common_kv_api::KVApi;
 use common_kv_api_vo::UpsertKVActionResult;
 use common_metatypes::KVMeta;
 use common_metatypes::MatchSeq;
+use common_metatypes::NodeInfo;
 
 use crate::namespace::NamespaceApi;
-use crate::namespace::NodeInfo;
 
 #[allow(dead_code)]
 pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";

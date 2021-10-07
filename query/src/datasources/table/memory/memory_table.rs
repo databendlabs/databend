@@ -16,12 +16,14 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
+use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_api_vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -81,7 +83,7 @@ impl Table for MemoryTable {
 
     fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
@@ -97,11 +99,7 @@ impl Table for MemoryTable {
             table_id: tbl_info.table_id,
             table_version: None,
             schema: tbl_info.schema.clone(),
-            parts: generate_parts(
-                0,
-                ctx.get_settings().get_max_threads()?,
-                blocks.len() as u64,
-            ),
+            parts: generate_parts(0, io_ctx.get_max_threads() as u64, blocks.len() as u64),
             statistics: Statistics::new_exact(rows, bytes),
             description: format!("(Read from Memory Engine table  {}.{})", db, self.name()),
             scan_plan: Default::default(),

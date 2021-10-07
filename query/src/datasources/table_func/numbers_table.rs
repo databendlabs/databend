@@ -17,6 +17,8 @@ use std::any::Any;
 use std::mem::size_of;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
+use common_catalog::TableIOContext;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -117,7 +119,7 @@ impl Table for NumbersTable {
 
     fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
@@ -125,8 +127,11 @@ impl Table for NumbersTable {
 
         let statistics =
             Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
-        ctx.try_set_statistics(&statistics)?;
-        ctx.add_total_rows_approx(statistics.read_rows);
+
+        // TODO(xp): @drmingdrmer commented the following two lines.
+        //           It looks like some dirty hacking waiting for a refactor on it :DDD
+        // ctx.try_set_statistics(&statistics)?;
+        // ctx.add_total_rows_approx(statistics.read_rows);
 
         let tbl_arg = Some(vec![Expression::create_literal(DataValue::UInt64(Some(
             self.total,
@@ -138,7 +143,7 @@ impl Table for NumbersTable {
             table_id: self.table_id,
             table_version: None,
             schema: self.schema.clone(),
-            parts: generate_parts(0, ctx.get_settings().get_max_threads()?, total),
+            parts: generate_parts(0, io_ctx.get_max_threads() as u64, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",

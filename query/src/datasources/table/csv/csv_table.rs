@@ -17,10 +17,12 @@ use std::any::Any;
 use std::fs::File;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
+use common_catalog::TableIOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
@@ -88,7 +90,7 @@ impl Table for CsvTable {
 
     fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
@@ -106,7 +108,7 @@ impl Table for CsvTable {
             schema: self.tbl_info.schema.clone(),
             parts: generate_parts(
                 start_line as u64,
-                ctx.get_settings().get_max_threads()?,
+                io_ctx.get_max_threads() as u64,
                 lines_count as u64,
             ),
             statistics: Statistics::default(),

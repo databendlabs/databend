@@ -13,18 +13,18 @@
 //  limitations under the License.
 //
 
-use common_store_api_sdk::ClientConf;
-use common_store_api_sdk::RpcClientTlsConfig;
-use common_store_api_sdk::StoreClientConf;
+use common_flight_rpc::FlightClientConf;
+use common_flight_rpc::FlightClientTlsConfig;
+use common_meta::MetaFlightClientConf;
 
 use crate::configs::Config;
 
 // since `store-api-sdk` should not depends on query
 // we provide a converter for it -- just copy things around
-impl From<&Config> for StoreClientConf {
+impl From<&Config> for MetaFlightClientConf {
     fn from(conf: &Config) -> Self {
         let meta_tls_conf = if conf.tls_meta_cli_enabled() {
-            Some(RpcClientTlsConfig {
+            Some(FlightClientTlsConfig {
                 rpc_tls_server_root_ca_cert: conf.meta.rpc_tls_meta_server_root_ca_cert.clone(),
                 domain_name: conf.meta.rpc_tls_meta_service_domain_name.clone(),
             })
@@ -32,14 +32,14 @@ impl From<&Config> for StoreClientConf {
             None
         };
 
-        let meta_config = ClientConf {
+        let meta_config = FlightClientConf {
             address: conf.meta.meta_address.clone(),
             username: conf.meta.meta_username.clone(),
             password: conf.meta.meta_password.clone(),
             tls_conf: meta_tls_conf,
         };
 
-        StoreClientConf {
+        MetaFlightClientConf {
             // kv service is configured by conf.meta
             kv_service_config: meta_config.clone(),
             // copy meta config from query config

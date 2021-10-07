@@ -13,13 +13,6 @@
 //  limitations under the License.
 //
 
-mod aws_s3;
 mod azure_blob;
 mod builders;
 mod fuse_dfs;
-mod local;
-mod schemes;
-
-pub use aws_s3::S3;
-pub use local::Local;
-pub use schemes::StorageScheme;
