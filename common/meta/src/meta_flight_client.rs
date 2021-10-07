@@ -37,12 +37,12 @@ use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::store_client_conf::StoreClientConf;
-use crate::store_do_action::RequestFor;
-use crate::store_do_action::StoreDoAction;
+use crate::meta_flight_action::MetaFlightAction;
+use crate::meta_flight_action::RequestFor;
+use crate::meta_flight_client_conf::MetaFlightClientConf;
 
 #[derive(Clone)]
-pub struct StoreClient {
+pub struct MetaFlightClient {
     #[allow(dead_code)]
     token: Vec<u8>,
     pub(crate) timeout: Duration,
@@ -51,8 +51,8 @@ pub struct StoreClient {
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
-impl StoreClient {
-    pub async fn try_new(conf: &StoreClientConf) -> Result<StoreClient> {
+impl MetaFlightClient {
+    pub async fn try_new(conf: &MetaFlightClientConf) -> Result<MetaFlightClient> {
         Self::with_tls_conf(
             &conf.meta_service_config.address,
             &conf.meta_service_config.username,
@@ -62,10 +62,10 @@ impl StoreClient {
         .await
     }
 
-    pub fn sync_try_new(conf: &StoreClientConf) -> Result<StoreClient> {
+    pub fn sync_try_new(conf: &MetaFlightClientConf) -> Result<MetaFlightClient> {
         let cfg = conf.clone();
         STORE_RUNTIME.block_on(
-            async move { StoreClient::try_new(&cfg).await },
+            async move { MetaFlightClient::try_new(&cfg).await },
             STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
         )?
     }
@@ -92,7 +92,7 @@ impl StoreClient {
         let channel = res?;
 
         let mut client = FlightServiceClient::new(channel.clone());
-        let token = StoreClient::handshake(&mut client, timeout, username, password).await?;
+        let token = MetaFlightClient::handshake(&mut client, timeout, username, password).await?;
 
         let client = {
             let token = token.clone();
@@ -146,10 +146,10 @@ impl StoreClient {
     pub(crate) async fn do_action<T, R>(&self, v: T) -> Result<R>
     where
         T: RequestFor<Reply = R>,
-        T: Into<StoreDoAction>,
+        T: Into<MetaFlightAction>,
         R: DeserializeOwned,
     {
-        let act: StoreDoAction = v.into();
+        let act: MetaFlightAction = v.into();
         let req: Request<Action> = (&act).try_into()?;
         let mut req = common_tracing::inject_span_to_tonic_request(req);
 

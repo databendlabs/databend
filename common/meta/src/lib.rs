@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod meta_flight_client;
+#[macro_use]
+mod meta_flight_action;
+mod impl_flights;
+pub mod meta_api;
+mod meta_flight_client_conf;
+pub mod meta_flight_reply;
+
 pub use impl_flights::kv_api_impl;
 pub use impl_flights::meta_api_impl;
-pub use store_client::StoreClient;
-pub use store_client_conf::StoreClientConf;
-pub use store_do_action::RequestFor;
-pub use store_do_action::StoreDoAction;
-
-mod impl_flights;
-mod store_client;
-#[macro_use]
-mod store_do_action;
-pub mod meta_api;
-mod store_client_conf;
-pub mod vo;
+pub use meta_flight_action::MetaFlightAction;
+pub use meta_flight_action::RequestFor;
+pub use meta_flight_client::MetaFlightClient;
+pub use meta_flight_client_conf::MetaFlightClientConf;
 
 // ProtoBuf generated files.
 #[allow(clippy::all)]

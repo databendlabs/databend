@@ -16,10 +16,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta::vo::CreateDatabaseReply;
-use common_meta::vo::CreateTableReply;
-use common_meta::vo::DatabaseInfo;
-use common_meta::vo::TableInfo;
+use common_meta::meta_flight_reply::CreateDatabaseReply;
+use common_meta::meta_flight_reply::CreateTableReply;
+use common_meta::meta_flight_reply::DatabaseInfo;
+use common_meta::meta_flight_reply::TableInfo;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;

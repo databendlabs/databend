@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta::MetaFlightAction;
 use common_meta::RequestFor;
-use common_meta::StoreDoAction;
 use serde::Serialize;
 
 use crate::meta_service::MetaNode;
@@ -44,29 +44,35 @@ impl ActionHandler {
         ActionHandler { meta_node }
     }
 
-    pub async fn execute<S, R>(&self, action: StoreDoAction, s: S) -> common_exception::Result<R>
-    where S: ReplySerializer<Output = R> {
+    pub async fn execute<S, R>(
+        &self,
+        action: MetaFlightAction,
+        s: S,
+    ) -> common_exception::Result<R>
+    where
+        S: ReplySerializer<Output = R>,
+    {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
 
         match action {
-            StoreDoAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::UpdateKVMeta(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::GetKV(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::MGetKV(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::UpdateKVMeta(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::GetKV(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::MGetKV(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
 
             // database
-            StoreDoAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::GetDatabases(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::GetDatabases(a) => s.serialize(self.handle(a).await?),
 
             // table
-            StoreDoAction::CreateTable(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::DropTable(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::GetTable(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::GetTables(a) => s.serialize(self.handle(a).await?),
-            StoreDoAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::CreateTable(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::DropTable(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::GetTable(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::GetTables(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
         }
     }
 }
