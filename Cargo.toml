@@ -18,7 +18,7 @@ members = [
     "common/kv-apis/api",
     "common/kv-apis/util",
     "common/kv-apis/vo",
-    "common/kv",
+    "common/local-store",
     "common/management",
     "common/planners",
     "common/raft-store",

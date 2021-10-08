@@ -19,9 +19,9 @@ use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
 use common_exception::Result;
-use common_kv::KV;
 use common_kv_api::KVApi;
 use common_kv_api_vo::GetKVActionResult;
+use common_local_store::KV;
 use common_meta_types::NodeInfo;
 
 use super::*;
