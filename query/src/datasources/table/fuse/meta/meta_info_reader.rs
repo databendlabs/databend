@@ -16,23 +16,22 @@
 use std::sync::Arc;
 
 use common_arrow::parquet::read::read_metadata;
+use common_base::Runtime;
+use common_catalog::RawBlockStats;
+use common_catalog::SegmentInfo;
+use common_dal::DataAccessor;
+use common_dal::ObjectAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::table::fuse::read_segment;
-use crate::datasources::table::fuse::RawBlockStats;
-use crate::datasources::table::fuse::SegmentInfo;
-use crate::sessions::DatabendQueryContextRef;
 
 // TODO cache
 pub struct MetaInfoReader {
     da: Arc<dyn DataAccessor>,
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<Runtime>,
 }
 
 impl MetaInfoReader {
-    pub fn new(da: Arc<dyn DataAccessor>, ctx: DatabendQueryContextRef) -> Self {
+    pub fn new(da: Arc<dyn DataAccessor>, ctx: Arc<Runtime>) -> Self {
         MetaInfoReader { da, ctx }
     }
 }
@@ -56,6 +55,6 @@ impl MetaInfoReader {
     }
     #[allow(dead_code)]
     pub fn read_segment_info(&self, location: &str) -> Result<SegmentInfo> {
-        read_segment(self.da.clone(), &self.ctx, location)
+        ObjectAccessor::new(self.da.clone()).blocking_read_obj(&self.ctx, location)
     }
 }

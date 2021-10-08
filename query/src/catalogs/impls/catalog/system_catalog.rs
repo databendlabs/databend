@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_flight::meta_flight_reply::CreateDatabaseReply;
 use common_metatypes::MetaId;
 use common_metatypes::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -25,21 +26,11 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::configs::Config;
 use crate::datasources::database::system::SystemDatabase;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
-
-// min id for system tables (inclusive)
-pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;
-// max id for system tables (exclusive)
-pub const SYS_TBL_ID_END: u64 = SYS_TBL_ID_BEGIN + 10000;
-
-// min id for system tables (inclusive)
-// max id for local tables is u64:MAX
-pub const LOCAL_TBL_ID_BEGIN: u64 = SYS_TBL_ID_END;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
@@ -51,8 +42,8 @@ pub struct SystemCatalog {
 impl SystemCatalog {
     pub fn try_create_with_config(_conf: &Config) -> Result<Self> {
         let mut dbs = HashMap::new();
-        let sys_db = Arc::new(SystemDatabase::create()) as Arc<dyn Database>;
-        dbs.insert("system".to_owned(), sys_db);
+        let sys_db = Arc::new(SystemDatabase::create("system")) as Arc<dyn Database>;
+        dbs.insert(sys_db.name().to_owned(), sys_db);
         Ok(Self { dbs })
     }
 }
@@ -85,10 +76,6 @@ impl Catalog for SystemCatalog {
         Ok(db.clone())
     }
 
-    fn exists_database(&self, db_name: &str) -> Result<bool> {
-        Ok(self.dbs.contains_key(db_name))
-    }
-
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
         let db = self.get_database(db_name)?;
         db.get_table(table_name)
@@ -104,23 +91,7 @@ impl Catalog for SystemCatalog {
         db.get_table_by_id(table_id, table_version)
     }
 
-    fn get_table_function(&self, func_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        let databases = self.get_databases()?;
-        for database in databases {
-            let funcs = database.get_table_functions()?;
-            for func in funcs {
-                if func.raw().name() == func_name {
-                    return Ok(func);
-                }
-            }
-        }
-        Err(ErrorCode::UnknownTableFunction(format!(
-            "Unknown table function: '{}'",
-            func_name
-        )))
-    }
-
-    fn create_database(&self, _plan: CreateDatabasePlan) -> Result<()> {
+    fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         Err(ErrorCode::UnImplement("Cannot create system database"))
     }
 

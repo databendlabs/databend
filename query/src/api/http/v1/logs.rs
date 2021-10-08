@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::Infallible;
+use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::body::Full;
@@ -23,7 +24,6 @@ use axum::response::Html;
 use axum::response::IntoResponse;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_planners::ScanPlan;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
@@ -72,10 +72,12 @@ async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataB
     let tracing_table_meta = context.get_table("system", "tracing")?;
 
     let tracing_table = tracing_table_meta.raw();
+
+    let io_ctx = context.get_single_node_table_io_context()?;
     let tracing_table_read_plan = tracing_table.read_plan(
-        context.clone(),
-        &ScanPlan::empty(),
-        context.get_settings().get_max_threads()? as usize,
+        Arc::new(io_ctx),
+        None,
+        Some(context.get_settings().get_max_threads()? as usize),
     )?;
 
     tracing_table

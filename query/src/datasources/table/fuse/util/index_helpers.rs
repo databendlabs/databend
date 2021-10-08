@@ -13,12 +13,12 @@
 //  limitations under the License.
 //
 
+use common_catalog::BlockLocation;
+use common_catalog::TableSnapshot;
 use common_exception::Result;
 use common_planners::Extras;
 
-use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::MetaInfoReader;
-use crate::datasources::table::fuse::TableSnapshot;
 
 struct TableSparseIndex {}
 struct CacheMgr;
@@ -36,7 +36,7 @@ impl TableSparseIndex {
 
     // Returns an iterator or stream would be better
     // let's begin with
-    pub fn apply(&self, _expression: &Extras) -> Result<Vec<BlockLocation>> {
+    pub fn apply(&self, _expression: &Option<Extras>) -> Result<Vec<BlockLocation>> {
         // prunes blocks
         todo!()
     }
@@ -44,7 +44,7 @@ impl TableSparseIndex {
 
 pub fn range_filter(
     table_snapshot: &TableSnapshot,
-    push_down: &Extras,
+    push_down: &Option<Extras>,
     // MetaInfoReader takes care of caching itself
     meta_reader: MetaInfoReader,
 ) -> Result<Vec<BlockLocation>> {

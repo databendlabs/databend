@@ -14,10 +14,12 @@
 //
 
 use std::env;
+use std::sync::Arc;
 
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -37,17 +39,21 @@ async fn test_parquet_table() -> Result<()> {
     .collect();
 
     let ctx = crate::tests::try_create_context()?;
-    let table = ParquetTable::try_create(
-        "default".into(),
-        "test_parquet".into(),
-        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
-        options,
-    )?;
+    let tbl_info = TableInfo {
+        db: "default".to_string(),
+        table_id: 0,
+        name: "test_parquet".to_string(),
+        schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
+        engine: "test_parquet".into(),
+        options: options,
+    };
+    let table = ParquetTable::try_create(tbl_info)?;
 
+    let io_ctx = ctx.get_single_node_table_io_context()?;
     let source_plan = table.read_plan(
-        ctx.clone(),
-        &ScanPlan::empty(),
-        ctx.get_settings().get_max_threads()? as usize,
+        Arc::new(io_ctx),
+        None,
+        Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;

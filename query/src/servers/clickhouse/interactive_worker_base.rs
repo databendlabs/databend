@@ -22,6 +22,7 @@ use common_base::tokio;
 use common_base::tokio::sync::mpsc::channel;
 use common_base::tokio::time::interval;
 use common_base::ProgressValues;
+use common_base::TrySpawn;
 use common_clickhouse_srv::types::Block as ClickHouseBlock;
 use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
@@ -94,7 +95,7 @@ impl InteractiveWorkerBase {
                     }
                 });
 
-                ctx.execute_task(async move {
+                ctx.try_spawn(async move {
                     while let Some(block) = data_stream.next().await {
                         tx2.send(BlockItem::Block(block)).await.ok();
                     }
@@ -132,7 +133,7 @@ impl InteractiveWorkerBase {
         // the data is comming in async mode
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
-        ctx.execute_task(async move {
+        ctx.try_spawn(async move {
             interpreter.execute().await.unwrap();
             sent_all_data.notify_one();
         })?;

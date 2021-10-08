@@ -14,7 +14,6 @@
 
 use std::cell::RefCell;
 
-use databend_dfs::configs::Config as StoreConfig;
 use databend_query::configs::Config as QueryConfig;
 use tempfile::tempdir;
 

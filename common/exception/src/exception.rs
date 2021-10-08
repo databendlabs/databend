@@ -178,6 +178,7 @@ build_exceptions! {
     TLSConfigurationFailure(52),
     UnknownSession(53),
     UnexpectedError(54),
+    DateTimeParseError(55),
 
     // uncategorized
     UnexpectedResponseType(600),
@@ -265,6 +266,7 @@ build_exceptions! {
 
     // DAL error
     DALTransportError(7000),
+    UnknownStorageSchemeName(7001),
 
 
     // datasource error
@@ -283,6 +285,8 @@ build_exceptions! {
     // A task that already started and can not start twice.
     AlreadyStopped(7102),
 
+    // Trying to cast to a invalid type
+    InvalidCast(7201),
 }
 
 pub type Result<T> = std::result::Result<T, ErrorCode>;

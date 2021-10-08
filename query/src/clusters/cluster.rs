@@ -21,11 +21,11 @@ use common_base::tokio::time::sleep as tokio_async_sleep;
 use common_base::GlobalUniqName;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_flight_rpc::ConnectionFactory;
 use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
-use common_management::NodeInfo;
-use common_store_api_sdk::ConnectionFactory;
+use common_metatypes::NodeInfo;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -127,6 +127,10 @@ impl Cluster {
 
     pub fn is_local(&self, node: &NodeInfo) -> bool {
         node.id == self.local_id
+    }
+
+    pub fn local_id(&self) -> String {
+        self.local_id.clone()
     }
 
     pub async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient> {

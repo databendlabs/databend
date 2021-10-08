@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
@@ -367,8 +368,7 @@ where T: AggregateArgMinMaxState
     }
 }
 
-pub fn try_create_aggregate_arg_minmax_function(
-    is_min: bool,
+pub fn try_create_aggregate_arg_minmax_function<const IS_MIN: bool>(
     display_name: &str,
     _params: Vec<DataValue>,
     arguments: Vec<DataField>,
@@ -378,7 +378,7 @@ pub fn try_create_aggregate_arg_minmax_function(
 
     with_match_primitive_type!(data_type, |$T| {
         type AggState = NumericState<$T>;
-        if is_min {
+        if IS_MIN {
              AggregateArgMinMaxFunction::<AggState>::try_create_arg_min(
                 display_name,
                 arguments,
@@ -394,7 +394,7 @@ pub fn try_create_aggregate_arg_minmax_function(
 
     {
         if data_type == &DataType::String {
-            if is_min {
+            if IS_MIN {
                 return AggregateArgMinMaxFunction::<StringState>::try_create_arg_min(
                     display_name,
                     arguments,
@@ -412,4 +412,16 @@ pub fn try_create_aggregate_arg_minmax_function(
             data_type
         )))
     })
+}
+
+pub fn aggregate_arg_min_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_arg_minmax_function::<true>,
+    ))
+}
+
+pub fn aggregate_arg_max_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(
+        try_create_aggregate_arg_minmax_function::<false>,
+    ))
 }

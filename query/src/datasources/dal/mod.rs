@@ -13,14 +13,4 @@
 //  limitations under the License.
 //
 
-mod blob_accessor;
 mod impls;
-
-pub use blob_accessor::AsyncSeekableReader;
-pub use blob_accessor::Bytes;
-pub use blob_accessor::DataAccessor;
-pub use blob_accessor::InputStream;
-pub use blob_accessor::SeekableReader;
-pub use impls::Local;
-pub use impls::StorageScheme;
-pub use impls::S3;

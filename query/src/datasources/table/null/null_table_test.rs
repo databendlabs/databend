@@ -20,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -32,12 +33,14 @@ async fn test_null_table() -> Result<()> {
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = NullTable::try_create(
-        "default".into(),
-        "a".into(),
-        DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
-        TableOptions::default(),
-    )?;
+    let table = NullTable::try_create(TableInfo {
+        db: "default".into(),
+        name: "a".into(),
+        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
+        engine: "Null".to_string(),
+        options: TableOptions::default(),
+        table_id: 0,
+    })?;
 
     // append data.
     {
@@ -60,10 +63,11 @@ async fn test_null_table() -> Result<()> {
 
     // read.
     {
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let source_plan = table.read_plan(
-            ctx.clone(),
-            &ScanPlan::empty(),
-            ctx.get_settings().get_max_threads()? as usize,
+            Arc::new(io_ctx),
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         assert_eq!(table.engine(), "Null");
 

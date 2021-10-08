@@ -15,15 +15,11 @@
 
 // consider remove these, read_util seems to be enough (type could be inferred)
 mod segment_reader;
-mod snapshot_reader;
 // end
 
 mod block_appender;
 mod block_reader;
-mod reader_util;
 
 pub use block_appender::*;
 pub use block_reader::*;
-pub use reader_util::*;
 pub use segment_reader::*;
-pub use snapshot_reader::*;

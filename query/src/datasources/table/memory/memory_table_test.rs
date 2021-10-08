@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -33,12 +34,14 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = MemoryTable::try_create(
-        "default".into(),
-        "a".into(),
-        schema.clone(),
-        TableOptions::default(),
-    )?;
+    let table = MemoryTable::try_create(TableInfo {
+        db: "default".into(),
+        name: "a".into(),
+        schema: schema.clone(),
+        engine: "Memory".to_string(),
+        options: TableOptions::default(),
+        table_id: 0,
+    })?;
 
     // append data.
     {
@@ -65,10 +68,11 @@ async fn test_memorytable() -> Result<()> {
 
     // read.
     {
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let source_plan = table.read_plan(
-            ctx.clone(),
-            &ScanPlan::empty(),
-            ctx.get_settings().get_max_threads()? as usize,
+            Arc::new(io_ctx),
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
@@ -98,10 +102,11 @@ async fn test_memorytable() -> Result<()> {
         };
         table.truncate(ctx.clone(), truncate_plan).await?;
 
+        let io_ctx = ctx.get_single_node_table_io_context()?;
         let source_plan = table.read_plan(
-            ctx.clone(),
-            &ScanPlan::empty(),
-            ctx.get_settings().get_max_threads()? as usize,
+            Arc::new(io_ctx),
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         let stream = table.read(ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

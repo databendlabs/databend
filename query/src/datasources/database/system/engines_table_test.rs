@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -26,11 +27,13 @@ async fn test_engines_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     ctx.get_settings().set_max_threads(2)?;
 
-    let table = EnginesTable::create();
+    let table = EnginesTable::create(1);
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+
     let source_plan = table.read_plan(
-        ctx.clone(),
-        &ScanPlan::empty(),
-        ctx.get_settings().get_max_threads()? as usize,
+        Arc::new(io_ctx),
+        None,
+        Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;

@@ -15,12 +15,13 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -30,12 +31,14 @@ use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct ConfigsTable {
+    table_id: u64,
     schema: DataSchemaRef,
 }
 
 impl ConfigsTable {
-    pub fn create() -> Self {
+    pub fn create(table_id: u64) -> Self {
         ConfigsTable {
+            table_id,
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("name", DataType::String, false),
                 DataField::new("value", DataType::String, false),
@@ -84,21 +87,25 @@ impl Table for ConfigsTable {
         Ok(self.schema.clone())
     }
 
+    fn get_id(&self) -> u64 {
+        self.table_id
+    }
+
     fn is_local(&self) -> bool {
         true
     }
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        _partitions: usize,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
-            table_id: scan.table_id,
-            table_version: scan.table_version,
+            table_id: self.table_id,
+            table_version: None,
             schema: self.schema.clone(),
             parts: vec![Part {
                 name: "".to_string(),
@@ -106,8 +113,10 @@ impl Table for ConfigsTable {
             }],
             statistics: Statistics::default(),
             description: "(Read from system.configs table)".to_string(),
-            scan_plan: Arc::new(scan.clone()),
+            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
             remote: false,
+            tbl_args: None,
+            push_downs: None,
         })
     }
 
@@ -154,17 +163,6 @@ impl Table for ConfigsTable {
             &mut descs,
             "meta".to_string(),
             meta_config_value,
-        );
-
-        let store_config = config.store;
-        let store_config_value = serde_json::to_value(store_config)?;
-        ConfigsTable::extract_config(
-            &mut names,
-            &mut values,
-            &mut groups,
-            &mut descs,
-            "dfs".to_string(),
-            store_config_value,
         );
 
         let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();

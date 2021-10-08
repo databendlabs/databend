@@ -19,6 +19,10 @@ use super::interval_function::MonthsArithmeticFunction;
 use super::interval_function::SecondsArithmeticFunction;
 use super::now::NowFunction;
 use super::RoundFunction;
+use super::ToDayOfMonthFunction;
+use super::ToDayOfWeekFunction;
+use super::ToDayOfYearFunction;
+use super::ToMonthFunction;
 use super::ToStartOfISOYearFunction;
 use super::ToStartOfMonthFunction;
 use super::ToStartOfQuarterFunction;
@@ -30,156 +34,135 @@ use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
-use crate::scalars::FactoryFuncRef;
+use crate::scalars::function_factory::FactoryCreator;
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct DateFunction {}
 
 impl DateFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert("today".into(), TodayFunction::try_create);
-        map.insert("yesterday".into(), YesterdayFunction::try_create);
-        map.insert("tomorrow".into(), TomorrowFunction::try_create);
-        map.insert("now".into(), NowFunction::try_create);
-        map.insert("toYYYYMM".into(), ToYYYYMMFunction::try_create);
-        map.insert("toYYYYMMDD".into(), ToYYYYMMDDFunction::try_create);
-        map.insert(
-            "toYYYYMMDDhhmmss".into(),
-            ToYYYYMMDDhhmmssFunction::try_create,
-        );
-        map.insert("toStartOfYear".into(), ToStartOfYearFunction::try_create);
-        map.insert(
-            "toStartOfISOYear".into(),
-            ToStartOfISOYearFunction::try_create,
-        );
-        map.insert(
-            "toStartOfQuarter".into(),
-            ToStartOfQuarterFunction::try_create,
-        );
-        map.insert("toStartOfWeek".into(), ToStartOfWeekFunction::try_create);
-        map.insert("toStartOfMonth".into(), ToStartOfMonthFunction::try_create);
+    fn round_function_creator(round: u32) -> FunctionDescription {
+        let creator: FactoryCreator = Box::new(move |display_name| -> Result<Box<dyn Function>> {
+            RoundFunction::try_create(display_name, round)
+        });
+
+        FunctionDescription::creator(creator).features(FunctionFeatures::default().deterministic())
+    }
+
+    fn month_arithmetic_function_creator(factor: i64) -> FunctionDescription {
+        /* one year is 12 months */
+        let function_creator: FactoryCreator = match factor.is_positive() {
+            true => Box::new(move |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    factor,
+                )
+            }),
+            false => Box::new(move |display_name| {
+                MonthsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    -factor,
+                )
+            }),
+        };
+
+        FunctionDescription::creator(function_creator)
+            .features(FunctionFeatures::default().deterministic())
+    }
+
+    fn seconds_arithmetic_function_creator(factor: i64) -> FunctionDescription {
+        /* one day is 24 * 3600 seconds */
+        let function_creator: FactoryCreator = match factor.is_positive() {
+            true => Box::new(move |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Plus,
+                    factor,
+                )
+            }),
+            false => Box::new(move |display_name| {
+                SecondsArithmeticFunction::try_create(
+                    display_name,
+                    DataValueArithmeticOperator::Minus,
+                    -factor,
+                )
+            }),
+        };
+
+        FunctionDescription::creator(function_creator)
+            .features(FunctionFeatures::default().deterministic())
+    }
+
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("today", TodayFunction::desc());
+        factory.register("yesterday", YesterdayFunction::desc());
+        factory.register("tomorrow", TomorrowFunction::desc());
+        factory.register("now", NowFunction::desc());
+        factory.register("toYYYYMM", ToYYYYMMFunction::desc());
+        factory.register("toYYYYMMDD", ToYYYYMMDDFunction::desc());
+        factory.register("toYYYYMMDDhhmmss", ToYYYYMMDDhhmmssFunction::desc());
+        factory.register("toStartOfYear", ToStartOfYearFunction::desc());
+        factory.register("toStartOfISOYear", ToStartOfISOYearFunction::desc());
+        factory.register("toStartOfQuarter", ToStartOfQuarterFunction::desc());
+        factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
+        factory.register("toStartOfMonth", ToStartOfMonthFunction::desc());
+        factory.register("toMonth", ToMonthFunction::desc());
+        factory.register("toDayOfYear", ToDayOfYearFunction::desc());
+        factory.register("toDayOfMonth", ToDayOfMonthFunction::desc());
+        factory.register("toDayOfWeek", ToDayOfWeekFunction::desc());
 
         // rounders
-        {
-            map.insert("toStartOfSecond".into(), |display_name| {
-                RoundFunction::try_create(display_name, 1)
-            });
+        factory.register("toStartOfSecond", Self::round_function_creator(1));
+        factory.register("toStartOfMinute", Self::round_function_creator(60));
+        factory.register("toStartOfFiveMinutes", Self::round_function_creator(5 * 60));
+        factory.register("toStartOfTenMinutes", Self::round_function_creator(10 * 60));
+        factory.register(
+            "toStartOfFifteenMinutes",
+            Self::round_function_creator(15 * 60),
+        );
+        factory.register("timeSlot", Self::round_function_creator(30 * 60));
+        factory.register("toStartOfHour", Self::round_function_creator(60 * 60));
+        factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
 
-            map.insert("toStartOfMinute".into(), |display_name| {
-                RoundFunction::try_create(display_name, 60)
-            });
+        //interval functions
+        factory.register("addYears", Self::month_arithmetic_function_creator(12));
+        factory.register("addMonths", Self::month_arithmetic_function_creator(1));
+        factory.register(
+            "addDays",
+            Self::seconds_arithmetic_function_creator(24 * 3600),
+        );
+        factory.register("addHours", Self::seconds_arithmetic_function_creator(3600));
+        factory.register("addMinutes", Self::seconds_arithmetic_function_creator(60));
+        factory.register("addSeconds", Self::seconds_arithmetic_function_creator(1));
 
-            map.insert("toStartOfFiveMinutes".into(), |display_name| {
-                RoundFunction::try_create(display_name, 5 * 60)
-            });
-
-            map.insert("toStartOfTenMinutes".into(), |display_name| {
-                RoundFunction::try_create(display_name, 10 * 60)
-            });
-
-            map.insert("toStartOfFifteenMinutes".into(), |display_name| {
-                RoundFunction::try_create(display_name, 15 * 60)
-            });
-
-            map.insert("timeSlot".into(), |display_name| {
-                RoundFunction::try_create(display_name, 30 * 60)
-            });
-            map.insert("toStartOfHour".into(), |display_name| {
-                RoundFunction::try_create(display_name, 60 * 60)
-            });
-            map.insert("toStartOfDay".into(), |display_name| {
-                RoundFunction::try_create(display_name, 60 * 60 * 24)
-            });
-        }
-
-        {
-            //interval functions
-            map.insert("addYears".into(), |display_name| {
-                MonthsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Plus,
-                    12, /* one year is 12 months */
-                )
-            });
-            map.insert("subtractYears".into(), |display_name| {
-                MonthsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Minus,
-                    12, /* one year is 12 months */
-                )
-            });
-            map.insert("addMonths".into(), |display_name| {
-                MonthsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Plus,
-                    1,
-                )
-            });
-            map.insert("subtractMonths".into(), |display_name| {
-                MonthsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Minus,
-                    1,
-                )
-            });
-            map.insert("addDays".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Plus,
-                    24 * 3600, /* one day is 24 * 3600 seconds */
-                )
-            });
-            map.insert("subtractDays".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Minus,
-                    24 * 3600, /* one day is 24 * 3600 seconds */
-                )
-            });
-            map.insert("addHours".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Plus,
-                    3600, /* one hour is 3600 seconds */
-                )
-            });
-            map.insert("subtractHours".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Minus,
-                    3600, /* one hour is 3600 seconds */
-                )
-            });
-            map.insert("addMinutes".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Plus,
-                    60, /* one minute is 60 seconds */
-                )
-            });
-            map.insert("subtractMinutes".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Minus,
-                    60, /* one minute is 60 seconds */
-                )
-            });
-            map.insert("addSeconds".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Plus,
-                    1,
-                )
-            });
-            map.insert("subtractSeconds".into(), |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueArithmeticOperator::Minus,
-                    1,
-                )
-            });
-        }
-        Ok(())
+        factory.register(
+            "subtractYears",
+            Self::month_arithmetic_function_creator(-12),
+        );
+        factory.register(
+            "subtractMonths",
+            Self::month_arithmetic_function_creator(-1),
+        );
+        factory.register(
+            "subtractDays",
+            Self::seconds_arithmetic_function_creator(-(24 * 3600)),
+        );
+        factory.register(
+            "subtractHours",
+            Self::seconds_arithmetic_function_creator(-3600),
+        );
+        factory.register(
+            "subtractMinutes",
+            Self::seconds_arithmetic_function_creator(-60),
+        );
+        factory.register(
+            "subtractSeconds",
+            Self::seconds_arithmetic_function_creator(-1),
+        );
     }
 }

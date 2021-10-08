@@ -116,7 +116,7 @@ where T: DFPrimitiveType + NumComp + Simd8
     }
 
     fn comparison_scalar(&self, rhs: T, op: Operator) -> Result<DFBooleanArray> {
-        let array = primitive_compare_scalar(&self.array, rhs, op);
+        let array = primitive_compare_scalar(&self.array, &Some(rhs).into(), op);
         Ok(array.into())
     }
 }
@@ -178,7 +178,7 @@ impl DFBooleanArray {
     }
 
     fn comparison_scalar(&self, rhs: bool, op: Operator) -> Result<DFBooleanArray> {
-        let array = boolean_compare_scalar(&self.array, rhs, op);
+        let array = boolean_compare_scalar(&self.array, &Some(rhs).into(), op);
         Ok(array.into())
     }
 }
@@ -216,7 +216,7 @@ impl DFStringArray {
     }
 
     fn comparison_scalar(&self, rhs: &[u8], op: Operator) -> Result<DFBooleanArray> {
-        let array = binary_compare_scalar(&self.array, rhs, op);
+        let array = binary_compare_scalar(&self.array, &Some(rhs).into(), op);
         Ok(array.into())
     }
 

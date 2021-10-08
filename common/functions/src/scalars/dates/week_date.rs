@@ -25,6 +25,8 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone, Debug)]
@@ -35,6 +37,8 @@ pub struct WeekFunction<T, R> {
 }
 
 pub trait WeekResultFunction<R> {
+    const IS_DETERMINISTIC: bool;
+
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>, mode: Option<u64>) -> R;
     fn to_constant_value(_value: DateTime<Utc>, mode: Option<u64>) -> DataValue;
@@ -44,6 +48,8 @@ pub trait WeekResultFunction<R> {
 pub struct ToStartOfWeek;
 
 impl WeekResultFunction<u32> for ToStartOfWeek {
+    const IS_DETERMINISTIC: bool = true;
+
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
     }
@@ -76,6 +82,16 @@ where
             t: PhantomData,
             r: PhantomData,
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        let mut features = FunctionFeatures::default();
+
+        if T::IS_DETERMINISTIC {
+            features = features.deterministic();
+        }
+
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
@@ -134,13 +150,13 @@ where
             },
             DataType::Date32 => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
-                    let date_time = Utc.timestamp(v.as_u64()? as i64 * 24 * 3600, 0_u32);
+                    let date_time = Utc.timestamp(v.as_i64()?  * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time, mode);
                     Ok(DataColumn::Constant(constant_result, input_rows))
                 } else {
                     let result = columns[0].column()
                         .to_array()?
-                        .u32()?
+                        .i32()?
                         .apply_cast_numeric(|v| {
                             let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                             T::to_number(date_time, mode)
@@ -151,7 +167,7 @@ where
             },
             DataType::DateTime32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
-                    let date_time = Utc.timestamp(v.as_u64()? as i64, 0_u32);
+                    let date_time = Utc.timestamp(v.as_i64()?, 0_u32);
                     let constant_result = T::to_constant_value(date_time, mode);
                     Ok(DataColumn::Constant(constant_result, input_rows))
                 } else {

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
-use crate::scalars::FactoryFuncRef;
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::IsNotNullFunction;
 use crate::scalars::IsNullFunction;
 
@@ -22,12 +20,8 @@ use crate::scalars::IsNullFunction;
 pub struct NullableFunction;
 
 impl NullableFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-
-        map.insert("isnull".into(), IsNullFunction::try_create_func);
-        map.insert("isnotnull".into(), IsNotNullFunction::try_create_func);
-
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("isnull", IsNullFunction::desc());
+        factory.register("isnotnull", IsNotNullFunction::desc());
     }
 }

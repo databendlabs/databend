@@ -50,9 +50,10 @@ impl ConstantFoldingImpl {
 
     fn rewrite_function<F>(op: &str, args: Expressions, name: String, f: F) -> Result<Expression>
     where F: Fn(&str, Expressions) -> Expression {
-        let function = FunctionFactory::get(op)?;
+        let factory = FunctionFactory::instance();
+        let function_features = factory.get_features(op)?;
 
-        if function.is_deterministic() && ConstantFoldingImpl::constants_arguments(&args) {
+        if function_features.is_deterministic && Self::constants_arguments(&args) {
             let op = op.to_string();
             return ConstantFoldingImpl::execute_expression(
                 Expression::ScalarFunction { op, args },
@@ -61,24 +62,6 @@ impl ConstantFoldingImpl {
         }
 
         Ok(f(op, args))
-    }
-
-    fn create_scalar_function(op: &str, args: Expressions) -> Expression {
-        let op = op.to_string();
-        Expression::ScalarFunction { op, args }
-    }
-
-    fn create_unary_expression(op: &str, mut args: Expressions) -> Expression {
-        let op = op.to_string();
-        let expr = Box::new(args.remove(0));
-        Expression::UnaryExpression { op, expr }
-    }
-
-    fn create_binary_expression(op: &str, mut args: Expressions) -> Expression {
-        let op = op.to_string();
-        let left = Box::new(args.remove(0));
-        let right = Box::new(args.remove(0));
-        Expression::BinaryExpression { op, left, right }
     }
 
     fn expr_executor(schema: &DataSchemaRef, expr: Expression) -> Result<ExpressionExecutor> {
@@ -142,12 +125,22 @@ impl PlanRewriter for ConstantFoldingImpl {
                     .collect::<Result<Vec<_>>>()?;
 
                 let origin_name = origin.column_name();
-                Self::rewrite_function(op, new_args, origin_name, Self::create_scalar_function)
+                Self::rewrite_function(
+                    op,
+                    new_args,
+                    origin_name,
+                    Expression::create_scalar_function,
+                )
             }
             Expression::UnaryExpression { op, expr } => {
                 let origin_name = origin.column_name();
                 let new_expr = vec![self.rewrite_expr(schema, expr)?];
-                Self::rewrite_function(op, new_expr, origin_name, Self::create_unary_expression)
+                Self::rewrite_function(
+                    op,
+                    new_expr,
+                    origin_name,
+                    Expression::create_unary_expression,
+                )
             }
             Expression::BinaryExpression { op, left, right } => {
                 let new_left = self.rewrite_expr(schema, left)?;
@@ -155,7 +148,12 @@ impl PlanRewriter for ConstantFoldingImpl {
 
                 let origin_name = origin.column_name();
                 let new_exprs = vec![new_left, new_right];
-                Self::rewrite_function(op, new_exprs, origin_name, Self::create_binary_expression)
+                Self::rewrite_function(
+                    op,
+                    new_exprs,
+                    origin_name,
+                    Expression::create_binary_expression,
+                )
             }
             Expression::Cast { expr, data_type } => {
                 let new_expr = self.rewrite_expr(schema, expr)?;

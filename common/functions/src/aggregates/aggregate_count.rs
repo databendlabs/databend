@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
 
@@ -46,6 +47,10 @@ impl AggregateCountFunction {
             display_name: display_name.to_string(),
             arguments,
         }))
+    }
+
+    pub fn desc() -> AggregateFunctionDescription {
+        AggregateFunctionDescription::creator(Box::new(Self::try_create))
     }
 }
 

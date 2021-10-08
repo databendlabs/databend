@@ -203,7 +203,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     }
 
     /// Get the null count and the buffer of bits representing null values
-    pub fn null_bits(&self) -> (usize, &Option<Bitmap>) {
+    pub fn null_bits(&self) -> (usize, Option<&Bitmap>) {
         (self.array.null_count(), self.array.validity())
     }
 

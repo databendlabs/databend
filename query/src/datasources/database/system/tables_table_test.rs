@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
@@ -23,11 +24,12 @@ use crate::datasources::database::system::TablesTable;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
-    let table = TablesTable::create();
+    let table = TablesTable::create(1);
+    let io_ctx = ctx.get_single_node_table_io_context()?;
     let source_plan = table.read_plan(
-        ctx.clone(),
-        &ScanPlan::empty(),
-        ctx.get_settings().get_max_threads()? as usize,
+        Arc::new(io_ctx),
+        None,
+        Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
     let stream = table.read(ctx, &source_plan).await?;
@@ -36,25 +38,22 @@ async fn test_tables_table() -> Result<()> {
     assert_eq!(block.num_columns(), 3);
 
     let expected = vec![
-        "+----------+---------------+--------------------+",
-        "| database | name          | engine             |",
-        "+----------+---------------+--------------------+",
-        "| system   | clusters      | SystemClusters     |",
-        "| system   | configs       | SystemConfigs      |",
-        "| system   | contributors  | SystemContributors |",
-        "| system   | credits       | SystemCredits      |",
-        "| system   | databases     | SystemDatabases    |",
-        "| system   | engines       | SystemEngines      |",
-        "| system   | functions     | SystemFunctions    |",
-        "| system   | numbers       | SystemNumbers      |",
-        "| system   | numbers_local | SystemNumbersLocal |",
-        "| system   | numbers_mt    | SystemNumbersMt    |",
-        "| system   | one           | SystemOne          |",
-        "| system   | processes     | SystemProcesses    |",
-        "| system   | settings      | SystemSettings     |",
-        "| system   | tables        | SystemTables       |",
-        "| system   | tracing       | SystemTracing      |",
-        "+----------+---------------+--------------------+",
+        "+----------+--------------+--------------------+",
+        "| database | name         | engine             |",
+        "+----------+--------------+--------------------+",
+        "| system   | clusters     | SystemClusters     |",
+        "| system   | configs      | SystemConfigs      |",
+        "| system   | contributors | SystemContributors |",
+        "| system   | credits      | SystemCredits      |",
+        "| system   | databases    | SystemDatabases    |",
+        "| system   | engines      | SystemEngines      |",
+        "| system   | functions    | SystemFunctions    |",
+        "| system   | one          | SystemOne          |",
+        "| system   | processes    | SystemProcesses    |",
+        "| system   | settings     | SystemSettings     |",
+        "| system   | tables       | SystemTables       |",
+        "| system   | tracing      | SystemTracing      |",
+        "+----------+--------------+--------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

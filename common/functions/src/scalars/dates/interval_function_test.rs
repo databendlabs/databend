@@ -44,7 +44,7 @@ fn test_add_months() -> Result<()> {
 
     let blocks = DataBlock::create_by_array(schema.clone(), vec![
         Series::new(vec![dt_to_days("2020-02-29T10:00:00Z") as u16]),
-        Series::new(vec![dt_to_days("2020-02-29T10:00:00Z") as u32]),
+        Series::new(vec![dt_to_days("2020-02-29T10:00:00Z") as i32]),
         Series::new(vec![dt_to_seconds("2020-02-29T01:02:03Z") as u32]),
         Series::new(vec![12_u8]),
         Series::new(vec![12_u16]),
@@ -89,24 +89,24 @@ fn test_add_months() -> Result<()> {
     }
 
     {
-        let mut expects: Vec<u32> = Vec::new();
+        let mut expects: Vec<i32> = Vec::new();
         expects.reserve(8);
         for c in ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"] {
             let col = add_months.eval(&[column("date32"), column(c)], 1)?;
-            let raw = col.to_array()?.u32()?.inner().values().as_slice().to_vec();
+            let raw = col.to_array()?.i32()?.inner().values().as_slice().to_vec();
             assert_eq!(raw.len(), 1);
-            assert_eq!(col.data_type(), DataType::UInt32);
+            assert_eq!(col.data_type(), DataType::Int32);
             expects.push(raw[0]);
         }
         assert_eq!(expects, vec![
-            dt_to_days("2021-02-28T10:00:00Z") as u32,
-            dt_to_days("2021-02-28T10:00:00Z") as u32,
-            dt_to_days("2021-02-28T10:00:00Z") as u32,
-            dt_to_days("2021-02-28T10:00:00Z") as u32,
-            dt_to_days("2019-01-29T10:00:00Z") as u32,
-            dt_to_days("2019-01-29T10:00:00Z") as u32,
-            dt_to_days("2019-01-29T10:00:00Z") as u32,
-            dt_to_days("2019-01-29T10:00:00Z") as u32,
+            dt_to_days("2021-02-28T10:00:00Z") as i32,
+            dt_to_days("2021-02-28T10:00:00Z") as i32,
+            dt_to_days("2021-02-28T10:00:00Z") as i32,
+            dt_to_days("2021-02-28T10:00:00Z") as i32,
+            dt_to_days("2019-01-29T10:00:00Z") as i32,
+            dt_to_days("2019-01-29T10:00:00Z") as i32,
+            dt_to_days("2019-01-29T10:00:00Z") as i32,
+            dt_to_days("2019-01-29T10:00:00Z") as i32,
         ]);
     }
 

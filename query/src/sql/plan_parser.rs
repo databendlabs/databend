@@ -722,13 +722,17 @@ impl PlanParser {
                     })
                     .and_then(|builder| builder.build())
                     .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                        PlanNode::Scan(ref dummy_scan_plan) => table
-                            .read_plan(
-                                self.ctx.clone(),
-                                dummy_scan_plan,
-                                self.ctx.get_settings().get_max_threads()? as usize,
-                            )
-                            .map(PlanNode::ReadSource),
+                        PlanNode::Scan(ref dummy_scan_plan) => {
+                            // TODO(xp): is it possible to use get_cluster_table_io_context() here?
+                            let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                            table
+                                .read_plan(
+                                    Arc::new(io_ctx),
+                                    Some(dummy_scan_plan.push_downs.clone()),
+                                    Some(self.ctx.get_settings().get_max_threads()? as usize),
+                                )
+                                .map(PlanNode::ReadSource)
+                        }
                         _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
                     })
             })
@@ -747,7 +751,7 @@ impl PlanParser {
                     db_name = name.0[0].to_string();
                     table_name = name.0[1].to_string();
                 }
-                let mut table_args = None;
+                let table_args = None;
                 let meta_id;
                 let meta_version;
                 let table;
@@ -761,16 +765,23 @@ impl PlanParser {
                     }
 
                     let empty_schema = Arc::new(DataSchema::empty());
-                    match &args[0] {
-                        FunctionArg::Named { arg, .. } => {
-                            table_args = Some(self.sql_to_rex(arg, empty_schema.as_ref(), None)?);
-                        }
-                        FunctionArg::Unnamed(arg) => {
-                            table_args = Some(self.sql_to_rex(arg, empty_schema.as_ref(), None)?);
-                        }
-                    }
+                    let table_args = args.iter().try_fold(
+                        Vec::with_capacity(args.len()),
+                        |mut acc, f_arg| {
+                            let item = match f_arg {
+                                FunctionArg::Named { arg, .. } => {
+                                    self.sql_to_rex(arg, empty_schema.as_ref(), None)?
+                                }
+                                FunctionArg::Unnamed(arg) => {
+                                    self.sql_to_rex(arg, empty_schema.as_ref(), None)?
+                                }
+                            };
+                            acc.push(item);
+                            Ok::<_, ErrorCode>(acc)
+                        },
+                    )?;
 
-                    let func_meta = self.ctx.get_table_function(&table_name)?;
+                    let func_meta = self.ctx.get_table_function(&table_name, Some(table_args))?;
                     meta_id = func_meta.meta_id();
                     meta_version = func_meta.meta_ver();
                     let table_function = func_meta.raw().clone();
@@ -800,9 +811,19 @@ impl PlanParser {
                 // TODO: Move ReadSourcePlan to SelectInterpreter
                 let partitions = self.ctx.get_settings().get_max_threads()? as usize;
                 scan.and_then(|scan| match scan {
-                    PlanNode::Scan(ref scan) => table
-                        .read_plan(self.ctx.clone(), scan, partitions)
-                        .map(PlanNode::ReadSource),
+                    PlanNode::Scan(ref scan) => {
+                        // TODO(xp): is it possible to use get_cluster_table_io_context() here?
+
+                        let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                        table
+                            .read_plan(
+                                Arc::new(io_ctx),
+                                Some(scan.push_downs.clone()),
+                                // TODO(xp): remove partitions, partitioning hint has been included in io_ctx.max_threads and io_ctx.query_nodes
+                                Some(partitions),
+                            )
+                            .map(PlanNode::ReadSource)
+                    }
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
             }
@@ -1001,13 +1022,13 @@ impl PlanParser {
                     expr: Box::new(self.sql_to_rex(expr, schema, select)?),
                 }),
             },
-            sqlparser::ast::Expr::IsNull(expr) => Ok(Expression::UnaryExpression {
+            sqlparser::ast::Expr::IsNull(expr) => Ok(Expression::ScalarFunction {
                 op: "isnull".to_owned(),
-                expr: Box::new(self.sql_to_rex(expr, schema, select)?),
+                args: vec![self.sql_to_rex(expr, schema, select)?],
             }),
-            sqlparser::ast::Expr::IsNotNull(expr) => Ok(Expression::UnaryExpression {
+            sqlparser::ast::Expr::IsNotNull(expr) => Ok(Expression::ScalarFunction {
                 op: "isnotnull".to_owned(),
-                expr: Box::new(self.sql_to_rex(expr, schema, select)?),
+                args: vec![self.sql_to_rex(expr, schema, select)?],
             }),
             sqlparser::ast::Expr::Exists(q) => Ok(Expression::ScalarFunction {
                 op: "EXISTS".to_lowercase(),
@@ -1044,7 +1065,7 @@ impl PlanParser {
                 }
 
                 let op = e.name.to_string();
-                if AggregateFunctionFactory::check(&op) {
+                if AggregateFunctionFactory::instance().check(&op) {
                     let args = match op.to_lowercase().as_str() {
                         "count" => args
                             .iter()

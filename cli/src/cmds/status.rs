@@ -19,8 +19,9 @@ use std::path::Path;
 use nix::unistd::Pid;
 use log::{info, warn};
 
-use databend_dfs::configs::Config as StoreConfig;
+use databend_meta::configs::Config as StoreConfig;
 use databend_query::configs::{Config as QueryConfig};
+use databend_query::configs::Config as QueryConfig;
 
 use crate::cmds::Config;
 use crate::error::{Result, CliError};

@@ -14,11 +14,13 @@
 //
 
 use std::env;
+use std::sync::Arc;
 
 use common_base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -38,12 +40,14 @@ async fn test_csv_table() -> Result<()> {
     .collect();
 
     let ctx = crate::tests::try_create_context()?;
-    let table = CsvTable::try_create(
-        "default".into(),
-        "test_csv".into(),
-        DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
-        options,
-    )?;
+    let table = CsvTable::try_create(TableInfo {
+        db: "default".into(),
+        name: "test_csv".into(),
+        schema: DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
+        engine: "Csv".to_string(),
+        options: options,
+        table_id: 0,
+    })?;
 
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
@@ -59,7 +63,12 @@ async fn test_csv_table() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let source_plan = table.read_plan(ctx.clone(), scan_plan, partitions)?;
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let source_plan = table.read_plan(
+        Arc::new(io_ctx),
+        Some(scan_plan.push_downs.clone()),
+        Some(partitions),
+    )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;
@@ -98,17 +107,21 @@ async fn test_csv_table_parse_error() -> Result<()> {
     .collect();
 
     let ctx = crate::tests::try_create_context()?;
-    let table = CsvTable::try_create(
-        "default".into(),
-        "test_csv".into(),
-        DataSchemaRefExt::create(vec![
+
+    let table = CsvTable::try_create(TableInfo {
+        db: "default".into(),
+        name: "test_csv".into(),
+        schema: DataSchemaRefExt::create(vec![
             DataField::new("column1", DataType::UInt64, false),
             DataField::new("column2", DataType::UInt64, false),
             DataField::new("column3", DataType::UInt64, false),
             DataField::new("column4", DataType::UInt64, false),
         ]),
-        options,
-    )?;
+        engine: "Csv".to_string(),
+        options: options,
+        table_id: 0,
+    })?;
+
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
         table_id: 0,
@@ -123,7 +136,12 @@ async fn test_csv_table_parse_error() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let source_plan = table.read_plan(ctx.clone(), scan_plan, partitions)?;
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let source_plan = table.read_plan(
+        Arc::new(io_ctx),
+        Some(scan_plan.push_downs.clone()),
+        Some(partitions),
+    )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;
