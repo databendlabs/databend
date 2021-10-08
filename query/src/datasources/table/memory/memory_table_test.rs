@@ -82,7 +82,7 @@ async fn test_memorytable() -> Result<()> {
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
-        let stream = table.read(io_ctx, &source_plan).await?;
+        let stream = table.read(io_ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(
             vec![
@@ -105,7 +105,7 @@ async fn test_memorytable() -> Result<()> {
             db: "default".to_string(),
             table: "a".to_string(),
         };
-        table.truncate(ctx.clone(), truncate_plan).await?;
+        table.truncate(io_ctx, truncate_plan).await?;
 
         let io_ctx = ctx.get_single_node_table_io_context()?;
         let io_ctx = Arc::new(io_ctx);

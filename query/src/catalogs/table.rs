@@ -26,8 +26,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::sessions::DatabendQueryContextRef;
-
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
     fn name(&self) -> &str;
@@ -72,7 +70,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(

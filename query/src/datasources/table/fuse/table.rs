@@ -47,7 +47,6 @@ use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
 use crate::datasources::table::fuse::MetaInfoReader;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable {
     pub(crate) tbl_info: TableInfo,
@@ -267,7 +266,7 @@ impl Table for FuseTable {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         todo!()

@@ -36,7 +36,6 @@ use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct MemoryTable {
     tbl_info: TableInfo,
@@ -151,7 +150,7 @@ impl Table for MemoryTable {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         let mut blocks = self.blocks.write();
