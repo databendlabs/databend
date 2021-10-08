@@ -123,7 +123,6 @@ pub trait DataAccessorBuilder: Sync + Send {
         match scheme {
             StorageScheme::S3 => Ok(Arc::new(S3::fake_new())),
             StorageScheme::LocalFs => Ok(Arc::new(Local::new("/tmp"))),
-            _ => todo!(),
         }
     }
 }

@@ -13,9 +13,30 @@
 //  limitations under the License.
 //
 
-#[derive(Clone, Debug)]
+use std::str::FromStr;
+
+use common_exception::ErrorCode;
+
+use self::StorageScheme::LocalFs;
+use self::StorageScheme::S3;
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum StorageScheme {
     LocalFs,
-    FuseDfs,
     S3,
+}
+
+impl FromStr for StorageScheme {
+    type Err = common_exception::ErrorCode;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_uppercase();
+        match s.as_str() {
+            "S3" => Ok(S3),
+            "LOCAL" | "DISK" => Ok(LocalFs),
+            _ => Err(ErrorCode::UnknownStorageSchemeName(format!(
+                "unknown storage scheme {}, supported schemes are S3 | Disk",
+                s
+            ))),
+        }
+    }
 }

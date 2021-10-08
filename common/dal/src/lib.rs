@@ -16,6 +16,9 @@ mod data_accessor;
 mod impls;
 mod schemes;
 
+#[cfg(test)]
+mod schemes_test;
+
 pub use data_accessor::AsyncSeekableReader;
 pub use data_accessor::Bytes;
 pub use data_accessor::DataAccessor;
