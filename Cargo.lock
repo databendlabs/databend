@@ -775,7 +775,7 @@ dependencies = [
  "common-dal",
  "common-datavalues",
  "common-exception",
- "common-metatypes",
+ "common-meta-types",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -952,7 +952,7 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-util",
  "common-kv-api-vo",
- "common-metatypes",
+ "common-meta-types",
  "common-raft-store",
  "common-sled-store",
  "common-tracing",
@@ -969,7 +969,7 @@ dependencies = [
  "common-exception",
  "common-kv-api-util",
  "common-kv-api-vo",
- "common-metatypes",
+ "common-meta-types",
  "futures",
 ]
 
@@ -986,7 +986,7 @@ dependencies = [
 name = "common-kv-api-vo"
 version = "0.1.0"
 dependencies = [
- "common-metatypes",
+ "common-meta-types",
  "serde",
 ]
 
@@ -1000,7 +1000,7 @@ dependencies = [
  "common-kv",
  "common-kv-api",
  "common-kv-api-vo",
- "common-metatypes",
+ "common-meta-types",
  "common-tracing",
  "lazy_static",
  "mockall",
@@ -1024,7 +1024,7 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-util",
  "common-kv-api-vo",
- "common-metatypes",
+ "common-meta-types",
  "common-planners",
  "common-streams",
  "common-tracing",
@@ -1044,7 +1044,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-metatypes"
+name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
  "async-raft",
@@ -1064,7 +1064,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-infallible",
- "common-metatypes",
+ "common-meta-types",
  "futures",
  "lazy_static",
  "pretty_assertions",
@@ -1080,7 +1080,7 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "common-metatypes",
+ "common-meta-types",
  "common-planners",
  "common-sled-store",
  "common-tracing",
@@ -1103,7 +1103,7 @@ dependencies = [
  "byteorder",
  "common-base",
  "common-exception",
- "common-metatypes",
+ "common-meta-types",
  "common-tracing",
  "lazy_static",
  "pretty_assertions",
@@ -1569,7 +1569,7 @@ dependencies = [
  "common-kv-api-vo",
  "common-management",
  "common-meta-flight",
- "common-metatypes",
+ "common-meta-types",
  "common-planners",
  "common-streams",
  "common-tracing",
@@ -3080,7 +3080,7 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-vo",
  "common-meta-flight",
- "common-metatypes",
+ "common-meta-types",
  "common-planners",
  "common-raft-store",
  "common-sled-store",

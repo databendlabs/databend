@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;

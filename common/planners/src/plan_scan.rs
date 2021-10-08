@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 
 use crate::Expression;
 use crate::Extras;

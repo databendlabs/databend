@@ -18,7 +18,7 @@ common-infallible = {path = "../../infallible"}
 common-kv-api = {path = "../../kv-apis/api" }
 common-kv-api-util = {path = "../../kv-apis/util" }
 common-kv-api-vo = {path = "../../kv-apis/vo" }
-common-metatypes = {path = "../../metatypes"}
+common-meta-types = {path = "../../meta/types"}
 common-planners = {path = "../../planners"}
 common-streams = {path = "../../streams"}
 common-tracing = {path = "../../tracing"}

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_infallible::Mutex;
-use common_metatypes::MetaId;
+use common_meta_types::MetaId;
 
 type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;

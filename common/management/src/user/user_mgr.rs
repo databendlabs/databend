@@ -22,9 +22,9 @@ use common_exception::ToErrorCode;
 use common_kv_api::KVApi;
 use common_kv_api::SyncKVApi;
 use common_kv_api_vo::UpsertKVActionResult;
-use common_metatypes::MatchSeq;
-use common_metatypes::MatchSeqExt;
-use common_metatypes::SeqValue;
+use common_meta_types::MatchSeq;
+use common_meta_types::MatchSeqExt;
+use common_meta_types::SeqValue;
 
 use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;

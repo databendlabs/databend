@@ -17,11 +17,11 @@ use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use common_base::tokio;
 use common_base::GlobalSequence;
-use common_metatypes::Cmd;
-use common_metatypes::KVValue;
-use common_metatypes::LogEntry;
-use common_metatypes::LogId;
-use common_metatypes::LogIndex;
+use common_meta_types::Cmd;
+use common_meta_types::KVValue;
+use common_meta_types::LogEntry;
+use common_meta_types::LogId;
+use common_meta_types::LogIndex;
 
 use crate::get_sled_db;
 use crate::testing::fake_key_spaces::Files;

@@ -20,7 +20,7 @@ use common_dal::DataAccessor;
 use common_dal::DataAccessorBuilder;
 use common_dal::StorageScheme;
 use common_exception::ErrorCode;
-use common_metatypes::NodeInfo;
+use common_meta_types::NodeInfo;
 
 /// Methods for a table to get resource handles it needs to read/write.
 ///

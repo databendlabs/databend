@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_kv::KV;
 use common_kv_api::KVApi;
 use common_kv_api_vo::GetKVActionResult;
-use common_metatypes::NodeInfo;
+use common_meta_types::NodeInfo;
 
 use super::*;
 use crate::namespace::namespace_mgr::NamespaceMgr;

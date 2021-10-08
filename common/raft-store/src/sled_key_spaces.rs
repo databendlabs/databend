@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use async_raft::raft::Entry;
-use common_metatypes::KVValue;
-use common_metatypes::LogEntry;
-use common_metatypes::LogIndex;
-use common_metatypes::Node;
-use common_metatypes::NodeId;
-use common_metatypes::SeqValue;
+use common_meta_types::KVValue;
+use common_meta_types::LogEntry;
+use common_meta_types::LogIndex;
+use common_meta_types::Node;
+use common_meta_types::NodeId;
+use common_meta_types::SeqValue;
 use common_sled_store::SeqNum;
 use common_sled_store::SledKeySpace;
 
