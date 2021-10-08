@@ -197,6 +197,7 @@ nav:
           - CRASHME: sqlstatement/test-functions/crashme.md
       - Other Functions:
           - ToTypeName: sqlstatement/other-functions/totypename.md
+          - runningDifference: sqlstatement/other-functions/running-difference.md
       - System Tables: system/system-tables.md
     - API:
         - Config: api/config.md
