@@ -15,9 +15,9 @@ common-datavalues = {path = "../../datavalues"}
 common-flight-rpc = {path = "../../flight-rpc"}
 common-exception= {path = "../../exception"}
 common-infallible = {path = "../../infallible"}
-common-kv-api = {path = "../../kv-apis/api" }
-common-kv-api-util = {path = "../../kv-apis/util" }
-common-kv-api-vo = {path = "../../kv-apis/vo" }
+common-meta-kv-api = {path = "../kv/api" }
+common-meta-kv-api-util = {path = "../kv/util" }
+common-meta-kv-api-vo = {path = "../kv/vo" }
 common-meta-types = {path = "../../meta/types"}
 common-planners = {path = "../../planners"}
 common-streams = {path = "../../streams"}

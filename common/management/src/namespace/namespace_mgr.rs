@@ -20,8 +20,8 @@ use std::time::UNIX_EPOCH;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_kv_api::KVApi;
-use common_kv_api_vo::UpsertKVActionResult;
+use common_meta_kv_api::KVApi;
+use common_meta_kv_api_vo::UpsertKVActionResult;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;

@@ -16,10 +16,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_kv_api::KVApi;
 use common_meta_flight::meta_api::MetaApi;
 use common_meta_flight::MetaFlightClient;
 use common_meta_flight::MetaFlightClientConf;
+use common_meta_kv_api::KVApi;
 
 // Since there is a pending dependency issue,
 // StoreApiProvider is temporarily moved from store-api-sdk
@@ -54,7 +54,7 @@ impl StoreApiProvider {
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
         let local = self.conf.kv_service_config.address.is_empty();
         if local {
-            let client = common_local_store::KV::new_temp().await?;
+            let client = common_meta_local_store::KV::new_temp().await?;
             Ok(Arc::new(client))
         } else {
             let client = MetaFlightClient::try_new(&self.conf).await?;
@@ -66,7 +66,7 @@ impl StoreApiProvider {
     pub fn sync_try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
         let local = self.conf.kv_service_config.address.is_empty();
         if local {
-            let client = common_local_store::KV::sync_new_temp()?;
+            let client = common_meta_local_store::KV::sync_new_temp()?;
             Ok(Arc::new(client))
         } else {
             let client = MetaFlightClient::sync_try_new(&self.conf)?;

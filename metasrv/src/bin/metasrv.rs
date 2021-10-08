@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_base::tokio;
-use common_sled_store::init_sled_db;
+use common_meta_sled_store::init_sled_db;
 use common_tracing::init_tracing_with_file;
 use log::info;
 use metasrv::api::FlightServer;

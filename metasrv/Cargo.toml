@@ -25,13 +25,13 @@ common-functions = {path = "../common/functions"}
 common-flight-rpc = {path = "../common/flight-rpc"}
 common-infallible = {path = "../common/infallible"}
 common-planners = {path = "../common/planners"}
-common-raft-store = {path = "../common/raft-store"}
 common-base = {path = "../common/base" }
-common-sled-store = {path = "../common/sled-store"}
+common-meta-kv-api-vo = {path = "../common/meta/kv/vo" }
+common-meta-raft-store = {path = "../common/meta/raft-store"}
+common-meta-sled-store = {path = "../common/meta/sled-store"}
 common-meta-flight = {path = "../common/meta/flight" }
 common-meta-types = {path = "../common/meta/types"}
 common-tracing = {path = "../common/tracing"}
-common-kv-api-vo = {path = "../common/kv-apis/vo" }
 
 # Github dependencies
 
@@ -69,8 +69,7 @@ axum = {version = "0.2.8", features=["headers"] }
 axum-server = { version = "0.2", features = ["tls-rustls"] }
 
 [dev-dependencies]
-
-common-kv-api = {path = "../common/kv-apis/api" }
+common-meta-kv-api = {path = "../common/meta/kv/api" }
 
 pretty_assertions = "1.0"
 test-env-log = "0.2.7"

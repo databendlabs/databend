@@ -37,6 +37,7 @@ use common_meta_flight::meta_flight_reply::DatabaseInfo;
 use common_meta_flight::meta_flight_reply::GetDatabasesReply;
 use common_meta_flight::meta_flight_reply::GetTablesReply;
 use common_meta_flight::meta_flight_reply::TableInfo;
+use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
 use common_meta_types::Cmd::DropDatabase;
@@ -44,7 +45,6 @@ use common_meta_types::Cmd::DropTable;
 use common_meta_types::Database;
 use common_meta_types::LogEntry;
 use common_meta_types::Table;
-use common_raft_store::state_machine::AppliedState;
 use log::info;
 
 use crate::executor::action_handler::RequestHandler;

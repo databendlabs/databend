@@ -20,7 +20,7 @@ use std::str::FromStr;
 use async_raft::NodeId;
 use common_exception::exception::ErrorCode;
 use common_exception::exception::Result;
-use common_sled_store::SledSerde;
+use common_meta_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
