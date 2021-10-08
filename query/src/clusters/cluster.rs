@@ -129,6 +129,10 @@ impl Cluster {
         node.id == self.local_id
     }
 
+    pub fn local_id(&self) -> String {
+        self.local_id.clone()
+    }
+
     pub async fn create_node_conn(&self, name: &str, config: &Config) -> Result<FlightClient> {
         for node in &self.nodes {
             if node.id == name {

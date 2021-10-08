@@ -775,6 +775,7 @@ dependencies = [
  "common-dal",
  "common-datavalues",
  "common-exception",
+ "common-metatypes",
  "pretty_assertions",
  "serde",
  "serde_json",

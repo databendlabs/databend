@@ -48,7 +48,9 @@ impl fmt::Display for Node {
 impl SledSerde for Node {}
 
 /// Query node
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default,
+)]
 pub struct NodeInfo {
     #[serde(default)]
     pub id: String,

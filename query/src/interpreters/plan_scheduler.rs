@@ -856,7 +856,7 @@ impl PlanScheduler {
         table.read_plan(
             io_ctx.clone(),
             Some(node.push_downs.clone()),
-            Some(io_ctx.get_max_threads() * io_ctx.get_query_nodes().len()),
+            Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
         )
     }
 
