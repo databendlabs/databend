@@ -98,7 +98,6 @@ impl ErrorCode {
     }
 }
 
-
 macro_rules! build_exceptions {
     ($($body:ident($code:expr)),*$(,)*) => {
             impl ErrorCode {
