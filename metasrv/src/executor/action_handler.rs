@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta::MetaFlightAction;
-use common_meta::RequestFor;
+use common_meta_flight::MetaFlightAction;
+use common_meta_flight::RequestFor;
 use serde::Serialize;
 
 use crate::meta_service::MetaNode;

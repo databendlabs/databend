@@ -24,12 +24,12 @@ common-exception = {path = "../common/exception"}
 common-functions = {path = "../common/functions"}
 common-flight-rpc = {path = "../common/flight-rpc"}
 common-infallible = {path = "../common/infallible"}
-common-metatypes = {path = "../common/metatypes"}
 common-planners = {path = "../common/planners"}
 common-raft-store = {path = "../common/raft-store"}
 common-base = {path = "../common/base" }
 common-sled-store = {path = "../common/sled-store"}
-common-meta = {path = "../common/meta" }
+common-meta-flight = {path = "../common/meta/flight" }
+common-meta-types = {path = "../common/meta/types"}
 common-tracing = {path = "../common/tracing"}
 common-kv-api-vo = {path = "../common/kv-apis/vo" }
 

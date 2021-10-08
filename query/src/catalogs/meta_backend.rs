@@ -16,12 +16,12 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta::meta_flight_reply::CreateDatabaseReply;
-use common_meta::meta_flight_reply::CreateTableReply;
-use common_meta::meta_flight_reply::DatabaseInfo;
-use common_meta::meta_flight_reply::TableInfo;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_flight::meta_flight_reply::CreateDatabaseReply;
+use common_meta_flight::meta_flight_reply::CreateTableReply;
+use common_meta_flight::meta_flight_reply::DatabaseInfo;
+use common_meta_flight::meta_flight_reply::TableInfo;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;

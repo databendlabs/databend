@@ -14,8 +14,8 @@
 
 use async_raft::State;
 use common_base::tokio;
-use common_metatypes::Cmd;
-use common_metatypes::LogEntry;
+use common_meta_types::Cmd;
+use common_meta_types::LogEntry;
 use common_raft_store::state_machine::AppliedState;
 #[allow(unused_imports)]
 use log::info;

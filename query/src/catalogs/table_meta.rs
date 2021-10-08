@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;

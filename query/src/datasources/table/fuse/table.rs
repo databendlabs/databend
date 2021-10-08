@@ -24,10 +24,11 @@ use common_dal::DataAccessor;
 use common_dal::DataAccessorBuilder;
 use common_dal::DefaultDataAccessorBuilder;
 use common_dal::ObjectAccessor;
+use common_dal::StorageScheme;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta::meta_flight_reply::TableInfo;
+use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
@@ -45,12 +46,11 @@ use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
 use crate::datasources::table::fuse::MetaInfoReader;
-use crate::datasources::table::fuse::TableStorageScheme;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable {
     pub(crate) tbl_info: TableInfo,
-    pub(crate) storage_scheme: TableStorageScheme,
+    pub(crate) storage_scheme: StorageScheme,
 }
 
 impl FuseTable {

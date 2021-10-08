@@ -28,9 +28,9 @@ use common_dal::DefaultDataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
-use common_metatypes::NodeInfo;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
+use common_meta_types::NodeInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -231,7 +231,7 @@ impl DatabendQueryContext {
     }
 
     /// Build a TableIOContext for single node service.
-    pub fn get_single_node_table_io_context(&self) -> Result<TableIOContext> {
+    pub fn get_single_node_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
         let nodes = vec![Arc::new(NodeInfo {
             id: self.get_cluster().local_id(),
             ..Default::default()
@@ -245,11 +245,12 @@ impl DatabendQueryContext {
             Arc::new(DefaultDataAccessorBuilder {}),
             max_threads,
             nodes,
+            Some(Arc::new(self.clone())),
         ))
     }
 
     /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
-    pub fn get_cluster_table_io_context(&self) -> Result<TableIOContext> {
+    pub fn get_cluster_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
         let cluster = self.get_cluster();
         let nodes = cluster.get_nodes();
         let settings = self.get_settings();
@@ -260,6 +261,7 @@ impl DatabendQueryContext {
             Arc::new(DefaultDataAccessorBuilder {}),
             max_threads,
             nodes,
+            Some(Arc::new(self.clone())),
         ))
     }
 }

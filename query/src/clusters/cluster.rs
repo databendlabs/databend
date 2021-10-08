@@ -30,7 +30,7 @@ use common_flight_rpc::ConnectionFactory;
 use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
-use common_metatypes::NodeInfo;
+use common_meta_types::NodeInfo;
 use futures::Future;
 use rand::thread_rng;
 use rand::Rng;

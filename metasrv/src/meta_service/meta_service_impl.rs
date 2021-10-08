@@ -18,7 +18,7 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use common_metatypes::LogEntry;
+use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
 use crate::meta_service::GetReply;

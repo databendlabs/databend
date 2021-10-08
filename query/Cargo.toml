@@ -36,13 +36,13 @@ common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-meta = {path = "../common/meta" }
+common-meta-flight = {path = "../common/meta/flight" }
+common-meta-types = {path = "../common/meta/types"}
 common-kv-api = { path = "../common/kv-apis/api" }
 common-kv-api-vo = { path = "../common/kv-apis/vo" }
 common-io = { path = "../common/io" }
-common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
-common-kv = { path = "../common/kv" }
+common-local-store = { path = "../common/local-store" }
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "9c706a3" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }

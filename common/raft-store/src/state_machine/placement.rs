@@ -16,9 +16,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use common_metatypes::Node;
-use common_metatypes::NodeId;
-use common_metatypes::Slot;
+use common_meta_types::Node;
+use common_meta_types::NodeId;
+use common_meta_types::Slot;
 
 /// IPlacement defines the behavior of an algo to assign file to nodes.
 /// An placement algo considers the replication config, such as number of copies,
