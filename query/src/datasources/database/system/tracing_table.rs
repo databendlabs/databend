@@ -103,7 +103,6 @@ impl Table for TracingTable {
             statistics: Statistics::default(),
             description: "(Read from system.tracing table)".to_string(),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })

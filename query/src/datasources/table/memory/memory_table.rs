@@ -104,7 +104,6 @@ impl Table for MemoryTable {
             statistics: Statistics::new_exact(rows, bytes),
             description: format!("(Read from Memory Engine table  {}.{})", db, self.name()),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs,
         })

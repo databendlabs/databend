@@ -56,7 +56,6 @@ impl Test {
                 statistics.read_rows, statistics.read_bytes
             ),
             scan_plan: Arc::new(ScanPlan::empty()),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         }))

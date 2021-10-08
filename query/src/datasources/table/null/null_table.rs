@@ -91,7 +91,6 @@ impl Table for NullTable {
             statistics: Statistics::new_exact(0, 0),
             description: format!("(Read from Null Engine table  {}.{})", db, self.name()),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })

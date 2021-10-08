@@ -93,7 +93,6 @@ impl Table for EnginesTable {
             statistics: Statistics::default(),
             description: "(Read from system.engines table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })

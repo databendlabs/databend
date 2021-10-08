@@ -17,7 +17,6 @@ use std::env;
 use common_base::tokio::runtime::Runtime;
 use common_exception::Result;
 
-use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionManagerRef;

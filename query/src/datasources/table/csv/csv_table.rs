@@ -114,7 +114,6 @@ impl Table for CsvTable {
             statistics: Statistics::default(),
             description: format!("(Read from CSV Engine table  {}.{})", db, name),
             scan_plan: Arc::new(ScanPlan::empty()),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
