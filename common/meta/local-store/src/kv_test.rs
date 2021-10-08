@@ -17,11 +17,11 @@ use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
 use common_exception::Result;
-use common_kv_api::KVApi;
-use common_kv_api::SyncKVApi;
-use common_kv_api_vo::GetKVActionResult;
-use common_kv_api_vo::MGetKVActionResult;
-use common_kv_api_vo::UpsertKVActionResult;
+use common_meta_kv_api::KVApi;
+use common_meta_kv_api::SyncKVApi;
+use common_meta_kv_api_vo::GetKVActionResult;
+use common_meta_kv_api_vo::MGetKVActionResult;
+use common_meta_kv_api_vo::UpsertKVActionResult;
 use common_meta_sled_store::init_temp_sled_db;
 use common_meta_types::KVMeta;
 use common_meta_types::KVValue;

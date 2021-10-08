@@ -36,11 +36,11 @@ common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
+common-meta-kv-api = { path = "../common/meta/apis/api" }
+common-meta-kv-api-vo = { path = "../common/meta/apis/vo" }
 common-meta-flight = {path = "../common/meta/flight" }
 common-meta-types = {path = "../common/meta/types"}
 common-meta-local-store = { path = "../common/meta/local-store" }
-common-kv-api = { path = "../common/kv-apis/api" }
-common-kv-api-vo = { path = "../common/kv-apis/vo" }
 common-io = { path = "../common/io" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 # Github dependencies

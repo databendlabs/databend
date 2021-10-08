@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::TrySpawn;
-use common_kv_api_vo::GetKVActionResult;
-use common_kv_api_vo::MGetKVActionResult;
-use common_kv_api_vo::PrefixListReply;
-use common_kv_api_vo::UpsertKVActionResult;
+use common_meta_kv_api_vo::GetKVActionResult;
+use common_meta_kv_api_vo::MGetKVActionResult;
+use common_meta_kv_api_vo::PrefixListReply;
+use common_meta_kv_api_vo::UpsertKVActionResult;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 

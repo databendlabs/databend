@@ -943,44 +943,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-kv-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-base",
- "common-exception",
- "common-kv-api-util",
- "common-kv-api-vo",
- "common-meta-types",
- "futures",
-]
-
-[[package]]
-name = "common-kv-api-util"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-tracing",
- "lazy_static",
-]
-
-[[package]]
-name = "common-kv-api-vo"
-version = "0.1.0"
-dependencies = [
- "common-meta-types",
- "serde",
-]
-
-[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "common-kv-api",
- "common-kv-api-vo",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
  "common-meta-local-store",
  "common-meta-types",
  "common-tracing",
@@ -1003,9 +973,9 @@ dependencies = [
  "common-exception",
  "common-flight-rpc",
  "common-infallible",
- "common-kv-api",
- "common-kv-api-util",
- "common-kv-api-vo",
+ "common-meta-kv-api",
+ "common-meta-kv-api-util",
+ "common-meta-kv-api-vo",
  "common-meta-types",
  "common-planners",
  "common-streams",
@@ -1026,15 +996,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-kv-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-kv-api-util",
+ "common-meta-kv-api-vo",
+ "common-meta-types",
+ "futures",
+]
+
+[[package]]
+name = "common-meta-kv-api-util"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-tracing",
+ "lazy_static",
+]
+
+[[package]]
+name = "common-meta-kv-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-meta-types",
+ "serde",
+]
+
+[[package]]
 name = "common-meta-local-store"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "common-kv-api",
- "common-kv-api-util",
- "common-kv-api-vo",
+ "common-meta-kv-api",
+ "common-meta-kv-api-util",
+ "common-meta-kv-api-vo",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
@@ -1564,10 +1564,10 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
- "common-kv-api",
- "common-kv-api-vo",
  "common-management",
  "common-meta-flight",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
  "common-meta-local-store",
  "common-meta-types",
  "common-planners",
@@ -3077,9 +3077,9 @@ dependencies = [
  "common-flight-rpc",
  "common-functions",
  "common-infallible",
- "common-kv-api",
- "common-kv-api-vo",
  "common-meta-flight",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
