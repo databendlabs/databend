@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::Extras;
+use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -32,7 +33,6 @@ use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct NullTable {
     tbl_info: TableInfo,
@@ -99,7 +99,7 @@ impl Table for NullTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.tbl_info.schema.clone());
@@ -113,11 +113,11 @@ impl Table for NullTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
-        insert_plan: common_planners::InsertIntoPlan,
+        _io_ctx: Arc<TableIOContext>,
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         let mut s = {
-            let mut inner = insert_plan.input_stream.lock();
+            let mut inner = _insert_plan.input_stream.lock();
             (*inner).take()
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
@@ -130,7 +130,7 @@ impl Table for NullTable {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())

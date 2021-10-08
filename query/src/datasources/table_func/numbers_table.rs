@@ -37,7 +37,7 @@ use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table_func_engine::TableArgs;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct NumbersTable {
     db_name: String,
@@ -158,9 +158,13 @@ impl Table for NumbersTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         Ok(Box::pin(NumbersStream::try_create(
             ctx,
             self.schema.clone(),

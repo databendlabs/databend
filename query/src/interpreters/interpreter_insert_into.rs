@@ -48,10 +48,11 @@ impl Interpreter for InsertIntoInterpreter {
         let datasource = self.ctx.get_catalog();
         let database = datasource.get_database(self.plan.db_name.as_str())?;
         let table = database.get_table_by_id(self.plan.tbl_id, None)?;
-        table
-            .raw()
-            .append_data(self.ctx.clone(), self.plan.clone())
-            .await?;
+
+        let io_ctx = self.ctx.get_cluster_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
+
+        table.raw().append_data(io_ctx, self.plan.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

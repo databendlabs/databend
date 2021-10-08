@@ -53,7 +53,10 @@ impl SourceTransform {
                 .get_table_function(&self.source_plan.table, self.source_plan.tbl_args.clone())?;
             func_meta.raw().clone().as_table()
         };
-        let table_stream = table.read(self.ctx.clone(), &self.source_plan);
+        // TODO(xp): get_single_node_table_io_context() or
+        //           get_cluster_table_io_context()?
+        let io_ctx = Arc::new(self.ctx.get_cluster_table_io_context()?);
+        let table_stream = table.read(io_ctx, &self.source_plan);
         Ok(Box::pin(
             self.ctx.try_create_abortable(table_stream.await?)?,
         ))

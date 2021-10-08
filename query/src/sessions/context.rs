@@ -245,7 +245,7 @@ impl DatabendQueryContext {
             Arc::new(DefaultDataAccessorBuilder {}),
             max_threads,
             nodes,
-            Some(Arc::new(self.clone())),
+            Some(self.clone()),
         ))
     }
 
@@ -261,7 +261,7 @@ impl DatabendQueryContext {
             Arc::new(DefaultDataAccessorBuilder {}),
             max_threads,
             nodes,
-            Some(Arc::new(self.clone())),
+            Some(self.clone()),
         ))
     }
 }

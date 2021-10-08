@@ -43,6 +43,9 @@ async fn test_memorytable() -> Result<()> {
         table_id: 0,
     })?;
 
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
+
     // append data.
     {
         let block = DataBlock::create_by_array(schema.clone(), vec![
@@ -63,21 +66,23 @@ async fn test_memorytable() -> Result<()> {
             schema,
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
-        table.append_data(ctx.clone(), insert_plan).await.unwrap();
+        table
+            .append_data(io_ctx.clone(), insert_plan)
+            .await
+            .unwrap();
     }
 
     // read.
     {
-        let io_ctx = ctx.get_single_node_table_io_context()?;
         let source_plan = table.read_plan(
-            Arc::new(io_ctx),
+            io_ctx.clone(),
             None,
             Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
-        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let stream = table.read(io_ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(
             vec![
@@ -100,15 +105,16 @@ async fn test_memorytable() -> Result<()> {
             db: "default".to_string(),
             table: "a".to_string(),
         };
-        table.truncate(ctx.clone(), truncate_plan).await?;
+        table.truncate(io_ctx, truncate_plan).await?;
 
         let io_ctx = ctx.get_single_node_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
         let source_plan = table.read_plan(
-            Arc::new(io_ctx),
+            io_ctx.clone(),
             None,
             Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
-        let stream = table.read(ctx, &source_plan).await?;
+        let stream = table.read(io_ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(vec!["++", "++"], &result);
     }

@@ -36,7 +36,6 @@ use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct ParquetTable {
     tbl_info: TableInfo,
@@ -146,7 +145,7 @@ impl Table for ParquetTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;

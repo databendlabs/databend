@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
 use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -28,7 +29,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct EnginesTable {
     table_id: u64,
@@ -100,9 +101,13 @@ impl Table for EnginesTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         let engines = ctx.get_catalog().get_db_engines()?;
         let mut names: Vec<String> = vec![];
         let mut descs: Vec<String> = vec![];
