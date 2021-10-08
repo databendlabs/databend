@@ -37,7 +37,7 @@ ureq = { version = "2.2.0", features = ["json"] }
 pretty_assertions = "1.0"
 tempfile = "3.2.0"
 assert_cmd = "2.0.2"
-predicates = "2.0.2"
+predicates = "2.0.3"
 
 [build-dependencies]
 common-building = {path = "../common/building"}
