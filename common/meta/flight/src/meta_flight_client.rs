@@ -19,13 +19,10 @@ use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_arrow::arrow_flight::Action;
 use common_arrow::arrow_flight::BasicAuth;
 use common_arrow::arrow_flight::HandshakeRequest;
-use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::ConnectionFactory;
 use common_flight_rpc::FlightClientTlsConfig;
-use common_meta_kv_api_util::STORE_RUNTIME;
-use common_meta_kv_api_util::STORE_SYNC_CALL_TIMEOUT;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -64,10 +61,7 @@ impl MetaFlightClient {
 
     pub fn sync_try_new(conf: &MetaFlightClientConf) -> Result<MetaFlightClient> {
         let cfg = conf.clone();
-        STORE_RUNTIME.block_on(
-            async move { MetaFlightClient::try_new(&cfg).await },
-            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
-        )?
+        futures::executor::block_on(MetaFlightClient::try_new(&cfg))
     }
 
     #[tracing::instrument(level = "debug", skip(password))]

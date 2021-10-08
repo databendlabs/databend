@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_base::TrySpawn;
 use common_meta_kv_api_vo::GetKVActionResult;
 use common_meta_kv_api_vo::MGetKVActionResult;
 use common_meta_kv_api_vo::PrefixListReply;
@@ -25,70 +24,6 @@ use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 
 use crate::kv_api::KVApi;
-use crate::util::STORE_RUNTIME;
-use crate::util::STORE_SYNC_CALL_TIMEOUT;
-
-pub trait SyncKVApi: KVApi
-where Self: Clone + 'static
-{
-    fn sync_upsert_kv(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value: Option<Vec<u8>>,
-        value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<UpsertKVActionResult> {
-        let me = self.clone();
-        let key = key.to_owned();
-        STORE_RUNTIME.block_on(
-            async move { me.upsert_kv(&key, seq, value, value_meta).await },
-            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
-        )?
-    }
-
-    fn sync_update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<UpsertKVActionResult> {
-        let me = self.clone();
-        let key = key.to_owned();
-        STORE_RUNTIME.block_on(
-            async move { me.update_kv_meta(&key, seq, value_meta).await },
-            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
-        )?
-    }
-
-    fn sync_get_kv(&self, key: &str) -> common_exception::Result<GetKVActionResult> {
-        let me = self.clone();
-        let key = key.to_owned();
-        STORE_RUNTIME.block_on(
-            async move { me.get_kv(&key).await },
-            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
-        )?
-    }
-
-    fn sync_mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionResult> {
-        let me = self.clone();
-        let keys = keys.to_owned();
-        STORE_RUNTIME.block_on(
-            async move { me.mget_kv(&keys).await },
-            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
-        )?
-    }
-
-    fn sync_prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply> {
-        let me = self.clone();
-        let prefix = prefix.to_owned();
-        STORE_RUNTIME.block_on(
-            async move { me.prefix_list_kv(&prefix).await },
-            STORE_SYNC_CALL_TIMEOUT.as_ref().cloned(),
-        )?
-    }
-}
-
-impl<T> SyncKVApi for T where T: KVApi + Clone + 'static {}
 
 #[async_trait]
 impl KVApi for Arc<dyn KVApi> {
