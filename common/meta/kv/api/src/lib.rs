@@ -15,6 +15,4 @@
 mod kv_api;
 mod kv_api_sync;
 
-use common_meta_kv_api_util as util;
 pub use kv_api::KVApi;
-pub use kv_api_sync::SyncKVApi;

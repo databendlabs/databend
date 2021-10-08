@@ -18,10 +18,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::tokio::sync::Mutex;
-use common_base::TrySpawn;
 use common_exception::Result;
 use common_meta_kv_api::KVApi;
-use common_meta_kv_api_util::STORE_RUNTIME;
 use common_meta_kv_api_vo::GetKVActionResult;
 use common_meta_kv_api_vo::MGetKVActionResult;
 use common_meta_kv_api_vo::PrefixListReply;
@@ -95,7 +93,7 @@ impl KV {
     }
 
     pub fn sync_new_temp() -> common_exception::Result<KV> {
-        STORE_RUNTIME.block_on(KV::new_temp(), None)?
+        futures::executor::block_on(KV::new_temp())
     }
 }
 
