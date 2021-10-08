@@ -46,6 +46,7 @@ use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
 use crate::datasources::table::fuse::MetaInfoReader;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable {
@@ -142,9 +143,13 @@ impl Table for FuseTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         let default_proj = || {
             (0..self.tbl_info.schema.fields().len())
                 .into_iter()

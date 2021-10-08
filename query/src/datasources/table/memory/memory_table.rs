@@ -34,6 +34,7 @@ use futures::stream::StreamExt;
 use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct MemoryTable {
@@ -111,9 +112,13 @@ impl Table for MemoryTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         let blocks = self.blocks.read();
         Ok(Box::pin(MemoryTableStream::try_create(
             ctx,

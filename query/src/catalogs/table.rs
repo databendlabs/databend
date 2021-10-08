@@ -54,7 +54,7 @@ pub trait Table: Sync + Send {
     // Read block data from the underling.
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        io_ctx: Arc<TableIOContext>,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 

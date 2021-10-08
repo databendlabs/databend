@@ -64,14 +64,15 @@ async fn test_csv_table() -> Result<()> {
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
     let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(
-        Arc::new(io_ctx),
+        io_ctx.clone(),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
@@ -137,14 +138,15 @@ async fn test_csv_table_parse_error() -> Result<()> {
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
     let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(
-        Arc::new(io_ctx),
+        io_ctx.clone(),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     // integer parse error will result to Null value
     assert_eq!(false, result.is_err());

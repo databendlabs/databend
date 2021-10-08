@@ -27,7 +27,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct CreditsTable {
     table_id: u64,
@@ -100,7 +99,7 @@ impl Table for CreditsTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let metadata_command = cargo_metadata::MetadataCommand::new();

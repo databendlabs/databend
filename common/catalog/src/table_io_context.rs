@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_base::Runtime;
@@ -47,7 +48,7 @@ pub trait IOContext {
     fn get_user_data_any(&self) -> Option<Arc<dyn Any + Send + Sync + 'static>>;
 
     /// Get user defined data as type T
-    fn get_user_data<T: Send + Sync + 'static>(&self) -> Result<Option<Arc<T>>, ErrorCode> {
+    fn get_user_data<T: Debug + Send + Sync + 'static>(&self) -> Result<Option<Arc<T>>, ErrorCode> {
         let ud = self.get_user_data_any();
         match ud {
             None => Ok(None),
@@ -55,7 +56,10 @@ pub trait IOContext {
                 let v = x.downcast::<T>();
                 match v {
                     Ok(x) => Ok(Some(x)),
-                    Err(_) => Err(ErrorCode::InvalidCast("invalid cast")),
+                    Err(_) => {
+                        let e = ErrorCode::InvalidCast("invalid cast");
+                        Err(e)
+                    }
                 }
             }
         }

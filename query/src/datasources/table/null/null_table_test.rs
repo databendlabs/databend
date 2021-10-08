@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_catalog::IOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -64,14 +65,15 @@ async fn test_null_table() -> Result<()> {
     // read.
     {
         let io_ctx = ctx.get_single_node_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
         let source_plan = table.read_plan(
-            Arc::new(io_ctx),
+            io_ctx.clone(),
             None,
-            Some(ctx.get_settings().get_max_threads()? as usize),
+            Some(io_ctx.get_max_threads() as usize),
         )?;
         assert_eq!(table.engine(), "Null");
 
-        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let stream = table.read(io_ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);

@@ -113,7 +113,7 @@ impl Table for ExampleTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.schema.clone());
