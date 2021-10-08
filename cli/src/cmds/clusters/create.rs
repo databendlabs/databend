@@ -32,6 +32,10 @@ use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
+use portpicker::Port;
+use sysinfo::{System, SystemExt};
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct CreateCommand {
@@ -49,11 +53,11 @@ impl CreateCommand {
         App::new("create")
             .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
-            .about("Create a databend clusters based on profile")
+            .about("Create a databend cluster based on profile")
             .arg(
                 Arg::new("profile")
                     .long("profile")
-                    .about("Profile for deployment, support local and clusters")
+                    .about("Profile for deployment, support local and cluster")
                     .required(true)
                     .possible_values(&["local"]),
             )
@@ -61,32 +65,21 @@ impl CreateCommand {
                 Arg::new("meta_address")
                     .long("meta-address")
                     .about("Set endpoint to provide metastore service")
+                    .takes_value(true)
                     .env(databend_query::configs::config_meta::META_ADDRESS),
-            )
-            .arg(
-                Arg::new("meta_username")
-                    .long("meta-username")
-                    .about("Set user name for metastore service authentication")
-                    .env(databend_query::configs::config_meta::META_USERNAME)
-                    .default_value("root"),
-            )
-            .arg(
-                Arg::new("meta_password")
-                    .long("meta-password")
-                    .about("Set password for metastore service authentication")
-                    .env(databend_query::configs::config_meta::META_PASSWORD)
-                    .default_value("root"),
             )
             .arg(
                 Arg::new("log_level")
                     .long("log-level")
                     .about("Set logging level")
+                    .takes_value(true)
                     .env(databend_query::configs::config_log::LOG_LEVEL)
                     .default_value("INFO"),
             )
             .arg(
                 Arg::new("version")
                     .long("version")
+                    .takes_value(true)
                     .about("Set databend version to run")
                     .default_value("latest"),
             )
@@ -155,14 +148,14 @@ impl CreateCommand {
 
     fn generate_meta_config(&self) -> MetaConfig {
         let mut config = MetaConfig::empty();
-        if !portpicker::is_free(config.metric_api_address.parse().unwrap()) {
+        if config.metric_api_address.parse::<Port>().is_err() || !portpicker::is_free(config.metric_api_address.parse().unwrap()) {
             config.metric_api_address = Status::find_unused_local_port()
         }
 
-        if !portpicker::is_free(config.admin_api_address.parse().unwrap()) {
+        if config.admin_api_address.parse::<Port>().is_err() || !portpicker::is_free(config.admin_api_address.parse().unwrap()) {
             config.admin_api_address = Status::find_unused_local_port()
         }
-        if !portpicker::is_free(config.flight_api_address.parse().unwrap()) {
+        if config.flight_api_address.parse::<Port>().is_err() || !portpicker::is_free(config.flight_api_address.parse().unwrap()) {
             config.flight_api_address = Status::find_unused_local_port()
         }
         config
@@ -175,7 +168,7 @@ impl CreateCommand {
         let mut config = self.generate_meta_config();
 
         if args.value_of("meta_address").is_some()
-            && args.value_of("meta_address").unwrap().is_empty()
+            && !args.value_of("meta_address").unwrap().is_empty()
         {
             config.flight_api_address = args.value_of("meta_address").unwrap().to_string();
         }
@@ -231,7 +224,7 @@ impl CreateCommand {
     fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args) {
             Ok(_) => {
-                writer.write_ok("databend clusters precheck passed!");
+                writer.write_ok("databend cluster precheck passed!");
                 // ensuring needed dependencies
                 let bin_path = self
                     .ensure_bin(writer, args)
@@ -239,19 +232,21 @@ impl CreateCommand {
 
                 {
                     let res = self.provision_local_meta_service(writer, args, bin_path);
-                    writer.write_err(&*format!(
-                        "❌ Cannot provison meta service, error: {:?}",
-                        res.unwrap_err()
-                    ));
+                    if res.is_err() {
+                        writer.write_err(&*format!(
+                            "❌ Cannot provison meta service, error: {:?}",
+                            res.unwrap_err()
+                        ));
+                    }
                 }
-                Ok(())
-            }
-            Err(CliError::Unknown(s)) => {
-                writer.write_err(s.as_str());
+                let mut status = Status::read(self.conf.clone())?;
+                status.current_profile = Some(serde_json::to_string::<ClusterProfile>(&ClusterProfile::Local).unwrap());
+                status.write()?;
+
                 Ok(())
             }
             Err(e) => {
-                log::error!("{:?}", e);
+                writer.write_err(&*format!("cluster precheck failed, error {:?}", e));
                 Ok(())
             }
         }
@@ -262,18 +257,37 @@ impl CreateCommand {
         let status = Status::read(self.conf.clone())?;
         if status.local_configs != LocalConfig::empty() {
             return Err(CliError::Unknown(format!(
-                "❗ found previously existed clusters with config in {}",
+                "❗ found previously existed cluster with config in {}",
                 status.path
+            )));
+        }
+        let s = System::new_all();
+
+        if !s.process_by_name("databend-meta").is_empty() {
+            return Err(CliError::Unknown(format!(
+                "❗ have installed databend-meta service before, please stop them and retry",
             )));
         }
         if args.value_of("meta_address").is_some()
             && !args.value_of("meta_address").unwrap().is_empty()
-            && !portpicker::is_free(args.value_of("meta_address").unwrap().parse().unwrap())
         {
-            return Err(CliError::Unknown(format!(
-                "clickhouse handler port {} is occupied by other program",
-                args.value_of("clickhouse_handler_port").unwrap()
-            )));
+            let meta_address = SocketAddr::from_str(args.value_of("meta_address").unwrap());
+            match meta_address {
+                Ok(addr) => {
+                    if !portpicker::is_free(addr.port()) {
+                        return Err(CliError::Unknown(format!(
+                            "Address {} has been used for local meta service",
+                            addr.port()
+                        )))
+                    }
+                }
+                Err(e) => {
+                    return Err(CliError::Unknown(format!(
+                        "Cannot parse meta service address, error: {:?}",
+                        e
+                    )))
+                }
+            }
         }
 
         Ok(())
@@ -290,7 +304,7 @@ impl CreateCommand {
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
-                    Err(_) => writer.write_err("currently profile only support clusters or local"),
+                    Err(_) => writer.write_err("currently profile only support cluster or local"),
                 }
             }
             None => {

@@ -12,206 +12,97 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use std::fs::File;
-// use std::io;
-// use std::path::Path;
-//
-// use clap::{ArgMatches, App, AppSettings, Arg};
-// use indicatif::ProgressBar;
-// use indicatif::ProgressStyle;
-// use tar::Archive;
-//
-// use crate::cmds::{Config, Status, FetchCommand};
-// use crate::cmds::SwitchCommand;
-// use crate::cmds::Writer;
-// use crate::error::{Result, CliError};
-// use crate::cmds::clusters::clusters::ClusterProfile;
-// use databend_query::configs::{QueryConfig, StoreConfig};
-// use databend_dfs::configs::Config as DfsConfig;
-// use crate::cmds::status::{LocalConfig, LocalMetaConfig, LocalRuntime};
-// use std::process::exit;
+use clap::{ArgMatches, App, AppSettings, Arg};
+use serde::Deserialize;
+use serde_json;
+use crate::cmds::{Config, Status};
+use crate::cmds::Writer;
+use crate::error::{Result, CliError};
+use crate::cmds::clusters::cluster::ClusterProfile;
+use crate::cmds::status::LocalRuntime;
 
-// #[derive(Clone)]
-// pub struct DeleteCommand {
-//     conf: Config,
-// }
-// struct LocalBinaryPaths {
-//     query: String,
-//     store: String,
-// }
-// impl DeleteCommand {
-//     pub fn create(conf: Config) -> Self {
-//         DeleteCommand { conf }
-//     }
-//     pub fn generate() -> App<'static> {
-//         App::new("create")
-//             .setting(AppSettings::ColoredHelp)
-//             .setting(AppSettings::DisableVersionFlag)
-//             .about("Create a databend clusters based on profile")
-//             .arg(Arg::new("profile").long("profile").about("Profile to delete, support local and clusters").required(false).possible_values(&["local"]))
-//             .arg(Arg::new("purge").long("purge").about("Purge would "))
-//     }
-//
-//     fn binary_path(&self, dir: String, version: String, name: String) -> Result<String> {
-//         if version.is_empty() {
-//             return Err(CliError::Unknown("cannot find binary path, current version is empty".to_string()));
-//         }
-//         let bin_path = format!("{}/{}/{}", dir, version, name);
-//         if  !Path::new(bin_path.as_str()).exists() {
-//             return Err(CliError::Unknown(format!("cannot find binary path in {}", bin_path)))
-//         }
-//         Ok(fs::canonicalize(&bin_path).unwrap().to_str().unwrap().to_string())
-//     }
-//
-//     fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
-//         let status = Status::read(self.conf.clone())?;
-//
-//         let mut paths = LocalBinaryPaths{ query: "".to_string(), store: "".to_string() };
-//         if self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version.clone(), "databend-query".to_string()).is_err() {
-//             // fetch latest version of databend binary if version not found
-//             writer.write_ok(&*format!("Cannot find databend binary path in version {}, start to download", args.value_of("version").unwrap()));
-//             FetchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
-//         }
-//         SwitchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
-//         let status = Status::read(self.conf.clone())?;
-//         paths.query = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version.clone(), "databend-query".to_string()).expect("cannot find query bin");
-//         paths.store = self.binary_path(format!("{}/bin", self.conf.databend_dir), status.version, "databend-dfs".to_string()).expect("cannot find store bin");
-//         return Ok(paths)
-//     }
-//
-//     fn generate_dfs_config() -> DfsConfig {
-//         let mut config = DfsConfig::empty();
-//         if !portpicker::is_free(config.metric_api_address.parse().unwrap()) {
-//             config.metric_api_address = Status::find_unused_local_port()
-//         }
-//
-//         if !portpicker::is_free(config.http_api_address.parse().unwrap()) {
-//             config.http_api_address = Status::find_unused_local_port()
-//         }
-//         if !portpicker::is_free(config.flight_api_address.parse().unwrap()) {
-//             config.flight_api_address = Status::find_unused_local_port()
-//         }
-//         return config
-//     }
-//     fn generate_local_meta_config(&self, args: &ArgMatches, bin_path: LocalBinaryPaths) -> Option<LocalMetaConfig> {
-//         let mut config = DfsConfig::empty();
-//
-//         if args.value_of("meta_address").is_some() && args.value_of("meta_address").unwrap().is_empty() {
-//             config.flight_api_address = args.value_of("meta_address").unwrap().to_string();
-//         }
-//         config.log_level = args.value_of("log_level").unwrap().to_string();
-//         let log_base = format!("{}/logs", self.conf.clone().databend_dir);
-//         if !Path::new(log_base.as_str()).exists() {
-//             fs::create_dir(Path::new(log_base.as_str())).expect(format!("cannot create directory {}", log_base).as_str());
-//         }
-//         let meta_log_dir = format!("{}/local_meta_log", log_base);
-//         if !Path::new(meta_log_dir.as_str()).exists() {
-//             fs::create_dir(Path::new(meta_log_dir.as_str())).expect(format!("cannot create directory {}", meta_log_dir).as_str());
-//         }
-//         config.log_dir = meta_log_dir;
-//
-//         let data_base = format!("{}/data", self.conf.clone().databend_dir);
-//         if !Path::new(data_base.as_str()).exists() {
-//             fs::create_dir(Path::new(data_base.as_str())).expect(format!("cannot create directory {}", data_base).as_str());
-//         }
-//         let meta_data_dir = format!("{}/_meta_local_fs", data_base);
-//         if !Path::new(meta_data_dir.as_str()).exists() {
-//             fs::create_dir(Path::new(meta_data_dir.as_str())).expect(format!("cannot create directory {}", meta_data_dir).as_str());
-//         }
-//         config.local_fs_dir = meta_data_dir;
-//         config.meta_config.single = true;
-//         return Some(LocalMetaConfig {
-//             config,
-//             pid: None,
-//             path: Some(bin_path.store),
-//             log_dir: Some(log_base)
-//         })
-//     }
-//
-//     fn provision_local_meta_service(&self, writer: &mut Writer, args: &ArgMatches, bin_path: LocalBinaryPaths) -> Result<()> {
-//         let mut meta_config = self.generate_local_meta_config(args, bin_path).expect("cannot generate metaservice config");
-//         match meta_config.start() {
-//             Ok(_) => {
-//                 assert!(meta_config.get_pid().is_some());
-//                 let mut status = Status::read(self.conf.clone())?;
-//                 status.local_configs.meta_configs = Some(meta_config.clone());
-//                 status.write()?;
-//                 writer.write_ok(format!("👏 successfully started meta service with rpc endpoint {}", meta_config.config.flight_api_address).as_str());
-//                 return Ok(())
-//             }
-//             Err(e) => {
-//                 return Err(e)
-//             }
-//         }
-//
-//     }
-//
-//     fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()>{
-//         match self.local_exec_precheck(args) {
-//             Ok(_) => {
-//                 writer.write_ok("databend clusters precheck passed!");
-//                 /// ensuring needed dependencies
-//                 let bin_path = self.ensure_bin(writer, args).expect("cannot find binary path");
-//                 self.provision_local_meta_service(writer, args, bin_path);
-//                 Ok(())
-//             }
-//             Err(CliError::Unknown(s)) => {
-//                 writer.write_err(s.as_str());
-//                 return Ok(())
-//             }
-//             Err(E) => {
-//                 log::error!("{:?}", E);
-//                 return Ok(())
-//             }
-//         }
-//
-//     }
-//
-//     /// precheck whether current local profile applicable for local host machine
-//     fn local_exec_precheck(&self, args: &ArgMatches) -> Result<()> {
-//         let status = Status::read(self.conf.clone())?;
-//         if status.local_configs !=  LocalConfig::empty() {
-//             return Err(CliError::Unknown(format!("❗ found previously existed clusters with config in {}", status.path).to_string()))
-//         }
-//         if !portpicker::is_free(args.value_of("mysql_handler_port").unwrap().parse().unwrap()) {
-//             return Err(CliError::Unknown(format!("mysql handler port {} is occupied by other program", args.value_of("mysql_handler_port").unwrap()).to_string()))
-//         }
-//         if !portpicker::is_free(args.value_of("clickhouse_handler_port").unwrap().parse().unwrap()) {
-//             return Err(CliError::Unknown(format!("clickhouse handler port {} is occupied by other program", args.value_of("clickhouse_handler_port").unwrap()).to_string()))
-//         }
-//         if args.value_of("meta_address").is_some() && !args.value_of("meta_address").unwrap().is_empty() && !portpicker::is_free(args.value_of("meta_address").unwrap().parse().unwrap()) {
-//             return Err(CliError::Unknown(format!("clickhouse handler port {} is occupied by other program", args.value_of("clickhouse_handler_port").unwrap()).to_string()))
-//         }
-//         if args.value_of("store_address").is_some() && !args.value_of("store_address").unwrap().is_empty() && !portpicker::is_free(args.value_of("store_address").unwrap().parse().unwrap()) {
-//             return Err(CliError::Unknown(format!("clickhouse handler port {} is occupied by other program", args.value_of("clickhouse_handler_port").unwrap()).to_string()))
-//         }
-//
-//         Ok(())
-//     }
-//
-//     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
-//         match args {
-//             Some(matches) => {
-//                 let profile= matches.value_of_t("profile");
-//                 match profile {
-//                     Ok(ClusterProfile::Local) => {
-//                         return self.local_exec_match(writer, matches);
-//                     }
-//                     Ok(ClusterProfile::Cluster) => {
-//                         todo!()
-//                     }
-//                     Err(_) => {
-//                         writer.write_err("currently profile only support clusters or local")
-//                     }
-//                 }
-//
-//             }
-//             None => {
-//                 println!("none ");
-//             }
-//         }
-//
-//         Ok(())
-//     }
-//
-// }
+#[derive(Clone)]
+pub struct DeleteCommand {
+    conf: Config,
+}
+struct LocalBinaryPaths {
+    query: String,
+    store: String,
+}
+impl DeleteCommand {
+    pub fn create(conf: Config) -> Self {
+        DeleteCommand { conf }
+    }
+    pub fn generate() -> App<'static> {
+        App::new("delete")
+            .setting(AppSettings::ColoredHelp)
+            .setting(AppSettings::DisableVersionFlag)
+            .about("Create a databend clusters based on profile")
+            .arg(Arg::new("profile").long("profile").about("Profile to delete, support local and clusters").required(false).takes_value(true))
+            .arg(Arg::new("purge").long("purge").takes_value(false).about("Purge would delete both persist data and deploy instances"))
+    }
+
+    fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
+        let status = Status::read(self.conf.clone())?;
+        let local_meta_srv = status.local_configs;
+        match local_meta_srv.meta_configs {
+            Some(meta) => {
+                meta.kill().expect("cannot stop metaservice");
+                let mut status = Status::read(self.conf.clone())?;
+                status.local_configs.meta_configs = None;
+                status.write()?;
+                writer.write_ok("🚀 stopped meta service");
+
+            }
+            None => {
+                writer.write_ok("no meta service found in local, skipped");
+            }
+        }
+        Ok(())
+    }
+
+    fn get_profile(&self, profile: Option<&str>) -> Result<ClusterProfile> {
+        match profile {
+            Some("local") => {
+                Ok(ClusterProfile::Local)
+            }
+            Some("cluster") => {
+                Ok(ClusterProfile::Cluster)
+            }
+            None => {
+                let status = Status::read(self.conf.clone())?;
+                if status.current_profile.is_none() {
+                    return Err(CliError::Unknown("Currently there is no profile in use, please create or use a profile".parse().unwrap()))
+                }
+                Ok(serde_json::from_str::<ClusterProfile>(&*status.current_profile.unwrap())?)
+            }
+            _ => {
+                return Err(CliError::Unknown("Currently there is no profile in use, please create or use a profile".parse().unwrap()))
+            }
+        }
+    }
+    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        match args {
+            Some(matches) => {
+                let p = self.get_profile(matches.value_of("profile"));
+                match p {
+                    Ok(ClusterProfile::Local) => {
+                        self.local_exec_match(writer, matches);
+                    }
+                    Ok(ClusterProfile::Cluster)=> {
+                        todo!()
+                    }
+                    Err(e) => {
+                        writer.write_err(format!("cannot parse profile, {:?}", e).as_str())
+                    }
+                }
+            }
+            None => {
+                writer.write_err(&*format!("cannot find matches for cluster delete"));
+            }
+        }
+
+        Ok(())
+    }
+
+}

@@ -284,7 +284,7 @@ impl LocalMetaConfig {
             {
                 format!("http://{}/v1/health", self.config.admin_api_address)
             } else {
-                format!("")
+                todo!()
             }
         };
         (client, url)
