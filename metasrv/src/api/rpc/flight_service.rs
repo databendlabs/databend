@@ -33,7 +33,7 @@ use common_arrow::arrow_flight::SchemaResult;
 use common_arrow::arrow_flight::Ticket;
 use common_flight_rpc::FlightClaim;
 use common_flight_rpc::FlightToken;
-use common_meta::MetaFlightAction;
+use common_meta_flight::MetaFlightAction;
 use common_tracing::tracing;
 use futures::Stream;
 use futures::StreamExt;

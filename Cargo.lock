@@ -1010,7 +1010,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-meta"
+name = "common-meta-flight"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1568,7 +1568,7 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-vo",
  "common-management",
- "common-meta",
+ "common-meta-flight",
  "common-metatypes",
  "common-planners",
  "common-streams",
@@ -3079,7 +3079,7 @@ dependencies = [
  "common-infallible",
  "common-kv-api",
  "common-kv-api-vo",
- "common-meta",
+ "common-meta-flight",
  "common-metatypes",
  "common-planners",
  "common-raft-store",
