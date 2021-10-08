@@ -71,7 +71,7 @@ async fn test_s3_input_stream_api() -> common_exception::Result<()> {
     fixture.gen_test_obj().await?;
 
     let s3 = S3::new(fixture.region.clone(), fixture.bucket_name.clone());
-    let mut input = s3.get_input_stream(&test_key, None).await?;
+    let mut input = s3.get_input_stream(&test_key, None)?;
     let mut buffer = vec![];
     input.read_to_end(&mut buffer).await?;
     assert_eq!(fixture.content, buffer);
@@ -94,7 +94,7 @@ async fn test_s3_cli_with_credentials() -> common_exception::Result<()> {
         secret,
     )?;
     let mut buffer = vec![];
-    let mut input = s3.get_input_stream(&test_key, None).await?;
+    let mut input = s3.get_input_stream(&test_key, None)?;
     input.read_to_end(&mut buffer).await?;
     assert_eq!(fixture.content, buffer);
     Ok(())
@@ -108,7 +108,7 @@ async fn test_s3_input_stream_seek_api() -> common_exception::Result<()> {
     fixture.gen_test_obj().await?;
 
     let s3 = S3::new(fixture.region.clone(), fixture.bucket_name.clone());
-    let mut input = s3.get_input_stream(&test_key, None).await?;
+    let mut input = s3.get_input_stream(&test_key, None)?;
     let mut buffer = vec![];
     input.seek(SeekFrom::Current(1)).await?;
     input.read_to_end(&mut buffer).await?;

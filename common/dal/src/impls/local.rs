@@ -69,9 +69,11 @@ impl DataAccessor for Local {
         Ok(Box::new(std::fs::File::create(path)?))
     }
 
-    async fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {
+    fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {
         let path = self.prefix_with_root(path)?;
-        Ok(Box::new(tokio::fs::File::open(path).await?.compat()))
+        let std_file = std::fs::File::open(path)?;
+        let tokio_file = tokio::fs::File::from_std(std_file);
+        Ok(Box::new(tokio_file.compat()))
     }
 
     async fn get(&self, path: &str) -> Result<Bytes> {

@@ -111,7 +111,7 @@ impl DataAccessor for S3 {
         todo!()
     }
 
-    async fn get_input_stream(
+    fn get_input_stream(
         &self,
         path: &str,
         stream_len: Option<u64>,

@@ -79,7 +79,7 @@ pub(crate) async fn read_part(
 ) -> Result<()> {
     let loc = block_location(&part.name);
     // TODO pass in parquet file len
-    let mut reader = data_accessor.get_input_stream(&loc, None).await?;
+    let mut reader = data_accessor.get_input_stream(&loc, None)?;
     let metadata = read_metadata_async(&mut reader)
         .await
         .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
