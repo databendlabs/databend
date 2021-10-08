@@ -137,7 +137,6 @@ impl Table for ParquetTable {
             statistics: Statistics::default(),
             description: format!("(Read from Parquet Engine table  {}.{})", db, self.name()),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs,
         })

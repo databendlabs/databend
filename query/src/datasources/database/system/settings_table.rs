@@ -94,7 +94,6 @@ impl Table for SettingsTable {
             statistics: Statistics::default(),
             description: "(Read from system.settings table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })

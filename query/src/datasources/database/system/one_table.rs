@@ -87,7 +87,6 @@ impl Table for OneTable {
             statistics: Statistics::new_exact(1, std::mem::size_of::<u8>()),
             description: "(Read from system.one table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })

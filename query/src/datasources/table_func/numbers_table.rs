@@ -150,7 +150,6 @@ impl Table for NumbersTable {
                 &self.table_name, statistics.read_rows, statistics.read_bytes
             ),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: tbl_arg,
             push_downs,
         })

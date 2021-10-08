@@ -130,7 +130,6 @@ impl Table for FuseTable {
                 statistics,
                 description: "".to_string(),
                 scan_plan: Default::default(),
-                remote: true,
                 tbl_args: None,
                 push_downs,
             };
@@ -296,7 +295,6 @@ impl FuseTable {
             statistics: Statistics::default(),
             description: "".to_string(),
             scan_plan: Default::default(),
-            remote: true,
             tbl_args: None,
             push_downs: None,
         })
