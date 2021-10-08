@@ -18,17 +18,16 @@ use serde::Deserialize;
 use serde::Serialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
-pub const KVSRV_API_HOST : &str = "KVSRV_API_HOST";
-pub const KVSRV_API_PORT : &str = "KVSRV_API_PORT";
-pub const KVSRV_RAFT_DIR : &str = "KVSRV_RAFT_DIR";
-pub const KVSRV_NO_SYNC : &str = "KVSRV_NO_SYNC";
-pub const KVSRV_SNAPSHOT_LOGS_SINCE_LAST : &str = "KVSRV_SNAPSHOT_LOGS_SINCE_LAST";
+pub const KVSRV_API_HOST: &str = "KVSRV_API_HOST";
+pub const KVSRV_API_PORT: &str = "KVSRV_API_PORT";
+pub const KVSRV_RAFT_DIR: &str = "KVSRV_RAFT_DIR";
+pub const KVSRV_NO_SYNC: &str = "KVSRV_NO_SYNC";
+pub const KVSRV_SNAPSHOT_LOGS_SINCE_LAST: &str = "KVSRV_SNAPSHOT_LOGS_SINCE_LAST";
 pub const KVSRV_HEARTBEAT_INTERVAL: &str = "KVSRV_HEARTBEAT_INTERVAL";
 pub const KVSRV_INSTALL_SNAPSHOT_TIMEOUT: &str = "KVSRV_INSTALL_SNAPSHOT_TIMEOUT";
 pub const KVSRV_BOOT: &str = "KVSRV_BOOT";
 pub const KVSRV_SINGLE: &str = "KVSRV_SINGLE";
 pub const KVSRV_ID: &str = "KVSRV_ID";
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct RaftConfig {

@@ -19,9 +19,9 @@ use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 
+use crate::cmds::ClusterCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
-use crate::cmds::ClusterCommand;
 
 #[derive(Clone, Debug)]
 pub struct Config {

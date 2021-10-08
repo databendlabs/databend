@@ -17,30 +17,23 @@ use std::str::FromStr;
 
 use clap::App;
 use clap::AppSettings;
-use clap::Arg;
 use clap::ArgMatches;
 
+use crate::cmds::clusters::create::CreateCommand;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
-use crate::cmds::FetchCommand;
-use crate::cmds::ListCommand;
-use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
-use crate::error::{Result, CliError};
-use crate::cmds::cluster::create::CreateCommand;
-use databend_query::configs::QueryConfig;
-use databend_dfs::configs::Config as StoreConfig;
-use structopt::StructOpt;
-use serde_json::Value;
+use crate::error::Result;
+
 #[derive(Clone)]
 pub struct ClusterCommand {
     conf: Config,
-    clap: App<'static>
+    clap: App<'static>,
 }
 
-// Support to up and run databend cluster on different platforms
+// Support to up and run databend clusters on different platforms
 // For local profile, databend would be deployed as processes in bare metal host
-// For cluster profile, databend would be deployed as CRD on kubernetes cluster
+// For clusters profile, databend would be deployed as CRD on kubernetes clusters
 pub enum ClusterProfile {
     Local,
     Cluster,
@@ -53,7 +46,7 @@ impl FromStr for ClusterProfile {
     fn from_str(s: &str) -> std::result::Result<ClusterProfile, &'static str> {
         match s {
             "local" => Ok(ClusterProfile::Local),
-            "cluster" => Ok(ClusterProfile::Cluster),
+            "clusters" => Ok(ClusterProfile::Cluster),
             _ => Err("no match for profile"),
         }
     }
@@ -65,16 +58,12 @@ impl ClusterCommand {
         ClusterCommand { conf, clap }
     }
     pub fn generate() -> App<'static> {
-        let app = App::new("cluster")
+        let app = App::new("clusters")
             .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
             .about("Cluster life cycle management")
-            .subcommand(
-                CreateCommand::generate()
-            ).subcommand(
-            DeleteCommand::generate()
-            );
-        return app;
+            .subcommand(CreateCommand::generate());
+        app
     }
 
     pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
@@ -84,7 +73,7 @@ impl ClusterCommand {
                     let create = CreateCommand::create(self.conf.clone());
                     create.exec_match(writer, matches.subcommand_matches("create"))?;
                 }
-                _ => writer.write_err("unknown command, usage: cluster -h"),
+                _ => writer.write_err("unknown command, usage: clusters -h"),
             },
             None => {
                 println!("None")
@@ -97,7 +86,7 @@ impl ClusterCommand {
 
 impl Command for ClusterCommand {
     fn name(&self) -> &str {
-        "cluster"
+        "clusters"
     }
 
     fn about(&self) -> &str {
@@ -121,6 +110,3 @@ impl Command for ClusterCommand {
         Ok(())
     }
 }
-
-
-

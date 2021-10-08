@@ -30,18 +30,18 @@ macro_rules! default_local_config {
             query_configs: vec![LocalQueryConfig {
                 pid: Some(123),
                 config: QueryConfig::default(),
-                path: Some("~/.databend/test/databend-query".to_string())
+                path: Some("~/.databend/test/databend-query".to_string()),
             }],
             store_configs: Some(LocalStoreConfig {
                 pid: Some(234),
                 config: StoreConfig::empty(),
-                path: Some("~/.databend/test/databend-store".to_string())
+                path: Some("~/.databend/test/databend-store".to_string()),
             }),
             meta_configs: Some(LocalStoreConfig {
                 pid: Some(345),
                 config: StoreConfig::empty(),
-                path: Some("~/.databend/test/databend-store".to_string())
-            })
+                path: Some("~/.databend/test/databend-store".to_string()),
+            }),
         }
     };
 }
@@ -88,7 +88,7 @@ fn test_status() -> Result<()> {
         local_config.query_configs.push(LocalQueryConfig {
             config: QueryConfig::default(),
             pid: Some(123),
-            path: None
+            path: None,
         });
         status.version = "default".to_string();
         status.local_configs = local_config;
@@ -98,7 +98,7 @@ fn test_status() -> Result<()> {
         expected_config.query_configs.push(LocalQueryConfig {
             config: QueryConfig::default(),
             pid: Some(123),
-            path: None
+            path: None,
         });
         // should have empty profile with set version
         if let Ok(status) = Status::read(conf.clone()) {

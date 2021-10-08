@@ -19,7 +19,8 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
-use crate::cmds::{CommentCommand, ClusterCommand};
+use crate::cmds::ClusterCommand;
+use crate::cmds::CommentCommand;
 use crate::cmds::Config;
 use crate::cmds::Env;
 use crate::cmds::HelpCommand;

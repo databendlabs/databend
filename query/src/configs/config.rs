@@ -48,7 +48,7 @@ lazy_static! {
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
 #[derive(
-Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
+    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 #[serde(default)]
 pub struct Config {

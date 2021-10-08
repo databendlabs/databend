@@ -15,23 +15,23 @@
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::os::unix::prelude::FromRawFd;
+use std::os::unix::prelude::IntoRawFd;
 use std::path::Path;
-use nix::unistd::Pid;
-use log::{info, warn};
+use std::process::Command;
+use std::process::Stdio;
+use std::thread::sleep;
+use std::time;
 
-use databend_meta::configs::Config as StoreConfig;
-use databend_query::configs::{Config as QueryConfig};
 use databend_query::configs::Config as QueryConfig;
+use libc::pid_t;
+use log::info;
+use metasrv::configs::Config as MetaConfig;
+use nix::unistd::Pid;
 
 use crate::cmds::Config;
-use crate::error::{Result, CliError};
-use std::os::unix::raw::pid_t;
-use std::process::{Command, Stdio};
-use std::time;
-use crate::cmds::cluster::cluster::ClusterProfile;
-use std::os::unix::prelude::{AsRawFd, FromRawFd, IntoRawFd};
-use reqwest::Client;
-use std::thread::sleep;
+use crate::error::CliError;
+use crate::error::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct Status {
@@ -45,8 +45,8 @@ pub struct Status {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct LocalConfig {
     pub query_configs: Vec<LocalQueryConfig>,
-    pub store_configs: Option<LocalStoreConfig>,
-    pub meta_configs: Option<LocalStoreConfig>,
+    pub store_configs: Option<LocalMetaConfig>,
+    pub meta_configs: Option<LocalMetaConfig>,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -57,8 +57,8 @@ pub struct LocalQueryConfig {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-pub struct LocalStoreConfig {
-    pub config: StoreConfig,
+pub struct LocalMetaConfig {
+    pub config: MetaConfig,
     pub pid: Option<pid_t>,
     pub path: Option<String>, // download location
     pub log_dir: Option<String>,
@@ -81,43 +81,36 @@ pub trait LocalRuntime {
         match pid {
             Some(id) => {
                 match nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT)) {
-                    Ok(_) => {
-                        Ok(())
-                    }
-                    Err(e) => {
-                        Err(CliError::from(e))
-                    }
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(CliError::from(e)),
                 }
             }
-            None => {
-                Ok(())
-            }
+            None => Ok(()),
         }
     }
     fn start(&mut self) -> Result<()> {
         if self.get_pid().is_some() {
-            return Err(CliError::Unknown(format!("current instance in path {} already started", self.get_path().expect("cannot retrieve executable path"))));
+            return Err(CliError::Unknown(format!(
+                "current instance in path {} already started",
+                self.get_path().expect("cannot retrieve executable path")
+            )));
         }
         let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
         match self.verify() {
-            Ok(_) => {
-                Ok(())
-            }
-            Err(e) => {
-                return Err(e)
-            }
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
         }
     }
     fn get_pid(&self) -> Option<pid_t>;
-    fn verify(&self)  -> Result<()> ;
+    fn verify(&self) -> Result<()>;
     fn get_path(&self) -> Option<String>;
     fn generate_command(&mut self) -> Result<Command>;
     fn set_pid(&mut self, id: pid_t);
 }
 
-impl LocalRuntime for LocalStoreConfig {
+impl LocalRuntime for LocalMetaConfig {
     const RETRIES: u16 = 5;
 
     fn get_pid(&self) -> Option<pid_t> {
@@ -127,15 +120,18 @@ impl LocalRuntime for LocalStoreConfig {
     // will check health for endpoint through http request
     fn verify(&self) -> Result<()> {
         let (cli, url) = self.get_health_probe();
-        for _ in 0..LocalStoreConfig::RETRIES {
+        for _ in 0..LocalMetaConfig::RETRIES {
             let resp = cli.get(url.as_str()).send();
-            if !resp.is_ok() || !resp.unwrap().status().is_success() {
+            if resp.is_err() || !resp.unwrap().status().is_success() {
                 sleep(time::Duration::from_secs(1));
             } else {
-                return Ok(())
+                return Ok(());
             }
         }
-        return Err(CliError::Unknown(format!("cannot fetch healthness status for store instance: {}", url)))
+        return Err(CliError::Unknown(format!(
+            "cannot fetch healthness status for store instance: {}",
+            url
+        )));
     }
 
     fn get_path(&self) -> Option<String> {
@@ -146,30 +142,66 @@ impl LocalRuntime for LocalStoreConfig {
     fn generate_command(&mut self) -> Result<Command> {
         let conf = self.config.clone();
         if self.path.is_none() {
-            return Err(CliError::Unknown("cannot retrieve store binary execution path".parse().unwrap()));
+            return Err(CliError::Unknown(
+                "cannot retrieve store binary execution path"
+                    .parse()
+                    .unwrap(),
+            ));
         }
         let mut command = Command::new(self.path.clone().unwrap());
-        let log_dir = format!("{}/_local_logs", self.log_dir.as_ref().expect("cannot find log dir for store"));
+        let log_dir = format!(
+            "{}/_local_logs",
+            self.log_dir
+                .as_ref()
+                .expect("cannot find log dir for store")
+        );
 
         if !Path::new(log_dir.as_str()).exists() {
-            std::fs::create_dir(Path::new(log_dir.as_str())).expect(format!("cannot create directory {}", log_dir).as_str());
+            std::fs::create_dir(Path::new(log_dir.as_str()))
+                .unwrap_or_else(|_| panic!("cannot create directory {}", log_dir));
         }
 
-        let out_file = File::create(format!("{}/std_out.log", log_dir).as_str()).expect("couldn't create stdout file");
-        let err_file = File::create(format!("{}/std_err.log", log_dir).as_str()).expect("couldn't create stdout file");
+        let out_file = File::create(format!("{}/std_out.log", log_dir).as_str())
+            .expect("couldn't create stdout file");
+        let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
+            .expect("couldn't create stdout file");
         // configure runtime by process local env settings
         // TODO(zhihanz): configure on other needed env variables for raft metastore
-        command.env(databend_dfs::configs::config::STORE_LOG_LEVEL, conf.log_level)
-            .env(databend_dfs::configs::config::STORE_LOG_DIR, conf.log_dir)
-            .env(databend_dfs::configs::config::STORE_FLIGHT_API_ADDRESS, conf.flight_api_address)
-            .env(databend_dfs::configs::config::STORE_LOCAL_FS_DIR, conf.local_fs_dir)
-            .env(databend_dfs::configs::config::STORE_HTTP_API_ADDRESS, conf.http_api_address)
-            .env(databend_dfs::configs::config::STORE_METRIC_API_ADDRESS, conf.metric_api_address)
-            .env(databend_dfs::configs::config::STORE_RPC_TLS_SERVER_CERT, conf.rpc_tls_server_cert)
-            .env(databend_dfs::configs::config::STORE_RPC_TLS_SERVER_KEY, conf.rpc_tls_server_key)
-            .env(databend_dfs::configs::config::STORE_TLS_SERVER_CERT, conf.tls_server_cert)
-            .env(databend_dfs::configs::config::STORE_TLS_SERVER_KEY, conf.tls_server_key)
-            .env(common_raft_store::config::KVSRV_SINGLE, conf.meta_config.single.to_string())
+        command
+            .env(metasrv::configs::config::METASRV_LOG_LEVEL, conf.log_level)
+            .env(metasrv::configs::config::METASRV_LOG_DIR, conf.log_dir)
+            .env(
+                metasrv::configs::config::METASRV_FLIGHT_API_ADDRESS,
+                conf.flight_api_address,
+            )
+            .env(
+                metasrv::configs::config::ADMIN_API_ADDRESS,
+                conf.admin_api_address,
+            )
+            .env(
+                metasrv::configs::config::METASRV_METRIC_API_ADDRESS,
+                conf.metric_api_address,
+            )
+            .env(
+                metasrv::configs::config::FLIGHT_TLS_SERVER_CERT,
+                conf.flight_tls_server_cert,
+            )
+            .env(
+                metasrv::configs::config::FLIGHT_TLS_SERVER_KEY,
+                conf.flight_tls_server_key,
+            )
+            .env(
+                metasrv::configs::config::ADMIN_TLS_SERVER_CERT,
+                conf.admin_tls_server_cert,
+            )
+            .env(
+                metasrv::configs::config::ADMIN_TLS_SERVER_KEY,
+                conf.admin_tls_server_key,
+            )
+            .env(
+                common_raft_store::config::KVSRV_SINGLE,
+                conf.raft_config.single.to_string(),
+            )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
@@ -182,7 +214,7 @@ impl LocalRuntime for LocalStoreConfig {
     }
 }
 
-impl LocalRuntime for LocalQueryConfig{
+impl LocalRuntime for LocalQueryConfig {
     const RETRIES: u16 = 5;
 
     fn get_pid(&self) -> Option<pid_t> {
@@ -202,16 +234,25 @@ impl LocalRuntime for LocalQueryConfig{
         let mut conf = self.config.clone();
         if !conf.config_file.is_empty() {
             // logging debug
-            conf = databend_query::configs::Config::load_from_toml(conf.config_file.as_str()).expect("query instance configuration cannot load from toml");
+            conf = databend_query::configs::Config::load_from_toml(conf.config_file.as_str())
+                .expect("query instance configuration cannot load from toml");
         }
-        conf = databend_query::configs::Config::load_from_env(&conf).expect("cannot parse env variable for query configuration");
+        conf = databend_query::configs::Config::load_from_env(&conf)
+            .expect("cannot parse env variable for query configuration");
         if self.path.is_none() {
-            return Err(CliError::Unknown("cannot retrieve query instance execution path".parse().unwrap()));
+            return Err(CliError::Unknown(
+                "cannot retrieve query instance execution path"
+                    .parse()
+                    .unwrap(),
+            ));
         }
         self.config = conf.clone(); // update configurations
         let mut command = Command::new(self.path.clone().unwrap());
         // configure runtime by process local env settings
-        command.env(databend_query::configs::config::LOG_LEVEL, conf.log.log_level);
+        command.env(
+            databend_query::configs::config_log::LOG_LEVEL,
+            conf.log.log_level,
+        );
         // logging debug
         info!("executing command {:?}", command);
         Ok(command)
@@ -229,7 +270,7 @@ impl LocalQueryConfig {
     }
 }
 
-impl LocalStoreConfig {
+impl LocalMetaConfig {
     // retrieve the configured url for health check
     // TODO(zhihanz): http TLS endpoint
     pub fn get_health_probe(&self) -> (reqwest::blocking::Client, String) {
@@ -238,13 +279,15 @@ impl LocalStoreConfig {
             .expect("Cannot build health probe for health check");
 
         let url = {
-            if self.config.tls_server_key.is_empty() || self.config.tls_server_cert.is_empty() {
-                format!("http://{}/v1/health", self.config.http_api_address)
+            if self.config.admin_tls_server_key.is_empty()
+                || self.config.admin_tls_server_cert.is_empty()
+            {
+                format!("http://{}/v1/health", self.config.admin_api_address)
             } else {
                 format!("")
             }
         };
-        return (client, url);
+        (client, url)
     }
 }
 
@@ -280,6 +323,9 @@ impl Status {
         Ok(())
     }
     pub fn find_unused_local_port() -> String {
-        format!("0.0.0.0:{}", portpicker::pick_unused_port().expect("cannot find a non-occupied port"))
+        format!(
+            "0.0.0.0:{}",
+            portpicker::pick_unused_port().expect("cannot find a non-occupied port")
+        )
     }
 }

@@ -18,8 +18,8 @@ use structopt_toml::StructOptToml;
 use crate::configs::Config;
 
 // Log env.
-const LOG_LEVEL: &str = "LOG_LEVEL";
-const LOG_DIR: &str = "LOG_DIR";
+pub const LOG_LEVEL: &str = "LOG_LEVEL";
+pub const LOG_DIR: &str = "LOG_DIR";
 
 /// Log config group.
 /// serde(default) make the toml de to default working.

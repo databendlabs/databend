@@ -15,7 +15,7 @@
 #[cfg(test)]
 mod status_test;
 
-mod cluster;
+mod clusters;
 mod command;
 mod comments;
 mod config;
@@ -27,6 +27,8 @@ mod status;
 mod versions;
 mod writer;
 
+pub use clusters::cluster::ClusterCommand;
+pub use clusters::create::CreateCommand;
 pub use comments::comment::CommentCommand;
 pub use config::Config;
 pub use env::Env;
@@ -39,5 +41,3 @@ pub use processor::Processor;
 pub use status::Status;
 pub use versions::version::VersionCommand;
 pub use writer::Writer;
-pub use cluster::cluster::ClusterCommand;
-pub use cluster::create::CreateCommand;

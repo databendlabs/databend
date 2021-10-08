@@ -39,46 +39,56 @@ lazy_static! {
     };
 }
 
+pub const METASRV_LOG_LEVEL: &str = "METASRV_LOG_LEVEL";
+pub const METASRV_LOG_DIR: &str = "METASRV_LOG_DIR";
+pub const METASRV_METRIC_API_ADDRESS: &str = "METASRV_METRIC_API_ADDRESS";
+pub const ADMIN_API_ADDRESS: &str = "ADMIN_API_ADDRESS";
+pub const ADMIN_TLS_SERVER_CERT: &str = "ADMIN_TLS_SERVER_CERT";
+pub const ADMIN_TLS_SERVER_KEY: &str = "ADMIN_TLS_SERVER_KEY";
+pub const METASRV_FLIGHT_API_ADDRESS: &str = "METASRV_FLIGHT_API_ADDRESS";
+pub const FLIGHT_TLS_SERVER_CERT: &str = "FLIGHT_TLS_SERVER_CERT";
+pub const FLIGHT_TLS_SERVER_KEY: &str = "FLIGHT_TLS_SERVER_KEY";
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
 pub struct Config {
-    #[structopt(long, env = "METASRV_LOG_LEVEL", default_value = "INFO")]
+    #[structopt(long, env = METASRV_LOG_LEVEL, default_value = "INFO")]
     pub log_level: String,
 
-    #[structopt(long, env = "METASRV_LOG_DIR", default_value = "./_logs")]
+    #[structopt(long, env = METASRV_LOG_DIR, default_value = "./_logs")]
     pub log_dir: String,
 
     #[structopt(
-        long,
-        env = "METASRV_METRIC_API_ADDRESS",
-        default_value = "127.0.0.1:28001"
+    long,
+    env = METASRV_METRIC_API_ADDRESS,
+    default_value = "127.0.0.1:28001"
     )]
     pub metric_api_address: String,
 
-    #[structopt(long, env = "ADMIN_API_ADDRESS", default_value = "127.0.0.1:28002")]
+    #[structopt(long, env = ADMIN_API_ADDRESS, default_value = "127.0.0.1:28002")]
     pub admin_api_address: String,
 
-    #[structopt(long, env = "ADMIN_TLS_SERVER_CERT", default_value = "")]
+    #[structopt(long, env = ADMIN_TLS_SERVER_CERT, default_value = "")]
     pub admin_tls_server_cert: String,
 
-    #[structopt(long, env = "ADMIN_TLS_SERVER_KEY", default_value = "")]
+    #[structopt(long, env = ADMIN_TLS_SERVER_KEY, default_value = "")]
     pub admin_tls_server_key: String,
 
     #[structopt(
-        long,
-        env = "METASRV_FLIGHT_API_ADDRESS",
-        default_value = "127.0.0.1:9191"
+    long,
+    env = METASRV_FLIGHT_API_ADDRESS,
+    default_value = "127.0.0.1:9191"
     )]
     pub flight_api_address: String,
 
     #[structopt(
-        long,
-        env = "FLIGHT_TLS_SERVER_CERT",
-        default_value = "",
-        help = "Certificate for server to identify itself"
+    long,
+    env = FLIGHT_TLS_SERVER_CERT,
+    default_value = "",
+    help = "Certificate for server to identify itself"
     )]
     pub flight_tls_server_cert: String,
 
-    #[structopt(long, env = "FLIGHT_TLS_SERVER_KEY", default_value = "")]
+    #[structopt(long, env = FLIGHT_TLS_SERVER_KEY, default_value = "")]
     pub flight_tls_server_key: String,
 
     #[structopt(flatten)]
