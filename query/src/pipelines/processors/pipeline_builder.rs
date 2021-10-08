@@ -67,7 +67,7 @@ impl PipelineBuilder {
     pub fn build(mut self, node: &PlanNode) -> Result<Pipeline> {
         tracing::debug!("Received plan:\n{:?}", node);
         let pipeline = self.visit(node)?;
-        tracing::debug!("Pipeline:\n{:?}", pipeline);
+        // tracing::debug!("Pipeline:\n{:?}", pipeline);
         Ok(pipeline)
     }
 

@@ -59,6 +59,10 @@ impl ExpressionExecutor {
         })
     }
 
+    pub fn schema(&self) -> DataSchemaRef {
+        self.output_schema.clone()
+    }
+
     pub fn validate(&self) -> Result<()> {
         Ok(())
     }

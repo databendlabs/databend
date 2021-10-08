@@ -17,10 +17,6 @@ mod pipe_test;
 #[cfg(test)]
 mod pipeline_builder_test;
 #[cfg(test)]
-mod pipeline_display_test;
-#[cfg(test)]
-mod pipeline_walker_test;
-#[cfg(test)]
 mod processor_dag_test;
 #[cfg(test)]
 mod processor_dag_display_test;
@@ -35,22 +31,22 @@ mod processor_mixed_test;
 mod pipe;
 mod pipeline;
 mod pipeline_builder;
-mod pipeline_display;
-mod pipeline_walker;
 mod processor;
 #[allow(dead_code)]
 mod processor_dag;
 #[allow(dead_code)]
 mod processor_dag_display;
+#[allow(dead_code)]
+mod processor_dag_executor;
 
 mod processor_empty;
 mod processor_merge;
 mod processor_mixed;
 
+
 pub use pipe::Pipe;
 pub use pipeline::Pipeline;
 pub use pipeline_builder::PipelineBuilder;
-pub use processor::FormatterSettings;
 pub use processor::Processor;
 pub use processor_empty::EmptyProcessor;
 pub use processor_merge::MergeProcessor;

@@ -18,7 +18,6 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFactory;
-use crate::aggregates::*;
 
 #[test]
 fn test_aggregate_combinator_function() -> Result<()> {

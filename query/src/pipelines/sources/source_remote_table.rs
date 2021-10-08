@@ -4,9 +4,8 @@ use common_datablocks::DataBlock;
 use crate::sessions::DatabendQueryContextRef;
 use common_planners::ReadDataSourcePlan;
 use common_streams::{SendableDataBlockStream, DataBlockStream};
-use futures::{Future, StreamExt, FutureExt};
-use common_exception::{Result, ErrorCode};
-use futures::future::BoxFuture;
+use futures::{StreamExt};
+use common_exception::{Result};
 use crate::catalogs::TablePtr;
 
 

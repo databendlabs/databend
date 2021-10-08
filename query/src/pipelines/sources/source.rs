@@ -28,7 +28,7 @@ pub struct SourceStream<T: Source> {
 }
 
 impl<T: Source> SourceStream<T> {
-    pub fn create(mut source: T) -> SourceStream<T> {
+    pub fn create(source: T) -> SourceStream<T> {
         SourceStream { source }
     }
 }
@@ -41,26 +41,26 @@ impl<T: Source> Stream for SourceStream<T> {
     }
 }
 
-#[async_trait::async_trait]
-impl<T: Source> Processor for T {
-    fn name(&self) -> &str {
-        Self::NAME
-    }
-
-    fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
-        Err(ErrorCode::UnImplement("must be not implement."))
-    }
-
-    fn inputs(&self) -> Vec<Arc<dyn Processor>> {
-        vec![]
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        todo!("remove this function")
-    }
-
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
-
-        todo!("async -> sync and create source stream")
-    }
-}
+// #[async_trait::async_trait]
+// impl<T: Source> Processor for T {
+//     fn name(&self) -> &str {
+//         Self::NAME
+//     }
+//
+//     fn connect_to(&mut self, input: Arc<dyn Processor>) -> Result<()> {
+//         Err(ErrorCode::UnImplement("must be not implement."))
+//     }
+//
+//     fn inputs(&self) -> Vec<Arc<dyn Processor>> {
+//         vec![]
+//     }
+//
+//     fn as_any(&self) -> &dyn Any {
+//         todo!("remove this function")
+//     }
+//
+//     async fn execute(&self) -> Result<SendableDataBlockStream> {
+//
+//         todo!("async -> sync and create source stream")
+//     }
+// }

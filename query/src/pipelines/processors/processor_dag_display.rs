@@ -67,7 +67,7 @@ impl<'a> IndentDisplayWrap<'a> {
         c: usize,
         f: &mut Formatter,
         index: &Vec<NodeIndex>,
-        mut neighbors: &Vec<NodeIndex>,
+        neighbors: &Vec<NodeIndex>,
     ) -> std::fmt::Result {
         if !neighbors.is_empty() {
             let graph = &self.0.graph;
@@ -107,7 +107,7 @@ impl<'a> IndentDisplayWrap<'a> {
         c: usize,
         f: &mut Formatter,
         index: &Vec<NodeIndex>,
-        mut neighbors: &Vec<NodeIndex>,
+        neighbors: &Vec<NodeIndex>,
     ) -> std::fmt::Result {
         if !neighbors.is_empty() {
             let graph = &self.0.graph;

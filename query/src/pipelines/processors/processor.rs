@@ -19,16 +19,8 @@ use std::sync::Arc;
 
 use common_exception::{Result, ErrorCode};
 use common_streams::SendableDataBlockStream;
-
-/// Formatter settings for PlanStep debug.
-pub struct FormatterSettings {
-    pub ways: usize,
-    pub indent: usize,
-    pub indent_char: &'static str,
-    pub prefix: &'static str,
-    pub prev_ways: usize,
-    pub prev_name: String,
-}
+use std::task::{Poll, Context};
+use std::pin::Pin;
 
 #[async_trait::async_trait]
 pub trait Processor: Sync + Send {
@@ -63,3 +55,15 @@ impl Display for dyn Processor {
 }
 
 pub type ProcessorRef = Arc<dyn Processor>;
+
+pub enum ReadyStatus {
+    NeedData,
+    PortFull,
+}
+
+trait NewProcessor {
+    fn name(&self) -> &str;
+
+    fn ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<ReadyStatus>;
+}
+

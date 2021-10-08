@@ -8,95 +8,57 @@ use crate::pipelines::processors::Processor;
 use std::sync::Arc;
 use std::any::Any;
 
-pub enum TransformStatus {
-    PollUpstream,
-    PushDownstream(DataBlock),
-    End,
-}
-
-#[async_trait::async_trait]
-pub trait StatefulTransform: Send + Unpin + Sync {
-    const NAME: &'static str;
-
-    async fn ready(&mut self) -> Result<()>;
-
-    fn transform(&mut self, data: Option<DataBlock>) -> Result<TransformStatus>;
-}
-
 #[async_trait::async_trait]
 pub trait StatelessTransform: Send + Unpin + Sync {
     const NAME: &'static str;
 
     async fn ready(&mut self) -> Result<()>;
 
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock>;
-}
+    ///
+    fn finalized(&self) -> Result<Option<DataBlock>>;
 
-pub struct StatefulTransformStream<T: StatefulTransform> {
-    transform: T,
-    end_for_upstream: bool,
-    upstream: SendableDataBlockStream,
-}
-
-impl<T: StatefulTransform> StatefulTransformStream<T> {
-    pub fn create(mut transform: T, upstream: SendableDataBlockStream) -> StatefulTransformStream<T> {
-        StatefulTransformStream { transform, end_for_upstream: false, upstream }
-    }
-
-    fn transform_data(&mut self, data: Option<Result<DataBlock>>) -> Result<TransformStatus> {
-        match data {
-            None => {
-                self.end_for_upstream = true;
-                self.transform.transform(None)
-            }
-            Some(Err(cause)) => Err(cause),
-            Some(Ok(ready_data)) => self.transform.transform(Some(ready_data))
-        }
-    }
-}
-
-impl<T: StatefulTransform> Stream for StatefulTransformStream<T> {
-    type Item = Result<DataBlock>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            // fast path for end stream.
-            if self.end_for_upstream {
-                match self.transform.transform(None) {
-                    Err(cause) => { return Poll::Ready(Some(Err(cause))); }
-                    Ok(TransformStatus::End) => { return Poll::Ready(None); }
-                    Ok(TransformStatus::PushDownstream(data)) => { return Poll::Ready(Some(Ok(data))); }
-                    Ok(TransformStatus::PollUpstream) => unreachable!("")
-                }
-            }
-
-            match self.upstream.poll_next_unpin(cx) {
-                Poll::Pending => { return Poll::Pending; }
-                Poll::Ready(ready_data) => {
-                    match self.transform_data(ready_data) {
-                        Err(cause) => { return Poll::Ready(Some(Err(cause))); }
-                        Ok(TransformStatus::End) => { return Poll::Ready(None); }
-                        Ok(TransformStatus::PollUpstream) => { continue; }
-                        Ok(TransformStatus::PushDownstream(data)) => { return Poll::Ready(Some(Ok(data))); }
-                    };
-                }
-            }
-        }
-    }
+    fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>>;
 }
 
 pub struct StatelessTransformStream<T: StatelessTransform> {
-    transform: T,
+    inner: T,
+    is_finalized: bool,
     upstream: SendableDataBlockStream,
+}
+
+impl<T: StatelessTransform> StatelessTransformStream<T> {
+    fn poll_finalized(&mut self) -> Option<Result<DataBlock>> {
+        if !self.is_finalized {
+            self.is_finalized = true;
+            return match self.inner.finalized() {
+                Ok(None) => None,
+                Err(cause) => Some(Err(cause)),
+                Ok(Some(data)) => Some(Ok(data))
+            };
+        }
+
+        return None;
+    }
 }
 
 impl<T: StatelessTransform> Stream for StatelessTransformStream<T> {
     type Item = Result<DataBlock>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.upstream.poll_next_unpin(cx) {
-            Poll::Ready(Some(Ok(data))) => Poll::Ready(Some(self.transform.transform(data))),
-            other => other
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut_self = self.get_mut();
+        loop {
+            match mut_self.upstream.as_mut().poll_next(cx) {
+                Poll::Pending => { return Poll::Pending; }
+                Poll::Ready(None) => { return Poll::Ready(mut_self.poll_finalized()); },
+                Poll::Ready(Some(Err(cause))) => { return Poll::Ready(Some(Err(cause))); }
+                Poll::Ready(Some(Ok(data))) => {
+                    match mut_self.inner.transform(data) {
+                        Ok(None) => { continue; }
+                        Ok(Some(data)) => { return Poll::Ready(Some(Ok(data))); }
+                        Err(cause) => { return Poll::Ready(Some(Err(cause))); },
+                    }
+                },
+            }
         }
     }
 }
