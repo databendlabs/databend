@@ -24,7 +24,7 @@ members = [
     "common/planners",
     "common/raft-store",
     "common/sled-store",
-    "common/meta",
+    "common/meta/flight",
     "common/streams",
     "common/tracing",
 

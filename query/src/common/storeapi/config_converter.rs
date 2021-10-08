@@ -15,7 +15,7 @@
 
 use common_flight_rpc::FlightClientConf;
 use common_flight_rpc::FlightClientTlsConfig;
-use common_meta::MetaFlightClientConf;
+use common_meta_flight::MetaFlightClientConf;
 
 use crate::configs::Config;
 

@@ -36,7 +36,7 @@ common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-meta = {path = "../common/meta" }
+common-meta-flight = {path = "../common/meta/flight" }
 common-kv-api = { path = "../common/kv-apis/api" }
 common-kv-api-vo = { path = "../common/kv-apis/vo" }
 common-io = { path = "../common/io" }
