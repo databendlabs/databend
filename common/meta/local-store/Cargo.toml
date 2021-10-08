@@ -13,9 +13,9 @@ edition = "2021"
 # Workspace dependencies
 common-base = {path = "../../base" }
 common-exception = {path = "../../exception" }
-common-meta-kv-api = {path = "../apis/api" }
-common-meta-kv-api-vo = {path = "../apis/vo" }
-common-meta-kv-api-util = {path = "../apis/util" }
+common-meta-kv-api = {path = "../kv/api" }
+common-meta-kv-api-vo = {path = "../kv/vo" }
+common-meta-kv-api-util = {path = "../kv/util" }
 common-meta-types = {path = "../types" }
 common-meta-sled-store = {path = "../sled-store" }
 common-meta-raft-store = {path = "../raft-store" }

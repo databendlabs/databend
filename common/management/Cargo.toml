@@ -11,8 +11,8 @@ edition = "2021"
 [dependencies]
 common-base= {path = "../base" }
 common-exception= {path = "../exception"}
-common-meta-kv-api= {path = "../meta/apis/api" }
-common-meta-kv-api-vo= {path = "../meta/apis/vo" }
+common-meta-kv-api= {path = "../meta/kv/api" }
+common-meta-kv-api-vo= {path = "../meta/kv/vo" }
 common-meta-types= {path = "../meta/types"}
 common-tracing= {path = "../tracing"}
 
