@@ -99,7 +99,7 @@ impl Table for NullTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.tbl_info.schema.clone());
 

@@ -53,7 +53,7 @@ pub trait Table: Sync + Send {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it

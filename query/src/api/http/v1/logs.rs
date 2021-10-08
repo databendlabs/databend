@@ -81,5 +81,7 @@ async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataB
         Some(context.get_settings().get_max_threads()? as usize),
     )?;
 
-    tracing_table.read(io_ctx, &tracing_table_read_plan).await
+    tracing_table
+        .read(io_ctx, &tracing_table_read_plan.push_downs)
+        .await
 }

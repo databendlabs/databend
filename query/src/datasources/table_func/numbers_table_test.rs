@@ -52,7 +52,7 @@ async fn test_number_table() -> Result<()> {
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

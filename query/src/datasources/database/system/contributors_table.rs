@@ -95,7 +95,7 @@ impl Table for ContributorsTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let contributors: Vec<&[u8]> = env!("DATABEND_COMMIT_AUTHORS")
             .split_terminator(',')
