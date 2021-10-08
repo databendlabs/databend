@@ -1,7 +1,7 @@
 [package]
-name = "common-sled-store"
+name = "common-meta-sled-store"
 version = "0.1.0"
-description = "distributed meta data service"
+description = "Sled store backend for raft state machine"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -9,8 +9,8 @@ edition = "2021"
 
 
 [dependencies]
-common-exception = {path = "../exception"}
-common-tracing = {path = "../tracing"}
+common-exception = {path = "../../exception"}
+common-tracing = {path = "../../tracing"}
 
 anyhow = "1.0.44"
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
@@ -23,8 +23,8 @@ tempfile = "3.2.0"
 
 
 [dev-dependencies]
-common-base = {path = "../base" }
-common-meta-types = {path = "../meta/types"}
+common-base = {path = "../../base" }
+common-meta-types = {path = "../types"}
 
 pretty_assertions = "1.0"
 

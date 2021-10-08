@@ -26,14 +26,14 @@ use common_kv_api_vo::GetKVActionResult;
 use common_kv_api_vo::MGetKVActionResult;
 use common_kv_api_vo::PrefixListReply;
 use common_kv_api_vo::UpsertKVActionResult;
+use common_meta_raft_store::config::RaftConfig;
+use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_raft_store::state_machine::StateMachine;
+pub use common_meta_sled_store::init_temp_sled_db;
 use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_raft_store::config::RaftConfig;
-use common_raft_store::state_machine::AppliedState;
-use common_raft_store::state_machine::StateMachine;
-pub use common_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 
 /// Local storage that provides the API defined by `KVApi`.
@@ -58,8 +58,8 @@ impl KV {
     ///
     /// One of the following has to be called to initialize a process-wise sled::Db,
     /// before using `LocalKVStore`:
-    /// - `common_sled_store::init_sled_db`
-    /// - `common_sled_store::init_temp_sled_db`
+    /// - `common_meta_sled_store::init_sled_db`
+    /// - `common_meta_sled_store::init_temp_sled_db`
     #[allow(dead_code)]
     pub async fn new(name: &str) -> common_exception::Result<KV> {
         let mut config = RaftConfig::empty();
@@ -81,7 +81,7 @@ impl KV {
     #[allow(dead_code)]
     pub async fn new_temp() -> common_exception::Result<KV> {
         let temp_dir = tempfile::tempdir()?;
-        common_sled_store::init_temp_sled_db(temp_dir);
+        common_meta_sled_store::init_temp_sled_db(temp_dir);
 
         // generate a unique id as part of the name of sled::Tree
 

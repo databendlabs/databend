@@ -17,13 +17,13 @@ use async_raft::raft::EntryConfigChange;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
+use common_meta_sled_store::sled;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::RaftTxId;
-use common_sled_store::sled;
 use maplit::btreeset;
 use sled::IVec;
 

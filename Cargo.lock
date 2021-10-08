@@ -1035,11 +1035,53 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-util",
  "common-kv-api-vo",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
  "common-meta-types",
- "common-raft-store",
- "common-sled-store",
  "common-tracing",
  "pretty_assertions",
+ "tempfile",
+]
+
+[[package]]
+name = "common-meta-raft-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-planners",
+ "common-tracing",
+ "maplit",
+ "pretty_assertions",
+ "rand",
+ "serde",
+ "serde_json",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+]
+
+[[package]]
+name = "common-meta-sled-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "byteorder",
+ "common-base",
+ "common-exception",
+ "common-meta-types",
+ "common-tracing",
+ "lazy_static",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sled",
  "tempfile",
 ]
 
@@ -1049,7 +1091,7 @@ version = "0.1.0"
 dependencies = [
  "async-raft",
  "common-exception",
- "common-sled-store",
+ "common-meta-sled-store",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1069,48 +1111,6 @@ dependencies = [
  "lazy_static",
  "pretty_assertions",
  "serde",
-]
-
-[[package]]
-name = "common-raft-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-raft",
- "async-trait",
- "common-base",
- "common-exception",
- "common-meta-types",
- "common-planners",
- "common-sled-store",
- "common-tracing",
- "maplit",
- "pretty_assertions",
- "rand",
- "serde",
- "serde_json",
- "structopt",
- "structopt-toml",
- "tempfile",
-]
-
-[[package]]
-name = "common-sled-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-raft",
- "byteorder",
- "common-base",
- "common-exception",
- "common-meta-types",
- "common-tracing",
- "lazy_static",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sled",
- "tempfile",
 ]
 
 [[package]]
@@ -3080,10 +3080,10 @@ dependencies = [
  "common-kv-api",
  "common-kv-api-vo",
  "common-meta-flight",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
  "common-meta-types",
  "common-planners",
- "common-raft-store",
- "common-sled-store",
  "common-tracing",
  "env_logger 0.9.0",
  "flaky_test",

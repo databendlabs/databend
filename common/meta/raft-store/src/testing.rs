@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_base::GlobalSequence;
-use common_sled_store::get_sled_db;
-use common_sled_store::sled;
+use common_meta_sled_store::get_sled_db;
+use common_meta_sled_store::sled;
 
 use crate::config::RaftConfig;
 
@@ -43,7 +43,7 @@ pub fn new_raft_test_context() -> RaftTestContext {
 macro_rules! init_raft_store_ut {
     () => {{
         let t = tempfile::tempdir().expect("create temp dir to sled db");
-        common_sled_store::init_temp_sled_db(t);
+        common_meta_sled_store::init_temp_sled_db(t);
 
         // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
         common_tracing::init_default_ut_tracing();

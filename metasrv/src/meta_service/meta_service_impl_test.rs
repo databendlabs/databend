@@ -14,9 +14,9 @@
 
 use async_raft::State;
 use common_base::tokio;
+use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
-use common_raft_store::state_machine::AppliedState;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;
@@ -41,7 +41,7 @@ async fn test_meta_server_add_file() -> anyhow::Result<()> {
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
-    let cases = common_raft_store::state_machine::testing::cases_add_file();
+    let cases = common_meta_raft_store::state_machine::testing::cases_add_file();
 
     for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
         let req = LogEntry {
@@ -82,7 +82,7 @@ async fn test_meta_server_set_file() -> anyhow::Result<()> {
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
-    let cases = common_raft_store::state_machine::testing::cases_set_file();
+    let cases = common_meta_raft_store::state_machine::testing::cases_set_file();
 
     for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
         let req = LogEntry {
@@ -221,7 +221,7 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
 
-    let cases = common_raft_store::state_machine::testing::cases_incr_seq();
+    let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
         let req = LogEntry {

@@ -13,13 +13,13 @@ edition = "2021"
 # Workspace dependencies
 common-base = {path = "../../base" }
 common-exception = {path = "../../exception" }
-common-meta-types = {path = "../../meta/types" }
-common-raft-store = {path = "../../raft-store" }
-common-tracing = {path = "../../tracing" }
 common-kv-api = {path = "../../kv-apis/api" }
 common-kv-api-vo = {path = "../../kv-apis/vo" }
 common-kv-api-util = {path = "../../kv-apis/util" }
-common-sled-store = {path = "../../sled-store" }
+common-meta-types = {path = "../../meta/types" }
+common-meta-sled-store = {path = "../sled-store" }
+common-meta-raft-store = {path = "../raft-store" }
+common-tracing = {path = "../../tracing" }
 
 
 # Crates.io dependencies
