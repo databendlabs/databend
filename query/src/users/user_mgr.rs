@@ -64,7 +64,12 @@ impl UserManager {
     }
 
     // Auth the user and password for different Auth type.
-    pub fn auth_user(&self, user: &str, password: impl AsRef<[u8]>) -> Result<bool> {
+    pub fn auth_user(
+        &self,
+        user: &str,
+        password: impl AsRef<[u8]>,
+        _client_addr: &str,
+    ) -> Result<bool> {
         let user = self.get_user(user)?;
 
         match user.auth_type {
