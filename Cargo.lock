@@ -973,24 +973,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-local-store"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-base",
- "common-exception",
- "common-kv-api",
- "common-kv-api-util",
- "common-kv-api-vo",
- "common-meta-types",
- "common-raft-store",
- "common-sled-store",
- "common-tracing",
- "pretty_assertions",
- "tempfile",
-]
-
-[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
@@ -999,7 +981,7 @@ dependencies = [
  "common-exception",
  "common-kv-api",
  "common-kv-api-vo",
- "common-local-store",
+ "common-meta-local-store",
  "common-meta-types",
  "common-tracing",
  "lazy_static",
@@ -1041,6 +1023,24 @@ dependencies = [
  "tonic",
  "tonic-build",
  "trust-dns-resolver",
+]
+
+[[package]]
+name = "common-meta-local-store"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-kv-api",
+ "common-kv-api-util",
+ "common-kv-api-vo",
+ "common-meta-types",
+ "common-raft-store",
+ "common-sled-store",
+ "common-tracing",
+ "pretty_assertions",
+ "tempfile",
 ]
 
 [[package]]
@@ -1566,9 +1566,9 @@ dependencies = [
  "common-io",
  "common-kv-api",
  "common-kv-api-vo",
- "common-local-store",
  "common-management",
  "common-meta-flight",
+ "common-meta-local-store",
  "common-meta-types",
  "common-planners",
  "common-streams",
