@@ -17,7 +17,6 @@ use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
-use databend_query::clusters::ClusterDiscovery;
 use databend_query::configs::Config;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
@@ -25,7 +24,6 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
-use databend_query::users::UserManager;
 use log::info;
 
 #[tokio::main]
@@ -61,16 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         *databend_query::configs::DATABEND_COMMIT_VERSION,
     );
 
-    // User manager and init the default users.
-    let user_manager = UserManager::create_global(conf.clone()).await?;
-
-    // Cluster discovery.
-    let cluster_discovery = ClusterDiscovery::create_global(conf.clone()).await?;
-    let session_manager = SessionManager::from_conf(
-        conf.clone(),
-        cluster_discovery.clone(),
-        user_manager.clone(),
-    )?;
+    let session_manager = SessionManager::from_conf(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());
 
     // MySQL handler.
@@ -133,7 +122,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("RPC API server listening on {}", listening);
     }
 
-    cluster_discovery.register_to_metastore(&conf).await?;
+    // Namespace
+    {
+        let cluster_discovery = session_manager.get_cluster_discovery();
+        let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
+        register_to_metastore.await?;
+        info!("Databend query has been registered to metastore.");
+    }
+
     log::info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
     // TODO: destroy cluster
