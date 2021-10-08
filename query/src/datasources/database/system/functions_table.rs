@@ -100,7 +100,7 @@ impl Table for FunctionsTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();

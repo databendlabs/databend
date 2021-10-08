@@ -99,7 +99,7 @@ impl Table for CreditsTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let metadata_command = cargo_metadata::MetadataCommand::new();
 

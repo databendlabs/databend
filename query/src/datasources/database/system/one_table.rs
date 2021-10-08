@@ -95,7 +95,7 @@ impl Table for OneTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(vec![1u8])]);
         Ok(Box::pin(DataBlockStream::create(

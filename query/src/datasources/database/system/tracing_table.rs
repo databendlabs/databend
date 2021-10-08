@@ -111,7 +111,7 @@ impl Table for TracingTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        source_plan: &ReadDataSourcePlan,
+        push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
 
@@ -130,7 +130,6 @@ impl Table for TracingTable {
 
         // Default limit.
         let mut limit = 100000000_usize;
-        let push_downs = &source_plan.push_downs;
         tracing::debug!("read push_down:{:?}", push_downs);
 
         if let Some(extras) = push_downs {

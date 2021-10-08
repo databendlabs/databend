@@ -56,7 +56,7 @@ impl SourceTransform {
         // TODO(xp): get_single_node_table_io_context() or
         //           get_cluster_table_io_context()?
         let io_ctx = Arc::new(self.ctx.get_cluster_table_io_context()?);
-        let table_stream = table.read(io_ctx, &self.source_plan);
+        let table_stream = table.read(io_ctx, &self.source_plan.push_downs);
         Ok(Box::pin(
             self.ctx.try_create_abortable(table_stream.await?)?,
         ))

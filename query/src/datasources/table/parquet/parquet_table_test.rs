@@ -57,7 +57,7 @@ async fn test_parquet_table() -> Result<()> {
         Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
 

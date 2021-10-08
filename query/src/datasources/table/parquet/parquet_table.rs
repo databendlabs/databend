@@ -145,7 +145,7 @@ impl Table for ParquetTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;
         type BlockReceiver = Receiver<Option<Result<DataBlock>>>;

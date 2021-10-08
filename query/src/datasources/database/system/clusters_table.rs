@@ -100,7 +100,7 @@ impl Table for ClustersTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _source_plan: &ReadDataSourcePlan,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let cluster_nodes = io_ctx.get_query_nodes();
 

@@ -142,7 +142,7 @@ impl Table for FuseTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        source_plan: &ReadDataSourcePlan,
+        push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?
@@ -154,7 +154,7 @@ impl Table for FuseTable {
                 .collect::<Vec<usize>>()
         };
 
-        let projection = if let Some(push_down) = &source_plan.push_downs {
+        let projection = if let Some(push_down) = push_downs {
             if let Some(prj) = &push_down.projection {
                 prj.clone()
             } else {
