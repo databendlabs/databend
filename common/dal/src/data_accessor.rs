@@ -49,7 +49,7 @@ pub trait DataAccessor: Send + Sync {
 
     fn get_writer(&self, path: &str) -> Result<Box<dyn Write>>;
 
-    async fn get_input_stream(&self, path: &str, stream_len: Option<u64>) -> Result<InputStream>;
+    fn get_input_stream(&self, path: &str, stream_len: Option<u64>) -> Result<InputStream>;
 
     async fn get(&self, path: &str) -> Result<Bytes>;
 
@@ -65,7 +65,7 @@ pub trait DataAccessor: Send + Sync {
     ) -> Result<()>;
 
     async fn read(&self, location: &str) -> Result<Vec<u8>> {
-        let mut input_stream = self.get_input_stream(location, None).await?;
+        let mut input_stream = self.get_input_stream(location, None)?;
         let mut buffer = vec![];
         input_stream.read_to_end(&mut buffer).await?;
         Ok(buffer)
