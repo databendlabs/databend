@@ -125,7 +125,6 @@ impl HttpService {
 
     fn build_router(&self) -> Router<BoxRoute> {
         Router::new()
-            .layer(AddExtensionLayer::new(self.sessions.clone()))
             .route("/v1/health", get(super::http::v1::health::health_handler))
             .route("/v1/config", get(super::http::v1::config::config_handler))
             .route("/v1/logs", get(super::http::v1::logs::logs_handler))
@@ -141,6 +140,7 @@ impl HttpService {
                 "/debug/pprof/profile",
                 get(super::http::debug::pprof::debug_pprof_handler),
             )
+            .layer(AddExtensionLayer::new(self.sessions.clone()))
             .boxed()
     }
 

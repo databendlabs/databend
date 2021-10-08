@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::RangeInclusive;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_base::tokio;
+use common_base::tokio::sync::Mutex;
+use common_base::tokio::task::JoinHandle;
 use common_base::tokio::time::sleep as tokio_async_sleep;
 use common_base::GlobalUniqName;
 use common_exception::ErrorCode;
@@ -26,6 +31,7 @@ use common_kv_api::KVApi;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
 use common_metatypes::NodeInfo;
+use futures::Future;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -38,7 +44,7 @@ pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
 
 pub struct ClusterDiscovery {
     local_id: String,
-    heartbeat: ClusterHeartbeat,
+    heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn NamespaceApi>,
 }
 
@@ -59,7 +65,7 @@ impl ClusterDiscovery {
         Ok(Arc::new(ClusterDiscovery {
             local_id: local_id.clone(),
             api_provider: provider.clone(),
-            heartbeat: ClusterHeartbeat::create(lift_time, local_id, provider),
+            heartbeat: Mutex::new(ClusterHeartbeat::create(lift_time, provider)),
         }))
     }
 
@@ -91,16 +97,64 @@ impl ClusterDiscovery {
         }
     }
 
+    async fn drop_invalid_nodes(self: &Arc<Self>, node_info: &NodeInfo) -> Result<()> {
+        let current_nodes_info = match self.api_provider.get_nodes().await {
+            Ok(nodes) => nodes,
+            Err(cause) => {
+                return Err(cause.add_message_back("(while drop_invalid_nodes)"));
+            }
+        };
+
+        for before_node in current_nodes_info {
+            // Restart in a very short time(< heartbeat timeout) after abnormal shutdown, Which will
+            // lead to some invalid information
+            if before_node.flight_address.eq(&node_info.flight_address) {
+                let drop_invalid_node = self.api_provider.drop_node(before_node.id, None);
+                if let Err(cause) = drop_invalid_node.await {
+                    log::warn!("Drop invalid node failure: {:?}", cause);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn unregister_to_metastore(self: &Arc<Self>) {
+        let mut heartbeat = self.heartbeat.lock().await;
+
+        if let Err(shutdown_failure) = heartbeat.shutdown().await {
+            log::warn!(
+                "Cannot shutdown namespace heartbeat, cause {:?}",
+                shutdown_failure
+            );
+        }
+
+        let drop_node = self.api_provider.drop_node(self.local_id.clone(), None);
+        if let Err(drop_node_failure) = drop_node.await {
+            log::warn!(
+                "Cannot drop namespace node(while shutdown), cause {:?}",
+                drop_node_failure
+            );
+        }
+    }
+
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<()> {
         let cpus = cfg.query.num_cpus;
+        // TODO: 0.0.0.0 || ::0
         let address = cfg.query.flight_api_address.clone();
         let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
 
-        // TODO: restart node
+        self.drop_invalid_nodes(&node_info).await?;
         match self.api_provider.add_node(node_info).await {
-            Ok(_) => self.heartbeat.startup(),
+            Ok(_) => self.start_heartbeat().await,
             Err(cause) => Err(cause.add_message_back("(while namespace api add_node).")),
         }
+    }
+
+    async fn start_heartbeat(self: &Arc<Self>) -> Result<()> {
+        let mut heartbeat = self.heartbeat.lock().await;
+        heartbeat.start(self.local_id.clone());
+        Ok(())
     }
 }
 
@@ -167,48 +221,62 @@ impl Cluster {
 }
 
 struct ClusterHeartbeat {
-    lift_time: Duration,
-    local_node_id: String,
-    provider: Arc<dyn NamespaceApi>,
+    timeout: Duration,
+    shutdown: Arc<AtomicBool>,
+    namespace_api: Arc<dyn NamespaceApi>,
+    shutdown_handler: Option<JoinHandle<()>>,
 }
 
 impl ClusterHeartbeat {
-    pub fn create(
-        lift_time: Duration,
-        local_node_id: String,
-        provider: Arc<dyn NamespaceApi>,
-    ) -> ClusterHeartbeat {
+    pub fn create(timeout: Duration, namespace_api: Arc<dyn NamespaceApi>) -> ClusterHeartbeat {
         ClusterHeartbeat {
-            lift_time,
-            local_node_id,
-            provider,
+            timeout,
+            namespace_api,
+            shutdown: Arc::new(AtomicBool::new(false)),
+            shutdown_handler: None,
         }
     }
 
-    pub fn startup(&self) -> Result<()> {
-        let sleep_time = self.lift_time;
-        let local_node_id = self.local_node_id.clone();
-        let provider = self.provider.clone();
+    fn heartbeat_loop(&self, local_id: String) -> impl Future<Output = ()> + 'static {
+        let shutdown = self.shutdown.clone();
+        let namespace_api = self.namespace_api.clone();
+        let sleep_range = self.heartbeat_interval(self.timeout);
 
-        tokio::spawn(async move {
-            loop {
-                let min_sleep_time = sleep_time / 3;
-                let max_sleep_time = min_sleep_time * 2;
-                let sleep_range = min_sleep_time.as_millis()..=max_sleep_time.as_millis();
-
+        async move {
+            while !shutdown.load(Ordering::Relaxed) {
                 let mills = {
                     let mut rng = thread_rng();
-                    rng.gen_range(sleep_range)
+                    rng.gen_range(sleep_range.clone())
                 };
 
                 tokio_async_sleep(Duration::from_millis(mills as u64)).await;
 
-                if let Err(cause) = provider.heartbeat(local_node_id.clone(), None).await {
-                    log::error!("Cluster Heartbeat failure: {:?}", cause);
+                let heartbeat = namespace_api.heartbeat(local_id.clone(), None);
+                if let Err(failure) = heartbeat.await {
+                    log::error!("Cluster namespace api heartbeat failure: {:?}", failure);
                 }
             }
-        });
+        }
+    }
 
+    fn heartbeat_interval(&self, duration: Duration) -> RangeInclusive<u128> {
+        (duration / 3).as_millis()..=((duration / 3) * 2).as_millis()
+    }
+
+    pub fn start(&mut self, local_id: String) {
+        self.shutdown_handler = Some(tokio::spawn(self.heartbeat_loop(local_id)));
+    }
+
+    pub async fn shutdown(&mut self) -> Result<()> {
+        if let Some(shutdown_handler) = self.shutdown_handler.take() {
+            self.shutdown.store(true, Ordering::Relaxed);
+            if let Err(shutdown_failure) = shutdown_handler.await {
+                return Err(ErrorCode::TokioError(format!(
+                    "Cannot shutdown namespace heartbeat, cause {:?}",
+                    shutdown_failure
+                )));
+            }
+        }
         Ok(())
     }
 }
