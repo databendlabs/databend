@@ -19,7 +19,7 @@ use common_catalog::TableIOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metatypes::MetaId;
+use common_meta_types::MetaId;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;

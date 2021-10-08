@@ -15,8 +15,8 @@
 use std::ops::RangeBounds;
 
 use async_raft::raft::Entry;
-use common_metatypes::LogEntry;
-use common_metatypes::LogIndex;
+use common_meta_types::LogEntry;
+use common_meta_types::LogIndex;
 use common_sled_store::sled;
 use common_sled_store::AsKeySpace;
 use common_sled_store::SledTree;

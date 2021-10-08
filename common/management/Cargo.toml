@@ -11,9 +11,9 @@ edition = "2021"
 [dependencies]
 common-base= {path = "../base" }
 common-exception= {path = "../exception"}
-common-metatypes= {path = "../metatypes"}
 common-kv-api= {path = "../kv-apis/api" }
 common-kv-api-vo= {path = "../kv-apis/vo" }
+common-meta-types= {path = "../meta/types"}
 common-tracing= {path = "../tracing"}
 
 async-trait = "0.1"
@@ -25,7 +25,7 @@ tempfile = "3.2.0"
 
 [dev-dependencies]
 common-base = { path = "../base" }
-common-kv = {path = "../kv" }
+common-local-store = {path = "../local-store" }
 
 mockall = "0.10.2"
 tempfile = "3.2.0"

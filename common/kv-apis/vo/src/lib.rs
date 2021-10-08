@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metatypes::KVValue;
-use common_metatypes::SeqValue;
+use common_meta_types::KVValue;
+use common_meta_types::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UpsertKVActionResult {

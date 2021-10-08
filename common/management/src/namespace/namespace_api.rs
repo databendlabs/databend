@@ -14,7 +14,7 @@
 //
 
 use common_exception::Result;
-use common_metatypes::NodeInfo;
+use common_meta_types::NodeInfo;
 
 #[async_trait::async_trait]
 pub trait NamespaceApi: Sync + Send {

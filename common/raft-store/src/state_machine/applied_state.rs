@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use async_raft::AppDataResponse;
-use common_metatypes::Database;
-use common_metatypes::KVValue;
-use common_metatypes::Node;
-use common_metatypes::SeqValue;
-use common_metatypes::Table;
+use common_meta_types::Database;
+use common_meta_types::KVValue;
+use common_meta_types::Node;
+use common_meta_types::SeqValue;
+use common_meta_types::Table;
 use serde::Deserialize;
 use serde::Serialize;
 

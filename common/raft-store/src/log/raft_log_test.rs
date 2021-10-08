@@ -17,8 +17,8 @@ use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use async_raft::LogId;
 use common_base::tokio;
-use common_metatypes::Cmd;
-use common_metatypes::LogEntry;
+use common_meta_types::Cmd;
+use common_meta_types::LogEntry;
 
 use crate::init_raft_store_ut;
 use crate::log::RaftLog;

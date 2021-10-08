@@ -8,12 +8,12 @@ publish = false
 edition = "2021"
 
 [dependencies]
-common-exception = {path = "../exception"}
-common-metatypes = {path = "../metatypes"}
-common-planners = {path = "../planners"}
 common-base = {path = "../base" }
+common-exception = {path = "../exception"}
+common-planners = {path = "../planners"}
 common-sled-store = {path = "../sled-store"}
 common-tracing = {path = "../tracing"}
+common-meta-types = {path = "../meta/types"}
 
 anyhow = "1.0.44"
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
