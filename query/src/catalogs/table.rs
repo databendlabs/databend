@@ -61,7 +61,7 @@ pub trait Table: Sync + Send {
     // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(

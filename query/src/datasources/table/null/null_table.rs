@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::Extras;
+use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -113,11 +114,11 @@ impl Table for NullTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
-        insert_plan: common_planners::InsertIntoPlan,
+        _io_ctx: Arc<TableIOContext>,
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         let mut s = {
-            let mut inner = insert_plan.input_stream.lock();
+            let mut inner = _insert_plan.input_stream.lock();
             (*inner).take()
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;

@@ -43,6 +43,9 @@ async fn test_memorytable() -> Result<()> {
         table_id: 0,
     })?;
 
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
+
     // append data.
     {
         let block = DataBlock::create_by_array(schema.clone(), vec![
@@ -63,13 +66,14 @@ async fn test_memorytable() -> Result<()> {
             schema,
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
-        table.append_data(ctx.clone(), insert_plan).await.unwrap();
+        table
+            .append_data(io_ctx.clone(), insert_plan)
+            .await
+            .unwrap();
     }
 
     // read.
     {
-        let io_ctx = ctx.get_single_node_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
         let source_plan = table.read_plan(
             io_ctx.clone(),
             None,

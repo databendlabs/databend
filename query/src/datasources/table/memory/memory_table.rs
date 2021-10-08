@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_flight::meta_flight_reply::TableInfo;
 use common_planners::Extras;
+use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -128,16 +129,16 @@ impl Table for MemoryTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
-        insert_plan: common_planners::InsertIntoPlan,
+        _io_ctx: Arc<TableIOContext>,
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         let mut s = {
-            let mut inner = insert_plan.input_stream.lock();
+            let mut inner = _insert_plan.input_stream.lock();
             (*inner).take()
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-        if insert_plan.schema().as_ref().fields() != self.tbl_info.schema.as_ref().fields() {
+        if _insert_plan.schema().as_ref().fields() != self.tbl_info.schema.as_ref().fields() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
         }
 
