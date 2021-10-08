@@ -179,6 +179,7 @@ build_exceptions! {
     UnknownSession(53),
     UnexpectedError(54),
     DateTimeParseError(55),
+    BadPredicateRows(56),
 
     // uncategorized
     UnexpectedResponseType(600),

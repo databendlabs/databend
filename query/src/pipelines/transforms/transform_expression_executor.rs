@@ -40,6 +40,8 @@ pub struct ExpressionExecutor {
     alias_project: bool,
 }
 
+pub type ExpressionExecutorRef = Arc<ExpressionExecutor>;
+
 impl ExpressionExecutor {
     pub fn try_create(
         description: &str,
