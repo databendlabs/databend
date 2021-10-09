@@ -13,6 +13,11 @@
 // limitations under the License.
 //
 
+use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateTableReply;
+use common_meta_types::DatabaseInfo;
+use common_meta_types::GetDatabasesReply;
+use common_meta_types::GetTablesReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
@@ -22,13 +27,8 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::action_declare;
-use crate::meta_api::MetaApi;
-use crate::meta_flight_action::MetaFlightAction;
-use crate::meta_flight_reply::CreateDatabaseReply;
-use crate::meta_flight_reply::CreateTableReply;
-use crate::meta_flight_reply::DatabaseInfo;
-use crate::meta_flight_reply::GetDatabasesReply;
-use crate::meta_flight_reply::GetTablesReply;
+use crate::flight_action::MetaFlightAction;
+use crate::flight_api::MetaApi;
 use crate::MetaFlightClient;
 use crate::RequestFor;
 

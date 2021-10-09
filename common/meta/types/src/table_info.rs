@@ -13,8 +13,34 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fmt;
+use std::fmt::Formatter;
 
 use common_datavalues::DataSchemaRef;
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct Table {
+    pub table_id: u64,
+
+    /// serialized schema
+    pub schema: Vec<u8>,
+
+    /// table engine
+    pub table_engine: String,
+
+    /// table options
+    pub table_options: HashMap<String, String>,
+
+    /// name of parts that belong to this table.
+    pub parts: HashSet<String>,
+}
+
+impl fmt::Display for Table {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "table id: {}", self.table_id)
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableInfo {

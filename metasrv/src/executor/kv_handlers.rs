@@ -14,11 +14,11 @@
 //
 
 use common_exception::ErrorCode;
-use common_meta_flight::kv_api_impl::GetKVAction;
-use common_meta_flight::kv_api_impl::KVMetaAction;
-use common_meta_flight::kv_api_impl::MGetKVAction;
-use common_meta_flight::kv_api_impl::PrefixListReq;
-use common_meta_flight::kv_api_impl::UpsertKVAction;
+use common_meta_flight::impls::GetKVAction;
+use common_meta_flight::impls::KVMetaAction;
+use common_meta_flight::impls::MGetKVAction;
+use common_meta_flight::impls::PrefixListReq;
+use common_meta_flight::impls::UpsertKVAction;
 use common_meta_kv_api_vo::GetKVActionResult;
 use common_meta_kv_api_vo::MGetKVActionResult;
 use common_meta_kv_api_vo::PrefixListReply;

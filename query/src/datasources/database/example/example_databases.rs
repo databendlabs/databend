@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_flight::meta_flight_reply::DatabaseInfo;
+use common_meta_types::DatabaseInfo;
 
 use crate::catalogs::backends::CatalogBackend;
 use crate::catalogs::backends::EmbeddedCatalogBackend;

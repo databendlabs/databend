@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_flight::meta_api::MetaApi;
+use common_meta_flight::MetaApi;
 use common_meta_flight::MetaFlightClient;
 use common_meta_flight::MetaFlightClientConf;
 use common_meta_kv_api::KVApi;
@@ -27,26 +27,20 @@ use common_meta_kv_api::KVApi;
 // @see https://github.com/datafuselabs/databend/issues/1929
 
 #[derive(Clone)]
-pub struct StoreApiProvider {
+pub struct MetaClientProvider {
     // do not depend on query::configs::Config in case of moving back to sdk
     // also @see config_converter.rs
     conf: MetaFlightClientConf,
 }
 
-impl StoreApiProvider {
+impl MetaClientProvider {
     pub fn new(conf: impl Into<MetaFlightClientConf>) -> Self {
-        StoreApiProvider { conf: conf.into() }
+        MetaClientProvider { conf: conf.into() }
     }
 
     /// Get meta async client, trait is defined in MetaApi.
     pub async fn try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
         let client = MetaFlightClient::try_new(&self.conf).await?;
-        Ok(Arc::new(client))
-    }
-
-    /// Get meta client, operations trait is defined in MetaApi.
-    pub fn sync_try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
-        let client = MetaFlightClient::sync_try_new(&self.conf)?;
         Ok(Arc::new(client))
     }
 
@@ -58,18 +52,6 @@ impl StoreApiProvider {
             Ok(Arc::new(client))
         } else {
             let client = MetaFlightClient::try_new(&self.conf).await?;
-            Ok(Arc::new(client))
-        }
-    }
-
-    /// Get kv client, operations trait defined in KVApi.
-    pub fn sync_try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
-        let local = self.conf.kv_service_config.address.is_empty();
-        if local {
-            let client = common_meta_local_store::KV::sync_new_temp()?;
-            Ok(Arc::new(client))
-        } else {
-            let client = MetaFlightClient::sync_try_new(&self.conf)?;
             Ok(Arc::new(client))
         }
     }

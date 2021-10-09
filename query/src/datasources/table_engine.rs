@@ -16,7 +16,7 @@
 use common_meta_types::TableInfo;
 
 use crate::catalogs::Table;
-use crate::common::StoreApiProvider;
+use crate::common::MetaClientProvider;
 
 // TODO maybe we should introduce a
 // `Session::store_provider(...) -> Result<StoreApiProvider>`
@@ -26,7 +26,7 @@ pub trait TableEngine: Send + Sync {
     fn try_create(
         &self,
         tbl_info: TableInfo,
-        store_provider: StoreApiProvider,
+        store_provider: MetaClientProvider,
     ) -> common_exception::Result<Box<dyn Table>>;
 }
 
@@ -38,7 +38,7 @@ where
     fn try_create(
         &self,
         tbl_info: TableInfo,
-        _store_provider: StoreApiProvider,
+        _store_provider: MetaClientProvider,
     ) -> common_exception::Result<Box<dyn Table>> {
         self(tbl_info)
     }

@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_flight::meta_flight_reply::CreateDatabaseReply;
-use common_meta_flight::meta_flight_reply::CreateTableReply;
-use common_meta_flight::meta_flight_reply::DatabaseInfo;
+use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateTableReply;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;

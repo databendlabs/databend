@@ -18,12 +18,12 @@ use async_raft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::table_info::Table;
 use crate::Database;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
-use crate::Table;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.

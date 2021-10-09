@@ -36,7 +36,7 @@ use rand::thread_rng;
 use rand::Rng;
 
 use crate::api::FlightClient;
-use crate::common::StoreApiProvider;
+use crate::common::MetaClientProvider;
 use crate::configs::Config;
 
 pub type ClusterRef = Arc<Cluster>;
@@ -50,7 +50,7 @@ pub struct ClusterDiscovery {
 
 impl ClusterDiscovery {
     async fn create_store_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        let store_api_provider = StoreApiProvider::new(cfg);
+        let store_api_provider = MetaClientProvider::new(cfg);
         match store_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create namespace api).")),
