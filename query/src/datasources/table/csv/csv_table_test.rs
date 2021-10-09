@@ -41,12 +41,14 @@ async fn test_csv_table() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = CsvTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "test_csv".into(),
         schema: DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
         engine: "Csv".to_string(),
         options: options,
         table_id: 0,
+        version: 0,
     })?;
 
     let scan_plan = &ScanPlan {
@@ -110,6 +112,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let table = CsvTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "test_csv".into(),
         schema: DataSchemaRefExt::create(vec![
@@ -121,6 +124,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
         engine: "Csv".to_string(),
         options: options,
         table_id: 0,
+        version: 0,
     })?;
 
     let scan_plan = &ScanPlan {
