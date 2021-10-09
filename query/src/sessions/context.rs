@@ -147,7 +147,7 @@ impl DatabendQueryContext {
     }
 
     pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
-        self.get_catalog().get_table(database, table)
+        self.shared.get_table(database, table)
     }
 
     pub fn get_table_by_id(
