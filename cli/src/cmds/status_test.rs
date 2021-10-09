@@ -15,11 +15,12 @@
 use std::cell::RefCell;
 
 use databend_query::configs::Config as QueryConfig;
+use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
 use crate::cmds::status::LocalConfig;
+use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
-use crate::cmds::status::LocalStoreConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
@@ -28,11 +29,16 @@ macro_rules! default_local_config {
     () => {
         LocalConfig {
             query_configs: vec![LocalQueryConfig {
-                pid: "test-query".to_string(),
+                pid: Some(123),
                 config: QueryConfig::default(),
+                path: Some("~/.databend/test/databend-query".to_string()),
             }],
-            store_configs: Some(LocalStoreConfig {
-                pid: "test-dfs".to_string(),
+            store_configs: None,
+            meta_configs: Some(LocalMetaConfig {
+                pid: Some(345),
+                config: MetaConfig::empty(),
+                path: Some("~/.databend/test/databend-meta".to_string()),
+                log_dir: Some("./".to_string()),
             }),
         }
     };
@@ -79,7 +85,8 @@ fn test_status() -> Result<()> {
         let mut local_config = default_local_config!();
         local_config.query_configs.push(LocalQueryConfig {
             config: QueryConfig::default(),
-            pid: "added".to_string(),
+            pid: Some(123),
+            path: None,
         });
         status.version = "default".to_string();
         status.local_configs = local_config;
@@ -88,7 +95,8 @@ fn test_status() -> Result<()> {
         let mut expected_config = default_local_config!();
         expected_config.query_configs.push(LocalQueryConfig {
             config: QueryConfig::default(),
-            pid: "added".to_string(),
+            pid: Some(123),
+            path: None,
         });
         // should have empty profile with set version
         if let Ok(status) = Status::read(conf.clone()) {

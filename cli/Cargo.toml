@@ -16,7 +16,9 @@ path = "src/bin/databend-cli.rs"
 [dependencies]
 # Workspace dependencies
 databend-query = {path = "../query"}
-clap = "2.33.3"
+clap = "3.0.0-beta.4"
+metasrv= {path = "../metasrv" }
+common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"
 comfy-table = "4.1.1"
 dirs = "4.0.0"
@@ -32,6 +34,15 @@ sysinfo = "0.20.4"
 tar = "0.4.37"
 thiserror = "1.0.29"
 ureq = { version = "2.2.0", features = ["json"] }
+nix = "0.22.1"
+log = "0.4"
+
+structopt = "0.3"
+structopt-toml = "0.5.0"
+portpicker = "0.1.1"
+reqwest = { version = "0.11", features = ["json", "native-tls", "blocking"] }
+libc = "0.2"
+lexical-util = "0.8.1"
 
 [dev-dependencies]
 pretty_assertions = "1.0"

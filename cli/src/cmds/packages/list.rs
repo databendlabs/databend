@@ -66,7 +66,7 @@ impl ListCommand {
 
             let mut current_marker = Cell::new("");
             if current == version {
-                current_marker = Cell::new("☑").fg(Color::Green);
+                current_marker = Cell::new("✅").fg(Color::Green);
             }
             row.push(current_marker.set_alignment(CellAlignment::Center));
             table.add_row(row);
