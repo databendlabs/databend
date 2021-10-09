@@ -87,12 +87,7 @@ async fn test_s3_cli_with_credentials() -> common_exception::Result<()> {
     let key = std::env::var("AWS_ACCESS_KEY_ID").unwrap();
     let secret = std::env::var("AWS_SECRET_ACCESS_KEY").unwrap();
 
-    let s3 = S3::with_credentials(
-        fixture.region.name(),
-        fixture.bucket_name.clone(),
-        key,
-        secret,
-    )?;
+    let s3 = S3::with_credentials(&fixture.region.name(), &fixture.bucket_name, &key, &secret)?;
     let mut buffer = vec![];
     let mut input = s3.get_input_stream(&test_key, None)?;
     input.read_to_end(&mut buffer).await?;

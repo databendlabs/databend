@@ -33,7 +33,7 @@ use common_infallible::Mutex;
 use common_planners::Part;
 use futures::StreamExt;
 
-use crate::datasources::table::fuse::block_location;
+use crate::datasources::table::fuse::block_location_from_name;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct BlockMetaCacheKey {
@@ -77,7 +77,7 @@ pub(crate) async fn read_part(
     sender: Sender<Result<DataBlock>>,
     arrow_schema: &ArrowSchema,
 ) -> Result<()> {
-    let loc = block_location(&part.name);
+    let loc = block_location_from_name(&part.name);
     // TODO pass in parquet file len
     let mut reader = data_accessor.get_input_stream(&loc, None)?;
     let metadata = read_metadata_async(&mut reader)

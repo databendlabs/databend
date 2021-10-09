@@ -12,15 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_base::Runtime;
-use common_dal::DefaultDataAccessorBuilder;
+use common_dal::DataAccessor;
+use common_dal::DataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::IOContext;
 use crate::TableIOContext;
+
+/// A default DataAccessorBuilder impl.
+#[derive(Debug)]
+pub struct DefaultDataAccessorBuilder {}
+
+impl DataAccessorBuilder for DefaultDataAccessorBuilder {
+    fn build(&self) -> Result<Arc<dyn DataAccessor>> {
+        // we do not use it in unit test
+        todo!()
+    }
+}
 
 #[test]
 fn test_table_io_context() -> Result<()> {
