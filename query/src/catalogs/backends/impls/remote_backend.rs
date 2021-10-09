@@ -192,7 +192,6 @@ impl CatalogBackend for RemoteCatalogBackend {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>> {
@@ -213,8 +212,8 @@ impl CatalogBackend for RemoteCatalogBackend {
         )??;
 
         let res = TableInfo {
+            db: reply.db.clone(),
             database_id: 0,
-            db: db_name.to_owned(),
             table_id: reply.table_id,
             version: 0,
             name: reply.name.clone(),

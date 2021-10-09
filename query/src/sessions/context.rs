@@ -152,12 +152,10 @@ impl DatabendQueryContext {
 
     pub fn get_table_by_id(
         &self,
-        database: &str,
         table_id: MetaId,
         table_ver: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        self.get_catalog()
-            .get_table_by_id(database, table_id, table_ver)
+        self.get_catalog().get_table_by_id(table_id, table_ver)
     }
 
     pub fn get_table_function(

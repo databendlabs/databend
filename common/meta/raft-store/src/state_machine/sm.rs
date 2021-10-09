@@ -471,6 +471,9 @@ impl StateMachine {
                 } else {
                     let table = Table {
                         table_id: self.incr_seq(SEQ_TABLE_ID).await?,
+                        table_name: table_name.to_string(),
+                        database_id: db.database_id,
+                        db_name: db_name.to_string(),
                         schema: table.schema.clone(),
                         table_engine: table.table_engine.clone(),
                         table_options: table.table_options.clone(),

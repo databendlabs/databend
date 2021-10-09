@@ -51,7 +51,6 @@ pub trait Catalog {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;

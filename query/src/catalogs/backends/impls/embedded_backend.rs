@@ -166,7 +166,7 @@ impl CatalogBackend for EmbeddedCatalogBackend {
         let table_name = clone.table.as_str();
 
         let table_info = TableInfo {
-            database_id: 0,
+            database_id: 0, // TODO tobe assigned to some real value
             db: plan.db,
             table_id: self.next_db_id(),
             version: 0,
@@ -296,27 +296,25 @@ impl CatalogBackend for EmbeddedCatalogBackend {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         _table_version: Option<MetaVersion>,
     ) -> common_exception::Result<Arc<TableInfo>> {
-        let lock = self.databases.read();
-        let v = lock.get(db_name);
-        match v {
-            None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: {}",
-                    db_name
-                )))
-            }
-            Some((_, metas)) => {
-                let table = metas.id2meta.get(&table_id).ok_or_else(|| {
-                    ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
-                })?;
-
-                Ok(table.clone())
+        let map = self.databases.read();
+        for (_, tbl_idx) in map.values() {
+            match tbl_idx.id2meta.get(&table_id) {
+                None => {
+                    continue;
+                }
+                Some(tbl) => {
+                    return Ok(tbl.clone());
+                }
             }
         }
+
+        Err(ErrorCode::UnknownTable(format!(
+            "Unknown table of id: {}",
+            table_id
+        )))
     }
 
     fn name(&self) -> String {

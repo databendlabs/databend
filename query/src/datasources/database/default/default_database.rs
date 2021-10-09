@@ -114,9 +114,9 @@ impl Database for DefaultDatabase {
             }
         }
 
-        let tbl_info =
-            self.catalog_backend
-                .get_table_by_id(self.name(), table_id, table_version)?;
+        let tbl_info = self
+            .catalog_backend
+            .get_table_by_id(table_id, table_version)?;
 
         self.build_table_instance(tbl_info.as_ref())
     }
