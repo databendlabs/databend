@@ -42,10 +42,11 @@ impl Cmd {
             // todo cancel
             Packet::Cancel => {}
             Packet::Hello(hello) => {
-                if !connection
-                    .session
-                    .authenticate(&hello.user, &hello.password)
-                {
+                if !connection.session.authenticate(
+                    &hello.user,
+                    &hello.password,
+                    &connection.client_addr,
+                ) {
                     let err = Error::Server(ServerError {
                         code: WRONG_PASSWORD,
                         name: "AuthenticateException".to_owned(),

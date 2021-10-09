@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
 use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -29,7 +28,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct ClustersTable {
     table_id: u64,
@@ -94,7 +92,6 @@ impl Table for ClustersTable {
             statistics: Statistics::default(),
             description: "(Read from system.clusters table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -102,22 +99,21 @@ impl Table for ClustersTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let cluster = ctx.get_cluster();
-        let cluster_nodes = cluster.get_nodes();
+        let cluster_nodes = io_ctx.get_query_nodes();
 
         let mut names = StringArrayBuilder::with_capacity(cluster_nodes.len());
         let mut addresses = StringArrayBuilder::with_capacity(cluster_nodes.len());
         let mut addresses_port = DFUInt16ArrayBuilder::with_capacity(cluster_nodes.len());
 
         for cluster_node in &cluster_nodes {
-            let address = SocketAddr::from_str(&cluster_node.flight_address)?;
+            let (ip, port) = cluster_node.ip_port()?;
 
             names.append_value(cluster_node.id.as_bytes());
-            addresses.append_value(address.ip().to_string().as_bytes());
-            addresses_port.append_value(address.port());
+            addresses.append_value(ip.as_bytes());
+            addresses_port.append_value(port);
         }
 
         Ok(Box::pin(DataBlockStream::create(

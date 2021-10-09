@@ -46,7 +46,7 @@ use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
 use crate::datasources::table::fuse::MetaInfoReader;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct FuseTable {
     pub(crate) tbl_info: TableInfo,
@@ -130,7 +130,6 @@ impl Table for FuseTable {
                 statistics,
                 description: "".to_string(),
                 scan_plan: Default::default(),
-                remote: true,
                 tbl_args: None,
                 push_downs,
             };
@@ -142,16 +141,20 @@ impl Table for FuseTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         let default_proj = || {
             (0..self.tbl_info.schema.fields().len())
                 .into_iter()
                 .collect::<Vec<usize>>()
         };
 
-        let projection = if let Some(push_down) = &source_plan.push_downs {
+        let projection = if let Some(push_down) = push_downs {
             if let Some(prj) = &push_down.projection {
                 prj.clone()
             } else {
@@ -204,13 +207,13 @@ impl Table for FuseTable {
 
     async fn append_data(
         &self,
-        ctx: DatabendQueryContextRef,
-        insert_plan: InsertIntoPlan,
+        io_ctx: Arc<TableIOContext>,
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         // 1. take out input stream from plan
         //    Assumes that, insert_interpreter has already split data into blocks properly
         let block_stream = {
-            match insert_plan.input_stream.lock().take() {
+            match _insert_plan.input_stream.lock().take() {
                 Some(s) => s,
                 None => return Err(ErrorCode::EmptyData("input stream consumed")),
             }
@@ -232,9 +235,8 @@ impl Table for FuseTable {
         }
 
         // 3. new snapshot
-        let io_ctx = ctx.get_single_node_table_io_context()?;
         let tbl_snapshot = self
-            .table_snapshot(Arc::new(io_ctx))?
+            .table_snapshot(io_ctx)?
             .unwrap_or_else(TableSnapshot::new);
         let _snapshot_id = tbl_snapshot.snapshot_id;
         let new_snapshot = tbl_snapshot.append_segment(seg_loc);
@@ -249,7 +251,7 @@ impl Table for FuseTable {
         }
 
         // 4. commit
-        let _table_id = insert_plan.tbl_id;
+        let _table_id = _insert_plan.tbl_id;
         // TODO simple retry strategy
         // self.meta_client
         //     .commit_table(
@@ -263,7 +265,7 @@ impl Table for FuseTable {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         todo!()
@@ -293,7 +295,6 @@ impl FuseTable {
             statistics: Statistics::default(),
             description: "".to_string(),
             scan_plan: Default::default(),
-            remote: true,
             tbl_args: None,
             push_downs: None,
         })

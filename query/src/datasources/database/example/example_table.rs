@@ -20,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Extras;
+use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -29,7 +30,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct ExampleTable {
     db: String,
@@ -105,7 +105,6 @@ impl Table for ExampleTable {
                 self.db, self.name
             ),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -113,8 +112,8 @@ impl Table for ExampleTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.schema.clone());
 
@@ -127,15 +126,15 @@ impl Table for ExampleTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _insert_plan: common_planners::InsertIntoPlan,
+        _io_ctx: Arc<TableIOContext>,
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         Ok(())
     }
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())

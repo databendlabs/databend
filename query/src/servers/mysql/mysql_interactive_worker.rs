@@ -48,6 +48,7 @@ pub struct InteractiveWorker<W: std::io::Write> {
     base: InteractiveWorkerBase<W>,
     version: String,
     salt: [u8; 20],
+    client_addr: String,
 }
 
 impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
@@ -95,6 +96,11 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 
                         let result = m.digest().bytes();
                         if auth_data.len() != result.len() {
+                            log::error!(
+                                "mysql authenticate failed, client_addr: {} user: {}, error: SHA1 check failed",
+                                self.client_addr,
+                                String::from_utf8_lossy(username)
+                            );
                             return false;
                         }
                         let mut s = Vec::with_capacity(result.len());
@@ -107,11 +113,17 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
                 _ => auth_data.to_vec(),
             };
 
-            if let Ok(res) = user_mgr.auth_user(user_name.as_ref(), encode_password) {
+            if let Ok(res) =
+                user_mgr.auth_user(user_name.as_ref(), encode_password, &self.client_addr)
+            {
                 return res;
             }
         }
-
+        log::error!(
+            "mysql authenticate failed, client_addr: {} user: {}, error: user_mgr auth failed",
+            self.client_addr,
+            String::from_utf8_lossy(username)
+        );
         false
     }
 
@@ -319,7 +331,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorker<W> {
-    pub fn create(session: SessionRef) -> InteractiveWorker<W> {
+    pub fn create(session: SessionRef, client_addr: String) -> InteractiveWorker<W> {
         let mut bs = vec![0u8; 20];
         let mut rng = rand::thread_rng();
         rng.fill_bytes(bs.as_mut());
@@ -341,6 +353,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             salt: scramble,
             // TODO: version
             version: crate::configs::DATABEND_COMMIT_VERSION.to_string(),
+            client_addr,
         }
     }
 }

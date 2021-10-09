@@ -109,7 +109,6 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
             statistics.read_bytes
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
-        remote: false,
         tbl_args: None,
         push_downs: None,
     });
@@ -168,7 +167,6 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
             statistics.read_bytes
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
-        remote: false,
         tbl_args: None,
         push_downs: None,
     });

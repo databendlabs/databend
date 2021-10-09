@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_kv_api::KVApi;
 use common_management::AuthType;
 use common_management::UserInfo;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
+use common_meta_kv_api::KVApi;
 use sha2::Digest;
 
 use crate::common::StoreApiProvider;
@@ -64,7 +64,12 @@ impl UserManager {
     }
 
     // Auth the user and password for different Auth type.
-    pub fn auth_user(&self, user: &str, password: impl AsRef<[u8]>) -> Result<bool> {
+    pub fn auth_user(
+        &self,
+        user: &str,
+        password: impl AsRef<[u8]>,
+        _client_addr: &str,
+    ) -> Result<bool> {
         let user = self.get_user(user)?;
 
         match user.auth_type {

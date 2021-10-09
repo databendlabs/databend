@@ -59,6 +59,9 @@ impl ShutdownHandle {
         let sessions = self.sessions.clone();
         let join_all = futures::future::join_all(shutdown_jobs);
         async move {
+            let cluster_discovery = sessions.get_cluster_discovery();
+            cluster_discovery.unregister_to_metastore().await;
+
             join_all.await;
             sessions.shutdown(signal).await;
         }

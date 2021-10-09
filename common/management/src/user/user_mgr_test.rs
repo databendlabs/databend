@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
-use common_kv_api::KVApi;
-use common_kv_api_vo::GetKVActionResult;
-use common_kv_api_vo::MGetKVActionResult;
-use common_kv_api_vo::PrefixListReply;
-use common_kv_api_vo::UpsertKVActionResult;
-use common_metatypes::KVMeta;
-use common_metatypes::MatchSeq;
+use common_meta_kv_api::KVApi;
+use common_meta_kv_api_vo::GetKVActionResult;
+use common_meta_kv_api_vo::MGetKVActionResult;
+use common_meta_kv_api_vo::PrefixListReply;
+use common_meta_kv_api_vo::UpsertKVActionResult;
+use common_meta_types::KVMeta;
+use common_meta_types::MatchSeq;
 use mockall::predicate::*;
 use mockall::*;
 
@@ -64,7 +64,7 @@ mock! {
 }
 
 mod add {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -188,7 +188,7 @@ mod add {
 }
 
 mod get {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -328,8 +328,8 @@ mod get {
 
 mod get_users {
 
-    use common_metatypes::KVValue;
-    use common_metatypes::SeqValue;
+    use common_meta_types::KVValue;
+    use common_meta_types::SeqValue;
 
     use super::*;
 
@@ -413,7 +413,7 @@ mod get_users {
 }
 
 mod drop {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -473,7 +473,7 @@ mod drop {
 }
 
 mod update {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 

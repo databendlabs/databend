@@ -21,11 +21,11 @@ use async_raft::storage::HardState;
 use async_raft::LogId;
 use async_raft::RaftStorage;
 use common_base::tokio;
-use common_raft_store::state_machine::testing::pretty_snapshot;
-use common_raft_store::state_machine::testing::snapshot_logs;
-use common_raft_store::state_machine::SerializableSnapshot;
-use common_raft_store::state_machine::StateMachineMetaKey::LastMembership;
-use common_raft_store::state_machine::StateMachineMetaValue;
+use common_meta_raft_store::state_machine::testing::pretty_snapshot;
+use common_meta_raft_store::state_machine::testing::snapshot_logs;
+use common_meta_raft_store::state_machine::SerializableSnapshot;
+use common_meta_raft_store::state_machine::StateMachineMetaKey::LastMembership;
+use common_meta_raft_store::state_machine::StateMachineMetaValue;
 use common_tracing::tracing;
 use maplit::btreeset;
 

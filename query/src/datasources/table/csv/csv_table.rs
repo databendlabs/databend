@@ -33,7 +33,7 @@ use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table::csv::csv_table_stream::CsvTableStream;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct CsvTable {
     tbl_info: TableInfo,
@@ -114,7 +114,6 @@ impl Table for CsvTable {
             statistics: Statistics::default(),
             description: format!("(Read from CSV Engine table  {}.{})", db, name),
             scan_plan: Arc::new(ScanPlan::empty()),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -122,9 +121,13 @@ impl Table for CsvTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         Ok(Box::pin(CsvTableStream::try_create(
             ctx,
             self.tbl_info.schema.clone(),

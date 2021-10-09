@@ -19,14 +19,12 @@ use common_catalog::TableIOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metatypes::MetaId;
+use common_meta_types::MetaId;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-
-use crate::sessions::DatabendQueryContextRef;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -54,14 +52,14 @@ pub trait Table: Sync + Send {
     // Read block data from the underling.
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -72,7 +70,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(

@@ -96,11 +96,16 @@ impl ClickHouseSession for InteractiveWorker {
         54405
     }
 
-    fn authenticate(&self, user: &str, password: &[u8]) -> bool {
+    fn authenticate(&self, user: &str, password: &[u8], client_addr: &str) -> bool {
         let user_mgr = self.session.get_user_manager();
-        if let Ok(res) = user_mgr.auth_user(user, password) {
+        if let Ok(res) = user_mgr.auth_user(user, password, client_addr) {
             return res;
         }
+        log::error!(
+            "clickhouse authenticate failed, client_addr: {} user: {}",
+            client_addr,
+            user
+        );
         false
     }
 

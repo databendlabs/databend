@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_kv_api::KVApi;
-use common_kv_api_vo::GetKVActionResult;
-use common_kv_api_vo::MGetKVActionResult;
-use common_kv_api_vo::PrefixListReply;
-use common_kv_api_vo::UpsertKVActionResult;
-use common_metatypes::KVMeta;
-use common_metatypes::MatchSeq;
+use common_meta_kv_api::KVApi;
+use common_meta_kv_api_vo::GetKVActionResult;
+use common_meta_kv_api_vo::MGetKVActionResult;
+use common_meta_kv_api_vo::PrefixListReply;
+use common_meta_kv_api_vo::UpsertKVActionResult;
+use common_meta_types::KVMeta;
+use common_meta_types::MatchSeq;
 use common_tracing::tracing;
 
 use crate::action_declare;

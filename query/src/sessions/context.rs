@@ -28,9 +28,9 @@ use common_dal::DefaultDataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
-use common_metatypes::NodeInfo;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
+use common_meta_types::NodeInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -245,7 +245,7 @@ impl DatabendQueryContext {
             Arc::new(DefaultDataAccessorBuilder {}),
             max_threads,
             nodes,
-            Some(Arc::new(self.clone())),
+            Some(self.clone()),
         ))
     }
 
@@ -261,7 +261,7 @@ impl DatabendQueryContext {
             Arc::new(DefaultDataAccessorBuilder {}),
             max_threads,
             nodes,
-            Some(Arc::new(self.clone())),
+            Some(self.clone()),
         ))
     }
 }

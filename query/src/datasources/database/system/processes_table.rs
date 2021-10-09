@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
 use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
@@ -32,7 +33,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::ProcessInfo;
 
 pub struct ProcessesTable {
@@ -113,7 +114,6 @@ impl Table for ProcessesTable {
             statistics: Statistics::default(),
             description: "(Read from system.processes table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -121,9 +121,13 @@ impl Table for ProcessesTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         let sessions_manager = ctx.get_sessions_manager();
         let processes_info = sessions_manager.processes_info();
 

@@ -29,7 +29,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct FunctionsTable {
     table_id: u64,
@@ -93,7 +92,6 @@ impl Table for FunctionsTable {
             statistics: Statistics::default(),
             description: "(Read from system.functions table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -101,8 +99,8 @@ impl Table for FunctionsTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();

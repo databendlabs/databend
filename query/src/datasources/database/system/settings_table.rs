@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
 use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -27,7 +28,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct SettingsTable {
     table_id: u64,
@@ -93,7 +94,6 @@ impl Table for SettingsTable {
             statistics: Statistics::default(),
             description: "(Read from system.settings table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -101,9 +101,13 @@ impl Table for SettingsTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+
         let settings = ctx.get_settings();
 
         let mut names: Vec<String> = vec![];

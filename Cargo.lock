@@ -126,13 +126,13 @@ dependencies = [
 
 [[package]]
 name = "assert_cmd"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b800c4403e8105d959595e1f88119e78bc12bc874c4336973658b648a746ba93"
+checksum = "e996dc7940838b7ef1096b882e29ec30a3149a3a443cdc8dba19ed382eca1fe2"
 dependencies = [
  "bstr",
  "doc-comment",
- "predicates 2.0.2",
+ "predicates 2.0.3",
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
@@ -806,7 +806,7 @@ dependencies = [
  "common-dal",
  "common-datavalues",
  "common-exception",
- "common-metatypes",
+ "common-meta-types",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -974,64 +974,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-kv"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-base",
- "common-exception",
- "common-kv-api",
- "common-kv-api-util",
- "common-kv-api-vo",
- "common-metatypes",
- "common-raft-store",
- "common-sled-store",
- "common-tracing",
- "pretty_assertions",
- "tempfile",
-]
-
-[[package]]
-name = "common-kv-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-base",
- "common-exception",
- "common-kv-api-util",
- "common-kv-api-vo",
- "common-metatypes",
- "futures",
-]
-
-[[package]]
-name = "common-kv-api-util"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-tracing",
- "lazy_static",
-]
-
-[[package]]
-name = "common-kv-api-vo"
-version = "0.1.0"
-dependencies = [
- "common-metatypes",
- "serde",
-]
-
-[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "common-kv",
- "common-kv-api",
- "common-kv-api-vo",
- "common-metatypes",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
+ "common-meta-local-store",
+ "common-meta-types",
  "common-tracing",
  "lazy_static",
  "mockall",
@@ -1052,10 +1004,9 @@ dependencies = [
  "common-exception",
  "common-flight-rpc",
  "common-infallible",
- "common-kv-api",
- "common-kv-api-util",
- "common-kv-api-vo",
- "common-metatypes",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
+ "common-meta-types",
  "common-planners",
  "common-streams",
  "common-tracing",
@@ -1075,12 +1026,92 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-metatypes"
+name = "common-meta-kv-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-kv-api-vo",
+ "common-meta-types",
+ "futures",
+]
+
+[[package]]
+name = "common-meta-kv-api-vo"
+version = "0.1.0"
+dependencies = [
+ "common-meta-types",
+ "serde",
+]
+
+[[package]]
+name = "common-meta-local-store"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-tracing",
+ "futures",
+ "pretty_assertions",
+ "tempfile",
+]
+
+[[package]]
+name = "common-meta-raft-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-planners",
+ "common-tracing",
+ "maplit",
+ "pretty_assertions",
+ "rand",
+ "serde",
+ "serde_json",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+]
+
+[[package]]
+name = "common-meta-sled-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "byteorder",
+ "common-base",
+ "common-exception",
+ "common-meta-types",
+ "common-tracing",
+ "lazy_static",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sled",
+ "tempfile",
+]
+
+[[package]]
+name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
  "async-raft",
  "common-exception",
- "common-sled-store",
+ "common-meta-sled-store",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1095,53 +1126,11 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-infallible",
- "common-metatypes",
+ "common-meta-types",
  "futures",
  "lazy_static",
  "pretty_assertions",
  "serde",
-]
-
-[[package]]
-name = "common-raft-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-raft",
- "async-trait",
- "common-base",
- "common-exception",
- "common-metatypes",
- "common-planners",
- "common-sled-store",
- "common-tracing",
- "maplit",
- "pretty_assertions",
- "rand",
- "serde",
- "serde_json",
- "structopt",
- "structopt-toml",
- "tempfile",
-]
-
-[[package]]
-name = "common-sled-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-raft",
- "byteorder",
- "common-base",
- "common-exception",
- "common-metatypes",
- "common-tracing",
- "lazy_static",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sled",
- "tempfile",
 ]
 
 [[package]]
@@ -1545,7 +1534,7 @@ dependencies = [
  "colored",
  "comfy-table",
  "common-building",
- "common-raft-store",
+ "common-meta-raft-store",
  "databend-query",
  "dirs",
  "dyn-clone",
@@ -1557,7 +1546,7 @@ dependencies = [
  "metasrv",
  "nix 0.22.1",
  "portpicker",
- "predicates 2.0.2",
+ "predicates 2.0.3",
  "pretty_assertions",
  "procfs",
  "reqwest",
@@ -1606,12 +1595,12 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
- "common-kv",
- "common-kv-api",
- "common-kv-api-vo",
  "common-management",
  "common-meta-flight",
- "common-metatypes",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
+ "common-meta-local-store",
+ "common-meta-types",
  "common-planners",
  "common-streams",
  "common-tracing",
@@ -3119,13 +3108,13 @@ dependencies = [
  "common-flight-rpc",
  "common-functions",
  "common-infallible",
- "common-kv-api",
- "common-kv-api-vo",
  "common-meta-flight",
- "common-metatypes",
+ "common-meta-kv-api",
+ "common-meta-kv-api-vo",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
  "common-planners",
- "common-raft-store",
- "common-sled-store",
  "common-tracing",
  "env_logger 0.9.0",
  "flaky_test",
@@ -4186,9 +4175,9 @@ dependencies = [
 
 [[package]]
 name = "predicates"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c143348f141cc87aab5b950021bac6145d0e5ae754b0591de23244cee42c9308"
+checksum = "5c6ce811d0b2e103743eec01db1c50612221f173084ce2f7941053e94b6bb474"
 dependencies = [
  "difflib",
  "float-cmp 0.9.0",
@@ -4554,9 +4543,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.4"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "246e9f61b9bb77df069a947682be06e31ac43ea37862e244a69f177694ea6d22"
+checksum = "51c732d463dd300362ffb44b7b125f299c23d2990411a4253824630ebc7467fb"
 dependencies = [
  "base64",
  "bytes",
@@ -6271,8 +6260,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e68338db6becec24d3c7977b5bf8a48be992c934b5d07177e3931f5dc9b076c"
 dependencies = [
  "cfg-if 1.0.0",
- "serde",
- "serde_json",
  "wasm-bindgen-macro",
 ]
 

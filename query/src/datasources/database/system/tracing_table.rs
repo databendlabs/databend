@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::IOContext;
 use common_catalog::TableIOContext;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
@@ -32,7 +33,7 @@ use walkdir::WalkDir;
 
 use crate::catalogs::Table;
 use crate::datasources::database::system::TracingTableStream;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct TracingTable {
     table_id: u64,
@@ -102,7 +103,6 @@ impl Table for TracingTable {
             statistics: Statistics::default(),
             description: "(Read from system.tracing table)".to_string(),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -110,10 +110,14 @@ impl Table for TracingTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
+
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
 
         for entry in WalkDir::new(ctx.get_config().log.log_dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
@@ -126,7 +130,6 @@ impl Table for TracingTable {
 
         // Default limit.
         let mut limit = 100000000_usize;
-        let push_downs = &source_plan.push_downs;
         tracing::debug!("read push_down:{:?}", push_downs);
 
         if let Some(extras) = push_downs {

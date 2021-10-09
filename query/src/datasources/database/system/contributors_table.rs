@@ -27,7 +27,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct ContributorsTable {
     table_id: u64,
@@ -88,7 +87,6 @@ impl Table for ContributorsTable {
             statistics: Statistics::default(),
             description: "(Read from system.contributors table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -96,8 +94,8 @@ impl Table for ContributorsTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let contributors: Vec<&[u8]> = env!("DATABEND_COMMIT_AUTHORS")
             .split_terminator(',')

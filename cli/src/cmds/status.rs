@@ -199,8 +199,20 @@ impl LocalRuntime for LocalMetaConfig {
                 conf.admin_tls_server_key,
             )
             .env(
-                common_raft_store::config::KVSRV_SINGLE,
+                common_meta_raft_store::config::KVSRV_SINGLE,
                 conf.raft_config.single.to_string(),
+            )
+            .env(
+                common_meta_raft_store::config::KVSRV_RAFT_DIR,
+                conf.raft_config.raft_dir,
+            )
+            .env(
+                common_meta_raft_store::config::KVSRV_API_PORT,
+                conf.raft_config.raft_api_port.to_string(),
+            )
+            .env(
+                common_meta_raft_store::config::KVSRV_API_HOST,
+                conf.raft_config.raft_api_host,
             )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });

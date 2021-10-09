@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 
 use crate::Expression;
 use crate::Extras;
@@ -39,7 +39,6 @@ pub struct ReadDataSourcePlan {
     pub statistics: Statistics,
     pub description: String,
     pub scan_plan: Arc<ScanPlan>,
-    pub remote: bool,
 
     pub tbl_args: Option<Vec<Expression>>,
     pub push_downs: Option<Extras>,
@@ -57,7 +56,6 @@ impl ReadDataSourcePlan {
             statistics: Statistics::default(),
             description: "".to_string(),
             scan_plan: Arc::new(ScanPlan::with_table_id(table_id, table_version)),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         }

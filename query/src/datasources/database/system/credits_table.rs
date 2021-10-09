@@ -27,7 +27,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct CreditsTable {
     table_id: u64,
@@ -92,7 +91,6 @@ impl Table for CreditsTable {
             statistics: Statistics::default(),
             description: "(Read from system.credits table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -100,8 +98,8 @@ impl Table for CreditsTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let metadata_command = cargo_metadata::MetadataCommand::new();
 

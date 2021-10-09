@@ -15,16 +15,18 @@
 
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::time::Duration;
 
+use common_base::Runtime;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_kv_api::KVApi;
-use common_kv_api::SyncKVApi;
-use common_kv_api_vo::UpsertKVActionResult;
-use common_metatypes::MatchSeq;
-use common_metatypes::MatchSeqExt;
-use common_metatypes::SeqValue;
+use common_meta_kv_api::KVApi;
+use common_meta_kv_api_vo::UpsertKVActionResult;
+use common_meta_types::MatchSeq;
+use common_meta_types::MatchSeqExt;
+use common_meta_types::SeqValue;
 
 use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
@@ -35,13 +37,21 @@ pub static USER_API_KEY_PREFIX: &str = "__fd_users";
 pub struct UserMgr {
     kv_api: Arc<dyn KVApi>,
     user_prefix: String,
+
+    rt: Arc<Runtime>,
+    rpc_time_out: Option<Duration>,
 }
 
 impl UserMgr {
     pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
+        let rt = Runtime::with_worker_threads(1).expect("UserMgr initialization failure");
+
         UserMgr {
             kv_api,
             user_prefix: format!("{}/{}", USER_API_KEY_PREFIX, tenant),
+            rt: Arc::new(rt),
+            // TODO(bh): add config.
+            rpc_time_out: Some(Duration::from_secs(5)),
         }
     }
 }
@@ -52,9 +62,11 @@ impl UserMgrApi for UserMgr {
         let key = format!("{}/{}", self.user_prefix, user_info.name);
         let value = serde_json::to_vec(&user_info)?;
 
-        let res = self
-            .kv_api
-            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
+        let kv_api = self.kv_api.clone();
+        let res = self.rt.block_on(
+            async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await },
+            self.rpc_time_out,
+        )??;
 
         match res {
             UpsertKVActionResult {
@@ -79,7 +91,10 @@ impl UserMgrApi for UserMgr {
 
     fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>> {
         let key = format!("{}/{}", self.user_prefix, username);
-        let res = self.kv_api.sync_get_kv(&key)?;
+        let kv_api = self.kv_api.clone();
+        let res = self
+            .rt
+            .block_on(async move { kv_api.get_kv(&key).await }, self.rpc_time_out)??;
 
         let seq_value = res
             .result
@@ -92,7 +107,13 @@ impl UserMgrApi for UserMgr {
     }
 
     fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>> {
-        let values = self.kv_api.sync_prefix_list_kv(self.user_prefix.as_str())?;
+        let user_prefix = self.user_prefix.clone();
+        let kv_api = self.kv_api.clone();
+        let values = self.rt.block_on(
+            async move { kv_api.prefix_list_kv(user_prefix.as_str()).await },
+            self.rpc_time_out,
+        )??;
+
         let mut r = vec![];
         for (_key, (s, val)) in values {
             let u = serde_json::from_slice::<UserInfo>(&val.value)
@@ -134,9 +155,12 @@ impl UserMgrApi for UserMgr {
             None => MatchSeq::GE(1),
             Some(s) => MatchSeq::Exact(s),
         };
-        let res = self
-            .kv_api
-            .sync_upsert_kv(&key, match_seq, Some(value), None)?;
+
+        let kv_api = self.kv_api.clone();
+        let res = self.rt.block_on(
+            async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await },
+            self.rpc_time_out,
+        )??;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -148,7 +172,12 @@ impl UserMgrApi for UserMgr {
 
     fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
         let key = format!("{}/{}", self.user_prefix, username);
-        let res = self.kv_api.sync_upsert_kv(&key, seq.into(), None, None)?;
+        let kv_api = self.kv_api.clone();
+        let res = self.rt.block_on(
+            async move { kv_api.upsert_kv(&key, seq.into(), None, None).await },
+            self.rpc_time_out,
+        )??;
+
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {

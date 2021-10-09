@@ -18,7 +18,7 @@ path = "src/bin/databend-cli.rs"
 databend-query = {path = "../query"}
 clap = "3.0.0-beta.4"
 metasrv= {path = "../metasrv" }
-common-raft-store = {path = "../common/raft-store"}
+common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"
 comfy-table = "4.1.1"
 dirs = "4.0.0"
@@ -47,8 +47,8 @@ lexical-util = "0.8.1"
 [dev-dependencies]
 pretty_assertions = "1.0"
 tempfile = "3.2.0"
-assert_cmd = "2.0.1"
-predicates = "2.0.2"
+assert_cmd = "2.0.2"
+predicates = "2.0.3"
 
 [build-dependencies]
 common-building = {path = "../common/building"}

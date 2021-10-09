@@ -98,27 +98,19 @@ impl ErrorCode {
     }
 }
 
-macro_rules! as_item {
-    ($i:item) => {
-        $i
-    };
-}
-
 macro_rules! build_exceptions {
-    ($($body:tt($code:expr)),*$(,)*) => {
-        as_item! {
+    ($($body:ident($code:expr)),*$(,)*) => {
             impl ErrorCode {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
                     ErrorCode {
-                        code:$code,
+                        code: $code,
                         display_text: display_text.into(),
                         cause: None,
                         backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
                     }
                 })*
             }
-        }
     }
 }
 

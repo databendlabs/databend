@@ -27,7 +27,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct OneTable {
     tbl_id: u64,
@@ -88,7 +87,6 @@ impl Table for OneTable {
             statistics: Statistics::new_exact(1, std::mem::size_of::<u8>()),
             description: "(Read from system.one table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -96,8 +94,8 @@ impl Table for OneTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _read_source: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(vec![1u8])]);
         Ok(Box::pin(DataBlockStream::create(
