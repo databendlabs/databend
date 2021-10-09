@@ -40,8 +40,10 @@ async fn test_parquet_table() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let tbl_info = TableInfo {
+        database_id: 0,
         db: "default".to_string(),
         table_id: 0,
+        version: 0,
         name: "test_parquet".to_string(),
         schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
         engine: "test_parquet".into(),

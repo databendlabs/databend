@@ -165,8 +165,10 @@ impl CatalogBackend for RemoteCatalogBackend {
         };
 
         let table_info = TableInfo {
+            database_id: 0,
             db: reply.db,
             table_id: reply.table_id,
+            version: 0,
             name: reply.name.clone(),
             schema: reply.schema,
             engine: reply.engine,
@@ -211,8 +213,10 @@ impl CatalogBackend for RemoteCatalogBackend {
         )??;
 
         let res = TableInfo {
+            database_id: 0,
             db: db_name.to_owned(),
             table_id: reply.table_id,
+            version: 0,
             name: reply.name.clone(),
             schema: reply.schema.clone(),
             engine: reply.engine.clone(),

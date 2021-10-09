@@ -286,7 +286,9 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                     ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
                 })?;
                 let rst = TableInfo {
+                    database_id: 0,
                     table_id: table.table_id,
+                    version: 0,
                     db: db_name.clone(),
                     name: table_name.clone(),
                     schema: Arc::new(arrow_schema.into()),
@@ -316,7 +318,9 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
                 })?;
                 let rst = TableInfo {
+                    database_id: 0,
                     table_id: table.table_id,
+                    version: 0,
                     // TODO rm these filed
                     db: "".to_owned(),
                     name: "".to_owned(), // TODO for each version of table, we duplicates the name at present
@@ -372,8 +376,10 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
                 })?;
 
                 let tbl_info = TableInfo {
+                    database_id: 0,
                     db: req.db.to_string(),
                     table_id: *id,
+                    version: 0,
                     name: name.to_string(),
                     schema: Arc::new(arrow_schema.into()),
                     engine: tbl.table_engine.to_string(),

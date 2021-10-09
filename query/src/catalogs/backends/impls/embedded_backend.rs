@@ -166,8 +166,10 @@ impl CatalogBackend for EmbeddedCatalogBackend {
         let table_name = clone.table.as_str();
 
         let table_info = TableInfo {
+            database_id: 0,
             db: plan.db,
             table_id: self.next_db_id(),
+            version: 0,
             name: plan.table,
             schema: plan.schema,
             options: plan.options,

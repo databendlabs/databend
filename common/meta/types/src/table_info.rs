@@ -19,6 +19,8 @@ use std::fmt::Formatter;
 
 use common_datavalues::DataSchemaRef;
 
+use crate::MetaVersion;
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Table {
     pub table_id: u64,
@@ -44,9 +46,22 @@ impl fmt::Display for Table {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableInfo {
+    pub database_id: u64,
     pub table_id: u64,
+
+    /// version of this table snapshot.
+    ///
+    /// Any change to a table causes the version to increment, e.g. insert or delete rows, update schema etc.
+    /// But renaming a table should not affect the version, since the table itself does not change.
+    /// The tuple (database_id, table_id, version) identifies a unique and consistent table snapshot.
+    ///
+    /// A version is not guaranteed to be consecutive.
+    ///
+    pub version: MetaVersion,
+
     pub db: String,
     pub name: String,
+
     pub schema: DataSchemaRef,
     pub engine: String,
     pub options: HashMap<String, String>,
