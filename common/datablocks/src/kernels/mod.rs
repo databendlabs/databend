@@ -15,6 +15,8 @@
 #[cfg(test)]
 mod data_block_concat_test;
 #[cfg(test)]
+mod data_block_filter_test;
+#[cfg(test)]
 mod data_block_group_by_hash_test;
 #[cfg(test)]
 mod data_block_group_by_test;
