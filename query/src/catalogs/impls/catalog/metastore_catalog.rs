@@ -26,10 +26,10 @@ use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
+use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::backends::EmbeddedCatalogBackend;
+use crate::catalogs::backends::RemoteCatalogBackend;
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
-use crate::catalogs::impls::meta_backends::RemoteMeteStoreClient;
-use crate::catalogs::meta_backend::MetaBackend;
 use crate::catalogs::Database;
 use crate::catalogs::TableMeta;
 use crate::common::StoreApiProvider;
@@ -49,9 +49,9 @@ pub const DEFAULT_DB_ENGINE: &str = "Default";
 /// - Instances of `Database` are created by using database factories according to the engine
 /// - Database engines are free to save table meta in metastore or not
 pub struct MetaStoreCatalog {
-    db_engine_registry: Arc<DatabaseEngineRegistry>,
-    meta_backend: Arc<dyn MetaBackend>,
     conf: Config,
+    db_engine_registry: Arc<DatabaseEngineRegistry>,
+    catalog_backend: Arc<dyn CatalogBackend>,
 
     // this is not for performance:
     // some tables are stateful, cached in database, thus, instances of Database have to be kept as well.
@@ -63,14 +63,11 @@ pub struct MetaStoreCatalog {
 impl MetaStoreCatalog {
     pub fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.meta_address.is_empty();
-
-        let meta_backend: Arc<dyn MetaBackend>;
-
-        meta_backend = if local_mode {
-            Arc::new(EmbeddedMetaBackend::new())
+        let catalog_backend: Arc<dyn CatalogBackend> = if local_mode {
+            Arc::new(EmbeddedCatalogBackend::create())
         } else {
             let store_client_provider = Arc::new(StoreApiProvider::new(&conf));
-            Arc::new(RemoteMeteStoreClient::create(store_client_provider))
+            Arc::new(RemoteCatalogBackend::create(store_client_provider))
         };
 
         let plan = CreateDatabasePlan {
@@ -79,7 +76,7 @@ impl MetaStoreCatalog {
             engine: DEFAULT_DB_ENGINE.to_string(),
             options: Default::default(),
         };
-        meta_backend.create_database(plan)?;
+        catalog_backend.create_database(plan)?;
 
         let db_engine_registry = Arc::new(DatabaseEngineRegistry::new());
         let table_engine_registry = Arc::new(TableEngineRegistry::new());
@@ -87,14 +84,14 @@ impl MetaStoreCatalog {
         register_prelude_tbl_engines(&table_engine_registry)?;
         register_prelude_db_engines(
             &db_engine_registry,
-            meta_backend.clone(),
+            catalog_backend.clone(),
             table_engine_registry,
         )?;
 
         let cat = MetaStoreCatalog {
-            db_engine_registry,
-            meta_backend,
             conf,
+            db_engine_registry,
+            catalog_backend,
             db_instances: RwLock::new(HashMap::new()),
         };
 
@@ -141,7 +138,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.meta_backend.get_databases()?;
+        let dbs = self.catalog_backend.get_databases()?;
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
             acc.push(db);
@@ -155,7 +152,7 @@ impl Catalog for MetaStoreCatalog {
                 return Ok(db.clone());
             }
         }
-        let db_info = self.meta_backend.get_database(db_name)?;
+        let db_info = self.catalog_backend.get_database(db_name)?;
         self.build_db_instance(&db_info)
     }
 
@@ -177,7 +174,7 @@ impl Catalog for MetaStoreCatalog {
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         if self.db_engine_registry.contains(&plan.engine) {
             // TODO check if plan is valid (add validate method to database_factory)
-            self.meta_backend.create_database(plan)
+            self.catalog_backend.create_database(plan)
         } else {
             Err(ErrorCode::UnknownDatabaseEngine(format!(
                 "unknown database engine {}, supported database engines: {}",
@@ -189,7 +186,7 @@ impl Catalog for MetaStoreCatalog {
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let name = plan.db.clone();
-        self.meta_backend.drop_database(plan)?;
+        self.catalog_backend.drop_database(plan)?;
         self.db_instances.write().remove(&name);
         Ok(())
     }

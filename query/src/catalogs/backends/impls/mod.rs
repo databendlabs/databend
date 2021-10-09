@@ -13,4 +13,8 @@
 //  limitations under the License.
 //
 
-pub(crate) mod in_memory_metas;
+mod embedded_backend;
+mod remote_backend;
+
+pub use embedded_backend::EmbeddedCatalogBackend;
+pub use remote_backend::RemoteCatalogBackend;

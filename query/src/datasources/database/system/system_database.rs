@@ -21,8 +21,8 @@ use common_meta_types::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
 use crate::catalogs::Database;
+use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
 use crate::catalogs::TableMeta;
 use crate::catalogs::SYS_TBL_ID_BEGIN;

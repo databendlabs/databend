@@ -27,9 +27,8 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-pub trait MetaBackend: Send + Sync {
+pub trait CatalogBackend: Send + Sync {
     // database
-
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
@@ -39,7 +38,6 @@ pub trait MetaBackend: Send + Sync {
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
 
     // table
-
     fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply>;
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()>;

@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+mod backend;
+mod impls;
 
-mod catalog;
-mod database_catalog;
-pub use database_catalog::DatabaseCatalog;
-
-pub use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
-pub use crate::catalogs::meta_id_ranges::SYS_TBL_ID_BEGIN;
-pub use crate::catalogs::meta_id_ranges::SYS_TBL_ID_END;
+pub use backend::CatalogBackend;
+pub use impls::EmbeddedCatalogBackend;
+pub use impls::RemoteCatalogBackend;

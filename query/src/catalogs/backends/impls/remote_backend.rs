@@ -33,30 +33,30 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta_backend::MetaBackend;
+use crate::catalogs::backends::CatalogBackend;
 use crate::common::StoreApiProvider;
 
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
 #[derive(Clone)]
-pub struct RemoteMeteStoreClient {
+pub struct RemoteCatalogBackend {
     rt: Arc<Runtime>,
     rpc_time_out: Option<Duration>,
     table_meta_cache: Arc<Mutex<TableMetaCache>>,
     store_api_provider: Arc<StoreApiProvider>,
 }
 
-impl RemoteMeteStoreClient {
-    pub fn create(apis_provider: Arc<StoreApiProvider>) -> RemoteMeteStoreClient {
+impl RemoteCatalogBackend {
+    pub fn create(apis_provider: Arc<StoreApiProvider>) -> RemoteCatalogBackend {
         Self::with_timeout_setting(apis_provider, Some(Duration::from_secs(5)))
     }
 
     pub fn with_timeout_setting(
         apis_provider: Arc<StoreApiProvider>,
         timeout: Option<Duration>,
-    ) -> RemoteMeteStoreClient {
+    ) -> RemoteCatalogBackend {
         let rt = Runtime::with_worker_threads(1).expect("remote catalogs initialization failure");
-        RemoteMeteStoreClient {
+        RemoteCatalogBackend {
             rt: Arc::new(rt),
             // TODO configuration
             rpc_time_out: timeout,
@@ -66,7 +66,90 @@ impl RemoteMeteStoreClient {
     }
 }
 
-impl MetaBackend for RemoteMeteStoreClient {
+impl CatalogBackend for RemoteCatalogBackend {
+    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+        let cli_provider = self.store_api_provider.clone();
+        let r = self.rt.block_on(
+            async move {
+                let cli = cli_provider.try_get_meta_client().await?;
+                cli.create_database(plan).await
+            },
+            self.rpc_time_out,
+        )??;
+        Ok(r)
+    }
+
+    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+        let cli_provider = self.store_api_provider.clone();
+        let _r = self.rt.block_on(
+            async move {
+                let cli = cli_provider.try_get_meta_client().await?;
+                cli.drop_database(plan).await
+            },
+            self.rpc_time_out,
+        )??;
+        Ok(())
+    }
+
+    fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>> {
+        let cli_provider = self.store_api_provider.clone();
+        let db = {
+            let db_name = db_name.to_owned();
+            self.rt.block_on(
+                async move {
+                    let client = cli_provider.try_get_meta_client().await?;
+                    client.get_database(&db_name).await
+                },
+                self.rpc_time_out,
+            )??
+        };
+
+        let database_info = DatabaseInfo {
+            database_id: db.database_id,
+            db: db_name.to_owned(),
+            engine: db.engine,
+        };
+
+        Ok(Arc::new(database_info))
+    }
+
+    fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
+        let cli_provider = self.store_api_provider.clone();
+        let dbs = self.rt.block_on(
+            async move {
+                let client = cli_provider.try_get_meta_client().await?;
+                client.get_databases().await
+            },
+            self.rpc_time_out,
+        )??;
+        Ok(dbs.into_iter().map(Arc::new).collect())
+    }
+
+    fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
+        // TODO validate plan by table engine first
+        let cli = self.store_api_provider.clone();
+        let r = self.rt.block_on(
+            async move {
+                let client = cli.try_get_meta_client().await?;
+                client.create_table(plan).await
+            },
+            self.rpc_time_out,
+        )??;
+        Ok(r)
+    }
+
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
+        let cli = self.store_api_provider.clone();
+        let _r = self.rt.block_on(
+            async move {
+                let client = cli.try_get_meta_client().await?;
+                client.drop_table(plan.clone()).await
+            },
+            self.rpc_time_out,
+        )??;
+        Ok(())
+    }
+
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>> {
         let cli_provider = self.store_api_provider.clone();
         let reply = {
@@ -90,6 +173,19 @@ impl MetaBackend for RemoteMeteStoreClient {
             options: reply.options,
         };
         Ok(Arc::new(table_info))
+    }
+
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
+        let cli = self.store_api_provider.clone();
+        let db_name = db_name.to_owned();
+        let tbls = self.rt.block_on(
+            async move {
+                let client = cli.try_get_meta_client().await?;
+                client.get_tables(&db_name).await
+            },
+            self.rpc_time_out,
+        )??;
+        Ok(tbls.into_iter().map(Arc::new).collect())
     }
 
     fn get_table_by_id(
@@ -128,102 +224,6 @@ impl MetaBackend for RemoteMeteStoreClient {
         // TODO version
         cache.put((reply.table_id, 0), res.clone());
         Ok(res)
-    }
-
-    fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>> {
-        let cli_provider = self.store_api_provider.clone();
-        let db = {
-            let db_name = db_name.to_owned();
-            self.rt.block_on(
-                async move {
-                    let client = cli_provider.try_get_meta_client().await?;
-                    client.get_database(&db_name).await
-                },
-                self.rpc_time_out,
-            )??
-        };
-
-        let database_info = DatabaseInfo {
-            database_id: db.database_id,
-            db: db_name.to_owned(),
-            engine: db.engine,
-        };
-
-        Ok(Arc::new(database_info))
-    }
-
-    fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
-        let cli_provider = self.store_api_provider.clone();
-        let dbs = self.rt.block_on(
-            async move {
-                let client = cli_provider.try_get_meta_client().await?;
-                client.get_databases().await
-            },
-            self.rpc_time_out,
-        )??;
-        Ok(dbs.into_iter().map(Arc::new).collect())
-    }
-
-    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
-        let cli = self.store_api_provider.clone();
-        let db_name = db_name.to_owned();
-        let tbls = self.rt.block_on(
-            async move {
-                let client = cli.try_get_meta_client().await?;
-                client.get_tables(&db_name).await
-            },
-            self.rpc_time_out,
-        )??;
-        Ok(tbls.into_iter().map(Arc::new).collect())
-    }
-
-    fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
-        // TODO validate plan by table engine first
-        let cli = self.store_api_provider.clone();
-        let r = self.rt.block_on(
-            async move {
-                let client = cli.try_get_meta_client().await?;
-                client.create_table(plan).await
-            },
-            self.rpc_time_out,
-        )??;
-        Ok(r)
-    }
-
-    fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        let cli = self.store_api_provider.clone();
-        let _r = self.rt.block_on(
-            async move {
-                let client = cli.try_get_meta_client().await?;
-                client.drop_table(plan.clone()).await
-            },
-            self.rpc_time_out,
-        )??;
-        Ok(())
-    }
-
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        let cli_provider = self.store_api_provider.clone();
-        let r = self.rt.block_on(
-            async move {
-                let cli = cli_provider.try_get_meta_client().await?;
-                cli.create_database(plan).await
-            },
-            self.rpc_time_out,
-        )??;
-        Ok(r)
-    }
-
-    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        let cli_provider = self.store_api_provider.clone();
-        let _r = self.rt.block_on(
-            async move {
-                let cli = cli_provider.try_get_meta_client().await?;
-                cli.drop_database(plan).await
-            },
-            self.rpc_time_out,
-        )??;
-        Ok(())
     }
 
     fn name(&self) -> String {
