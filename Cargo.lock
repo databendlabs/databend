@@ -1548,7 +1548,6 @@ dependencies = [
  "portpicker",
  "predicates 2.0.3",
  "pretty_assertions",
- "procfs",
  "reqwest",
  "run_script",
  "rustyline",
@@ -4258,21 +4257,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9f5105d4fdaab20335ca9565e106a5d9b82b6219b5ba735731124ac6711d23d"
 dependencies = [
  "unicode-xid",
-]
-
-[[package]]
-name = "procfs"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95e344cafeaeefe487300c361654bcfc85db3ac53619eeccced29f5ea18c4c70"
-dependencies = [
- "bitflags",
- "byteorder",
- "chrono",
- "flate2",
- "hex",
- "lazy_static",
- "libc",
 ]
 
 [[package]]
