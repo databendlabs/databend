@@ -23,7 +23,6 @@ use super::get_list_builder;
 use crate::prelude::*;
 use crate::series::Series;
 use crate::utils::get_iter_capacity;
-use crate::utils::NoNull;
 
 /// FromIterator trait
 
@@ -45,15 +44,14 @@ where T: DFPrimitiveType
     }
 }
 
-// NoNull is only a wrapper needed for specialization
-impl<T> FromIterator<T> for NoNull<DFPrimitiveArray<T>>
+impl<T> FromIterator<T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
     // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
     // know we don't have null values.
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let av = iter.into_iter().collect::<AlignedVec<T>>();
-        NoNull::new(DFPrimitiveArray::<T>::new_from_aligned_vec(av))
+        DFPrimitiveArray::<T>::new_from_aligned_vec(av)
     }
 }
 
@@ -70,13 +68,6 @@ impl FromIterator<bool> for DFBooleanArray {
         let arr: BooleanArray = iter.into_iter().map(Some).collect();
 
         arr.into()
-    }
-}
-
-impl FromIterator<bool> for NoNull<DFBooleanArray> {
-    fn from_iter<I: IntoIterator<Item = bool>>(iter: I) -> Self {
-        let ca = iter.into_iter().collect::<DFBooleanArray>();
-        NoNull::new(ca)
     }
 }
 

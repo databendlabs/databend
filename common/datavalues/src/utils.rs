@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::ops::Deref;
-use std::ops::DerefMut;
 
 use common_arrow::arrow::bitmap::Bitmap;
 
@@ -38,39 +37,6 @@ fn index_of<T>(slice: &[T], item: &T) -> Option<usize> {
         } else {
             None
         }
-    }
-}
-
-/// Just a wrapper structure. Useful for certain impl specializations
-/// This is for instance use to implement
-/// `impl<T> FromIterator<T> for NoNull<DFPrimitiveArrary<T>>`
-/// as `Option<T>` was already implemented:
-/// `impl<T> FromIterator<Option<T>> for DFPrimitiveArrary<T>`
-pub struct NoNull<T> {
-    inner: T,
-}
-
-impl<T> NoNull<T> {
-    pub fn new(inner: T) -> Self {
-        NoNull { inner }
-    }
-
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
-}
-
-impl<T> Deref for NoNull<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T> DerefMut for NoNull<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
     }
 }
 
