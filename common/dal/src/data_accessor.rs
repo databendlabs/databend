@@ -14,7 +14,6 @@
 
 use std::io::Read;
 use std::io::Seek;
-use std::io::Write;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -40,8 +39,6 @@ impl<T> SeekableReader for T where T: Read + Seek {}
 pub trait DataAccessor: Send + Sync {
     fn get_reader(&self, path: &str, len: Option<u64>) -> Result<Box<dyn SeekableReader>>;
 
-    fn get_writer(&self, path: &str) -> Result<Box<dyn Write>>;
-
     fn get_input_stream(&self, path: &str, stream_len: Option<u64>) -> Result<InputStream>;
 
     async fn get(&self, path: &str) -> Result<Bytes>;
@@ -52,7 +49,10 @@ pub trait DataAccessor: Send + Sync {
         &self,
         path: &str,
         input_stream: Box<
-            dyn Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + Unpin + 'static,
+            dyn Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>>
+                + Send
+                + Unpin
+                + 'static,
         >,
         stream_len: usize,
     ) -> Result<()>;

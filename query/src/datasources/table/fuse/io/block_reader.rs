@@ -33,7 +33,7 @@ use common_infallible::Mutex;
 use common_planners::Part;
 use futures::StreamExt;
 
-use crate::datasources::table::fuse::block_location_from_name;
+use crate::datasources::table::fuse::util;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct BlockMetaCacheKey {
@@ -51,6 +51,7 @@ pub type BlockMetaCache = Arc<Mutex<LruCache<BlockMetaCacheKey, Vec<u8>>>>;
 
 #[allow(dead_code)]
 pub struct BlockReader {
+    // TODO enable those buddies
     meta_cache: BlockMetaCache,
     block_col_cache: BlockColCache,
     data_accessor: Arc<dyn DataAccessor>,
@@ -58,66 +59,55 @@ pub struct BlockReader {
 
 #[allow(dead_code)]
 impl BlockReader {
-    pub async fn read_block(
-        &self,
-        _part: Part,
-        _data_accessor: Arc<dyn DataAccessor>,
-        _projection: Vec<usize>,
-        _sender: Sender<Result<DataBlock>>,
-        _arrow_schema: ArrowSchema,
+    pub async fn read_part(
+        part: Part,
+        data_accessor: Arc<dyn DataAccessor>,
+        projection: Vec<usize>,
+        sender: Sender<Result<DataBlock>>,
+        arrow_schema: &ArrowSchema,
     ) -> Result<()> {
-        Ok(())
-    }
-}
-
-pub(crate) async fn read_part(
-    part: Part,
-    data_accessor: Arc<dyn DataAccessor>,
-    projection: Vec<usize>,
-    sender: Sender<Result<DataBlock>>,
-    arrow_schema: &ArrowSchema,
-) -> Result<()> {
-    let loc = block_location_from_name(&part.name);
-    // TODO pass in parquet file len
-    let mut reader = data_accessor.get_input_stream(&loc, None)?;
-    let metadata = read_metadata_async(&mut reader)
-        .await
-        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-
-    // only onw page in the the parquet
-    let row_group = 0;
-    let cols = projection
-        .iter()
-        .map(|idx| (metadata.row_groups[row_group].column(*idx), *idx));
-
-    let fields = arrow_schema.fields();
-    let mut arrays: Vec<Arc<dyn common_arrow::arrow::array::Array>> = vec![];
-    for (col_meta, idx) in cols {
-        // NOTE: here the page filter is !Send
-        let pages = get_page_stream(col_meta, &mut reader, vec![], Arc::new(|_, _| true))
+        let loc = util::block_location_from_name(&part.name);
+        // TODO pass in parquet file len
+        let mut reader = data_accessor.get_input_stream(&loc, None)?;
+        let metadata = read_metadata_async(&mut reader)
             .await
             .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-        let pages = pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
-        // QUOTE(from arrow2): deserialize the pages. This is CPU bounded and SHOULD be done in a dedicated thread pool (e.g. Rayon)
-        let array = page_stream_to_array(
-            pages,
-            &metadata.row_groups[0].columns()[idx],
-            fields[idx].data_type.clone(),
-        )
-        .await?;
-        arrays.push(array.into());
+
+        // only onw page in the the parquet
+        let row_group = 0;
+        let cols = projection
+            .iter()
+            .map(|idx| (metadata.row_groups[row_group].column(*idx), *idx));
+
+        let fields = arrow_schema.fields();
+        let mut arrays: Vec<Arc<dyn common_arrow::arrow::array::Array>> = vec![];
+        for (col_meta, idx) in cols {
+            // NOTE: here the page filter is !Send
+            let pages = get_page_stream(col_meta, &mut reader, vec![], Arc::new(|_, _| true))
+                .await
+                .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+            let pages = pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
+            // QUOTE(from arrow2): deserialize the pages. This is CPU bounded and SHOULD be done in a dedicated thread pool (e.g. Rayon)
+            let array = page_stream_to_array(
+                pages,
+                &metadata.row_groups[0].columns()[idx],
+                fields[idx].data_type.clone(),
+            )
+            .await?;
+            arrays.push(array.into());
+        }
+
+        let ser = arrays
+            .into_iter()
+            .map(|a| DataColumn::Array(a.into_series()))
+            .collect::<Vec<_>>();
+
+        let block = DataBlock::create(Arc::new(DataSchema::from(arrow_schema)), ser);
+        sender
+            .send(Ok(block))
+            .await
+            .map_err(|e| ErrorCode::BrokenChannel(e.to_string()))?;
+
+        Ok(())
     }
-
-    let ser = arrays
-        .into_iter()
-        .map(|a| DataColumn::Array(a.into_series()))
-        .collect::<Vec<_>>();
-
-    let block = DataBlock::create(Arc::new(DataSchema::from(arrow_schema)), ser);
-    sender
-        .send(Ok(block))
-        .await
-        .map_err(|e| ErrorCode::BrokenChannel(e.to_string()))?;
-
-    Ok(())
 }

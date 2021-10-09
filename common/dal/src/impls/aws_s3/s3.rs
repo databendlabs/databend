@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use std::io::Write;
 use std::str::FromStr;
 
 use common_base::tokio::io::AsyncReadExt;
@@ -82,10 +81,6 @@ impl S3 {
         })
     }
 
-    pub fn fake_new() -> Self {
-        todo!()
-    }
-
     async fn put_byte_stream(
         &self,
         path: &str,
@@ -112,10 +107,6 @@ impl DataAccessor for S3 {
         _path: &str,
         _stream_len: Option<u64>,
     ) -> common_exception::Result<Box<dyn SeekableReader>> {
-        todo!()
-    }
-
-    fn get_writer(&self, _path: &str) -> common_exception::Result<Box<dyn Write>> {
         todo!()
     }
 
@@ -161,7 +152,10 @@ impl DataAccessor for S3 {
         &self,
         path: &str,
         input_stream: Box<
-            dyn Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + Unpin + 'static,
+            dyn Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>>
+                + Send
+                + Unpin
+                + 'static,
         >,
         stream_len: usize,
     ) -> common_exception::Result<()> {

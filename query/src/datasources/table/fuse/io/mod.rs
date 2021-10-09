@@ -18,6 +18,8 @@ mod segment_reader;
 // end
 
 mod block_appender;
+#[cfg(test)]
+mod block_appender_test;
 mod block_reader;
 
 pub(crate) use block_appender::*;

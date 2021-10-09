@@ -13,12 +13,15 @@
 //  limitations under the License.
 //
 
+mod col_encode;
 mod index_helpers;
 mod location_gen;
-mod projection_helper;
 mod statistic_helper;
 
-pub use index_helpers::range_filter;
+pub use col_encode::*;
+pub use index_helpers::*;
 pub use location_gen::*;
-pub use projection_helper::project_col_idx;
-pub use statistic_helper::column_stats_reduce;
+pub use statistic_helper::*;
+
+#[cfg(test)]
+mod statistic_helper_test;
