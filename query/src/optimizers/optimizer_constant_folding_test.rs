@@ -108,6 +108,70 @@ mod tests {
                 \n  Expression: String:String (Before Projection)\
                 \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
             },
+            Test {
+                name: "Filter true and cond",
+                query: "SELECT number from numbers(10) where true AND number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Filter cond and true",
+                query: "SELECT number from numbers(10) where number > 1 AND true",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Filter false and cond",
+                query: "SELECT number from numbers(10) where false AND number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: false\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Filter cond and false",
+                query: "SELECT number from numbers(10) where number > 1 AND false",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: false\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Filter false or cond",
+                query: "SELECT number from numbers(10) where false OR number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Filter cond or false",
+                query: "SELECT number from numbers(10) where number > 1 OR false",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Filter true or cond",
+                query: "SELECT number from numbers(10) where true OR number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: true\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Filter cond or true",
+                query: "SELECT number from numbers(10) where number > 1 OR true",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: true\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
         ];
 
         for test in tests {
