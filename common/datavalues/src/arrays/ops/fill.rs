@@ -16,7 +16,6 @@ use common_exception::Result;
 
 use crate::prelude::*;
 use crate::series::Series;
-use crate::utils::NoNull;
 
 #[derive(Copy, Clone, Debug)]
 pub enum FillNoneStrategy {
@@ -79,8 +78,7 @@ where T: DFPrimitiveType
             .take(length)
             .map(|_| value)
             .into_iter()
-            .collect_trusted::<NoNull<DFPrimitiveArray<T>>>()
-            .into_inner()
+            .collect_trusted::<DFPrimitiveArray<T>>()
     }
 }
 
