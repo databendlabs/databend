@@ -27,7 +27,7 @@ use crate::catalogs::backends::CatalogBackend;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::TableMeta;
-use crate::common::StoreApiProvider;
+use crate::common::MetaClientProvider;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub struct DefaultDatabase {
@@ -35,7 +35,7 @@ pub struct DefaultDatabase {
     engine_name: String,
     catalog_backend: Arc<dyn CatalogBackend>,
     table_factory_registry: Arc<TableEngineRegistry>,
-    store_api_provider: StoreApiProvider,
+    store_api_provider: MetaClientProvider,
     stateful_table_cache: RwLock<InMemoryMetas>,
 }
 
@@ -45,7 +45,7 @@ impl DefaultDatabase {
         engine_name: impl Into<String>,
         catalog_backend: Arc<dyn CatalogBackend>,
         table_factory_registry: Arc<TableEngineRegistry>,
-        store_api_provider: StoreApiProvider,
+        store_api_provider: MetaClientProvider,
     ) -> Self {
         Self {
             db_name: db_name.into(),

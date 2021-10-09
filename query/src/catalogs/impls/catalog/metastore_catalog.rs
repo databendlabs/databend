@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_flight::meta_flight_reply::CreateDatabaseReply;
-use common_meta_flight::meta_flight_reply::DatabaseInfo;
+use common_meta_types::CreateDatabaseReply;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
@@ -32,7 +32,7 @@ use crate::catalogs::backends::RemoteCatalogBackend;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
 use crate::catalogs::TableMeta;
-use crate::common::StoreApiProvider;
+use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::datasources::database::prelude::register_prelude_db_engines;
 use crate::datasources::database_engine::DatabaseEngine;
@@ -66,7 +66,7 @@ impl MetaStoreCatalog {
         let catalog_backend: Arc<dyn CatalogBackend> = if local_mode {
             Arc::new(EmbeddedCatalogBackend::create())
         } else {
-            let store_client_provider = Arc::new(StoreApiProvider::new(&conf));
+            let store_client_provider = Arc::new(MetaClientProvider::new(&conf));
             Arc::new(RemoteCatalogBackend::create(store_client_provider))
         };
 

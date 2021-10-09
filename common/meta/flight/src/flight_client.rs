@@ -34,9 +34,9 @@ use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::meta_flight_action::MetaFlightAction;
-use crate::meta_flight_action::RequestFor;
-use crate::meta_flight_client_conf::MetaFlightClientConf;
+use crate::flight_action::MetaFlightAction;
+use crate::flight_action::RequestFor;
+use crate::flight_client_conf::MetaFlightClientConf;
 
 #[derive(Clone)]
 pub struct MetaFlightClient {

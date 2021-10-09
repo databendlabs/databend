@@ -22,7 +22,7 @@ use common_management::UserMgrApi;
 use common_meta_kv_api::KVApi;
 use sha2::Digest;
 
-use crate::common::StoreApiProvider;
+use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::users::User;
 
@@ -34,7 +34,7 @@ pub struct UserManager {
 
 impl UserManager {
     async fn create_kv_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        let store_api_provider = StoreApiProvider::new(cfg);
+        let store_api_provider = MetaClientProvider::new(cfg);
         match store_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create user api).")),

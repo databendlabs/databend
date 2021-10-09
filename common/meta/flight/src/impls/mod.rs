@@ -11,8 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod config_converter;
-mod store_api_provider;
+mod kv_api_impl;
+mod meta_api_impl;
 
-pub use store_api_provider::StoreApiProvider;
+pub use kv_api_impl::*;
+pub use meta_api_impl::*;

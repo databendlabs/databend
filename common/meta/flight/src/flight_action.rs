@@ -20,20 +20,20 @@ use common_exception::ErrorCode;
 use prost::Message;
 use tonic::Request;
 
-use crate::impl_flights::kv_api_impl::GetKVAction;
-use crate::impl_flights::kv_api_impl::KVMetaAction;
-use crate::impl_flights::kv_api_impl::MGetKVAction;
-use crate::impl_flights::kv_api_impl::PrefixListReq;
-use crate::impl_flights::kv_api_impl::UpsertKVAction;
-use crate::impl_flights::meta_api_impl::CreateDatabaseAction;
-use crate::impl_flights::meta_api_impl::CreateTableAction;
-use crate::impl_flights::meta_api_impl::DropDatabaseAction;
-use crate::impl_flights::meta_api_impl::DropTableAction;
-use crate::impl_flights::meta_api_impl::GetDatabaseAction;
-use crate::impl_flights::meta_api_impl::GetDatabasesAction;
-use crate::impl_flights::meta_api_impl::GetTableAction;
-use crate::impl_flights::meta_api_impl::GetTableExtReq;
-use crate::impl_flights::meta_api_impl::GetTablesAction;
+use crate::impls::CreateDatabaseAction;
+use crate::impls::CreateTableAction;
+use crate::impls::DropDatabaseAction;
+use crate::impls::DropTableAction;
+use crate::impls::GetDatabaseAction;
+use crate::impls::GetDatabasesAction;
+use crate::impls::GetKVAction;
+use crate::impls::GetTableAction;
+use crate::impls::GetTableExtReq;
+use crate::impls::GetTablesAction;
+use crate::impls::KVMetaAction;
+use crate::impls::MGetKVAction;
+use crate::impls::PrefixListReq;
+use crate::impls::UpsertKVAction;
 use crate::protobuf::FlightMetaRequest;
 
 pub trait RequestFor {

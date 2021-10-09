@@ -22,9 +22,9 @@ use common_cache::Cache;
 use common_cache::LruCache;
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_meta_flight::meta_flight_reply::CreateDatabaseReply;
-use common_meta_flight::meta_flight_reply::CreateTableReply;
-use common_meta_flight::meta_flight_reply::DatabaseInfo;
+use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateTableReply;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
@@ -34,7 +34,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::backends::CatalogBackend;
-use crate::common::StoreApiProvider;
+use crate::common::MetaClientProvider;
 
 type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
@@ -43,16 +43,16 @@ pub struct RemoteCatalogBackend {
     rt: Arc<Runtime>,
     rpc_time_out: Option<Duration>,
     table_meta_cache: Arc<Mutex<TableMetaCache>>,
-    store_api_provider: Arc<StoreApiProvider>,
+    store_api_provider: Arc<MetaClientProvider>,
 }
 
 impl RemoteCatalogBackend {
-    pub fn create(apis_provider: Arc<StoreApiProvider>) -> RemoteCatalogBackend {
+    pub fn create(apis_provider: Arc<MetaClientProvider>) -> RemoteCatalogBackend {
         Self::with_timeout_setting(apis_provider, Some(Duration::from_secs(5)))
     }
 
     pub fn with_timeout_setting(
-        apis_provider: Arc<StoreApiProvider>,
+        apis_provider: Arc<MetaClientProvider>,
         timeout: Option<Duration>,
     ) -> RemoteCatalogBackend {
         let rt = Runtime::with_worker_threads(1).expect("remote catalogs initialization failure");

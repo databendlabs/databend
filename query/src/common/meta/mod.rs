@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod hashtable;
-mod meta;
+mod config_converter;
+mod meta_client;
 
-pub use hashtable::*;
-pub use meta::MetaClientProvider;
+pub use meta_client::MetaClientProvider;
