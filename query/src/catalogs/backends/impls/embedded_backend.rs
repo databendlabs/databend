@@ -30,7 +30,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::backends::CatalogBackend;
-use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
+use crate::catalogs::table_id_ranges::LOCAL_TBL_ID_BEGIN;
 
 /// This catalog backend used for test only.
 struct InMemoryTableInfo {
