@@ -35,12 +35,14 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("b", DataType::UInt64, false),
     ]);
     let table = MemoryTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "a".into(),
         schema: schema.clone(),
         engine: "Memory".to_string(),
         options: TableOptions::default(),
         table_id: 0,
+        version: 0,
     })?;
 
     let io_ctx = ctx.get_single_node_table_io_context()?;

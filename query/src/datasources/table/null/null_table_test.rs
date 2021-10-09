@@ -35,12 +35,14 @@ async fn test_null_table() -> Result<()> {
         DataField::new("b", DataType::UInt64, false),
     ]);
     let table = NullTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "a".into(),
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
         engine: "Null".to_string(),
         options: TableOptions::default(),
         table_id: 0,
+        version: 0,
     })?;
 
     let io_ctx = ctx.get_single_node_table_io_context()?;
