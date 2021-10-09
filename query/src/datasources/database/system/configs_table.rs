@@ -46,6 +46,7 @@ impl ConfigsTable {
         ]);
 
         let table_info = TableInfo {
+            db: "system".to_string(),
             name: "configs".to_string(),
             table_id,
             schema,

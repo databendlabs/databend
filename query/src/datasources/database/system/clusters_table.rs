@@ -43,6 +43,7 @@ impl ClustersTable {
         ]);
 
         let table_info = TableInfo {
+            db: "system".to_string(),
             name: "clusters".to_string(),
             table_id,
             schema,
