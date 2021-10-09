@@ -15,11 +15,12 @@
 use std::cell::RefCell;
 
 use databend_query::configs::Config as QueryConfig;
+use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
 use crate::cmds::status::LocalConfig;
+use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
-use crate::cmds::status::LocalStoreConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
@@ -32,15 +33,12 @@ macro_rules! default_local_config {
                 config: QueryConfig::default(),
                 path: Some("~/.databend/test/databend-query".to_string()),
             }],
-            store_configs: Some(LocalStoreConfig {
-                pid: Some(234),
-                config: StoreConfig::empty(),
-                path: Some("~/.databend/test/databend-store".to_string()),
-            }),
-            meta_configs: Some(LocalStoreConfig {
+            store_configs: None,
+            meta_configs: Some(LocalMetaConfig {
                 pid: Some(345),
-                config: StoreConfig::empty(),
-                path: Some("~/.databend/test/databend-store".to_string()),
+                config: MetaConfig::empty(),
+                path: Some("~/.databend/test/databend-meta".to_string()),
+                log_dir: Some("./".to_string()),
             }),
         }
     };

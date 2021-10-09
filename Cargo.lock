@@ -1551,6 +1551,7 @@ dependencies = [
  "dyn-clone",
  "flate2",
  "indicatif",
+ "lexical-util",
  "libc",
  "log",
  "metasrv",

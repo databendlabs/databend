@@ -13,13 +13,18 @@
 // limitations under the License.
 
 use std::fs;
+use std::net::SocketAddr;
 use std::path::Path;
+use std::str::FromStr;
 
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use lexical_util::num::AsPrimitive;
 use metasrv::configs::Config as MetaConfig;
+use sysinfo::System;
+use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::status::LocalConfig;
@@ -32,18 +37,14 @@ use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use portpicker::Port;
-use sysinfo::{System, SystemExt};
-use std::net::SocketAddr;
-use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct CreateCommand {
     conf: Config,
 }
-struct LocalBinaryPaths {
-    query: String,
-    meta: String,
+pub struct LocalBinaryPaths {
+    pub(crate) query: String,
+    pub(crate) meta: String,
 }
 impl CreateCommand {
     pub fn create(conf: Config) -> Self {
@@ -142,25 +143,55 @@ impl CreateCommand {
                 status.version,
                 "databend-meta".to_string(),
             )
-            .expect("cannot find store bin");
+            .expect("cannot find meta service binary");
         Ok(paths)
     }
 
     fn generate_meta_config(&self) -> MetaConfig {
         let mut config = MetaConfig::empty();
-        if config.metric_api_address.parse::<Port>().is_err() || !portpicker::is_free(config.metric_api_address.parse().unwrap()) {
+        if config.metric_api_address.parse::<SocketAddr>().is_err()
+            || !portpicker::is_free(
+                config
+                    .metric_api_address
+                    .parse::<SocketAddr>()
+                    .unwrap()
+                    .port(),
+            )
+        {
             config.metric_api_address = Status::find_unused_local_port()
         }
 
-        if config.admin_api_address.parse::<Port>().is_err() || !portpicker::is_free(config.admin_api_address.parse().unwrap()) {
+        if config.admin_api_address.parse::<SocketAddr>().is_err()
+            || !portpicker::is_free(
+                config
+                    .admin_api_address
+                    .parse::<SocketAddr>()
+                    .unwrap()
+                    .port(),
+            )
+        {
             config.admin_api_address = Status::find_unused_local_port()
         }
-        if config.flight_api_address.parse::<Port>().is_err() || !portpicker::is_free(config.flight_api_address.parse().unwrap()) {
+        if config.flight_api_address.parse::<SocketAddr>().is_err()
+            || !portpicker::is_free(
+                config
+                    .admin_api_address
+                    .parse::<SocketAddr>()
+                    .unwrap()
+                    .port(),
+            )
+        {
             config.flight_api_address = Status::find_unused_local_port()
+        }
+        if !portpicker::is_free(config.raft_config.raft_api_port.as_u16()) {
+            config.raft_config.raft_api_port = portpicker::pick_unused_port().unwrap() as u32;
+        }
+        if config.raft_config.raft_api_host.is_empty() {
+            config.raft_config.raft_api_host = "0.0.0.0".to_string();
         }
         config
     }
-    fn generate_local_meta_config(
+    pub fn generate_local_meta_config(
         &self,
         args: &ArgMatches,
         bin_path: LocalBinaryPaths,
@@ -180,11 +211,18 @@ impl CreateCommand {
         }
         let meta_log_dir = format!("{}/local_meta_log", log_base);
         if !Path::new(meta_log_dir.as_str()).exists() {
-            fs::create_dir(Path::new(meta_log_dir.as_str()))
-                .unwrap_or_else(|_| panic!("cannot create directory {}", meta_log_dir));
+            fs::create_dir(Path::new(meta_log_dir.as_str())).unwrap_or_else(|_| {
+                panic!("cannot create meta serivce log directory {}", meta_log_dir)
+            });
         }
         config.log_dir = meta_log_dir;
         config.raft_config.single = true;
+        let raft_dir = format!("{}/local_raft_dir", log_base);
+        if !Path::new(raft_dir.as_str()).exists() {
+            fs::create_dir(Path::new(raft_dir.as_str()))
+                .unwrap_or_else(|_| panic!("cannot create raft data directory {}", raft_dir));
+        }
+        config.raft_config.raft_dir = raft_dir;
         Some(LocalMetaConfig {
             config,
             pid: None,
@@ -240,7 +278,8 @@ impl CreateCommand {
                     }
                 }
                 let mut status = Status::read(self.conf.clone())?;
-                status.current_profile = Some(serde_json::to_string::<ClusterProfile>(&ClusterProfile::Local).unwrap());
+                status.current_profile =
+                    Some(serde_json::to_string::<ClusterProfile>(&ClusterProfile::Local).unwrap());
                 status.write()?;
 
                 Ok(())
@@ -264,9 +303,11 @@ impl CreateCommand {
         let s = System::new_all();
 
         if !s.process_by_name("databend-meta").is_empty() {
-            return Err(CliError::Unknown(format!(
-                "❗ have installed databend-meta service before, please stop them and retry",
-            )));
+            return Err(CliError::Unknown(
+                "❗ have installed databend-meta service before, please stop them and retry"
+                    .parse()
+                    .unwrap(),
+            ));
         }
         if args.value_of("meta_address").is_some()
             && !args.value_of("meta_address").unwrap().is_empty()
@@ -278,7 +319,7 @@ impl CreateCommand {
                         return Err(CliError::Unknown(format!(
                             "Address {} has been used for local meta service",
                             addr.port()
-                        )))
+                        )));
                     }
                 }
                 Err(e) => {

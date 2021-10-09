@@ -52,8 +52,7 @@ impl SwitchCommand {
                 };
                 let status = Status::read(self.conf.clone())?;
                 if status.version == current_tag {
-
-                    return Ok(())
+                    return Ok(());
                 }
                 let mut exists = false;
                 for path in paths {

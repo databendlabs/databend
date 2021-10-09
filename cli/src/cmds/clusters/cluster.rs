@@ -18,14 +18,15 @@ use std::str::FromStr;
 use clap::App;
 use clap::AppSettings;
 use clap::ArgMatches;
-use serde::Serialize;
 use serde::Deserialize;
+use serde::Serialize;
+
 use crate::cmds::clusters::create::CreateCommand;
+use crate::cmds::clusters::delete::DeleteCommand;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::Writer;
 use crate::error::Result;
-use crate::cmds::clusters::delete::DeleteCommand;
 
 #[derive(Clone)]
 pub struct ClusterCommand {
