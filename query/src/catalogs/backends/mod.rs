@@ -12,27 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+mod backend;
+mod impls;
 
-mod catalog;
-mod database;
-mod table;
-mod table_function;
-mod table_id_ranges;
-mod table_meta;
-mod table_metas;
-
-pub mod backends;
-pub mod impls;
-
-pub use catalog::Catalog;
-pub use database::Database;
-pub use table::Table;
-pub use table::TablePtr;
-pub use table_function::TableFunction;
-pub use table_id_ranges::*;
-pub use table_meta::Meta;
-pub use table_meta::TableFunctionMeta;
-pub use table_meta::TableMeta;
-pub use table_metas::InMemoryMetas;
-
-pub use crate::datasources::database_engine::DatabaseEngine;
+pub use backend::CatalogBackend;
+pub use impls::EmbeddedCatalogBackend;
+pub use impls::RemoteCatalogBackend;

@@ -29,9 +29,10 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::meta_backend::MetaBackend;
-use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
+use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::table_id_ranges::LOCAL_TBL_ID_BEGIN;
 
+/// This catalog backend used for test only.
 struct InMemoryTableInfo {
     pub(crate) name2meta: HashMap<String, Arc<TableInfo>>,
     pub(crate) id2meta: HashMap<MetaId, Arc<TableInfo>>,
@@ -55,13 +56,13 @@ impl InMemoryTableInfo {
 
 type Databases = Arc<RwLock<HashMap<String, (Arc<DatabaseInfo>, InMemoryTableInfo)>>>;
 
-pub struct EmbeddedMetaBackend {
+pub struct EmbeddedCatalogBackend {
     databases: Databases,
     tbl_id_seq: Arc<RwLock<u64>>,
 }
 
-impl EmbeddedMetaBackend {
-    pub fn new() -> Self {
+impl EmbeddedCatalogBackend {
+    pub fn create() -> Self {
         let tbl_id_seq = Arc::new(RwLock::new(LOCAL_TBL_ID_BEGIN));
         Self {
             databases: Default::default(),
@@ -76,50 +77,64 @@ impl EmbeddedMetaBackend {
     }
 }
 
-impl MetaBackend for EmbeddedMetaBackend {
-    fn get_table(
+impl CatalogBackend for EmbeddedCatalogBackend {
+    fn create_database(
         &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> common_exception::Result<Arc<TableInfo>> {
-        let lock = self.databases.read();
-        let v = lock.get(db_name);
-        match v {
-            None => Err(ErrorCode::UnknownDatabase(format!(
-                "Unknown database: {}",
-                db_name
-            ))),
-            Some((_, metas)) => {
-                let table = metas.name2meta.get(table_name).ok_or_else(|| {
-                    ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
-                })?;
-                Ok(table.clone())
-            }
-        }
-    }
+        plan: CreateDatabasePlan,
+    ) -> common_exception::Result<CreateDatabaseReply> {
+        let db_name = plan.db.as_str();
 
-    fn get_table_by_id(
-        &self,
-        db_name: &str,
-        table_id: MetaId,
-        _table_version: Option<MetaVersion>,
-    ) -> common_exception::Result<Arc<TableInfo>> {
-        let lock = self.databases.read();
-        let v = lock.get(db_name);
-        match v {
-            None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: {}",
+        let mut db = self.databases.write();
+
+        if db.get(db_name).is_some() {
+            return if plan.if_not_exists {
+                // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+                Ok(CreateDatabaseReply { database_id: 0 })
+            } else {
+                Err(ErrorCode::DatabaseAlreadyExists(format!(
+                    "Database: '{}' already exists.",
                     db_name
                 )))
-            }
-            Some((_, metas)) => {
-                let table = metas.id2meta.get(&table_id).ok_or_else(|| {
-                    ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
-                })?;
+            };
+        }
 
-                Ok(table.clone())
-            }
+        let database_info = DatabaseInfo {
+            // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+            database_id: 0,
+            db: db_name.to_string(),
+            engine: plan.engine.clone(),
+        };
+
+        db.insert(
+            plan.db,
+            (Arc::new(database_info), InMemoryTableInfo::create()),
+        );
+
+        // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
+        Ok(CreateDatabaseReply { database_id: 0 })
+    }
+
+    fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
+        let db_name = plan.db.as_str();
+
+        let removed = {
+            let mut dbs = self.databases.write();
+            dbs.remove(db_name)
+        };
+
+        if removed.is_some() {
+            return Ok(());
+        }
+
+        // removed.is_none()
+
+        if plan.if_exists {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database: '{}'",
+                db_name
+            )))
         }
     }
 
@@ -141,26 +156,6 @@ impl MetaBackend for EmbeddedMetaBackend {
         let values = lock.values();
         for (db, _) in values {
             res.push(db.clone());
-        }
-        Ok(res)
-    }
-
-    fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let mut res = vec![];
-        let lock = self.databases.read();
-        let v = lock.get(db_name);
-        match v {
-            None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Unknown database: {}",
-                    db_name
-                )));
-            }
-            Some((_, metas)) => {
-                for meta in metas.name2meta.values() {
-                    res.push(meta.clone());
-                }
-            }
         }
         Ok(res)
     }
@@ -256,63 +251,69 @@ impl MetaBackend for EmbeddedMetaBackend {
         Ok(())
     }
 
-    fn create_database(
+    fn get_table(
         &self,
-        plan: CreateDatabasePlan,
-    ) -> common_exception::Result<CreateDatabaseReply> {
-        let db_name = plan.db.as_str();
-
-        let mut db = self.databases.write();
-
-        if db.get(db_name).is_some() {
-            return if plan.if_not_exists {
-                // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
-                Ok(CreateDatabaseReply { database_id: 0 })
-            } else {
-                Err(ErrorCode::DatabaseAlreadyExists(format!(
-                    "Database: '{}' already exists.",
-                    db_name
-                )))
-            };
+        db_name: &str,
+        table_name: &str,
+    ) -> common_exception::Result<Arc<TableInfo>> {
+        let lock = self.databases.read();
+        let v = lock.get(db_name);
+        match v {
+            None => Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database: {}",
+                db_name
+            ))),
+            Some((_, metas)) => {
+                let table = metas.name2meta.get(table_name).ok_or_else(|| {
+                    ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
+                })?;
+                Ok(table.clone())
+            }
         }
-
-        let database_info = DatabaseInfo {
-            // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
-            database_id: 0,
-            db: db_name.to_string(),
-            engine: plan.engine.clone(),
-        };
-
-        db.insert(
-            plan.db,
-            (Arc::new(database_info), InMemoryTableInfo::create()),
-        );
-
-        // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
-        Ok(CreateDatabaseReply { database_id: 0 })
     }
 
-    fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
-        let db_name = plan.db.as_str();
-
-        let removed = {
-            let mut dbs = self.databases.write();
-            dbs.remove(db_name)
-        };
-
-        if removed.is_some() {
-            return Ok(());
+    fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+        let mut res = vec![];
+        let lock = self.databases.read();
+        let v = lock.get(db_name);
+        match v {
+            None => {
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Unknown database: {}",
+                    db_name
+                )));
+            }
+            Some((_, metas)) => {
+                for meta in metas.name2meta.values() {
+                    res.push(meta.clone());
+                }
+            }
         }
+        Ok(res)
+    }
 
-        // removed.is_none()
+    fn get_table_by_id(
+        &self,
+        db_name: &str,
+        table_id: MetaId,
+        _table_version: Option<MetaVersion>,
+    ) -> common_exception::Result<Arc<TableInfo>> {
+        let lock = self.databases.read();
+        let v = lock.get(db_name);
+        match v {
+            None => {
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Unknown database: {}",
+                    db_name
+                )))
+            }
+            Some((_, metas)) => {
+                let table = metas.id2meta.get(&table_id).ok_or_else(|| {
+                    ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
+                })?;
 
-        if plan.if_exists {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownDatabase(format!(
-                "Unknown database: '{}'",
-                db_name
-            )))
+                Ok(table.clone())
+            }
         }
     }
 

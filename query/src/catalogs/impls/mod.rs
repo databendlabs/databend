@@ -13,13 +13,10 @@
 // limitations under the License.
 //
 
-pub use database_catalog::DatabaseCatalog;
-
-pub use crate::catalogs::meta_id_ranges::LOCAL_TBL_ID_BEGIN;
-pub use crate::catalogs::meta_id_ranges::SYS_TBL_ID_BEGIN;
-pub use crate::catalogs::meta_id_ranges::SYS_TBL_ID_END;
-
 mod catalog;
 mod database_catalog;
-pub(crate) mod meta_backends;
-pub(crate) mod util;
+pub use database_catalog::DatabaseCatalog;
+
+pub use crate::catalogs::table_id_ranges::LOCAL_TBL_ID_BEGIN;
+pub use crate::catalogs::table_id_ranges::SYS_TBL_ID_BEGIN;
+pub use crate::catalogs::table_id_ranges::SYS_TBL_ID_END;
