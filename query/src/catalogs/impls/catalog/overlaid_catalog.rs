@@ -110,16 +110,12 @@ impl Catalog for OverlaidCatalog {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> common_exception::Result<Arc<TableMeta>> {
         self.read_only
-            .get_table_by_id(db_name, table_id, table_version)
-            .or_else(|_e| {
-                self.bottom
-                    .get_table_by_id(db_name, table_id, table_version)
-            })
+            .get_table_by_id(table_id, table_version)
+            .or_else(|_e| self.bottom.get_table_by_id(table_id, table_version))
     }
 
     fn get_table_function(

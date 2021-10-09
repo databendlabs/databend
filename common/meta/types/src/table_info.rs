@@ -25,6 +25,15 @@ use crate::MetaVersion;
 pub struct Table {
     pub table_id: u64,
 
+    /// name of this table
+    pub table_name: String,
+
+    /// identity of the database which this table belongs to
+    pub database_id: u64,
+
+    /// snapshot of the database name which this table is being created
+    pub db_name: String,
+
     /// serialized schema
     pub schema: Vec<u8>,
 

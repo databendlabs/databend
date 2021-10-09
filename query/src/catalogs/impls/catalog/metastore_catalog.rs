@@ -163,11 +163,14 @@ impl Catalog for MetaStoreCatalog {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        let db = self.get_database(db_name)?;
+        let tbl_info = self
+            .catalog_backend
+            .get_table_by_id(table_id, table_version)?;
+        // table factories are insides Database, tobe optimized latter
+        let db = self.get_database(&tbl_info.db)?;
         db.get_table_by_id(table_id, table_version)
     }
 

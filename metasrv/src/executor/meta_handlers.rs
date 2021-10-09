@@ -175,6 +175,9 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         let table = Table {
             table_id: 0,
+            table_name: table_name.to_string(),
+            database_id: 0, // this field is unused during the creation of table
+            db_name: db_name.to_string(),
             schema: flight_data.data_header,
             table_engine: plan.engine.clone(),
             table_options: plan.options.clone(),
@@ -286,9 +289,9 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                     ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
                 })?;
                 let rst = TableInfo {
-                    database_id: 0,
+                    database_id: db.database_id,
                     table_id: table.table_id,
-                    version: 0,
+                    version: 0, // placeholder, not yet implemented in meta service
                     db: db_name.clone(),
                     name: table_name.clone(),
                     schema: Arc::new(arrow_schema.into()),
@@ -318,12 +321,11 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
                 })?;
                 let rst = TableInfo {
-                    database_id: 0,
+                    database_id: table.database_id,
                     table_id: table.table_id,
+                    db: table.db_name,
+                    name: table.table_name,
                     version: 0,
-                    // TODO rm these filed
-                    db: "".to_owned(),
-                    name: "".to_owned(), // TODO for each version of table, we duplicates the name at present
                     schema: Arc::new(arrow_schema.into()),
                     engine: table.table_engine.clone(),
                     options: table.table_options,
@@ -376,7 +378,7 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
                 })?;
 
                 let tbl_info = TableInfo {
-                    database_id: 0,
+                    database_id: tbl.database_id,
                     db: req.db.to_string(),
                     table_id: *id,
                     version: 0,

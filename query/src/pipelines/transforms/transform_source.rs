@@ -39,14 +39,11 @@ impl SourceTransform {
         Ok(SourceTransform { ctx, source_plan })
     }
 
-    async fn read_table(&self, db: &str) -> Result<SendableDataBlockStream> {
+    async fn read_table(&self, _db: &str) -> Result<SendableDataBlockStream> {
         let table_id = self.source_plan.table_id;
         let table_ver = self.source_plan.table_version;
         let table = if self.source_plan.tbl_args.is_none() {
-            self.ctx
-                .get_table_by_id(db, table_id, table_ver)?
-                .raw()
-                .clone()
+            self.ctx.get_table_by_id(table_id, table_ver)?.raw().clone()
         } else {
             let func_meta = self
                 .ctx
