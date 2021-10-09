@@ -294,6 +294,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                     version: 0, // placeholder, not yet implemented in meta service
                     db: db_name.clone(),
                     name: table_name.clone(),
+                    is_local: false,
                     schema: Arc::new(arrow_schema.into()),
                     engine: table.table_engine.clone(),
                     options: table.table_options,
@@ -326,6 +327,7 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     db: table.db_name,
                     name: table.table_name,
                     version: 0,
+                    is_local: false,
                     schema: Arc::new(arrow_schema.into()),
                     engine: table.table_engine.clone(),
                     options: table.table_options,
@@ -382,6 +384,7 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
                     db: req.db.to_string(),
                     table_id: *id,
                     version: 0,
+                    is_local: false,
                     name: name.to_string(),
                     schema: Arc::new(arrow_schema.into()),
                     engine: tbl.table_engine.to_string(),

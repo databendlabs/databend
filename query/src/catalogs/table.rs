@@ -98,6 +98,7 @@ impl<T: Table> ToTableInfo for T {
             version: 0,
             db: db.to_string(),
             name: self.name().to_string(),
+            is_local: self.is_local(),
             schema: self.schema()?,
             engine: self.engine().to_string(),
             options: Default::default(),
