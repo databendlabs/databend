@@ -40,14 +40,18 @@ impl SourceTransform {
     }
 
     async fn read_table(&self, _db: &str) -> Result<SendableDataBlockStream> {
-        let table_id = self.source_plan.table_id;
-        let table_ver = self.source_plan.table_version;
+        let table_id = self.source_plan.table_info.table_id;
+        let table_ver = self.source_plan.table_info.version;
         let table = if self.source_plan.tbl_args.is_none() {
-            self.ctx.get_table_by_id(table_id, table_ver)?.raw().clone()
+            self.ctx
+                .get_table_by_id(table_id, Some(table_ver))?
+                .raw()
+                .clone()
         } else {
-            let func_meta = self
-                .ctx
-                .get_table_function(&self.source_plan.table, self.source_plan.tbl_args.clone())?;
+            let func_meta = self.ctx.get_table_function(
+                &self.source_plan.table_info.name,
+                self.source_plan.tbl_args.clone(),
+            )?;
             func_meta.raw().clone().as_table()
         };
         // TODO(xp): get_single_node_table_io_context() or
@@ -81,8 +85,8 @@ impl Processor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let db = self.source_plan.db.clone();
-        let table = self.source_plan.table.clone();
+        let db = self.source_plan.table_info.db.clone();
+        let table = self.source_plan.table_info.name.clone();
 
         tracing::debug!("execute, table:{:#}.{:#} ...", db, table);
 
@@ -90,7 +94,7 @@ impl Processor for SourceTransform {
         // Because the table may not support require columns
         Ok(Box::pin(CorrectWithSchemaStream::new(
             self.read_table(&db).await?,
-            self.source_plan.schema.clone(),
+            self.source_plan.table_info.schema.clone(),
         )))
     }
 }

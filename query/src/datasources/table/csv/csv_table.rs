@@ -101,11 +101,7 @@ impl Table for CsvTable {
         let db = &self.tbl_info.db;
         let name = &self.tbl_info.name;
         Ok(ReadDataSourcePlan {
-            db: db.to_owned(),
-            table: name.to_owned(),
-            table_id: self.tbl_info.table_id,
-            table_version: None,
-            schema: self.tbl_info.schema.clone(),
+            table_info: self.tbl_info.clone(),
             parts: generate_parts(
                 start_line as u64,
                 io_ctx.get_max_threads() as u64,

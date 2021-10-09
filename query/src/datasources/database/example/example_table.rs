@@ -19,6 +19,7 @@ use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
@@ -90,11 +91,16 @@ impl Table for ExampleTable {
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            db: self.db.clone(),
-            table: self.name().to_string(),
-            table_id: self.table_id,
-            table_version: None,
-            schema: self.schema.clone(),
+            table_info: TableInfo {
+                database_id: 0,
+                table_id: self.table_id,
+                version: 0,
+                db: self.db.clone(),
+                name: self.name().to_string(),
+                schema: self.schema.clone(),
+                engine: "".to_string(),
+                options: Default::default(),
+            },
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,

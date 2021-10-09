@@ -783,12 +783,14 @@ impl PlanScheduler {
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
         let table = if plan.tbl_args.is_none() {
-            let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
+            let table_meta = self
+                .query_context
+                .get_table(&plan.table_info.db, &plan.table_info.name)?;
             table_meta.raw().clone()
         } else {
             let meta = self
                 .query_context
-                .get_table_function(&plan.table, plan.tbl_args.clone())?;
+                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?;
             meta.raw().clone().as_table()
         };
 

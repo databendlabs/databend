@@ -16,8 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchema;
 
 use crate::MetaVersion;
 
@@ -71,7 +72,39 @@ pub struct TableInfo {
     pub db: String,
     pub name: String,
 
-    pub schema: DataSchemaRef,
+    pub schema: Arc<DataSchema>,
     pub engine: String,
     pub options: HashMap<String, String>,
+}
+
+impl TableInfo {
+    /// Create a TableInfo with only db, table, schema
+    pub fn simple(db: &str, table: &str, schema: Arc<DataSchema>) -> TableInfo {
+        TableInfo {
+            db: db.to_string(),
+            name: table.to_string(),
+            schema,
+            ..Default::default()
+        }
+    }
+
+    pub fn schema(mut self, schema: Arc<DataSchema>) -> TableInfo {
+        self.schema = schema;
+        self
+    }
+}
+
+impl Default for TableInfo {
+    fn default() -> Self {
+        TableInfo {
+            database_id: 0,
+            table_id: 0,
+            version: 0,
+            db: "".to_string(),
+            name: "".to_string(),
+            schema: Arc::new(DataSchema::empty()),
+            engine: "".to_string(),
+            options: HashMap::new(),
+        }
+    }
 }

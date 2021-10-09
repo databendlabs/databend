@@ -32,6 +32,7 @@ use common_tracing::tracing;
 use walkdir::WalkDir;
 
 use crate::catalogs::Table;
+use crate::catalogs::ToTableInfo;
 use crate::datasources::database::system::TracingTableStream;
 use crate::sessions::DatabendQueryContext;
 
@@ -91,11 +92,7 @@ impl Table for TracingTable {
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            db: "system".to_string(),
-            table: self.name().to_string(),
-            table_id: self.table_id,
-            table_version: None,
-            schema: self.schema.clone(),
+            table_info: self.to_table_info("system")?,
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,

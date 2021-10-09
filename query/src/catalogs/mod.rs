@@ -28,6 +28,7 @@ pub use catalog::Catalog;
 pub use database::Database;
 pub use table::Table;
 pub use table::TablePtr;
+pub use table::ToTableInfo;
 pub use table_function::TableFunction;
 pub use table_id_ranges::*;
 pub use table_meta::Meta;
