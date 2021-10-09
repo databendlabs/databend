@@ -53,7 +53,7 @@ impl NumbersTable {
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
-    ) -> Result<Arc<dyn TableFunction>> {
+    ) -> Result<Arc<dyn TableFunction<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
         let mut total = None;
         if let Some(args) = &table_args {
             if args.len() == 1 {
@@ -87,6 +87,9 @@ impl NumbersTable {
 
 #[async_trait::async_trait]
 impl Table for NumbersTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         &self.table_name
     }
@@ -120,9 +123,9 @@ impl Table for NumbersTable {
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         let total = self.total;
 
         let statistics =
@@ -158,7 +161,7 @@ impl Table for NumbersTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?
@@ -180,7 +183,9 @@ impl TableFunction for NumbersTable {
         &self.db_name
     }
 
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    fn as_table<'a>(
+        self: Arc<Self>,
+    ) -> Arc<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan> + 'a>
     where Self: 'a {
         self
     }

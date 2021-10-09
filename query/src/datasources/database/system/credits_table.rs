@@ -48,6 +48,9 @@ impl CreditsTable {
 
 #[async_trait::async_trait]
 impl Table for CreditsTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         "credits"
     }
@@ -75,9 +78,9 @@ impl Table for CreditsTable {
     fn read_plan(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -99,7 +102,7 @@ impl Table for CreditsTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let metadata_command = cargo_metadata::MetadataCommand::new();
 

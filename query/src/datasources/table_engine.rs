@@ -14,6 +14,8 @@
 //
 
 use common_meta_flight::meta_flight_reply::TableInfo;
+use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::Table;
 use crate::common::StoreApiProvider;
@@ -27,19 +29,24 @@ pub trait TableEngine: Send + Sync {
         &self,
         tbl_info: TableInfo,
         store_provider: StoreApiProvider,
-    ) -> common_exception::Result<Box<dyn Table>>;
+    ) -> common_exception::Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>>;
 }
 
 impl<T> TableEngine for T
 where
-    T: Fn(TableInfo) -> common_exception::Result<Box<dyn Table>>,
+    T: Fn(
+        TableInfo,
+    ) -> common_exception::Result<
+        Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>,
+    >,
     T: Send + Sync,
 {
     fn try_create(
         &self,
         tbl_info: TableInfo,
         _store_provider: StoreApiProvider,
-    ) -> common_exception::Result<Box<dyn Table>> {
+    ) -> common_exception::Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>>
+    {
         self(tbl_info)
     }
 }

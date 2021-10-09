@@ -54,7 +54,9 @@ pub struct FuseTable {
 }
 
 impl FuseTable {
-    pub fn try_create(_tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        _tbl_info: TableInfo,
+    ) -> Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
         todo!()
     }
 
@@ -64,7 +66,7 @@ impl FuseTable {
     //        schema: DataSchemaRef,
     //        options: TableOptions,
     //        meta_client: T,
-    //    ) -> Result<Box<dyn Table>> {
+    //    ) -> Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
     //        let storage_scheme = parse_storage_scheme(options.get("STORAGE_SCHEME"))?;
     //        let res = FuseTable {
     //            db,
@@ -81,6 +83,9 @@ impl FuseTable {
 
 #[async_trait::async_trait]
 impl Table for FuseTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         &self.tbl_info.name
     }
@@ -110,7 +115,7 @@ impl Table for FuseTable {
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         // primary work to do: partition pruning/elimination
         let tbl_snapshot = self.table_snapshot(io_ctx.clone())?;
         if let Some(snapshot) = tbl_snapshot {
@@ -142,7 +147,7 @@ impl Table for FuseTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?
@@ -154,7 +159,7 @@ impl Table for FuseTable {
                 .collect::<Vec<usize>>()
         };
 
-        let projection = if let Some(push_down) = push_downs {
+        let projection = if let Some(push_down) = _push_downs {
             if let Some(prj) = &push_down.projection {
                 prj.clone()
             } else {

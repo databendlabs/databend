@@ -47,6 +47,9 @@ impl DatabasesTable {
 
 #[async_trait::async_trait]
 impl Table for DatabasesTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         "databases"
     }
@@ -74,9 +77,9 @@ impl Table for DatabasesTable {
     fn read_plan(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -98,7 +101,7 @@ impl Table for DatabasesTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?

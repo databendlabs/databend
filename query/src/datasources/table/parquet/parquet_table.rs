@@ -43,7 +43,9 @@ pub struct ParquetTable {
 }
 
 impl ParquetTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        tbl_info: TableInfo,
+    ) -> Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
         let options = &tbl_info.options;
         let file = options.get("location").cloned();
         return match file {
@@ -93,6 +95,9 @@ fn read_file(
 
 #[async_trait::async_trait]
 impl Table for ParquetTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         &self.tbl_info.name
     }
@@ -120,9 +125,9 @@ impl Table for ParquetTable {
     fn read_plan(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         let db = &self.tbl_info.db;
         Ok(ReadDataSourcePlan {
             db: db.to_string(),
@@ -145,7 +150,7 @@ impl Table for ParquetTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;
         type BlockReceiver = Receiver<Option<Result<DataBlock>>>;

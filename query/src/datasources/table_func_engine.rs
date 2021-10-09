@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use common_meta_types::MetaId;
 use common_planners::Expression;
+use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::TableFunction;
 
@@ -29,12 +31,21 @@ pub trait TableFuncEngine: Send + Sync {
         tbl_func_name: &str,
         tbl_id: MetaId,
         arg: TableArgs,
-    ) -> common_exception::Result<Arc<dyn TableFunction>>;
+    ) -> common_exception::Result<
+        Arc<dyn TableFunction<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>,
+    >;
 }
 
 impl<T> TableFuncEngine for T
 where
-    T: Fn(&str, &str, MetaId, TableArgs) -> common_exception::Result<Arc<dyn TableFunction>>,
+    T: Fn(
+        &str,
+        &str,
+        MetaId,
+        TableArgs,
+    ) -> common_exception::Result<
+        Arc<dyn TableFunction<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>,
+    >,
     T: Send + Sync,
 {
     fn try_create(
@@ -43,7 +54,9 @@ where
         tbl_func_name: &str,
         tbl_id: MetaId,
         arg: TableArgs,
-    ) -> common_exception::Result<Arc<dyn TableFunction>> {
+    ) -> common_exception::Result<
+        Arc<dyn TableFunction<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>,
+    > {
         self(db_name, tbl_func_name, tbl_id, arg)
     }
 }

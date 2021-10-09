@@ -42,7 +42,9 @@ pub struct CsvTable {
 }
 
 impl CsvTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        tbl_info: TableInfo,
+    ) -> Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
         let options = &tbl_info.options;
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
@@ -64,6 +66,9 @@ impl CsvTable {
 
 #[async_trait::async_trait]
 impl Table for CsvTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         &self.tbl_info.name
     }
@@ -91,9 +96,9 @@ impl Table for CsvTable {
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = count_lines(File::open(file.clone())?)?;
@@ -122,7 +127,7 @@ impl Table for CsvTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?

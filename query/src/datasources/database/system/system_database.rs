@@ -20,6 +20,8 @@ use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
+use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::impls::util::in_memory_metas::InMemoryMetas;
 use crate::catalogs::Database;
@@ -52,7 +54,7 @@ impl SystemDatabase {
         let name = name.into();
 
         // Table list.
-        let table_list: Vec<Arc<dyn Table>> = vec![
+        let table_list: Vec<Arc<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> = vec![
             Arc::new(system::OneTable::create(next_id())),
             Arc::new(system::FunctionsTable::create(next_id())),
             Arc::new(system::ContributorsTable::create(next_id())),

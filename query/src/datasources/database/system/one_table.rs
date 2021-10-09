@@ -44,6 +44,9 @@ impl OneTable {
 
 #[async_trait::async_trait]
 impl Table for OneTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         "one"
     }
@@ -71,9 +74,9 @@ impl Table for OneTable {
     fn read_plan(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -95,7 +98,7 @@ impl Table for OneTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(vec![1u8])]);
         Ok(Box::pin(DataBlockStream::create(

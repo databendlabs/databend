@@ -46,7 +46,7 @@ impl ExampleTable {
         schema: DataSchemaRef,
         _options: TableOptions,
         table_id: u64,
-    ) -> Result<Box<dyn Table>> {
+    ) -> Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
         let table = Self {
             db,
             name,
@@ -59,6 +59,9 @@ impl ExampleTable {
 
 #[async_trait::async_trait]
 impl Table for ExampleTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         &self.name
     }
@@ -86,9 +89,9 @@ impl Table for ExampleTable {
     fn read_plan(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         Ok(ReadDataSourcePlan {
             db: self.db.clone(),
             table: self.name().to_string(),
@@ -113,7 +116,7 @@ impl Table for ExampleTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.schema.clone());
 

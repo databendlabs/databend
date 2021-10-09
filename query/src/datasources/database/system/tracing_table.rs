@@ -60,6 +60,9 @@ impl TracingTable {
 
 #[async_trait::async_trait]
 impl Table for TracingTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         "tracing"
     }
@@ -87,9 +90,9 @@ impl Table for TracingTable {
     fn read_plan(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         Ok(ReadDataSourcePlan {
             db: "system".to_string(),
             table: self.name().to_string(),
@@ -111,7 +114,7 @@ impl Table for TracingTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
 
@@ -130,9 +133,9 @@ impl Table for TracingTable {
 
         // Default limit.
         let mut limit = 100000000_usize;
-        tracing::debug!("read push_down:{:?}", push_downs);
+        tracing::debug!("read push_down:{:?}", _push_downs);
 
-        if let Some(extras) = push_downs {
+        if let Some(extras) = _push_downs {
             if let Some(limit_push_down) = extras.limit {
                 limit = limit_push_down;
             }

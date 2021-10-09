@@ -28,6 +28,9 @@ use common_streams::SendableDataBlockStream;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
+    type PushDown;
+    type ReadPlan;
+
     fn name(&self) -> &str;
     fn engine(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
@@ -45,15 +48,15 @@ pub trait Table: Sync + Send {
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<Self::PushDown>,
         partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan>;
+    ) -> Result<Self::ReadPlan>;
 
     // Read block data from the underling.
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
@@ -80,4 +83,4 @@ pub trait Table: Sync + Send {
     }
 }
 
-pub type TablePtr = Arc<dyn Table>;
+pub type TablePtr = Arc<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>;

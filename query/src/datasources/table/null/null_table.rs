@@ -39,13 +39,18 @@ pub struct NullTable {
 }
 
 impl NullTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        tbl_info: TableInfo,
+    ) -> Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
         Ok(Box::new(Self { tbl_info }))
     }
 }
 
 #[async_trait::async_trait]
 impl Table for NullTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         &self.tbl_info.name
     }
@@ -73,9 +78,9 @@ impl Table for NullTable {
     fn read_plan(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         let tbl_info = &self.tbl_info;
         let db = &tbl_info.db;
         Ok(ReadDataSourcePlan {
@@ -99,7 +104,7 @@ impl Table for NullTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.tbl_info.schema.clone());
 

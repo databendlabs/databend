@@ -43,7 +43,9 @@ pub struct MemoryTable {
 }
 
 impl MemoryTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        tbl_info: TableInfo,
+    ) -> Result<Box<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>> {
         let table = Self {
             tbl_info,
             blocks: Arc::new(RwLock::new(vec![])),
@@ -54,6 +56,9 @@ impl MemoryTable {
 
 #[async_trait::async_trait]
 impl Table for MemoryTable {
+    type PushDown = Extras;
+    type ReadPlan = ReadDataSourcePlan;
+
     fn name(&self) -> &str {
         &self.tbl_info.name
     }
@@ -85,9 +90,9 @@ impl Table for MemoryTable {
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<Self::PushDown>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Self::ReadPlan> {
         let blocks = self.blocks.read();
         let rows = blocks.iter().map(|block| block.num_rows()).sum();
         let bytes = blocks.iter().map(|block| block.memory_size()).sum();
@@ -112,7 +117,7 @@ impl Table for MemoryTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<Self::PushDown>,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?

@@ -17,12 +17,15 @@ use std::sync::Arc;
 
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 
-pub type TableMeta = Meta<Arc<dyn Table>>;
-pub type TableFunctionMeta = Meta<Arc<dyn TableFunction>>;
+pub type TableMeta = Meta<Arc<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>>;
+pub type TableFunctionMeta =
+    Meta<Arc<dyn TableFunction<PushDown = Extras, ReadPlan = ReadDataSourcePlan>>>;
 
 /// The wrapper of the T with meta version.
 #[derive(Debug, Clone)]

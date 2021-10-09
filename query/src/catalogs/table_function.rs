@@ -14,12 +14,17 @@
 
 use std::sync::Arc;
 
+use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
+
 use crate::catalogs::Table;
 
 pub trait TableFunction: Sync + Send + Table {
     fn function_name(&self) -> &str;
     fn db(&self) -> &str;
 
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    fn as_table<'a>(
+        self: Arc<Self>,
+    ) -> Arc<dyn Table<PushDown = Extras, ReadPlan = ReadDataSourcePlan> + 'a>
     where Self: 'a;
 }
