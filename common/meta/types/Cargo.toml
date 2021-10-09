@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+common-datavalues = {path = "../../datavalues"}
 common-exception = {path = "../../exception"}
 common-meta-sled-store = {path = "../sled-store"}
 

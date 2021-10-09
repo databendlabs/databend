@@ -15,6 +15,7 @@
 
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableInfo;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -28,7 +29,6 @@ use crate::meta_flight_reply::CreateTableReply;
 use crate::meta_flight_reply::DatabaseInfo;
 use crate::meta_flight_reply::GetDatabasesReply;
 use crate::meta_flight_reply::GetTablesReply;
-use crate::meta_flight_reply::TableInfo;
 use crate::MetaFlightClient;
 use crate::RequestFor;
 

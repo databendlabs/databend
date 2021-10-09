@@ -63,7 +63,6 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::UnaryOperator;
 
-use crate::catalogs::Catalog;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -433,8 +432,8 @@ impl PlanParser {
             db_name = tbl_name;
             tbl_name = table_name.0[1].value.clone();
         }
-        let table = self.ctx.get_catalog().get_table(&db_name, &tbl_name)?;
 
+        let table = self.ctx.get_table(&db_name, &tbl_name)?;
         let mut schema = table.raw().schema()?;
         let tbl_id = table.meta_id();
 

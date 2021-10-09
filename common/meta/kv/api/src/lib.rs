@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
+
 mod kv_api;
-mod kv_api_sync;
 
 pub use kv_api::KVApi;

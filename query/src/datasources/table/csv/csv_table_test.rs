@@ -20,7 +20,7 @@ use common_base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_flight::meta_flight_reply::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 

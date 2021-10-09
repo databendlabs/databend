@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use data_accessor::AsyncSeekableReader;
-pub use data_accessor::Bytes;
-pub use data_accessor::DataAccessor;
-pub use data_accessor::DataAccessorBuilder;
-pub use data_accessor::InputStream;
-pub use data_accessor::ObjectAccessor;
-pub use data_accessor::SeekableReader;
-pub use impls::aws_s3::S3InputStream;
-pub use impls::aws_s3::S3;
-pub use impls::local::Local;
-pub use schemes::StorageScheme;
+use std::collections::HashMap;
 
-mod data_accessor;
-mod impls;
-mod schemes;
+use common_datavalues::DataSchemaRef;
 
-#[cfg(test)]
-mod schemes_test;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TableInfo {
+    pub table_id: u64,
+    pub db: String,
+    pub name: String,
+    pub schema: DataSchemaRef,
+    pub engine: String,
+    pub options: HashMap<String, String>,
+}

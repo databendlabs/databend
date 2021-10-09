@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_base::Runtime;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorBuilder;
-use common_dal::StorageScheme;
 use common_exception::ErrorCode;
 use common_meta_types::NodeInfo;
 
@@ -33,8 +32,7 @@ pub trait IOContext {
     // fn get_runtime(&self) -> Arc<dyn TrySpawn>;
     fn get_runtime(&self) -> Arc<Runtime>;
 
-    fn get_data_accessor(&self, scheme: &StorageScheme)
-        -> Result<Arc<dyn DataAccessor>, ErrorCode>;
+    fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>, ErrorCode>;
 
     fn get_max_threads(&self) -> usize;
 
@@ -97,11 +95,8 @@ impl IOContext for TableIOContext {
         self.runtime.clone()
     }
 
-    fn get_data_accessor(
-        &self,
-        scheme: &StorageScheme,
-    ) -> Result<Arc<dyn DataAccessor>, ErrorCode> {
-        self.data_accessor_builder.build(scheme)
+    fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>, ErrorCode> {
+        self.data_accessor_builder.build()
     }
 
     fn get_max_threads(&self) -> usize {

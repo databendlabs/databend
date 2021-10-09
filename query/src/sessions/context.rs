@@ -24,7 +24,6 @@ use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
 use common_catalog::TableIOContext;
-use common_dal::DefaultDataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -44,6 +43,7 @@ use crate::catalogs::TableFunctionMeta;
 use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::datasources::common::ContextDalBuilder;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
@@ -147,7 +147,7 @@ impl DatabendQueryContext {
     }
 
     pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
-        self.get_catalog().get_table(database, table)
+        self.shared.get_table(database, table)
     }
 
     pub fn get_table_by_id(
@@ -242,7 +242,7 @@ impl DatabendQueryContext {
 
         Ok(TableIOContext::new(
             self.get_shared_runtime()?,
-            Arc::new(DefaultDataAccessorBuilder {}),
+            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
             max_threads,
             nodes,
             Some(self.clone()),
@@ -258,7 +258,7 @@ impl DatabendQueryContext {
 
         Ok(TableIOContext::new(
             self.get_shared_runtime()?,
-            Arc::new(DefaultDataAccessorBuilder {}),
+            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
             max_threads,
             nodes,
             Some(self.clone()),

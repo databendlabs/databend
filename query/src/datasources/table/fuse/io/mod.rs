@@ -20,6 +20,6 @@ mod segment_reader;
 mod block_appender;
 mod block_reader;
 
-pub use block_appender::*;
+pub(crate) use block_appender::*;
 pub use block_reader::*;
 pub use segment_reader::*;

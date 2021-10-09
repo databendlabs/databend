@@ -20,15 +20,11 @@ use common_catalog::BlockLocation;
 use common_catalog::IOContext;
 use common_catalog::TableIOContext;
 use common_catalog::TableSnapshot;
-use common_dal::DataAccessor;
-use common_dal::DataAccessorBuilder;
-use common_dal::DefaultDataAccessorBuilder;
 use common_dal::ObjectAccessor;
-use common_dal::StorageScheme;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_flight::meta_flight_reply::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
@@ -45,38 +41,18 @@ use crate::datasources::table::fuse::range_filter;
 use crate::datasources::table::fuse::read_part;
 use crate::datasources::table::fuse::segment_info_location;
 use crate::datasources::table::fuse::snapshot_location;
+use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::MetaInfoReader;
 use crate::sessions::DatabendQueryContext;
 
 pub struct FuseTable {
     pub(crate) tbl_info: TableInfo,
-    pub(crate) storage_scheme: StorageScheme,
 }
 
 impl FuseTable {
-    pub fn try_create(_tbl_info: TableInfo) -> Result<Box<dyn Table>> {
-        todo!()
+    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+        Ok(Box::new(FuseTable { tbl_info }))
     }
-
-    //    pub fn with_meta_client(
-    //        db: String,
-    //        name: String,
-    //        schema: DataSchemaRef,
-    //        options: TableOptions,
-    //        meta_client: T,
-    //    ) -> Result<Box<dyn Table>> {
-    //        let storage_scheme = parse_storage_scheme(options.get("STORAGE_SCHEME"))?;
-    //        let res = FuseTable {
-    //            db,
-    //            name,
-    //            schema,
-    //            storage_scheme,
-    //            meta_client,
-    //            local: true,
-    //        };
-    //
-    //        Ok(Box::new(res))
-    //    }
 }
 
 #[async_trait::async_trait]
@@ -114,7 +90,7 @@ impl Table for FuseTable {
         // primary work to do: partition pruning/elimination
         let tbl_snapshot = self.table_snapshot(io_ctx.clone())?;
         if let Some(snapshot) = tbl_snapshot {
-            let da = self.data_accessor()?;
+            let da = io_ctx.get_data_accessor()?;
 
             let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
             let block_locations = range_filter(&snapshot, &push_downs, meta_reader)?;
@@ -182,7 +158,7 @@ impl Table for FuseTable {
             })
             .flatten()
         };
-        let da = self.data_accessor()?;
+        let da = io_ctx.get_data_accessor()?;
         let arrow_schema = self.tbl_info.schema.to_arrow();
         let _h = common_base::tokio::task::spawn_local(async move {
             // TODO error handling is buggy
@@ -219,10 +195,10 @@ impl Table for FuseTable {
             }
         };
 
-        let da = self.data_accessor()?;
+        let da = io_ctx.get_data_accessor()?;
 
         // 2. Append blocks to storage
-        let segment_info = self.append_blocks(block_stream).await?;
+        let segment_info = BlockAppender::append_blocks(da.clone(), block_stream).await?;
 
         let seg_loc = {
             let uuid = Uuid::new_v4().to_simple().to_string();
@@ -274,9 +250,9 @@ impl Table for FuseTable {
 
 impl FuseTable {
     fn table_snapshot(&self, io_ctx: Arc<TableIOContext>) -> Result<Option<TableSnapshot>> {
-        let schema = self.schema()?;
+        let schema = &self.tbl_info.schema;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
-            let da = io_ctx.get_data_accessor(&self.storage_scheme)?;
+            let da = io_ctx.get_data_accessor()?;
             let r = ObjectAccessor::new(da).blocking_read_obj(&io_ctx.get_runtime(), loc)?;
             Ok(Some(r))
         } else {
@@ -302,10 +278,5 @@ impl FuseTable {
 
     pub(crate) fn to_partitions(&self, _blocs: &[BlockLocation]) -> (Statistics, Partitions) {
         todo!()
-    }
-
-    pub(crate) fn data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
-        // TODO(xp): temp impl, a DataAccessor should be built by the caller that uses `Table`, not `Table` itself
-        DefaultDataAccessorBuilder {}.build(&self.storage_scheme)
     }
 }

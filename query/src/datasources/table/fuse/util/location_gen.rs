@@ -13,14 +13,25 @@
 //  limitations under the License.
 //
 
-pub fn block_location(name: &str) -> String {
-    format!("_b/{}", name)
+use uuid::Uuid;
+
+const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
+const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
+const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
+
+pub fn gen_unique_block_location() -> String {
+    let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
+    format!("{}/{}", FUSE_TBL_BLOCK_PREFIX, part_uuid)
+}
+
+pub fn block_location_from_name(name: &str) -> String {
+    format!("{}/{}", FUSE_TBL_BLOCK_PREFIX, name)
 }
 
 pub fn segment_info_location(name: &str) -> String {
-    format!("_sg/{}", name)
+    format!("{}/{}", FUSE_TBL_SEGMENT_PREFIX, name)
 }
 
 pub fn snapshot_location(name: &str) -> String {
-    format!("_ss/{}", name)
+    format!("{}/{}", FUSE_TBL_SNAPSHOT_PREFIX, name)
 }
