@@ -125,11 +125,7 @@ impl Table for ParquetTable {
     ) -> Result<ReadDataSourcePlan> {
         let db = &self.tbl_info.db;
         Ok(ReadDataSourcePlan {
-            db: db.to_string(),
-            table: self.name().to_string(),
-            table_id: self.tbl_info.table_id,
-            table_version: None,
-            schema: self.tbl_info.schema.clone(),
+            table_info: self.tbl_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,

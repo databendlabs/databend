@@ -35,6 +35,7 @@ use common_streams::SendableDataBlockStream;
 use super::numbers_stream::NumbersStream;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
+use crate::catalogs::ToTableInfo;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::DatabendQueryContext;
@@ -138,11 +139,7 @@ impl Table for NumbersTable {
         )))]);
 
         Ok(ReadDataSourcePlan {
-            db: self.db_name.clone(),
-            table: self.table_name.clone(),
-            table_id: self.table_id,
-            table_version: None,
-            schema: self.schema.clone(),
+            table_info: self.to_table_info(&self.db_name)?,
             parts: generate_parts(0, io_ctx.get_max_threads() as u64, total),
             statistics: statistics.clone(),
             description: format!(

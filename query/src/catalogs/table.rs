@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
@@ -81,3 +82,27 @@ pub trait Table: Sync + Send {
 }
 
 pub type TablePtr = Arc<dyn Table>;
+
+pub trait ToTableInfo {
+    /// Collect information through Table trait methods and build a TableInfo
+    fn to_table_info(&self, db: &str) -> Result<TableInfo>;
+}
+
+impl<T: Table> ToTableInfo for T {
+    fn to_table_info(&self, db: &str) -> Result<TableInfo> {
+        let ti = TableInfo {
+            // TODO not supported yet. maybe removed
+            database_id: 0,
+            table_id: self.get_id(),
+            // TODO not supported yet.
+            version: 0,
+            db: db.to_string(),
+            name: self.name().to_string(),
+            schema: self.schema()?,
+            engine: self.engine().to_string(),
+            options: Default::default(),
+        };
+
+        Ok(ti)
+    }
+}

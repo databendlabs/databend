@@ -79,11 +79,7 @@ impl Table for NullTable {
         let tbl_info = &self.tbl_info;
         let db = &tbl_info.db;
         Ok(ReadDataSourcePlan {
-            db: db.to_string(),
-            table: self.name().to_string(),
-            table_id: tbl_info.table_id,
-            table_version: None,
-            schema: tbl_info.schema.clone(),
+            table_info: self.tbl_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,

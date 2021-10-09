@@ -97,11 +97,7 @@ impl Table for FuseTable {
             let (statistics, parts) = self.to_partitions(&block_locations);
 
             let plan = ReadDataSourcePlan {
-                db: self.tbl_info.db.to_string(),
-                table: self.name().to_string(),
-                table_id: self.tbl_info.table_id,
-                table_version: None,
-                schema: self.tbl_info.schema.clone(),
+                table_info: self.tbl_info.clone(),
                 parts,
                 statistics,
                 description: "".to_string(),
@@ -262,11 +258,7 @@ impl FuseTable {
 
     pub(crate) fn empty_read_source_plan(&self) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            db: self.tbl_info.name.clone(),
-            table: self.name().to_string(),
-            table_id: self.tbl_info.table_id,
-            table_version: None,
-            schema: self.tbl_info.schema.clone(),
+            table_info: self.tbl_info.clone(),
             parts: vec![],
             statistics: Statistics::default(),
             description: "".to_string(),

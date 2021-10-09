@@ -282,10 +282,13 @@ impl PlanRewriter for ScattersOptimizerImpl {
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         let context = self.ctx.clone();
         let select_table = if plan.tbl_args.is_none() {
-            context.get_table(&plan.db, &plan.table)?.raw().clone()
+            context
+                .get_table(&plan.table_info.db, &plan.table_info.name)?
+                .raw()
+                .clone()
         } else {
             context
-                .get_table_function(&plan.table, plan.tbl_args.clone())?
+                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
                 .raw()
                 .clone()
                 .as_table()

@@ -95,11 +95,7 @@ impl Table for MemoryTable {
         let tbl_info = &self.tbl_info;
         let db = &tbl_info.db;
         Ok(ReadDataSourcePlan {
-            db: db.to_string(),
-            table: self.name().to_string(),
-            table_id: tbl_info.table_id,
-            table_version: None,
-            schema: tbl_info.schema.clone(),
+            table_info: self.tbl_info.clone(),
             parts: generate_parts(0, io_ctx.get_max_threads() as u64, blocks.len() as u64),
             statistics: Statistics::new_exact(rows, bytes),
             description: format!("(Read from Memory Engine table  {}.{})", db, self.name()),
