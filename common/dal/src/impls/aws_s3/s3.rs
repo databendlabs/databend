@@ -52,9 +52,9 @@ impl S3 {
     /// for region mapping, see [`rusoto_core::Region`]
     pub fn with_credentials(
         region: &str,
-        bucket: String,
-        access_key_id: String,
-        secret_accesses_key: String,
+        bucket: &str,
+        access_key_id: &str,
+        secret_accesses_key: &str,
     ) -> Result<Self> {
         let region = Region::from_str(region).map_err(|e| {
             ErrorCode::DALTransportError(format!(
@@ -63,7 +63,12 @@ impl S3 {
                 e.to_string()
             ))
         })?;
-        let provider = StaticProvider::new(access_key_id, secret_accesses_key, None, None);
+        let provider = StaticProvider::new(
+            access_key_id.to_owned(),
+            secret_accesses_key.to_owned(),
+            None,
+            None,
+        );
         let client = HttpClient::new().map_err(|e| {
             ErrorCode::DALTransportError(format!(
                 "failed to create http client of s3, {}",
@@ -71,7 +76,10 @@ impl S3 {
             ))
         })?;
         let client = S3Client::new_with(client, provider, region);
-        Ok(S3 { client, bucket })
+        Ok(S3 {
+            client,
+            bucket: bucket.to_owned(),
+        })
     }
 
     pub fn fake_new() -> Self {

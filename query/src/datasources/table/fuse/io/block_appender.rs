@@ -32,18 +32,20 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
-use uuid::Uuid;
 
-use crate::datasources::table::fuse::block_location;
 use crate::datasources::table::fuse::column_stats_reduce;
-use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::fuse::gen_unique_block_location;
 
-// TODO A better name, we already have a SendableDataBlockStream
 pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
-impl FuseTable {
-    pub async fn append_blocks(&self, mut stream: BlockStream) -> Result<SegmentInfo> {
+pub struct BlockAppender;
+
+impl BlockAppender {
+    pub async fn append_blocks(
+        data_accessor: Arc<dyn DataAccessor>,
+        mut stream: BlockStream,
+    ) -> Result<SegmentInfo> {
         let mut block_metas = vec![];
         let mut blocks_stats = vec![];
         let mut summary_row_count = 0u64;
@@ -58,12 +60,9 @@ impl FuseTable {
             let row_count = block.num_rows() as u64;
             let block_in_memory_size = block.memory_size() as u64;
 
-            let data_accessor = self.data_accessor()?;
+            let location = gen_unique_block_location();
 
-            let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
-            let location = block_location(&part_uuid);
-
-            let file_size = save_block(&schema, block, data_accessor, &location)?;
+            let file_size = save_block(&schema, block, &data_accessor, &location)?;
 
             // TODO gather parquet meta
             let meta_size = 0u64;
@@ -153,9 +152,10 @@ pub fn block_stats(data_block: &DataBlock) -> Result<HashMap<ColumnId, (DataType
 pub(crate) fn save_block(
     arrow_schema: &ArrowSchema,
     block: DataBlock,
-    data_accessor: Arc<dyn DataAccessor>,
+    data_accessor: impl AsRef<dyn DataAccessor>,
     location: &str,
 ) -> Result<u64> {
+    let data_accessor = data_accessor.as_ref();
     // TODO pick proper compression / encoding algos
     let options = WriteOptions {
         write_statistics: true,
@@ -163,9 +163,11 @@ pub(crate) fn save_block(
         version: Version::V2,
     };
     use std::iter::repeat;
+
     let encodings: Vec<_> = repeat(Encoding::Plain).take(block.num_columns()).collect();
 
     let batch = RecordBatch::try_from(block)?;
+
     let iter = vec![Ok(batch)];
     let row_groups = RowGroupIterator::try_new(iter.into_iter(), arrow_schema, options, encodings)?;
     let parquet_schema = row_groups.parquet_schema().clone();
