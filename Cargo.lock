@@ -1110,6 +1110,7 @@ name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
  "async-raft",
+ "common-datavalues",
  "common-exception",
  "common-meta-sled-store",
  "pretty_assertions",

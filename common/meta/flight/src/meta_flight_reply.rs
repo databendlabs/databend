@@ -13,9 +13,7 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
-
-use common_datavalues::DataSchemaRef;
+use common_meta_types::TableInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
@@ -32,16 +30,6 @@ pub struct DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct TableInfo {
-    pub table_id: u64,
-    pub db: String,
-    pub name: String,
-    pub schema: DataSchemaRef,
-    pub engine: String,
-    pub options: HashMap<String, String>,
 }
 
 pub type GetDatabasesReply = Vec<DatabaseInfo>;

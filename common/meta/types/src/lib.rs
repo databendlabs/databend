@@ -36,8 +36,7 @@ pub use raft_types::LogId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
-use serde::Deserialize;
-use serde::Serialize;
+pub use table_info::TableInfo;
 
 mod errors;
 mod match_seq;
@@ -47,11 +46,15 @@ mod cmd;
 mod log_entry;
 mod raft_txid;
 mod raft_types;
+mod table_info;
 
 #[cfg(test)]
 mod cluster_test;
 #[cfg(test)]
 mod match_seq_test;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Database {
