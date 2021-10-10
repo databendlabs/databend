@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -26,7 +27,6 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::flight_api::MetaApi;
 use crate::CreateDatabaseAction;
 use crate::CreateTableAction;
 use crate::DropDatabaseAction;

@@ -19,7 +19,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_base::tokio::sync::Mutex;
 use common_exception::Result;
-use common_meta_kv_api::KVApi;
+use common_meta_api::KVApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;

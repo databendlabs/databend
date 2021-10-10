@@ -19,7 +19,7 @@ use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_kv_api::KVApi;
+use common_meta_api::KVApi;
 use common_meta_local_store::KV;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::NodeInfo;

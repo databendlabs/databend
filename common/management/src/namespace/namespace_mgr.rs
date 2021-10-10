@@ -20,7 +20,7 @@ use std::time::UNIX_EPOCH;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_kv_api::KVApi;
+use common_meta_api::KVApi;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;

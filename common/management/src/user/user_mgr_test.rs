@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
-use common_meta_kv_api::KVApi;
+use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;

@@ -22,7 +22,7 @@ use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_meta_kv_api::KVApi;
+use common_meta_api::KVApi;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::SeqValue;

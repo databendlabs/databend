@@ -15,13 +15,11 @@
 mod flight_client;
 #[macro_use]
 mod flight_action;
-mod flight_api;
 mod flight_client_conf;
 
 pub mod impls;
 
 pub use flight_action::*;
-pub use flight_api::MetaApi;
 pub use flight_client::MetaFlightClient;
 pub use flight_client_conf::MetaFlightClientConf;
 

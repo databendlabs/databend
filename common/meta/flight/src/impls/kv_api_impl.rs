@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_kv_api::KVApi;
+use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
