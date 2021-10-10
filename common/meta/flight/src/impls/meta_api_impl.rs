@@ -13,6 +13,8 @@
 // limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
@@ -53,9 +55,12 @@ impl MetaApi for MetaFlightClient {
         self.do_action(DropDatabaseAction { plan }).await
     }
 
-    async fn get_database(&self, db: &str) -> common_exception::Result<DatabaseInfo> {
-        self.do_action(GetDatabaseAction { db: db.to_string() })
-            .await
+    async fn get_database(&self, db: &str) -> common_exception::Result<Arc<DatabaseInfo>> {
+        let x = self
+            .do_action(GetDatabaseAction { db: db.to_string() })
+            .await?;
+
+        Ok(Arc::new(x))
     }
 
     async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply> {
@@ -76,7 +81,7 @@ impl MetaApi for MetaFlightClient {
     }
 
     /// Get table.
-    async fn get_table(&self, db: &str, table: &str) -> common_exception::Result<TableInfo> {
+    async fn get_table(&self, db: &str, table: &str) -> common_exception::Result<Arc<TableInfo>> {
         self.do_action(GetTableAction {
             db: db.to_string(),
             table: table.to_string(),

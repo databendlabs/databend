@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::TableInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -19,4 +21,4 @@ pub struct CreateTableReply {
     pub table_id: u64,
 }
 
-pub type GetTablesReply = Vec<TableInfo>;
+pub type GetTablesReply = Vec<Arc<TableInfo>>;

@@ -107,7 +107,7 @@ impl CatalogBackend for RemoteCatalogBackend {
         let database_info = DatabaseInfo {
             database_id: db.database_id,
             db: db_name.to_owned(),
-            engine: db.engine,
+            engine: db.engine.clone(),
         };
 
         Ok(Arc::new(database_info))
@@ -122,7 +122,7 @@ impl CatalogBackend for RemoteCatalogBackend {
             },
             self.rpc_time_out,
         )??;
-        Ok(dbs.into_iter().map(Arc::new).collect())
+        Ok(dbs)
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
@@ -166,14 +166,14 @@ impl CatalogBackend for RemoteCatalogBackend {
 
         let table_info = TableInfo {
             database_id: 0,
-            db: reply.db,
+            db: reply.db.clone(),
             table_id: reply.table_id,
             version: 0,
             name: reply.name.clone(),
             is_local: false,
-            schema: reply.schema,
-            engine: reply.engine,
-            options: reply.options,
+            schema: reply.schema.clone(),
+            engine: reply.engine.clone(),
+            options: reply.options.clone(),
         };
         Ok(Arc::new(table_info))
     }
@@ -188,7 +188,7 @@ impl CatalogBackend for RemoteCatalogBackend {
             },
             self.rpc_time_out,
         )??;
-        Ok(tbls.into_iter().map(Arc::new).collect())
+        Ok(tbls)
     }
 
     fn get_table_by_id(
