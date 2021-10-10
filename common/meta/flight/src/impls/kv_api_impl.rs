@@ -14,12 +14,12 @@
 
 use common_exception::Result;
 use common_meta_kv_api::KVApi;
-use common_meta_kv_api_vo::GetKVActionResult;
-use common_meta_kv_api_vo::MGetKVActionResult;
-use common_meta_kv_api_vo::PrefixListReply;
-use common_meta_kv_api_vo::UpsertKVActionResult;
+use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
+use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
+use common_meta_types::PrefixListReply;
+use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
 use crate::action_declare;
@@ -36,7 +36,7 @@ impl KVApi for MetaFlightClient {
         seq: MatchSeq,
         value: Option<Vec<u8>>,
         value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionResult> {
+    ) -> Result<UpsertKVActionReply> {
         self.do_action(UpsertKVAction {
             key: key.to_string(),
             seq,
@@ -51,7 +51,7 @@ impl KVApi for MetaFlightClient {
         key: &str,
         seq: MatchSeq,
         value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionResult> {
+    ) -> Result<UpsertKVActionReply> {
         self.do_action(KVMetaAction {
             key: key.to_string(),
             seq,
@@ -61,7 +61,7 @@ impl KVApi for MetaFlightClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn get_kv(&self, key: &str) -> Result<GetKVActionResult> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply> {
         self.do_action(GetKVAction {
             key: key.to_string(),
         })
@@ -69,7 +69,7 @@ impl KVApi for MetaFlightClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, keys))]
-    async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionResult> {
+    async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionReply> {
         let keys = keys.to_vec();
         //keys.iter().map(|k| k.to_string()).collect();
         self.do_action(MGetKVAction { keys }).await
@@ -101,7 +101,7 @@ pub struct GetKVAction {
 // Explicitly defined (the request / reply relation)
 // this can be simplified by using macro (see code below)
 impl RequestFor for GetKVAction {
-    type Reply = GetKVActionResult;
+    type Reply = GetKVActionReply;
 }
 
 // Explicitly defined the converter for MetaDoAction
@@ -122,7 +122,7 @@ pub struct MGetKVAction {
 }
 
 // here we use a macro to simplify the declarations
-action_declare!(MGetKVAction, MGetKVActionResult, MetaFlightAction::MGetKV);
+action_declare!(MGetKVAction, MGetKVActionReply, MetaFlightAction::MGetKV);
 
 // - prefix list
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -144,7 +144,7 @@ pub struct UpsertKVAction {
 
 action_declare!(
     UpsertKVAction,
-    UpsertKVActionResult,
+    UpsertKVActionReply,
     MetaFlightAction::UpsertKV
 );
 
@@ -157,6 +157,6 @@ pub struct KVMetaAction {
 
 action_declare!(
     KVMetaAction,
-    UpsertKVActionResult,
+    UpsertKVActionReply,
     MetaFlightAction::UpdateKVMeta
 );

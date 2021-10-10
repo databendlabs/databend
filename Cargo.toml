@@ -18,7 +18,6 @@ members = [
     "common/management",
     "common/planners",
     "common/meta/kv/api",
-    "common/meta/kv/vo",
     "common/meta/local-store",
     "common/meta/raft-store",
     "common/meta/sled-store",

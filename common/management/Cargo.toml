@@ -12,7 +12,6 @@ edition = "2021"
 common-base= {path = "../base" }
 common-exception= {path = "../exception"}
 common-meta-kv-api= {path = "../meta/kv/api" }
-common-meta-kv-api-vo= {path = "../meta/kv/vo" }
 common-meta-types= {path = "../meta/types"}
 common-tracing= {path = "../tracing"}
 

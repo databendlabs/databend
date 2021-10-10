@@ -23,10 +23,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_kv_api::KVApi;
-use common_meta_kv_api_vo::UpsertKVActionResult;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::SeqValue;
+use common_meta_types::UpsertKVActionReply;
 
 use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
@@ -69,23 +69,21 @@ impl UserMgrApi for UserMgr {
         )??;
 
         match res {
-            UpsertKVActionResult {
+            UpsertKVActionReply {
                 prev: None,
                 result: Some((s, _)),
             } => Ok(s),
-            UpsertKVActionResult {
+            UpsertKVActionReply {
                 prev: Some((s, _)),
                 result: _,
             } => Err(ErrorCode::UserAlreadyExists(format!(
                 "User already exists, seq [{}]",
                 s
             ))),
-            catch_result @ UpsertKVActionResult { .. } => {
-                Err(ErrorCode::UnknownException(format!(
-                    "upsert result not expected (using version 0, got {:?})",
-                    catch_result
-                )))
-            }
+            catch_result @ UpsertKVActionReply { .. } => Err(ErrorCode::UnknownException(format!(
+                "upsert result not expected (using version 0, got {:?})",
+                catch_result
+            ))),
         }
     }
 

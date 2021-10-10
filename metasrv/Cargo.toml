@@ -26,7 +26,6 @@ common-flight-rpc = {path = "../common/flight-rpc"}
 common-infallible = {path = "../common/infallible"}
 common-planners = {path = "../common/planners"}
 common-base = {path = "../common/base" }
-common-meta-kv-api-vo = {path = "../common/meta/kv/vo" }
 common-meta-raft-store = {path = "../common/meta/raft-store"}
 common-meta-sled-store = {path = "../common/meta/sled-store"}
 common-meta-flight = {path = "../common/meta/flight" }

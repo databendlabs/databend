@@ -20,18 +20,18 @@ use async_trait::async_trait;
 use common_base::tokio::sync::Mutex;
 use common_exception::Result;
 use common_meta_kv_api::KVApi;
-use common_meta_kv_api_vo::GetKVActionResult;
-use common_meta_kv_api_vo::MGetKVActionResult;
-use common_meta_kv_api_vo::PrefixListReply;
-use common_meta_kv_api_vo::UpsertKVActionResult;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
 use common_meta_types::Cmd;
+use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
+use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_meta_types::PrefixListReply;
+use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
 /// Local storage that provides the API defined by `KVApi`.
@@ -105,7 +105,7 @@ impl KVApi for KV {
         seq: MatchSeq,
         value: Option<Vec<u8>>,
         value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionResult> {
+    ) -> Result<UpsertKVActionReply> {
         let cmd = Cmd::UpsertKV {
             key: key.to_string(),
             seq,
@@ -117,7 +117,7 @@ impl KVApi for KV {
         let res = sm.apply_cmd(&cmd).await?;
 
         match res {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
+            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
             _ => {
                 panic!("expect AppliedState::KV");
             }
@@ -129,7 +129,7 @@ impl KVApi for KV {
         key: &str,
         seq: MatchSeq,
         value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionResult> {
+    ) -> Result<UpsertKVActionReply> {
         let cmd = Cmd::UpsertKV {
             key: key.to_string(),
             seq,
@@ -141,23 +141,23 @@ impl KVApi for KV {
         let res = sm.apply_cmd(&cmd).await?;
 
         match res {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionResult { prev, result }),
+            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
             _ => {
                 panic!("expect AppliedState::KV");
             }
         }
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVActionResult> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply> {
         let sm = self.inner.lock().await;
         let res = sm.get_kv(key)?;
-        Ok(GetKVActionResult { result: res })
+        Ok(GetKVActionReply { result: res })
     }
 
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionResult> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply> {
         let sm = self.inner.lock().await;
         let res = sm.mget_kv(key)?;
-        Ok(MGetKVActionResult { result: res })
+        Ok(MGetKVActionReply { result: res })
     }
 
     async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply> {
