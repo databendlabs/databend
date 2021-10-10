@@ -18,12 +18,12 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
+use common_meta_api::KVApi;
 use common_meta_flight::MetaFlightClient;
-use common_meta_kv_api::KVApi;
-use common_meta_kv_api_vo::UpsertKVActionResult;
 use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
 use common_meta_types::MatchSeq;
+use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 use metasrv::init_meta_ut;
 use pretty_assertions::assert_eq;
@@ -52,7 +52,7 @@ async fn test_restart() -> anyhow::Result<()> {
         tracing::debug!("set kv res: {:?}", res);
         let res = res?;
         assert_eq!(
-            UpsertKVActionResult {
+            UpsertKVActionReply {
                 prev: None,
                 result: Some((1, KVValue {
                     meta: None,

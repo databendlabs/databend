@@ -980,8 +980,7 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "common-meta-kv-api",
- "common-meta-kv-api-vo",
+ "common-meta-api",
  "common-meta-local-store",
  "common-meta-types",
  "common-tracing",
@@ -990,6 +989,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "common-meta-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-types",
+ "common-planners",
+ "futures",
 ]
 
 [[package]]
@@ -1004,8 +1015,7 @@ dependencies = [
  "common-exception",
  "common-flight-rpc",
  "common-infallible",
- "common-meta-kv-api",
- "common-meta-kv-api-vo",
+ "common-meta-api",
  "common-meta-types",
  "common-planners",
  "common-streams",
@@ -1026,34 +1036,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-meta-kv-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-base",
- "common-exception",
- "common-meta-kv-api-vo",
- "common-meta-types",
- "futures",
-]
-
-[[package]]
-name = "common-meta-kv-api-vo"
-version = "0.1.0"
-dependencies = [
- "common-meta-types",
- "serde",
-]
-
-[[package]]
 name = "common-meta-local-store"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "common-meta-kv-api",
- "common-meta-kv-api-vo",
+ "common-meta-api",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
@@ -1596,9 +1585,8 @@ dependencies = [
  "common-infallible",
  "common-io",
  "common-management",
+ "common-meta-api",
  "common-meta-flight",
- "common-meta-kv-api",
- "common-meta-kv-api-vo",
  "common-meta-local-store",
  "common-meta-types",
  "common-planners",
@@ -3108,9 +3096,8 @@ dependencies = [
  "common-flight-rpc",
  "common-functions",
  "common-infallible",
+ "common-meta-api",
  "common-meta-flight",
- "common-meta-kv-api",
- "common-meta-kv-api-vo",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",

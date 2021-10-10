@@ -29,7 +29,7 @@ use common_exception::Result;
 use common_flight_rpc::ConnectionFactory;
 use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
-use common_meta_kv_api::KVApi;
+use common_meta_api::KVApi;
 use common_meta_types::NodeInfo;
 use futures::Future;
 use rand::thread_rng;

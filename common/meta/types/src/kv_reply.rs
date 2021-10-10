@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::KVValue;
-use common_meta_types::SeqValue;
+use crate::KVValue;
+use crate::SeqValue;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct UpsertKVActionResult {
+pub struct UpsertKVActionReply {
     /// prev is the value before upsert.
     pub prev: Option<SeqValue<KVValue>>,
     /// result is the value after upsert.
@@ -24,12 +24,12 @@ pub struct UpsertKVActionResult {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetKVActionResult {
+pub struct GetKVActionReply {
     pub result: Option<SeqValue<KVValue>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct MGetKVActionResult {
+pub struct MGetKVActionReply {
     pub result: Vec<Option<SeqValue<KVValue>>>,
 }
 

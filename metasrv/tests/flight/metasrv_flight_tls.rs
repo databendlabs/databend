@@ -15,7 +15,7 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_flight_rpc::FlightClientTlsConfig;
-use common_meta_flight::MetaApi;
+use common_meta_api::MetaApi;
 use common_meta_flight::MetaFlightClient;
 use metasrv::init_meta_ut;
 use metasrv::tests::service::new_test_context;

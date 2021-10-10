@@ -16,10 +16,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_flight::MetaApi;
+use common_meta_api::KVApi;
+use common_meta_api::MetaApi;
 use common_meta_flight::MetaFlightClient;
 use common_meta_flight::MetaFlightClientConf;
-use common_meta_kv_api::KVApi;
 
 // Since there is a pending dependency issue,
 // StoreApiProvider is temporarily moved from store-api-sdk
