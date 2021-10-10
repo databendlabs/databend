@@ -20,6 +20,7 @@ use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -29,35 +30,42 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::catalogs::ToTableInfo;
 use crate::sessions::DatabendQueryContext;
 
 pub struct TablesTable {
-    table_id: u64,
-    schema: DataSchemaRef,
+    table_info: TableInfo,
 }
 
 impl TablesTable {
     pub fn create(table_id: u64) -> Self {
-        TablesTable {
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("database", DataType::String, false),
+            DataField::new("name", DataType::String, false),
+            DataField::new("engine", DataType::String, false),
+        ]);
+
+        let table_info = TableInfo {
+            db: "system".to_string(),
+            name: "tables".to_string(),
             table_id,
-            schema: DataSchemaRefExt::create(vec![
-                DataField::new("database", DataType::String, false),
-                DataField::new("name", DataType::String, false),
-                DataField::new("engine", DataType::String, false),
-            ]),
-        }
+            schema,
+            engine: "SystemTables".to_string(),
+            is_local: true,
+            ..Default::default()
+        };
+
+        TablesTable { table_info }
     }
 }
 
 #[async_trait::async_trait]
 impl Table for TablesTable {
     fn name(&self) -> &str {
-        "tables"
+        &self.table_info.name
     }
 
     fn engine(&self) -> &str {
-        "SystemTables"
+        &self.table_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -65,15 +73,15 @@ impl Table for TablesTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.table_info.schema.clone())
     }
 
     fn get_id(&self) -> u64 {
-        self.table_id
+        self.table_info.table_id
     }
 
     fn is_local(&self) -> bool {
-        true
+        self.table_info.is_local
     }
 
     fn read_plan(
@@ -83,7 +91,7 @@ impl Table for TablesTable {
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            table_info: self.to_table_info("system")?,
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -125,14 +133,14 @@ impl Table for TablesTable {
             .map(|(_, v)| v.raw().engine().as_bytes())
             .collect();
 
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![
             Series::new(databases),
             Series::new(names),
             Series::new(engines),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
+            self.table_info.schema.clone(),
             None,
             vec![block],
         )))
