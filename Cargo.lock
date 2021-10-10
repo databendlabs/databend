@@ -655,6 +655,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_generate"
+version = "3.0.0-beta.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d9b1abef93569f290952eff3c4a0a92d6767bb5158db095b4dc9a512b1c3643"
+dependencies = [
+ "clap 3.0.0-beta.4",
+]
+
+[[package]]
 name = "clickhouse-rs"
 version = "1.0.0-alpha.1"
 source = "git+https://github.com/datafuse-extras/clickhouse-rs?rev=c4743a9#c4743a920e744a0adf672262f6714ccfa429bcd4"
@@ -1532,6 +1541,7 @@ version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "clap 3.0.0-beta.4",
+ "clap_generate",
  "colored",
  "comfy-table",
  "common-building",

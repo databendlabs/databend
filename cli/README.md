@@ -7,6 +7,24 @@ Build:
 $ make cli-build
 ```
 
+Install:
+
+```bash
+$ make cli-install
+```
+
+bash auto-completion on Linux after install (optional)
+```bash
+$ # make sure bash-completion installed, otherwise run sudo apt install bash-completion
+$ type _init_completion
+$ databend-cli completion bash > /tmp/databend-cli.bash && sudo mv /tmp/databend-cli.bash /usr/share/bash-completion/completions/databend-cli.bash
+$ source /usr/share/bash-completion/bash_completion
+$ # you may need to open another terminal to check whether completion works
+```
+
+
+``````
+
 Usage:
 ``` 
 $ ./target/release/databend-cli 
