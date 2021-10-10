@@ -16,11 +16,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::BlockingWait;
 use common_catalog::BlockLocation;
 use common_catalog::IOContext;
 use common_catalog::TableIOContext;
 use common_catalog::TableSnapshot;
-use common_dal::ObjectAccessor;
+use common_dal::read_obj;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -249,7 +250,7 @@ impl FuseTable {
         let schema = &self.tbl_info.schema;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
             let da = io_ctx.get_data_accessor()?;
-            let r = ObjectAccessor::new(da).blocking_read_obj(&io_ctx.get_runtime(), loc)?;
+            let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime())??;
             Ok(Some(r))
         } else {
             Ok(None)

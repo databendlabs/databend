@@ -20,6 +20,7 @@ use tokio::time::sleep_until;
 use tokio::time::Duration;
 use tokio::time::Instant;
 
+use crate::runtime::BlockingWait;
 use crate::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
@@ -102,6 +103,25 @@ fn test_block_on() -> Result<()> {
             assert_eq!(expect, actual);
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_blocking_wait() -> Result<()> {
+    async fn five() -> Result<u8> {
+        Ok(5)
+    }
+
+    let res = five().wait();
+    assert!(res.is_ok());
+    assert_eq!(5, res.unwrap());
+
+    let rt = Runtime::with_default_worker_threads().unwrap();
+
+    let res = five().wait_in(&rt)?;
+    assert!(res.is_ok());
+    assert_eq!(5, res.unwrap());
 
     Ok(())
 }

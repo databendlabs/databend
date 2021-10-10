@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use data_accessor::read_obj;
 pub use data_accessor::AsyncSeekableReader;
 pub use data_accessor::Bytes;
 pub use data_accessor::DataAccessor;
 pub use data_accessor::DataAccessorBuilder;
 pub use data_accessor::InputStream;
-pub use data_accessor::ObjectAccessor;
 pub use data_accessor::SeekableReader;
 pub use impls::aws_s3::S3InputStream;
 pub use impls::aws_s3::S3;

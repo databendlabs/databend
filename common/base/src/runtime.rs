@@ -95,6 +95,47 @@ impl<S: TrySpawn> TrySpawn for Arc<S> {
     }
 }
 
+/// Blocking wait for a future to complete.
+///
+/// This trait turns an `async` function into `sync`.
+/// It is meant to provide convenience for building a proof-of-concept demo or else.
+/// Always avoid using it in a real world production,
+/// unless **you KNOW what you are doing**:
+///
+/// - `wait()` runs the future in current thread and **blocks** current thread until the future is finished.
+/// - `wait_in(rt)` runs the future in the specified runtime, and **blocks** current thread until the future is finished.
+pub trait BlockingWait
+where
+    Self: Future + Send + 'static,
+    Self::Output: Send + 'static,
+{
+    /// Runs the future and blocks current thread.
+    ///
+    /// ```ignore
+    /// use runtime::BlockingWait;
+    /// async fn five() -> u8 { 5 }
+    /// assert_eq!(5, five().wait());
+    /// ```
+    fn wait(self) -> Self::Output;
+
+    /// Runs the future in provided runtime and blocks current thread.
+    fn wait_in<RT: TrySpawn>(self, rt: &RT) -> Result<Self::Output>;
+}
+
+impl<T> BlockingWait for T
+where
+    T: Future + Send + 'static,
+    T::Output: Send + 'static,
+{
+    fn wait(self) -> T::Output {
+        futures::executor::block_on(self)
+    }
+
+    fn wait_in<RT: TrySpawn>(self, rt: &RT) -> Result<T::Output> {
+        rt.block_on(self, None)
+    }
+}
+
 /// Tokio Runtime wrapper.
 /// If a runtime is in an asynchronous context, shutdown it first.
 pub struct Runtime {
