@@ -25,6 +25,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -33,28 +34,34 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::catalogs::ToTableInfo;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::ProcessInfo;
 
 pub struct ProcessesTable {
-    table_id: u64,
-    schema: DataSchemaRef,
+    table_info: TableInfo,
 }
 
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Self {
-        ProcessesTable {
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("id", DataType::String, false),
+            DataField::new("type", DataType::String, false),
+            DataField::new("host", DataType::String, true),
+            DataField::new("state", DataType::String, false),
+            DataField::new("database", DataType::String, false),
+            DataField::new("extra_info", DataType::String, true),
+        ]);
+
+        let table_info = TableInfo {
+            db: "system".to_string(),
+            name: "processes".to_string(),
             table_id,
-            schema: DataSchemaRefExt::create(vec![
-                DataField::new("id", DataType::String, false),
-                DataField::new("type", DataType::String, false),
-                DataField::new("host", DataType::String, true),
-                DataField::new("state", DataType::String, false),
-                DataField::new("database", DataType::String, false),
-                DataField::new("extra_info", DataType::String, true),
-            ]),
-        }
+            schema,
+            engine: "SystemProcesses".to_string(),
+            is_local: true,
+            ..Default::default()
+        };
+        ProcessesTable { table_info }
     }
 
     fn process_host(process_info: &ProcessInfo) -> Option<Vec<u8>> {
@@ -73,11 +80,11 @@ impl ProcessesTable {
 #[async_trait::async_trait]
 impl Table for ProcessesTable {
     fn name(&self) -> &str {
-        "processes"
+        &self.table_info.name
     }
 
     fn engine(&self) -> &str {
-        "SystemProcesses"
+        &self.table_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -85,15 +92,15 @@ impl Table for ProcessesTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.table_info.schema.clone())
     }
 
     fn get_id(&self) -> u64 {
-        self.table_id
+        self.table_info.table_id
     }
 
     fn is_local(&self) -> bool {
-        true
+        self.table_info.is_local
     }
 
     fn read_plan(
@@ -103,7 +110,7 @@ impl Table for ProcessesTable {
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            table_info: self.to_table_info("system")?,
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -144,7 +151,7 @@ impl Table for ProcessesTable {
             processes_extra_info.push(ProcessesTable::process_extra_info(process_info));
         }
 
-        let schema = self.schema.clone();
+        let schema = self.table_info.schema.clone();
         let block = DataBlock::create_by_array(schema.clone(), vec![
             Series::new(processes_id),
             Series::new(processes_type),
