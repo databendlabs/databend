@@ -19,7 +19,23 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v1
 
-      - name: Run cargo bloat
+      - name: Run cargo bloat for databend-query
         uses: orf/cargo-bloat-action@v1
         with:
+          by_function: true
+          bloat_args: --release --bin databend-query
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run cargo bloat for databend-meta
+        uses: orf/cargo-bloat-action@v1
+        with:
+          by_function: true
+          bloat_args: --release --bin databend-meta
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run cargo bloat for databend-cli
+        uses: orf/cargo-bloat-action@v1
+        with:
+          by_function: true
+          bloat_args: --release --bin databend-cli
           token: ${{ secrets.GITHUB_TOKEN }}
