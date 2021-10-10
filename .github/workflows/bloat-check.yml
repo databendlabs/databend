@@ -16,6 +16,9 @@ jobs:
         run: |
           bash ./scripts/setup/dev_setup.sh
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v1
+
       - name: Run cargo bloat
         uses: orf/cargo-bloat-action@v1
         with:
