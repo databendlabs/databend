@@ -19,7 +19,6 @@ use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
@@ -31,6 +30,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::catalogs::ToTableInfo;
 
 pub struct ExampleTable {
     db: String,
@@ -91,16 +91,7 @@ impl Table for ExampleTable {
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            table_info: TableInfo {
-                database_id: 0,
-                table_id: self.table_id,
-                version: 0,
-                db: self.db.clone(),
-                name: self.name().to_string(),
-                schema: self.schema.clone(),
-                engine: "".to_string(),
-                options: Default::default(),
-            },
+            table_info: self.to_table_info(&self.db)?,
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,

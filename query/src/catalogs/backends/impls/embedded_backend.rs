@@ -171,6 +171,7 @@ impl CatalogBackend for EmbeddedCatalogBackend {
             table_id: self.next_db_id(),
             version: 0,
             name: plan.table,
+            is_local: false,
             schema: plan.schema,
             options: plan.options,
             engine: plan.engine,

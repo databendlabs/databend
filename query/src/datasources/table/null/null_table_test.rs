@@ -38,6 +38,7 @@ async fn test_null_table() -> Result<()> {
         database_id: 0,
         db: "default".into(),
         name: "a".into(),
+        is_local: true,
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
         engine: "Null".to_string(),
         options: TableOptions::default(),
