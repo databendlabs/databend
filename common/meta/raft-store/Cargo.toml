@@ -8,9 +8,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-common-base = {path = "../../base" }
 common-exception = {path = "../../exception"}
-common-planners = {path = "../../planners"}
 common-tracing = {path = "../../tracing"}
 common-meta-sled-store = {path = "../sled-store"}
 common-meta-types = {path = "../types"}
@@ -25,7 +23,7 @@ structopt = "0.3"
 structopt-toml = "0.5.0"
 maplit = "1.0.2"
 
-
 [dev-dependencies]
+common-base = {path = "../../base" }
 pretty_assertions = "1.0"
 tempfile = "3.2.0"
