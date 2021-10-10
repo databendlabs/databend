@@ -20,8 +20,7 @@ mod flight_client_conf;
 
 pub mod impls;
 
-pub use flight_action::MetaFlightAction;
-pub use flight_action::RequestFor;
+pub use flight_action::*;
 pub use flight_api::MetaApi;
 pub use flight_client::MetaFlightClient;
 pub use flight_client_conf::MetaFlightClientConf;

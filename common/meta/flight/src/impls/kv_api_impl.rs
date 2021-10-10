@@ -22,10 +22,12 @@ use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
-use crate::action_declare;
-use crate::MetaFlightAction;
+use crate::GetKVAction;
+use crate::KVMetaAction;
+use crate::MGetKVAction;
 use crate::MetaFlightClient;
-use crate::RequestFor;
+use crate::PrefixListReq;
+use crate::UpsertKVAction;
 
 #[async_trait::async_trait]
 impl KVApi for MetaFlightClient {
@@ -80,83 +82,3 @@ impl KVApi for MetaFlightClient {
         self.do_action(PrefixListReq(prefix.to_string())).await
     }
 }
-
-// Let take this API for a reference of the implementations of a kv API
-
-// - GetKV
-
-// We wrap the "request of getting a kv" up here as GetKVAction,
-// Technically we can use `String` directly, but as we are ...
-// provides that MetaDoAction::GetKV is typed as `:: String -> StoreAction`
-
-// The return type of GetKVAction is `GetActionResult`, which is defined by the KVApi,
-// we use it directly here, but we can also wrap it up if needed.
-//
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct GetKVAction {
-    pub key: String,
-}
-
-// Explicitly defined (the request / reply relation)
-// this can be simplified by using macro (see code below)
-impl RequestFor for GetKVAction {
-    type Reply = GetKVActionReply;
-}
-
-// Explicitly defined the converter for MetaDoAction
-// It's implementations' choice, that they gonna using enum MetaDoAction as wrapper.
-// This can be simplified by using macro (see code below)
-impl From<GetKVAction> for MetaFlightAction {
-    fn from(act: GetKVAction) -> Self {
-        MetaFlightAction::GetKV(act)
-    }
-}
-
-// - MGetKV
-
-// Again, impl chooses to wrap it up
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct MGetKVAction {
-    pub keys: Vec<String>,
-}
-
-// here we use a macro to simplify the declarations
-action_declare!(MGetKVAction, MGetKVActionReply, MetaFlightAction::MGetKV);
-
-// - prefix list
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct PrefixListReq(pub String);
-action_declare!(
-    PrefixListReq,
-    PrefixListReply,
-    MetaFlightAction::PrefixListKV
-);
-
-// === general-kv: upsert ===
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct UpsertKVAction {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value: Option<Vec<u8>>,
-    pub value_meta: Option<KVMeta>,
-}
-
-action_declare!(
-    UpsertKVAction,
-    UpsertKVActionReply,
-    MetaFlightAction::UpsertKV
-);
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct KVMetaAction {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value_meta: Option<KVMeta>,
-}
-
-action_declare!(
-    KVMetaAction,
-    UpsertKVActionReply,
-    MetaFlightAction::UpdateKVMeta
-);

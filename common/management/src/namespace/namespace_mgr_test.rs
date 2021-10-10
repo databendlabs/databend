@@ -45,7 +45,7 @@ async fn test_successfully_add_node() -> Result<()> {
             assert!(value.meta.unwrap().expire_at.unwrap() - current_time >= 60);
             assert_eq!(value.value, serde_json::to_vec(&node_info)?);
         }
-        catch @ GetKVActionReply { .. } => assert!(false, "GetKVActionResult {:?}", catch),
+        catch @ GetKVActionReply { .. } => assert!(false, "GetKVActionReply{:?}", catch),
     }
 
     Ok(())

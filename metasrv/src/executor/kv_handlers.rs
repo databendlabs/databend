@@ -14,11 +14,11 @@
 //
 
 use common_exception::ErrorCode;
-use common_meta_flight::impls::GetKVAction;
-use common_meta_flight::impls::KVMetaAction;
-use common_meta_flight::impls::MGetKVAction;
-use common_meta_flight::impls::PrefixListReq;
-use common_meta_flight::impls::UpsertKVAction;
+use common_meta_flight::GetKVAction;
+use common_meta_flight::KVMetaAction;
+use common_meta_flight::MGetKVAction;
+use common_meta_flight::PrefixListReq;
+use common_meta_flight::UpsertKVAction;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;

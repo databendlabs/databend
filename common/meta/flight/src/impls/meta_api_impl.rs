@@ -26,11 +26,17 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::action_declare;
-use crate::flight_action::MetaFlightAction;
 use crate::flight_api::MetaApi;
+use crate::CreateDatabaseAction;
+use crate::CreateTableAction;
+use crate::DropDatabaseAction;
+use crate::DropTableAction;
+use crate::GetDatabaseAction;
+use crate::GetDatabasesAction;
+use crate::GetTableAction;
+use crate::GetTableExtReq;
+use crate::GetTablesAction;
 use crate::MetaFlightClient;
-use crate::RequestFor;
 
 #[async_trait::async_trait]
 impl MetaApi for MetaFlightClient {
@@ -91,86 +97,3 @@ impl MetaApi for MetaFlightClient {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
     }
 }
-
-// == database actions ==
-// - create database
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateDatabaseAction {
-    pub plan: CreateDatabasePlan,
-}
-action_declare!(
-    CreateDatabaseAction,
-    CreateDatabaseReply,
-    MetaFlightAction::CreateDatabase
-);
-
-// - get database
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct GetDatabaseAction {
-    pub db: String,
-}
-action_declare!(
-    GetDatabaseAction,
-    DatabaseInfo,
-    MetaFlightAction::GetDatabase
-);
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropDatabaseAction {
-    pub plan: DropDatabasePlan,
-}
-action_declare!(DropDatabaseAction, (), MetaFlightAction::DropDatabase);
-
-// == table actions ==
-// - create table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateTableAction {
-    pub plan: CreateTablePlan,
-}
-action_declare!(
-    CreateTableAction,
-    CreateTableReply,
-    MetaFlightAction::CreateTable
-);
-
-// - drop table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropTableAction {
-    pub plan: DropTablePlan,
-}
-action_declare!(DropTableAction, (), MetaFlightAction::DropTable);
-
-// - get table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableAction {
-    pub db: String,
-    pub table: String,
-}
-
-action_declare!(GetTableAction, TableInfo, MetaFlightAction::GetTable);
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableExtReq {
-    pub tbl_id: MetaId,
-    pub tbl_ver: Option<MetaVersion>,
-}
-action_declare!(GetTableExtReq, TableInfo, MetaFlightAction::GetTableExt);
-
-// - get tables
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTablesAction {
-    pub db: String,
-}
-
-action_declare!(GetTablesAction, GetTablesReply, MetaFlightAction::GetTables);
-
-// -get databases
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct GetDatabasesAction;
-
-action_declare!(
-    GetDatabasesAction,
-    GetDatabasesReply,
-    MetaFlightAction::GetDatabases
-);
