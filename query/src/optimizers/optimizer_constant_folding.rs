@@ -105,6 +105,113 @@ impl ConstantFoldingImpl {
             data_type,
         })
     }
+
+    fn remove_const_cond(
+        &mut self,
+        schema: &DataSchemaRef,
+        column_name: String,
+        left: &Expression,
+        right: &Expression,
+        is_and: bool,
+    ) -> Result<Expression> {
+        let mut is_remove = false;
+
+        let mut left_const = false;
+        let new_left = self.eval_const_cond(
+            schema,
+            column_name.clone(),
+            left,
+            is_and,
+            &mut left_const,
+            &mut is_remove,
+        )?;
+        if is_remove {
+            return Ok(new_left);
+        }
+
+        let mut right_const = false;
+        let new_right = self.eval_const_cond(
+            schema,
+            column_name.clone(),
+            right,
+            is_and,
+            &mut right_const,
+            &mut is_remove,
+        )?;
+        if is_remove {
+            return Ok(new_right);
+        }
+
+        match (left_const, right_const) {
+            (true, true) => {
+                if is_and {
+                    Ok(Expression::Literal {
+                        value: DataValue::Boolean(Some(true)),
+                        column_name: Some(column_name),
+                        data_type: DataType::Boolean,
+                    })
+                } else {
+                    Ok(Expression::Literal {
+                        value: DataValue::Boolean(Some(false)),
+                        column_name: Some(column_name),
+                        data_type: DataType::Boolean,
+                    })
+                }
+            }
+            (true, false) => Ok(new_right),
+            (false, true) => Ok(new_left),
+            (false, false) => {
+                if is_and {
+                    Ok(new_left.and(new_right))
+                } else {
+                    Ok(new_left.or(new_right))
+                }
+            }
+        }
+    }
+
+    fn eval_const_cond(
+        &mut self,
+        schema: &DataSchemaRef,
+        column_name: String,
+        expr: &Expression,
+        is_and: bool,
+        is_const: &mut bool,
+        is_remove: &mut bool,
+    ) -> Result<Expression> {
+        let new_expr = self.rewrite_expr(schema, expr)?;
+        match new_expr {
+            Expression::Literal { ref value, .. } => {
+                *is_const = true;
+                let val = value
+                    .to_array()?
+                    .cast_with_type(&DataType::Boolean)?
+                    .bool()?
+                    .inner()
+                    .value(0);
+                if val {
+                    if !is_and {
+                        *is_remove = true;
+                        return Ok(Expression::Literal {
+                            value: DataValue::Boolean(Some(true)),
+                            column_name: Some(column_name),
+                            data_type: DataType::Boolean,
+                        });
+                    }
+                } else if is_and {
+                    *is_remove = true;
+                    return Ok(Expression::Literal {
+                        value: DataValue::Boolean(Some(false)),
+                        column_name: Some(column_name),
+                        data_type: DataType::Boolean,
+                    });
+                }
+            }
+            _ => *is_const = false,
+        }
+        *is_remove = false;
+        Ok(new_expr)
+    }
 }
 
 impl PlanRewriter for ConstantFoldingImpl {
@@ -142,19 +249,23 @@ impl PlanRewriter for ConstantFoldingImpl {
                     Expression::create_unary_expression,
                 )
             }
-            Expression::BinaryExpression { op, left, right } => {
-                let new_left = self.rewrite_expr(schema, left)?;
-                let new_right = self.rewrite_expr(schema, right)?;
+            Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
+                "and" => self.remove_const_cond(schema, origin.column_name(), left, right, true),
+                "or" => self.remove_const_cond(schema, origin.column_name(), left, right, false),
+                _ => {
+                    let new_left = self.rewrite_expr(schema, left)?;
+                    let new_right = self.rewrite_expr(schema, right)?;
 
-                let origin_name = origin.column_name();
-                let new_exprs = vec![new_left, new_right];
-                Self::rewrite_function(
-                    op,
-                    new_exprs,
-                    origin_name,
-                    Expression::create_binary_expression,
-                )
-            }
+                    let origin_name = origin.column_name();
+                    let new_exprs = vec![new_left, new_right];
+                    Self::rewrite_function(
+                        op,
+                        new_exprs,
+                        origin_name,
+                        Expression::create_binary_expression,
+                    )
+                }
+            },
             Expression::Cast { expr, data_type } => {
                 let new_expr = self.rewrite_expr(schema, expr)?;
 
