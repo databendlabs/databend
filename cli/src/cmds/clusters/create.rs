@@ -110,28 +110,12 @@ impl CreateCommand {
                     .default_value("test"),
             )
             .arg(
-                Arg::new("mysql_handler_host")
-                    .long("mysql-handler-host")
-                    .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_HOST)
-                    .takes_value(true)
-                    .about("Configure mysql endpoint to run queries in mysql client(local)")
-                    .default_value("0.0.0.0"),
-            )
-            .arg(
                 Arg::new("mysql_handler_port")
                     .long("mysql-handler-port")
                     .takes_value(true)
                     .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT)
                     .about("Configure the port for mysql endpoint to run queries in mysql client")
                     .default_value("3307"),
-            )
-            .arg(
-                Arg::new("clickhouse_handler_host")
-                    .long("clickhouse-handler-host")
-                    .env(databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST)
-                    .takes_value(true)
-                    .about("Configure clickhouse endpoint to run queries in clickhouse client(local)")
-                    .default_value("0.0.0.0"),
             )
             .arg(
                 Arg::new("clickhouse_handler_port")
@@ -384,11 +368,6 @@ impl CreateCommand {
         }
 
         // mysql handler
-        if args.value_of("mysql_handler_host").is_some()
-            && !args.value_of("mysql_handler_host").unwrap().is_empty()
-        {
-            config.query.mysql_handler_host = args.value_of("mysql_handler_host").unwrap().to_string();
-        }
         if args.value_of("mysql_handler_port").is_some()
             && !args.value_of("mysql_handler_port").unwrap().is_empty()
         {
@@ -396,11 +375,6 @@ impl CreateCommand {
         }
 
         // clickhouse handler
-        if args.value_of("clickhouse_handler_host").is_some()
-            && !args.value_of("clickhouse_handler_host").unwrap().is_empty()
-        {
-            config.query.clickhouse_handler_host = args.value_of("clickhouse_handler_host").unwrap().to_string();
-        }
         if args.value_of("clickhouse_handler_port").is_some()
             && !args.value_of("clickhouse_handler_port").unwrap().is_empty()
         {
