@@ -17,12 +17,13 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
 
-use clap::App;
+use clap::{App, ValueHint};
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 use lexical_util::num::AsPrimitive;
 use metasrv::configs::Config as MetaConfig;
+use databend_query::configs::Config as QueryConfig;
 use sysinfo::System;
 use sysinfo::SystemExt;
 
@@ -83,6 +84,78 @@ impl CreateCommand {
                     .takes_value(true)
                     .about("Set databend version to run")
                     .default_value("latest"),
+            )
+            .arg(
+                Arg::new("num_cpus")
+                    .long("num-cpus")
+                    .env(databend_query::configs::config_query::QUERY_NUM_CPUS)
+                    .takes_value(true)
+                    .about("Set number of cpus for query instance to use")
+                    .default_value(""),
+            )
+            .arg(
+                Arg::new("query_namespace")
+                    .long("query-namespace")
+                    .env(databend_query::configs::config_query::QUERY_NAMESPACE)
+                    .takes_value(true)
+                    .about("Set the namespace for query to work on")
+                    .default_value("test"),
+            )
+            .arg(
+                Arg::new("query_tenant")
+                    .long("query-tenant")
+                    .env(databend_query::configs::config_query::QUERY_TENANT)
+                    .takes_value(true)
+                    .about("Set the tenant for query to work on")
+                    .default_value("test"),
+            )
+            .arg(
+                Arg::new("mysql_handler_host")
+                    .long("mysql-handler-host")
+                    .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_HOST)
+                    .takes_value(true)
+                    .about("Configure mysql endpoint to run queries in mysql client(local)")
+                    .default_value("0.0.0.0"),
+            )
+            .arg(
+                Arg::new("mysql_handler_port")
+                    .long("mysql-handler-port")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT)
+                    .about("Configure the port for mysql endpoint to run queries in mysql client")
+                    .default_value("3307"),
+            )
+            .arg(
+                Arg::new("clickhouse_handler_host")
+                    .long("clickhouse-handler-host")
+                    .env(databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST)
+                    .takes_value(true)
+                    .about("Configure clickhouse endpoint to run queries in clickhouse client(local)")
+                    .default_value("0.0.0.0"),
+            )
+            .arg(
+                Arg::new("clickhouse_handler_port")
+                    .long("clickhouse-handler-port")
+                    .env(databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST)
+                    .takes_value(true)
+                    .about("Configure the port clickhouse endpoint to run queries in clickhouse client")
+                    .default_value("9000"),
+            )
+            .arg(
+                Arg::new("storage_type")
+                    .long("storage-type")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_storage::STORAGE_TYPE)
+                    .about("Set the storage medium to store datasets, support disk or s3 object storage ")
+                    .possible_values(&["disk", "s3"]),
+            )
+            .arg(
+                Arg::new("disk_path")
+                    .long("disk-path")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
+                    .about("Set the root directory to store all datasets")
+                    .value_hint(ValueHint::DirPath),
             )
     }
 
@@ -231,15 +304,57 @@ impl CreateCommand {
         })
     }
 
+    fn generate_query_config(&self, meta_config: LocalMetaConfig) -> QueryConfig {
+        let mut config = QueryConfig::default();
+        if config.query.http_api_address.parse::<SocketAddr>().is_err()
+            || !portpicker::is_free(
+            config
+                .query.http_api_address
+                .parse::<SocketAddr>()
+                .unwrap()
+                .port(),
+        )
+        {
+            config.query.http_api_address = Status::find_unused_local_port()
+        }
+
+        if config.query.metric_api_address.parse::<SocketAddr>().is_err()
+            || !portpicker::is_free(
+            config.query.metric_api_address
+                .parse::<SocketAddr>()
+                .unwrap()
+                .port(),
+        )
+        {
+            config.query.metric_api_address = Status::find_unused_local_port()
+        }
+        if config.query.flight_api_address.parse::<SocketAddr>().is_err()
+            || !portpicker::is_free(
+            config
+                .query
+                .flight_api_address
+                .parse::<SocketAddr>()
+                .unwrap()
+                .port(),
+        )
+        {
+            config.query.flight_api_address = Status::find_unused_local_port()
+        }
+        if config.query.mysql_handler_host.is_empty() {
+            config.query.mysql_handler_host = "0.0.0.0".to_string();
+        }
+        if config.query.clickhouse_handler_host.is_empty() {
+            config.query.clickhouse_handler_host = "0.0.0.0".to_string();
+        }
+
+        config
+    }
+
     fn provision_local_meta_service(
         &self,
         writer: &mut Writer,
-        args: &ArgMatches,
-        bin_path: LocalBinaryPaths,
+        mut meta_config: LocalMetaConfig,
     ) -> Result<()> {
-        let mut meta_config = self
-            .generate_local_meta_config(args, bin_path)
-            .expect("cannot generate metaservice config");
         match meta_config.start() {
             Ok(_) => {
                 assert!(meta_config.get_pid().is_some());
@@ -267,12 +382,25 @@ impl CreateCommand {
                 let bin_path = self
                     .ensure_bin(writer, args)
                     .expect("cannot find binary path");
+                let meta_config = self
+                    .generate_local_meta_config(args, bin_path.clone())
+                    .expect("cannot generate metaservice config");
+                let query_config =self.generate_local_query_config(args, bin_path, meta_config.clone());
 
                 {
-                    let res = self.provision_local_meta_service(writer, args, bin_path);
+                    let res = self.provision_local_meta_service(writer, meta_config);
                     if res.is_err() {
                         writer.write_err(&*format!(
                             "❌ Cannot provison meta service, error: {:?}",
+                            res.unwrap_err()
+                        ));
+                    }
+                }
+                {
+                    let res = self.provison_local_query_service(writer, args, bin_path);
+                    if res.is_err() {
+                        writer.write_err(&*format!(
+                            "❌ Cannot provison query service, error: {:?}",
                             res.unwrap_err()
                         ));
                     }
