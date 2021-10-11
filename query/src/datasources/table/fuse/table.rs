@@ -17,10 +17,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_base::BlockingWait;
-use common_catalog::BlockLocation;
 use common_catalog::IOContext;
 use common_catalog::TableIOContext;
-use common_catalog::TableSnapshot;
 use common_dal::read_obj;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
@@ -35,6 +33,8 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::datasources::table::fuse::BlockLocation;
+use crate::datasources::table::fuse::TableSnapshot;
 
 pub struct FuseTable {
     pub(crate) tbl_info: TableInfo,

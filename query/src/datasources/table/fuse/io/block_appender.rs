@@ -18,8 +18,6 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_catalog::SegmentInfo;
-use common_catalog::Stats;
 use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -28,6 +26,8 @@ use futures::StreamExt;
 use rusoto_core::ByteStream;
 
 use crate::datasources::table::fuse::util;
+use crate::datasources::table::fuse::SegmentInfo;
+use crate::datasources::table::fuse::Stats;
 
 pub type BlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;

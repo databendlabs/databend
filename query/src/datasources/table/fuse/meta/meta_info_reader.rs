@@ -18,12 +18,13 @@ use std::sync::Arc;
 use common_arrow::parquet::read::read_metadata;
 use common_base::BlockingWait;
 use common_base::Runtime;
-use common_catalog::RawBlockStats;
-use common_catalog::SegmentInfo;
 use common_dal::read_obj;
 use common_dal::DataAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
+
+use crate::datasources::table::fuse::RawBlockStats;
+use crate::datasources::table::fuse::SegmentInfo;
 
 // TODO cache
 pub struct MetaInfoReader {

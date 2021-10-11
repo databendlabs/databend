@@ -16,14 +16,15 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use common_catalog::BlockLocation;
-use common_catalog::BlockMeta;
-use common_catalog::ColStats;
-use common_catalog::ColumnId;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataType;
 use common_exception::Result;
+
+use crate::datasources::table::fuse::BlockLocation;
+use crate::datasources::table::fuse::BlockMeta;
+use crate::datasources::table::fuse::ColStats;
+use crate::datasources::table::fuse::ColumnId;
 
 type BlockStats = HashMap<ColumnId, (DataType, ColStats)>;
 
