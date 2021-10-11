@@ -17,19 +17,21 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
 
-use clap::{App, ValueHint};
+use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::ValueHint;
+use databend_query::configs::Config as QueryConfig;
 use lexical_util::num::AsPrimitive;
 use metasrv::configs::Config as MetaConfig;
-use databend_query::configs::Config as QueryConfig;
 use sysinfo::System;
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::status::{LocalConfig, LocalQueryConfig};
+use crate::cmds::status::LocalConfig;
 use crate::cmds::status::LocalMetaConfig;
+use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::FetchCommand;
@@ -294,35 +296,46 @@ impl CreateCommand {
         let mut config = QueryConfig::default();
         if config.query.http_api_address.parse::<SocketAddr>().is_err()
             || !portpicker::is_free(
-            config
-                .query.http_api_address
-                .parse::<SocketAddr>()
-                .unwrap()
-                .port(),
-        )
+                config
+                    .query
+                    .http_api_address
+                    .parse::<SocketAddr>()
+                    .unwrap()
+                    .port(),
+            )
         {
             config.query.http_api_address = Status::find_unused_local_port()
         }
 
-        if config.query.metric_api_address.parse::<SocketAddr>().is_err()
+        if config
+            .query
+            .metric_api_address
+            .parse::<SocketAddr>()
+            .is_err()
             || !portpicker::is_free(
-            config.query.metric_api_address
-                .parse::<SocketAddr>()
-                .unwrap()
-                .port(),
-        )
+                config
+                    .query
+                    .metric_api_address
+                    .parse::<SocketAddr>()
+                    .unwrap()
+                    .port(),
+            )
         {
             config.query.metric_api_address = Status::find_unused_local_port()
         }
-        if config.query.flight_api_address.parse::<SocketAddr>().is_err()
+        if config
+            .query
+            .flight_api_address
+            .parse::<SocketAddr>()
+            .is_err()
             || !portpicker::is_free(
-            config
-                .query
-                .flight_api_address
-                .parse::<SocketAddr>()
-                .unwrap()
-                .port(),
-        )
+                config
+                    .query
+                    .flight_api_address
+                    .parse::<SocketAddr>()
+                    .unwrap()
+                    .port(),
+            )
         {
             config.query.flight_api_address = Status::find_unused_local_port()
         }
@@ -341,7 +354,7 @@ impl CreateCommand {
         args: &ArgMatches,
         bin_path: LocalBinaryPaths,
         meta_config: &LocalMetaConfig,
-    )  -> Result<LocalQueryConfig> {
+    ) -> Result<LocalQueryConfig> {
         let mut config = self.generate_query_config();
         // configure meta address based on provisioned meta service
 
@@ -360,9 +373,7 @@ impl CreateCommand {
             config.query.tenant = args.value_of("query_tenant").unwrap().to_string();
         }
 
-        if args.value_of("num_cpus").is_some()
-            && !args.value_of("num_cpus").unwrap().is_empty()
-        {
+        if args.value_of("num_cpus").is_some() && !args.value_of("num_cpus").unwrap().is_empty() {
             config.query.num_cpus = args.value_of("num_cpus").unwrap().parse::<u64>().unwrap();
         }
 
@@ -370,49 +381,68 @@ impl CreateCommand {
         if args.value_of("mysql_handler_port").is_some()
             && !args.value_of("mysql_handler_port").unwrap().is_empty()
         {
-            config.query.mysql_handler_port = args.value_of("mysql_handler_port").unwrap().parse::<u16>().unwrap();
+            config.query.mysql_handler_port = args
+                .value_of("mysql_handler_port")
+                .unwrap()
+                .parse::<u16>()
+                .unwrap();
         }
 
         // clickhouse handler
         if args.value_of("clickhouse_handler_port").is_some()
             && !args.value_of("clickhouse_handler_port").unwrap().is_empty()
         {
-            config.query.clickhouse_handler_port = args.value_of("clickhouse_handler_port").unwrap().parse::<u16>().unwrap();
+            config.query.clickhouse_handler_port = args
+                .value_of("clickhouse_handler_port")
+                .unwrap()
+                .parse::<u16>()
+                .unwrap();
         }
 
         // storage
         let storage_type = args.value_of_t("storage_type");
         match storage_type {
             Ok(databend_query::configs::config_storage::StorageType::Disk) => {
-                    if args.value_of("disk_path").is_some()
-                        && !args.value_of("disk_path").unwrap().is_empty()
-                    {
-                        if !Path::new(&args.value_of("disk_path").unwrap()).exists() {
-                            return Err(CliError::Unknown(format!("cannot find local disk_path in {}", args.value_of("disk_path").unwrap())))
-                        }
-                        config.storage.disk.data_path = fs::canonicalize(&args.value_of("disk_path").unwrap())
+                if args.value_of("disk_path").is_some()
+                    && !args.value_of("disk_path").unwrap().is_empty()
+                {
+                    if !Path::new(&args.value_of("disk_path").unwrap()).exists() {
+                        return Err(CliError::Unknown(format!(
+                            "cannot find local disk_path in {}",
+                            args.value_of("disk_path").unwrap()
+                        )));
+                    }
+                    config.storage.disk.data_path =
+                        fs::canonicalize(&args.value_of("disk_path").unwrap())
                             .unwrap()
                             .to_str()
                             .unwrap()
                             .to_string()
-                    } else {
-                        let data_dir = format!("{}/data", self.conf.clone().databend_dir);
-                        if !Path::new(data_dir.as_str()).exists() {
-                            if fs::create_dir(Path::new(data_dir.as_str())).is_err() {
-                                return Err(CliError::Unknown(format!("cannot find local disk_path in {}", data_dir)))
-                            }
-                            config.storage.disk.data_path = fs::canonicalize(data_dir)
-                                .unwrap()
-                                .to_str()
-                                .unwrap()
-                                .to_string()
+                } else {
+                    let data_dir = format!("{}/data", self.conf.clone().databend_dir);
+                    if !Path::new(data_dir.as_str()).exists() {
+                        if fs::create_dir(Path::new(data_dir.as_str())).is_err() {
+                            return Err(CliError::Unknown(format!(
+                                "cannot find local disk_path in {}",
+                                data_dir
+                            )));
                         }
+                        config.storage.disk.data_path = fs::canonicalize(data_dir)
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string()
                     }
+                }
             }
             Ok(databend_query::configs::config_storage::StorageType::S3) => {
                 todo!()
             }
-            Err(_) => return Err(CliError::Unknown("storage type is not supported for now".parse().unwrap())),
+            Err(_) => {
+                return Err(CliError::Unknown(
+                    "storage type is not supported for now".parse().unwrap(),
+                ))
+            }
         }
 
         // log
@@ -429,7 +459,7 @@ impl CreateCommand {
             });
         }
         config.log.log_dir = query_log_dir.clone();
-        Ok(LocalQueryConfig{
+        Ok(LocalQueryConfig {
             config,
             pid: None,
             path: Some(bin_path.query),
@@ -478,18 +508,18 @@ impl CreateCommand {
                             "❌ Cannot provison meta service, error: {:?}",
                             res.unwrap_err()
                         ));
-                        return Ok(())
+                        return Ok(());
                     }
                 }
-                let meta_status = meta_config.clone().verify();
+                let meta_status = meta_config.verify();
                 if meta_status.is_err() {
                     writer.write_err(&*format!(
                         "❌ Cannot cannot to meta service: {:?}",
                         meta_status.unwrap_err()
                     ));
-                    return Ok(())
+                    return Ok(());
                 }
-                let query_config =self.generate_local_query_config(args, bin_path, &meta_config.clone());
+                let query_config = self.generate_local_query_config(args, bin_path, &meta_config);
                 if query_config.is_err() {
                     writer.write_err(&*format!(
                         "❌ Cannot generate query configurations, error: {:?}",

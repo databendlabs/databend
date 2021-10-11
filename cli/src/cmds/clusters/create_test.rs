@@ -19,7 +19,7 @@ use tempfile::tempdir;
 use crate::cmds::clusters::create::LocalBinaryPaths;
 use crate::cmds::Config;
 use crate::cmds::CreateCommand;
-use crate::error::{Result};
+use crate::error::Result;
 
 #[test]
 fn test_generate_local_meta_config() -> Result<()> {
@@ -133,7 +133,8 @@ fn test_generate_local_query_config() -> Result<()> {
         };
         let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
         assert!(meta_config.clone().is_some());
-        let query_config = create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
+        let query_config =
+            create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
 
         assert_eq!(
             query_config.as_ref().unwrap().log_dir,
@@ -146,21 +147,33 @@ fn test_generate_local_query_config() -> Result<()> {
         );
         // clickhouse endpoint default settings
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.clickhouse_handler_host,
+            query_config
+                .as_ref()
+                .unwrap()
+                .config
+                .query
+                .clickhouse_handler_host,
             "127.0.0.1"
         );
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.clickhouse_handler_port,
+            query_config
+                .as_ref()
+                .unwrap()
+                .config
+                .query
+                .clickhouse_handler_port,
             9000
         );
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.mysql_handler_port,
+            query_config
+                .as_ref()
+                .unwrap()
+                .config
+                .query
+                .mysql_handler_port,
             3307
         );
-        assert_eq!(
-            query_config.as_ref().unwrap().config.query.tenant,
-            "test"
-        );
+        assert_eq!(query_config.as_ref().unwrap().config.query.tenant, "test");
         assert_eq!(
             query_config.as_ref().unwrap().config.query.namespace,
             "test"
@@ -210,11 +223,9 @@ fn test_generate_local_query_config() -> Result<()> {
         };
         let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
         assert!(meta_config.clone().is_some());
-        let query_config = create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
-        assert_eq!(
-            query_config.as_ref().unwrap().config.query.num_cpus,
-            2
-        );
+        let query_config =
+            create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
+        assert_eq!(query_config.as_ref().unwrap().config.query.num_cpus, 2);
         assert_eq!(
             query_config.as_ref().unwrap().log_dir,
             Some(format!("{}/logs/local_query_log_0", conf.databend_dir))
@@ -226,15 +237,30 @@ fn test_generate_local_query_config() -> Result<()> {
         );
         // clickhouse endpoint default settings
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.clickhouse_handler_host,
+            query_config
+                .as_ref()
+                .unwrap()
+                .config
+                .query
+                .clickhouse_handler_host,
             "127.0.0.1"
         );
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.clickhouse_handler_port,
+            query_config
+                .as_ref()
+                .unwrap()
+                .config
+                .query
+                .clickhouse_handler_port,
             9002
         );
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.mysql_handler_port,
+            query_config
+                .as_ref()
+                .unwrap()
+                .config
+                .query
+                .mysql_handler_port,
             3309
         );
         assert_eq!(

@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::fmt;
+use std::str::FromStr;
 
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
 use crate::configs::Config;
-use std::str::FromStr;
 
 pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
 
