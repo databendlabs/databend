@@ -99,4 +99,8 @@ impl MetaApi for MetaFlightClient {
     ) -> common_exception::Result<Arc<TableInfo>> {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
     }
+
+    fn name(&self) -> String {
+        "MetaFlightClient".to_string()
+    }
 }
