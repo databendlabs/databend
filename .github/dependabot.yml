@@ -6,7 +6,7 @@ updates:
     interval: daily
     time: "17:00"
   open-pull-requests-limit: 4
-  target-branch: master
+  target-branch: main
   ignore:
   - dependency-name: libc
     versions:
