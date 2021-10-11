@@ -48,7 +48,7 @@ fn test_generate_local_meta_config() -> Result<()> {
         // logs for std out and std err
         assert_eq!(
             config.as_ref().unwrap().log_dir,
-            Some(format!("{}/logs", conf.databend_dir))
+            Some(format!("{}/logs/local_meta_log", conf.databend_dir))
         );
         // logs for meta service
         assert_eq!(
@@ -87,7 +87,7 @@ fn test_generate_local_meta_config() -> Result<()> {
         // logs for std out and std err
         assert_eq!(
             config.as_ref().unwrap().log_dir,
-            Some(format!("{}/logs//local_meta_log", conf.databend_dir))
+            Some(format!("{}/logs/local_meta_log", conf.databend_dir))
         );
         // logs for meta service
         assert_eq!(
