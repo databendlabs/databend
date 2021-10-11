@@ -490,34 +490,34 @@ impl CreateCommand {
         }
     }
 
-    fn provision_local_query_service(
-        &self,
-        writer: &mut Writer,
-        mut query_config: LocalQueryConfig,
-    ) -> Result<()> {
-        match query_config.start() {
-            Ok(_) => {
-                assert!(query_config.get_pid().is_some());
-                let mut status = Status::read(self.conf.clone())?;
-                status.local_configs.query_configs = vec![query_config.clone()];
-                status.write()?;
-                writer.write_ok(
-                    format!(
-                        "👏 successfully started query service. \n
-                        To process mysql queries, run: mysql -h {} -P {} \n \
-                        To process clickhouse queries, run: clickhouse client --host {} --port {}",
-                        query_config.config.query.mysql_handler_host,
-                        query_config.config.query.mysql_handler_port,
-                        query_config.config.query.clickhouse_handler_host,
-                        query_config.config.query.clickhouse_handler_port
-                    )
-                    .as_str(),
-                );
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
+    // fn provision_local_query_service(
+    //     &self,
+    //     writer: &mut Writer,
+    //     mut query_config: LocalQueryConfig,
+    // ) -> Result<()> {
+    //     match query_config.start() {
+    //         Ok(_) => {
+    //             assert!(query_config.get_pid().is_some());
+    //             let mut status = Status::read(self.conf.clone())?;
+    //             status.local_configs.query_configs = vec![query_config.clone()];
+    //             status.write()?;
+    //             writer.write_ok(
+    //                 format!(
+    //                     "👏 successfully started query service. \n
+    //                     To process mysql queries, run: mysql -h {} -P {} \n \
+    //                     To process clickhouse queries, run: clickhouse client --host {} --port {}",
+    //                     query_config.config.query.mysql_handler_host,
+    //                     query_config.config.query.mysql_handler_port,
+    //                     query_config.config.query.clickhouse_handler_host,
+    //                     query_config.config.query.clickhouse_handler_port
+    //                 )
+    //                 .as_str(),
+    //             );
+    //             Ok(())
+    //         }
+    //         Err(e) => Err(e),
+    //     }
+    // }
 
     fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args) {
@@ -555,15 +555,15 @@ impl CreateCommand {
                         query_config.as_ref().unwrap_err()
                     ));
                 }
-                {
-                    let res = self.provision_local_query_service(writer, query_config.unwrap());
-                    if res.is_err() {
-                        writer.write_err(&*format!(
-                            "❌ Cannot provison query service, error: {:?}",
-                            res.unwrap_err()
-                        ));
-                    }
-                }
+                // {
+                //     let res = self.provision_local_query_service(writer, query_config.unwrap());
+                //     if res.is_err() {
+                //         writer.write_err(&*format!(
+                //             "❌ Cannot provison query service, error: {:?}",
+                //             res.unwrap_err()
+                //         ));
+                //     }
+                // }
                 let mut status = Status::read(self.conf.clone())?;
                 status.current_profile =
                     Some(serde_json::to_string::<ClusterProfile>(&ClusterProfile::Local).unwrap());

@@ -20,6 +20,7 @@ use crate::cmds::clusters::create::LocalBinaryPaths;
 use crate::cmds::Config;
 use crate::cmds::CreateCommand;
 use crate::error::Result;
+use std::fs;
 
 #[test]
 fn test_generate_local_meta_config() -> Result<()> {
@@ -184,7 +185,11 @@ fn test_generate_local_query_config() -> Result<()> {
         );
         assert_eq!(
             query_config.as_ref().unwrap().config.storage.disk.data_path,
-            format!("{}/data", conf.databend_dir)
+            fs::canonicalize(&format!("{}/data", conf.databend_dir))
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
         );
         assert_eq!(query_config.as_ref().unwrap().config.log.log_level, "INFO");
     }
