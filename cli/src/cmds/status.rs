@@ -54,6 +54,7 @@ pub struct LocalQueryConfig {
     pub config: QueryConfig,
     pub pid: Option<pid_t>,
     pub path: Option<String>, // download location
+    pub log_dir: Option<String>,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -234,7 +235,19 @@ impl LocalRuntime for LocalQueryConfig {
     }
 
     fn verify(&self) -> Result<()> {
-        todo!()
+        let (cli, url) = self.get_health_probe();
+        for _ in 0..LocalQueryConfig::RETRIES {
+            let resp = cli.get(url.as_str()).send();
+            if resp.is_err() || !resp.unwrap().status().is_success() {
+                sleep(time::Duration::from_secs(1));
+            } else {
+                return Ok(());
+            }
+        }
+        return Err(CliError::Unknown(format!(
+            "cannot fetch healthness status for query instance: {}",
+            url
+        )));
     }
 
     fn get_path(&self) -> Option<String> {
@@ -260,11 +273,63 @@ impl LocalRuntime for LocalQueryConfig {
         }
         self.config = conf.clone(); // update configurations
         let mut command = Command::new(self.path.clone().unwrap());
+        let log_dir = self.log_dir.as_ref().unwrap();
+        let out_file = File::create(format!("{}/std_out.log", log_dir).as_str())
+            .expect("couldn't create stdout file");
+        let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
+            .expect("couldn't create stdout file");
         // configure runtime by process local env settings
-        command.env(
-            databend_query::configs::config_log::LOG_LEVEL,
-            conf.log.log_level,
-        );
+        command
+            .env(
+                databend_query::configs::config_log::LOG_LEVEL,
+                conf.log.log_level,
+            )
+            .env(
+                databend_query::configs::config_log::LOG_DIR,
+                conf.log.log_dir,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_NAMESPACE,
+                conf.query.namespace,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_TENANT,
+                conf.query.tenant,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_NUM_CPUS,
+                conf.query.num_cpus.to_string(),
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST,
+                conf.query.clickhouse_handler_host,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_PORT,
+                conf.query.clickhouse_handler_port.to_string(),
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_MYSQL_HANDLER_HOST,
+                conf.query.mysql_handler_host,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT,
+                conf.query.mysql_handler_port.to_string(),
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_FLIGHT_API_ADDRESS,
+                conf.query.flight_api_address,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_HTTP_API_ADDRESS,
+                conf.query.http_api_address,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_METRICS_API_ADDRESS,
+                conf.query.metric_api_address,
+            )
+            .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
+            .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
         info!("executing command {:?}", command);
         Ok(command)
@@ -277,8 +342,19 @@ impl LocalRuntime for LocalQueryConfig {
 
 impl LocalQueryConfig {
     // retrieve the configured url for health check
-    pub fn get_health_endpoint(&self) -> Option<String> {
-        todo!()
+    pub fn get_health_probe(&self) -> (reqwest::blocking::Client, String) {
+        let client = reqwest::blocking::Client::builder()
+            .build()
+            .expect("Cannot build health probe for health check");
+
+        let url = {
+            if !self.config.tls_rpc_server_enabled() {
+                format!("http://{}/v1/health", self.config.query.http_api_address)
+            } else {
+                todo!()
+            }
+        };
+        (client, url)
     }
 }
 

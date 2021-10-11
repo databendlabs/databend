@@ -21,8 +21,8 @@ mod config_test;
 mod config;
 pub mod config_log;
 pub mod config_meta;
-mod config_query;
-mod config_storage;
+pub mod config_query;
+pub mod config_storage;
 
 pub use config::Config;
 pub use config::DATABEND_COMMIT_VERSION;
