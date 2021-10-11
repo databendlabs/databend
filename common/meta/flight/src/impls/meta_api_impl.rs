@@ -19,8 +19,6 @@ use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
-use common_meta_types::GetDatabasesReply;
-use common_meta_types::GetTablesReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
@@ -63,7 +61,7 @@ impl MetaApi for MetaFlightClient {
         Ok(Arc::new(x))
     }
 
-    async fn get_databases(&self) -> common_exception::Result<GetDatabasesReply> {
+    async fn get_databases(&self) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         self.do_action(GetDatabasesAction {}).await
     }
 
@@ -90,7 +88,7 @@ impl MetaApi for MetaFlightClient {
     }
 
     /// Get tables.
-    async fn get_tables(&self, db: &str) -> common_exception::Result<GetTablesReply> {
+    async fn get_tables(&self, db: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         self.do_action(GetTablesAction { db: db.to_string() }).await
     }
 
@@ -100,5 +98,9 @@ impl MetaApi for MetaFlightClient {
         tbl_ver: Option<MetaVersion>,
     ) -> common_exception::Result<Arc<TableInfo>> {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
+    }
+
+    fn name(&self) -> String {
+        "MetaFlightClient".to_string()
     }
 }

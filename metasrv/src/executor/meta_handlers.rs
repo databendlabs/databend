@@ -40,8 +40,6 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::Database;
 use common_meta_types::DatabaseInfo;
-use common_meta_types::GetDatabasesReply;
-use common_meta_types::GetTablesReply;
 use common_meta_types::LogEntry;
 use common_meta_types::Table;
 use common_meta_types::TableInfo;
@@ -347,7 +345,7 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
     async fn handle(
         &self,
         _req: GetDatabasesAction,
-    ) -> common_exception::Result<GetDatabasesReply> {
+    ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         let res = self.meta_node.get_databases().await;
         Ok(res
             .iter()
@@ -364,7 +362,7 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTablesAction> for ActionHandler {
-    async fn handle(&self, req: GetTablesAction) -> common_exception::Result<GetTablesReply> {
+    async fn handle(&self, req: GetTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let res = self.meta_node.get_tables(req.db.as_str()).await?;
         Ok(res
             .iter()
