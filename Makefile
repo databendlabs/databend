@@ -52,7 +52,10 @@ cross-compile-release:
 	cross build --target armv7-unknown-linux-gnueabihf --release
 
 cli-build:
-	bash ./scripts/build/build-cli.sh
+	bash ./scripts/build/build-cli.sh build-cli
+
+cli-install:
+	bash ./scripts/build/build-cli.sh install-cli
 
 cli-test:
 	bash ./scripts/ci/ci-run-cli-unit-tests.sh

@@ -37,51 +37,63 @@ pub struct Config {
 }
 
 impl Config {
+    pub(crate) fn build_cli() -> App<'static> {
+        App::new("databend-cli")
+            .setting(AppSettings::ColoredHelp)
+            .arg(
+                Arg::new("group")
+                    .long("group")
+                    .about("Sets the group name for configuration")
+                    .default_value("test")
+                    .env("DATABEND_GROUP")
+                    .global(true)
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("databend_dir")
+                    .long("databend_dir")
+                    .about("Sets the directory to store databend binaries(query and store)")
+                    .default_value("~/.databend")
+                    .env("databend_dir")
+                    .global(true)
+                    .takes_value(true)
+                    .value_hint(clap::ValueHint::DirPath),
+            )
+            .arg(
+                Arg::new("download_url")
+                    .long("download_url")
+                    .about("Sets the url to download databend binaries")
+                    .default_value("https://github.com/datafuselabs/databend/releases/download")
+                    .env("DOWNLOAD_URL")
+                    .global(true)
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("tag_url")
+                    .long("tag_url")
+                    .about("Sets the url to for databend tags")
+                    .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
+                    .env("DOWNLOAD_URL")
+                    .global(true)
+                    .takes_value(true),
+            )
+            .subcommand(
+                App::new("completion")
+                    .setting(AppSettings::ColoredHelp)
+                    .setting(AppSettings::DisableVersionFlag)
+                    .about("Generate auto completion scripts for bash or zsh terminal")
+                    .arg(
+                        Arg::new("completion")
+                            .takes_value(true)
+                            .possible_values(&["bash", "zsh"]),
+                    ),
+            )
+            .subcommand(PackageCommand::generate())
+            .subcommand(VersionCommand::generate())
+            .subcommand(ClusterCommand::generate())
+    }
     pub fn create() -> Self {
-        let clap = RefCell::new(
-            App::new("config")
-                .setting(AppSettings::ColoredHelp)
-                .arg(
-                    Arg::new("group")
-                        .long("group")
-                        .about("Sets the group name for configuration")
-                        .default_value("test")
-                        .env("DATABEND_GROUP")
-                        .global(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("databend_dir")
-                        .long("databend_dir")
-                        .about("Sets the directory to store databend binaries(query and store)")
-                        .default_value("~/.databend")
-                        .env("databend_dir")
-                        .global(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("download_url")
-                        .long("download_url")
-                        .about("Sets the url to download databend binaries")
-                        .default_value("https://github.com/datafuselabs/databend/releases/download")
-                        .env("DOWNLOAD_URL")
-                        .global(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::new("tag_url")
-                        .long("tag_url")
-                        .about("Sets the url to for databend tags")
-                        .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
-                        .env("DOWNLOAD_URL")
-                        .global(true)
-                        .takes_value(true),
-                )
-                .subcommand(PackageCommand::generate())
-                .subcommand(VersionCommand::generate())
-                .subcommand(ClusterCommand::generate())
-                .get_matches(),
-        );
+        let clap = RefCell::new(Config::build_cli().get_matches());
         let config = Config {
             group: clap
                 .clone()
