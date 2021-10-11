@@ -250,7 +250,7 @@ impl FuseTable {
         let schema = &self.tbl_info.schema;
         if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
             let da = io_ctx.get_data_accessor()?;
-            let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime())??;
+            let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime(), None)??;
             Ok(Some(r))
         } else {
             Ok(None)

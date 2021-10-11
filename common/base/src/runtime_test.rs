@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use tokio::time::sleep_until;
 use tokio::time::Duration;
@@ -113,15 +114,53 @@ fn test_blocking_wait() -> Result<()> {
         Ok(5)
     }
 
-    let res = five().wait();
+    let res = five().wait(None)?;
     assert!(res.is_ok());
     assert_eq!(5, res.unwrap());
 
     let rt = Runtime::with_default_worker_threads().unwrap();
 
-    let res = five().wait_in(&rt)?;
+    let res = five().wait_in(&rt, None)?;
     assert!(res.is_ok());
     assert_eq!(5, res.unwrap());
+
+    Ok(())
+}
+
+#[test]
+fn test_blocking_wait_timeout() -> Result<()> {
+    async fn sleep_5_sec() -> Result<()> {
+        tokio::time::sleep(Duration::from_millis(5000)).await;
+        Ok(())
+    }
+
+    let res = sleep_5_sec().wait(Some(Duration::from_millis(1000)));
+    assert!(res.is_err());
+    assert_eq!(ErrorCode::Timeout("").code(), res.unwrap_err().code());
+
+    let rt = Runtime::with_default_worker_threads().unwrap();
+
+    let res = sleep_5_sec().wait_in(&rt, Some(Duration::from_millis(1000)));
+    assert!(res.is_err());
+    assert_eq!(ErrorCode::Timeout("").code(), res.unwrap_err().code());
+
+    Ok(())
+}
+
+#[test]
+fn test_blocking_wait_no_timeout() -> Result<()> {
+    async fn sleep_1_sec() -> Result<()> {
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        Ok(())
+    }
+
+    let res = sleep_1_sec().wait(Some(Duration::from_millis(5000)))?;
+    assert!(res.is_ok());
+
+    let rt = Runtime::with_default_worker_threads().unwrap();
+
+    let res = sleep_1_sec().wait_in(&rt, Some(Duration::from_millis(5000)))?;
+    assert!(res.is_ok());
 
     Ok(())
 }

@@ -56,6 +56,6 @@ impl MetaInfoReader {
     }
     #[allow(dead_code)]
     pub fn read_segment_info(&self, location: &str) -> Result<SegmentInfo> {
-        read_obj(self.da.clone(), location.to_string()).wait_in(&self.ctx)?
+        read_obj(self.da.clone(), location.to_string()).wait_in(&self.ctx, None)?
     }
 }

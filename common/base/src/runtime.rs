@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::future::Either;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -116,10 +117,10 @@ where
     /// async fn five() -> u8 { 5 }
     /// assert_eq!(5, five().wait());
     /// ```
-    fn wait(self) -> Self::Output;
+    fn wait(self, timeout: Option<Duration>) -> Result<Self::Output>;
 
     /// Runs the future in provided runtime and blocks current thread.
-    fn wait_in<RT: TrySpawn>(self, rt: &RT) -> Result<Self::Output>;
+    fn wait_in<RT: TrySpawn>(self, rt: &RT, timeout: Option<Duration>) -> Result<Self::Output>;
 }
 
 impl<T> BlockingWait for T
@@ -127,12 +128,33 @@ where
     T: Future + Send + 'static,
     T::Output: Send + 'static,
 {
-    fn wait(self) -> T::Output {
-        futures::executor::block_on(self)
+    fn wait(self, timeout: Option<Duration>) -> Result<T::Output> {
+        match timeout {
+            None => Ok(futures::executor::block_on(self)),
+            Some(d) => {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
+                    .build()
+                    .map_err(|e| ErrorCode::TokioError(format!("{}", e)))?;
+
+                rt.block_on(async move {
+                    let sl = tokio::time::sleep(d);
+                    let sl = Box::pin(sl);
+                    let task = Box::pin(self);
+
+                    match futures::future::select(sl, task).await {
+                        Either::Left((_, _)) => Err::<T::Output, ErrorCode>(ErrorCode::Timeout(
+                            format!("timeout: {:?}", d),
+                        )),
+                        Either::Right((res, _)) => Ok(res),
+                    }
+                })
+            }
+        }
     }
 
-    fn wait_in<RT: TrySpawn>(self, rt: &RT) -> Result<T::Output> {
-        rt.block_on(self, None)
+    fn wait_in<RT: TrySpawn>(self, rt: &RT, timeout: Option<Duration>) -> Result<T::Output> {
+        rt.block_on(self, timeout)
     }
 }
 
