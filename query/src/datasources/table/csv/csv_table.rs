@@ -17,8 +17,8 @@ use std::any::Any;
 use std::fs::File;
 use std::sync::Arc;
 
-use common_catalog::IOContext;
-use common_catalog::TableIOContext;
+use common_context::IOContext;
+use common_context::TableIOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;

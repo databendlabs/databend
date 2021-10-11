@@ -807,21 +807,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-catalog"
-version = "0.1.0"
-dependencies = [
- "common-arrow",
- "common-base",
- "common-dal",
- "common-datavalues",
- "common-exception",
- "common-meta-types",
- "pretty_assertions",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "common-clickhouse-srv"
 version = "0.3.2"
 dependencies = [
@@ -852,6 +837,21 @@ dependencies = [
  "tokio-util",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "common-context"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-dal",
+ "common-datavalues",
+ "common-exception",
+ "common-meta-types",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1579,8 +1579,8 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
- "common-catalog",
  "common-clickhouse-srv",
+ "common-context",
  "common-dal",
  "common-datablocks",
  "common-datavalues",

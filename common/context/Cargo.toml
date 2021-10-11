@@ -1,5 +1,5 @@
 [package]
-name = "common-catalog"
+name = "common-context"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"

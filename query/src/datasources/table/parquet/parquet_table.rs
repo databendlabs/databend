@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read;
 use common_base::tokio::task;
-use common_catalog::TableIOContext;
+use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;

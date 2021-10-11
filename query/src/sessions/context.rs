@@ -23,7 +23,7 @@ use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
-use common_catalog::TableIOContext;
+use common_context::TableIOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
