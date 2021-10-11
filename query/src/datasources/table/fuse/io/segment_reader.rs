@@ -15,10 +15,11 @@
 
 use std::sync::Arc;
 
-use common_catalog::SegmentInfo;
 use common_dal::read_obj;
 use common_dal::DataAccessor;
 use common_exception::Result;
+
+use crate::datasources::table::fuse::SegmentInfo;
 
 #[allow(dead_code)]
 pub async fn read_segment_async(da: Arc<dyn DataAccessor>, loc: &str) -> Result<SegmentInfo> {

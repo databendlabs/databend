@@ -13,12 +13,12 @@
 //  limitations under the License.
 //
 
-use common_catalog::BlockLocation;
-use common_catalog::TableSnapshot;
 use common_exception::Result;
 use common_planners::Extras;
 
+use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::MetaInfoReader;
+use crate::datasources::table::fuse::TableSnapshot;
 
 struct TableSparseIndex {}
 struct CacheMgr;

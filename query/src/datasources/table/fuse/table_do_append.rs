@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_catalog::IOContext;
 use common_catalog::TableIOContext;
-use common_catalog::TableSnapshot;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertIntoPlan;
@@ -26,6 +25,7 @@ use uuid::Uuid;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::fuse::TableSnapshot;
 
 impl FuseTable {
     #[inline]
