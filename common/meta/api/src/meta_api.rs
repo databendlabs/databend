@@ -53,5 +53,5 @@ pub trait MetaApi: Send + Sync {
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
-    ) -> Result<TableInfo>;
+    ) -> Result<Arc<TableInfo>>;
 }

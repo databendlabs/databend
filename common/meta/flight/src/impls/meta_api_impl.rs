@@ -98,7 +98,7 @@ impl MetaApi for MetaFlightClient {
         &self,
         tbl_id: MetaId,
         tbl_ver: Option<MetaVersion>,
-    ) -> common_exception::Result<TableInfo> {
+    ) -> common_exception::Result<Arc<TableInfo>> {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
     }
 }

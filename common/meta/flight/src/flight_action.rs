@@ -250,7 +250,11 @@ pub struct GetTableExtReq {
     pub tbl_id: MetaId,
     pub tbl_ver: Option<MetaVersion>,
 }
-action_declare!(GetTableExtReq, TableInfo, MetaFlightAction::GetTableExt);
+action_declare!(
+    GetTableExtReq,
+    Arc<TableInfo>,
+    MetaFlightAction::GetTableExt
+);
 
 // - get tables
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

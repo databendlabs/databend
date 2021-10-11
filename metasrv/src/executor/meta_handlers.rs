@@ -308,7 +308,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableExtReq> for ActionHandler {
-    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<TableInfo> {
+    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<Arc<TableInfo>> {
         // TODO duplicated code
         let table_id = act.tbl_id;
         let result = self.meta_node.get_table(&table_id).await;
@@ -332,7 +332,7 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     engine: table.table_engine.clone(),
                     options: table.table_options,
                 };
-                Ok(rst)
+                Ok(Arc::new(rst))
             }
             None => Err(ErrorCode::UnknownTable(format!(
                 "table of id {} not found",
