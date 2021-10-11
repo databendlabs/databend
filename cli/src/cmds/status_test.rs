@@ -32,6 +32,7 @@ macro_rules! default_local_config {
                 pid: Some(123),
                 config: QueryConfig::default(),
                 path: Some("~/.databend/test/databend-query".to_string()),
+                log_dir: Some("./".to_string()),
             }],
             store_configs: None,
             meta_configs: Some(LocalMetaConfig {
@@ -87,6 +88,7 @@ fn test_status() -> Result<()> {
             config: QueryConfig::default(),
             pid: Some(123),
             path: None,
+            log_dir: Some("./".to_string()),
         });
         status.version = "default".to_string();
         status.local_configs = local_config;
@@ -97,6 +99,7 @@ fn test_status() -> Result<()> {
             config: QueryConfig::default(),
             pid: Some(123),
             path: None,
+            log_dir: Some("./".to_string()),
         });
         // should have empty profile with set version
         if let Ok(status) = Status::read(conf.clone()) {

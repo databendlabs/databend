@@ -43,6 +43,8 @@ use crate::error::Result;
 pub struct CreateCommand {
     conf: Config,
 }
+
+#[derive(Clone)]
 pub struct LocalBinaryPaths {
     pub(crate) query: String,
     pub(crate) meta: String,
@@ -131,7 +133,7 @@ impl CreateCommand {
                     .takes_value(true)
                     .env(databend_query::configs::config_storage::STORAGE_TYPE)
                     .about("Set the storage medium to store datasets, support disk or s3 object storage ")
-                    .possible_values(&["disk", "s3"]),
+                    .possible_values(&["disk", "s3"]).default_value("disk"),
             )
             .arg(
                 Arg::new("disk_path")
@@ -272,7 +274,7 @@ impl CreateCommand {
                 panic!("cannot create meta serivce log directory {}", meta_log_dir)
             });
         }
-        config.log_dir = meta_log_dir;
+        config.log_dir = meta_log_dir.clone();
         config.raft_config.single = true;
         let raft_dir = format!("{}/local_raft_dir", log_base);
         if !Path::new(raft_dir.as_str()).exists() {
@@ -284,7 +286,7 @@ impl CreateCommand {
             config,
             pid: None,
             path: Some(bin_path.meta),
-            log_dir: Some(log_base),
+            log_dir: Some(meta_log_dir),
         })
     }
 
@@ -334,7 +336,7 @@ impl CreateCommand {
         config
     }
 
-    fn generate_local_query_config(
+    pub fn generate_local_query_config(
         &self,
         args: &ArgMatches,
         bin_path: LocalBinaryPaths,
@@ -342,10 +344,7 @@ impl CreateCommand {
     )  -> Result<LocalQueryConfig> {
         let mut config = self.generate_query_config();
         // configure meta address based on provisioned meta service
-        let meta_status = meta_config.clone().verify();
-        if meta_status.is_err() {
-            return Err(meta_status.unwrap_err())
-        }
+
         config.meta.meta_address = meta_config.clone().config.flight_api_address;
 
         // tenant
@@ -364,25 +363,25 @@ impl CreateCommand {
         if args.value_of("num_cpus").is_some()
             && !args.value_of("num_cpus").unwrap().is_empty()
         {
-            config.query.num_cpus = args.value_of("num_cpus").unwrap() as u64;
+            config.query.num_cpus = args.value_of("num_cpus").unwrap().parse::<u64>().unwrap();
         }
 
         // mysql handler
         if args.value_of("mysql_handler_port").is_some()
             && !args.value_of("mysql_handler_port").unwrap().is_empty()
         {
-            config.query.mysql_handler_port = args.value_of("mysql_handler_port").unwrap() as u16;
+            config.query.mysql_handler_port = args.value_of("mysql_handler_port").unwrap().parse::<u16>().unwrap();
         }
 
         // clickhouse handler
         if args.value_of("clickhouse_handler_port").is_some()
             && !args.value_of("clickhouse_handler_port").unwrap().is_empty()
         {
-            config.query.clickhouse_handler_port = args.value_of("clickhouse_handler_port").unwrap() as u16;
+            config.query.clickhouse_handler_port = args.value_of("clickhouse_handler_port").unwrap().parse::<u16>().unwrap();
         }
 
         // storage
-        let storage_type = matches.value_of_t("storage_type");
+        let storage_type = args.value_of_t("storage_type");
         match storage_type {
             Ok(databend_query::configs::config_storage::StorageType::Disk) => {
                     if args.value_of("disk_path").is_some()
@@ -413,16 +412,28 @@ impl CreateCommand {
             Ok(databend_query::configs::config_storage::StorageType::S3) => {
                 todo!()
             }
-            Err(_) => writer.write_err("currently profile only support cluster or local"),
+            Err(_) => return Err(CliError::Unknown("storage type is not supported for now".parse().unwrap())),
         }
 
         // log
-
+        config.log.log_level = args.value_of("log_level").unwrap().to_string();
+        let log_base = format!("{}/logs", self.conf.clone().databend_dir);
+        if !Path::new(log_base.as_str()).exists() {
+            fs::create_dir(Path::new(log_base.as_str()))
+                .unwrap_or_else(|_| panic!("cannot create directory {}", log_base));
+        }
+        let query_log_dir = format!("{}/local_query_log_0", log_base);
+        if !Path::new(query_log_dir.as_str()).exists() {
+            fs::create_dir(Path::new(query_log_dir.as_str())).unwrap_or_else(|_| {
+                panic!("cannot create meta serivce log directory {}", query_log_dir)
+            });
+        }
+        config.log.log_dir = query_log_dir.clone();
         Ok(LocalQueryConfig{
             config,
             pid: None,
             path: Some(bin_path.query),
-            log_dir: meta_config.clone().log_dir,
+            log_dir: Some(query_log_dir),
         })
     }
     fn provision_local_meta_service(
@@ -461,25 +472,39 @@ impl CreateCommand {
                     .generate_local_meta_config(args, bin_path.clone())
                     .expect("cannot generate metaservice config");
                 {
-                    let res = self.provision_local_meta_service(writer, meta_config);
+                    let res = self.provision_local_meta_service(writer, meta_config.clone());
                     if res.is_err() {
                         writer.write_err(&*format!(
                             "❌ Cannot provison meta service, error: {:?}",
                             res.unwrap_err()
                         ));
+                        return Ok(())
                     }
                 }
-                let query_config =self.generate_local_query_config(args, writer, bin_path, &meta_config);
-
-                {
-                    let res = self.provison_local_query_service(writer, args, bin_path);
-                    if res.is_err() {
-                        writer.write_err(&*format!(
-                            "❌ Cannot provison query service, error: {:?}",
-                            res.unwrap_err()
-                        ));
-                    }
+                let meta_status = meta_config.clone().verify();
+                if meta_status.is_err() {
+                    writer.write_err(&*format!(
+                        "❌ Cannot cannot to meta service: {:?}",
+                        meta_status.unwrap_err()
+                    ));
+                    return Ok(())
                 }
+                let query_config =self.generate_local_query_config(args, bin_path, &meta_config.clone());
+                if query_config.is_err() {
+                    writer.write_err(&*format!(
+                        "❌ Cannot generate query configurations, error: {:?}",
+                        query_config.unwrap_err()
+                    ));
+                }
+                // {
+                //     let res = self.provision_local_query_service(writer, args, bin_path);
+                //     if res.is_err() {
+                //         writer.write_err(&*format!(
+                //             "❌ Cannot provison query service, error: {:?}",
+                //             res.unwrap_err()
+                //         ));
+                //     }
+                // }
                 let mut status = Status::read(self.conf.clone())?;
                 status.current_profile =
                     Some(serde_json::to_string::<ClusterProfile>(&ClusterProfile::Local).unwrap());
