@@ -234,7 +234,19 @@ impl LocalRuntime for LocalQueryConfig {
     }
 
     fn verify(&self) -> Result<()> {
-        todo!()
+        let (cli, url) = self.get_health_probe();
+        for _ in 0..LocalQueryConfig::RETRIES {
+            let resp = cli.get(url.as_str()).send();
+            if resp.is_err() || !resp.unwrap().status().is_success() {
+                sleep(time::Duration::from_secs(1));
+            } else {
+                return Ok(());
+            }
+        }
+        return Err(CliError::Unknown(format!(
+            "cannot fetch healthness status for query instance: {}",
+            url
+        )));
     }
 
     fn get_path(&self) -> Option<String> {
@@ -264,7 +276,44 @@ impl LocalRuntime for LocalQueryConfig {
         command.env(
             databend_query::configs::config_log::LOG_LEVEL,
             conf.log.log_level,
-        );
+        ).env(
+            databend_query::configs::config_log::LOG_DIR,
+            conf.log.log_dir
+        ).env(
+            databend_query::configs::config_query::QUERY_NAMESPACE,
+            conf.query.namespace
+        ).env(
+            databend_query::configs::config_query::QUERY_TENANT,
+            conf.query.tenant
+        ).env(
+            databend_query::configs::config_query::QUERY_NUM_CPUS,
+            conf.query.num_cpus
+        ).env(
+            databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST,
+            conf.query.clickhouse_handler_host
+        ).env(
+            databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_PORT,
+            conf.query.clickhouse_handler_port
+        ).env(
+            databend_query::configs::config_query::QUERY_MYSQL_HANDLER_HOST,
+            conf.query.mysql_handler_host
+        ).env(
+            databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT,
+            conf.query.mysql_handler_port
+        )
+        .env(
+            databend_query::configs::config_query::QUERY_FLIGHT_API_ADDRESS,
+            conf.query.flight_api_address
+        )
+        .env(
+            databend_query::configs::config_query::QUERY_HTTP_API_ADDRESS,
+            conf.query.http_api_address
+        )
+        .env(
+            databend_query::configs::config_query::QUERY_METRICS_API_ADDRESS,
+            conf.query.metric_api_address
+        )
+        ;
         // logging debug
         info!("executing command {:?}", command);
         Ok(command)
@@ -277,8 +326,21 @@ impl LocalRuntime for LocalQueryConfig {
 
 impl LocalQueryConfig {
     // retrieve the configured url for health check
-    pub fn get_health_endpoint(&self) -> Option<String> {
-        todo!()
+    pub fn get_health_probe(&self) -> (reqwest::blocking::Client, String) {
+        let client = reqwest::blocking::Client::builder()
+            .build()
+            .expect("Cannot build health probe for health check");
+
+        let url = {
+            if self.config.admin_tls_server_key.is_empty()
+                || self.config.admin_tls_server_cert.is_empty()
+            {
+                format!("http://{}/v1/health", self.config.query.http_api_address)
+            } else {
+                todo!()
+            }
+        };
+        (client, url)
     }
 }
 

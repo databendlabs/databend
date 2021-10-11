@@ -28,7 +28,7 @@ use sysinfo::System;
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::status::LocalConfig;
+use crate::cmds::status::{LocalConfig, LocalQueryConfig};
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
@@ -304,8 +304,9 @@ impl CreateCommand {
         })
     }
 
-    fn generate_query_config(&self, meta_config: LocalMetaConfig) -> QueryConfig {
+    fn generate_query_config(&self, meta_config: &LocalMetaConfig) -> QueryConfig {
         let mut config = QueryConfig::default();
+        config.meta.meta_address = meta_config.clone().config.flight_api_address;
         if config.query.http_api_address.parse::<SocketAddr>().is_err()
             || !portpicker::is_free(
             config
@@ -350,6 +351,15 @@ impl CreateCommand {
         config
     }
 
+    fn generate_local_query_service(
+        &self,
+        args: &ArgMatches,
+        bin_path: LocalBinaryPaths,
+        meta_config: &LocalMetaConfig,
+    )  -> Option<LocalQueryConfig> {
+        let mut config = self.generate_query_config(meta_config);
+        config.query.flight_api_address =
+    }
     fn provision_local_meta_service(
         &self,
         writer: &mut Writer,
@@ -385,7 +395,7 @@ impl CreateCommand {
                 let meta_config = self
                     .generate_local_meta_config(args, bin_path.clone())
                     .expect("cannot generate metaservice config");
-                let query_config =self.generate_local_query_config(args, bin_path, meta_config.clone());
+                let query_config =self.generate_local_query_config(args, bin_path, &meta_config);
 
                 {
                     let res = self.provision_local_meta_service(writer, meta_config);
