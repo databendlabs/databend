@@ -264,7 +264,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableAction> for ActionHandler {
-    async fn handle(&self, act: GetTableAction) -> common_exception::Result<TableInfo> {
+    async fn handle(&self, act: GetTableAction) -> common_exception::Result<Arc<TableInfo>> {
         let db_name = &act.db;
         let table_name = &act.table;
 
@@ -299,7 +299,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                     engine: table.table_engine.clone(),
                     options: table.table_options,
                 };
-                Ok(rst)
+                Ok(Arc::new(rst))
             }
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
@@ -308,7 +308,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableExtReq> for ActionHandler {
-    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<TableInfo> {
+    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<Arc<TableInfo>> {
         // TODO duplicated code
         let table_id = act.tbl_id;
         let result = self.meta_node.get_table(&table_id).await;
@@ -332,7 +332,7 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     engine: table.table_engine.clone(),
                     options: table.table_options,
                 };
-                Ok(rst)
+                Ok(Arc::new(rst))
             }
             None => Err(ErrorCode::UnknownTable(format!(
                 "table of id {} not found",
@@ -351,10 +351,12 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
         let res = self.meta_node.get_databases().await;
         Ok(res
             .iter()
-            .map(|(name, db)| DatabaseInfo {
-                database_id: db.database_id,
-                db: name.to_string(),
-                engine: db.database_engine.to_string(),
+            .map(|(name, db)| {
+                Arc::new(DatabaseInfo {
+                    database_id: db.database_id,
+                    db: name.to_string(),
+                    engine: db.database_engine.to_string(),
+                })
             })
             .collect::<Vec<_>>())
     }
@@ -391,7 +393,7 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
                     options: tbl.table_options.clone(),
                 };
 
-                acc.push(tbl_info);
+                acc.push(Arc::new(tbl_info));
                 Ok::<_, ErrorCode>(acc)
             })?)
     }

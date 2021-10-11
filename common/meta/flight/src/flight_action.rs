@@ -14,6 +14,7 @@
 
 use std::convert::TryInto;
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_arrow::arrow_flight::Action;
 use common_exception::ErrorCode;
@@ -46,7 +47,7 @@ pub trait RequestFor {
 
 #[macro_export]
 macro_rules! action_declare {
-    ($req:ident, $reply:tt, $enum_ctor:expr) => {
+    ($req:ident, $reply:ty, $enum_ctor:expr) => {
         impl RequestFor for $req {
             type Reply = $reply;
         }
@@ -242,14 +243,18 @@ pub struct GetTableAction {
     pub table: String,
 }
 
-action_declare!(GetTableAction, TableInfo, MetaFlightAction::GetTable);
+action_declare!(GetTableAction, Arc<TableInfo>, MetaFlightAction::GetTable);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableExtReq {
     pub tbl_id: MetaId,
     pub tbl_ver: Option<MetaVersion>,
 }
-action_declare!(GetTableExtReq, TableInfo, MetaFlightAction::GetTableExt);
+action_declare!(
+    GetTableExtReq,
+    Arc<TableInfo>,
+    MetaFlightAction::GetTableExt
+);
 
 // - get tables
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

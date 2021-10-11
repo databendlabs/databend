@@ -13,12 +13,12 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
-use common_meta_types::GetDatabasesReply;
-use common_meta_types::GetTablesReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
@@ -35,9 +35,9 @@ pub trait MetaApi: Send + Sync {
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 
-    async fn get_database(&self, db: &str) -> Result<DatabaseInfo>;
+    async fn get_database(&self, db: &str) -> Result<Arc<DatabaseInfo>>;
 
-    async fn get_databases(&self) -> Result<GetDatabasesReply>;
+    async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
 
     // table
 
@@ -45,13 +45,13 @@ pub trait MetaApi: Send + Sync {
 
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 
-    async fn get_table(&self, db: &str, table: &str) -> Result<TableInfo>;
+    async fn get_table(&self, db: &str, table: &str) -> Result<Arc<TableInfo>>;
 
-    async fn get_tables(&self, db: &str) -> Result<GetTablesReply>;
+    async fn get_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>>;
 
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
-        db_ver: Option<MetaVersion>,
-    ) -> Result<TableInfo>;
+        table_version: Option<MetaVersion>,
+    ) -> Result<Arc<TableInfo>>;
 }
