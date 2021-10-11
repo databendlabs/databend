@@ -304,9 +304,8 @@ impl CreateCommand {
         })
     }
 
-    fn generate_query_config(&self, meta_config: &LocalMetaConfig) -> QueryConfig {
+    fn generate_query_config(&self) -> QueryConfig {
         let mut config = QueryConfig::default();
-        config.meta.meta_address = meta_config.clone().config.flight_api_address;
         if config.query.http_api_address.parse::<SocketAddr>().is_err()
             || !portpicker::is_free(
             config
@@ -351,14 +350,106 @@ impl CreateCommand {
         config
     }
 
-    fn generate_local_query_service(
+    fn generate_local_query_config(
         &self,
         args: &ArgMatches,
         bin_path: LocalBinaryPaths,
         meta_config: &LocalMetaConfig,
-    )  -> Option<LocalQueryConfig> {
-        let mut config = self.generate_query_config(meta_config);
-        config.query.flight_api_address =
+    )  -> Result<LocalQueryConfig> {
+        let mut config = self.generate_query_config();
+        // configure meta address based on provisioned meta service
+        let meta_status = meta_config.clone().verify();
+        if meta_status.is_err() {
+            return Err(meta_status.unwrap_err())
+        }
+        config.meta.meta_address = meta_config.clone().config.flight_api_address;
+
+        // tenant
+        if args.value_of("query_namespace").is_some()
+            && !args.value_of("query_namespace").unwrap().is_empty()
+        {
+            config.query.namespace = args.value_of("query_namespace").unwrap().to_string();
+        }
+
+        if args.value_of("query_tenant").is_some()
+            && !args.value_of("query_tenant").unwrap().is_empty()
+        {
+            config.query.tenant = args.value_of("query_tenant").unwrap().to_string();
+        }
+
+        if args.value_of("num_cpus").is_some()
+            && !args.value_of("num_cpus").unwrap().is_empty()
+        {
+            config.query.num_cpus = args.value_of("num_cpus").unwrap() as u64;
+        }
+
+        // mysql handler
+        if args.value_of("mysql_handler_host").is_some()
+            && !args.value_of("mysql_handler_host").unwrap().is_empty()
+        {
+            config.query.mysql_handler_host = args.value_of("mysql_handler_host").unwrap().to_string();
+        }
+        if args.value_of("mysql_handler_port").is_some()
+            && !args.value_of("mysql_handler_port").unwrap().is_empty()
+        {
+            config.query.mysql_handler_port = args.value_of("mysql_handler_port").unwrap() as u16;
+        }
+
+        // clickhouse handler
+        if args.value_of("clickhouse_handler_host").is_some()
+            && !args.value_of("clickhouse_handler_host").unwrap().is_empty()
+        {
+            config.query.clickhouse_handler_host = args.value_of("clickhouse_handler_host").unwrap().to_string();
+        }
+        if args.value_of("clickhouse_handler_port").is_some()
+            && !args.value_of("clickhouse_handler_port").unwrap().is_empty()
+        {
+            config.query.clickhouse_handler_port = args.value_of("clickhouse_handler_port").unwrap() as u16;
+        }
+
+        // storage
+        let storage_type = matches.value_of_t("storage_type");
+        match storage_type {
+            Ok(databend_query::configs::config_storage::StorageType::Disk) => {
+                    if args.value_of("disk_path").is_some()
+                        && !args.value_of("disk_path").unwrap().is_empty()
+                    {
+                        if !Path::new(&args.value_of("disk_path").unwrap()).exists() {
+                            return Err(CliError::Unknown(format!("cannot find local disk_path in {}", args.value_of("disk_path").unwrap())))
+                        }
+                        config.storage.disk.data_path = fs::canonicalize(&args.value_of("disk_path").unwrap())
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    } else {
+                        let data_dir = format!("{}/data", self.conf.clone().databend_dir);
+                        if !Path::new(data_dir.as_str()).exists() {
+                            if fs::create_dir(Path::new(data_dir.as_str())).is_err() {
+                                return Err(CliError::Unknown(format!("cannot find local disk_path in {}", data_dir)))
+                            }
+                            config.storage.disk.data_path = fs::canonicalize(data_dir)
+                                .unwrap()
+                                .to_str()
+                                .unwrap()
+                                .to_string()
+                        }
+                    }
+            }
+            Ok(databend_query::configs::config_storage::StorageType::S3) => {
+                todo!()
+            }
+            Err(_) => writer.write_err("currently profile only support cluster or local"),
+        }
+
+        // log
+
+        Ok(LocalQueryConfig{
+            config,
+            pid: None,
+            path: Some(bin_path.query),
+            log_dir: meta_config.clone().log_dir,
+        })
     }
     fn provision_local_meta_service(
         &self,
@@ -395,8 +486,6 @@ impl CreateCommand {
                 let meta_config = self
                     .generate_local_meta_config(args, bin_path.clone())
                     .expect("cannot generate metaservice config");
-                let query_config =self.generate_local_query_config(args, bin_path, &meta_config);
-
                 {
                     let res = self.provision_local_meta_service(writer, meta_config);
                     if res.is_err() {
@@ -406,6 +495,8 @@ impl CreateCommand {
                         ));
                     }
                 }
+                let query_config =self.generate_local_query_config(args, writer, bin_path, &meta_config);
+
                 {
                     let res = self.provison_local_query_service(writer, args, bin_path);
                     if res.is_err() {

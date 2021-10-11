@@ -54,6 +54,7 @@ pub struct LocalQueryConfig {
     pub config: QueryConfig,
     pub pid: Option<pid_t>,
     pub path: Option<String>, // download location
+    pub log_dir: Option<String>,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
