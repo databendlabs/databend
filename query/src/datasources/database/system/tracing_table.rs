@@ -23,6 +23,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -32,41 +33,49 @@ use common_tracing::tracing;
 use walkdir::WalkDir;
 
 use crate::catalogs::Table;
-use crate::catalogs::ToTableInfo;
 use crate::datasources::database::system::TracingTableStream;
 use crate::sessions::DatabendQueryContext;
 
 pub struct TracingTable {
-    table_id: u64,
-    schema: DataSchemaRef,
+    table_info: TableInfo,
 }
 
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
         // {"v":0,"name":"databend-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"databend","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
-        TracingTable {
+
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("v", DataType::Int64, false),
+            DataField::new("name", DataType::String, false),
+            DataField::new("msg", DataType::String, false),
+            DataField::new("level", DataType::Int8, false),
+            DataField::new("hostname", DataType::String, false),
+            DataField::new("pid", DataType::Int64, false),
+            DataField::new("time", DataType::String, false),
+        ]);
+
+        let table_info = TableInfo {
+            db: "system".to_string(),
+            name: "tracing".to_string(),
             table_id,
-            schema: DataSchemaRefExt::create(vec![
-                DataField::new("v", DataType::Int64, false),
-                DataField::new("name", DataType::String, false),
-                DataField::new("msg", DataType::String, false),
-                DataField::new("level", DataType::Int8, false),
-                DataField::new("hostname", DataType::String, false),
-                DataField::new("pid", DataType::Int64, false),
-                DataField::new("time", DataType::String, false),
-            ]),
-        }
+            schema,
+            engine: "SystemTracing".to_string(),
+            is_local: true,
+            ..Default::default()
+        };
+
+        TracingTable { table_info }
     }
 }
 
 #[async_trait::async_trait]
 impl Table for TracingTable {
     fn name(&self) -> &str {
-        "tracing"
+        &self.table_info.name
     }
 
     fn engine(&self) -> &str {
-        "SystemTracing"
+        &self.table_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -74,15 +83,15 @@ impl Table for TracingTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.table_info.schema.clone())
     }
 
     fn get_id(&self) -> u64 {
-        self.table_id
+        self.table_info.table_id
     }
 
     fn is_local(&self) -> bool {
-        true
+        self.table_info.is_local
     }
 
     fn read_plan(
@@ -92,7 +101,7 @@ impl Table for TracingTable {
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            table_info: self.to_table_info("system")?,
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -136,7 +145,7 @@ impl Table for TracingTable {
         }
 
         Ok(Box::pin(TracingTableStream::try_create(
-            self.schema.clone(),
+            self.table_info.schema.clone(),
             log_files,
             limit,
         )?))

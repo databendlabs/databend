@@ -15,11 +15,9 @@ common-datavalues = {path = "../../datavalues"}
 common-flight-rpc = {path = "../../flight-rpc"}
 common-exception= {path = "../../exception"}
 common-infallible = {path = "../../infallible"}
-common-meta-kv-api = {path = "../kv/api" }
-common-meta-kv-api-vo = {path = "../kv/vo" }
+common-meta-api = {path = "../api" }
 common-meta-types = {path = "../../meta/types"}
 common-planners = {path = "../../planners"}
-common-streams = {path = "../../streams"}
 common-tracing = {path = "../../tracing"}
 
 # Github dependencies

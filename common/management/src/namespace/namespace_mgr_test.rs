@@ -19,9 +19,9 @@ use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_kv_api::KVApi;
-use common_meta_kv_api_vo::GetKVActionResult;
+use common_meta_api::KVApi;
 use common_meta_local_store::KV;
+use common_meta_types::GetKVActionReply;
 use common_meta_types::NodeInfo;
 
 use super::*;
@@ -39,13 +39,13 @@ async fn test_successfully_add_node() -> Result<()> {
         .await?;
 
     match value {
-        GetKVActionResult {
+        GetKVActionReply {
             result: Some((1, value)),
         } => {
             assert!(value.meta.unwrap().expire_at.unwrap() - current_time >= 60);
             assert_eq!(value.value, serde_json::to_vec(&node_info)?);
         }
-        catch @ GetKVActionResult { .. } => assert!(false, "GetKVActionResult {:?}", catch),
+        catch @ GetKVActionReply { .. } => assert!(false, "GetKVActionReply{:?}", catch),
     }
 
     Ok(())

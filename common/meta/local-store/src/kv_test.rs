@@ -17,14 +17,14 @@ use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_kv_api::KVApi;
-use common_meta_kv_api_vo::GetKVActionResult;
-use common_meta_kv_api_vo::MGetKVActionResult;
-use common_meta_kv_api_vo::UpsertKVActionResult;
+use common_meta_api::KVApi;
 use common_meta_sled_store::init_temp_sled_db;
+use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
+use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
+use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
 use crate::kv::KV;
@@ -52,7 +52,7 @@ async fn test_kv_async_api() -> Result<()> {
         .await?;
 
     assert_eq!(
-        UpsertKVActionResult {
+        UpsertKVActionReply {
             prev: None,
             result: Some((1, KVValue {
                 meta: None,
@@ -75,7 +75,7 @@ async fn test_kv_async_api() -> Result<()> {
         .await?;
 
     assert_eq!(
-        UpsertKVActionResult {
+        UpsertKVActionReply {
             prev: Some((1, KVValue {
                 meta: None,
                 value: b"upsert-value".to_vec(),
@@ -102,7 +102,7 @@ async fn test_kv_async_api() -> Result<()> {
         .await?;
 
     assert_eq!(
-        UpsertKVActionResult {
+        UpsertKVActionReply {
             prev: Some((1, KVValue {
                 meta: None,
                 value: b"upsert-value".to_vec(),
@@ -121,7 +121,7 @@ async fn test_kv_async_api() -> Result<()> {
 
     let res = api.get_kv("upsert-key").await?;
     assert_eq!(
-        GetKVActionResult {
+        GetKVActionReply {
             result: Some((2, KVValue {
                 meta: Some(KVMeta {
                     expire_at: Some(now + 20)
@@ -152,7 +152,7 @@ async fn test_kv_async_api() -> Result<()> {
         .await?;
 
     assert_eq!(
-        MGetKVActionResult {
+        MGetKVActionReply {
             result: vec![
                 Some((2, KVValue {
                     meta: Some(KVMeta {

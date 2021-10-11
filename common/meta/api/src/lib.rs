@@ -14,5 +14,7 @@
 //
 
 mod kv_api;
+mod meta_api;
 
 pub use kv_api::KVApi;
+pub use meta_api::MetaApi;

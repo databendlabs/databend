@@ -22,15 +22,15 @@ use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
 use common_arrow::arrow_flight::FlightData;
 use common_exception::ErrorCode;
-use common_meta_flight::impls::CreateDatabaseAction;
-use common_meta_flight::impls::CreateTableAction;
-use common_meta_flight::impls::DropDatabaseAction;
-use common_meta_flight::impls::DropTableAction;
-use common_meta_flight::impls::GetDatabaseAction;
-use common_meta_flight::impls::GetDatabasesAction;
-use common_meta_flight::impls::GetTableAction;
-use common_meta_flight::impls::GetTableExtReq;
-use common_meta_flight::impls::GetTablesAction;
+use common_meta_flight::CreateDatabaseAction;
+use common_meta_flight::CreateTableAction;
+use common_meta_flight::DropDatabaseAction;
+use common_meta_flight::DropTableAction;
+use common_meta_flight::GetDatabaseAction;
+use common_meta_flight::GetDatabasesAction;
+use common_meta_flight::GetTableAction;
+use common_meta_flight::GetTableExtReq;
+use common_meta_flight::GetTablesAction;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
@@ -264,7 +264,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableAction> for ActionHandler {
-    async fn handle(&self, act: GetTableAction) -> common_exception::Result<TableInfo> {
+    async fn handle(&self, act: GetTableAction) -> common_exception::Result<Arc<TableInfo>> {
         let db_name = &act.db;
         let table_name = &act.table;
 
@@ -294,11 +294,12 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                     version: 0, // placeholder, not yet implemented in meta service
                     db: db_name.clone(),
                     name: table_name.clone(),
+                    is_local: false,
                     schema: Arc::new(arrow_schema.into()),
                     engine: table.table_engine.clone(),
                     options: table.table_options,
                 };
-                Ok(rst)
+                Ok(Arc::new(rst))
             }
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
@@ -307,7 +308,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableExtReq> for ActionHandler {
-    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<TableInfo> {
+    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<Arc<TableInfo>> {
         // TODO duplicated code
         let table_id = act.tbl_id;
         let result = self.meta_node.get_table(&table_id).await;
@@ -326,11 +327,12 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
                     db: table.db_name,
                     name: table.table_name,
                     version: 0,
+                    is_local: false,
                     schema: Arc::new(arrow_schema.into()),
                     engine: table.table_engine.clone(),
                     options: table.table_options,
                 };
-                Ok(rst)
+                Ok(Arc::new(rst))
             }
             None => Err(ErrorCode::UnknownTable(format!(
                 "table of id {} not found",
@@ -349,10 +351,12 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
         let res = self.meta_node.get_databases().await;
         Ok(res
             .iter()
-            .map(|(name, db)| DatabaseInfo {
-                database_id: db.database_id,
-                db: name.to_string(),
-                engine: db.database_engine.to_string(),
+            .map(|(name, db)| {
+                Arc::new(DatabaseInfo {
+                    database_id: db.database_id,
+                    db: name.to_string(),
+                    engine: db.database_engine.to_string(),
+                })
             })
             .collect::<Vec<_>>())
     }
@@ -382,13 +386,14 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
                     db: req.db.to_string(),
                     table_id: *id,
                     version: 0,
+                    is_local: false,
                     name: name.to_string(),
                     schema: Arc::new(arrow_schema.into()),
                     engine: tbl.table_engine.to_string(),
                     options: tbl.table_options.clone(),
                 };
 
-                acc.push(tbl_info);
+                acc.push(Arc::new(tbl_info));
                 Ok::<_, ErrorCode>(acc)
             })?)
     }

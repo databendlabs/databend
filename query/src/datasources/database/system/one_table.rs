@@ -19,6 +19,7 @@ use common_catalog::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -27,30 +28,37 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::catalogs::ToTableInfo;
 
 pub struct OneTable {
-    tbl_id: u64,
-    schema: DataSchemaRef,
+    table_info: TableInfo,
 }
 
 impl OneTable {
-    pub fn create(tbl_id: u64) -> Self {
-        OneTable {
-            tbl_id,
-            schema: DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]),
-        }
+    pub fn create(table_id: u64) -> Self {
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+
+        let table_info = TableInfo {
+            db: "system".to_string(),
+            name: "one".to_string(),
+            table_id,
+            schema,
+            engine: "SystemOne".to_string(),
+            is_local: true,
+            ..Default::default()
+        };
+        OneTable { table_info }
     }
 }
 
 #[async_trait::async_trait]
 impl Table for OneTable {
     fn name(&self) -> &str {
-        "one"
+        &self.table_info.name
     }
 
     fn engine(&self) -> &str {
-        "SystemOne"
+        &self.table_info.engine
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -58,15 +66,15 @@ impl Table for OneTable {
     }
 
     fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+        Ok(self.table_info.schema.clone())
     }
 
     fn get_id(&self) -> u64 {
-        self.tbl_id
+        self.table_info.table_id
     }
 
     fn is_local(&self) -> bool {
-        true
+        self.table_info.is_local
     }
 
     fn read_plan(
@@ -76,7 +84,7 @@ impl Table for OneTable {
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            table_info: self.to_table_info("system")?,
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -94,9 +102,12 @@ impl Table for OneTable {
         _io_ctx: Arc<TableIOContext>,
         _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(vec![1u8])]);
+        let block =
+            DataBlock::create_by_array(self.table_info.schema.clone(), vec![Series::new(vec![
+                1u8,
+            ])]);
         Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
+            self.table_info.schema.clone(),
             None,
             vec![block],
         )))

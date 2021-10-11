@@ -14,6 +14,11 @@
 
 //! This crate defines data types used in meta data storage service.
 
+#[cfg(test)]
+mod cluster_test;
+#[cfg(test)]
+mod match_seq_test;
+
 mod errors;
 mod match_seq;
 
@@ -21,17 +26,13 @@ mod cluster;
 mod cmd;
 mod database_info;
 mod database_reply;
+mod kv_reply;
 mod log_entry;
 mod operation;
 mod raft_txid;
 mod raft_types;
 mod table_info;
 mod table_reply;
-
-#[cfg(test)]
-mod cluster_test;
-#[cfg(test)]
-mod match_seq_test;
 
 pub use cluster::Node;
 pub use cluster::NodeInfo;
@@ -45,6 +46,10 @@ pub use database_info::DatabaseInfo;
 pub use database_reply::CreateDatabaseReply;
 pub use database_reply::GetDatabasesReply;
 pub use errors::ConflictSeq;
+pub use kv_reply::GetKVActionReply;
+pub use kv_reply::MGetKVActionReply;
+pub use kv_reply::PrefixListReply;
+pub use kv_reply::UpsertKVActionReply;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
