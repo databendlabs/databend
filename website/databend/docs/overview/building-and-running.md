@@ -3,7 +3,7 @@ id: building-and-running
 title: Deploy
 ---
 
-This document describes how to build and run [DatabendQuery](https://github.com/datafuselabs/databend/tree/master/query) as a distributed query engine.
+This document describes how to build and run [DatabendQuery](https://github.com/datafuselabs/databend/tree/main/query) as a distributed query engine.
 
 
 ## 1. Deploy
@@ -18,7 +18,7 @@ This document describes how to build and run [DatabendQuery](https://github.com/
 === "Release binary"
 
     ```markdown
-    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/master/scripts/installer/install-databend.sh | bash
+    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/main/scripts/installer/install-databend.sh | bash
     ```
 
 === "From source"
