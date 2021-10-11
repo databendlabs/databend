@@ -282,7 +282,11 @@ fn test_generate_local_query_config() -> Result<()> {
         );
         assert_eq!(
             query_config.as_ref().unwrap().config.storage.disk.data_path,
-            "/tmp"
+            fs::canonicalize("/tmp")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string()
         );
         assert_eq!(query_config.as_ref().unwrap().config.log.log_level, "DEBUG");
     }
