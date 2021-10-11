@@ -21,9 +21,7 @@ use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
-use common_meta_types::GetDatabasesReply;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::GetTablesReply;
 use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
@@ -262,7 +260,11 @@ pub struct GetTablesAction {
     pub db: String,
 }
 
-action_declare!(GetTablesAction, GetTablesReply, MetaFlightAction::GetTables);
+action_declare!(
+    GetTablesAction,
+    Vec<Arc<TableInfo>>,
+    MetaFlightAction::GetTables
+);
 
 // -get databases
 
@@ -271,6 +273,6 @@ pub struct GetDatabasesAction;
 
 action_declare!(
     GetDatabasesAction,
-    GetDatabasesReply,
+    Vec<Arc<DatabaseInfo>>,
     MetaFlightAction::GetDatabases
 );

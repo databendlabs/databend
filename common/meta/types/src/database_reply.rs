@@ -13,13 +13,7 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
-use crate::DatabaseInfo;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub database_id: u64,
 }
-
-pub type GetDatabasesReply = Vec<Arc<DatabaseInfo>>;
