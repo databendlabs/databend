@@ -3819,6 +3819,7 @@ dependencies = [
  "async-stream",
  "bitpacking",
  "futures",
+ "lz4",
  "parquet-format-async-temp",
  "streaming-iterator",
 ]

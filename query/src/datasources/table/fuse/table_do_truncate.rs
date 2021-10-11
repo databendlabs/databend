@@ -13,15 +13,21 @@
 //  limitations under the License.
 //
 
-pub(crate) mod io;
-mod meta;
-mod table;
-mod table_do_append;
-mod table_do_read;
-mod table_do_read_plan;
-mod table_do_truncate;
-pub(crate) mod util;
+use std::sync::Arc;
 
-pub(crate) use io::*;
-pub(crate) use meta::*;
-pub(crate) use table::FuseTable;
+use common_catalog::TableIOContext;
+use common_exception::Result;
+use common_planners::TruncateTablePlan;
+
+use crate::datasources::table::fuse::FuseTable;
+
+impl FuseTable {
+    #[inline]
+    pub async fn do_truncate(
+        &self,
+        _io_ctx: Arc<TableIOContext>,
+        _truncate_plan: TruncateTablePlan,
+    ) -> Result<()> {
+        todo!()
+    }
+}

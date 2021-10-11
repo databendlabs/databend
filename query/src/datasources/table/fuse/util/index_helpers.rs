@@ -23,7 +23,6 @@ use crate::datasources::table::fuse::MetaInfoReader;
 struct TableSparseIndex {}
 struct CacheMgr;
 
-// non-distributed indexing
 impl TableSparseIndex {
     pub fn load(
         _table_snapshot: &TableSnapshot,
@@ -45,26 +44,9 @@ impl TableSparseIndex {
 pub fn range_filter(
     table_snapshot: &TableSnapshot,
     push_down: &Option<Extras>,
-    // MetaInfoReader takes care of caching itself
     meta_reader: MetaInfoReader,
 ) -> Result<Vec<BlockLocation>> {
     let cache_mgr = CacheMgr; // TODO passed in from context
     let range_index = TableSparseIndex::load(table_snapshot, &meta_reader, &cache_mgr)?;
     range_index.apply(push_down)
-
-    /*
-    for seg_loc in &table_snapshot.segments {
-        // TODO filter by seg.summary
-        let seg = meta_reader.read_segment_info(seg_loc)?;
-        let _seg_summary = &seg.summary;
-        for x in seg.blocks {
-            // filter by block_meta's ColStats if necessary
-            let _col_stats = &x.col_stats;
-            // keep the block we are fond of
-            res.push(x);
-        }
-    }
-
-    Ok(res)
-    */
 }

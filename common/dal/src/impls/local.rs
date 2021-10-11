@@ -15,7 +15,8 @@
 
 use std::io::Error;
 use std::io::ErrorKind;
-use std::io::Write;
+use std::path::Component;
+use std::path::Path;
 use std::path::PathBuf;
 
 use async_compat::CompatExt;
@@ -42,11 +43,14 @@ impl Local {
             root: PathBuf::from(root),
         }
     }
+    pub fn with_path(root_path: PathBuf) -> Local {
+        Local { root: root_path }
+    }
 }
 
 impl Local {
     fn prefix_with_root(&self, path: &str) -> Result<PathBuf> {
-        let path = self.root.join(path).canonicalize()?;
+        let path = normalize_path(&self.root.join(&path));
         if path.starts_with(&self.root) {
             Ok(path)
         } else {
@@ -63,10 +67,6 @@ impl Local {
 impl DataAccessor for Local {
     fn get_reader(&self, path: &str, _len: Option<u64>) -> Result<Box<dyn SeekableReader>> {
         Ok(Box::new(std::fs::File::open(path)?))
-    }
-
-    fn get_writer(&self, path: &str) -> common_exception::Result<Box<dyn Write>> {
-        Ok(Box::new(std::fs::File::create(path)?))
     }
 
     fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {
@@ -101,7 +101,10 @@ impl DataAccessor for Local {
         &self,
         path: &str,
         input_stream: Box<
-            dyn Stream<Item = std::result::Result<Bytes, std::io::Error>> + Send + Unpin + 'static,
+            dyn Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>>
+                + Send
+                + Unpin
+                + 'static,
         >,
         _stream_len: usize,
     ) -> common_exception::Result<()> {
@@ -117,4 +120,32 @@ impl DataAccessor for Local {
         }
         Ok(())
     }
+}
+
+// from cargo::util::path
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut components = path.components().peekable();
+    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
+        components.next();
+        PathBuf::from(c.as_os_str())
+    } else {
+        PathBuf::new()
+    };
+
+    for component in components {
+        match component {
+            Component::Prefix(..) => unreachable!(),
+            Component::RootDir => {
+                ret.push(component.as_os_str());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                ret.pop();
+            }
+            Component::Normal(c) => {
+                ret.push(c);
+            }
+        }
+    }
+    ret
 }
