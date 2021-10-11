@@ -14,9 +14,8 @@ install-cli () {
   echo "Install(RELEASE) start..."
   cargo install --bin=databend-cli --path ./cli
   echo "All done..."
-  echo "databend-cli completion bash would generate bash auto complete scripts"
-  echo "databend-cli completion zsh would generate zsh auto complete scripts"
-
+  echo "Take a look at cli/README.md for further instructions"
 }
+
 
 "$@"
