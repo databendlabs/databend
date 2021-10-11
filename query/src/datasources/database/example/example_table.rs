@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::TableIOContext;
+use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
