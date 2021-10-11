@@ -43,6 +43,9 @@ impl Local {
             root: PathBuf::from(root),
         }
     }
+    pub fn with_path(root_path: PathBuf) -> Local {
+        Local { root: root_path }
+    }
 }
 
 impl Local {

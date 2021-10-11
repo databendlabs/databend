@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::env::temp_dir;
 use std::sync::Arc;
 
 use common_base::tokio;
@@ -27,11 +28,11 @@ use crate::datasources::table::fuse::BlockAppender;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_fuse_table_block_appender() {
-    let local_fs = common_dal::Local::new("/tmp");
+    let tmp_dir = temp_dir().canonicalize().unwrap();
+    let local_fs = common_dal::Local::with_path(tmp_dir);
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![block]);
     let r = BlockAppender::append_blocks(Arc::new(local_fs), Box::pin(block_stream)).await;
-    eprintln!("err is {:?}", r);
     assert!(r.is_ok())
 }
