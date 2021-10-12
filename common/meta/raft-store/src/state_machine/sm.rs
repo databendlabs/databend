@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -25,6 +26,7 @@ use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
+use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
 use common_meta_types::Database;
@@ -32,6 +34,7 @@ use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
+use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -509,58 +512,14 @@ impl StateMachine {
             }
 
             Cmd::UpsertKV {
-                ref key,
-                ref seq,
-                value: ref value_op,
-                ref value_meta,
+                key,
+                seq,
+                value: value_op,
+                value_meta,
             } => {
-                // TODO(xp): need to be done all in a tx
-                // TODO(xp): now must be a timestamp extracted from raft log.
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
-
-                let kvs = self.kvs();
-                let prev = kvs.get(key)?;
-
-                // If prev is timed out, treat it as a None.
-                let prev = match prev {
-                    None => None,
-                    Some(ref p) => {
-                        if p.1 < now {
-                            None
-                        } else {
-                            prev
-                        }
-                    }
-                };
-
-                if seq.match_seq(&prev).is_err() {
-                    return Ok((prev.clone(), prev).into());
-                }
-
-                // result is the state after applying an operation.
-                let result;
-
-                match value_op {
-                    Operation::Update(v) => {
-                        result = self.kv_update(key, value_meta, v).await?;
-                    }
-                    Operation::Delete => {
-                        kvs.remove(key, true).await?;
-                        result = None;
-                    }
-                    Operation::AsIs => {
-                        result = match prev {
-                            None => None,
-                            Some((_, ref curr_kv_value)) => {
-                                self.kv_update(key, value_meta, &curr_kv_value.value)
-                                    .await?
-                            }
-                        };
-                    }
-                }
+                let (prev, result) = self
+                    .sub_tree_upsert(self.kvs(), key, seq, value_op.clone(), value_meta.clone())
+                    .await?;
 
                 tracing::debug!("applied UpsertKV: {} {:?}", key, result);
                 Ok((prev, result).into())
@@ -568,23 +527,74 @@ impl StateMachine {
         }
     }
 
-    /// Update a generic-kv record, without seq checking
-    async fn kv_update(
-        &self,
-        key: &str,
-        value_meta: &Option<KVMeta>,
-        v: &[u8],
-    ) -> common_exception::Result<Option<SeqValue<KVValue>>> {
-        let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
+    async fn sub_tree_upsert<'s, V, KS>(
+        &'s self,
+        sub_tree: AsKeySpace<'s, KS>,
+        key: &KS::K,
+        seq: &MatchSeq,
+        value_op: Operation<V>,
+        value_meta: Option<KVMeta>,
+    ) -> common_exception::Result<(Option<SeqValue<KVValue<V>>>, Option<SeqValue<KVValue<V>>>)>
+    where
+        V: Clone + Debug,
+        KS: SledKeySpace<V = SeqValue<KVValue<V>>>,
+    {
+        // TODO(xp): need to be done all in a tx
 
-        let kv_value = KVValue {
-            meta: value_meta.clone(),
-            value: v.to_vec(),
+        let prev = sub_tree.get(key)?;
+
+        // If prev is timed out, treat it as a None.
+        let prev = Self::unexpired_opt(prev);
+
+        if seq.match_seq(&prev).is_err() {
+            return Ok((prev.clone(), prev));
+        }
+
+        // result is the state after applying an operation.
+        let result = self
+            .sub_tree_do_update(&sub_tree, key, prev.clone(), value_meta, value_op)
+            .await?;
+
+        tracing::debug!("applied upsert: {} {:?}", key, result);
+        Ok((prev, result))
+    }
+
+    /// Update a record into a sled tree sub tree, defined by a KeySpace, without seq check.
+    ///
+    /// TODO(xp); this should be a method of sled sub tree
+    async fn sub_tree_do_update<'s, V, KS>(
+        &'s self,
+        sub_tree: &AsKeySpace<'s, KS>,
+        key: &KS::K,
+        prev: Option<SeqValue<KVValue<V>>>,
+        value_meta: Option<KVMeta>,
+        value_op: Operation<V>,
+    ) -> common_exception::Result<Option<SeqValue<KVValue<V>>>>
+    where
+        V: Clone + Debug,
+        KS: SledKeySpace<V = SeqValue<KVValue<V>>>,
+    {
+        let new_kv_value = match value_op {
+            Operation::Update(v) => KVValue {
+                meta: value_meta.clone(),
+                value: v,
+            },
+            Operation::Delete => {
+                sub_tree.remove(key, true).await?;
+                return Ok(None);
+            }
+            Operation::AsIs => match prev {
+                None => return Ok(None),
+                Some((_, ref prev_kv_value)) => prev_kv_value.clone().set_meta(value_meta),
+            },
         };
-        let seq_kv_value = (new_seq, kv_value);
 
-        let kvs = self.kvs();
-        kvs.insert(&key.to_string(), &seq_kv_value).await?;
+        // insert the updated record.
+
+        let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
+        let seq_kv_value = (new_seq, new_kv_value);
+
+        sub_tree.insert(key, &seq_kv_value).await?;
 
         Ok(Some(seq_kv_value))
     }
@@ -734,13 +744,15 @@ impl StateMachine {
         Ok(x.collect())
     }
 
-    fn unexpired_opt(seq_value: Option<SeqValue<KVValue>>) -> Option<SeqValue<KVValue>> {
+    fn unexpired_opt<V: Debug>(
+        seq_value: Option<SeqValue<KVValue<V>>>,
+    ) -> Option<SeqValue<KVValue<V>>> {
         match seq_value {
             None => None,
             Some(sv) => Self::unexpired(sv),
         }
     }
-    fn unexpired(seq_value: SeqValue<KVValue>) -> Option<SeqValue<KVValue>> {
+    fn unexpired<V: Debug>(seq_value: SeqValue<KVValue<V>>) -> Option<SeqValue<KVValue<V>>> {
         // TODO(xp): log must be assigned with a ts.
 
         // TODO(xp): background task to clean expired

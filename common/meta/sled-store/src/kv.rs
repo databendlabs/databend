@@ -31,8 +31,20 @@ pub struct KVValue<T = Vec<u8>> {
     pub value: T,
 }
 
+impl<T> KVValue<T> {
+    pub fn set_meta(mut self, m: Option<KVMeta>) -> KVValue<T> {
+        self.meta = m;
+        self
+    }
+
+    pub fn set_value(mut self, v: T) -> KVValue<T> {
+        self.value = v;
+        self
+    }
+}
+
 /// Compare with a timestamp to check if it is expired.
-impl PartialEq<u64> for KVValue {
+impl<T> PartialEq<u64> for KVValue<T> {
     fn eq(&self, other: &u64) -> bool {
         match self.meta {
             None => false,
@@ -45,7 +57,7 @@ impl PartialEq<u64> for KVValue {
 }
 
 /// Compare with a timestamp to check if it is expired.
-impl PartialOrd<u64> for KVValue {
+impl<T> PartialOrd<u64> for KVValue<T> {
     fn partial_cmp(&self, other: &u64) -> Option<Ordering> {
         match self.meta {
             None => None,
