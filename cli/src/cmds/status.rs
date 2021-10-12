@@ -29,13 +29,14 @@ use libc::pid_t;
 use log::info;
 use metasrv::configs::Config as MetaConfig;
 use nix::unistd::Pid;
+use serde::Deserialize;
 use serde::Serialize;
 
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Status {
     pub path: String,
     pub version: String,
@@ -44,15 +45,7 @@ pub struct Status {
     pub current_profile: Option<String>,
 }
 
-/// TODO(zhihanz) extension configurations
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub struct LocalConfig {
-    pub query_configs: Vec<LocalQueryConfig>,
-    pub store_configs: Option<LocalMetaConfig>,
-    pub meta_configs: Option<LocalMetaConfig>,
-}
-
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct LocalQueryConfig {
     pub config: QueryConfig,
     pub pid: Option<pid_t>,
@@ -60,7 +53,7 @@ pub struct LocalQueryConfig {
     pub log_dir: Option<String>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct LocalMetaConfig {
     pub config: MetaConfig,
     pub pid: Option<pid_t>,
