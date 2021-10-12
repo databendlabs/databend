@@ -15,6 +15,7 @@
 use async_raft::raft::Entry;
 use common_meta_sled_store::SeqNum;
 use common_meta_sled_store::SledKeySpace;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
@@ -92,4 +93,13 @@ impl SledKeySpace for Sequences {
     const NAME: &'static str = "sequences";
     type K = String;
     type V = SeqNum;
+}
+
+/// Key-Value Types for storing general purpose kv in sled::Tree:
+pub struct Databases {}
+impl SledKeySpace for Databases {
+    const PREFIX: u8 = 8;
+    const NAME: &'static str = "databases";
+    type K = String;
+    type V = SeqValue<KVValue<DatabaseInfo>>;
 }

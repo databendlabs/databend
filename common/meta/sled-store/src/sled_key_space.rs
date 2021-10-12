@@ -38,7 +38,7 @@ pub trait SledKeySpace {
     type K: SledOrderedSerde + Display + Debug;
 
     /// Type for value.
-    type V: SledSerde;
+    type V: SledSerde + Debug;
 
     fn serialize_key(k: &Self::K) -> Result<sled::IVec, ErrorCode> {
         let b = k.ser()?;

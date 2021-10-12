@@ -18,4 +18,4 @@ use crate::SledSerde;
 /// Value with a corresponding sequence number
 pub type SeqValue<T = Vec<u8>> = (u64, T);
 
-impl SledSerde for SeqValue<KVValue> {}
+impl<T: serde::Serialize + serde::de::DeserializeOwned> SledSerde for SeqValue<KVValue<T>> {}
