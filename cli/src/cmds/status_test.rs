@@ -13,37 +13,18 @@
 // limitations under the License.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 use databend_query::configs::Config as QueryConfig;
 use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
-use crate::cmds::status::LocalConfig;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
 
-macro_rules! default_local_config {
-    () => {
-        LocalConfig {
-            query_configs: vec![LocalQueryConfig {
-                pid: Some(123),
-                config: QueryConfig::default(),
-                path: Some("~/.databend/test/databend-query".to_string()),
-                log_dir: Some("./".to_string()),
-            }],
-            store_configs: None,
-            meta_configs: Some(LocalMetaConfig {
-                pid: Some(345),
-                config: MetaConfig::empty(),
-                path: Some("~/.databend/test/databend-meta".to_string()),
-                log_dir: Some("./".to_string()),
-            }),
-        }
-    };
-}
 #[test]
 fn test_status() -> Result<()> {
     let mut conf = Config {
@@ -63,7 +44,7 @@ fn test_status() -> Result<()> {
         // should have empty profile with set version
         if let Ok(status) = Status::read(conf.clone()) {
             assert_eq!(status.version, "xx".to_string());
-            assert_eq!(status.local_configs, LocalConfig::empty());
+            assert_eq!(status.local_configs, HashMap::new());
         }
     }
 
@@ -71,41 +52,100 @@ fn test_status() -> Result<()> {
     {
         let mut status = Status::read(conf.clone())?;
         status.version = "default".to_string();
-        status.local_configs = default_local_config!();
+        status.local_configs = HashMap::new();
         status.write()?;
         // should have empty profile with set version
         if let Ok(status) = Status::read(conf.clone()) {
             assert_eq!(status.version, "default".to_string());
-            assert_eq!(status.local_configs, default_local_config!());
+            assert_eq!(status.local_configs, HashMap::new());
         }
     }
 
     // update query component on local
     {
         let mut status = Status::read(conf.clone())?;
-        let mut local_config = default_local_config!();
-        local_config.query_configs.push(LocalQueryConfig {
+        let query_config = LocalQueryConfig {
             config: QueryConfig::default(),
             pid: Some(123),
             path: None,
             log_dir: Some("./".to_string()),
-        });
+        };
+        Status::save_local_config(
+            &mut status,
+            "query".parse().unwrap(),
+            "query_1.json".to_string(),
+            &query_config,
+        )
+        .unwrap();
         status.version = "default".to_string();
-        status.local_configs = local_config;
         status.write()?;
-
-        let mut expected_config = default_local_config!();
-        expected_config.query_configs.push(LocalQueryConfig {
-            config: QueryConfig::default(),
+        let mut status = Status::read(conf.clone()).unwrap();
+        assert_eq!(status.version, "default");
+        assert_eq!(status.get_local_query_configs().len(), 1);
+        assert_eq!(
+            status.get_local_query_configs().get(0).unwrap().clone().1,
+            query_config.clone()
+        );
+        assert_eq!(status.has_local_configs(), true);
+        let meta_config = LocalMetaConfig {
+            config: MetaConfig::empty(),
             pid: Some(123),
+            path: Some("String".to_string()),
+            log_dir: Some("dir".to_string()),
+        };
+        Status::save_local_config(
+            &mut status,
+            "meta".parse().unwrap(),
+            "meta_1.json".to_string(),
+            &meta_config,
+        )
+        .unwrap();
+        let query_config2 = LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: None,
             path: None,
-            log_dir: Some("./".to_string()),
-        });
-        // should have empty profile with set version
-        if let Ok(status) = Status::read(conf.clone()) {
-            assert_eq!(status.version, "default".to_string());
-            assert_eq!(status.local_configs, expected_config);
+            log_dir: None,
+        };
+        Status::save_local_config(
+            &mut status,
+            "query".parse().unwrap(),
+            "query_2.json".to_string(),
+            &query_config2,
+        )
+        .unwrap();
+        status.current_profile = Some("local".to_string());
+        status.write()?;
+        let status = Status::read(conf.clone()).unwrap();
+        assert_eq!(status.version, "default");
+        assert_eq!(status.get_local_query_configs().len(), 2);
+        assert_eq!(
+            status.get_local_query_configs().get(0).unwrap().clone().1,
+            query_config
+        );
+        assert_eq!(
+            status.get_local_query_configs().get(1).unwrap().clone().1,
+            query_config2
+        );
+        assert_eq!(
+            status.get_local_meta_config().unwrap().clone().1,
+            meta_config
+        );
+        assert_eq!(status.current_profile, Some("local".to_string()));
+        assert_eq!(status.has_local_configs(), true);
+        // delete status
+        let mut status = Status::read(conf.clone()).unwrap();
+        let (fs, _) = status.clone().get_local_meta_config().unwrap().clone();
+        Status::delete_local_config(&mut status, "meta".to_string(), fs).unwrap();
+        for (fs, _) in status.clone().get_local_query_configs() {
+            Status::delete_local_config(&mut status, "query".to_string(), fs).unwrap();
         }
+        status.current_profile = None;
+        status.write()?;
+        let status = Status::read(conf.clone()).unwrap();
+        assert_eq!(status.get_local_query_configs().len(), 0);
+        assert_eq!(status.get_local_meta_config(), None);
+        assert_eq!(status.current_profile, None);
+        assert_eq!(status.has_local_configs(), false);
     }
     Ok(())
 }

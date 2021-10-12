@@ -29,7 +29,6 @@ use sysinfo::System;
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::status::LocalConfig;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
@@ -475,8 +474,12 @@ impl CreateCommand {
             Ok(_) => {
                 assert!(meta_config.get_pid().is_some());
                 let mut status = Status::read(self.conf.clone())?;
-                status.local_configs.meta_configs = Some(meta_config.clone());
-                status.write()?;
+                Status::save_local_config::<LocalMetaConfig>(
+                    &mut status,
+                    "meta".to_string(),
+                    "meta_config_0.json".to_string(),
+                    &meta_config.clone(),
+                )?;
                 writer.write_ok(
                     format!(
                         "👏 successfully started meta service with rpc endpoint {}",
@@ -581,17 +584,24 @@ impl CreateCommand {
     /// precheck whether current local profile applicable for local host machine
     fn local_exec_precheck(&self, args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
-        if status.local_configs != LocalConfig::empty() {
+        if status.has_local_configs() {
             return Err(CliError::Unknown(format!(
                 "❗ found previously existed cluster with config in {}",
-                status.path
+                status.local_config_dir
             )));
         }
         let s = System::new_all();
 
         if !s.process_by_name("databend-meta").is_empty() {
             return Err(CliError::Unknown(
-                "❗ have installed databend-meta service before, please stop them and retry"
+                "❗ have installed databend-meta process before, please stop them and retry"
+                    .parse()
+                    .unwrap(),
+            ));
+        }
+        if !s.process_by_name("databend-query").is_empty() {
+            return Err(CliError::Unknown(
+                "❗ have installed databend-query process before, please stop them and retry"
                     .parse()
                     .unwrap(),
             ));

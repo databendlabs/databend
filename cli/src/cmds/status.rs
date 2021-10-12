@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
@@ -28,28 +29,23 @@ use libc::pid_t;
 use log::info;
 use metasrv::configs::Config as MetaConfig;
 use nix::unistd::Pid;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Status {
     pub path: String,
     pub version: String,
-    pub local_configs: LocalConfig,
+    pub local_configs: HashMap<String, String>,
+    pub local_config_dir: String,
     pub current_profile: Option<String>,
 }
 
-/// TODO(zhihanz) extension configurations
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-pub struct LocalConfig {
-    pub query_configs: Vec<LocalQueryConfig>,
-    pub store_configs: Option<LocalMetaConfig>,
-    pub meta_configs: Option<LocalMetaConfig>,
-}
-
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct LocalQueryConfig {
     pub config: QueryConfig,
     pub pid: Option<pid_t>,
@@ -57,22 +53,12 @@ pub struct LocalQueryConfig {
     pub log_dir: Option<String>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct LocalMetaConfig {
     pub config: MetaConfig,
     pub pid: Option<pid_t>,
     pub path: Option<String>, // download location
     pub log_dir: Option<String>,
-}
-
-impl LocalConfig {
-    pub fn empty() -> Self {
-        LocalConfig {
-            query_configs: vec![],
-            store_configs: None,
-            meta_configs: None,
-        }
-    }
 }
 
 pub trait LocalRuntime {
@@ -383,13 +369,17 @@ impl Status {
     pub fn read(conf: Config) -> Result<Self> {
         let status_path = format!("{}/.status.json", conf.databend_dir);
         log::info!("{}", status_path.as_str());
+        let local_config_dir = format!("{}/configs/local", conf.databend_dir);
+        std::fs::create_dir_all(local_config_dir.as_str())
+            .expect("cannot create dir to store local profile");
         if !Path::new(status_path.as_str()).exists() {
             // Create.
             let file = File::create(status_path.as_str())?;
             let status = Status {
                 path: status_path.clone(),
                 version: "".to_string(),
-                local_configs: LocalConfig::empty(),
+                local_configs: HashMap::new(),
+                local_config_dir,
                 current_profile: None,
             };
             serde_json::to_writer(&file, &status)?;
@@ -401,6 +391,131 @@ impl Status {
         Ok(status)
     }
 
+    pub fn save_local_config<T>(
+        status: &mut Status,
+        config_type: String,
+        file_name: String,
+        data: &T,
+    ) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        if config_type.as_str() != "meta" && config_type.as_str() != "query" {
+            return Err(CliError::Unknown(
+                "Unsupported config type for local storage".parse().unwrap(),
+            ));
+        }
+        let file_location = format!("{}/{}", status.local_config_dir, file_name);
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(file_location.clone())?;
+        serde_json::to_writer(&file, data)
+            .expect(&*format!("cannot write to file {}", file_location));
+        if status.local_configs.get(&*config_type).is_none() {
+            status.local_configs.insert(config_type, file_location);
+        } else {
+            let current_status = status.clone();
+            let mut current_configs: Vec<&str> = current_status
+                .local_configs
+                .get(&*config_type)
+                .unwrap()
+                .split(',')
+                .collect();
+            current_configs.push(&*file_location);
+            status
+                .local_configs
+                .insert(config_type, current_configs.join(","));
+        }
+        status.write()?;
+        Ok(())
+    }
+
+    pub fn delete_local_config(
+        status: &mut Status,
+        config_type: String,
+        file_name: String,
+    ) -> Result<()> {
+        if config_type.as_str() != "meta" && config_type.as_str() != "query" {
+            return Err(CliError::Unknown(
+                "Unsupported config type for local storage".parse().unwrap(),
+            ));
+        }
+        if status.local_configs.get(config_type.as_str()).is_none() {
+            return Ok(());
+        }
+        std::fs::remove_file(file_name.clone()).expect("cannot delete config");
+        let current_status = status.clone();
+        let mut vec = current_status
+            .local_configs
+            .get(config_type.as_str())
+            .unwrap()
+            .split(',')
+            .collect::<Vec<&str>>();
+        vec.retain(|s| *s.to_string() != file_name);
+        status.local_configs.insert(config_type, vec.join(","));
+        status.write()?;
+        Ok(())
+    }
+
+    pub fn get_local_meta_config(&self) -> Option<(String, LocalMetaConfig)> {
+        if self.local_configs.get("meta").is_none()
+            || self.local_configs.get("meta").unwrap().is_empty()
+        {
+            return None;
+        }
+        let meta_file = self.local_configs.get("meta").unwrap();
+        let splited = meta_file.as_str().split(',').collect::<Vec<&str>>();
+        let meta_file = splited.get(0).unwrap();
+        if !Path::new(meta_file.to_string().as_str()).exists() {
+            return None;
+        }
+        let file = File::open(meta_file.to_string())
+            .expect(&*format!("cannot read from {}", meta_file.to_string()));
+        let reader = BufReader::new(file);
+        return Some((
+            meta_file.to_string(),
+            serde_json::from_reader(reader).expect(&*format!("cannot read from {}", meta_file)),
+        ));
+    }
+
+    pub fn has_local_configs(&self) -> bool {
+        for v in self.local_configs.values() {
+            let mut v = v.clone();
+            v.retain(|c| c != ',');
+            if !v.is_empty() {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn get_local_query_configs(&self) -> Vec<(String, LocalQueryConfig)> {
+        if self.local_configs.get("query").is_none() {
+            return Vec::new();
+        }
+        let query_files = self
+            .local_configs
+            .get("query")
+            .unwrap()
+            .split(',')
+            .collect::<Vec<&str>>();
+        let mut ret = Vec::new();
+        for file_name in query_files {
+            if !Path::new(file_name.to_string().as_str()).exists() {
+                continue;
+            }
+            let file = File::open(file_name.to_string().as_str()).unwrap();
+            let reader = BufReader::new(file);
+            ret.push((
+                file_name.to_string(),
+                serde_json::from_reader(reader).expect(&*format!("cannot read from {}", file_name)),
+            ));
+        }
+        ret
+    }
+
     pub fn write(&self) -> Result<()> {
         let file = OpenOptions::new()
             .create(true)
@@ -410,6 +525,7 @@ impl Status {
         serde_json::to_writer(&file, self)?;
         Ok(())
     }
+
     pub fn find_unused_local_port() -> String {
         format!(
             "0.0.0.0:{}",
