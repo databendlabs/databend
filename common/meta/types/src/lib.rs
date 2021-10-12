@@ -14,30 +14,11 @@
 
 //! This crate defines data types used in meta data storage service.
 
-#[cfg(test)]
-mod cluster_test;
-#[cfg(test)]
-mod match_seq_test;
-
-mod errors;
-mod match_seq;
-
-mod cluster;
-mod cmd;
-mod database_info;
-mod database_reply;
-mod kv_reply;
-mod log_entry;
-mod operation;
-mod raft_txid;
-mod raft_types;
-mod table_info;
-mod table_reply;
-
 pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::Slot;
 pub use cmd::Cmd;
+pub use common_meta_sled_store::ClientLastRespValue;
 pub use common_meta_sled_store::KVMeta;
 pub use common_meta_sled_store::KVValue;
 pub use common_meta_sled_store::SeqValue;
@@ -63,3 +44,23 @@ pub use raft_types::Term;
 pub use table_info::Table;
 pub use table_info::TableInfo;
 pub use table_reply::CreateTableReply;
+
+#[cfg(test)]
+mod cluster_test;
+#[cfg(test)]
+mod match_seq_test;
+
+mod errors;
+mod match_seq;
+
+mod cluster;
+mod cmd;
+mod database_info;
+mod database_reply;
+mod kv_reply;
+mod log_entry;
+mod operation;
+mod raft_txid;
+mod raft_types;
+mod table_info;
+mod table_reply;

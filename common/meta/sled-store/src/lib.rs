@@ -15,6 +15,7 @@
 //! sled_store implement a key-value like store backed by sled::Tree.
 //!
 //! It is used by raft for log and state machine storage.
+pub use client_last_resp::ClientLastRespValue;
 pub use db::get_sled_db;
 pub use db::init_sled_db;
 pub use db::init_temp_sled_db;
@@ -39,6 +40,7 @@ mod sled_key_space;
 mod sled_serde;
 mod sled_tree;
 
+mod client_last_resp;
 #[cfg(test)]
 mod sled_tree_test;
 #[cfg(test)]

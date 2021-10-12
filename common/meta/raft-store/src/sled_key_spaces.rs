@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use async_raft::raft::Entry;
+use common_meta_sled_store::ClientLastRespValue;
 use common_meta_sled_store::SeqNum;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_types::DatabaseInfo;
@@ -102,4 +103,12 @@ impl SledKeySpace for Databases {
     const NAME: &'static str = "databases";
     type K = String;
     type V = SeqValue<KVValue<DatabaseInfo>>;
+}
+
+pub struct ClientLastResps {}
+impl SledKeySpace for ClientLastResps {
+    const PREFIX: u8 = 9;
+    const NAME: &'static str = "client-last-resp";
+    type K = String;
+    type V = ClientLastRespValue;
 }
