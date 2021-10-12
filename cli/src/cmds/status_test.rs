@@ -19,8 +19,6 @@ use databend_query::configs::Config as QueryConfig;
 use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
-use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::status::LocalConfig;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
@@ -100,7 +98,8 @@ fn test_status() -> Result<()> {
             "meta".parse().unwrap(),
             "meta_1.json".to_string(),
             &meta_config,
-        );
+        )
+        .unwrap();
         let query_config2 = LocalQueryConfig {
             config: QueryConfig::default(),
             pid: None,
@@ -112,7 +111,8 @@ fn test_status() -> Result<()> {
             "query".parse().unwrap(),
             "query_2.json".to_string(),
             &query_config2,
-        );
+        )
+        .unwrap();
         status.current_profile = Some("local".to_string());
         status.write()?;
         let status = Status::read(conf.clone()).unwrap();
@@ -135,9 +135,9 @@ fn test_status() -> Result<()> {
         // delete status
         let mut status = Status::read(conf.clone()).unwrap();
         let (fs, _) = status.clone().get_local_meta_config().unwrap().clone();
-        Status::delete_local_config(&mut status, "meta".to_string(), fs);
+        Status::delete_local_config(&mut status, "meta".to_string(), fs).unwrap();
         for (fs, _) in status.clone().get_local_query_configs() {
-            Status::delete_local_config(&mut status, "query".to_string(), fs);
+            Status::delete_local_config(&mut status, "query".to_string(), fs).unwrap();
         }
         status.current_profile = None;
         status.write()?;
