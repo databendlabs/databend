@@ -25,7 +25,7 @@ use crate::common::MetaClientProvider;
 pub trait TableEngine: Send + Sync {
     fn try_create(
         &self,
-        tbl_info: TableInfo,
+        table_info: TableInfo,
         store_provider: MetaClientProvider,
     ) -> common_exception::Result<Box<dyn Table>>;
 }
@@ -37,9 +37,9 @@ where
 {
     fn try_create(
         &self,
-        tbl_info: TableInfo,
+        table_info: TableInfo,
         _store_provider: MetaClientProvider,
     ) -> common_exception::Result<Box<dyn Table>> {
-        self(tbl_info)
+        self(table_info)
     }
 }

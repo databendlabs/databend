@@ -59,7 +59,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let name = table.name();
         let engine = table.engine();
-        let schema = table.schema()?;
+        let schema = table.schema();
 
         let mut table_info = format!("CREATE TABLE `{}` (\n", name);
         for field in schema.fields().iter() {

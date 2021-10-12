@@ -46,8 +46,8 @@ impl InMemoryTableInfo {
         }
     }
 
-    pub fn insert(&mut self, tbl_info: TableInfo) {
-        let met_ref = Arc::new(tbl_info);
+    pub fn insert(&mut self, table_info: TableInfo) {
+        let met_ref = Arc::new(table_info);
         self.name2meta
             .insert(met_ref.name.to_owned(), met_ref.clone());
         self.id2meta.insert(met_ref.table_id, met_ref);
@@ -171,7 +171,6 @@ impl CatalogBackend for EmbeddedCatalogBackend {
             table_id: self.next_db_id(),
             version: 0,
             name: plan.table,
-            is_local: false,
             schema: plan.schema,
             options: plan.options,
             engine: plan.engine,

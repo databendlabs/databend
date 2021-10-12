@@ -39,18 +39,18 @@ async fn test_parquet_table() -> Result<()> {
     .collect();
 
     let ctx = crate::tests::try_create_context()?;
-    let tbl_info = TableInfo {
+    let table_info = TableInfo {
         database_id: 0,
         db: "default".to_string(),
         table_id: 0,
         version: 0,
         name: "test_parquet".to_string(),
-        is_local: true,
+
         schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
         engine: "test_parquet".into(),
         options: options,
     };
-    let table = ParquetTable::try_create(tbl_info)?;
+    let table = ParquetTable::try_create(table_info)?;
 
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);

@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
@@ -60,7 +59,6 @@ impl TracingTable {
             table_id,
             schema,
             engine: "SystemTracing".to_string(),
-            is_local: true,
             ..Default::default()
         };
 
@@ -70,28 +68,12 @@ impl TracingTable {
 
 #[async_trait::async_trait]
 impl Table for TracingTable {
-    fn name(&self) -> &str {
-        &self.table_info.name
-    }
-
-    fn engine(&self) -> &str {
-        &self.table_info.engine
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.table_info.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.table_info.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        self.table_info.is_local
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(

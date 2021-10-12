@@ -38,7 +38,6 @@ async fn test_memorytable() -> Result<()> {
         database_id: 0,
         db: "default".into(),
         name: "a".into(),
-        is_local: true,
         schema: schema.clone(),
         engine: "Memory".to_string(),
         options: TableOptions::default(),

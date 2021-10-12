@@ -20,12 +20,12 @@ use std::sync::Arc;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
@@ -35,16 +35,12 @@ use common_streams::SendableDataBlockStream;
 use super::numbers_stream::NumbersStream;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
-use crate::catalogs::ToTableInfo;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::DatabendQueryContext;
 
 pub struct NumbersTable {
-    db_name: String,
-    table_name: String,
-    table_id: u64, // to be removed, if func never renamed
-    schema: DataSchemaRef,
+    table_info: TableInfo,
     total: u64,
 }
 
@@ -72,50 +68,44 @@ impl NumbersTable {
             ))
         })?;
 
-        Ok(Arc::new(NumbersTable {
-            db_name: database_name.to_string(),
-            table_name: table_func_name.to_string(),
+        let engine = match table_func_name {
+            "numbers" => "SystemNumbers",
+            "numbers_mt" => "SystemNumbersMt",
+            "numbers_local" => "SystemNumbersLocal",
+            _ => unreachable!(),
+        };
+
+        let table_info = TableInfo {
+            database_id: 0,
             table_id,
+            version: 0,
+            db: database_name.to_string(),
+            name: table_func_name.to_string(),
             schema: DataSchemaRefExt::create(vec![DataField::new(
                 "number",
                 DataType::UInt64,
                 false,
             )]),
-            total,
-        }))
+            engine: engine.to_string(),
+            options: Default::default(),
+        };
+
+        Ok(Arc::new(NumbersTable { table_info, total }))
     }
 }
 
 #[async_trait::async_trait]
 impl Table for NumbersTable {
-    fn name(&self) -> &str {
-        &self.table_name
-    }
-
-    fn get_id(&self) -> u64 {
-        self.table_id
-    }
-
-    fn engine(&self) -> &str {
-        match self.table_name.as_str() {
-            "numbers" => "SystemNumbers",
-            "numbers_mt" => "SystemNumbersMt",
-            "numbers_local" => "SystemNumbersLocal",
-            _ => unreachable!(),
-        }
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
+    fn is_local(&self) -> bool {
+        self.name() == "numbers_local"
     }
 
-    // As remote for performance test.
-    fn is_local(&self) -> bool {
-        self.table_name.as_str() == "numbers_local"
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
@@ -139,12 +129,14 @@ impl Table for NumbersTable {
         )))]);
 
         Ok(ReadDataSourcePlan {
-            table_info: self.to_table_info(&self.db_name)?,
+            table_info: self.get_table_info().clone(),
             parts: generate_parts(0, io_ctx.get_max_threads() as u64, total),
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
-                &self.table_name, statistics.read_rows, statistics.read_bytes
+                &self.name(),
+                statistics.read_rows,
+                statistics.read_bytes
             ),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
             tbl_args: tbl_arg,
@@ -161,20 +153,17 @@ impl Table for NumbersTable {
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
 
-        Ok(Box::pin(NumbersStream::try_create(
-            ctx,
-            self.schema.clone(),
-        )?))
+        Ok(Box::pin(NumbersStream::try_create(ctx, self.schema())?))
     }
 }
 
 impl TableFunction for NumbersTable {
     fn function_name(&self) -> &str {
-        &self.table_name
+        self.name()
     }
 
     fn db(&self) -> &str {
-        &self.db_name
+        self.get_table_info().db.as_str()
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>

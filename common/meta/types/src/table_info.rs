@@ -72,8 +72,6 @@ pub struct TableInfo {
     pub db: String,
     pub name: String,
 
-    pub is_local: bool,
-
     pub schema: Arc<DataSchema>,
     pub engine: String,
     pub options: HashMap<String, String>,
@@ -104,7 +102,6 @@ impl Default for TableInfo {
             version: 0,
             db: "".to_string(),
             name: "".to_string(),
-            is_local: false,
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
             options: HashMap::new(),
