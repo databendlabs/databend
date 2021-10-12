@@ -17,8 +17,8 @@ use std::convert::TryInto;
 use std::sync::Arc;
 use std::time::Duration;
 
+use common_base::BlockingWait;
 use common_base::Runtime;
-use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -63,11 +63,8 @@ impl UserMgrApi for UserMgr {
         let value = serde_json::to_vec(&user_info)?;
 
         let kv_api = self.kv_api.clone();
-        let res = self.rt.block_on(
-            async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await },
-            self.rpc_time_out,
-        )??;
-
+        let upsert_kv = async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await };
+        let res = upsert_kv.wait_in(&self.rt, self.rpc_time_out)??;
         match res {
             UpsertKVActionReply {
                 prev: None,
@@ -90,10 +87,8 @@ impl UserMgrApi for UserMgr {
     fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>> {
         let key = format!("{}/{}", self.user_prefix, username);
         let kv_api = self.kv_api.clone();
-        let res = self
-            .rt
-            .block_on(async move { kv_api.get_kv(&key).await }, self.rpc_time_out)??;
-
+        let get_kv = async move { kv_api.get_kv(&key).await };
+        let res = get_kv.wait_in(&self.rt, self.rpc_time_out)??;
         let seq_value = res
             .result
             .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username)))?;
@@ -107,10 +102,8 @@ impl UserMgrApi for UserMgr {
     fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>> {
         let user_prefix = self.user_prefix.clone();
         let kv_api = self.kv_api.clone();
-        let values = self.rt.block_on(
-            async move { kv_api.prefix_list_kv(user_prefix.as_str()).await },
-            self.rpc_time_out,
-        )??;
+        let prefix_list_kv = async move { kv_api.prefix_list_kv(user_prefix.as_str()).await };
+        let values = prefix_list_kv.wait_in(&self.rt, self.rpc_time_out)??;
 
         let mut r = vec![];
         for (_key, (s, val)) in values {
@@ -155,10 +148,8 @@ impl UserMgrApi for UserMgr {
         };
 
         let kv_api = self.kv_api.clone();
-        let res = self.rt.block_on(
-            async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await },
-            self.rpc_time_out,
-        )??;
+        let upsert_kv = async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await };
+        let res = upsert_kv.wait_in(&self.rt, self.rpc_time_out)??;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -171,11 +162,8 @@ impl UserMgrApi for UserMgr {
     fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
         let key = format!("{}/{}", self.user_prefix, username);
         let kv_api = self.kv_api.clone();
-        let res = self.rt.block_on(
-            async move { kv_api.upsert_kv(&key, seq.into(), None, None).await },
-            self.rpc_time_out,
-        )??;
-
+        let upsert_kv = async move { kv_api.upsert_kv(&key, seq.into(), None, None).await };
+        let res = upsert_kv.wait_in(&self.rt, self.rpc_time_out)??;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
