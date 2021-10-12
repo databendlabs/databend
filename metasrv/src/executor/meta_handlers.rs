@@ -379,7 +379,7 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
                     ))
                 })?;
 
-                let tbl_info = TableInfo {
+                let table_info = TableInfo {
                     database_id: tbl.database_id,
                     db: req.db.to_string(),
                     table_id: *id,
@@ -391,7 +391,7 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
                     options: tbl.table_options.clone(),
                 };
 
-                acc.push(Arc::new(tbl_info));
+                acc.push(Arc::new(table_info));
                 Ok::<_, ErrorCode>(acc)
             })?)
     }

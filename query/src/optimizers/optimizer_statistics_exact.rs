@@ -67,18 +67,15 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                                 let table = table_meta.raw();
                                 let table_id = table_meta.meta_id();
                                 let table_version = table_meta.meta_ver();
-                                table
-                                    .schema()
-                                    .and_then(|ref schema| {
-                                        let tbl_scan_info = TableScanInfo {
-                                            table_name,
-                                            table_id,
-                                            table_version,
-                                            table_schema: schema.as_ref(),
-                                            table_args: None,
-                                        };
-                                        PlanBuilder::scan(db_name, tbl_scan_info, None, None)
-                                    })
+
+                                let tbl_scan_info = TableScanInfo {
+                                    table_name,
+                                    table_id,
+                                    table_version,
+                                    table_schema: &table.schema(),
+                                    table_args: None,
+                                };
+                                PlanBuilder::scan(db_name, tbl_scan_info, None, None)
                                     .and_then(|builder| builder.build())
                                     .and_then(|dummy_scan_plan| match dummy_scan_plan {
                                         PlanNode::Scan(ref dummy_scan_plan) => {

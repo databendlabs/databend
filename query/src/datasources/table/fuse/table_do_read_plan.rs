@@ -39,7 +39,7 @@ impl FuseTable {
             let block_locations = util::range_filter(&snapshot, &push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
             let plan = ReadDataSourcePlan {
-                table_info: self.tbl_info.clone(),
+                table_info: self.table_info.clone(),
                 parts,
                 statistics,
                 description: "".to_string(),

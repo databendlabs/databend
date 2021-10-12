@@ -161,9 +161,10 @@ pub trait Table: Sync + Send {
     fn name(&self) -> &str;
     fn engine(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
-    fn schema(&self) -> Result<DataSchemaRef>;
+    fn schema(&self) -> DataSchemaRef;
     // Is Local or Remote.
     fn is_local(&self) -> bool;
+    fn get_table_info(&self) -> &TableInfo;
     // Get the read source plan.
     fn read_plan(
         &self,

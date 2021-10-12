@@ -29,12 +29,29 @@ use common_streams::SendableDataBlockStream;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
-    fn name(&self) -> &str;
-    fn engine(&self) -> &str;
+    fn name(&self) -> &str {
+        &self.get_table_info().name
+    }
+
+    fn engine(&self) -> &str {
+        &self.get_table_info().engine
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.get_table_info().schema.clone()
+    }
+
+    fn get_id(&self) -> MetaId {
+        self.get_table_info().table_id
+    }
+
+    fn is_local(&self) -> bool {
+        self.get_table_info().is_local
+    }
+
     fn as_any(&self) -> &dyn Any;
-    fn schema(&self) -> Result<DataSchemaRef>;
-    fn get_id(&self) -> MetaId;
-    fn is_local(&self) -> bool;
+
+    fn get_table_info(&self) -> &TableInfo;
 
     // Some tables may have internal states, like MemoryTable
     // their instances will be kept, instead of dropped after used
@@ -82,28 +99,3 @@ pub trait Table: Sync + Send {
 }
 
 pub type TablePtr = Arc<dyn Table>;
-
-pub trait ToTableInfo {
-    /// Collect information through Table trait methods and build a TableInfo
-    fn to_table_info(&self, db: &str) -> Result<TableInfo>;
-}
-
-impl<T: Table> ToTableInfo for T {
-    fn to_table_info(&self, db: &str) -> Result<TableInfo> {
-        let ti = TableInfo {
-            // TODO not supported yet. maybe removed
-            database_id: 0,
-            table_id: self.get_id(),
-            // TODO not supported yet.
-            version: 0,
-            db: db.to_string(),
-            name: self.name().to_string(),
-            is_local: self.is_local(),
-            schema: self.schema()?,
-            engine: self.engine().to_string(),
-            options: Default::default(),
-        };
-
-        Ok(ti)
-    }
-}

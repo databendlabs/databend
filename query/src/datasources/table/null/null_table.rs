@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_context::TableIOContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -35,39 +34,23 @@ use futures::stream::StreamExt;
 use crate::catalogs::Table;
 
 pub struct NullTable {
-    tbl_info: TableInfo,
+    table_info: TableInfo,
 }
 
 impl NullTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Box::new(Self { tbl_info }))
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+        Ok(Box::new(Self { table_info }))
     }
 }
 
 #[async_trait::async_trait]
 impl Table for NullTable {
-    fn name(&self) -> &str {
-        &self.tbl_info.name
-    }
-
-    fn engine(&self) -> &str {
-        &self.tbl_info.engine
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.tbl_info.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.tbl_info.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
@@ -76,10 +59,10 @@ impl Table for NullTable {
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        let tbl_info = &self.tbl_info;
-        let db = &tbl_info.db;
+        let table_info = &self.table_info;
+        let db = &table_info.db;
         Ok(ReadDataSourcePlan {
-            table_info: self.tbl_info.clone(),
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -97,10 +80,10 @@ impl Table for NullTable {
         _io_ctx: Arc<TableIOContext>,
         _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::empty_with_schema(self.tbl_info.schema.clone());
+        let block = DataBlock::empty_with_schema(self.table_info.schema.clone());
 
         Ok(Box::pin(DataBlockStream::create(
-            self.tbl_info.schema.clone(),
+            self.table_info.schema.clone(),
             None,
             vec![block],
         )))

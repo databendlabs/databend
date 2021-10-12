@@ -166,11 +166,11 @@ impl Catalog for MetaStoreCatalog {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        let tbl_info = self
+        let table_info = self
             .catalog_backend
             .get_table_by_id(table_id, table_version)?;
         // table factories are insides Database, tobe optimized latter
-        let db = self.get_database(&tbl_info.db)?;
+        let db = self.get_database(&table_info.db)?;
         db.get_table_by_id(table_id, table_version)
     }
 

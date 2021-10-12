@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_context::IOContext;
 use common_context::TableIOContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -36,14 +35,14 @@ use crate::datasources::table::csv::csv_table_stream::CsvTableStream;
 use crate::sessions::DatabendQueryContext;
 
 pub struct CsvTable {
-    tbl_info: TableInfo,
+    table_info: TableInfo,
     file: String,
     has_header: bool,
 }
 
 impl CsvTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
-        let options = &tbl_info.options;
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let options = &table_info.options;
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
@@ -55,7 +54,7 @@ impl CsvTable {
         };
 
         Ok(Box::new(Self {
-            tbl_info,
+            table_info,
             file,
             has_header,
         }))
@@ -64,28 +63,12 @@ impl CsvTable {
 
 #[async_trait::async_trait]
 impl Table for CsvTable {
-    fn name(&self) -> &str {
-        &self.tbl_info.name
-    }
-
-    fn engine(&self) -> &str {
-        &self.tbl_info.engine
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.tbl_info.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.tbl_info.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
@@ -98,10 +81,10 @@ impl Table for CsvTable {
         let file = &self.file;
         let lines_count = count_lines(File::open(file.clone())?)?;
 
-        let db = &self.tbl_info.db;
-        let name = &self.tbl_info.name;
+        let db = &self.table_info.db;
+        let name = &self.table_info.name;
         Ok(ReadDataSourcePlan {
-            table_info: self.tbl_info.clone(),
+            table_info: self.table_info.clone(),
             parts: generate_parts(
                 start_line as u64,
                 io_ctx.get_max_threads() as u64,
@@ -126,7 +109,7 @@ impl Table for CsvTable {
 
         Ok(Box::pin(CsvTableStream::try_create(
             ctx,
-            self.tbl_info.schema.clone(),
+            self.table_info.schema.clone(),
             self.file.clone(),
         )?))
     }

@@ -46,8 +46,8 @@ impl InMemoryTableInfo {
         }
     }
 
-    pub fn insert(&mut self, tbl_info: TableInfo) {
-        let met_ref = Arc::new(tbl_info);
+    pub fn insert(&mut self, table_info: TableInfo) {
+        let met_ref = Arc::new(table_info);
         self.name2meta
             .insert(met_ref.name.to_owned(), met_ref.clone());
         self.id2meta.insert(met_ref.table_id, met_ref);

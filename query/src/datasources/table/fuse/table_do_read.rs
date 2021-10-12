@@ -40,7 +40,7 @@ impl FuseTable {
             .expect("DatabendQueryContext should not be None");
 
         let default_proj = || {
-            (0..self.tbl_info.schema.fields().len())
+            (0..self.table_info.schema.fields().len())
                 .into_iter()
                 .collect::<Vec<usize>>()
         };
@@ -69,7 +69,7 @@ impl FuseTable {
             .flatten()
         };
         let da = io_ctx.get_data_accessor()?;
-        let arrow_schema = self.tbl_info.schema.to_arrow();
+        let arrow_schema = self.table_info.schema.to_arrow();
 
         // BlockReader::read_part is !Send (since parquet2::read::page_stream::get_page_stream is !Send)
         // we have to use spawn_local here

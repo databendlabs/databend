@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -38,14 +37,14 @@ use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
 use crate::sessions::DatabendQueryContext;
 
 pub struct MemoryTable {
-    tbl_info: TableInfo,
+    table_info: TableInfo,
     blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl MemoryTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         let table = Self {
-            tbl_info,
+            table_info,
             blocks: Arc::new(RwLock::new(vec![])),
         };
         Ok(Box::new(table))
@@ -54,32 +53,16 @@ impl MemoryTable {
 
 #[async_trait::async_trait]
 impl Table for MemoryTable {
-    fn name(&self) -> &str {
-        &self.tbl_info.name
-    }
-
-    fn engine(&self) -> &str {
-        &self.tbl_info.engine
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.tbl_info.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.tbl_info.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn is_stateful(&self) -> bool {
         true
+    }
+
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
@@ -92,10 +75,10 @@ impl Table for MemoryTable {
         let rows = blocks.iter().map(|block| block.num_rows()).sum();
         let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
-        let tbl_info = &self.tbl_info;
-        let db = &tbl_info.db;
+        let table_info = &self.table_info;
+        let db = &table_info.db;
         Ok(ReadDataSourcePlan {
-            table_info: self.tbl_info.clone(),
+            table_info: self.table_info.clone(),
             parts: generate_parts(0, io_ctx.get_max_threads() as u64, blocks.len() as u64),
             statistics: Statistics::new_exact(rows, bytes),
             description: format!("(Read from Memory Engine table  {}.{})", db, self.name()),
@@ -132,7 +115,7 @@ impl Table for MemoryTable {
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-        if _insert_plan.schema().as_ref().fields() != self.tbl_info.schema.as_ref().fields() {
+        if _insert_plan.schema().as_ref().fields() != self.table_info.schema.as_ref().fields() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
         }
 
