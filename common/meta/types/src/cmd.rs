@@ -29,12 +29,6 @@ use crate::Operation;
 /// and is the essential part of a raft log.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Cmd {
-    /// AKA put-if-absent. add a key-value record only when key is absent.
-    AddFile { key: String, value: String },
-
-    /// Override the record with key.
-    SetFile { key: String, value: String },
-
     /// Increment the sequence number generator specified by `key` and returns the new value.
     IncrSeq { key: String },
 
@@ -97,12 +91,6 @@ pub enum Cmd {
 impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Cmd::AddFile { key, value } => {
-                write!(f, "add_file:{}={}", key, value)
-            }
-            Cmd::SetFile { key, value } => {
-                write!(f, "set_file:{}={}", key, value)
-            }
             Cmd::IncrSeq { key } => {
                 write!(f, "incr_seq:{}", key)
             }

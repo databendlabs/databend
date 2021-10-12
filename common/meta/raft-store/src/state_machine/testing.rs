@@ -66,15 +66,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         },
         Entry {
             log_id: LogId { term: 1, index: 6 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::SetFile {
-                        key: "b".to_string(),
-                        value: "B".to_string(),
-                    },
-                },
-            }),
+            payload: EntryPayload::Blank,
         },
         Entry {
             log_id: LogId { term: 1, index: 8 },
@@ -105,7 +97,6 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         "[3, 1]:{\"LogId\":{\"term\":1,\"index\":9}}",                  // sm meta: LastApplied
         "[3, 2]:{\"Bool\":true}",                                       // sm meta: init
         "[3, 3]:{\"Membership\":{\"members\":[4,5,6],\"members_after_consensus\":null}}", // membership
-        "[5, 98]:B",                                                                      // Files
         "[6, 97]:[1,{\"meta\":null,\"value\":[65]}]", // generic kv
         "[7, 99]:1",                                  // sequence: c
         "[7, 103, 101, 110, 101, 114, 105, 99, 95, 107, 118]:1", // sequence: by upsertkv
@@ -207,61 +198,5 @@ pub fn cases_add_file() -> Vec<AddFileCase> {
             Some("v3".to_string()),
         ),
         ("no txid", None, "k3", "v4", None, Some("v4".to_string())),
-    ]
-}
-
-pub type SetFileCase = (
-    &'static str,
-    Option<RaftTxId>,
-    &'static str,
-    &'static str,
-    Option<String>,
-    Option<String>,
-);
-
-// test cases for Cmd::SetFile
-// case_name, txid, key, value, want_prev, want_result
-pub fn cases_set_file() -> Vec<SetFileCase> {
-    vec![
-        (
-            "set on none",
-            Some(RaftTxId::new("foo", 1)),
-            "k1",
-            "v1",
-            None,
-            Some("v1".to_string()),
-        ),
-        (
-            "set on existent",
-            Some(RaftTxId::new("foo", 2)),
-            "k1",
-            "v2",
-            Some("v1".to_string()),
-            Some("v2".to_string()),
-        ),
-        (
-            "dup set with same serial, even with diff key, got the previous result",
-            Some(RaftTxId::new("foo", 2)),
-            "k2",
-            "v3",
-            Some("v1".to_string()),
-            Some("v2".to_string()),
-        ),
-        (
-            "diff client, same serial",
-            Some(RaftTxId::new("bar", 2)),
-            "k2",
-            "v3",
-            None,
-            Some("v3".to_string()),
-        ),
-        (
-            "no txid",
-            None,
-            "k2",
-            "v4",
-            Some("v3".to_string()),
-            Some("v4".to_string()),
-        ),
     ]
 }
