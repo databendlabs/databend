@@ -70,10 +70,7 @@ async fn select_table(sessions: SessionManagerRef) -> Result<String> {
 }
 
 async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
-    let tracing_table_meta = context.get_table("system", "tracing")?;
-
-    let tracing_table = tracing_table_meta.raw();
-
+    let tracing_table = context.get_table("system", "tracing")?;
     let io_ctx = context.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
 

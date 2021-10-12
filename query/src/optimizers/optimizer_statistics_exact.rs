@@ -62,43 +62,37 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let table_name = "one";
 
                     let dummy_read_plan =
-                        self.ctx
-                            .get_table(db_name, table_name)
-                            .and_then(|table_meta| {
-                                let table = table_meta.raw();
-                                let table_id = table_meta.meta_id();
-                                let table_version = table_meta.meta_ver();
+                        self.ctx.get_table(db_name, table_name).and_then(|table| {
+                            let table_id = table.get_id();
+                            let table_version = Some(table.get_table_info().version);
 
-                                let tbl_scan_info = TableScanInfo {
-                                    table_name,
-                                    table_id,
-                                    table_version,
-                                    table_schema: &table.schema(),
-                                    table_args: None,
-                                };
-                                PlanBuilder::scan(db_name, tbl_scan_info, None, None)
-                                    .and_then(|builder| builder.build())
-                                    .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                                        PlanNode::Scan(ref dummy_scan_plan) => {
-                                            //
-                                            let io_ctx =
-                                                self.ctx.get_single_node_table_io_context()?;
-                                            table
-                                                .read_plan(
-                                                    Arc::new(io_ctx),
-                                                    Some(dummy_scan_plan.push_downs.clone()),
-                                                    Some(
-                                                        self.ctx.get_settings().get_max_threads()?
-                                                            as usize,
-                                                    ),
-                                                )
-                                                .map(PlanNode::ReadSource)
-                                        }
-                                        _unreachable_plan => {
-                                            panic!("Logical error: cannot downcast to scan plan")
-                                        }
-                                    })
-                            })?;
+                            let tbl_scan_info = TableScanInfo {
+                                table_name,
+                                table_id,
+                                table_version,
+                                table_schema: &table.schema(),
+                                table_args: None,
+                            };
+                            PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+                                .and_then(|builder| builder.build())
+                                .and_then(|dummy_scan_plan| match dummy_scan_plan {
+                                    PlanNode::Scan(ref dummy_scan_plan) => {
+                                        //
+                                        let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                                        table
+                                            .read_plan(
+                                                Arc::new(io_ctx),
+                                                Some(dummy_scan_plan.push_downs.clone()),
+                                                Some(self.ctx.get_settings().get_max_threads()?
+                                                    as usize),
+                                            )
+                                            .map(PlanNode::ReadSource)
+                                    }
+                                    _unreachable_plan => {
+                                        panic!("Logical error: cannot downcast to scan plan")
+                                    }
+                                })
+                        })?;
                     let mut body: Vec<u8> = Vec::new();
                     body.write_uvarint(read_source_plan.statistics.read_rows as u64)?;
                     let expr = Expression::create_literal(DataValue::String(Some(body)));

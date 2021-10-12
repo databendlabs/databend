@@ -87,11 +87,11 @@ impl Table for TablesTable {
         let databases: Vec<&[u8]> = database_tables.iter().map(|(d, _)| d.as_bytes()).collect();
         let names: Vec<&[u8]> = database_tables
             .iter()
-            .map(|(_, v)| v.raw().name().as_bytes())
+            .map(|(_, v)| v.name().as_bytes())
             .collect();
         let engines: Vec<&[u8]> = database_tables
             .iter()
-            .map(|(_, v)| v.raw().engine().as_bytes())
+            .map(|(_, v)| v.engine().as_bytes())
             .collect();
 
         let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![

@@ -39,8 +39,8 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
-use crate::catalogs::TableFunctionMeta;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::common::ContextDalBuilder;
@@ -146,7 +146,7 @@ impl DatabendQueryContext {
         self.shared.get_catalog()
     }
 
-    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
         self.shared.get_table(database, table)
     }
 
@@ -154,7 +154,7 @@ impl DatabendQueryContext {
         &self,
         table_id: MetaId,
         table_ver: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>> {
+    ) -> Result<Arc<dyn Table>> {
         self.get_catalog().get_table_by_id(table_id, table_ver)
     }
 
@@ -162,7 +162,7 @@ impl DatabendQueryContext {
         &self,
         function_name: &str,
         tbl_args: TableArgs,
-    ) -> Result<Arc<TableFunctionMeta>> {
+    ) -> Result<Arc<dyn TableFunction>> {
         self.get_catalog()
             .get_table_function(function_name, tbl_args)
     }

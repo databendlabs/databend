@@ -25,8 +25,8 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table_func_engine::TableArgs;
@@ -94,7 +94,7 @@ impl Catalog for OverlaidCatalog {
         &self,
         db_name: &str,
         table_name: &str,
-    ) -> common_exception::Result<Arc<TableMeta>> {
+    ) -> common_exception::Result<Arc<dyn Table>> {
         let res = self.read_only.get_table(db_name, table_name);
         match res {
             Ok(v) => Ok(v),
@@ -112,7 +112,7 @@ impl Catalog for OverlaidCatalog {
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
-    ) -> common_exception::Result<Arc<TableMeta>> {
+    ) -> common_exception::Result<Arc<dyn Table>> {
         self.read_only
             .get_table_by_id(table_id, table_version)
             .or_else(|_e| self.bottom.get_table_by_id(table_id, table_version))
@@ -122,12 +122,14 @@ impl Catalog for OverlaidCatalog {
         &self,
         func_name: &str,
         tbl_args: TableArgs,
-    ) -> common_exception::Result<Arc<TableFunctionMeta>> {
+    ) -> common_exception::Result<Arc<dyn TableFunction>> {
         let (id, factory) = self.func_engine_registry.get(func_name).ok_or_else(|| {
             ErrorCode::UnknownTable(format!("unknown table function {}", func_name))
         })?;
+
+        // table function belongs to no/every database
         let func = factory.try_create("", func_name, *id, tbl_args)?;
-        Ok(Arc::new(TableFunctionMeta::create(func.clone(), *id)))
+        Ok(func)
     }
 
     fn create_database(

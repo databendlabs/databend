@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::Session;
@@ -57,7 +57,7 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
-    pub(in crate::sessions) tables_meta: Arc<Mutex<HashMap<DatabaseAndTable, Arc<TableMeta>>>>,
+    pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
 }
 
 impl DatabendQueryContextShared {
@@ -78,7 +78,7 @@ impl DatabendQueryContextShared {
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
             running_plan: Arc::new(RwLock::new(None)),
-            tables_meta: Arc::new(Mutex::new(HashMap::new())),
+            tables_refs: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -112,18 +112,18 @@ impl DatabendQueryContextShared {
         self.session.get_catalog()
     }
 
-    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
         let table_meta_key = (database.to_string(), table.to_string());
 
-        let mut tables_meta = self.tables_meta.lock();
+        let mut tables_refs = self.tables_refs.lock();
 
-        Ok(match tables_meta.entry(table_meta_key) {
+        Ok(match tables_refs.entry(table_meta_key) {
             Entry::Occupied(entry) => entry.get().clone(),
             Entry::Vacant(entry) => {
                 let catalog = self.get_catalog();
-                let table_meta = catalog.get_table(database, table)?;
-                entry.insert(table_meta).clone()
+                let table = catalog.get_table(database, table)?;
+                entry.insert(table).clone()
             }
         })
     }

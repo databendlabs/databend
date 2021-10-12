@@ -42,10 +42,7 @@ impl NumberTestData {
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
         let catalog = try_create_catalog()?;
         let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
-        Ok(catalog
-            .get_table_function(self.table, tbl_arg)?
-            .raw()
-            .schema())
+        Ok(catalog.get_table_function(self.table, tbl_arg)?.schema())
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
@@ -53,8 +50,7 @@ impl NumberTestData {
         let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
             numbers,
         )))]);
-        let table_meta = catalog.get_table_function(self.table, tbl_arg)?;
-        let table = table_meta.raw();
+        let table = catalog.get_table_function(self.table, tbl_arg)?;
         let io_ctx = self.ctx.get_single_node_table_io_context()?;
         table.clone().as_table().read_plan(
             Arc::new(io_ctx),

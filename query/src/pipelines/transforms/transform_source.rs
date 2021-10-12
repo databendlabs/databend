@@ -43,16 +43,13 @@ impl SourceTransform {
         let table_id = self.source_plan.table_info.table_id;
         let table_ver = self.source_plan.table_info.version;
         let table = if self.source_plan.tbl_args.is_none() {
-            self.ctx
-                .get_table_by_id(table_id, Some(table_ver))?
-                .raw()
-                .clone()
+            self.ctx.get_table_by_id(table_id, Some(table_ver))?.clone()
         } else {
             let func_meta = self.ctx.get_table_function(
                 &self.source_plan.table_info.name,
                 self.source_plan.tbl_args.clone(),
             )?;
-            func_meta.raw().clone().as_table()
+            func_meta.as_table()
         };
         // TODO(xp): get_single_node_table_io_context() or
         //           get_cluster_table_io_context()?

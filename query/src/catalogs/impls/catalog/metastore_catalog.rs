@@ -31,7 +31,7 @@ use crate::catalogs::backends::EmbeddedCatalogBackend;
 use crate::catalogs::backends::RemoteCatalogBackend;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::datasources::database::prelude::register_prelude_db_engines;
@@ -156,7 +156,7 @@ impl Catalog for MetaStoreCatalog {
         self.build_db_instance(&db_info)
     }
 
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
         let db = self.get_database(db_name)?;
         db.get_table(table_name)
     }
@@ -165,7 +165,7 @@ impl Catalog for MetaStoreCatalog {
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>> {
+    ) -> Result<Arc<dyn Table>> {
         let table_info = self
             .catalog_backend
             .get_table_by_id(table_id, table_version)?;

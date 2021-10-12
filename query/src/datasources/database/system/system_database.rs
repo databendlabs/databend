@@ -24,7 +24,6 @@ use common_planners::DropTablePlan;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
-use crate::catalogs::TableMeta;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::catalogs::SYS_TBL_ID_END;
 use crate::datasources::database::system;
@@ -67,12 +66,8 @@ impl SystemDatabase {
             Arc::new(system::ConfigsTable::create(next_id())),
         ];
 
-        let tbl_meta_list = table_list.into_iter().map(|t| {
-            let id = t.get_id();
-            TableMeta::create(t, id)
-        });
         let mut tables = InMemoryMetas::create();
-        for tbl in tbl_meta_list.into_iter() {
+        for tbl in table_list.into_iter() {
             tables.insert(tbl);
         }
 
@@ -93,9 +88,9 @@ impl Database for SystemDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table =
-            self.tables.name2meta.get(table_name).ok_or_else(|| {
+            self.tables.name2table.get(table_name).ok_or_else(|| {
                 ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name))
             })?;
         Ok(table.clone())
@@ -105,16 +100,16 @@ impl Database for SystemDatabase {
         &self,
         table_id: MetaId,
         _table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>> {
+    ) -> Result<Arc<dyn Table>> {
         let table =
-            self.tables.id2meta.get(&table_id).ok_or_else(|| {
+            self.tables.id2table.get(&table_id).ok_or_else(|| {
                 ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
             })?;
         Ok(table.clone())
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        Ok(self.tables.name2meta.values().cloned().collect())
+    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(self.tables.name2table.values().cloned().collect())
     }
 
     fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {

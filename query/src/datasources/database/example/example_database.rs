@@ -24,7 +24,7 @@ use common_planners::DropTablePlan;
 
 use crate::catalogs::backends::CatalogBackend;
 use crate::catalogs::Database;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
 use crate::datasources::database::example::ExampleTable;
 
 pub struct ExampleDatabase {
@@ -50,7 +50,7 @@ impl ExampleDatabase {
     fn build_table_instance(
         &self,
         table_info: &TableInfo,
-    ) -> common_exception::Result<Arc<TableMeta>> {
+    ) -> common_exception::Result<Arc<dyn Table>> {
         let engine = &table_info.engine;
         if !engine.is_empty() && engine != EXAMPLE_TBL_ENGINE {
             return Err(ErrorCode::UnknownDatabaseEngine(format!(
@@ -59,15 +59,14 @@ impl ExampleDatabase {
             )));
         }
 
-        let tbl = ExampleTable::try_create(
+        Ok(ExampleTable::try_create(
             table_info.db.clone(),
             table_info.name.clone(),
             table_info.schema.clone(),
             table_info.options.clone(),
             table_info.table_id,
-        )?;
-        let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);
-        Ok(Arc::new(tbl_meta))
+        )?
+        .into())
     }
 }
 
@@ -84,7 +83,7 @@ impl Database for ExampleDatabase {
         true
     }
 
-    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>> {
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let db_name = self.name();
         let table_info = self.catalog_backend.get_table(db_name, table_name)?;
         self.build_table_instance(table_info.as_ref())
@@ -94,17 +93,16 @@ impl Database for ExampleDatabase {
         &self,
         _table_id: MetaId,
         _table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>> {
+    ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 
-    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>> {
-        let table_infos = self.catalog_backend.get_tables(self.name())?;
-        table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.build_table_instance(item)?;
-            acc.push(tbl);
-            Ok(acc)
-        })
+    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+        self.catalog_backend
+            .get_tables(self.name())?
+            .iter()
+            .map(|info| self.build_table_instance(info))
+            .collect()
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {

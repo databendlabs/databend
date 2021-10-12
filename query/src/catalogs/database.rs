@@ -20,7 +20,7 @@ use common_meta_types::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
 
 pub trait Database: Sync + Send {
     /// Database name.
@@ -29,17 +29,17 @@ pub trait Database: Sync + Send {
     fn is_local(&self) -> bool;
 
     /// Get the table by name.
-    fn get_table(&self, table_name: &str) -> Result<Arc<TableMeta>>;
+    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>>;
 
     /// Get table by meta id
     fn get_table_by_id(
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>>;
+    ) -> Result<Arc<dyn Table>>;
 
     /// Get all tables.
-    fn get_tables(&self) -> Result<Vec<Arc<TableMeta>>>;
+    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>>;
 
     /// DDL
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;

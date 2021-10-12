@@ -36,13 +36,13 @@ use common_planners::DropTablePlan;
 use crate::catalogs::backends::CatalogBackend;
 use crate::common::MetaClientProvider;
 
-type TableMetaCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
+type TableInfoCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
 #[derive(Clone)]
 pub struct RemoteCatalogBackend {
     rt: Arc<Runtime>,
     rpc_time_out: Option<Duration>,
-    table_meta_cache: Arc<Mutex<TableMetaCache>>,
+    table_meta_cache: Arc<Mutex<TableInfoCache>>,
     store_api_provider: Arc<MetaClientProvider>,
 }
 
