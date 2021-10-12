@@ -14,12 +14,13 @@
 //
 
 use std::env;
+use std::sync::Arc;
 
 use common_base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -40,12 +41,14 @@ async fn test_csv_table() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table = CsvTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "test_csv".into(),
         schema: DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
         engine: "Csv".to_string(),
         options: options,
         table_id: 0,
+        version: 0,
     })?;
 
     let scan_plan = &ScanPlan {
@@ -62,14 +65,16 @@ async fn test_csv_table() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(
-        ctx.clone(),
+        io_ctx.clone(),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
@@ -107,6 +112,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     let table = CsvTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "test_csv".into(),
         schema: DataSchemaRefExt::create(vec![
@@ -118,6 +124,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
         engine: "Csv".to_string(),
         options: options,
         table_id: 0,
+        version: 0,
     })?;
 
     let scan_plan = &ScanPlan {
@@ -134,14 +141,16 @@ async fn test_csv_table_parse_error() -> Result<()> {
         push_downs: Extras::default(),
     };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(
-        ctx.clone(),
+        io_ctx.clone(),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     // integer parse error will result to Null value
     assert_eq!(false, result.is_err());

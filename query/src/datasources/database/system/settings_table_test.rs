@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::tokio;
 use common_exception::Result;
 use futures::TryStreamExt;
@@ -26,13 +28,15 @@ async fn test_settings_table() -> Result<()> {
     ctx.get_settings().set_max_threads(2)?;
 
     let table = SettingsTable::create(1);
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(
-        ctx.clone(),
+        io_ctx.clone(),
         None,
         Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);

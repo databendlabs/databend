@@ -16,7 +16,6 @@ use std::borrow::Cow;
 use common_arrow::arrow::compute::arity::unary;
 
 use crate::prelude::*;
-use crate::utils::NoNull;
 
 macro_rules! apply {
     ($self:expr, $f:expr) => {{
@@ -107,12 +106,12 @@ where T: DFPrimitiveType
     fn apply_with_idx<F>(&'a self, f: F) -> Self
     where F: Fn((usize, T)) -> T + Copy {
         if self.null_count() == 0 {
-            let ca: NoNull<_> = self
+            let ca: Self = self
                 .into_no_null_iter()
                 .enumerate()
                 .map(|(idx, v)| f((idx, *v)))
                 .collect_trusted();
-            ca.into_inner()
+            ca
         } else {
             self.into_iter()
                 .enumerate()

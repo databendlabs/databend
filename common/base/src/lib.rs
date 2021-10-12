@@ -24,20 +24,21 @@ mod stoppable_test;
 mod profiling;
 mod progress;
 mod runtime;
+mod stop_handle;
+mod stoppable;
+mod uniq_id;
 
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressCallback;
 pub use progress::ProgressValues;
+pub use runtime::BlockingWait;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
-pub use tokio;
-
-mod stop_handle;
-mod stoppable;
-mod uniq_id;
-
+pub use runtime::TrySpawn;
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
+pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;
+pub use uuid;

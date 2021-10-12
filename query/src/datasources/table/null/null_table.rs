@@ -13,13 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use common_context::TableIOContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
+use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -30,58 +32,37 @@ use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct NullTable {
-    tbl_info: TableInfo,
+    table_info: TableInfo,
 }
 
 impl NullTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Box::new(Self { tbl_info }))
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+        Ok(Box::new(Self { table_info }))
     }
 }
 
 #[async_trait::async_trait]
 impl Table for NullTable {
-    fn name(&self) -> &str {
-        &self.tbl_info.name
-    }
-
-    fn engine(&self) -> &str {
-        &self.tbl_info.engine
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.tbl_info.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.tbl_info.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        let tbl_info = &self.tbl_info;
-        let db = &tbl_info.db;
+        let table_info = &self.table_info;
+        let db = &table_info.db;
         Ok(ReadDataSourcePlan {
-            db: db.to_string(),
-            table: self.name().to_string(),
-            table_id: tbl_info.table_id,
-            table_version: None,
-            schema: tbl_info.schema.clone(),
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -89,7 +70,6 @@ impl Table for NullTable {
             statistics: Statistics::new_exact(0, 0),
             description: format!("(Read from Null Engine table  {}.{})", db, self.name()),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -97,13 +77,13 @@ impl Table for NullTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::empty_with_schema(self.tbl_info.schema.clone());
+        let block = DataBlock::empty_with_schema(self.table_info.schema.clone());
 
         Ok(Box::pin(DataBlockStream::create(
-            self.tbl_info.schema.clone(),
+            self.table_info.schema.clone(),
             None,
             vec![block],
         )))
@@ -111,11 +91,11 @@ impl Table for NullTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
-        insert_plan: common_planners::InsertIntoPlan,
+        _io_ctx: Arc<TableIOContext>,
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         let mut s = {
-            let mut inner = insert_plan.input_stream.lock();
+            let mut inner = _insert_plan.input_stream.lock();
             (*inner).take()
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
@@ -128,7 +108,7 @@ impl Table for NullTable {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())

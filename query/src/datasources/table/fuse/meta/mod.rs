@@ -13,8 +13,8 @@
 //  limitations under the License.
 //
 
-mod meta_info_reader;
-mod table_snapshot;
-
 pub use meta_info_reader::MetaInfoReader;
 pub use table_snapshot::*;
+
+mod meta_info_reader;
+mod table_snapshot;

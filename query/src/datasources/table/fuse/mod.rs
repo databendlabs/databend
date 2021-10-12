@@ -13,12 +13,15 @@
 //  limitations under the License.
 //
 
-mod io;
+pub(crate) mod io;
 mod meta;
 mod table;
-mod util;
+mod table_do_append;
+mod table_do_read;
+mod table_do_read_plan;
+mod table_do_truncate;
+pub(crate) mod util;
 
-pub use io::*;
-pub use meta::*;
-pub use table::FuseTable;
-pub use util::*;
+pub(crate) use io::*;
+pub(crate) use meta::*;
+pub(crate) use table::FuseTable;

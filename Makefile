@@ -52,7 +52,10 @@ cross-compile-release:
 	cross build --target armv7-unknown-linux-gnueabihf --release
 
 cli-build:
-	bash ./scripts/build/build-cli.sh
+	bash ./scripts/build/build-cli.sh build-cli
+
+cli-install:
+	bash ./scripts/build/build-cli.sh install-cli
 
 cli-test:
 	bash ./scripts/ci/ci-run-cli-unit-tests.sh
@@ -61,14 +64,17 @@ unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 
 stateless-test:
+	rm -rf ./_meta/
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 stateless-cluster-test:
+	rm -rf ./_meta/
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
 stateless-cluster-test-tls:
+	rm -rf ./_meta/
 	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 

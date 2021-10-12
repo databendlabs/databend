@@ -20,11 +20,11 @@ use structopt_toml::StructOptToml;
 use crate::configs::Config;
 
 // Meta env.
-const META_ADDRESS: &str = "META_ADDRESS";
-const META_USERNAME: &str = "META_USERNAME";
-const META_PASSWORD: &str = "META_PASSWORD";
-const META_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "META_RPC_TLS_SERVER_ROOT_CA_CERT";
-const META_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "META_RPC_TLS_SERVICE_DOMAIN_NAME";
+pub const META_ADDRESS: &str = "META_ADDRESS";
+pub const META_USERNAME: &str = "META_USERNAME";
+pub const META_PASSWORD: &str = "META_PASSWORD";
+pub const META_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "META_RPC_TLS_SERVER_ROOT_CA_CERT";
+pub const META_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "META_RPC_TLS_SERVICE_DOMAIN_NAME";
 
 /// Meta config group.
 /// serde(default) make the toml de to default working.

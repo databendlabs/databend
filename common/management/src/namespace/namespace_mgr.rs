@@ -20,13 +20,13 @@ use std::time::UNIX_EPOCH;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_kv_api::KVApi;
-use common_kv_api_vo::UpsertKVActionResult;
-use common_metatypes::KVMeta;
-use common_metatypes::MatchSeq;
+use common_meta_api::KVApi;
+use common_meta_types::KVMeta;
+use common_meta_types::MatchSeq;
+use common_meta_types::NodeInfo;
+use common_meta_types::UpsertKVActionReply;
 
 use crate::namespace::NamespaceApi;
-use crate::namespace::NodeInfo;
 
 #[allow(dead_code)]
 pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";
@@ -143,23 +143,21 @@ impl NamespaceApi for NamespaceMgr {
         let upsert_node = self.kv_api.upsert_kv(&node_key, seq, value, meta);
 
         match upsert_node.await? {
-            UpsertKVActionResult {
+            UpsertKVActionReply {
                 prev: None,
                 result: Some((s, _)),
             } => Ok(s),
-            UpsertKVActionResult {
+            UpsertKVActionReply {
                 prev: Some((s, _)),
                 result: _,
             } => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
                 "Namespace already exists, seq [{}]",
                 s
             ))),
-            catch_result @ UpsertKVActionResult { .. } => {
-                Err(ErrorCode::UnknownException(format!(
-                    "upsert result not expected (using version 0, got {:?})",
-                    catch_result
-                )))
-            }
+            catch_result @ UpsertKVActionReply { .. } => Err(ErrorCode::UnknownException(format!(
+                "upsert result not expected (using version 0, got {:?})",
+                catch_result
+            ))),
         }
     }
 
@@ -187,11 +185,11 @@ impl NamespaceApi for NamespaceMgr {
         let upsert_node = self.kv_api.upsert_kv(&node_key, seq.into(), None, None);
 
         match upsert_node.await? {
-            UpsertKVActionResult {
+            UpsertKVActionReply {
                 prev: Some(_),
                 result: None,
             } => Ok(()),
-            UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+            UpsertKVActionReply { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
                 "unknown node {:?}",
                 node_id
             ))),
@@ -211,11 +209,11 @@ impl NamespaceApi for NamespaceMgr {
                 let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
 
                 match upsert_meta.await? {
-                    UpsertKVActionResult {
+                    UpsertKVActionReply {
                         prev: Some(_),
                         result: Some((s, _)),
                     } => Ok(s),
-                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+                    UpsertKVActionReply { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
                         "unknown node {:?}",
                         node_id
                     ))),
@@ -226,11 +224,11 @@ impl NamespaceApi for NamespaceMgr {
                 let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
 
                 match upsert_meta.await? {
-                    UpsertKVActionResult {
+                    UpsertKVActionReply {
                         prev: Some(_),
                         result: Some((s, _)),
                     } => Ok(s),
-                    UpsertKVActionResult { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+                    UpsertKVActionReply { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
                         "unknown node {:?}",
                         node_id
                     ))),

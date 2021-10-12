@@ -14,11 +14,12 @@
 //
 
 use std::env;
+use std::sync::Arc;
 
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -38,23 +39,28 @@ async fn test_parquet_table() -> Result<()> {
     .collect();
 
     let ctx = crate::tests::try_create_context()?;
-    let tbl_info = TableInfo {
+    let table_info = TableInfo {
+        database_id: 0,
         db: "default".to_string(),
         table_id: 0,
+        version: 0,
         name: "test_parquet".to_string(),
+
         schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
         engine: "test_parquet".into(),
         options: options,
     };
-    let table = ParquetTable::try_create(tbl_info)?;
+    let table = ParquetTable::try_create(table_info)?;
 
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(
-        ctx.clone(),
+        io_ctx.clone(),
         None,
         Some(ctx.get_settings().get_max_threads()? as usize),
     )?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
 

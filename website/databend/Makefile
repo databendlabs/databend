@@ -12,7 +12,7 @@ show:
 
 install:
 		@ npm install --force
-		@ pip install .
+		@ pip install . --use-feature=in-tree-build
 		@ pip install -r requirements.txt
 		@ pip install \
 			mkdocs-material \

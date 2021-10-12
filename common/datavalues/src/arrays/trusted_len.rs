@@ -20,7 +20,6 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::DFAsRef;
 use crate::prelude::*;
-use crate::utils::NoNull;
 
 pub trait CustomIterTools: Iterator {
     fn fold_first_<F>(mut self, f: F) -> Option<Self::Item>
@@ -55,8 +54,7 @@ where T: DFPrimitiveType
     }
 }
 
-// NoNull is only a wrapper needed for specialization
-impl<T> FromTrustedLenIterator<T> for NoNull<DFPrimitiveArray<T>>
+impl<T> FromTrustedLenIterator<T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
     // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
@@ -64,8 +62,7 @@ where T: DFPrimitiveType
     fn from_iter_trusted_length<I: TrustedLen<Item = T>>(iter: I) -> Self {
         let values = unsafe { Buffer::from_trusted_len_iter_unchecked(iter) };
         let arr = PrimitiveArray::from_data(T::data_type().to_arrow(), values, None);
-
-        NoNull::new(arr.into())
+        arr.into()
     }
 }
 impl<Ptr> FromTrustedLenIterator<Ptr> for DFListArray
@@ -98,11 +95,6 @@ impl FromTrustedLenIterator<bool> for DFBooleanArray {
     }
 }
 
-impl FromTrustedLenIterator<bool> for NoNull<DFBooleanArray> {
-    fn from_iter_trusted_length<I: TrustedLen<Item = bool>>(iter: I) -> Self {
-        iter.collect()
-    }
-}
 impl<Ptr> FromTrustedLenIterator<Ptr> for DFStringArray
 where Ptr: DFAsRef<[u8]>
 {

@@ -263,7 +263,7 @@ run_difference_first_not_null_test!(
 );
 run_difference_first_not_null_test!(
     test_running_difference_data32_first_not_null,
-    u32,
+    i32,
     Date32,
     i64,
     Int64,
@@ -416,8 +416,8 @@ run_difference_first_null_test!(
 
 run_difference_first_null_test!(
     test_running_difference_date32_first_null,
-    u32,
-    UInt32,
+    i32,
+    Date32,
     i64,
     Int64,
     Int64Array

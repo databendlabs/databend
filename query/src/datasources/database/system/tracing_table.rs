@@ -13,13 +13,16 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use common_context::IOContext;
+use common_context::TableIOContext;
 use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -30,69 +33,57 @@ use walkdir::WalkDir;
 
 use crate::catalogs::Table;
 use crate::datasources::database::system::TracingTableStream;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct TracingTable {
-    table_id: u64,
-    schema: DataSchemaRef,
+    table_info: TableInfo,
 }
 
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
         // {"v":0,"name":"databend-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"databend","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
-        TracingTable {
+
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("v", DataType::Int64, false),
+            DataField::new("name", DataType::String, false),
+            DataField::new("msg", DataType::String, false),
+            DataField::new("level", DataType::Int8, false),
+            DataField::new("hostname", DataType::String, false),
+            DataField::new("pid", DataType::Int64, false),
+            DataField::new("time", DataType::String, false),
+        ]);
+
+        let table_info = TableInfo {
+            db: "system".to_string(),
+            name: "tracing".to_string(),
             table_id,
-            schema: DataSchemaRefExt::create(vec![
-                DataField::new("v", DataType::Int64, false),
-                DataField::new("name", DataType::String, false),
-                DataField::new("msg", DataType::String, false),
-                DataField::new("level", DataType::Int8, false),
-                DataField::new("hostname", DataType::String, false),
-                DataField::new("pid", DataType::Int64, false),
-                DataField::new("time", DataType::String, false),
-            ]),
-        }
+            schema,
+            engine: "SystemTracing".to_string(),
+            ..Default::default()
+        };
+
+        TracingTable { table_info }
     }
 }
 
 #[async_trait::async_trait]
 impl Table for TracingTable {
-    fn name(&self) -> &str {
-        "tracing"
-    }
-
-    fn engine(&self) -> &str {
-        "SystemTracing"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            db: "system".to_string(),
-            table: self.name().to_string(),
-            table_id: self.table_id,
-            table_version: None,
-            schema: self.schema.clone(),
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -100,7 +91,6 @@ impl Table for TracingTable {
             statistics: Statistics::default(),
             description: "(Read from system.tracing table)".to_string(),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -108,10 +98,14 @@ impl Table for TracingTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
-        source_plan: &ReadDataSourcePlan,
+        io_ctx: Arc<TableIOContext>,
+        push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
+
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
 
         for entry in WalkDir::new(ctx.get_config().log.log_dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
@@ -124,7 +118,6 @@ impl Table for TracingTable {
 
         // Default limit.
         let mut limit = 100000000_usize;
-        let push_downs = &source_plan.push_downs;
         tracing::debug!("read push_down:{:?}", push_downs);
 
         if let Some(extras) = push_downs {
@@ -134,7 +127,7 @@ impl Table for TracingTable {
         }
 
         Ok(Box::pin(TracingTableStream::try_create(
-            self.schema.clone(),
+            self.table_info.schema.clone(),
             log_files,
             limit,
         )?))

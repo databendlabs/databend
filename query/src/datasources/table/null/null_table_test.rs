@@ -16,11 +16,12 @@
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_context::IOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_meta_api_vo::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -34,13 +35,19 @@ async fn test_null_table() -> Result<()> {
         DataField::new("b", DataType::UInt64, false),
     ]);
     let table = NullTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "a".into(),
+
         schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
         engine: "Null".to_string(),
         options: TableOptions::default(),
         table_id: 0,
+        version: 0,
     })?;
+
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
 
     // append data.
     {
@@ -58,19 +65,22 @@ async fn test_null_table() -> Result<()> {
             schema: schema.clone(),
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
-        table.append_data(ctx.clone(), insert_plan).await.unwrap();
+        table
+            .append_data(io_ctx.clone(), insert_plan)
+            .await
+            .unwrap();
     }
 
     // read.
     {
         let source_plan = table.read_plan(
-            ctx.clone(),
+            io_ctx.clone(),
             None,
-            Some(ctx.get_settings().get_max_threads()? as usize),
+            Some(io_ctx.get_max_threads() as usize),
         )?;
         assert_eq!(table.engine(), "Null");
 
-        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let stream = table.read(io_ctx.clone(), &source_plan.push_downs).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);
@@ -82,7 +92,7 @@ async fn test_null_table() -> Result<()> {
             db: "default".to_string(),
             table: "a".to_string(),
         };
-        table.truncate(ctx.clone(), truncate_plan).await?;
+        table.truncate(io_ctx, truncate_plan).await?;
     }
 
     Ok(())

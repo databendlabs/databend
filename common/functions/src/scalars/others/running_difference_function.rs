@@ -77,8 +77,8 @@ impl Function for RunningDifferenceFunction {
             DataType::UInt8 => compute_u8(columns[0].column(), input_rows),
             DataType::Int16 => compute_i16(columns[0].column(), input_rows),
             DataType::UInt16 | DataType::Date16 => compute_u16(columns[0].column(), input_rows),
-            DataType::Int32 => compute_i32(columns[0].column(), input_rows),
-            DataType::UInt32 | DataType::Date32 | DataType::DateTime32(_) => {
+            DataType::Int32 | DataType::Date32 => compute_i32(columns[0].column(), input_rows),
+            DataType::UInt32 | DataType::DateTime32(_) => {
                 compute_u32(columns[0].column(), input_rows)
             }
             DataType::Int64 => compute_i64(columns[0].column(), input_rows),

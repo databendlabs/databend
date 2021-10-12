@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -25,60 +28,47 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct OneTable {
-    tbl_id: u64,
-    schema: DataSchemaRef,
+    table_info: TableInfo,
 }
 
 impl OneTable {
-    pub fn create(tbl_id: u64) -> Self {
-        OneTable {
-            tbl_id,
-            schema: DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]),
-        }
+    pub fn create(table_id: u64) -> Self {
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+
+        let table_info = TableInfo {
+            db: "system".to_string(),
+            name: "one".to_string(),
+            table_id,
+            schema,
+            engine: "SystemOne".to_string(),
+
+            ..Default::default()
+        };
+        OneTable { table_info }
     }
 }
 
 #[async_trait::async_trait]
 impl Table for OneTable {
-    fn name(&self) -> &str {
-        "one"
-    }
-
-    fn engine(&self) -> &str {
-        "SystemOne"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.tbl_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            db: "system".to_string(),
-            table: self.name().to_string(),
-            table_id: self.tbl_id,
-            table_version: None,
-            schema: self.schema.clone(),
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -86,7 +76,6 @@ impl Table for OneTable {
             statistics: Statistics::new_exact(1, std::mem::size_of::<u8>()),
             description: "(Read from system.one table)".to_string(),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -94,12 +83,15 @@ impl Table for OneTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _read_source: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![Series::new(vec![1u8])]);
+        let block =
+            DataBlock::create_by_array(self.table_info.schema.clone(), vec![Series::new(vec![
+                1u8,
+            ])]);
         Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
+            self.table_info.schema.clone(),
             None,
             vec![block],
         )))

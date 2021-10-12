@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_management::NodeInfo;
+use common_meta_types::NodeInfo;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;

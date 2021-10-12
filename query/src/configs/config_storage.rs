@@ -13,16 +13,17 @@
 // limitations under the License.
 
 use std::fmt;
+use std::str::FromStr;
 
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
 use crate::configs::Config;
 
-const STORAGE_TYPE: &str = "STORAGE_TYPE";
+pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
 
 // Disk Storage env.
-const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
+pub const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
 
 // S3 Storage env.
 const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";
@@ -34,6 +35,19 @@ const S3_STORAGE_BUCKET: &str = "S3_STORAGE_BUCKET";
 pub enum StorageType {
     Disk,
     S3,
+}
+
+// Implement the trait
+impl FromStr for StorageType {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<StorageType, &'static str> {
+        match s {
+            "disk" => Ok(StorageType::Disk),
+            "s3" => Ok(StorageType::S3),
+            _ => Err("no match for storage type"),
+        }
+    }
 }
 
 #[derive(
@@ -97,7 +111,7 @@ impl fmt::Debug for S3StorageConfig {
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct StorageConfig {
-    #[structopt(long, env = STORAGE_TYPE, default_value = "", help = "Current storage type: dfs|disk|s3")]
+    #[structopt(long, env = STORAGE_TYPE, default_value = "", help = "Current storage type: disk|s3")]
     #[serde(default)]
     pub storage_type: String,
 

@@ -37,19 +37,16 @@ t this stage, we reply on background task to merge the data properly.
   
 - `Table::append`
   
-  For each block, save it in object store (as parquet for the time being).  
+  For each block, put it in object storage (as parquet for the time being).  
     
-  A segment info is generated for those blocks, which tracks all the block
+  Segment are generated for those blocks, which tracks all the block
   meta information. also, statistics of each block are aggregated and kept 
-  int the segment info.
+  int the segments.
+
+  Segments are stored in object storage as well.
  
-  Save Segment info in object store.
- 
-  NOTE: 
-    - `append` may be executed parallel.
-    - operations should be logged/journaled in case of rollback/abort 
      
-- "Driver"
+- commit (by "Driver" role)
 
   Gather all the segments(info) , aggregates the statistics, merge segments
   with previous snapshot, and commit.  
@@ -66,7 +63,7 @@ t this stage, we reply on background task to merge the data properly.
 
    Prunes bocks by using the scan expressions / criteria, and statistics in Snapshot / Segment.
 
-- `Table::append`
+- `Table::read`
 
-  Prunes columns by using the plan criteria 
+  Prunes columns/roles by using the plan criteria, and statistics/index insides the parquet file.
 

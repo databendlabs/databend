@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
-use common_kv_api::KVApi;
-use common_kv_api_vo::GetKVActionResult;
-use common_kv_api_vo::MGetKVActionResult;
-use common_kv_api_vo::PrefixListReply;
-use common_kv_api_vo::UpsertKVActionResult;
-use common_metatypes::KVMeta;
-use common_metatypes::MatchSeq;
+use common_meta_api::KVApi;
+use common_meta_types::GetKVActionReply;
+use common_meta_types::KVMeta;
+use common_meta_types::MGetKVActionReply;
+use common_meta_types::MatchSeq;
+use common_meta_types::PrefixListReply;
+use common_meta_types::UpsertKVActionReply;
 use mockall::predicate::*;
 use mockall::*;
 
@@ -43,28 +43,28 @@ mock! {
             seq: MatchSeq,
             value: Option<Vec<u8>>,
             value_meta: Option<KVMeta>
-        ) -> common_exception::Result<UpsertKVActionResult>;
+        ) -> common_exception::Result<UpsertKVActionReply>;
 
         async fn update_kv_meta(
             &self,
             key: &str,
             seq: MatchSeq,
             value_meta: Option<KVMeta>
-        ) -> common_exception::Result<UpsertKVActionResult>;
+        ) -> common_exception::Result<UpsertKVActionReply>;
 
-        async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionResult>;
+        async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply>;
 
         async fn mget_kv(
             &self,
             key: &[String],
-        ) -> common_exception::Result<MGetKVActionResult>;
+        ) -> common_exception::Result<MGetKVActionReply>;
 
         async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply>;
         }
 }
 
 mod add {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -96,7 +96,7 @@ mod add {
                 )
                 .times(1)
                 .return_once(|_u, _s, _salt, _meta| {
-                    Ok(UpsertKVActionResult {
+                    Ok(UpsertKVActionReply {
                         prev: None,
                         result: None,
                     })
@@ -124,7 +124,7 @@ mod add {
                 )
                 .times(1)
                 .returning(|_u, _s, _salt, _meta| {
-                    Ok(UpsertKVActionResult {
+                    Ok(UpsertKVActionReply {
                         prev: Some((1, KVValue {
                             meta: None,
                             value: vec![],
@@ -162,7 +162,7 @@ mod add {
                 )
                 .times(1)
                 .returning(|_u, _s, _salt, _meta| {
-                    Ok(UpsertKVActionResult {
+                    Ok(UpsertKVActionReply {
                         prev: None,
                         result: None,
                     })
@@ -188,7 +188,7 @@ mod add {
 }
 
 mod get {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -209,7 +209,7 @@ mod get {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| {
-                Ok(GetKVActionResult {
+                Ok(GetKVActionReply {
                     result: Some((1, KVValue { meta: None, value })),
                 })
             });
@@ -239,7 +239,7 @@ mod get {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| {
-                Ok(GetKVActionResult {
+                Ok(GetKVActionReply {
                     result: Some((100, KVValue { meta: None, value })),
                 })
             });
@@ -260,7 +260,7 @@ mod get {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| Ok(GetKVActionResult { result: None }));
+            .return_once(move |_k| Ok(GetKVActionReply { result: None }));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -280,7 +280,7 @@ mod get {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| {
-                Ok(GetKVActionResult {
+                Ok(GetKVActionReply {
                     result: Some((1, KVValue {
                         meta: None,
                         value: vec![],
@@ -306,7 +306,7 @@ mod get {
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
             .return_once(move |_k| {
-                Ok(GetKVActionResult {
+                Ok(GetKVActionReply {
                     result: Some((1, KVValue {
                         meta: None,
                         value: vec![1],
@@ -328,8 +328,8 @@ mod get {
 
 mod get_users {
 
-    use common_metatypes::KVValue;
-    use common_metatypes::SeqValue;
+    use common_meta_types::KVValue;
+    use common_meta_types::SeqValue;
 
     use super::*;
 
@@ -413,7 +413,7 @@ mod get_users {
 }
 
 mod drop {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -430,7 +430,7 @@ mod drop {
             )
             .times(1)
             .returning(|_k, _seq, _none, _meta| {
-                Ok(UpsertKVActionResult {
+                Ok(UpsertKVActionReply {
                     prev: Some((1, KVValue {
                         meta: None,
                         value: vec![],
@@ -459,7 +459,7 @@ mod drop {
             )
             .times(1)
             .returning(|_k, _seq, _none, _meta| {
-                Ok(UpsertKVActionResult {
+                Ok(UpsertKVActionReply {
                     prev: None,
                     result: None,
                 })
@@ -473,7 +473,7 @@ mod drop {
 }
 
 mod update {
-    use common_metatypes::KVValue;
+    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -501,7 +501,7 @@ mod update {
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
                 .return_once(move |_k| {
-                    Ok(GetKVActionResult {
+                    Ok(GetKVActionReply {
                         result: Some((0, KVValue {
                             meta: None,
                             value: prev_value,
@@ -529,7 +529,7 @@ mod update {
             )
             .times(1)
             .return_once(|_, _, _, _meta| {
-                Ok(UpsertKVActionResult {
+                Ok(UpsertKVActionReply {
                     prev: None,
                     result: Some((0, KVValue {
                         meta: None,
@@ -581,7 +581,7 @@ mod update {
             )
             .times(1)
             .return_once(|_, _, _, _meta| {
-                Ok(UpsertKVActionResult {
+                Ok(UpsertKVActionReply {
                     prev: None,
                     result: Some((0, KVValue {
                         meta: None,
@@ -631,7 +631,7 @@ mod update {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| Ok(GetKVActionResult { result: None }));
+            .return_once(move |_k| Ok(GetKVActionReply { result: None }));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -666,7 +666,7 @@ mod update {
             )
             .times(1)
             .returning(|_u, _s, _salt, _meta| {
-                Ok(UpsertKVActionResult {
+                Ok(UpsertKVActionReply {
                     prev: None,
                     result: None,
                 })

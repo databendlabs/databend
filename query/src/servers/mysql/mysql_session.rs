@@ -38,7 +38,8 @@ impl MySQLConnection {
     }
 
     fn session_executor(session: SessionRef, blocking_stream: std::net::TcpStream) {
-        let interactive_worker = InteractiveWorker::create(session);
+        let client_addr = blocking_stream.peer_addr().unwrap().to_string();
+        let interactive_worker = InteractiveWorker::create(session, client_addr);
         if let Err(error) = MysqlIntermediary::run_on_tcp(interactive_worker, blocking_stream) {
             if error.code() != ABORT_SESSION {
                 log::error!(

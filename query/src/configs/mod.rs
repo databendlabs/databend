@@ -19,15 +19,16 @@ mod macros;
 mod config_test;
 
 mod config;
-mod config_log;
-mod config_meta;
-mod config_query;
-mod config_storage;
+pub mod config_log;
+pub mod config_meta;
+pub mod config_query;
+pub mod config_storage;
 
-pub use common_store_api_sdk::RpcClientTlsConfig;
 pub use config::Config;
 pub use config::DATABEND_COMMIT_VERSION;
 pub use config_log::LogConfig;
 pub use config_meta::MetaConfig;
 pub use config_query::QueryConfig;
+pub use config_storage::DiskStorageConfig;
+pub use config_storage::S3StorageConfig;
 pub use config_storage::StorageConfig;

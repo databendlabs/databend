@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_base::tokio::sync::mpsc;
+use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -52,7 +53,7 @@ impl MergeProcessor {
         for i in 0..len {
             let processor = self.inputs[i].clone();
             let sender = sender.clone();
-            self.ctx.execute_task(async move {
+            self.ctx.try_spawn(async move {
                 let mut stream = match processor.execute().await {
                     Err(e) => {
                         if let Err(error) = sender.send(Result::Err(e)).await {

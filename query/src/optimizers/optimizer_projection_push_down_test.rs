@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::*;
 use pretty_assertions::assert_eq;
 
@@ -91,15 +92,15 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
         Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
-        db: "system".to_string(),
-        table: "test".to_string(),
-        table_id: 0,
-        table_version: None,
-        schema: DataSchemaRefExt::create(vec![
-            DataField::new("a", DataType::String, false),
-            DataField::new("b", DataType::String, false),
-            DataField::new("c", DataType::String, false),
-        ]),
+        table_info: TableInfo::simple(
+            "system",
+            "test",
+            DataSchemaRefExt::create(vec![
+                DataField::new("a", DataType::String, false),
+                DataField::new("b", DataType::String, false),
+                DataField::new("c", DataType::String, false),
+            ]),
+        ),
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
@@ -109,7 +110,6 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
             statistics.read_bytes
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
-        remote: false,
         tbl_args: None,
         push_downs: None,
     });
@@ -146,19 +146,19 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
         Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
-        db: "system".to_string(),
-        table: "test".to_string(),
-        table_id: 0,
-        table_version: None,
-        schema: DataSchemaRefExt::create(vec![
-            DataField::new("a", DataType::String, false),
-            DataField::new("b", DataType::String, false),
-            DataField::new("c", DataType::String, false),
-            DataField::new("d", DataType::String, false),
-            DataField::new("e", DataType::String, false),
-            DataField::new("f", DataType::String, false),
-            DataField::new("g", DataType::String, false),
-        ]),
+        table_info: TableInfo::simple(
+            "system",
+            "test",
+            DataSchemaRefExt::create(vec![
+                DataField::new("a", DataType::String, false),
+                DataField::new("b", DataType::String, false),
+                DataField::new("c", DataType::String, false),
+                DataField::new("d", DataType::String, false),
+                DataField::new("e", DataType::String, false),
+                DataField::new("f", DataType::String, false),
+                DataField::new("g", DataType::String, false),
+            ]),
+        ),
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
@@ -168,7 +168,6 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
             statistics.read_bytes
         ),
         scan_plan: Arc::new(ScanPlan::empty()),
-        remote: false,
         tbl_args: None,
         push_downs: None,
     });

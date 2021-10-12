@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod hashtable;
-mod storeapi;
+mod meta;
 
 pub use hashtable::*;
-pub use storeapi::StoreApiProvider;
+pub use meta::MetaClientProvider;

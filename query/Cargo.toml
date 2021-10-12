@@ -25,32 +25,30 @@ common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
 common-management = { path = "../common/management" }
 common-cache = { path = "../common/cache"}
+common-context = { path = "../common/context" }
+common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
+common-flight-rpc = { path = "../common/flight-rpc" }
 common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-store-api-sdk= {path = "../common/store-api-sdk" }
-common-kv-api = { path = "../common/kv-apis/api" }
-common-kv-api-vo = { path = "../common/kv-apis/vo" }
-common-meta-api = { path = "../common/meta-apis/api" }
-common-meta-api-vo = { path = "../common/meta-apis/vo" }
-common-dfs-api = { path = "../common/dfs-apis/api" }
-common-dfs-api-vo = { path = "../common/dfs-apis/vo" }
+common-meta-api = { path = "../common/meta/api" }
+common-meta-flight = {path = "../common/meta/flight" }
+common-meta-types = {path = "../common/meta/types"}
+common-meta-local-store = { path = "../common/meta/local-store" }
 common-io = { path = "../common/io" }
-common-metatypes = { path = "../common/metatypes" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
-common-kv = { path = "../common/kv" }
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "9c706a3" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "cdd2ce1" }
 
 # Crates.io dependencies
-ahash = "0.7.4"
+ahash = "0.7.5"
 async-trait = "0.1"
 async-compat = "0.2.1"
 bumpalo = "3.7.1"
@@ -70,7 +68,6 @@ num = "0.4"
 nom = "7.0.0"
 num_cpus = "1.0"
 paste = "^1.0"
-pnet = "0.28.0"
 chrono-tz = "0.6"
 chrono =  "0.4.0"
 prost = "0.8.0"
@@ -86,7 +83,7 @@ tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.8"
 tonic = "0.5.2"
 walkdir = "2.3.2"
-axum = {version = "0.2.5", features=["headers"] }
+axum = {version = "0.2.8", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
 hyper = "0.14.13"

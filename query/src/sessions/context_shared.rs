@@ -12,22 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
 use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::Catalog;
+use crate::catalogs::TableMeta;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+
+type DatabaseAndTable = (String, String);
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -50,6 +57,7 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
+    pub(in crate::sessions) tables_meta: Arc<Mutex<HashMap<DatabaseAndTable, Arc<TableMeta>>>>,
 }
 
 impl DatabendQueryContextShared {
@@ -70,6 +78,7 @@ impl DatabendQueryContextShared {
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
             running_plan: Arc::new(RwLock::new(None)),
+            tables_meta: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -101,6 +110,22 @@ impl DatabendQueryContextShared {
 
     pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
         self.session.get_catalog()
+    }
+
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
+        // Always get same table metadata in the same query
+        let table_meta_key = (database.to_string(), table.to_string());
+
+        let mut tables_meta = self.tables_meta.lock();
+
+        Ok(match tables_meta.entry(table_meta_key) {
+            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                let catalog = self.get_catalog();
+                let table_meta = catalog.get_table(database, table)?;
+                entry.insert(table_meta).clone()
+            }
+        })
     }
 
     /// Init runtime when first get

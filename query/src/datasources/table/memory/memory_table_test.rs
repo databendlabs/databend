@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_meta_api_vo::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -35,13 +35,18 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("b", DataType::UInt64, false),
     ]);
     let table = MemoryTable::try_create(TableInfo {
+        database_id: 0,
         db: "default".into(),
         name: "a".into(),
         schema: schema.clone(),
         engine: "Memory".to_string(),
         options: TableOptions::default(),
         table_id: 0,
+        version: 0,
     })?;
+
+    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
 
     // append data.
     {
@@ -63,20 +68,23 @@ async fn test_memorytable() -> Result<()> {
             schema,
             input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
         };
-        table.append_data(ctx.clone(), insert_plan).await.unwrap();
+        table
+            .append_data(io_ctx.clone(), insert_plan)
+            .await
+            .unwrap();
     }
 
     // read.
     {
         let source_plan = table.read_plan(
-            ctx.clone(),
+            io_ctx.clone(),
             None,
             Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
-        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let stream = table.read(io_ctx.clone(), &source_plan.push_downs).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(
             vec![
@@ -99,14 +107,16 @@ async fn test_memorytable() -> Result<()> {
             db: "default".to_string(),
             table: "a".to_string(),
         };
-        table.truncate(ctx.clone(), truncate_plan).await?;
+        table.truncate(io_ctx, truncate_plan).await?;
 
+        let io_ctx = ctx.get_single_node_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
         let source_plan = table.read_plan(
-            ctx.clone(),
+            io_ctx.clone(),
             None,
             Some(ctx.get_settings().get_max_threads()? as usize),
         )?;
-        let stream = table.read(ctx, &source_plan).await?;
+        let stream = table.read(io_ctx, &source_plan.push_downs).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(vec!["++", "++"], &result);
     }

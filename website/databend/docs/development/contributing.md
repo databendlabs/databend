@@ -38,7 +38,7 @@ All developer documentation is published on the Databend developer site, [databe
 
 To submit your pull request:
 
-1. Fork the `databend` repo and create your branch from `master`.
+1. Fork the `databend` repo and create your branch from `main`.
 2. Open an regular [issue](https://github.com/datafuselabs/databend/issues/new/choose) for binding the pull request.
 3. Submit a [draft pull requests](https://github.blog/2019-02-14-introducing-draft-pull-requests/), tag your work in progress.
 4. If you have added code that should be tested, add unit tests.

@@ -13,12 +13,19 @@
 // limitations under the License.
 
 use std::fs;
+use std::io;
 use std::io::Write;
 
+use clap::App;
+use clap_generate::generate;
+use clap_generate::generators::Bash;
+use clap_generate::generators::Zsh;
+use clap_generate::Generator;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
+use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
 use crate::cmds::Config;
 use crate::cmds::Env;
@@ -32,6 +39,10 @@ pub struct Processor {
     env: Env,
     readline: Editor<()>,
     commands: Vec<Box<dyn Command>>,
+}
+
+fn print_completions<G: Generator>(app: &mut App) {
+    generate::<G, _>(app, app.get_name().to_string(), &mut io::stdout());
 }
 
 impl Processor {
@@ -71,6 +82,39 @@ impl Processor {
             Some("version") => {
                 let cmd = VersionCommand::create();
                 cmd.exec(&mut writer, "".parse().unwrap())
+            }
+            Some("cluster") => {
+                let cmd = ClusterCommand::create(self.env.conf.clone());
+                return cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("cluster"),
+                );
+            }
+            Some("completion") => {
+                if let Some(generator) = self
+                    .env
+                    .conf
+                    .clone()
+                    .clap
+                    .into_inner()
+                    .subcommand_matches("completion")
+                    .unwrap()
+                    .value_of("completion")
+                {
+                    let mut app = Config::build_cli();
+                    eprintln!("Generating completion file for {}...", generator);
+                    match generator {
+                        "bash" => print_completions::<Bash>(&mut app),
+                        "zsh" => print_completions::<Zsh>(&mut app),
+                        _ => panic!("Unknown generator"),
+                    }
+                }
+                Ok(())
             }
             None => self.process_run_interactive(),
             _ => {

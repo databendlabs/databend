@@ -63,7 +63,6 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::UnaryOperator;
 
-use crate::catalogs::Catalog;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
@@ -433,9 +432,9 @@ impl PlanParser {
             db_name = tbl_name;
             tbl_name = table_name.0[1].value.clone();
         }
-        let table = self.ctx.get_catalog().get_table(&db_name, &tbl_name)?;
 
-        let mut schema = table.raw().schema()?;
+        let table = self.ctx.get_table(&db_name, &tbl_name)?;
+        let mut schema = table.raw().schema();
         let tbl_id = table.meta_id();
 
         if !columns.is_empty() {
@@ -708,27 +707,29 @@ impl PlanParser {
                 let table = table_meta.raw();
                 let table_id = table_meta.meta_id();
                 let table_version = table_meta.meta_ver();
-                table
-                    .schema()
-                    .and_then(|ref schema| {
-                        let tbl_scan_info = TableScanInfo {
-                            table_name,
-                            table_id,
-                            table_version,
-                            table_schema: schema.as_ref(),
-                            table_args: None,
-                        };
-                        PlanBuilder::scan(db_name, tbl_scan_info, None, None)
-                    })
+
+                let tbl_scan_info = TableScanInfo {
+                    table_name,
+                    table_id,
+                    table_version,
+                    table_schema: &table.schema(),
+                    table_args: None,
+                };
+
+                PlanBuilder::scan(db_name, tbl_scan_info, None, None)
                     .and_then(|builder| builder.build())
                     .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                        PlanNode::Scan(ref dummy_scan_plan) => table
-                            .read_plan(
-                                self.ctx.clone(),
-                                Some(dummy_scan_plan.push_downs.clone()),
-                                Some(self.ctx.get_settings().get_max_threads()? as usize),
-                            )
-                            .map(PlanNode::ReadSource),
+                        PlanNode::Scan(ref dummy_scan_plan) => {
+                            // TODO(xp): is it possible to use get_cluster_table_io_context() here?
+                            let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                            table
+                                .read_plan(
+                                    Arc::new(io_ctx),
+                                    Some(dummy_scan_plan.push_downs.clone()),
+                                    Some(self.ctx.get_settings().get_max_threads()? as usize),
+                                )
+                                .map(PlanNode::ReadSource)
+                        }
                         _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
                     })
             })
@@ -791,29 +792,33 @@ impl PlanParser {
                 }
 
                 let scan = {
-                    table.schema().and_then(|schema| {
-                        let tbl_scan_info = TableScanInfo {
-                            table_name: &table_name,
-                            table_id: meta_id,
-                            table_version: meta_version,
-                            table_schema: schema.as_ref(),
-                            table_args,
-                        };
-                        PlanBuilder::scan(&db_name, tbl_scan_info, None, None)
-                            .and_then(|builder| builder.build())
-                    })
+                    let tbl_scan_info = TableScanInfo {
+                        table_name: &table_name,
+                        table_id: meta_id,
+                        table_version: meta_version,
+                        table_schema: &table.schema(),
+                        table_args,
+                    };
+                    PlanBuilder::scan(&db_name, tbl_scan_info, None, None)
+                        .and_then(|builder| builder.build())
                 };
 
                 // TODO: Move ReadSourcePlan to SelectInterpreter
                 let partitions = self.ctx.get_settings().get_max_threads()? as usize;
                 scan.and_then(|scan| match scan {
-                    PlanNode::Scan(ref scan) => table
-                        .read_plan(
-                            self.ctx.clone(),
-                            Some(scan.push_downs.clone()),
-                            Some(partitions),
-                        )
-                        .map(PlanNode::ReadSource),
+                    PlanNode::Scan(ref scan) => {
+                        // TODO(xp): is it possible to use get_cluster_table_io_context() here?
+
+                        let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                        table
+                            .read_plan(
+                                Arc::new(io_ctx),
+                                Some(scan.push_downs.clone()),
+                                // TODO(xp): remove partitions, partitioning hint has been included in io_ctx.max_threads and io_ctx.query_nodes
+                                Some(partitions),
+                            )
+                            .map(PlanNode::ReadSource)
+                    }
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })
             }

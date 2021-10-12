@@ -18,6 +18,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 
 use crate::Part;
 use crate::Partitions;
@@ -44,11 +45,7 @@ impl Test {
         };
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
-            db: "system".to_string(),
-            table: "numbers_mt".to_string(),
-            table_id: 0,
-            table_version: None,
-            schema,
+            table_info: TableInfo::simple("system", "numbers_mt", schema),
             parts: Self::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
@@ -56,7 +53,6 @@ impl Test {
                 statistics.read_rows, statistics.read_bytes
             ),
             scan_plan: Arc::new(ScanPlan::empty()),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         }))

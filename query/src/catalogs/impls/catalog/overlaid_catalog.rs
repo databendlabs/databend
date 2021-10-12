@@ -17,9 +17,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_api_vo::CreateDatabaseReply;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::CreateDatabaseReply;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
@@ -110,16 +110,12 @@ impl Catalog for OverlaidCatalog {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> common_exception::Result<Arc<TableMeta>> {
         self.read_only
-            .get_table_by_id(db_name, table_id, table_version)
-            .or_else(|_e| {
-                self.bottom
-                    .get_table_by_id(db_name, table_id, table_version)
-            })
+            .get_table_by_id(table_id, table_version)
+            .or_else(|_e| self.bottom.get_table_by_id(table_id, table_version))
     }
 
     fn get_table_function(

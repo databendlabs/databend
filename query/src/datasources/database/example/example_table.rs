@@ -13,11 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
+use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -27,13 +31,9 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct ExampleTable {
-    db: String,
-    name: String,
-    schema: DataSchemaRef,
-    table_id: u64,
+    table_info: TableInfo,
 }
 
 impl ExampleTable {
@@ -42,57 +42,43 @@ impl ExampleTable {
         db: String,
         name: String,
         schema: DataSchemaRef,
-        _options: TableOptions,
+        options: TableOptions,
         table_id: u64,
     ) -> Result<Box<dyn Table>> {
-        let table = Self {
+        let table_info = TableInfo {
+            database_id: 0,
+            table_id,
+            version: 0,
             db,
             name,
+
             schema,
-            table_id,
+            engine: "ExampleNull".to_string(),
+            options,
         };
-        Ok(Box::new(table))
+
+        Ok(Box::new(Self { table_info }))
     }
 }
 
 #[async_trait::async_trait]
 impl Table for ExampleTable {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn engine(&self) -> &str {
-        "ExampleNull"
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         Ok(ReadDataSourcePlan {
-            db: self.db.clone(),
-            table: self.name().to_string(),
-            table_id: self.table_id,
-            table_version: None,
-            schema: self.schema.clone(),
+            table_info: self.get_table_info().clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -100,10 +86,10 @@ impl Table for ExampleTable {
             statistics: Statistics::new_exact(0, 0),
             description: format!(
                 "(Read from Example Null Engine table  {}.{})",
-                self.db, self.name
+                &self.get_table_info().db,
+                self.name()
             ),
             scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            remote: false,
             tbl_args: None,
             push_downs: None,
         })
@@ -111,13 +97,13 @@ impl Table for ExampleTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::empty_with_schema(self.schema.clone());
+        let block = DataBlock::empty_with_schema(self.schema());
 
         Ok(Box::pin(DataBlockStream::create(
-            self.schema.clone(),
+            self.schema(),
             None,
             vec![block],
         )))
@@ -125,15 +111,15 @@ impl Table for ExampleTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _insert_plan: common_planners::InsertIntoPlan,
+        _io_ctx: Arc<TableIOContext>,
+        _insert_plan: InsertIntoPlan,
     ) -> Result<()> {
         Ok(())
     }
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())

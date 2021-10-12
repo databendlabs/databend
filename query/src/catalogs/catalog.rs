@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_api_vo::CreateDatabaseReply;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::CreateDatabaseReply;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
@@ -51,7 +51,6 @@ pub trait Catalog {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>>;

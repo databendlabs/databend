@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api_vo::CreateDatabaseReply;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::CreateDatabaseReply;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
@@ -83,12 +83,20 @@ impl Catalog for SystemCatalog {
 
     fn get_table_by_id(
         &self,
-        db_name: &str,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableMeta>> {
-        let db = self.get_database(db_name)?;
-        db.get_table_by_id(table_id, table_version)
+        for db in self.dbs.values() {
+            let tbl = db.get_table_by_id(table_id, table_version);
+            match tbl {
+                Ok(tbl) => return Ok(tbl),
+                Err(_) => continue,
+            }
+        }
+        Err(ErrorCode::UnknownTable(format!(
+            "unknown table of id {}",
+            table_id
+        )))
     }
 
     fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {

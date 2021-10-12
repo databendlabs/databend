@@ -15,14 +15,15 @@
 use std::any::Any;
 use std::convert::TryInto;
 use std::fs::File;
+use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read;
 use common_base::tokio::task;
+use common_context::TableIOContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api_vo::TableInfo;
+use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
@@ -34,21 +35,20 @@ use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct ParquetTable {
-    tbl_info: TableInfo,
+    table_info: TableInfo,
     file: String,
 }
 
 impl ParquetTable {
-    pub fn try_create(tbl_info: TableInfo) -> Result<Box<dyn Table>> {
-        let options = &tbl_info.options;
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let options = &table_info.options;
         let file = options.get("location").cloned();
         return match file {
             Some(file) => {
                 let table = ParquetTable {
-                    tbl_info,
+                    table_info,
                     file: file.trim_matches(|s| s == '\'' || s == '"').to_string(),
                 };
                 Ok(Box::new(table))
@@ -92,43 +92,23 @@ fn read_file(
 
 #[async_trait::async_trait]
 impl Table for ParquetTable {
-    fn name(&self) -> &str {
-        &self.tbl_info.name
-    }
-
-    fn engine(&self) -> &str {
-        &self.tbl_info.engine
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.tbl_info.schema.clone())
-    }
-
-    fn get_id(&self) -> u64 {
-        self.tbl_info.table_id
-    }
-
-    fn is_local(&self) -> bool {
-        true
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
     }
 
     fn read_plan(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        let db = &self.tbl_info.db;
+        let db = &self.table_info.db;
         Ok(ReadDataSourcePlan {
-            db: db.to_string(),
-            table: self.name().to_string(),
-            table_id: self.tbl_info.table_id,
-            table_version: None,
-            schema: self.tbl_info.schema.clone(),
+            table_info: self.table_info.clone(),
             parts: vec![Part {
                 name: "".to_string(),
                 version: 0,
@@ -136,7 +116,6 @@ impl Table for ParquetTable {
             statistics: Statistics::default(),
             description: format!("(Read from Parquet Engine table  {}.{})", db, self.name()),
             scan_plan: Default::default(),
-            remote: false,
             tbl_args: None,
             push_downs,
         })
@@ -144,8 +123,8 @@ impl Table for ParquetTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
-        _source_plan: &ReadDataSourcePlan,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;
         type BlockReceiver = Receiver<Option<Result<DataBlock>>>;
@@ -153,7 +132,7 @@ impl Table for ParquetTable {
         let (response_tx, response_rx): (BlockSender, BlockReceiver) = bounded(2);
 
         let file = self.file.clone();
-        let projection: Vec<usize> = (0..self.tbl_info.schema.fields().len()).collect();
+        let projection: Vec<usize> = (0..self.table_info.schema.fields().len()).collect();
         task::spawn_blocking(move || {
             if let Err(e) = read_file(&file, response_tx, &projection) {
                 println!("Parquet reader thread terminated due to error: {:?}", e);

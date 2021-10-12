@@ -13,47 +13,8 @@
 // limitations under the License.
 //
 
-use std::convert::TryFrom;
-
-use common_exception::ErrorCode;
 use common_exception::Result;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct NodeInfo {
-    #[serde(default)]
-    pub id: String,
-    #[serde(default)]
-    pub cpu_nums: u64,
-    #[serde(default)]
-    pub version: u32,
-    #[serde(default)]
-    pub flight_address: String,
-}
-
-impl TryFrom<Vec<u8>> for NodeInfo {
-    type Error = ErrorCode;
-
-    fn try_from(value: Vec<u8>) -> Result<Self> {
-        match serde_json::from_slice(&value) {
-            Ok(user_info) => Ok(user_info),
-            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
-                "Cannot deserialize namespace from bytes. cause {}",
-                serialize_error
-            ))),
-        }
-    }
-}
-
-impl NodeInfo {
-    pub fn create(id: String, cpu_nums: u64, flight_address: String) -> NodeInfo {
-        NodeInfo {
-            id,
-            cpu_nums,
-            version: 0,
-            flight_address,
-        }
-    }
-}
+use common_meta_types::NodeInfo;
 
 #[async_trait::async_trait]
 pub trait NamespaceApi: Sync + Send {

@@ -15,14 +15,14 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_kv_api::KVApi;
 use common_management::AuthType;
 use common_management::UserInfo;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
+use common_meta_api::KVApi;
 use sha2::Digest;
 
-use crate::common::StoreApiProvider;
+use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::users::User;
 
@@ -34,7 +34,7 @@ pub struct UserManager {
 
 impl UserManager {
     async fn create_kv_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        let store_api_provider = StoreApiProvider::new(cfg);
+        let store_api_provider = MetaClientProvider::new(cfg);
         match store_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create user api).")),
@@ -64,7 +64,12 @@ impl UserManager {
     }
 
     // Auth the user and password for different Auth type.
-    pub fn auth_user(&self, user: &str, password: impl AsRef<[u8]>) -> Result<bool> {
+    pub fn auth_user(
+        &self,
+        user: &str,
+        password: impl AsRef<[u8]>,
+        _client_addr: &str,
+    ) -> Result<bool> {
         let user = self.get_user(user)?;
 
         match user.auth_type {

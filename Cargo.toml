@@ -5,35 +5,30 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
+    "common/context",
     "common/clickhouse-srv",
+    "common/dal",
     "common/datablocks",
     "common/datavalues",
-    "common/dfs-apis/api",
-    "common/dfs-apis/vo",
     "common/exception",
+    "common/flight-rpc",
     "common/functions",
     "common/infallible",
     "common/io",
-    "common/kv-apis/api",
-    "common/kv-apis/util",
-    "common/kv-apis/vo",
-    "common/kv",
     "common/management",
-    "common/meta-apis/api",
-    "common/metatypes",
     "common/planners",
-    "common/raft-store",
-    "common/sled-store",
-    "common/store-api-sdk",
+    "common/meta/api",
+    "common/meta/local-store",
+    "common/meta/raft-store",
+    "common/meta/sled-store",
+    "common/meta/flight",
+    "common/meta/types",
     "common/streams",
     "common/tracing",
 
     # Query
     "query",
-    "kvsrv",
-
-    # distributed file system
-    #"dfs",
+    "metasrv",
 
     # SQL Fuzz
     "query/fuzz",
@@ -45,6 +40,10 @@ members = [
 [profile.release]
 debug = 1
 codegen-units = 1   # Reduce number of codegen units to increase optimizations.
+
+[profile.release.package]
+arrow2 = { codegen-units = 4 }
+databend-query = { codegen-units = 4 }
 
 [profile.bench]
 debug = true

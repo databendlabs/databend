@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::Infallible;
+use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::body::Full;
@@ -71,13 +72,16 @@ async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataB
     let tracing_table_meta = context.get_table("system", "tracing")?;
 
     let tracing_table = tracing_table_meta.raw();
+
+    let io_ctx = context.get_single_node_table_io_context()?;
+    let io_ctx = Arc::new(io_ctx);
     let tracing_table_read_plan = tracing_table.read_plan(
-        context.clone(),
+        io_ctx.clone(),
         None,
         Some(context.get_settings().get_max_threads()? as usize),
     )?;
 
     tracing_table
-        .read(context.clone(), &tracing_table_read_plan)
+        .read(io_ctx, &tracing_table_read_plan.push_downs)
         .await
 }

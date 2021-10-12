@@ -28,7 +28,7 @@ and run SQL query from command line
 Use single line install script to install `databend-cli` on local machine
 
 ```bash
-curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/master/scripts/installer/install.sh | bash
+curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/main/scripts/installer/install.sh | bash
 ```
 
 ## SubCommands

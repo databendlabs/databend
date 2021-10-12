@@ -15,29 +15,29 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_api_vo::DatabaseInfo;
+use common_meta_types::DatabaseInfo;
 
-use crate::catalogs::impls::meta_backends::EmbeddedMetaBackend;
-use crate::catalogs::meta_backend::MetaBackend;
+use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::backends::EmbeddedCatalogBackend;
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
 use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabase;
 
 pub struct ExampleDatabaseEngine {
-    meta_backend: Arc<dyn MetaBackend>,
+    catalog_backend: Arc<dyn CatalogBackend>,
 }
 
 impl ExampleDatabaseEngine {
     pub fn create() -> Self {
-        let meta_backend = Arc::new(EmbeddedMetaBackend::new());
-        ExampleDatabaseEngine { meta_backend }
+        let catalog_backend = Arc::new(EmbeddedCatalogBackend::create());
+        ExampleDatabaseEngine { catalog_backend }
     }
 }
 
 impl DatabaseEngine for ExampleDatabaseEngine {
     fn create(&self, _conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let db = ExampleDatabase::new(&db_info.db, &db_info.engine, self.meta_backend.clone());
+        let db = ExampleDatabase::new(&db_info.db, &db_info.engine, self.catalog_backend.clone());
         Ok(Arc::new(db))
     }
 

@@ -12,179 +12,112 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
+use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::DataType;
-use common_dfs_api_vo::BlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
-use uuid::Uuid;
+use rusoto_core::ByteStream;
 
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::table::fuse::block_location;
-use crate::datasources::table::fuse::column_stats_reduce;
-use crate::datasources::table::fuse::BlockLocation;
-use crate::datasources::table::fuse::BlockMeta;
-use crate::datasources::table::fuse::ColStats;
-use crate::datasources::table::fuse::ColumnId;
-use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
-use crate::sessions::DatabendQueryContextRef;
 
-impl FuseTable {
+pub type BlockStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
+
+/// dummy struct, namespace placeholder
+pub struct BlockAppender;
+
+impl BlockAppender {
     pub async fn append_blocks(
-        &self,
-        ctx: DatabendQueryContextRef,
+        data_accessor: Arc<dyn DataAccessor>,
         mut stream: BlockStream,
     ) -> Result<SegmentInfo> {
-        let mut block_metas = vec![];
-        let mut blocks_stats = vec![];
-        let mut summary_row_count = 0u64;
-        let mut summary_block_count = 0u64;
-        let mut summary_uncompressed_byte_size = 0u64;
-        let mut summary_compressed_byte_size = 0u64;
+        let mut stats_acc = util::StatisticsAccumulator::new();
+        let mut block_meta_acc = util::BlockMetaAccumulator::new();
 
+        // accumulates the stats and save the blocks
         while let Some(block) = stream.next().await {
+            stats_acc.acc(&block)?;
             let schema = block.schema().to_arrow();
-            let blk_stats = block_stats(&block)?;
-
-            let row_count = block.num_rows() as u64;
-            let block_in_memory_size = block.memory_size() as u64;
-
-            let data_accessor = self.data_accessor(&ctx)?;
-
-            let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
-            let location = block_location(&part_uuid);
-
-            let file_size = save_block(&schema, block, data_accessor, &location)?;
-
-            // TODO gather parquet meta
-            let meta_size = 0u64;
-
-            let col_stats = blk_stats
-                .iter()
-                .map(|(idx, v)| (*idx, v.1.clone()))
-                .collect::<HashMap<ColumnId, ColStats>>();
-
-            let block_info = BlockMeta {
-                location: BlockLocation {
-                    location: location.clone(),
-                    meta_size,
-                },
-                row_count,
-                block_size: block_in_memory_size,
-                col_stats,
-            };
-
-            block_metas.push(block_info);
-            blocks_stats.push(blk_stats);
-
-            summary_block_count += 1;
-            summary_row_count += row_count;
-            summary_compressed_byte_size += file_size;
-            summary_uncompressed_byte_size += block_in_memory_size;
+            let location = util::gen_unique_block_location();
+            let file_size = Self::save_block(&schema, block, &data_accessor, &location).await?;
+            block_meta_acc.acc(file_size, location, &mut stats_acc);
         }
 
-        let summary = column_stats_reduce(blocks_stats)?;
+        // summary and gives back a segment_info
+        // we need to send back a stream of segment latter
+        let block_metas = block_meta_acc.blocks_metas;
+        let summary = util::column_stats_reduce(stats_acc.blocks_stats)?;
         let segment_info = SegmentInfo {
             blocks: block_metas,
             summary: Stats {
-                row_count: summary_row_count,
-                block_count: summary_block_count,
-                uncompressed_byte_size: summary_uncompressed_byte_size,
-                compressed_byte_size: summary_compressed_byte_size,
+                row_count: stats_acc.summary_row_count,
+                block_count: stats_acc.summary_block_count,
+                uncompressed_byte_size: stats_acc.in_memory_size,
+                compressed_byte_size: stats_acc.file_size,
                 col_stats: summary,
             },
         };
         Ok(segment_info)
     }
-}
 
-pub fn block_stats(data_block: &DataBlock) -> Result<HashMap<ColumnId, (DataType, ColStats)>> {
-    // TODO column id is FAKED, this is OK as long as table schema is NOT changed, which is not realistic
-    // we should extend DataField with column_id ...
+    async fn save_block(
+        arrow_schema: &ArrowSchema,
+        block: DataBlock,
+        data_accessor: impl AsRef<dyn DataAccessor>,
+        location: &str,
+    ) -> Result<u64> {
+        let data_accessor = data_accessor.as_ref();
+        let options = WriteOptions {
+            write_statistics: true,
+            compression: Compression::Lz4, // let's begin with lz4
+            version: Version::V2,
+        };
+        let batch = RecordBatch::try_from(block)?;
+        let encodings: Vec<_> = arrow_schema
+            .fields()
+            .iter()
+            .map(|f| util::col_encoding(&f.data_type))
+            .collect();
 
-    let row_count = data_block.num_rows();
-    (0..).into_iter().zip(data_block.columns().iter()).try_fold(
-        HashMap::new(),
-        |mut res, (idx, col)| {
-            let data_type = col.data_type();
-            let min = match col {
-                DataColumn::Array(s) => s.min(),
-                DataColumn::Constant(v, _) => Ok(v.clone()),
-            }?;
+        let iter = vec![Ok(batch)];
+        let row_groups =
+            RowGroupIterator::try_new(iter.into_iter(), arrow_schema, options, encodings)?;
+        let parquet_schema = row_groups.parquet_schema().clone();
 
-            let max = match col {
-                DataColumn::Array(s) => s.max(),
-                DataColumn::Constant(v, _) => Ok(v.clone()),
-            }?;
+        // PutObject in S3 need to know the content-length in advance
+        // multipart upload may intimidate this, but let's fit things together first
+        // see issue #xxx
 
-            let null_count = match col {
-                DataColumn::Array(s) => s.null_count(),
-                DataColumn::Constant(v, _) => {
-                    if v.is_null() {
-                        1
-                    } else {
-                        0
-                    }
-                }
-            };
+        use bytes::BufMut;
+        // we need a configuration of block size threshold here
+        let mut writer = Vec::with_capacity(10 * 1024 * 1024).writer();
 
-            let col_stats = ColStats {
-                min,
-                max,
-                null_count,
-                row_count,
-            };
+        let len = common_arrow::parquet::write::write_file(
+            &mut writer,
+            row_groups,
+            parquet_schema,
+            options,
+            None,
+            None,
+        )
+        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
-            res.insert(idx, (data_type, col_stats));
-            Ok(res)
-        },
-    )
-}
+        let parquet = writer.into_inner();
+        let stream_len = parquet.len();
+        let stream = ByteStream::from(parquet);
+        data_accessor
+            .put_stream(location, Box::new(stream), stream_len)
+            .await?;
 
-pub(crate) fn save_block(
-    arrow_schema: &ArrowSchema,
-    block: DataBlock,
-    data_accessor: Arc<dyn DataAccessor>,
-    location: &str,
-) -> Result<u64> {
-    // TODO pick proper compression / encoding algos
-    let options = WriteOptions {
-        write_statistics: true,
-        compression: Compression::Uncompressed,
-        version: Version::V2,
-    };
-    use std::iter::repeat;
-    let encodings: Vec<_> = repeat(Encoding::Plain).take(block.num_columns()).collect();
-
-    let batch = RecordBatch::try_from(block)?;
-    let iter = vec![Ok(batch)];
-    let row_groups = RowGroupIterator::try_new(iter.into_iter(), arrow_schema, options, encodings)?;
-    let parquet_schema = row_groups.parquet_schema().clone();
-    let mut writer = data_accessor.get_writer(location)?;
-
-    // arrow2 convert schema to metadata, is it required?
-    // -- let key_value_metadata = Some(vec![schema_to_metadata_key(schema)]);
-
-    let len = common_arrow::parquet::write::write_file(
-        &mut writer,
-        row_groups,
-        parquet_schema,
-        options,
-        None,
-        None,
-    )
-    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-
-    Ok(len)
+        Ok(len)
+    }
 }

@@ -19,6 +19,7 @@ mod tests {
 
     use common_datavalues::*;
     use common_exception::Result;
+    use common_meta_types::TableInfo;
     use common_planners::*;
     use pretty_assertions::assert_eq;
 
@@ -34,15 +35,15 @@ mod tests {
             Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
         ctx.try_set_statistics(&statistics)?;
         let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
-            db: "system".to_string(),
-            table: "test".to_string(),
-            table_id: 0,
-            table_version: None,
-            schema: DataSchemaRefExt::create(vec![
-                DataField::new("a", DataType::String, false),
-                DataField::new("b", DataType::String, false),
-                DataField::new("c", DataType::String, false),
-            ]),
+            table_info: TableInfo::simple(
+                "system",
+                "test",
+                DataSchemaRefExt::create(vec![
+                    DataField::new("a", DataType::String, false),
+                    DataField::new("b", DataType::String, false),
+                    DataField::new("c", DataType::String, false),
+                ]),
+            ),
             parts: generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
@@ -52,7 +53,6 @@ mod tests {
                 statistics.read_bytes
             ),
             scan_plan: Arc::new(ScanPlan::empty()),
-            remote: false,
             tbl_args: None,
             push_downs: None,
         });

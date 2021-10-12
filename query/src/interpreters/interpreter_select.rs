@@ -23,7 +23,7 @@ use common_base::tokio::macros::support::Poll;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_management::NodeInfo;
+use common_meta_types::NodeInfo;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;

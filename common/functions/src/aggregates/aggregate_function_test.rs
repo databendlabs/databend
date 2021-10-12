@@ -15,6 +15,7 @@
 use bumpalo::Bump;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use float_cmp::approx_eq;
 use pretty_assertions::assert_eq;
 
 use crate::aggregates::*;
@@ -174,6 +175,28 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "stddev_pop",
             arrays: vec![arrays[0].clone()],
             expect: DataValue::Float64(Some(1.118033988749895)),
+            error: "",
+        },
+        Test {
+            name: "covar-sample-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_samp",
+            func_name: "covar_samp",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(-1.6666666666666667)),
+            error: "",
+        },
+        Test {
+            name: "covar-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_pop",
+            func_name: "covar_pop",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(-1.25000)),
             error: "",
         },
     ];
@@ -360,6 +383,28 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             expect: DataValue::Float64(None),
             error: "",
         },
+        Test {
+            name: "covar-sample-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_samp",
+            func_name: "covar_samp",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(f64::INFINITY)),
+            error: "",
+        },
+        Test {
+            name: "covar-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_pop",
+            func_name: "covar_pop",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(f64::INFINITY)),
+            error: "",
+        },
     ];
 
     for t in tests {
@@ -394,5 +439,52 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             assert_eq!(t.error, e.to_string());
         }
     }
+    Ok(())
+}
+
+#[test]
+fn test_covariance_with_comparable_data_sets() -> Result<()> {
+    let arena = Bump::new();
+
+    let mut v0 = Vec::with_capacity(2000);
+    for _i in 0..2000 {
+        v0.push(1.0_f32)
+    }
+
+    let mut v1 = Vec::with_capacity(2000);
+    for i in 0..2000 {
+        v1.push(i as i16);
+    }
+
+    let arrays: Vec<Series> = vec![Series::new(v0), Series::new(v1)];
+
+    let args = vec![
+        DataField::new("a", DataType::Float32, false),
+        DataField::new("b", DataType::Int16, false),
+    ];
+
+    let factory = AggregateFunctionFactory::instance();
+
+    let run_test = |func_name: &'static str| -> Result<f64> {
+        let func = factory.get(func_name, vec![], args.clone())?;
+        let addr = arena.alloc_layout(func.state_layout());
+        func.init_state(addr.into());
+        func.accumulate(addr.into(), &arrays, 2000)?;
+        let result = func.merge_result(addr.into())?;
+        match result {
+            DataValue::Float64(Some(val)) => Ok(val),
+            _ => {
+                assert!(false);
+                Ok(0.0)
+            }
+        }
+    };
+
+    let r = run_test("covar_samp")?;
+    approx_eq!(f64, 0.0, r, epsilon = 0.000001);
+
+    let r = run_test("covar_pop")?;
+    approx_eq!(f64, 0.0, r, epsilon = 0.000001);
+
     Ok(())
 }

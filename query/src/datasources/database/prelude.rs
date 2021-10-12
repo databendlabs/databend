@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::catalogs::meta_backend::MetaBackend;
+use crate::catalogs::backends::CatalogBackend;
 use crate::datasources::database::default::default_database_factory::DefaultDatabaseFactory;
 use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
@@ -26,10 +26,10 @@ pub const DB_ENGINE_DEFAULT: &str = "Default";
 
 pub fn register_prelude_db_engines(
     registry: &DatabaseEngineRegistry,
-    meta_backend: Arc<dyn MetaBackend>,
+    catalog_backend: Arc<dyn CatalogBackend>,
     table_factory_registry: Arc<TableEngineRegistry>,
 ) -> Result<()> {
-    let default = DefaultDatabaseFactory::new(meta_backend, table_factory_registry);
+    let default = DefaultDatabaseFactory::new(catalog_backend, table_factory_registry);
     registry.register(DB_ENGINE_DEFAULT, Arc::new(default))?;
     Ok(())
 }

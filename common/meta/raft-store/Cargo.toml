@@ -1,0 +1,29 @@
+[package]
+name = "common-meta-raft-store"
+version = "0.1.0"
+description = "Raft state machine"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+common-exception = {path = "../../exception"}
+common-tracing = {path = "../../tracing"}
+common-meta-sled-store = {path = "../sled-store"}
+common-meta-types = {path = "../types"}
+
+anyhow = "1.0.44"
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
+async-trait = "0.1"
+rand = "0.8.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+structopt = "0.3"
+structopt-toml = "0.5.0"
+maplit = "1.0.2"
+
+[dev-dependencies]
+common-base = {path = "../../base" }
+pretty_assertions = "1.0"
+tempfile = "3.2.0"

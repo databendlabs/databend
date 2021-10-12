@@ -16,7 +16,6 @@ use common_arrow::arrow::array::*;
 
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
-use crate::utils::NoNull;
 
 pub struct PrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
@@ -85,7 +84,6 @@ where T: DFPrimitiveType
 
     /// Create a new DataArray from an iterator.
     fn new_from_iter(it: impl Iterator<Item = T>) -> DFPrimitiveArray<T> {
-        let ca: NoNull<DFPrimitiveArray<_>> = it.collect();
-        ca.into_inner()
+        it.collect()
     }
 }

@@ -29,11 +29,13 @@ use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
+use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabaseEngine;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::users::UserManager;
 use crate::users::UserManagerRef;
 
 pub struct SessionManager {
@@ -49,14 +51,15 @@ pub struct SessionManager {
 pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
-    pub fn from_conf(
-        conf: Config,
-        discovery: ClusterDiscoveryRef,
-        user: UserManagerRef,
-    ) -> Result<SessionManagerRef> {
+    pub async fn from_conf(conf: Config) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
-
         catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
+
+        // Cluster discovery.
+        let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
+
+        // User manager and init the default users.
+        let user = UserManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {

@@ -30,7 +30,7 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct PackageCommand {
     conf: Config,
-    clap: App<'static, 'static>,
+    clap: App<'static>,
 }
 
 impl PackageCommand {
@@ -38,30 +38,26 @@ impl PackageCommand {
         let clap = PackageCommand::generate();
         PackageCommand { conf, clap }
     }
-    pub fn generate() -> App<'static, 'static> {
+    pub fn generate() -> App<'static> {
         return App::new("package")
             .setting(AppSettings::ColoredHelp)
-            .setting(AppSettings::DisableVersion)
             .about("Package manage databend binary releases")
             .subcommand(
                 App::new("fetch")
-                    .setting(AppSettings::DisableVersion)
                     .setting(AppSettings::ColoredHelp)
                     .about("Fetch the given version binary package")
-                    .arg(Arg::with_name("version").help("Version of databend package to fetch").default_value("latest")),
+                    .arg(Arg::new("version").about("Version of databend package to fetch").default_value("latest")),
             )
             .subcommand(
                 App::new("list")
-                    .setting(AppSettings::DisableVersion)
                     .setting(AppSettings::ColoredHelp)
                     .about("List all the packages"),
             )
             .subcommand(
                 App::new("switch")
-                    .setting(AppSettings::DisableVersion)
                     .setting(AppSettings::ColoredHelp)
                     .about("Switch the active databend to a specified version")
-                    .arg(Arg::with_name("version").required(true).help(
+                    .arg(Arg::new("version").required(true).about(
                         "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
                     ))
             );
@@ -107,7 +103,7 @@ impl Command for PackageCommand {
     }
 
     fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().get_matches_from_safe(args.split(' ')) {
+        match self.clap.clone().try_get_matches_from(args.split(' ')) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow()));
             }

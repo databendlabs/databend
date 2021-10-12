@@ -15,24 +15,13 @@
 
 use std::sync::Arc;
 
+use common_dal::read_obj;
+use common_dal::DataAccessor;
 use common_exception::Result;
 
-use crate::datasources::dal::DataAccessor;
-use crate::datasources::table::fuse::do_read_obj;
-use crate::datasources::table::fuse::do_read_obj_async;
 use crate::datasources::table::fuse::SegmentInfo;
-use crate::sessions::DatabendQueryContextRef;
-
-#[allow(dead_code)]
-pub fn read_segment(
-    da: Arc<dyn DataAccessor>,
-    ctx: &DatabendQueryContextRef,
-    loc: &str,
-) -> Result<SegmentInfo> {
-    do_read_obj(da, ctx, loc)
-}
 
 #[allow(dead_code)]
 pub async fn read_segment_async(da: Arc<dyn DataAccessor>, loc: &str) -> Result<SegmentInfo> {
-    do_read_obj_async(da, loc).await
+    read_obj(da, loc.to_string()).await
 }

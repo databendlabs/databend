@@ -60,6 +60,8 @@ pub struct Connection {
     tz: Tz,
     with_stack_trace: bool,
     compress: bool,
+
+    pub client_addr: String,
 }
 
 impl Connection {
@@ -71,6 +73,7 @@ impl Connection {
         timezone: String,
     ) -> Result<Connection> {
         let tz: Tz = timezone.parse()?;
+        let client_addr = stream.peer_addr()?.to_string();
         Ok(Connection {
             stream: BufWriter::new(stream),
             buffer: BytesMut::with_capacity(4 * 1024),
@@ -78,6 +81,7 @@ impl Connection {
             tz,
             with_stack_trace: false,
             compress: true,
+            client_addr,
         })
     }
 

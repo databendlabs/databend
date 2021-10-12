@@ -15,7 +15,6 @@
 mod index;
 
 pub(crate) mod common;
-pub(crate) mod dal;
 pub(crate) mod database;
 pub(crate) mod database_engine;
 pub(crate) mod database_engine_registry;
