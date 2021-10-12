@@ -45,29 +45,6 @@ pub trait TrySpawn {
     {
         self.try_spawn(task).unwrap()
     }
-
-    /// Blocks until a task is finished.
-    ///
-    /// The default impl is a poor man's `runtime::block_on`.
-    /// This is mainly used to wrap an async function into sync function.
-    fn block_on<F>(&self, f: F, timeout: Option<Duration>) -> Result<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let (tx, rx) = channel();
-        let _jh = self.spawn(async move {
-            let r = f.await;
-            let _ = tx.send(r);
-        });
-        let reply = match timeout {
-            Some(to) => rx
-                .recv_timeout(to)
-                .map_err(|timeout_err| ErrorCode::Timeout(timeout_err.to_string()))?,
-            None => rx.recv().map_err(ErrorCode::from_std_error)?,
-        };
-        Ok(reply)
-    }
 }
 
 impl<S: TrySpawn> TrySpawn for Arc<S> {
@@ -85,14 +62,6 @@ impl<S: TrySpawn> TrySpawn for Arc<S> {
         T::Output: Send + 'static,
     {
         self.as_ref().spawn(task)
-    }
-
-    fn block_on<F>(&self, f: F, timeout: Option<Duration>) -> Result<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        self.as_ref().block_on(f, timeout)
     }
 }
 
@@ -154,7 +123,18 @@ where
     }
 
     fn wait_in<RT: TrySpawn>(self, rt: &RT, timeout: Option<Duration>) -> Result<T::Output> {
-        rt.block_on(self, timeout)
+        let (tx, rx) = channel();
+        let _jh = rt.spawn(async move {
+            let r = self.await;
+            let _ = tx.send(r);
+        });
+        let reply = match timeout {
+            Some(to) => rx
+                .recv_timeout(to)
+                .map_err(|timeout_err| ErrorCode::Timeout(timeout_err.to_string()))?,
+            None => rx.recv().map_err(ErrorCode::from_std_error)?,
+        };
+        Ok(reply)
     }
 }
 
