@@ -31,7 +31,7 @@ rustyline = "9.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.9.8"
-sysinfo = "0.20.4"
+sysinfo = "0.20.5"
 tar = "0.4.37"
 thiserror = "1.0.30"
 ureq = { version = "2.2.0", features = ["json"] }
