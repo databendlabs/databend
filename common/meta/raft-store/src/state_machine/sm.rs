@@ -381,29 +381,6 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn apply_cmd(&mut self, cmd: &Cmd) -> common_exception::Result<AppliedState> {
         match cmd {
-            Cmd::AddFile { ref key, ref value } => {
-                // TODO(xp): put it in a transaction
-                let files = self.files();
-
-                let prev = files.get(key)?;
-                if prev.is_none() {
-                    files.insert(key, value).await?;
-                    tracing::info!("applied AddFile: {}={}", key, value);
-                    Ok((prev, Some(value.clone())).into())
-                } else {
-                    // TODO(xp): failure to add should returns `prev` as `result`
-                    Ok((prev, None).into())
-                }
-            }
-
-            Cmd::SetFile { ref key, ref value } => {
-                let files = self.files();
-
-                let prev = files.insert(key, value).await?;
-                tracing::info!("applied SetFile: {}={}", key, value);
-                Ok((prev, Some(value.clone())).into())
-            }
-
             Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).await?.into()),
 
             Cmd::AddNode {
