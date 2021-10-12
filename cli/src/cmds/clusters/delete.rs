@@ -58,18 +58,18 @@ impl DeleteCommand {
     fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
         let local_meta_srv = status.local_configs;
-        match local_meta_srv.meta_configs {
-            Some(meta) => {
-                meta.kill().expect("cannot stop metaservice");
-                let mut status = Status::read(self.conf.clone())?;
-                status.local_configs.meta_configs = None;
-                status.write()?;
-                writer.write_ok("🚀 stopped meta service");
-            }
-            None => {
-                writer.write_ok("no meta service found in local, skipped");
-            }
-        }
+        // match local_meta_srv.meta_configs {
+        //     Some(meta) => {
+        //         meta.kill().expect("cannot stop metaservice");
+        //         let mut status = Status::read(self.conf.clone())?;
+        //         status.local_configs.meta_configs = None;
+        //         status.write()?;
+        //         writer.write_ok("🚀 stopped meta service");
+        //     }
+        //     None => {
+        //         writer.write_ok("no meta service found in local, skipped");
+        //     }
+        // }
         Ok(())
     }
 

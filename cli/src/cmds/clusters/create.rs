@@ -473,17 +473,17 @@ impl CreateCommand {
     ) -> Result<()> {
         match meta_config.start() {
             Ok(_) => {
-                assert!(meta_config.get_pid().is_some());
-                let mut status = Status::read(self.conf.clone())?;
-                status.local_configs.meta_configs = Some(meta_config.clone());
-                status.write()?;
-                writer.write_ok(
-                    format!(
-                        "👏 successfully started meta service with rpc endpoint {}",
-                        meta_config.config.flight_api_address
-                    )
-                    .as_str(),
-                );
+                // assert!(meta_config.get_pid().is_some());
+                // let mut status = Status::read(self.conf.clone())?;
+                // status.local_configs.meta_configs = Some(meta_config.clone());
+                // status.write()?;
+                // writer.write_ok(
+                //     format!(
+                //         "👏 successfully started meta service with rpc endpoint {}",
+                //         meta_config.config.flight_api_address
+                //     )
+                //     .as_str(),
+                // );
                 Ok(())
             }
             Err(e) => Err(e),
@@ -581,42 +581,42 @@ impl CreateCommand {
     /// precheck whether current local profile applicable for local host machine
     fn local_exec_precheck(&self, args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
-        if status.local_configs != LocalConfig::empty() {
+        if status.local_configs.is_empty() {
             return Err(CliError::Unknown(format!(
                 "❗ found previously existed cluster with config in {}",
                 status.path
             )));
         }
-        let s = System::new_all();
-
-        if !s.process_by_name("databend-meta").is_empty() {
-            return Err(CliError::Unknown(
-                "❗ have installed databend-meta service before, please stop them and retry"
-                    .parse()
-                    .unwrap(),
-            ));
-        }
-        if args.value_of("meta_address").is_some()
-            && !args.value_of("meta_address").unwrap().is_empty()
-        {
-            let meta_address = SocketAddr::from_str(args.value_of("meta_address").unwrap());
-            match meta_address {
-                Ok(addr) => {
-                    if !portpicker::is_free(addr.port()) {
-                        return Err(CliError::Unknown(format!(
-                            "Address {} has been used for local meta service",
-                            addr.port()
-                        )));
-                    }
-                }
-                Err(e) => {
-                    return Err(CliError::Unknown(format!(
-                        "Cannot parse meta service address, error: {:?}",
-                        e
-                    )))
-                }
-            }
-        }
+        // let s = System::new_all();
+        //
+        // if !s.process_by_name("databend-meta").is_empty() {
+        //     return Err(CliError::Unknown(
+        //         "❗ have installed databend-meta service before, please stop them and retry"
+        //             .parse()
+        //             .unwrap(),
+        //     ));
+        // }
+        // if args.value_of("meta_address").is_some()
+        //     && !args.value_of("meta_address").unwrap().is_empty()
+        // {
+        //     let meta_address = SocketAddr::from_str(args.value_of("meta_address").unwrap());
+        //     match meta_address {
+        //         Ok(addr) => {
+        //             if !portpicker::is_free(addr.port()) {
+        //                 return Err(CliError::Unknown(format!(
+        //                     "Address {} has been used for local meta service",
+        //                     addr.port()
+        //                 )));
+        //             }
+        //         }
+        //         Err(e) => {
+        //             return Err(CliError::Unknown(format!(
+        //                 "Cannot parse meta service address, error: {:?}",
+        //                 e
+        //             )))
+        //         }
+        //     }
+        // }
 
         Ok(())
     }
