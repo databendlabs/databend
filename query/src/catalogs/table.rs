@@ -130,7 +130,7 @@ impl ToReadDataSourcePlan for dyn Table {
         partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
         let (statistics, parts) =
-            self.read_partitions(io_ctx.clone(), push_downs.clone(), partition_num_hint)?;
+            self.read_partitions(io_ctx, push_downs.clone(), partition_num_hint)?;
         let table_info = self.get_table_info();
 
         let description = if statistics.read_rows > 0 {
