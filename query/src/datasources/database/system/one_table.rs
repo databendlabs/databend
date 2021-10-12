@@ -21,6 +21,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
+use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -56,6 +57,14 @@ impl Table for OneTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    fn read_statistics(
+        &self,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<Statistics> {
+        Ok(Statistics::new_exact(1, 1))
     }
 
     async fn read(

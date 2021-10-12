@@ -114,7 +114,6 @@ impl Table for NumbersTable {
         )))])
     }
 
-    // defaults to generate one single part
     fn read_parts(
         &self,
         io_ctx: Arc<TableIOContext>,

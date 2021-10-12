@@ -65,7 +65,6 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
-    // defaults to generate one single part
     fn read_parts(
         &self,
         io_ctx: Arc<TableIOContext>,
