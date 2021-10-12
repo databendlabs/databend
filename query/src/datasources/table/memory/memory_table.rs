@@ -25,7 +25,7 @@ use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
-use common_planners::ReadDataSourcePlan;
+use common_planners::Part;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
@@ -65,27 +65,30 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
-    fn read_plan(
+    // defaults to generate one single part
+    fn read_parts(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
+        _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Vec<Part>> {
+        let blocks = self.blocks.read();
+        Ok(generate_parts(
+            0,
+            io_ctx.get_max_threads() as u64,
+            blocks.len() as u64,
+        ))
+    }
+
+    fn read_statistics(
+        &self,
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<Statistics> {
         let blocks = self.blocks.read();
         let rows = blocks.iter().map(|block| block.num_rows()).sum();
         let bytes = blocks.iter().map(|block| block.memory_size()).sum();
-
-        let table_info = &self.table_info;
-        let db = &table_info.db;
-        Ok(ReadDataSourcePlan {
-            table_info: self.table_info.clone(),
-            parts: generate_parts(0, io_ctx.get_max_threads() as u64, blocks.len() as u64),
-            statistics: Statistics::new_exact(rows, bytes),
-            description: format!("(Read from Memory Engine table  {}.{})", db, self.name()),
-            scan_plan: Default::default(),
-            tbl_args: None,
-            push_downs,
-        })
+        Ok(Statistics::new_exact(rows, bytes))
     }
 
     async fn read(

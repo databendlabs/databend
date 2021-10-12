@@ -22,6 +22,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use super::NumbersTable;
+use crate::catalogs::ToReadDataSourcePlan;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {
@@ -45,7 +46,7 @@ async fn test_number_table() -> Result<()> {
     let partitions = ctx.get_settings().get_max_threads()? as usize;
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(
+    let source_plan = table.clone().as_table().read_plan(
         io_ctx.clone(),
         Some(scan.push_downs.clone()),
         Some(partitions),

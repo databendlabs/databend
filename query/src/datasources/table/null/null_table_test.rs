@@ -25,6 +25,7 @@ use common_meta_types::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::datasources::table::null::null_table::NullTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

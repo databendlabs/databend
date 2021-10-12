@@ -22,9 +22,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::Part;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use serde_json::Value;
@@ -86,26 +83,6 @@ impl Table for ConfigsTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
-    }
-
-    fn read_plan(
-        &self,
-        _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
-        Ok(ReadDataSourcePlan {
-            table_info: self.table_info.clone(),
-            parts: vec![Part {
-                name: "".to_string(),
-                version: 0,
-            }],
-            statistics: Statistics::default(),
-            description: "(Read from system.configs table)".to_string(),
-            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            tbl_args: None,
-            push_downs: None,
-        })
     }
 
     async fn read(

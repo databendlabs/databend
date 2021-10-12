@@ -23,9 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
-use common_planners::Statistics;
+use common_planners::Part;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
@@ -71,31 +69,21 @@ impl Table for CsvTable {
         &self.table_info
     }
 
-    fn read_plan(
+    fn read_parts(
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<Vec<Part>> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = count_lines(File::open(file.clone())?)?;
 
-        let db = &self.table_info.db;
-        let name = &self.table_info.name;
-        Ok(ReadDataSourcePlan {
-            table_info: self.table_info.clone(),
-            parts: generate_parts(
-                start_line as u64,
-                io_ctx.get_max_threads() as u64,
-                lines_count as u64,
-            ),
-            statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", db, name),
-            scan_plan: Arc::new(ScanPlan::empty()),
-            tbl_args: None,
-            push_downs: None,
-        })
+        Ok(generate_parts(
+            start_line as u64,
+            io_ctx.get_max_threads() as u64,
+            lines_count as u64,
+        ))
     }
 
     async fn read(

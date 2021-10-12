@@ -26,6 +26,7 @@ use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use common_planners::TableScanInfo;
 
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContextRef;
 
