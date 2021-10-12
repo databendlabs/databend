@@ -41,10 +41,10 @@ impl NumberTestData {
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
         let catalog = try_create_catalog()?;
         let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
-        catalog
+        Ok(catalog
             .get_table_function(self.table, tbl_arg)?
             .raw()
-            .schema()
+            .schema())
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
