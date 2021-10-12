@@ -57,11 +57,6 @@ impl Table for MemoryTable {
         self
     }
 
-    // Memory Table must be local
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn is_stateful(&self) -> bool {
         true
     }

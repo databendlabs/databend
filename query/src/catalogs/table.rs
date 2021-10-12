@@ -46,7 +46,7 @@ pub trait Table: Sync + Send {
     }
 
     fn is_local(&self) -> bool {
-        self.get_table_info().is_local
+        true
     }
 
     fn as_any(&self) -> &dyn Any;

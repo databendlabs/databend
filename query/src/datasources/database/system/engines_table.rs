@@ -49,7 +49,7 @@ impl EnginesTable {
             table_id,
             schema,
             engine: "SystemEngines".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
         EnginesTable { table_info }

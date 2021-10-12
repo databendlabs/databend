@@ -44,7 +44,7 @@ impl ContributorsTable {
             table_id,
             schema,
             engine: "SystemContributors".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
         ContributorsTable { table_info }

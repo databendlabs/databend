@@ -48,7 +48,7 @@ impl ClustersTable {
             table_id,
             schema,
             engine: "SystemClusters".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
 

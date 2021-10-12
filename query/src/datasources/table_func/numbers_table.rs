@@ -81,7 +81,6 @@ impl NumbersTable {
             version: 0,
             db: database_name.to_string(),
             name: table_func_name.to_string(),
-            is_local: table_func_name == "numbers_local",
             schema: DataSchemaRefExt::create(vec![DataField::new(
                 "number",
                 DataType::UInt64,
@@ -99,6 +98,10 @@ impl NumbersTable {
 impl Table for NumbersTable {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_local(&self) -> bool {
+        self.name() == "numbers_local"
     }
 
     fn get_table_info(&self) -> &TableInfo {

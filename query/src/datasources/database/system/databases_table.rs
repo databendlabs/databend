@@ -47,7 +47,7 @@ impl DatabasesTable {
             table_id,
             schema,
             engine: "SystemDatabases".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
 

@@ -50,7 +50,7 @@ impl TablesTable {
             table_id,
             schema,
             engine: "SystemTables".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
 

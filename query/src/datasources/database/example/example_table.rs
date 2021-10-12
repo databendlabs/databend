@@ -51,7 +51,7 @@ impl ExampleTable {
             version: 0,
             db,
             name,
-            is_local: true,
+
             schema,
             engine: "ExampleNull".to_string(),
             options,

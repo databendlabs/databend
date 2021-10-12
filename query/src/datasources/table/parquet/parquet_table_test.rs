@@ -45,7 +45,7 @@ async fn test_parquet_table() -> Result<()> {
         table_id: 0,
         version: 0,
         name: "test_parquet".to_string(),
-        is_local: true,
+
         schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
         engine: "test_parquet".into(),
         options: options,

@@ -50,7 +50,7 @@ impl SettingsTable {
             table_id,
             schema,
             engine: "SystemSettings".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
 

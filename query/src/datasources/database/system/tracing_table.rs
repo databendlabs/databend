@@ -59,7 +59,6 @@ impl TracingTable {
             table_id,
             schema,
             engine: "SystemTracing".to_string(),
-            is_local: true,
             ..Default::default()
         };
 

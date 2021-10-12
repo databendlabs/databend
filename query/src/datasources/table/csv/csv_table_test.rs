@@ -44,7 +44,6 @@ async fn test_csv_table() -> Result<()> {
         database_id: 0,
         db: "default".into(),
         name: "test_csv".into(),
-        is_local: false,
         schema: DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
         engine: "Csv".to_string(),
         options: options,
@@ -116,7 +115,6 @@ async fn test_csv_table_parse_error() -> Result<()> {
         database_id: 0,
         db: "default".into(),
         name: "test_csv".into(),
-        is_local: false,
         schema: DataSchemaRefExt::create(vec![
             DataField::new("column1", DataType::UInt64, false),
             DataField::new("column2", DataType::UInt64, false),

@@ -44,7 +44,7 @@ impl OneTable {
             table_id,
             schema,
             engine: "SystemOne".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
         OneTable { table_info }

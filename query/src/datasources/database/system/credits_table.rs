@@ -47,7 +47,7 @@ impl CreditsTable {
             table_id,
             schema,
             engine: "SystemCredits".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
         CreditsTable { table_info }

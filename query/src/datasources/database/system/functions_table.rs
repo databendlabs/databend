@@ -48,7 +48,7 @@ impl FunctionsTable {
             table_id,
             schema,
             engine: "SystemFunctions".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
         FunctionsTable { table_info }

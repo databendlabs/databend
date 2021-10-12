@@ -57,7 +57,7 @@ impl ProcessesTable {
             table_id,
             schema,
             engine: "SystemProcesses".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
         ProcessesTable { table_info }

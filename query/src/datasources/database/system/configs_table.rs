@@ -51,7 +51,7 @@ impl ConfigsTable {
             table_id,
             schema,
             engine: "SystemConfigs".to_string(),
-            is_local: true,
+
             ..Default::default()
         };
         ConfigsTable { table_info }
