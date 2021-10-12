@@ -467,7 +467,8 @@ impl Status {
 
     pub fn has_local_configs(&self) -> bool {
         for (k, v) in &self.local_configs {
-            let mut v = v.clone().retain(|c| c != ',');
+            let mut v = v.clone();
+            v.retain(|c| c != ',');
             if !v.is_empty() {
                 return true
             }
