@@ -1,7 +1,7 @@
 name: Website Build and Deploy
 on:
   push:
-    branches: master
+    branches: main
     paths:
       - "website/**/*"
 

@@ -1,7 +1,7 @@
 name: Push Performance tools to Dockerhub
 on:
   push:
-    branches: master
+    branches: main
     paths:
       - '**.rs'
       - '**.yaml'
