@@ -33,7 +33,7 @@ Support three semantics
 Compare performance difference between current pull requests’ latest SHA build and given branch name
 
 Branch-name supports:
-1. Master branch: master (some repo is main)
+1. Main branch: main (some repo is main)
 2. Release tag branch: i,e v1.1.1-nightly
 3. Latest tag: fetch the latest tag in the github repo
 
@@ -45,10 +45,10 @@ Similar to run-perf part, the ONLY difference is that it would bypass docker bui
 
 Examples:
 ```bash
-/run-perf master
+/run-perf main
 ```
 
-It will compare performance between current PR’s latest commit and master branch
+It will compare performance between current PR’s latest commit and main branch
 ```bash
 /run-perf v1.1.1-nightly
 ```
@@ -60,9 +60,9 @@ It will compare performance between current PR’s latest commit and release tag
 
 It will compare performance between current PR’s latest commit and the latest release tag
 ```bash
-/rerun-perf master
+/rerun-perf main
 ```
 
-Do the same thing as `/run-perf master` did, but will skip docker image building steps
+Do the same thing as `/run-perf main` did, but will skip docker image building steps
 
 For more information please checkout [test-infra](https://github.com/datafuselabs/test-infra)
