@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -53,6 +54,13 @@ pub trait MetaApiSync: Send + Sync {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>>;
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        new_table_version: MetaVersion,
+        new_snapshot_location: String,
+    ) -> Result<CommitTableReply>;
 
     fn name(&self) -> String;
 }

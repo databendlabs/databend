@@ -25,13 +25,15 @@ use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
+use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
+use super::util;
 use crate::catalogs::Table;
-use crate::datasources::table::fuse::BlockLocation;
+use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::TableSnapshot;
 
 pub struct FuseTable {
@@ -49,12 +51,12 @@ impl FuseTable {
 
 #[async_trait::async_trait]
 impl Table for FuseTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn is_local(&self) -> bool {
         false
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -67,7 +69,7 @@ impl Table for FuseTable {
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
-        self.do_read_partitions(io_ctx, push_downs)
+        self.do_read_partitions(io_ctx.as_ref(), push_downs)
     }
 
     async fn read(
@@ -96,18 +98,30 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
-    pub fn table_snapshot(&self, io_ctx: Arc<TableIOContext>) -> Result<Option<TableSnapshot>> {
-        let schema = &self.table_info.schema;
-        if let Some(loc) = schema.meta().get("META_SNAPSHOT_LOCATION") {
+    pub fn table_snapshot(&self, io_ctx: &TableIOContext) -> Result<Option<TableSnapshot>> {
+        let option = &self.table_info.options;
+        if let Some(loc) = option.get(util::TBL_OPT_KEY_SNAPSHOT_LOC) {
             let da = io_ctx.get_data_accessor()?;
             let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime(), None)??;
             Ok(Some(r))
         } else {
+            // TODO distinguish this from invalid TableSnapshot?
             Ok(None)
         }
     }
 
-    pub(crate) fn to_partitions(&self, _blocks: &[BlockLocation]) -> (Statistics, Partitions) {
-        todo!()
+    pub(crate) fn to_partitions(&self, blocks_metas: &[BlockMeta]) -> (Statistics, Partitions) {
+        blocks_metas.iter().fold(
+            (Statistics::default(), Partitions::default()),
+            |(mut stats, mut parts), item| {
+                stats.read_rows += item.row_count as usize;
+                stats.read_bytes += item.block_size as usize;
+                parts.push(Part {
+                    name: item.location.location.clone(),
+                    version: 0,
+                });
+                (stats, parts)
+            },
+        )
     }
 }

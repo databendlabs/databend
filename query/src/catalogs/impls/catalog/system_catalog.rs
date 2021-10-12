@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -122,6 +123,18 @@ impl Catalog for SystemCatalog {
                 ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
             })?;
         Ok(table.clone())
+    }
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        _new_table_version: MetaVersion,
+        _new_snapshot_location: String,
+    ) -> Result<CommitTableReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "commit table not allowed for system catalog {}",
+            table_id
+        )))
     }
 
     fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {

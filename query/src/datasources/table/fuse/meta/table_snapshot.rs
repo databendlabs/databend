@@ -22,12 +22,15 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
-pub type SnapshotId = Uuid;
+pub type SnapshotId = Uuid; // TODO String might be better
 pub type ColumnId = u32;
 pub type Location = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
+    // TODO format_version
+    // pub format_version: u32,
+    /// id of snapshot
     pub snapshot_id: SnapshotId,
 
     pub prev_snapshot_id: Option<SnapshotId>,
@@ -38,7 +41,7 @@ pub struct TableSnapshot {
     /// Summary Statistics
     pub summary: Stats,
 
-    /// Pointers to SegmentInfos
+    /// Pointers to SegmentInfos (may be of different format)
     ///
     /// We rely on background merge tasks to keep merging segments, so that
     /// this the size of this vector could be kept reasonable
@@ -46,36 +49,33 @@ pub struct TableSnapshot {
 }
 
 impl TableSnapshot {
-    pub fn new() -> Self {
-        todo!()
-    }
-
     pub fn append_segment(mut self, location: Location) -> TableSnapshot {
         self.segments.push(location);
-        self.snapshot_id = Uuid::new_v4();
         self
-    }
-}
-
-impl Default for TableSnapshot {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
 /// A segment comprised of one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SegmentInfo {
+    // TODO format_version
+    // pub format_version: u32,
+    /// blocks belong to this segment
     pub blocks: Vec<BlockMeta>,
+
+    /// summary statistics
     pub summary: Stats,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct Stats {
     pub row_count: u64,
     pub block_count: u64,
+
+    // TODO rename these two fields
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
+
     pub col_stats: HashMap<ColumnId, ColStats>,
 }
 

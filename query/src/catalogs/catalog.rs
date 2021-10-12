@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -55,6 +56,13 @@ pub trait Catalog {
     ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
     }
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        new_table_version: MetaVersion,
+        new_snapshot_location: String,
+    ) -> common_exception::Result<CommitTableReply>;
 
     // Operation with database.
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;

@@ -24,12 +24,9 @@ pub fn gen_unique_block_location() -> String {
     format!("{}/{}", FUSE_TBL_BLOCK_PREFIX, part_uuid)
 }
 
-pub fn block_location_from_name(name: &str) -> String {
-    format!("{}/{}", FUSE_TBL_BLOCK_PREFIX, name)
-}
-
-pub fn segment_info_location(name: &str) -> String {
-    format!("{}/{}", FUSE_TBL_SEGMENT_PREFIX, name)
+pub fn gen_segment_info_location() -> String {
+    let segment_uuid = Uuid::new_v4().to_simple().to_string();
+    format!("{}/{}", FUSE_TBL_SEGMENT_PREFIX, segment_uuid)
 }
 
 pub fn snapshot_location(name: &str) -> String {

@@ -18,9 +18,14 @@ mod meta;
 mod table;
 mod table_do_append;
 mod table_do_read;
-mod table_do_read_plan;
+mod table_do_read_partitions;
 mod table_do_truncate;
 pub(crate) mod util;
+
+#[cfg(test)]
+mod table_test;
+#[cfg(test)]
+mod table_test_fixture;
 
 pub(crate) use io::*;
 pub(crate) use meta::*;

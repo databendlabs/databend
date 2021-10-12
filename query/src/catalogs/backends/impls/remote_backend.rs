@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_exception::Result;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -110,6 +111,16 @@ impl<T: MetaApiSync, U: Deref<Target = T> + Send + Sync> MetaApiSync for U {
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>> {
         self.deref().get_table_by_id(table_id, table_version)
+    }
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        new_table_version: MetaVersion,
+        new_snapshot_location: String,
+    ) -> Result<CommitTableReply> {
+        self.deref()
+            .commit_table(table_id, new_table_version, new_snapshot_location)
     }
 
     fn name(&self) -> String {

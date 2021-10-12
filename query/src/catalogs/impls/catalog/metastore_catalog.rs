@@ -21,6 +21,7 @@ use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
@@ -169,6 +170,16 @@ impl Catalog for MetaStoreCatalog {
     ) -> Result<Arc<dyn Table>> {
         let table_info = self.meta.get_table_by_id(table_id, table_version)?;
         self.build_table_instance(table_info.as_ref().clone())
+    }
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        new_table_version: MetaVersion,
+        new_snapshot_location: String,
+    ) -> Result<CommitTableReply> {
+        self.meta
+            .commit_table(table_id, new_table_version, new_snapshot_location)
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {

@@ -13,8 +13,4 @@
 //  limitations under the License.
 //
 
-pub use table_snapshot::*;
-
-pub use crate::datasources::table::fuse::io::meta_info_reader::MetaInfoReader;
-
-mod table_snapshot;
+pub const TBL_OPT_KEY_SNAPSHOT_LOC: &str = "SNAPSHOT_LOC";

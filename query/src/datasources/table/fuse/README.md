@@ -46,14 +46,14 @@ t this stage, we reply on background task to merge the data properly.
   Segments are stored in object storage as well.
  
      
-- commit (by "Driver" role)
+- commit (by "Coordinator" role)
 
   Gather all the segments(info) , aggregates the statistics, merge segments
   with previous snapshot, and commit.  
 
-  In case of conflicts, "Driver" need to re-try the transaction.(OCC, Table level, READ-COMMITTED)
+  In case of conflicts, "Coordinator" need to re-try the transaction.(OCC, Table level, READ-COMMITTED)
 
-  For this iteration, the "Driver" is the `Table` itself.
+  For this iteration, the "Coordinator" is the `Table` itself.
 
 
 **Scan Flow:**

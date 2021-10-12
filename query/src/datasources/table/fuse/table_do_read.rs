@@ -17,12 +17,11 @@ use std::sync::Arc;
 
 use common_context::IOContext;
 use common_context::TableIOContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
-use tokio_stream::wrappers::ReceiverStream;
+use futures::StreamExt;
 
 use super::io;
 use crate::datasources::table::fuse::FuseTable;
@@ -55,11 +54,9 @@ impl FuseTable {
             default_proj()
         };
 
-        let (tx, rx) = common_base::tokio::sync::mpsc::channel(1024);
-
         // TODO we need a configuration to specify the unit of dequeue operation
         let bite_size = 1;
-        let mut iter = {
+        let iter = {
             let ctx = ctx.clone();
             std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
                 Err(_) => None,
@@ -71,25 +68,13 @@ impl FuseTable {
         let da = io_ctx.get_data_accessor()?;
         let arrow_schema = self.table_info.schema.to_arrow();
 
-        // BlockReader::read_part is !Send (since parquet2::read::page_stream::get_page_stream is !Send)
-        // we have to use spawn_local here
-        let _h = common_base::tokio::task::spawn_local(async move {
-            for part in &mut iter {
-                io::BlockReader::read_part(
-                    part,
-                    da.clone(),
-                    projection.clone(),
-                    tx.clone(),
-                    &arrow_schema,
-                )
-                .await?;
-            }
-            Ok::<(), ErrorCode>(())
+        let stream = futures::stream::iter(iter);
+        let stream = stream.then(move |part| {
+            io::do_read(part, da.clone(), projection.clone(), arrow_schema.clone())
         });
 
         let progress_callback = ctx.progress_callback()?;
-        let receiver = ReceiverStream::new(rx);
-        let stream = ProgressStream::try_create(Box::pin(receiver), progress_callback)?;
+        let stream = ProgressStream::try_create(Box::pin(stream), progress_callback)?;
         Ok(Box::pin(stream))
     }
 }

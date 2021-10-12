@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_meta_api::MetaApi;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -98,6 +99,15 @@ impl MetaApi for MetaFlightClient {
         tbl_ver: Option<MetaVersion>,
     ) -> common_exception::Result<Arc<TableInfo>> {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
+    }
+
+    async fn commit_table(
+        &self,
+        _table_id: MetaId,
+        _new_table_version: MetaVersion,
+        _new_snapshot_location: String,
+    ) -> common_exception::Result<CommitTableReply> {
+        todo!()
     }
 
     fn name(&self) -> String {
