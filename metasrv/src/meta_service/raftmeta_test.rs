@@ -24,6 +24,7 @@ use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeId;
+use common_meta_types::Operation;
 use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -101,7 +102,7 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
         let (_nid1, tc1) = setup_non_voter(mn0.clone(), 1).await?;
         let mn1 = tc1.meta_nodes[0].clone();
 
-        assert_set_file_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
+        assert_upsert_kv_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
     }
 
     Ok(())
@@ -132,9 +133,11 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
             let rst = mn
                 .write_to_local_leader(LogEntry {
                     txid: None,
-                    cmd: Cmd::SetFile {
+                    cmd: Cmd::UpsertKV {
                         key: key.to_string(),
-                        value: key.to_string(),
+                        seq: MatchSeq::Any,
+                        value: Operation::Update(key.to_string().into_bytes()),
+                        value_meta: None,
                     },
                 })
                 .await;
@@ -183,7 +186,7 @@ async fn test_meta_node_set_file() -> anyhow::Result<()> {
             let key = format!("test_meta_node_set_file-key-{}", id);
             let mn = &all[id as usize];
 
-            assert_set_file_on_specified_node_synced(all.clone(), mn.clone(), &key).await?;
+            assert_upsert_kv_on_specified_node_synced(all.clone(), mn.clone(), &key).await?;
         }
     }
 
@@ -209,7 +212,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
             .collect::<Vec<_>>();
 
         // ensure cluster works
-        assert_set_file_synced(all.clone(), "foo").await?;
+        assert_upsert_kv_synced(all.clone(), "foo").await?;
 
         // - db name to create
         // - expected db id
@@ -375,7 +378,7 @@ async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
     let (mut _nlog, tcs) = setup_cluster(btreeset![0, 1, 2], btreeset![3, 4]).await?;
     let all = test_context_nodes(&tcs);
 
-    _nlog += assert_set_file_synced(all.clone(), "foo-1").await?;
+    _nlog += assert_upsert_kv_synced(all.clone(), "foo-1").await?;
 
     Ok(())
 }
@@ -402,7 +405,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     let meta_nodes = vec![mn0.clone(), mn1.clone()];
 
-    assert_set_file_synced(meta_nodes.clone(), "key1").await?;
+    assert_upsert_kv_synced(meta_nodes.clone(), "key1").await?;
 
     // stop
     tracing::info!("shutting down all");
@@ -433,10 +436,10 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     wait_for_state(&mn1, State::NonVoter).await?;
     wait_for_current_leader(&mn1, 0).await?;
 
-    assert_set_file_synced(meta_nodes.clone(), "key2").await?;
+    assert_upsert_kv_synced(meta_nodes.clone(), "key2").await?;
 
     // check old data
-    assert_get_file(meta_nodes, "key1", "key1").await?;
+    assert_get_kv(meta_nodes, "key1", "key1").await?;
 
     Ok(())
 }
@@ -475,9 +478,11 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
         leader
             .write_to_local_leader(LogEntry {
                 txid: None,
-                cmd: Cmd::SetFile {
+                cmd: Cmd::UpsertKV {
                     key: "foo".to_string(),
-                    value: "foo".to_string(),
+                    seq: MatchSeq::Any,
+                    value: Operation::Update(b"1".to_vec()),
+                    value_meta: None,
                 },
             })
             .await??;
@@ -648,7 +653,7 @@ async fn setup_non_voter(
 
 /// Write one log on leader, check all nodes replicated the log.
 /// Returns the number log committed.
-async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
+async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
     let leader_id = meta_nodes[0].get_leader().await;
     let leader = meta_nodes[leader_id as usize].clone();
 
@@ -658,23 +663,25 @@ async fn assert_set_file_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> an
         leader
             .write_to_local_leader(LogEntry {
                 txid: None,
-                cmd: Cmd::SetFile {
+                cmd: Cmd::UpsertKV {
                     key: key.to_string(),
-                    value: key.to_string(),
+                    seq: MatchSeq::Any,
+                    value: Operation::Update(key.to_string().into_bytes()),
+                    value_meta: None,
                 },
             })
             .await??;
     }
 
     assert_applied_index(meta_nodes.clone(), last_applied + 1).await?;
-    assert_get_file(meta_nodes.clone(), key, key).await?;
+    assert_get_kv(meta_nodes.clone(), key, key).await?;
 
     Ok(1)
 }
 
 /// Write one log on every node, check all nodes replicated the log.
 /// Returns the number log committed.
-async fn assert_set_file_on_specified_node_synced(
+async fn assert_upsert_kv_on_specified_node_synced(
     meta_nodes: Vec<Arc<MetaNode>>,
     write_to: Arc<MetaNode>,
     key: &str,
@@ -689,16 +696,18 @@ async fn assert_set_file_on_specified_node_synced(
         write_to
             .write(LogEntry {
                 txid: None,
-                cmd: Cmd::SetFile {
+                cmd: Cmd::UpsertKV {
                     key: key.to_string(),
-                    value: key.to_string(),
+                    seq: MatchSeq::Any,
+                    value: Operation::Update(key.to_string().into_bytes()),
+                    value_meta: None,
                 },
             })
             .await?;
     }
 
     assert_applied_index(meta_nodes.clone(), last_applied + 1).await?;
-    assert_get_file(meta_nodes.clone(), key, key).await?;
+    assert_get_kv(meta_nodes.clone(), key, key).await?;
 
     Ok(1)
 }
@@ -711,14 +720,20 @@ async fn assert_applied_index(meta_nodes: Vec<Arc<MetaNode>>, at_least: u64) -> 
     Ok(())
 }
 
-async fn assert_get_file(
+async fn assert_get_kv(
     meta_nodes: Vec<Arc<MetaNode>>,
     key: &str,
     value: &str,
 ) -> anyhow::Result<()> {
     for (i, mn) in meta_nodes.iter().enumerate() {
-        let got = mn.get_file(key).await?;
-        assert_eq!(value.to_string(), got.unwrap(), "n{} applied value", i);
+        let got = mn.get_kv(key).await?;
+        // let got = mn.get_file(key).await?;
+        assert_eq!(
+            value.to_string().into_bytes(),
+            got.unwrap().1.value,
+            "n{} applied value",
+            i
+        );
     }
     Ok(())
 }

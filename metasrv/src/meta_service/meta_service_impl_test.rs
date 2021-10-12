@@ -17,11 +17,12 @@ use common_base::tokio;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
+use common_meta_types::MatchSeq;
+use common_meta_types::Operation;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;
 
-use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
 use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;
@@ -29,91 +30,7 @@ use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_server_add_file() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_test_context();
-    let addr = tc.config.raft_config.raft_api_addr();
-
-    let _mn = MetaNode::boot(0, &tc.config.raft_config).await?;
-    assert_meta_connection(&addr).await?;
-
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-
-    let cases = common_meta_raft_store::state_machine::testing::cases_add_file();
-
-    for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
-        let req = LogEntry {
-            txid: txid.clone(),
-            cmd: Cmd::AddFile {
-                key: k.to_string(),
-                value: v.to_string(),
-            },
-        };
-        let raft_mes = client.write(req).await?.into_inner();
-
-        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
-        let resp: AppliedState = rst?;
-        match resp {
-            AppliedState::String { prev, result } => {
-                assert_eq!(*want_prev, prev, "{}", name);
-                assert_eq!(*want_rst, result, "{}", name);
-            }
-            _ => {
-                panic!("not String")
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_server_set_file() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_test_context();
-    let addr = tc.config.raft_config.raft_api_addr();
-
-    let _mn = MetaNode::boot(0, &tc.config.raft_config).await?;
-    assert_meta_connection(&addr).await?;
-
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-
-    let cases = common_meta_raft_store::state_machine::testing::cases_set_file();
-
-    for (name, txid, k, v, want_prev, want_rst) in cases.iter() {
-        let req = LogEntry {
-            txid: txid.clone(),
-            cmd: Cmd::SetFile {
-                key: k.to_string(),
-                value: v.to_string(),
-            },
-        };
-        let raft_mes = client.write(req).await?.into_inner();
-
-        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
-        let resp: AppliedState = rst?;
-        match resp {
-            AppliedState::String { prev, result } => {
-                assert_eq!(*want_prev, prev, "{}", name);
-                assert_eq!(*want_rst, result, "{}", name);
-            }
-            _ => {
-                panic!("not String")
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
-    // Test Cmd::AddFile, Cmd::SetFile, Cma::GetFile
-
+async fn test_meta_server_upsert_kv() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -129,9 +46,11 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
         // add: ok
         let req = LogEntry {
             txid: None,
-            cmd: Cmd::AddFile {
+            cmd: Cmd::UpsertKV {
                 key: "foo".to_string(),
-                value: "bar".to_string(),
+                seq: MatchSeq::Exact(0),
+                value: Operation::Update(b"bar".to_vec()),
+                value_meta: None,
             },
         };
         let raft_mes = client.write(req).await?.into_inner();
@@ -139,70 +58,17 @@ async fn test_meta_server_add_set_get() -> anyhow::Result<()> {
         let rst: Result<AppliedState, RetryableError> = raft_mes.into();
         let resp: AppliedState = rst?;
         match resp {
-            AppliedState::String { prev: _, result } => {
-                assert_eq!("bar".to_string(), result.unwrap());
+            AppliedState::KV { prev, result } => {
+                assert!(prev.is_none());
+                let (seq, value) = result.unwrap();
+                assert!(seq > 0);
+                assert!(value.meta.is_none());
+                assert_eq!(b"bar".to_vec(), value.value);
             }
             _ => {
-                panic!("not string")
+                panic!("not KV")
             }
         }
-
-        // get the stored value
-
-        let req = tonic::Request::new(GetReq { key: "foo".into() });
-        let rst = client.get(req).await?.into_inner();
-        assert_eq!("bar", rst.value);
-    }
-
-    {
-        // add: conflict with existent.
-        let req = LogEntry {
-            txid: None,
-            cmd: Cmd::AddFile {
-                key: "foo".to_string(),
-                value: "bar".to_string(),
-            },
-        };
-        let raft_mes = client.write(req).await?.into_inner();
-
-        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
-        let resp: AppliedState = rst?;
-        match resp {
-            AppliedState::String { prev: _, result } => {
-                assert!(result.is_none());
-            }
-            _ => {
-                panic!("not string")
-            }
-        }
-    }
-    {
-        // set: override. ok.
-        let req = LogEntry {
-            txid: None,
-            cmd: Cmd::SetFile {
-                key: "foo".to_string(),
-                value: "bar2".to_string(),
-            },
-        };
-        let raft_mes = client.write(req).await?.into_inner();
-
-        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
-        let resp: AppliedState = rst?;
-        match resp {
-            AppliedState::String { prev: _, result } => {
-                assert_eq!(Some("bar2".to_string()), result);
-            }
-            _ => {
-                panic!("not string")
-            }
-        }
-
-        // get the stored value
-
-        let req = tonic::Request::new(GetReq { key: "foo".into() });
-        let rst = client.get(req).await?.into_inner();
-        assert_eq!("bar2", rst.value);
     }
 
     Ok(())
@@ -284,9 +150,11 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
 
     let req = LogEntry {
         txid: None,
-        cmd: Cmd::SetFile {
+        cmd: Cmd::UpsertKV {
             key: "t-write-on-non-voter".to_string(),
-            value: "t-write-on-non-voter".to_string(),
+            seq: MatchSeq::Any,
+            value: Operation::Update(b"1".to_vec()),
+            value_meta: None,
         },
     };
     let raft_mes = client.write(req).await?.into_inner();
