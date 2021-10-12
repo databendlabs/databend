@@ -25,6 +25,7 @@ use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -62,25 +63,17 @@ pub trait Table: Sync + Send {
         false
     }
 
-    // defaults to generate one single part
-    fn read_parts(
+    // defaults to generate one single part and empty statistics
+    fn read_partitions(
         &self,
         _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<Vec<Part>> {
-        Ok(vec![Part {
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::default(), vec![Part {
             name: "".to_string(),
             version: 0,
-        }])
-    }
-
-    fn read_statistics(
-        &self,
-        _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<Statistics> {
-        Ok(Statistics::default())
+        }]))
     }
 
     fn table_args(&self) -> Option<Vec<Expression>> {
@@ -136,8 +129,8 @@ impl ToReadDataSourcePlan for dyn Table {
         push_downs: Option<Extras>,
         partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        let parts = self.read_parts(io_ctx.clone(), push_downs.clone(), partition_num_hint)?;
-        let statistics = self.read_statistics(io_ctx, push_downs.clone())?;
+        let (statistics, parts) =
+            self.read_partitions(io_ctx.clone(), push_downs.clone(), partition_num_hint)?;
         let table_info = self.get_table_info();
 
         let description = if statistics.read_rows > 0 {

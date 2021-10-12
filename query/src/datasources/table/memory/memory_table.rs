@@ -25,7 +25,7 @@ use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
-use common_planners::Part;
+use common_planners::Partitions;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
@@ -65,29 +65,20 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
-    fn read_parts(
+    fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<Vec<Part>> {
+    ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
-        Ok(generate_parts(
-            0,
-            io_ctx.get_max_threads() as u64,
-            blocks.len() as u64,
-        ))
-    }
 
-    fn read_statistics(
-        &self,
-        _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<Statistics> {
-        let blocks = self.blocks.read();
         let rows = blocks.iter().map(|block| block.num_rows()).sum();
         let bytes = blocks.iter().map(|block| block.memory_size()).sum();
-        Ok(Statistics::new_exact(rows, bytes))
+
+        let statistics = Statistics::new_exact(rows, bytes);
+        let parts = generate_parts(0, io_ctx.get_max_threads() as u64, blocks.len() as u64);
+        Ok((statistics, parts))
     }
 
     async fn read(

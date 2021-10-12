@@ -21,6 +21,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
+use common_planners::Part;
+use common_planners::Partitions;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -59,12 +61,16 @@ impl Table for OneTable {
         &self.table_info
     }
 
-    fn read_statistics(
+    fn read_partitions(
         &self,
         _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<Statistics> {
-        Ok(Statistics::new_exact(1, 1))
+        _partition_num_hint: Option<usize>,
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::new_exact(1, 1), vec![Part {
+            name: "".to_string(),
+            version: 0,
+        }]))
     }
 
     async fn read(

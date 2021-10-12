@@ -28,7 +28,7 @@ use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::Part;
+use common_planners::Partitions;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
@@ -114,28 +114,19 @@ impl Table for NumbersTable {
         )))])
     }
 
-    fn read_parts(
+    fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<Vec<Part>> {
-        Ok(generate_parts(
-            0,
-            io_ctx.get_max_threads() as u64,
-            self.total,
-        ))
-    }
-
-    fn read_statistics(
-        &self,
-        _io_ctx: Arc<TableIOContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<Statistics> {
-        Ok(Statistics::new_exact(
+    ) -> Result<(Statistics, Partitions)> {
+        let statistics = Statistics::new_exact(
             self.total as usize,
             ((self.total) * size_of::<u64>() as u64) as usize,
-        ))
+        );
+        let parts = generate_parts(0, io_ctx.get_max_threads() as u64, self.total);
+
+        Ok((statistics, parts))
     }
 
     async fn read(

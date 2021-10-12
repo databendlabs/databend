@@ -24,7 +24,6 @@ use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
-use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -58,23 +57,13 @@ impl Table for FuseTable {
         &self.table_info
     }
 
-    fn read_parts(
+    fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<Vec<Part>> {
-        let (_, parts) = self.do_read_partitions(io_ctx, push_downs)?;
-        Ok(parts)
-    }
-
-    fn read_statistics(
-        &self,
-        io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<Statistics> {
-        let (statistics, _) = self.do_read_partitions(io_ctx, push_downs)?;
-        Ok(statistics)
+    ) -> Result<(Statistics, Partitions)> {
+        self.do_read_partitions(io_ctx, push_downs)
     }
 
     async fn read(
