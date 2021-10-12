@@ -29,7 +29,6 @@ use sysinfo::System;
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::status::LocalConfig;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
@@ -475,7 +474,12 @@ impl CreateCommand {
             Ok(_) => {
                 assert!(meta_config.get_pid().is_some());
                 let mut status = Status::read(self.conf.clone())?;
-                Status::save_local_config::<LocalMetaConfig>(&mut status, "meta".to_string(), "meta_config_0.json".to_string(), &meta_config.clone());
+                Status::save_local_config::<LocalMetaConfig>(
+                    &mut status,
+                    "meta".to_string(),
+                    "meta_config_0.json".to_string(),
+                    &meta_config.clone(),
+                )?;
                 writer.write_ok(
                     format!(
                         "👏 successfully started meta service with rpc endpoint {}",
