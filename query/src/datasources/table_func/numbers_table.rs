@@ -28,7 +28,7 @@ use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::ReadDataSourcePlan;
+use common_planners::Partitions;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
@@ -108,40 +108,25 @@ impl Table for NumbersTable {
         &self.table_info
     }
 
-    fn read_plan(
+    fn table_args(&self) -> Option<Vec<Expression>> {
+        Some(vec![Expression::create_literal(DataValue::UInt64(Some(
+            self.total,
+        )))])
+    }
+
+    fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
+        _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
-        let total = self.total;
+    ) -> Result<(Statistics, Partitions)> {
+        let statistics = Statistics::new_exact(
+            self.total as usize,
+            ((self.total) * size_of::<u64>() as u64) as usize,
+        );
+        let parts = generate_parts(0, io_ctx.get_max_threads() as u64, self.total);
 
-        let statistics =
-            Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
-
-        // TODO(xp): @drmingdrmer commented the following two lines.
-        //           It looks like some dirty hacking waiting for a refactor on it :DDD
-        // ctx.try_set_statistics(&statistics)?;
-        // ctx.add_total_rows_approx(statistics.read_rows);
-
-        let tbl_arg = Some(vec![Expression::create_literal(DataValue::UInt64(Some(
-            self.total,
-        )))]);
-
-        Ok(ReadDataSourcePlan {
-            table_info: self.get_table_info().clone(),
-            parts: generate_parts(0, io_ctx.get_max_threads() as u64, total),
-            statistics: statistics.clone(),
-            description: format!(
-                "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
-                &self.name(),
-                statistics.read_rows,
-                statistics.read_bytes
-            ),
-            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            tbl_args: tbl_arg,
-            push_downs,
-        })
+        Ok((statistics, parts))
     }
 
     async fn read(

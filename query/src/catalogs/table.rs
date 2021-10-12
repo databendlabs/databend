@@ -21,9 +21,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_meta_types::TableInfo;
+use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
+use common_planners::Part;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
@@ -59,13 +63,22 @@ pub trait Table: Sync + Send {
         false
     }
 
-    // Get the read source plan.
-    fn read_plan(
+    // defaults to generate one single part and empty statistics
+    fn read_partitions(
         &self,
-        io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
-        partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan>;
+        _io_ctx: Arc<TableIOContext>,
+        _push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::default(), vec![Part {
+            name: "".to_string(),
+            version: 0,
+        }]))
+    }
+
+    fn table_args(&self) -> Option<Vec<Expression>> {
+        None
+    }
 
     // Read block data from the underling.
     async fn read(
@@ -99,3 +112,52 @@ pub trait Table: Sync + Send {
 }
 
 pub type TablePtr = Arc<dyn Table>;
+
+pub trait ToReadDataSourcePlan {
+    fn read_plan(
+        &self,
+        io_ctx: Arc<TableIOContext>,
+        push_downs: Option<Extras>,
+        partition_num_hint: Option<usize>,
+    ) -> Result<ReadDataSourcePlan>;
+}
+
+impl ToReadDataSourcePlan for dyn Table {
+    fn read_plan(
+        &self,
+        io_ctx: Arc<TableIOContext>,
+        push_downs: Option<Extras>,
+        partition_num_hint: Option<usize>,
+    ) -> Result<ReadDataSourcePlan> {
+        let (statistics, parts) =
+            self.read_partitions(io_ctx, push_downs.clone(), partition_num_hint)?;
+        let table_info = self.get_table_info();
+
+        let description = if statistics.read_rows > 0 {
+            format!(
+                "(Read from {}.{} table, {} Read Rows:{}, Read Bytes:{})",
+                table_info.db,
+                table_info.name,
+                if statistics.is_exact {
+                    "Exactly"
+                } else {
+                    "Approximately"
+                },
+                statistics.read_rows,
+                statistics.read_bytes,
+            )
+        } else {
+            format!("(Read from {}.{} table)", table_info.db, table_info.name)
+        };
+
+        Ok(ReadDataSourcePlan {
+            table_info: table_info.clone(),
+            parts,
+            statistics,
+            description,
+            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
+            tbl_args: self.table_args(),
+            push_downs,
+        })
+    }
+}

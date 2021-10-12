@@ -19,7 +19,8 @@ use common_context::IOContext;
 use common_context::TableIOContext;
 use common_exception::Result;
 use common_planners::Extras;
-use common_planners::ReadDataSourcePlan;
+use common_planners::Partitions;
+use common_planners::Statistics;
 
 use super::util;
 use crate::datasources::table::fuse::FuseTable;
@@ -27,29 +28,20 @@ use crate::datasources::table::fuse::MetaInfoReader;
 
 impl FuseTable {
     #[inline]
-    pub fn do_read_plan(
+    pub fn do_read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<(Statistics, Partitions)> {
         let tbl_snapshot = self.table_snapshot(io_ctx.clone())?;
         if let Some(snapshot) = tbl_snapshot {
             let da = io_ctx.get_data_accessor()?;
             let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
             let block_locations = util::range_filter(&snapshot, &push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_locations);
-            let plan = ReadDataSourcePlan {
-                table_info: self.table_info.clone(),
-                parts,
-                statistics,
-                description: "".to_string(),
-                scan_plan: Default::default(),
-                tbl_args: None,
-                push_downs,
-            };
-            Ok(plan)
+            Ok((statistics, parts))
         } else {
-            self.empty_read_source_plan()
+            Ok((Statistics::default(), vec![]))
         }
     }
 }

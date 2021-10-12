@@ -21,6 +21,7 @@ use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::Catalog;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::DatabendQueryContextRef;
 use crate::tests::try_create_catalog;
@@ -55,7 +56,7 @@ impl NumberTestData {
         let table_meta = catalog.get_table_function(self.table, tbl_arg)?;
         let table = table_meta.raw();
         let io_ctx = self.ctx.get_single_node_table_io_context()?;
-        table.read_plan(
+        table.clone().as_table().read_plan(
             Arc::new(io_ctx),
             None,
             Some(self.ctx.get_settings().get_max_threads()? as usize),

@@ -20,6 +20,7 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::catalogs::Table;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::configs::Config;
 use crate::datasources::database::system::ConfigsTable;
 use crate::tests::try_create_context_with_config;
@@ -30,7 +31,7 @@ async fn test_configs_table() -> Result<()> {
     let ctx = try_create_context_with_config(config)?;
     ctx.get_settings().set_max_threads(8)?;
 
-    let table = ConfigsTable::create(1);
+    let table: Arc<dyn Table> = Arc::new(ConfigsTable::create(1));
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(

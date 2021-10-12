@@ -165,13 +165,7 @@ pub trait Table: Sync + Send {
     // Is Local or Remote.
     fn is_local(&self) -> bool;
     fn get_table_info(&self) -> &TableInfo;
-    // Get the read source plan.
-    fn read_plan(
-        &self,
-        ctx: DatabendQueryContextRef,
-        scan: &ScanPlan,
-        partitions: usize,
-    ) -> Result<ReadDataSourcePlan>;
+
     // Read block data from the underling.
     async fn read(
         &self,

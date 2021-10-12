@@ -49,7 +49,7 @@ impl Test {
             parts: Self::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
-                "(Read from system.numbers_mt table, Read Rows:{}, Read Bytes:{})",
+                "(Read from system.numbers_mt table, Exactly Read Rows:{}, Read Bytes:{})",
                 statistics.read_rows, statistics.read_bytes
             ),
             scan_plan: Arc::new(ScanPlan::empty()),

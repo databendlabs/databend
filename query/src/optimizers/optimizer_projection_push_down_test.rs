@@ -104,7 +104,7 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
-            "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
+            "(Read from system.{} table, Exactly Read Rows:{}, Read Bytes:{})",
             "test".to_string(),
             statistics.read_rows,
             statistics.read_bytes
@@ -162,7 +162,7 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
-            "(Read from system.{} table, Read Rows:{}, Read Bytes:{})",
+            "(Read from system.{} table, Exactly Read Rows:{}, Read Bytes:{})",
             "test".to_string(),
             statistics.read_rows,
             statistics.read_bytes

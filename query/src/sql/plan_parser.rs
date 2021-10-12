@@ -63,6 +63,7 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::UnaryOperator;
 
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;

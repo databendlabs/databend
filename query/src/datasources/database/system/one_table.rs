@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
-use common_planners::ReadDataSourcePlan;
+use common_planners::Partitions;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -61,24 +61,16 @@ impl Table for OneTable {
         &self.table_info
     }
 
-    fn read_plan(
+    fn read_partitions(
         &self,
         _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
-        Ok(ReadDataSourcePlan {
-            table_info: self.table_info.clone(),
-            parts: vec![Part {
-                name: "".to_string(),
-                version: 0,
-            }],
-            statistics: Statistics::new_exact(1, std::mem::size_of::<u8>()),
-            description: "(Read from system.one table)".to_string(),
-            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
-            tbl_args: None,
-            push_downs: None,
-        })
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::new_exact(1, 1), vec![Part {
+            name: "".to_string(),
+            version: 0,
+        }]))
     }
 
     async fn read(

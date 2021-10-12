@@ -23,8 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
+use common_planners::Partitions;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
@@ -71,31 +70,23 @@ impl Table for CsvTable {
         &self.table_info
     }
 
-    fn read_plan(
+    fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<(Statistics, Partitions)> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = count_lines(File::open(file.clone())?)?;
+        let bytes = File::open(file.clone())?.metadata()?.len() as usize;
 
-        let db = &self.table_info.db;
-        let name = &self.table_info.name;
-        Ok(ReadDataSourcePlan {
-            table_info: self.table_info.clone(),
-            parts: generate_parts(
-                start_line as u64,
-                io_ctx.get_max_threads() as u64,
-                lines_count as u64,
-            ),
-            statistics: Statistics::default(),
-            description: format!("(Read from CSV Engine table  {}.{})", db, name),
-            scan_plan: Arc::new(ScanPlan::empty()),
-            tbl_args: None,
-            push_downs: None,
-        })
+        let parts = generate_parts(
+            start_line as u64,
+            io_ctx.get_max_threads() as u64,
+            lines_count as u64,
+        );
+        Ok((Statistics::new_estimated(lines_count, bytes), parts))
     }
 
     async fn read(

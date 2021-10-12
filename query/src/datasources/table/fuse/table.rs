@@ -25,7 +25,6 @@ use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
-use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
@@ -58,13 +57,13 @@ impl Table for FuseTable {
         &self.table_info
     }
 
-    fn read_plan(
+    fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
         _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
-        self.do_read_plan(io_ctx, push_downs)
+    ) -> Result<(Statistics, Partitions)> {
+        self.do_read_partitions(io_ctx, push_downs)
     }
 
     async fn read(
@@ -102,18 +101,6 @@ impl FuseTable {
         } else {
             Ok(None)
         }
-    }
-
-    pub(crate) fn empty_read_source_plan(&self) -> Result<ReadDataSourcePlan> {
-        Ok(ReadDataSourcePlan {
-            table_info: self.table_info.clone(),
-            parts: vec![],
-            statistics: Statistics::default(),
-            description: "".to_string(),
-            scan_plan: Default::default(),
-            tbl_args: None,
-            push_downs: None,
-        })
     }
 
     pub(crate) fn to_partitions(&self, _blocks: &[BlockLocation]) -> (Statistics, Partitions) {

@@ -25,9 +25,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::Part;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
 use common_streams::ParquetStream;
 use common_streams::SendableDataBlockStream;
 use crossbeam::channel::bounded;
@@ -98,27 +95,6 @@ impl Table for ParquetTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
-    }
-
-    fn read_plan(
-        &self,
-        _io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
-        let db = &self.table_info.db;
-        Ok(ReadDataSourcePlan {
-            table_info: self.table_info.clone(),
-            parts: vec![Part {
-                name: "".to_string(),
-                version: 0,
-            }],
-            statistics: Statistics::default(),
-            description: format!("(Read from Parquet Engine table  {}.{})", db, self.name()),
-            scan_plan: Default::default(),
-            tbl_args: None,
-            push_downs,
-        })
     }
 
     async fn read(

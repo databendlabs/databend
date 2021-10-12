@@ -19,12 +19,13 @@ use common_exception::Result;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::datasources::database::system::TablesTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
-    let table = TablesTable::create(1);
+    let table: Arc<dyn Table> = Arc::new(TablesTable::create(1));
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(

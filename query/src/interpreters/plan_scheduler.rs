@@ -49,6 +49,7 @@ use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::catalogs::TablePtr;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 

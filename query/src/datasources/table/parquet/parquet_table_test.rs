@@ -23,6 +23,7 @@ use common_meta_types::TableInfo;
 use common_planners::*;
 use futures::TryStreamExt;
 
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
 
 #[tokio::test]

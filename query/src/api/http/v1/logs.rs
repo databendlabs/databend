@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionManagerRef;
 
@@ -75,6 +76,7 @@ async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataB
 
     let io_ctx = context.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
+
     let tracing_table_read_plan = tracing_table.read_plan(
         io_ctx.clone(),
         None,
