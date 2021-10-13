@@ -22,8 +22,8 @@ use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
 use crate::catalogs::Database;
-use crate::catalogs::TableFunctionMeta;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table_func_engine::TableArgs;
@@ -47,20 +47,20 @@ pub trait Catalog {
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
 
     // Get one table by db and table name.
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>>;
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
 
     fn get_table_by_id(
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>>;
+    ) -> Result<Arc<dyn Table>>;
 
     // Get function by name.
     fn get_table_function(
         &self,
         _func_name: &str,
         _tbl_args: TableArgs,
-    ) -> Result<Arc<TableFunctionMeta>> {
+    ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
     }
 

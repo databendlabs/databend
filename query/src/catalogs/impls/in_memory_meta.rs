@@ -18,36 +18,32 @@ use std::sync::Arc;
 
 use common_meta_types::MetaId;
 
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
 
 pub struct InMemoryMetas {
-    pub(crate) name2meta: HashMap<String, Arc<TableMeta>>,
-    pub(crate) id2meta: HashMap<MetaId, Arc<TableMeta>>,
+    pub(crate) name2table: HashMap<String, Arc<dyn Table>>,
+    pub(crate) id2table: HashMap<MetaId, Arc<dyn Table>>,
 }
 
 impl InMemoryMetas {
     pub fn create() -> Self {
         InMemoryMetas {
-            name2meta: HashMap::default(),
-            id2meta: HashMap::default(),
+            name2table: HashMap::default(),
+            id2table: HashMap::default(),
         }
     }
 
-    pub fn insert(&mut self, tbl_meta: TableMeta) {
-        let met_ref = Arc::new(tbl_meta);
-        let name = met_ref.raw().name().to_owned();
-        self.name2meta
-            .insert(met_ref.raw().name().to_owned(), met_ref.clone());
-        self.id2meta.insert(met_ref.meta_id(), met_ref);
-        self.get_by_name(&name);
+    pub fn insert(&mut self, tbl_ref: Arc<dyn Table>) {
+        let name = tbl_ref.name().to_owned();
+        self.name2table.insert(name, tbl_ref.clone());
+        self.id2table.insert(tbl_ref.get_id(), tbl_ref);
     }
 
-    pub fn get_by_name(&self, name: &str) -> Option<Arc<TableMeta>> {
-        let res = self.name2meta.get(name).cloned();
-        res
+    pub fn get_by_name(&self, name: &str) -> Option<Arc<dyn Table>> {
+        self.name2table.get(name).cloned()
     }
 
-    pub fn get_by_id(&self, id: &MetaId) -> Option<Arc<TableMeta>> {
-        self.id2meta.get(id).cloned()
+    pub fn get_by_id(&self, id: &MetaId) -> Option<Arc<dyn Table>> {
+        self.id2table.get(id).cloned()
     }
 }

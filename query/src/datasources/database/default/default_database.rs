@@ -26,7 +26,7 @@ use common_planners::DropTablePlan;
 use crate::catalogs::backends::CatalogBackend;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
@@ -60,7 +60,7 @@ impl DefaultDatabase {
     fn build_table_instance(
         &self,
         table_info: &TableInfo,
-    ) -> common_exception::Result<Arc<TableMeta>> {
+    ) -> common_exception::Result<Arc<dyn Table>> {
         let engine = &table_info.engine;
         let provider = self
             .table_factory_registry
@@ -68,14 +68,15 @@ impl DefaultDatabase {
             .ok_or_else(|| {
                 ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
             })?;
-        let tbl = provider.try_create(table_info.clone(), self.store_api_provider.clone())?;
+        let tbl: Arc<dyn Table> = provider
+            .try_create(table_info.clone(), self.store_api_provider.clone())?
+            .into();
         let stateful = tbl.is_stateful();
-        let tbl_meta = TableMeta::create(tbl.into(), table_info.table_id);
         if stateful {
-            self.stateful_table_cache.write().insert(tbl_meta.clone());
+            self.stateful_table_cache.write().insert(tbl.clone());
         }
 
-        Ok(Arc::new(tbl_meta))
+        Ok(tbl)
     }
 }
 
@@ -92,7 +93,7 @@ impl Database for DefaultDatabase {
         false
     }
 
-    fn get_table(&self, table_name: &str) -> common_exception::Result<Arc<TableMeta>> {
+    fn get_table(&self, table_name: &str) -> common_exception::Result<Arc<dyn Table>> {
         {
             if let Some(meta) = self.stateful_table_cache.read().get_by_name(table_name) {
                 return Ok(meta);
@@ -107,7 +108,7 @@ impl Database for DefaultDatabase {
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
-    ) -> common_exception::Result<Arc<TableMeta>> {
+    ) -> common_exception::Result<Arc<dyn Table>> {
         {
             if let Some(tbl) = self.stateful_table_cache.read().get_by_id(&table_id) {
                 return Ok(tbl.clone());
@@ -121,7 +122,7 @@ impl Database for DefaultDatabase {
         self.build_table_instance(table_info.as_ref())
     }
 
-    fn get_tables(&self) -> common_exception::Result<Vec<Arc<TableMeta>>> {
+    fn get_tables(&self) -> common_exception::Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.catalog_backend.get_tables(self.name())?;
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table_instance(item)?;

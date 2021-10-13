@@ -435,8 +435,8 @@ impl PlanParser {
         }
 
         let table = self.ctx.get_table(&db_name, &tbl_name)?;
-        let mut schema = table.raw().schema();
-        let tbl_id = table.meta_id();
+        let mut schema = table.schema();
+        let tbl_id = table.get_id();
 
         if !columns.is_empty() {
             let fields = columns
@@ -702,38 +702,35 @@ impl PlanParser {
         let db_name = "system";
         let table_name = "one";
 
-        self.ctx
-            .get_table(db_name, table_name)
-            .and_then(|table_meta| {
-                let table = table_meta.raw();
-                let table_id = table_meta.meta_id();
-                let table_version = table_meta.meta_ver();
+        self.ctx.get_table(db_name, table_name).and_then(|table| {
+            let table_id = table.get_id();
+            let table_version = Some(table.get_table_info().version);
 
-                let tbl_scan_info = TableScanInfo {
-                    table_name,
-                    table_id,
-                    table_version,
-                    table_schema: &table.schema(),
-                    table_args: None,
-                };
+            let tbl_scan_info = TableScanInfo {
+                table_name,
+                table_id,
+                table_version,
+                table_schema: &table.schema(),
+                table_args: None,
+            };
 
-                PlanBuilder::scan(db_name, tbl_scan_info, None, None)
-                    .and_then(|builder| builder.build())
-                    .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                        PlanNode::Scan(ref dummy_scan_plan) => {
-                            // TODO(xp): is it possible to use get_cluster_table_io_context() here?
-                            let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                            table
-                                .read_plan(
-                                    Arc::new(io_ctx),
-                                    Some(dummy_scan_plan.push_downs.clone()),
-                                    Some(self.ctx.get_settings().get_max_threads()? as usize),
-                                )
-                                .map(PlanNode::ReadSource)
-                        }
-                        _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
-                    })
-            })
+            PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+                .and_then(|builder| builder.build())
+                .and_then(|dummy_scan_plan| match dummy_scan_plan {
+                    PlanNode::Scan(ref dummy_scan_plan) => {
+                        // TODO(xp): is it possible to use get_cluster_table_io_context() here?
+                        let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                        table
+                            .read_plan(
+                                Arc::new(io_ctx),
+                                Some(dummy_scan_plan.push_downs.clone()),
+                                Some(self.ctx.get_settings().get_max_threads()? as usize),
+                            )
+                            .map(PlanNode::ReadSource)
+                    }
+                    _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
+                })
+        })
     }
 
     fn plan_table_with_joins(&self, t: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
@@ -779,24 +776,22 @@ impl PlanParser {
                         },
                     )?;
 
-                    let func_meta = self.ctx.get_table_function(&table_name, Some(table_args))?;
-                    meta_id = func_meta.meta_id();
-                    meta_version = func_meta.meta_ver();
-                    let table_function = func_meta.raw().clone();
-                    table_name = table_function.name().to_string();
-                    table = table_function.as_table();
+                    let table_func = self.ctx.get_table_function(&table_name, Some(table_args))?;
+                    meta_id = table_func.get_id();
+                    meta_version = table_func.get_table_info().version;
+                    table_name = table_func.name().to_string();
+                    table = table_func.as_table();
                 } else {
-                    let table_meta = self.ctx.get_table(&db_name, &table_name)?;
-                    meta_id = table_meta.meta_id();
-                    meta_version = table_meta.meta_ver();
-                    table = table_meta.raw().clone();
+                    table = self.ctx.get_table(&db_name, &table_name)?;
+                    meta_id = table.get_id();
+                    meta_version = table.get_table_info().version;
                 }
 
                 let scan = {
                     let tbl_scan_info = TableScanInfo {
                         table_name: &table_name,
                         table_id: meta_id,
-                        table_version: meta_version,
+                        table_version: Some(meta_version),
                         table_schema: &table.schema(),
                         table_args,
                     };

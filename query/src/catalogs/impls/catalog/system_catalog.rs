@@ -26,7 +26,7 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::TableMeta;
+use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::datasources::database::system::SystemDatabase;
 use crate::datasources::database_engine::DatabaseEngine;
@@ -76,7 +76,7 @@ impl Catalog for SystemCatalog {
         Ok(db.clone())
     }
 
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableMeta>> {
+    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
         let db = self.get_database(db_name)?;
         db.get_table(table_name)
     }
@@ -85,7 +85,7 @@ impl Catalog for SystemCatalog {
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>> {
+    ) -> Result<Arc<dyn Table>> {
         for db in self.dbs.values() {
             let tbl = db.get_table_by_id(table_id, table_version);
             match tbl {
