@@ -58,6 +58,7 @@ fn basic() {
 }
 
 #[test]
+#[ignore]
 fn version() {
     fusectl()
         .arg("version")
