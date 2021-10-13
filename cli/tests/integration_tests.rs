@@ -53,12 +53,11 @@ fn basic() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(contains_all!("Prints help information"))
+        .stdout(contains_all!("USAGE"))
         .stderr("");
 }
 
 #[test]
-#[ignore]
 fn version() {
     fusectl()
         .arg("version")

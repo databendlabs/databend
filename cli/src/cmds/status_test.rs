@@ -73,7 +73,7 @@ fn test_status() -> Result<()> {
         Status::save_local_config(
             &mut status,
             "query".parse().unwrap(),
-            "query_1.json".to_string(),
+            "query_1.yaml".to_string(),
             &query_config,
         )
         .unwrap();
@@ -96,7 +96,7 @@ fn test_status() -> Result<()> {
         Status::save_local_config(
             &mut status,
             "meta".parse().unwrap(),
-            "meta_1.json".to_string(),
+            "meta_1.yaml".to_string(),
             &meta_config,
         )
         .unwrap();
@@ -109,7 +109,7 @@ fn test_status() -> Result<()> {
         Status::save_local_config(
             &mut status,
             "query".parse().unwrap(),
-            "query_2.json".to_string(),
+            "query_2.yaml".to_string(),
             &query_config2,
         )
         .unwrap();

@@ -58,13 +58,17 @@ impl DeleteCommand {
     fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let mut status = Status::read(self.conf.clone())?;
         for (fs, query) in status.get_local_query_configs() {
-            query.kill().expect(&*format!(
-                "cannot kill query service with config in {}",
-                fs.clone()
-            ));
+            if query.kill().is_err() {
+                writer.write_err(&*format!(
+                    "cannot kill query service with config in {}",
+                    fs.clone()
+                ))
+            }
+
             //(TODO) check port freed
-            Status::delete_local_config(&mut status, "query".to_string(), fs)
-                .expect("cannot clean query config");
+            if Status::delete_local_config(&mut status, "query".to_string(), fs.clone()).is_err() {
+                writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
+            }
         }
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();

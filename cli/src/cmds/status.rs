@@ -29,8 +29,8 @@ use libc::pid_t;
 use log::info;
 use metasrv::configs::Config as MetaConfig;
 use nix::unistd::Pid;
-use serde::Deserialize;
 use serde::Serialize;
+use serde_derive::Deserialize;
 
 use crate::cmds::Config;
 use crate::error::CliError;
@@ -411,7 +411,7 @@ impl Status {
             .write(true)
             .truncate(true)
             .open(file_location.clone())?;
-        serde_json::to_writer(&file, data)
+        serde_yaml::to_writer(&file, data)
             .expect(&*format!("cannot write to file {}", file_location));
         if status.local_configs.get(&*config_type).is_none() {
             status.local_configs.insert(config_type, file_location);
@@ -476,7 +476,7 @@ impl Status {
         let reader = BufReader::new(file);
         return Some((
             meta_file.to_string(),
-            serde_json::from_reader(reader).expect(&*format!("cannot read from {}", meta_file)),
+            serde_yaml::from_reader(reader).expect(&*format!("cannot read from {}", meta_file)),
         ));
     }
 
@@ -508,14 +508,100 @@ impl Status {
             }
             let file = File::open(file_name.to_string().as_str()).unwrap();
             let reader = BufReader::new(file);
-            ret.push((
-                file_name.to_string(),
-                serde_json::from_reader(reader).expect(&*format!("cannot read from {}", file_name)),
-            ));
+            let values: serde_yaml::Value =
+                serde_yaml::from_reader(reader).expect(&*format!("cannot read from {}", file_name));
+            let qry = Status::value_to_query_config(&values.clone());
+            ret.push((file_name.to_string(), qry.unwrap()));
         }
         ret
     }
 
+    fn value_to_query_config(values: &serde_yaml::Value) -> Result<LocalQueryConfig> {
+        let config = QueryConfig {
+            config_file: values
+                .get("config")
+                .and_then(|v| {
+                    Option::from(
+                        v.get("config_file")
+                            .map(|val| serde_yaml::from_value::<String>(val.clone()).unwrap())
+                            .unwrap(),
+                    )
+                })
+                .unwrap(),
+            query: values
+                .get("config")
+                .and_then(|v| {
+                    Option::from(
+                        v.get("query")
+                            .map(|val| {
+                                serde_yaml::from_value::<
+                                    databend_query::configs::config_query::QueryConfig,
+                                >(val.clone())
+                                .unwrap()
+                            })
+                            .unwrap(),
+                    )
+                })
+                .unwrap(),
+            log: values
+                .get("config")
+                .and_then(|v| {
+                    Option::from(
+                        v.get("log")
+                            .map(|val| {
+                                serde_yaml::from_value::<
+                                    databend_query::configs::config_log::LogConfig,
+                                >(val.clone())
+                                .unwrap()
+                            })
+                            .unwrap(),
+                    )
+                })
+                .unwrap(),
+            meta: values
+                .get("config")
+                .and_then(|v| {
+                    Option::from(
+                        v.get("meta")
+                            .map(|val| {
+                                serde_yaml::from_value::<
+                                    databend_query::configs::config_meta::MetaConfig,
+                                >(val.clone())
+                                .unwrap()
+                            })
+                            .unwrap(),
+                    )
+                })
+                .unwrap(),
+            storage: values
+                .get("config")
+                .and_then(|v| {
+                    Option::from(
+                        v.get("storage")
+                            .map(|val| {
+                                serde_yaml::from_value::<
+                                    databend_query::configs::config_storage::StorageConfig,
+                                >(val.clone())
+                                .unwrap()
+                            })
+                            .unwrap(),
+                    )
+                })
+                .unwrap(),
+        };
+        Ok(LocalQueryConfig {
+            config,
+            pid: values
+                .get("pid")
+                .and_then(|val| val.as_u64().map(|s| s as pid_t)),
+            path: values.get("path").and_then(|val| {
+                Option::from(val.as_str().and_then(|s| Option::from(s.to_string())))
+            }),
+            log_dir: values.get("log_dir").and_then(|val| {
+                Option::from(val.as_str().and_then(|s| Option::from(s.to_string())))
+            }),
+        })
+    }
     pub fn write(&self) -> Result<()> {
         let file = OpenOptions::new()
             .create(true)
