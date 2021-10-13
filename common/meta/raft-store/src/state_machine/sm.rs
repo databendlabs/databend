@@ -27,7 +27,6 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
-use common_meta_types::ClientLastRespValue;
 use common_meta_types::Cmd;
 use common_meta_types::Database;
 use common_meta_types::KVMeta;
@@ -56,6 +55,7 @@ use crate::sled_key_spaces::Sequences;
 use crate::sled_key_spaces::StateMachineMeta;
 use crate::state_machine::placement::rand_n_from_m;
 use crate::state_machine::AppliedState;
+use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::Placement;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
@@ -576,10 +576,9 @@ impl StateMachine {
         key: &str,
         value: (u64, AppliedState),
     ) -> common_exception::Result<AppliedState> {
-        let st = serde_json::to_vec(&value.1)?;
         let v = ClientLastRespValue {
             req_serial_num: value.0,
-            res: st,
+            res: value.1.clone(),
         };
         let kvs = self.client_last_resps();
         kvs.insert(&key.to_string(), &v).await?;
@@ -614,8 +613,7 @@ impl StateMachine {
         let v: Option<ClientLastRespValue> = client_last_resps.get(&key.to_string())?;
 
         if let Some(resp) = v {
-            let st: AppliedState = serde_json::from_slice(&resp.res)?;
-            return Ok(Some((resp.req_serial_num, st)));
+            return Ok(Some((resp.req_serial_num, resp.res)));
         }
 
         Ok(Some((0, AppliedState::None)))

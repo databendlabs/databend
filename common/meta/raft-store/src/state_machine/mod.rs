@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub use applied_state::AppliedState;
+pub use client_last_resp::ClientLastRespValue;
 pub use placement::Placement;
 pub use sm::Replication;
 pub use sm::SerializableSnapshot;
@@ -23,6 +24,7 @@ pub use state_machine_meta::StateMachineMetaKey;
 pub use state_machine_meta::StateMachineMetaValue;
 
 pub mod applied_state;
+pub mod client_last_resp;
 pub mod sm;
 pub mod snapshot;
 pub mod state_machine_meta;

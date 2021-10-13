@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use async_raft::raft::Entry;
-use common_meta_sled_store::ClientLastRespValue;
 use common_meta_sled_store::SeqNum;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_types::DatabaseInfo;
@@ -26,6 +25,7 @@ use common_meta_types::SeqValue;
 
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
+use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
