@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -33,5 +36,11 @@ impl RaftTxId {
             client: client.to_string(),
             serial,
         }
+    }
+}
+
+impl Display for RaftTxId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "txid-{}-{}", &self.client, self.serial)
     }
 }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -28,6 +27,7 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_types::ClientLastRespValue;
 use common_meta_types::Cmd;
 use common_meta_types::Database;
 use common_meta_types::KVMeta;
@@ -48,6 +48,7 @@ use serde::Serialize;
 use sled::IVec;
 
 use crate::config::RaftConfig;
+use crate::sled_key_spaces::ClientLastResps;
 use crate::sled_key_spaces::Files;
 use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
@@ -107,11 +108,6 @@ pub struct StateMachine {
     ///
     /// TODO(xp): migrate other in-memory fields to `sm_tree`.
     pub sm_tree: SledTree,
-
-    /// raft state: A mapping of client IDs to their state info:
-    /// (serial, RaftResponse)
-    /// This is used to de-dup client request, to impl idempotent operations.
-    pub client_last_resp: HashMap<String, (u64, AppliedState)>,
 
     // cluster nodes, key distribution etc.
     pub slots: Vec<Slot>,
@@ -224,7 +220,6 @@ impl StateMachine {
 
             sm_tree,
 
-            client_last_resp: Default::default(),
             slots: Vec::new(),
 
             replication: Replication::Mirror(1),
@@ -343,9 +338,9 @@ impl StateMachine {
             EntryPayload::Normal(ref norm) => {
                 let data = &norm.data;
                 if let Some(ref txid) = data.txid {
-                    if let Some((serial, resp)) = self.client_last_resp.get(&txid.client) {
-                        if serial == &txid.serial {
-                            return Ok(resp.clone());
+                    if let Some((serial, resp)) = self.get_client_last_resp(&txid.client)? {
+                        if serial == txid.serial {
+                            return Ok(resp);
                         }
                     }
                 }
@@ -353,8 +348,8 @@ impl StateMachine {
                 let resp = self.apply_cmd(&data.cmd).await?;
 
                 if let Some(ref txid) = data.txid {
-                    self.client_last_resp
-                        .insert(txid.client.clone(), (txid.serial, resp.clone()));
+                    self.client_last_resp_update(&txid.client, (txid.serial, resp.clone()))
+                        .await?;
                 }
                 return Ok(resp);
             }
@@ -576,6 +571,22 @@ impl StateMachine {
         Ok(Some(seq_kv_value))
     }
 
+    async fn client_last_resp_update(
+        &self,
+        key: &str,
+        value: (u64, AppliedState),
+    ) -> common_exception::Result<AppliedState> {
+        let st = serde_json::to_vec(&value.1)?;
+        let v = ClientLastRespValue {
+            req_serial_num: value.0,
+            res: st,
+        };
+        let kvs = self.client_last_resps();
+        kvs.insert(&key.to_string(), &v).await?;
+
+        Ok(value.1)
+    }
+
     pub fn get_membership(&self) -> common_exception::Result<Option<MembershipConfig>> {
         let sm_meta = self.sm_meta();
         let mem = sm_meta
@@ -593,6 +604,21 @@ impl StateMachine {
             .unwrap_or_default();
 
         Ok(last_applied)
+    }
+
+    pub fn get_client_last_resp(
+        &self,
+        key: &str,
+    ) -> common_exception::Result<Option<(u64, AppliedState)>> {
+        let client_last_resps = self.client_last_resps();
+        let v: Option<ClientLastRespValue> = client_last_resps.get(&key.to_string())?;
+
+        if let Some(resp) = v {
+            let st: AppliedState = serde_json::from_slice(&resp.res)?;
+            return Ok(Some((resp.req_serial_num, st)));
+        }
+
+        Ok(Some((0, AppliedState::None)))
     }
 
     /// Initialize slots by assign nodes to everyone of them randomly, according to replicationn config.
@@ -786,6 +812,11 @@ impl StateMachine {
 
     /// storage of auto-incremental number.
     pub fn sequences(&self) -> AsKeySpace<Sequences> {
+        self.sm_tree.key_space()
+    }
+
+    /// storage of client last resp to keep idempotent.
+    pub fn client_last_resps(&self) -> AsKeySpace<ClientLastResps> {
         self.sm_tree.key_space()
     }
 }
