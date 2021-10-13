@@ -13,6 +13,6 @@
 // limitations under the License.
 
 pub mod processors;
-pub mod transforms;
-pub mod sources;
 pub mod sinks;
+pub mod sources;
+pub mod transforms;

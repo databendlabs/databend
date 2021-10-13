@@ -1,12 +1,11 @@
-use crate::pipelines::processors::processor_dag::ProcessorsDAG;
-use petgraph::dot::{Dot, Config};
-use std::fmt::{Display, Formatter};
-use petgraph::Direction;
-use petgraph::prelude::StableGraph;
-use std::sync::Arc;
-use crate::pipelines::processors::Processor;
-use petgraph::visit::{IntoNeighbors, IntoNeighborsDirected};
+use std::collections::HashSet;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 use petgraph::stable_graph::NodeIndex;
+use petgraph::Direction;
+
+use crate::pipelines::processors::processor_dag::ProcessorsDAG;
 
 impl ProcessorsDAG {
     pub fn display_indent(&self) -> impl Display + '_ {
@@ -29,35 +28,39 @@ impl ProcessorsDAG {
 struct IndentDisplayWrap<'a>(&'a ProcessorsDAG);
 
 impl<'a> IndentDisplayWrap<'a> {
-    fn write(&self, c: usize, index: &Vec<NodeIndex>, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn write(&self, c: usize, index: &[NodeIndex], f: &mut Formatter<'_>) -> std::fmt::Result {
         let graph = &self.0.graph;
         match graph.node_weight(index[0]) {
             None => unreachable!("Not found graph node weight."),
             Some(processor) => {
-                write!(
+                writeln!(
                     f,
-                    "{}{} × {} {}\n",
+                    "{}{} × {} {}",
                     "  ".repeat(c),
                     processor.name(),
                     index.len(),
-                    if index.len() == 1 { "processor" } else { "processors" }
+                    if index.len() == 1 {
+                        "processor"
+                    } else {
+                        "processors"
+                    }
                 )?;
             }
         };
 
-        let mut neighbors: Vec<NodeIndex> = Vec::new();
+        let mut neighbors_set = HashSet::new();
         for node_index in index {
-            let iterator = graph.neighbors_directed(*node_index, Direction::Incoming);
-
-            for neighbors_index in iterator {
-                neighbors.push(neighbors_index);
+            for neighbors_index in graph.neighbors_directed(*node_index, Direction::Incoming) {
+                neighbors_set.insert(neighbors_index);
             }
         }
 
-        match (index.len(), neighbors.len()) {
+        let neighbors = neighbors_set.iter().cloned().collect::<Vec<_>>();
+
+        match (index.len(), neighbors_set.len()) {
             (_, 0) => Ok(()),
             (left, right) if left == right => self.write(c + 1, &neighbors, f),
-            (1, _) => self.write_merge(c + 1, f, &index, &neighbors),
+            (1, _) => self.write_merge(c + 1, f, index, &neighbors),
             _ => self.write_mixed(c + 1, f, index, &neighbors),
         }
     }
@@ -66,8 +69,8 @@ impl<'a> IndentDisplayWrap<'a> {
         &self,
         c: usize,
         f: &mut Formatter,
-        index: &Vec<NodeIndex>,
-        neighbors: &Vec<NodeIndex>,
+        index: &[NodeIndex],
+        neighbors: &[NodeIndex],
     ) -> std::fmt::Result {
         if !neighbors.is_empty() {
             let graph = &self.0.graph;
@@ -76,11 +79,12 @@ impl<'a> IndentDisplayWrap<'a> {
 
             match (prev_processor, post_processor) {
                 (Some(prev_processor), Some(post_processor)) => {
-                    write!(
+                    writeln!(
                         f,
-                        "{}Mixed ({} × {} {}) to ({} × {} {})\n",
+                        "{}Mixed ({} × {} {}) to ({} × {} {})",
                         "  ".repeat(c),
-                        prev_processor.name(), neighbors.len(),
+                        prev_processor.name(),
+                        neighbors.len(),
                         if neighbors.len() == 1 {
                             "processor"
                         } else {
@@ -95,7 +99,7 @@ impl<'a> IndentDisplayWrap<'a> {
                         },
                     )?;
                 }
-                _ => unreachable!("")
+                _ => unreachable!(""),
             }
         }
 
@@ -106,8 +110,8 @@ impl<'a> IndentDisplayWrap<'a> {
         &self,
         c: usize,
         f: &mut Formatter,
-        index: &Vec<NodeIndex>,
-        neighbors: &Vec<NodeIndex>,
+        index: &[NodeIndex],
+        neighbors: &[NodeIndex],
     ) -> std::fmt::Result {
         if !neighbors.is_empty() {
             let graph = &self.0.graph;
@@ -116,20 +120,21 @@ impl<'a> IndentDisplayWrap<'a> {
 
             match (prev_processor, post_processor) {
                 (Some(prev_processor), Some(post_processor)) => {
-                    write!(
+                    writeln!(
                         f,
-                        "{}Merge ({} × {} {}) to ({} × {})\n",
+                        "{}Merge ({} × {} {}) to ({} × 1)",
                         "  ".repeat(c),
-                        prev_processor.name(), neighbors.len(),
+                        prev_processor.name(),
+                        neighbors.len(),
                         if neighbors.len() == 1 {
                             "processor"
                         } else {
                             "processors"
                         },
-                        post_processor.name(), "1"
+                        post_processor.name(),
                     )?;
                 }
-                _ => unreachable!("")
+                _ => unreachable!(""),
             }
         }
 
@@ -144,7 +149,7 @@ impl<'a> Display for IndentDisplayWrap<'a> {
         let externals_nodes: Vec<NodeIndex> = outgoing_externals.collect();
         match externals_nodes.is_empty() {
             true => Ok(()),
-            false => self.write(0, &externals_nodes, f)
+            false => self.write(0, &externals_nodes, f),
         }
     }
 }

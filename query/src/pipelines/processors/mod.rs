@@ -17,16 +17,15 @@ mod pipe_test;
 #[cfg(test)]
 mod pipeline_builder_test;
 #[cfg(test)]
-mod processor_dag_test;
-#[cfg(test)]
 mod processor_dag_display_test;
+#[cfg(test)]
+mod processor_dag_test;
 #[cfg(test)]
 mod processor_empty_test;
 #[cfg(test)]
 mod processor_merge_test;
 #[cfg(test)]
 mod processor_mixed_test;
-
 
 mod pipe;
 mod pipeline;
@@ -43,13 +42,12 @@ mod processor_empty;
 mod processor_merge;
 mod processor_mixed;
 
-
 pub use pipe::Pipe;
 pub use pipeline::Pipeline;
 pub use pipeline_builder::PipelineBuilder;
 pub use processor::Processor;
+pub use processor_dag::ProcessorsDAG;
+pub use processor_dag::ProcessorsDAGBuilder;
 pub use processor_empty::EmptyProcessor;
 pub use processor_merge::MergeProcessor;
 pub use processor_mixed::MixedProcessor;
-pub use processor_dag::ProcessorsDAG;
-pub use processor_dag::ProcessorsDAGBuilder;

@@ -1,12 +1,11 @@
-use common_exception::{Result, ErrorCode};
-use common_datablocks::DataBlock;
-use futures::{Stream, StreamExt};
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Context;
+use std::task::Poll;
+
+use common_datablocks::DataBlock;
+use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use crate::pipelines::processors::Processor;
-use std::sync::Arc;
-use std::any::Any;
+use futures::Stream;
 
 #[async_trait::async_trait]
 pub trait StatelessTransform: Send + Unpin + Sync {
@@ -33,11 +32,11 @@ impl<T: StatelessTransform> StatelessTransformStream<T> {
             return match self.inner.finalized() {
                 Ok(None) => None,
                 Err(cause) => Some(Err(cause)),
-                Ok(Some(data)) => Some(Ok(data))
+                Ok(Some(data)) => Some(Ok(data)),
             };
         }
 
-        return None;
+        None
     }
 }
 
@@ -48,14 +47,24 @@ impl<T: StatelessTransform> Stream for StatelessTransformStream<T> {
         let mut_self = self.get_mut();
         loop {
             match mut_self.upstream.as_mut().poll_next(cx) {
-                Poll::Pending => { return Poll::Pending; }
-                Poll::Ready(None) => { return Poll::Ready(mut_self.poll_finalized()); },
-                Poll::Ready(Some(Err(cause))) => { return Poll::Ready(Some(Err(cause))); }
-                Poll::Ready(Some(Ok(data))) => {
-                    match mut_self.inner.transform(data) {
-                        Ok(None) => { continue; }
-                        Ok(Some(data)) => { return Poll::Ready(Some(Ok(data))); }
-                        Err(cause) => { return Poll::Ready(Some(Err(cause))); },
+                Poll::Pending => {
+                    return Poll::Pending;
+                }
+                Poll::Ready(None) => {
+                    return Poll::Ready(mut_self.poll_finalized());
+                }
+                Poll::Ready(Some(Err(cause))) => {
+                    return Poll::Ready(Some(Err(cause)));
+                }
+                Poll::Ready(Some(Ok(data))) => match mut_self.inner.transform(data) {
+                    Ok(None) => {
+                        continue;
+                    }
+                    Ok(Some(data)) => {
+                        return Poll::Ready(Some(Ok(data)));
+                    }
+                    Err(cause) => {
+                        return Poll::Ready(Some(Err(cause)));
                     }
                 },
             }

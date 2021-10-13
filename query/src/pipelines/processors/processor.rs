@@ -13,14 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_exception::{Result, ErrorCode};
+use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use std::task::{Poll, Context};
-use std::pin::Pin;
 
 #[async_trait::async_trait]
 pub trait Processor: Sync + Send {
@@ -55,15 +54,3 @@ impl Display for dyn Processor {
 }
 
 pub type ProcessorRef = Arc<dyn Processor>;
-
-pub enum ReadyStatus {
-    NeedData,
-    PortFull,
-}
-
-trait NewProcessor {
-    fn name(&self) -> &str;
-
-    fn ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<ReadyStatus>;
-}
-

@@ -28,9 +28,9 @@ use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::ExpressionTransform;
-use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
+use crate::pipelines::transforms::HavingTransform;
 use crate::pipelines::transforms::LimitByTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
@@ -38,6 +38,7 @@ use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
+use crate::pipelines::transforms::WhereTransform;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct ProcessorsDAG {
@@ -68,6 +69,7 @@ pub struct ProcessorsDAGBuilder {
 
     // TODO(Winter): remove this.
     limit: Option<usize>,
+    after_order_by: bool,
 }
 
 impl ProcessorsDAGBuilder {
@@ -77,6 +79,7 @@ impl ProcessorsDAGBuilder {
             graph: Default::default(),
             top_processors: vec![],
             limit: None,
+            after_order_by: false,
         }
     }
 
@@ -116,7 +119,9 @@ impl ProcessorsDAGBuilder {
 
         self.visit_sort_for_partial(plan)?;
         self.visit_sort_for_merge_with_single_thread(plan)?;
-        self.visit_sort_for_merge_with_multiple_threads(plan)
+        self.visit_sort_for_merge_with_multiple_threads(plan)?;
+        self.after_order_by = true;
+        Ok(())
     }
 
     fn visit_limit(&mut self, node: &LimitPlan) -> Result<()> {
@@ -145,7 +150,7 @@ impl ProcessorsDAGBuilder {
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
         let limit = self.limit;
-        self.add_simple_graph_node(move || {
+        self.add_auto_graph_node(move || {
             let schema = plan.schema();
             let order_by_desc = plan.order_by.clone();
             Ok(Arc::new(SortPartialTransform::try_create(
@@ -161,7 +166,7 @@ impl ProcessorsDAGBuilder {
         // processor 2: [sorted blocks ...] ---> merge to one sorted block
         // processor 3: [sorted blocks ...] ---> merge to one sorted block
         let limit = self.limit;
-        self.add_simple_graph_node(move || {
+        self.add_auto_graph_node(move || {
             let schema = plan.schema();
             let order_by_desc = plan.order_by.clone();
             Ok(Arc::new(SortMergeTransform::try_create(
@@ -192,29 +197,25 @@ impl ProcessorsDAGBuilder {
 
     fn visit_filter(&mut self, node: &FilterPlan) -> Result<()> {
         self.visit(&*node.input)?;
-        self.add_simple_graph_node(|| {
+        self.add_auto_graph_node(|| {
             let schema = node.schema();
             let predicate = node.predicate.clone();
-            Ok(Arc::new(FilterTransform::try_create(
-                schema, predicate, false,
-            )?))
+            Ok(Arc::new(WhereTransform::try_create(schema, predicate)?))
         })
     }
 
     fn visit_having(&mut self, node: &HavingPlan) -> Result<()> {
         self.visit(&*node.input)?;
-        self.add_simple_graph_node(|| {
+        self.add_auto_graph_node(|| {
             let schema = node.schema();
             let predicate = node.predicate.clone();
-            Ok(Arc::new(FilterTransform::try_create(
-                schema, predicate, true,
-            )?))
+            Ok(Arc::new(HavingTransform::try_create(schema, predicate)?))
         })
     }
 
     fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {
         self.visit(&*plan.input)?;
-        self.add_simple_graph_node(|| {
+        self.add_auto_graph_node(|| {
             let exprs = plan.exprs.clone();
             let input = plan.input.schema();
             let output = plan.schema.clone();
@@ -226,7 +227,7 @@ impl ProcessorsDAGBuilder {
 
     fn visit_projection(&mut self, node: &ProjectionPlan) -> Result<()> {
         self.visit(&*node.input)?;
-        self.add_simple_graph_node(|| {
+        self.add_auto_graph_node(|| {
             let exprs = node.expr.clone();
             let input = node.input.schema();
             let output = node.schema.clone();
@@ -258,8 +259,6 @@ impl ProcessorsDAGBuilder {
                     node.group_expr.clone(),
                 )))
             })
-            // TODO(Winter)
-            // pipeline.mixed_processor(self.ctx.get_settings().get_max_threads()? as usize)?;
         }
     }
 
@@ -267,7 +266,7 @@ impl ProcessorsDAGBuilder {
         self.visit(&*node.input)?;
 
         if node.group_expr.is_empty() {
-            self.add_simple_graph_node(|| {
+            self.add_auto_graph_node(|| {
                 Ok(Arc::new(AggregatorPartialTransform::try_create(
                     node.schema(),
                     node.input.schema(),
@@ -275,7 +274,7 @@ impl ProcessorsDAGBuilder {
                 )?))
             })
         } else {
-            self.add_simple_graph_node(|| {
+            self.add_auto_graph_node(|| {
                 Ok(Arc::new(GroupByPartialTransform::create(
                     node.schema(),
                     node.input.schema(),
@@ -359,10 +358,44 @@ impl ProcessorsDAGBuilder {
         for index in 0..self.top_processors.len() {
             let node = f()?;
             let to_index = self.graph.add_node(node);
-            self.graph.add_edge(self.top_processors[index], to_index, ());
+            self.graph
+                .add_edge(self.top_processors[index], to_index, ());
             self.top_processors[index] = to_index;
         }
 
+        Ok(())
+    }
+
+    fn add_auto_graph_node<F: Fn() -> Result<ProcessorRef>>(&mut self, f: F) -> Result<()> {
+        if self.after_order_by {
+            return self.add_simple_graph_node(f);
+        }
+
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+
+        match self.top_processors.len() == max_threads {
+            true => self.add_simple_graph_node(f),
+            false => self.add_mixed_graph_node(f),
+        }
+    }
+
+    fn add_mixed_graph_node<F: Fn() -> Result<ProcessorRef>>(&mut self, f: F) -> Result<()> {
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let mut new_top_processors = Vec::with_capacity(max_threads);
+
+        for _thread_num in 0..max_threads {
+            let node = f()?;
+            let to_index = self.graph.add_node(node);
+
+            for index in 0..self.top_processors.len() {
+                self.graph
+                    .add_edge(self.top_processors[index], to_index, ());
+            }
+
+            new_top_processors.push(to_index);
+        }
+
+        self.top_processors = new_top_processors;
         Ok(())
     }
 }

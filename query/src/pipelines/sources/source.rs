@@ -1,17 +1,10 @@
-use std::any::Any;
-use std::sync::Arc;
 use std::task::Context;
 
-use futures::{Stream, StreamExt, FutureExt};
-
-use common_base::tokio::macros::support::{Pin, Poll};
+use common_base::tokio::macros::support::Pin;
+use common_base::tokio::macros::support::Poll;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::SendableDataBlockStream;
-
-use crate::pipelines::processors::Processor;
-use futures::future::BoxFuture;
+use futures::Stream;
 
 #[async_trait::async_trait]
 pub trait Source: Send + Unpin + Sync {
@@ -28,6 +21,7 @@ pub struct SourceStream<T: Source> {
 }
 
 impl<T: Source> SourceStream<T> {
+    #[allow(dead_code)]
     pub fn create(source: T) -> SourceStream<T> {
         SourceStream { source }
     }
