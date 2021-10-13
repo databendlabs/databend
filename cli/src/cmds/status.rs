@@ -265,6 +265,7 @@ impl LocalRuntime for LocalQueryConfig {
         let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
             .expect("couldn't create stdout file");
         // configure runtime by process local env settings
+        // (TODO) S3 configurations
         command
             .env(
                 databend_query::configs::config_log::LOG_LEVEL,
@@ -314,6 +315,26 @@ impl LocalRuntime for LocalQueryConfig {
                 databend_query::configs::config_query::QUERY_METRICS_API_ADDRESS,
                 conf.query.metric_api_address,
             )
+            .env(
+            databend_query::configs::config_meta::META_ADDRESS,
+            conf.meta.meta_address
+        )
+            .env(
+            databend_query::configs::config_meta::META_USERNAME,
+            conf.meta.meta_username
+        )
+            .env(
+            databend_query::configs::config_meta::META_PASSWORD,
+            conf.meta.meta_password
+        )
+            .env(
+            databend_query::configs::config_storage::STORAGE_TYPE,
+            conf.storage.storage_type
+        )
+            .env(
+            databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH,
+            conf.storage.disk.data_path
+        )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
@@ -422,6 +443,7 @@ impl Status {
                 .get(&*config_type)
                 .unwrap()
                 .split(',')
+                .filter(|s| !s.is_empty() )
                 .collect();
             current_configs.push(&*file_location);
             status
@@ -452,9 +474,15 @@ impl Status {
             .get(config_type.as_str())
             .unwrap()
             .split(',')
+            .filter(|s| !s.is_empty() )
             .collect::<Vec<&str>>();
         vec.retain(|s| *s.to_string() != file_name);
-        status.local_configs.insert(config_type, vec.join(","));
+
+        if vec.len() > 1 {
+            status.local_configs.insert(config_type, vec.join(","));
+        } else {
+            status.local_configs.insert(config_type, vec.get(0).map_or("".to_string(), |v| v.to_string()));
+        }
         status.write()?;
         Ok(())
     }
@@ -465,9 +493,13 @@ impl Status {
         {
             return None;
         }
-        let meta_file = self.local_configs.get("meta").unwrap();
-        let splited = meta_file.as_str().split(',').collect::<Vec<&str>>();
-        let meta_file = splited.get(0).unwrap();
+        let mut meta_file = self.local_configs.get("meta").unwrap().to_string();
+        if meta_file.contains(',') {
+            let splited = meta_file.as_str().split(',').filter(|s| !s.trim().is_empty()).collect::<Vec<&str>>();
+            if !splited.is_empty() {
+                meta_file = splited.iter().next().unwrap().to_string()
+            }
+        };
         if !Path::new(meta_file.to_string().as_str()).exists() {
             return None;
         }

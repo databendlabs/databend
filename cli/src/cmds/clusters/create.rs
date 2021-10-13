@@ -39,6 +39,7 @@ use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
+use crate::cmds::clusters::delete::DeleteCommand;
 
 #[derive(Clone)]
 pub struct CreateCommand {
@@ -140,7 +141,7 @@ impl CreateCommand {
                 Arg::new("disk_path")
                     .long("disk-path")
                     .takes_value(true)
-                    .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
+                    // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
                     .about("Set the root directory to store all datasets")
                     .value_hint(ValueHint::DirPath),
             )
@@ -359,6 +360,8 @@ impl CreateCommand {
 
         config.meta.meta_address = meta_config.clone().config.flight_api_address;
 
+        config.meta.meta_username = "root".to_string();
+        config.meta.meta_password = "root".to_string();
         // tenant
         if args.value_of("query_namespace").is_some()
             && !args.value_of("query_namespace").unwrap().is_empty()
@@ -397,14 +400,14 @@ impl CreateCommand {
                 .parse::<u16>()
                 .unwrap();
         }
-
         // storage
-        let storage_type = args.value_of_t("storage_type");
+        let storage_type = args.value_of("storage_type");
         match storage_type {
-            Ok(databend_query::configs::config_storage::StorageType::Disk) => {
+            Some("disk") => {
                 if args.value_of("disk_path").is_some()
                     && !args.value_of("disk_path").unwrap().is_empty()
                 {
+
                     if !Path::new(&args.value_of("disk_path").unwrap()).exists() {
                         return Err(CliError::Unknown(format!(
                             "cannot find local disk_path in {}",
@@ -426,23 +429,24 @@ impl CreateCommand {
                                 data_dir
                             )));
                         }
-                        config.storage.disk.data_path = fs::canonicalize(data_dir)
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string()
                     }
+                    config.storage.disk.data_path = fs::canonicalize(data_dir)
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string()
                 }
             }
-            Ok(databend_query::configs::config_storage::StorageType::S3) => {
+            Some("s3") => {
                 todo!()
             }
-            Err(_) => {
+            Some(_) | None => {
                 return Err(CliError::Unknown(
                     "storage type is not supported for now".parse().unwrap(),
                 ))
             }
         }
+
 
         // log
         config.log.log_level = args.value_of("log_level").unwrap().to_string();
@@ -548,22 +552,29 @@ impl CreateCommand {
                 }
                 let meta_status = meta_config.verify();
                 if meta_status.is_err() {
+                    let mut status = Status::read(self.conf.clone())?;
+                    DeleteCommand::stop_current_local_services(&mut status, writer);
                     writer.write_err(&*format!(
-                        "❌ Cannot cannot to meta service: {:?}",
+                        "❌ Cannot connect to meta service: {:?}",
                         meta_status.unwrap_err()
                     ));
                     return Ok(());
                 }
                 let query_config = self.generate_local_query_config(args, bin_path, &meta_config);
                 if query_config.is_err() {
+                    let mut status = Status::read(self.conf.clone())?;
+                    DeleteCommand::stop_current_local_services(&mut status, writer);
                     writer.write_err(&*format!(
                         "❌ Cannot generate query configurations, error: {:?}",
                         query_config.as_ref().unwrap_err()
                     ));
                 }
+                writer.write_ok(&*format!("local data would be stored in {}", query_config.as_ref().unwrap().config.storage.disk.data_path.as_str()));
                 {
                     let res = self.provision_local_query_service(writer, query_config.unwrap());
                     if res.is_err() {
+                        let mut status = Status::read(self.conf.clone())?;
+                        DeleteCommand::stop_current_local_services(&mut status, writer);
                         writer.write_err(&*format!(
                             "❌ Cannot provison query service, error: {:?}",
                             res.unwrap_err()
