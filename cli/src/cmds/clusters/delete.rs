@@ -55,24 +55,35 @@ impl DeleteCommand {
             )
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
-        let mut status = Status::read(self.conf.clone())?;
+    pub fn stop_current_local_services(status: &mut Status, writer: &mut Writer) -> Result<()> {
         for (fs, query) in status.get_local_query_configs() {
-            query.kill().expect(&*format!(
-                "cannot kill query service with config in {}",
-                fs.clone()
-            ));
+            if query.kill().is_err() {
+                writer.write_err(&*format!(
+                    "cannot kill query service with config in {}",
+                    fs.clone()
+                ))
+            }
+
             //(TODO) check port freed
-            Status::delete_local_config(&mut status, "query".to_string(), fs)
-                .expect("cannot clean query config");
+            if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
+                writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
+            }
+            writer.write_ok(format!("⚠️ stopped query service with config in {}", fs).as_str());
         }
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
             meta.kill()
                 .expect(&*format!("cannot kill meta service with config in {}", fs));
-            Status::delete_local_config(&mut status, "meta".to_string(), fs)
+            Status::delete_local_config(status, "meta".to_string(), fs.clone())
                 .expect("cannot clean meta config");
+            writer.write_ok(format!("⚠️ stopped query service with config in {}", fs).as_str());
         }
+        Ok(())
+    }
+
+    fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
+        let mut status = Status::read(self.conf.clone())?;
+        DeleteCommand::stop_current_local_services(&mut status, writer)?;
         status.current_profile = None;
         status.write()?;
         writer.write_ok("🚀 stopped services");
@@ -86,7 +97,14 @@ impl DeleteCommand {
             Some("local") => Ok(ClusterProfile::Local),
             Some("cluster") => Ok(ClusterProfile::Cluster),
             None => {
-                let status = Status::read(self.conf.clone())?;
+                let mut status = Status::read(self.conf.clone())?;
+                if status.get_local_meta_config().is_some() {
+                    let (fs, meta) = status.get_local_meta_config().unwrap();
+                    meta.kill()
+                        .expect(&*format!("cannot kill meta service with config in {}", fs));
+                    Status::delete_local_config(&mut status, "meta".to_string(), fs)
+                        .expect("cannot clean meta config");
+                }
                 if status.current_profile.is_none() {
                     return Err(CliError::Unknown(
                         "Currently there is no profile in use, please create or use a profile"
