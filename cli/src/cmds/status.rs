@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::net::SocketAddr;
 use std::os::unix::prelude::FromRawFd;
 use std::os::unix::prelude::IntoRawFd;
 use std::path::Path;
@@ -31,6 +32,8 @@ use metasrv::configs::Config as MetaConfig;
 use nix::unistd::Pid;
 use serde::Deserialize;
 use serde::Serialize;
+use sysinfo::System;
+use sysinfo::SystemExt;
 
 use crate::cmds::Config;
 use crate::error::CliError;
@@ -68,7 +71,18 @@ pub trait LocalRuntime {
         match pid {
             Some(id) => {
                 match nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT)) {
-                    Ok(_) => Ok(()),
+                    Ok(_) => {
+                        for _ in 0..30 {
+                            if !self.is_clean() {
+                                sleep(time::Duration::from_secs(1));
+                            } else {
+                                return Ok(());
+                            }
+                        }
+                        Err(CliError::Unknown(
+                            "some resources have not been freed".to_string(),
+                        ))
+                    }
                     Err(e) => Err(CliError::from(e)),
                 }
             }
@@ -95,6 +109,7 @@ pub trait LocalRuntime {
     fn get_path(&self) -> Option<String>;
     fn generate_command(&mut self) -> Result<Command>;
     fn set_pid(&mut self, id: pid_t);
+    fn is_clean(&self) -> bool; // return true if runtime resources are cleaned
 }
 
 impl LocalRuntime for LocalMetaConfig {
@@ -210,6 +225,26 @@ impl LocalRuntime for LocalMetaConfig {
 
     fn set_pid(&mut self, id: pid_t) {
         self.pid = Some(id)
+    }
+
+    fn is_clean(&self) -> bool {
+        if self.pid.is_none() {
+            return true;
+        }
+        let s = System::new_all();
+        let pid = self.pid.unwrap();
+        return portpicker::is_free(self.config.raft_config.raft_api_port as u16)
+            && portpicker::is_free(
+                self.config
+                    .flight_api_address
+                    .parse::<SocketAddr>()
+                    .expect(&*format!(
+                        "cannot parse meta server address {} ",
+                        self.config.flight_api_address
+                    ))
+                    .port(),
+            )
+            && s.process(pid).is_none();
     }
 }
 
@@ -341,7 +376,16 @@ impl LocalRuntime for LocalQueryConfig {
         info!("executing command {:?}", command);
         Ok(command)
     }
-
+    fn is_clean(&self) -> bool {
+        if self.pid.is_none() {
+            return true;
+        }
+        let s = System::new_all();
+        let pid = self.pid.unwrap();
+        portpicker::is_free(self.config.query.mysql_handler_port)
+            && portpicker::is_free(self.config.query.clickhouse_handler_port)
+            && s.process(pid).is_none()
+    }
     fn set_pid(&mut self, id: pid_t) {
         self.pid = Some(id)
     }

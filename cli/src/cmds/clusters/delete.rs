@@ -16,14 +16,13 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use serde_json;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
+use crate::cmds::clusters::utils;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
-use crate::error::CliError;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -39,7 +38,7 @@ impl DeleteCommand {
         App::new("delete")
             .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
-            .about("Create a databend clusters based on profile")
+            .about("Delete a databend cluster (delete current cluster by default) ")
             .arg(
                 Arg::new("profile")
                     .long("profile")
@@ -56,6 +55,7 @@ impl DeleteCommand {
     }
 
     pub fn stop_current_local_services(status: &mut Status, writer: &mut Writer) -> Result<()> {
+        writer.write_ok("⚠ start to clean up local services");
         for (fs, query) in status.get_local_query_configs() {
             if query.kill().is_err() {
                 writer.write_err(&*format!(
@@ -64,7 +64,6 @@ impl DeleteCommand {
                 ))
             }
 
-            //(TODO) check port freed
             if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
                 writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
             }
@@ -76,7 +75,7 @@ impl DeleteCommand {
                 .expect(&*format!("cannot kill meta service with config in {}", fs));
             Status::delete_local_config(status, "meta".to_string(), fs.clone())
                 .expect("cannot clean meta config");
-            writer.write_ok(format!("⚠️ stopped query service with config in {}", fs).as_str());
+            writer.write_ok(format!("⚠️ stopped meta service with config in {}", fs).as_str());
         }
         Ok(())
     }
@@ -92,41 +91,11 @@ impl DeleteCommand {
         Ok(())
     }
 
-    fn get_profile(&self, profile: Option<&str>) -> Result<ClusterProfile> {
-        match profile {
-            Some("local") => Ok(ClusterProfile::Local),
-            Some("cluster") => Ok(ClusterProfile::Cluster),
-            None => {
-                let mut status = Status::read(self.conf.clone())?;
-                if status.get_local_meta_config().is_some() {
-                    let (fs, meta) = status.get_local_meta_config().unwrap();
-                    meta.kill()
-                        .expect(&*format!("cannot kill meta service with config in {}", fs));
-                    Status::delete_local_config(&mut status, "meta".to_string(), fs)
-                        .expect("cannot clean meta config");
-                }
-                if status.current_profile.is_none() {
-                    return Err(CliError::Unknown(
-                        "Currently there is no profile in use, please create or use a profile"
-                            .parse()
-                            .unwrap(),
-                    ));
-                }
-                Ok(serde_json::from_str::<ClusterProfile>(
-                    &*status.current_profile.unwrap(),
-                )?)
-            }
-            _ => Err(CliError::Unknown(
-                "Currently there is no profile in use, please create or use a profile"
-                    .parse()
-                    .unwrap(),
-            )),
-        }
-    }
     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
-                let p = self.get_profile(matches.value_of("profile"));
+                let status = Status::read(self.conf.clone())?;
+                let p = utils::get_profile(status, matches.value_of("profile"));
                 match p {
                     Ok(ClusterProfile::Local) => return self.local_exec_match(writer, matches),
                     Ok(ClusterProfile::Cluster) => {

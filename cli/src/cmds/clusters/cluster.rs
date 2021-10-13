@@ -23,6 +23,7 @@ use serde::Serialize;
 
 use crate::cmds::clusters::create::CreateCommand;
 use crate::cmds::clusters::delete::DeleteCommand;
+use crate::cmds::clusters::view::ViewCommand;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::Writer;
@@ -68,7 +69,8 @@ impl ClusterCommand {
             .setting(AppSettings::DisableVersionFlag)
             .about("Cluster life cycle management")
             .subcommand(CreateCommand::generate())
-            .subcommand(DeleteCommand::generate());
+            .subcommand(DeleteCommand::generate())
+            .subcommand(ViewCommand::generate());
         app
     }
 
@@ -82,6 +84,10 @@ impl ClusterCommand {
                 Some("delete") => {
                     let create = DeleteCommand::create(self.conf.clone());
                     create.exec_match(writer, matches.subcommand_matches("delete"))?;
+                }
+                Some("view") => {
+                    let view = ViewCommand::create(self.conf.clone());
+                    view.exec_match(writer, matches.subcommand_matches("view"))?;
                 }
                 _ => writer.write_err("unknown command, usage: cluster -h"),
             },
