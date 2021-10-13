@@ -16,3 +16,8 @@ pub mod create;
 #[cfg(test)]
 mod create_test;
 pub mod delete;
+pub mod view;
+mod utils;
+
+#[cfg(test)]
+mod view_test;
