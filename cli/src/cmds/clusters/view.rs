@@ -12,32 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+use std::path::Path;
+
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use comfy_table::Cell;
+use comfy_table::CellAlignment;
+use comfy_table::Color;
+use comfy_table::Table;
 use serde_json;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
+use crate::cmds::clusters::utils;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use crate::cmds::clusters::utils;
-use comfy_table::Table;
-use comfy_table::Cell;
-use comfy_table::CellAlignment;
-use comfy_table::Color;
-use std::fmt;
-use std::path::Path;
 
 #[derive(Clone)]
 pub struct ViewCommand {
     conf: Config,
 }
-enum HealthStatus {
+
+pub enum HealthStatus {
     Ready,
     UnReady,
 }
@@ -73,7 +75,13 @@ impl ViewCommand {
         let status = Status::read(self.conf.clone())?;
         let table = ViewCommand::build_local_table(&status);
         if table.is_err() {
-            writer.write_err(format!("cannot retrieve view table, error: {:?}", table.unwrap_err()).as_str());
+            writer.write_err(
+                format!(
+                    "cannot retrieve view table, error: {:?}",
+                    table.unwrap_err()
+                )
+                .as_str(),
+            );
         } else {
             writer.writeln(&table.unwrap().trim_fmt());
         }
@@ -81,19 +89,25 @@ impl ViewCommand {
     }
 
     fn build_row<T>(fs: String, config: T) -> Vec<Cell>
-    where T : LocalRuntime
-    {
-        let file =  Path::new(fs.as_str());
-        let mut row =  vec![];
-        row.push(Cell::new(file.file_stem().expect(format!("cannot stem file {:?}", file).as_str())));
+    where T: LocalRuntime {
+        let file = Path::new(fs.as_str());
+        let mut row = vec![];
+        row.push(Cell::new(
+            file.file_stem()
+                .expect(format!("cannot stem file {:?}", file).as_str())
+                .to_string_lossy(),
+        ));
         row.push(Cell::new("local"));
-        row.push(config.verify().map_or(Cell::new(format!("{}", HealthStatus::UnReady).as_str()).fg(Color::Red), |v| Cell::new(format!("{}", HealthStatus::Ready).as_str()).fg(Color::Green)));
+        row.push(config.verify().map_or(
+            Cell::new(format!("{}", HealthStatus::UnReady).as_str()).fg(Color::Red),
+            |v| Cell::new(format!("{}", HealthStatus::Ready).as_str()).fg(Color::Green),
+        ));
         row.push(Cell::new("disabled"));
-        row.push(Cell::new(format!(fs)));
-        return row
+        row.push(Cell::new(format!("{}", fs)));
+        return row;
     }
 
-    fn build_local_table(status: &Status) -> Result<Table> {
+    pub fn build_local_table(status: &Status) -> Result<Table> {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
         // Title.
@@ -104,14 +118,13 @@ impl ViewCommand {
             Cell::new("Tls"),
             Cell::new("Config"),
         ]);
-        let meta_config  = status.get_local_meta_config();
-        if meta_config.is_none() {
-            return Ok(table)
+        let meta_config = status.get_local_meta_config();
+        if meta_config.is_some() {
+            let (fs, meta_config) = meta_config.unwrap();
+            let row = ViewCommand::build_row(fs, meta_config);
+            table.add_row(row);
         }
-        let (fs, meta_config) = meta_config.unwrap();
-        let row = ViewCommand::build_row(fs, meta_config);
-        table.add_row(row);
-        for (fs, query_config)  in status.get_local_query_configs() {
+        for (fs, query_config) in status.get_local_query_configs() {
             let row = ViewCommand::build_row(fs, query_config);
             table.add_row(row);
         }

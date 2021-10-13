@@ -15,13 +15,24 @@
 use std::cell::RefCell;
 use std::fs;
 
+use comfy_table::Cell;
+use comfy_table::Color;
+use comfy_table::Table;
+use databend_query::configs::Config as QueryConfig;
+use httpmock::Method::GET;
+use httpmock::MockServer;
 use tempfile::tempdir;
+use comfy_table::Row;
+use metasrv::configs::Config as MetaConfig;
 
 use crate::cmds::clusters::create::LocalBinaryPaths;
+use crate::cmds::clusters::view::HealthStatus;
+use crate::cmds::clusters::view::ViewCommand;
+use crate::cmds::status::{LocalQueryConfig, LocalMetaConfig};
 use crate::cmds::Config;
 use crate::cmds::CreateCommand;
+use crate::cmds::Status;
 use crate::error::Result;
-use crate::cmds::clusters::view::ViewCommand;
 
 #[test]
 fn test_build_table() -> Result<()> {
@@ -34,261 +45,62 @@ fn test_build_table() -> Result<()> {
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
-
+    // Start a lightweight mock server.
+    let server = MockServer::start();
+    // Create a mock on the server.
+    let _ = server.mock(|when, then| {
+        when.method(GET).path("/v1/health");
+        then.status(200)
+            .header("content-type", "text/html")
+            .body("health");
+    });
     {
-        let matches = args
-            .clone()
-            .get_matches_from(&["create", "--profile", "local"]);
-        let create = CreateCommand::create(conf.clone());
-        let mock_bin = LocalBinaryPaths {
-            query: format!("{}/meta/databend-query", conf.databend_dir),
-            meta: format!("{}/meta/databend-meta", conf.databend_dir),
+        let mut status = Status::read(conf.clone())?;
+        let mut meta_config = LocalMetaConfig {
+            config: MetaConfig::default(),
+            pid: Some(123),
+            path: Some("./".to_string()),
+            log_dir: Some("./".to_string()),
+        }
+        let mut query_config = LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: Some(123),
+            path: Some("./".to_string()),
+            log_dir: Some("./".to_string()),
         };
-        let config = create.generate_local_meta_config(&matches, mock_bin);
-        assert!(config.is_some());
-        // logs for std out and std err
-        assert_eq!(
-            config.as_ref().unwrap().log_dir,
-            Some(format!("{}/logs/local_meta_log", conf.databend_dir))
-        );
-        // logs for meta service
-        assert_eq!(
-            config.as_ref().unwrap().config.log_dir,
-            format!("{}/logs/local_meta_log", conf.databend_dir)
-        );
-        // raft_dir store meta service data
-        assert_eq!(
-            config.as_ref().unwrap().config.raft_config.raft_dir,
-            format!("{}/logs/local_raft_dir", conf.databend_dir)
-        );
+        query_config.config.query.http_api_address = format!("127.0.0.1:{}", server.port());
 
-        assert_eq!(config.as_ref().unwrap().config.log_level, "INFO");
-    }
-
-    // test on customized meta service
-    {
-        let matches = args.get_matches_from(&[
-            "create",
-            "--profile",
-            "local",
-            "--meta-address",
-            "0.0.0.0:7777",
-            "--log-level",
-            "DEBUG",
-            "--version",
-            "v0.4.111-nightly",
+        Status::save_local_config(
+            &mut status,
+            "query".parse().unwrap(),
+            "query_1.yaml".to_string(),
+            &query_config,
+        )
+        .unwrap();
+        status.version = "build_table".to_string();
+        status.write()?;
+        let table = ViewCommand::build_local_table(&status);
+        let configs = status.get_local_query_configs();
+        assert!(table.is_ok());
+        let table = table.unwrap();
+        let mut expected = Table::new();
+        expected.load_preset("||--+-++|    ++++++");
+        // Title.
+        expected.set_header(vec![
+            Cell::new("Name"),
+            Cell::new("Profile"),
+            Cell::new("Health"),
+            Cell::new("Tls"),
+            Cell::new("Config"),
         ]);
-        let create = CreateCommand::create(conf.clone());
-        let mock_bin = LocalBinaryPaths {
-            query: format!("{}/meta/databend-query", conf.databend_dir),
-            meta: format!("{}/meta/databend-meta", conf.databend_dir),
-        };
-        let config = create.generate_local_meta_config(&matches, mock_bin);
-        assert!(config.is_some());
-        // logs for std out and std err
-        assert_eq!(
-            config.as_ref().unwrap().log_dir,
-            Some(format!("{}/logs/local_meta_log", conf.databend_dir))
-        );
-        // logs for meta service
-        assert_eq!(
-            config.as_ref().unwrap().config.log_dir,
-            format!("{}/logs/local_meta_log", conf.databend_dir)
-        );
-        // raft_dir store meta service data
-        assert_eq!(
-            config.as_ref().unwrap().config.raft_config.raft_dir,
-            format!("{}/logs/local_raft_dir", conf.databend_dir)
-        );
-
-        assert_eq!(config.as_ref().unwrap().config.log_level, "DEBUG");
-        assert_eq!(
-            config.as_ref().unwrap().config.flight_api_address,
-            "0.0.0.0:7777"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn test_generate_local_query_config() -> Result<()> {
-    let mut conf = Config {
-        group: "foo".to_string(),
-        databend_dir: "/tmp/.databend".to_string(),
-        download_url: "".to_string(),
-        tag_url: "".to_string(),
-        clap: RefCell::new(Default::default()),
-    };
-    let t = tempdir()?;
-    conf.databend_dir = t.path().to_str().unwrap().to_string();
-    let args = CreateCommand::generate();
-    // test on default bahavior
-    {
-        let matches = args
-            .clone()
-            .get_matches_from(&["create", "--profile", "local"]);
-        let create = CreateCommand::create(conf.clone());
-        let mock_bin = LocalBinaryPaths {
-            query: format!("{}/meta/databend-query", conf.databend_dir),
-            meta: format!("{}/meta/databend-meta", conf.databend_dir),
-        };
-        let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
-        assert!(meta_config.clone().is_some());
-        let query_config =
-            create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
-
-        assert_eq!(
-            query_config.as_ref().unwrap().log_dir,
-            Some(format!("{}/logs/local_query_log_0", conf.databend_dir))
-        );
-        // logs for query service
-        assert_eq!(
-            query_config.as_ref().unwrap().config.log.log_dir,
-            format!("{}/logs/local_query_log_0", conf.databend_dir)
-        );
-        // clickhouse endpoint default settings
-        assert_eq!(
-            query_config
-                .as_ref()
-                .unwrap()
-                .config
-                .query
-                .clickhouse_handler_host,
-            "127.0.0.1"
-        );
-        assert_eq!(
-            query_config
-                .as_ref()
-                .unwrap()
-                .config
-                .query
-                .clickhouse_handler_port,
-            9000
-        );
-        assert_eq!(
-            query_config
-                .as_ref()
-                .unwrap()
-                .config
-                .query
-                .mysql_handler_port,
-            3307
-        );
-        assert_eq!(query_config.as_ref().unwrap().config.query.tenant, "test");
-        assert_eq!(
-            query_config.as_ref().unwrap().config.query.namespace,
-            "test"
-        );
-        assert_eq!(
-            query_config.as_ref().unwrap().config.storage.storage_type,
-            "disk"
-        );
-        assert_eq!(
-            query_config.as_ref().unwrap().config.storage.disk.data_path,
-            fs::canonicalize(&format!("{}/data", conf.databend_dir))
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string()
-        );
-        assert_eq!(query_config.as_ref().unwrap().config.log.log_level, "INFO");
-    }
-
-    // test on customized meta service
-    {
-        let matches = args.get_matches_from(&[
-            "create",
-            "--profile",
-            "local",
-            "--meta-address",
-            "0.0.0.0:7777",
-            "--log-level",
-            "DEBUG",
-            "--version",
-            "v0.4.111-nightly",
-            "--num-cpus",
-            "2",
-            "--query-namespace",
-            "customized_test",
-            "--query-tenant",
-            "customized_tenant",
-            "--mysql-handler-port",
-            "3309",
-            "--clickhouse-handler-port",
-            "9002",
-            "--storage-type",
-            "disk",
-            "--disk-path",
-            "/tmp",
+        expected.add_row(vec![
+            Cell::new("query_1"),
+            Cell::new("local"),
+            Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
+            Cell::new("disabled"),
+            Cell::new(format!("{}", configs.get(0).unwrap().0.clone())),
         ]);
-        let create = CreateCommand::create(conf.clone());
-        let mock_bin = LocalBinaryPaths {
-            query: format!("{}/meta/databend-query", conf.databend_dir),
-            meta: format!("{}/meta/databend-meta", conf.databend_dir),
-        };
-        let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
-        assert!(meta_config.clone().is_some());
-        let query_config =
-            create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
-        assert_eq!(query_config.as_ref().unwrap().config.query.num_cpus, 2);
-        assert_eq!(
-            query_config.as_ref().unwrap().log_dir,
-            Some(format!("{}/logs/local_query_log_0", conf.databend_dir))
-        );
-        // logs for query service
-        assert_eq!(
-            query_config.as_ref().unwrap().config.log.log_dir,
-            format!("{}/logs/local_query_log_0", conf.databend_dir)
-        );
-        // clickhouse endpoint default settings
-        assert_eq!(
-            query_config
-                .as_ref()
-                .unwrap()
-                .config
-                .query
-                .clickhouse_handler_host,
-            "127.0.0.1"
-        );
-        assert_eq!(
-            query_config
-                .as_ref()
-                .unwrap()
-                .config
-                .query
-                .clickhouse_handler_port,
-            9002
-        );
-        assert_eq!(
-            query_config
-                .as_ref()
-                .unwrap()
-                .config
-                .query
-                .mysql_handler_port,
-            3309
-        );
-        assert_eq!(
-            query_config.as_ref().unwrap().config.query.tenant,
-            "customized_tenant"
-        );
-        assert_eq!(
-            query_config.as_ref().unwrap().config.query.namespace,
-            "customized_test"
-        );
-        assert_eq!(
-            query_config.as_ref().unwrap().config.storage.storage_type,
-            "disk"
-        );
-        assert_eq!(
-            query_config.as_ref().unwrap().config.storage.disk.data_path,
-            fs::canonicalize("/tmp")
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string()
-        );
-        assert_eq!(query_config.as_ref().unwrap().config.log.log_level, "DEBUG");
+        assert_eq!(table.to_string(), expected.to_string())
     }
     Ok(())
 }

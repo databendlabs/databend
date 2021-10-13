@@ -26,7 +26,6 @@ use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
 
-
 pub fn get_profile(status: Status, profile: Option<&str>) -> Result<ClusterProfile> {
     match profile {
         Some("local") => Ok(ClusterProfile::Local),

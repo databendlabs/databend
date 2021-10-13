@@ -32,11 +32,12 @@ use metasrv::configs::Config as MetaConfig;
 use nix::unistd::Pid;
 use serde::Deserialize;
 use serde::Serialize;
+use sysinfo::System;
+use sysinfo::SystemExt;
 
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
-use sysinfo::{System, SystemExt};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Status {
@@ -228,7 +229,7 @@ impl LocalRuntime for LocalMetaConfig {
 
     fn is_clean(&self) -> bool {
         if self.pid.is_none() {
-            return true
+            return true;
         }
         let s = System::new_all();
         let pid = self.pid.unwrap();
@@ -242,7 +243,8 @@ impl LocalRuntime for LocalMetaConfig {
                         self.config.flight_api_address
                     ))
                     .port(),
-            ) && s.process(pid).is_none();
+            )
+            && s.process(pid).is_none();
     }
 }
 
@@ -376,12 +378,13 @@ impl LocalRuntime for LocalQueryConfig {
     }
     fn is_clean(&self) -> bool {
         if self.pid.is_none() {
-            return true
+            return true;
         }
         let s = System::new_all();
         let pid = self.pid.unwrap();
         portpicker::is_free(self.config.query.mysql_handler_port)
-            && portpicker::is_free(self.config.query.clickhouse_handler_port) && s.process(pid).is_none()
+            && portpicker::is_free(self.config.query.clickhouse_handler_port)
+            && s.process(pid).is_none()
     }
     fn set_pid(&mut self, id: pid_t) {
         self.pid = Some(id)
