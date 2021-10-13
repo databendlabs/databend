@@ -594,12 +594,12 @@ impl Status {
             pid: values
                 .get("pid")
                 .and_then(|val| val.as_u64().map(|s| s as pid_t)),
-            path: values.get("path").and_then(|val| {
-                Option::from(val.as_str().and_then(|s| Option::from(s.to_string())))
-            }),
-            log_dir: values.get("log_dir").and_then(|val| {
-                Option::from(val.as_str().and_then(|s| Option::from(s.to_string())))
-            }),
+            path: values
+                .get("path")
+                .and_then(|val| val.as_str().and_then(|s| Option::from(s.to_string()))),
+            log_dir: values
+                .get("log_dir")
+                .and_then(|val| val.as_str().and_then(|s| Option::from(s.to_string()))),
         })
     }
     pub fn write(&self) -> Result<()> {

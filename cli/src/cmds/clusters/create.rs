@@ -509,7 +509,7 @@ impl CreateCommand {
                     &query_config.clone(),
                 )?;
                 status.write()?;
-                writer.write_ok(format!("👏 successfully started query service.",).as_str());
+                writer.write_ok("👏 successfully started query service.");
                 writer.write_ok(
                     format!(
                         "✅ To process mysql queries, run: mysql -h {} -P {} -uroot",
