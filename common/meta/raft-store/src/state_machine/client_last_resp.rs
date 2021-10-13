@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::SledSerde;
+use crate::state_machine::AppliedState;
 
 /// Client last response that is stored in SledTree
 /// raft state: A mapping of client serial IDs to their state info:
@@ -24,7 +25,7 @@ use crate::SledSerde;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ClientLastRespValue {
     pub req_serial_num: u64,
-    pub res: Vec<u8>,
+    pub res: AppliedState,
 }
 
 impl SledSerde for ClientLastRespValue {}
