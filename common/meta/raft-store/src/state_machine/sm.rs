@@ -29,6 +29,7 @@ use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
 use common_meta_types::Database;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
@@ -48,6 +49,7 @@ use sled::IVec;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
+use crate::sled_key_spaces::Databases;
 use crate::sled_key_spaces::Files;
 use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
@@ -64,7 +66,6 @@ use crate::state_machine::StateMachineMetaKey::LastMembership;
 use crate::state_machine::StateMachineMetaValue;
 
 /// seq number key to generate database id
-/// TODO(xp): remove these const and replace with SledKeySpace::NAME
 const SEQ_DATABASE_ID: &str = "database_id";
 /// seq number key to generate table id
 const SEQ_TABLE_ID: &str = "table_id";
@@ -115,6 +116,9 @@ pub struct StateMachine {
 
     /// db name to database mapping
     pub databases: BTreeMap<String, Database>,
+
+    /// (db_id, table_name) to table id
+    pub table_lookup: BTreeMap<(u64, String), u64>,
 
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
@@ -223,6 +227,7 @@ impl StateMachine {
 
             replication: Replication::Mirror(1),
             databases: BTreeMap::new(),
+            table_lookup: BTreeMap::new(),
             tables: BTreeMap::new(),
         };
 
@@ -397,36 +402,40 @@ impl StateMachine {
             Cmd::CreateDatabase {
                 ref name, ref db, ..
             } => {
-                // - If the db present, return it.
-                // - Otherwise, create a new one with next seq number as database id, and add it in to store.
-                if self.databases.contains_key(name) {
-                    let prev = self.databases.get(name);
-                    Ok((prev.cloned(), prev.cloned()).into())
-                } else {
-                    let db = Database {
-                        database_id: self.incr_seq(SEQ_DATABASE_ID).await?,
-                        database_engine: db.database_engine.clone(),
-                        tables: Default::default(),
-                    };
+                let mut db = db.clone();
+                db.database_id = self.incr_seq(SEQ_DATABASE_ID).await?;
+
+                let dbs = self.databases();
+
+                let (prev, result) = self
+                    .sub_tree_upsert(dbs, name, &MatchSeq::Exact(0), Operation::Update(db), None)
+                    .await?;
+
+                // if it is just created
+                if prev.is_none() && result.is_some() {
+                    // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
-
-                    self.databases.insert(name.clone(), db.clone());
-                    tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
-
-                    Ok((None, Some(db)).into())
                 }
+
+                tracing::debug!("applied create Database: {} {:?}", name, result);
+                Ok((prev, result).into())
             }
 
             Cmd::DropDatabase { ref name } => {
-                let prev = self.databases.get(name).cloned();
-                if prev.is_some() {
-                    self.databases.remove(name);
+                let dbs = self.databases();
+
+                let (prev, result) = self
+                    .sub_tree_upsert(dbs, name, &MatchSeq::Any, Operation::Delete, None)
+                    .await?;
+
+                // if it is just deleted
+                if prev.is_some() && result.is_none() {
+                    // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
-                    tracing::debug!("applied DropDatabase: {}", name);
-                    Ok((prev, None).into())
-                } else {
-                    Ok((None::<Database>, None::<Database>).into())
                 }
+
+                tracing::debug!("applied drop Database: {} {:?}", name, result);
+                Ok((prev, result).into())
             }
 
             Cmd::CreateTable {
@@ -435,18 +444,25 @@ impl StateMachine {
                 if_not_exists: _,
                 ref table,
             } => {
-                let db = self.databases.get(db_name);
-                let mut db = db.unwrap().to_owned();
+                let dbi = self
+                    .databases()
+                    .get(db_name)?
+                    .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
-                if db.tables.contains_key(table_name) {
-                    let table_id = db.tables.get(table_name).unwrap();
+                let dbi = dbi.1.value;
+                let curr_table_id = self
+                    .table_lookup
+                    .get(&(dbi.database_id, table_name.clone()));
+
+                if let Some(table_id) = curr_table_id {
                     let prev = self.tables.get(table_id);
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
+                    let table_id = self.incr_seq(SEQ_TABLE_ID).await?;
                     let table = Table {
-                        table_id: self.incr_seq(SEQ_TABLE_ID).await?,
+                        table_id,
                         table_name: table_name.to_string(),
-                        database_id: db.database_id,
+                        database_id: dbi.database_id,
                         db_name: db_name.to_string(),
                         schema: table.schema.clone(),
                         table_engine: table.table_engine.clone(),
@@ -454,9 +470,11 @@ impl StateMachine {
                         parts: table.parts.clone(),
                     };
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
-                    db.tables.insert(table_name.clone(), table.table_id);
-                    self.databases.insert(db_name.clone(), db);
+
+                    self.table_lookup
+                        .insert((dbi.database_id, table_name.clone()), table_id);
                     self.tables.insert(table.table_id, table.clone());
+
                     tracing::debug!("applied CreateTable: {}={:?}", table_name, table);
 
                     Ok((None, Some(table)).into())
@@ -468,12 +486,22 @@ impl StateMachine {
                 ref table_name,
                 if_exists: _,
             } => {
-                let db = self.databases.get_mut(db_name).unwrap();
-                let tbl_id = db.tables.get(table_name);
-                if let Some(tbl_id) = tbl_id {
-                    let tbl_id = tbl_id.to_owned();
-                    db.tables.remove(table_name);
-                    let prev = self.tables.remove(&tbl_id);
+                let dbi = self
+                    .databases()
+                    .get(db_name)?
+                    .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+
+                let dbi = dbi.1.value;
+                let curr_table_id = self
+                    .table_lookup
+                    .get(&(dbi.database_id, table_name.clone()))
+                    .cloned();
+
+                if let Some(table_id) = curr_table_id {
+                    self.table_lookup
+                        .remove(&(dbi.database_id, table_name.clone()));
+                    let prev = self.tables.remove(&table_id);
+
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     Ok((prev, None).into())
@@ -678,13 +706,25 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    pub fn get_database(&self, name: &str) -> Option<Database> {
-        let x = self.databases.get(name);
-        x.cloned()
+    pub fn get_database(
+        &self,
+        name: &str,
+    ) -> Result<Option<SeqValue<KVValue<DatabaseInfo>>>, ErrorCode> {
+        let dbs = self.databases();
+        let x = dbs.get(&name.to_string())?;
+        Ok(x)
     }
 
-    pub fn get_databases(&self) -> &BTreeMap<String, Database> {
-        &self.databases
+    pub fn get_databases(&self) -> Result<Vec<(String, DatabaseInfo)>, ErrorCode> {
+        let mut res = vec![];
+
+        let it = self.databases().range(..)?;
+        for r in it {
+            let (a, b) = r?;
+            res.push((a, b.1.value));
+        }
+
+        Ok(res)
     }
 
     pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
@@ -814,6 +854,10 @@ impl StateMachine {
 
     /// storage of client last resp to keep idempotent.
     pub fn client_last_resps(&self) -> AsKeySpace<ClientLastResps> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn databases(&self) -> AsKeySpace<Databases> {
         self.sm_tree.key_space()
     }
 }

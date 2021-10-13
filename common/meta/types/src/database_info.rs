@@ -34,7 +34,7 @@ impl fmt::Display for Database {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
     pub database_id: u64,
     pub db: String,

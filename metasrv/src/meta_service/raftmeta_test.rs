@@ -216,15 +216,10 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
         // - db name to create
         // - expected db id
-        let cases: Vec<(&str, bool, u64)> = vec![
-            ("foo", true, 1),
-            ("bar", true, 2),
-            ("foo", true, 1),
-            ("bar", true, 2),
-        ];
+        let cases: Vec<(&str, u64)> = vec![("foo", 1), ("bar", 2), ("foo", 1), ("bar", 2)];
 
         // Sending AddDatabase request to any node is ok.
-        for (i, (name, not_exists, want_id)) in cases.iter().enumerate() {
+        for (i, (name, want_id)) in cases.iter().enumerate() {
             let mn = &all[i as usize];
 
             let last_applied = mn.raft.metrics().borrow().last_applied;
@@ -234,7 +229,6 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     txid: None,
                     cmd: Cmd::CreateDatabase {
                         name: name.to_string(),
-                        if_not_exists: *not_exists,
                         db: Default::default(),
                     },
                 })
@@ -246,11 +240,11 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
             assert_applied_index(all.clone(), last_applied + 1).await?;
 
             for (i, mn) in all.iter().enumerate() {
-                let got = mn.get_database(name).await;
+                let got = mn.get_database(name).await?;
 
                 assert_eq!(
                     *want_id,
-                    got.unwrap().database_id,
+                    got.unwrap().1.value.database_id,
                     "n{} applied AddDatabase",
                     i
                 );
