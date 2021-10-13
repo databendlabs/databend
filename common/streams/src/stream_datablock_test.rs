@@ -79,7 +79,7 @@ async fn test_datablock_stream() {
         let data_block = res.unwrap();
         match index {
             0 | 1 | 2 => assert_blocks_eq(expected[index].clone(), &[data_block]),
-            _ => assert!(false),
+            _ => panic!(),
         }
         index += 1;
     }

@@ -35,7 +35,7 @@ async fn test_create_database_interpreter() -> Result<()> {
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
     } else {
-        assert!(false)
+        panic!()
     }
 
     Ok(())

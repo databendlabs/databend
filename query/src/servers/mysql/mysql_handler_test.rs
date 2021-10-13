@@ -62,7 +62,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
 
         // Rejected connection
         match create_connection(listening.port()) {
-            Ok(_) => assert!(false, "Expected rejected connection"),
+            Ok(_) => panic!("Expected rejected connection"),
             Err(error) => {
                 assert_eq!(error.code(), 1000);
                 assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): The current accept connection has exceeded mysql_handler_thread_num config }");
@@ -134,7 +134,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     let mut rejected = 0;
     for join_handler in join_handlers {
         match join_handler.join() {
-            Err(error) => assert!(false, "Unexpected error: {:?}", error),
+            Err(error) => panic!("Unexpected error: {:?}", error),
             Ok(CreateServerResult::Accept) => accept += 1,
             Ok(CreateServerResult::Rejected) => rejected += 1,
         }

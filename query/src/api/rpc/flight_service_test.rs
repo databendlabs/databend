@@ -132,10 +132,7 @@ async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     let stage_id = "stage_id_1";
     let request = do_action_request(query_id, stage_id);
     match service.do_action(request?).await {
-        Ok(_) => assert!(
-            false,
-            "Aborted rpc service must be cannot create new session"
-        ),
+        Ok(_) => panic!("Aborted rpc service must be cannot create new session"),
         Err(error) => {
             let error_code = ErrorCode::from(error);
             assert_eq!(error_code.code(), ABORT_SESSION);

@@ -133,7 +133,7 @@ fn test_generate_local_query_config() -> Result<()> {
             meta: format!("{}/meta/databend-meta", conf.databend_dir),
         };
         let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
-        assert!(meta_config.clone().is_some());
+        assert!(meta_config.is_some());
         let query_config =
             create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
 
@@ -227,7 +227,7 @@ fn test_generate_local_query_config() -> Result<()> {
             meta: format!("{}/meta/databend-meta", conf.databend_dir),
         };
         let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
-        assert!(meta_config.clone().is_some());
+        assert!(meta_config.is_some());
         let query_config =
             create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
         assert_eq!(query_config.as_ref().unwrap().config.query.num_cpus, 2);

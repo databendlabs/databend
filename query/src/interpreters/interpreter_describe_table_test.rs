@@ -58,7 +58,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
             ];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {
-            assert!(false)
+            panic!()
         }
     }
 

@@ -451,7 +451,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&columns, rows)?;
+        let v = &(func.eval(&columns, rows)?);
         assert_eq!(v, &t.expect);
     }
     Ok(())

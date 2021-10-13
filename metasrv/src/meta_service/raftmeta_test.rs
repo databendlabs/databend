@@ -574,18 +574,18 @@ async fn setup_cluster(
     {
         wait_for_state(&leader, State::Leader).await?;
 
-        for i in 1..voters.len() {
-            wait_for_state(&rst[i].meta_nodes[0], State::Follower).await?;
+        for item in rst.iter().take(voters.len()).skip(1) {
+            wait_for_state(&item.meta_nodes[0], State::Follower).await?;
         }
-        for i in voters.len()..(voters.len() + non_voters.len()) {
-            wait_for_state(&rst[i].meta_nodes[0], State::NonVoter).await?;
+        for item in rst.iter().skip(voters.len()).take(non_voters.len()) {
+            wait_for_state(&item.meta_nodes[0], State::NonVoter).await?;
         }
     }
 
     tracing::info!("--- check node logs");
     {
-        for i in 0..rst.len() {
-            wait_for_log(&rst[i].meta_nodes[0], nlog).await?;
+        for item in &rst {
+            wait_for_log(&item.meta_nodes[0], nlog).await?;
         }
     }
 
@@ -782,7 +782,7 @@ fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(10000))
 }
 
-fn test_context_nodes(tcs: &Vec<KVSrvTestContext>) -> Vec<Arc<MetaNode>> {
+fn test_context_nodes(tcs: &[KVSrvTestContext]) -> Vec<Arc<MetaNode>> {
     tcs.iter()
         .map(|tc| tc.meta_nodes[0].clone())
         .collect::<Vec<_>>()

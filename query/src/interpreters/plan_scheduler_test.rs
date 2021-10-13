@@ -69,8 +69,8 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => assert!(false),
-            FlightAction::BroadcastAction(_) => assert!(false),
+            FlightAction::CancelAction(_) => panic!(),
+            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
         }
     }
@@ -103,10 +103,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
             assert_eq!(plan.stream_id, "dummy_local");
             assert_eq!(plan.fetch_nodes, ["dummy_local", "dummy"]);
         }
-        _ => assert!(
-            false,
-            "test_scheduler_plan_with_one_convergent_stage must be have Remote plan!"
-        ),
+        _ => panic!("test_scheduler_plan_with_one_convergent_stage must be have Remote plan!"),
     }
 
     Ok(())
@@ -150,8 +147,8 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => assert!(false),
-            FlightAction::BroadcastAction(_) => assert!(false),
+            FlightAction::CancelAction(_) => panic!(),
+            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
         }
     }
@@ -204,11 +201,10 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
                     assert_eq!(finalize.stream_id, "dummy_local");
                     assert_eq!(finalize.fetch_nodes, ["dummy_local", "dummy"]);
                 },
-                _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
+                _ => panic!("test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
             }
         }
-        _ => assert!(
-            false,
+        _ => panic!(
             "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"
         ),
     };
@@ -251,8 +247,8 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let mut remote_actions = vec![];
     for (node, remote_action) in scheduled_tasks.get_tasks()? {
         match remote_action {
-            FlightAction::CancelAction(_) => assert!(false),
-            FlightAction::BroadcastAction(_) => assert!(false),
+            FlightAction::CancelAction(_) => panic!(),
+            FlightAction::BroadcastAction(_) => panic!(),
             FlightAction::PrepareShuffleAction(action) => remote_actions.push((node, action)),
         }
     }
@@ -317,11 +313,10 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
                     assert_eq!(finalize.stream_id, "dummy_local");
                     assert_eq!(finalize.fetch_nodes, ["dummy_local", "dummy"]);
                 },
-                _ => assert!(false, "test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
+                _ => panic!("test_scheduler_plan_with_convergent_and_expansive_stage must be have Remote plan!"),
             }
         }
-        _ => assert!(
-            false,
+        _ => panic!(
             "test_scheduler_plan_with_convergent_and_expansive_stage must be have Select plan!"
         ),
     };

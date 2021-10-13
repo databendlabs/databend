@@ -49,7 +49,7 @@ async fn test_explain_interpreter() -> Result<()> {
         ];
         common_datablocks::assert_blocks_eq(expected, result.as_slice());
     } else {
-        assert!(false)
+        panic!()
     }
 
     Ok(())

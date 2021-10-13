@@ -20,7 +20,7 @@ fn test_empty_array() {
     let data_array: DFInt64Array = builder.finish();
 
     // verify empty data array and data type
-    assert_eq!(true, data_array.is_empty());
+    assert!(data_array.is_empty());
     assert_eq!(&DataType::Int64, data_array.data_type());
 }
 

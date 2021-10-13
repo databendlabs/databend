@@ -23,14 +23,14 @@ fn test_context_function_build_arg_from_ctx() -> Result<()> {
 
     // Ok.
     {
-        let args = ContextFunction::build_args_from_ctx("database".clone(), ctx.clone())?;
+        let args = ContextFunction::build_args_from_ctx("database", ctx.clone())?;
         assert_eq!("default", format!("{:?}", args[0]));
     }
 
     // Error.
     {
         let result = ContextFunction::build_args_from_ctx("databasexx", ctx).is_err();
-        assert_eq!(true, result);
+        assert!(result);
     }
 
     Ok(())

@@ -44,7 +44,7 @@ fn test_logic_function() -> Result<()> {
             func_name: "AndFunction",
             display: "and",
             nullable: false,
-            func: LogicAndFunction::try_create_func("".clone())?,
+            func: LogicAndFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec![true, true, true, false]).into(),
@@ -58,7 +58,7 @@ fn test_logic_function() -> Result<()> {
             func_name: "OrFunction",
             display: "or",
             nullable: false,
-            func: LogicOrFunction::try_create_func("".clone())?,
+            func: LogicOrFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec![true, true, true, false]).into(),
@@ -72,7 +72,7 @@ fn test_logic_function() -> Result<()> {
             func_name: "NotFunction",
             display: "not",
             nullable: false,
-            func: LogicNotFunction::try_create_func("".clone())?,
+            func: LogicNotFunction::try_create_func("")?,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec![true, false]).into()],
             expect: Series::new(vec![false, true]).into(),

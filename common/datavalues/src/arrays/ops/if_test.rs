@@ -51,13 +51,13 @@ fn test_array_if() -> Result<()> {
     let rhs = DFBooleanArray::new_from_slice(&[false, false, true]);
     let res = lhs.if_then_else(&rhs, &conds[1])?;
     assert_eq!(1, res.len());
-    assert_eq!(true, res.inner().value(0));
+    assert!(res.inner().value(0));
 
     let res = rhs.if_then_else(&lhs, &conds[0])?;
     assert_eq!(3, res.len());
-    assert_eq!(false, res.inner().value(0));
-    assert_eq!(true, res.inner().value(1));
-    assert_eq!(true, res.inner().value(2));
+    assert!(!res.inner().value(0));
+    assert!(res.inner().value(1));
+    assert!(res.inner().value(2));
 
     // DFStringArray.
     let lhs = DFStringArray::new_from_slice(&["a"]);

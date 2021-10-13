@@ -24,10 +24,10 @@ fn test_fuse_commit_version() -> anyhow::Result<()> {
 #[test]
 fn test_tls_rpc_enabled() -> anyhow::Result<()> {
     let mut conf = Config::empty();
-    assert_eq!(false, conf.tls_rpc_server_enabled());
+    assert!(!conf.tls_rpc_server_enabled());
     conf.flight_tls_server_key = "test".to_owned();
-    assert_eq!(false, conf.tls_rpc_server_enabled());
+    assert!(!conf.tls_rpc_server_enabled());
     conf.flight_tls_server_cert = "test".to_owned();
-    assert_eq!(true, conf.tls_rpc_server_enabled());
+    assert!(conf.tls_rpc_server_enabled());
     Ok(())
 }

@@ -721,8 +721,8 @@ mod test {
 
     #[test]
     fn test_parse_compression() {
-        assert_eq!(parse_compression("none").unwrap(), false);
-        assert_eq!(parse_compression("lz4").unwrap(), true);
+        assert!(!parse_compression("none").unwrap());
+        assert!(parse_compression("lz4").unwrap());
         parse_compression("?").unwrap_err();
     }
 }
