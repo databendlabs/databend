@@ -16,7 +16,6 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use serde_json;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
@@ -24,7 +23,6 @@ use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
-use crate::error::CliError;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -82,13 +80,6 @@ impl DeleteCommand {
         Ok(())
     }
 
-    fn view_local_meta(status: &Status, writer: &mut Writer) -> Result<()> {
-        Ok(())
-    }
-
-    fn view_local_query(status: &Status, writer: &mut Writer) -> Result<()> {
-        Ok(())
-    }
     fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let mut status = Status::read(self.conf.clone())?;
         DeleteCommand::stop_current_local_services(&mut status, writer)?;

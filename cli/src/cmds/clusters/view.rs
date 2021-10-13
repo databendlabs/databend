@@ -20,10 +20,8 @@ use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 use comfy_table::Cell;
-use comfy_table::CellAlignment;
 use comfy_table::Color;
 use comfy_table::Table;
-use serde_json;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
@@ -31,7 +29,6 @@ use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
-use crate::error::CliError;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -74,7 +71,9 @@ impl ViewCommand {
     fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
         let table = ViewCommand::build_local_table(&status);
-        if table.is_err() {
+        if let Ok(t) = table {
+            writer.writeln(&t.trim_fmt());
+        } else {
             writer.write_err(
                 format!(
                     "cannot retrieve view table, error: {:?}",
@@ -82,8 +81,6 @@ impl ViewCommand {
                 )
                 .as_str(),
             );
-        } else {
-            writer.writeln(&table.unwrap().trim_fmt());
         }
         Ok(())
     }
@@ -94,17 +91,17 @@ impl ViewCommand {
         let mut row = vec![];
         row.push(Cell::new(
             file.file_stem()
-                .expect(format!("cannot stem file {:?}", file).as_str())
+                .unwrap_or_else(|| panic!("cannot stem file {:?}", file))
                 .to_string_lossy(),
         ));
         row.push(Cell::new("local"));
         row.push(config.verify().map_or(
             Cell::new(format!("{}", HealthStatus::UnReady).as_str()).fg(Color::Red),
-            |v| Cell::new(format!("{}", HealthStatus::Ready).as_str()).fg(Color::Green),
+            |_| Cell::new(format!("{}", HealthStatus::Ready).as_str()).fg(Color::Green),
         ));
         row.push(Cell::new("disabled"));
-        row.push(Cell::new(format!("{}", fs)));
-        return row;
+        row.push(Cell::new(fs.to_string()));
+        row
     }
 
     pub fn build_local_table(status: &Status) -> Result<Table> {
@@ -119,8 +116,7 @@ impl ViewCommand {
             Cell::new("Config"),
         ]);
         let meta_config = status.get_local_meta_config();
-        if meta_config.is_some() {
-            let (fs, meta_config) = meta_config.unwrap();
+        if let Some((fs, meta_config)) = meta_config {
             let row = ViewCommand::build_row(fs, meta_config);
             table.add_row(row);
         }

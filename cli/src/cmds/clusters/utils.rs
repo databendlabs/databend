@@ -12,17 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::App;
-use clap::AppSettings;
-use clap::Arg;
-use clap::ArgMatches;
 use serde_json;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::status::LocalRuntime;
-use crate::cmds::Config;
 use crate::cmds::Status;
-use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
 
