@@ -29,8 +29,8 @@ use libc::pid_t;
 use log::info;
 use metasrv::configs::Config as MetaConfig;
 use nix::unistd::Pid;
+use serde::Deserialize;
 use serde::Serialize;
-use serde_derive::Deserialize;
 
 use crate::cmds::Config;
 use crate::error::CliError;
@@ -316,25 +316,25 @@ impl LocalRuntime for LocalQueryConfig {
                 conf.query.metric_api_address,
             )
             .env(
-            databend_query::configs::config_meta::META_ADDRESS,
-            conf.meta.meta_address
-        )
+                databend_query::configs::config_meta::META_ADDRESS,
+                conf.meta.meta_address,
+            )
             .env(
-            databend_query::configs::config_meta::META_USERNAME,
-            conf.meta.meta_username
-        )
+                databend_query::configs::config_meta::META_USERNAME,
+                conf.meta.meta_username,
+            )
             .env(
-            databend_query::configs::config_meta::META_PASSWORD,
-            conf.meta.meta_password
-        )
+                databend_query::configs::config_meta::META_PASSWORD,
+                conf.meta.meta_password,
+            )
             .env(
-            databend_query::configs::config_storage::STORAGE_TYPE,
-            conf.storage.storage_type
-        )
+                databend_query::configs::config_storage::STORAGE_TYPE,
+                conf.storage.storage_type,
+            )
             .env(
-            databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH,
-            conf.storage.disk.data_path
-        )
+                databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH,
+                conf.storage.disk.data_path,
+            )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
@@ -443,7 +443,7 @@ impl Status {
                 .get(&*config_type)
                 .unwrap()
                 .split(',')
-                .filter(|s| !s.is_empty() )
+                .filter(|s| !s.is_empty())
                 .collect();
             current_configs.push(&*file_location);
             status
@@ -474,14 +474,17 @@ impl Status {
             .get(config_type.as_str())
             .unwrap()
             .split(',')
-            .filter(|s| !s.is_empty() )
+            .filter(|s| !s.is_empty())
             .collect::<Vec<&str>>();
         vec.retain(|s| *s.to_string() != file_name);
 
         if vec.len() > 1 {
             status.local_configs.insert(config_type, vec.join(","));
         } else {
-            status.local_configs.insert(config_type, vec.get(0).map_or("".to_string(), |v| v.to_string()));
+            status.local_configs.insert(
+                config_type,
+                vec.get(0).map_or("".to_string(), |v| v.to_string()),
+            );
         }
         status.write()?;
         Ok(())
@@ -495,16 +498,20 @@ impl Status {
         }
         let mut meta_file = self.local_configs.get("meta").unwrap().to_string();
         if meta_file.contains(',') {
-            let splited = meta_file.as_str().split(',').filter(|s| !s.trim().is_empty()).collect::<Vec<&str>>();
+            let splited = meta_file
+                .as_str()
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .collect::<Vec<&str>>();
             if !splited.is_empty() {
-                meta_file = splited.iter().next().unwrap().to_string()
+                meta_file = splited.get(0).unwrap().to_string()
             }
         };
-        if !Path::new(meta_file.to_string().as_str()).exists() {
+        if !Path::new(meta_file.as_str()).exists() {
             return None;
         }
-        let file = File::open(meta_file.to_string())
-            .expect(&*format!("cannot read from {}", meta_file.to_string()));
+        let file =
+            File::open(meta_file.to_string()).expect(&*format!("cannot read from {}", meta_file));
         let reader = BufReader::new(file);
         return Some((
             meta_file.to_string(),

@@ -1547,7 +1547,6 @@ dependencies = [
  "run_script",
  "rustyline",
  "serde",
- "serde_derive",
  "serde_json",
  "serde_yaml",
  "sha2",

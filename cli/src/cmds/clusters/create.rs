@@ -29,6 +29,7 @@ use sysinfo::System;
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
+use crate::cmds::clusters::delete::DeleteCommand;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
@@ -39,7 +40,6 @@ use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use crate::cmds::clusters::delete::DeleteCommand;
 
 #[derive(Clone)]
 pub struct CreateCommand {
@@ -407,7 +407,6 @@ impl CreateCommand {
                 if args.value_of("disk_path").is_some()
                     && !args.value_of("disk_path").unwrap().is_empty()
                 {
-
                     if !Path::new(&args.value_of("disk_path").unwrap()).exists() {
                         return Err(CliError::Unknown(format!(
                             "cannot find local disk_path in {}",
@@ -422,14 +421,15 @@ impl CreateCommand {
                             .to_string()
                 } else {
                     let data_dir = format!("{}/data", self.conf.clone().databend_dir);
-                    if !Path::new(data_dir.as_str()).exists() {
-                        if fs::create_dir(Path::new(data_dir.as_str())).is_err() {
-                            return Err(CliError::Unknown(format!(
-                                "cannot find local disk_path in {}",
-                                data_dir
-                            )));
-                        }
+                    if !Path::new(data_dir.as_str()).exists()
+                        && fs::create_dir(Path::new(data_dir.as_str())).is_err()
+                    {
+                        return Err(CliError::Unknown(format!(
+                            "cannot find local disk_path in {}",
+                            data_dir
+                        )));
                     }
+
                     config.storage.disk.data_path = fs::canonicalize(data_dir)
                         .unwrap()
                         .to_str()
@@ -446,7 +446,6 @@ impl CreateCommand {
                 ))
             }
         }
-
 
         // log
         config.log.log_level = args.value_of("log_level").unwrap().to_string();
@@ -553,7 +552,7 @@ impl CreateCommand {
                 let meta_status = meta_config.verify();
                 if meta_status.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
-                    DeleteCommand::stop_current_local_services(&mut status, writer);
+                    DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                     writer.write_err(&*format!(
                         "❌ Cannot connect to meta service: {:?}",
                         meta_status.unwrap_err()
@@ -563,18 +562,28 @@ impl CreateCommand {
                 let query_config = self.generate_local_query_config(args, bin_path, &meta_config);
                 if query_config.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
-                    DeleteCommand::stop_current_local_services(&mut status, writer);
+                    DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                     writer.write_err(&*format!(
                         "❌ Cannot generate query configurations, error: {:?}",
                         query_config.as_ref().unwrap_err()
                     ));
                 }
-                writer.write_ok(&*format!("local data would be stored in {}", query_config.as_ref().unwrap().config.storage.disk.data_path.as_str()));
+                writer.write_ok(&*format!(
+                    "local data would be stored in {}",
+                    query_config
+                        .as_ref()
+                        .unwrap()
+                        .config
+                        .storage
+                        .disk
+                        .data_path
+                        .as_str()
+                ));
                 {
                     let res = self.provision_local_query_service(writer, query_config.unwrap());
                     if res.is_err() {
                         let mut status = Status::read(self.conf.clone())?;
-                        DeleteCommand::stop_current_local_services(&mut status, writer);
+                        DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                         writer.write_err(&*format!(
                             "❌ Cannot provison query service, error: {:?}",
                             res.unwrap_err()

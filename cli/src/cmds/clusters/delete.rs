@@ -73,7 +73,7 @@ impl DeleteCommand {
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
             meta.kill()
-                .expect(&*format!("cannot kill meta service with config in {}", fs.clone()));
+                .expect(&*format!("cannot kill meta service with config in {}", fs));
             Status::delete_local_config(status, "meta".to_string(), fs.clone())
                 .expect("cannot clean meta config");
             writer.write_ok(format!("⚠️ stopped query service with config in {}", fs).as_str());
@@ -83,7 +83,7 @@ impl DeleteCommand {
 
     fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let mut status = Status::read(self.conf.clone())?;
-        DeleteCommand::stop_current_local_services(&mut status, writer);
+        DeleteCommand::stop_current_local_services(&mut status, writer)?;
         status.current_profile = None;
         status.write()?;
         writer.write_ok("🚀 stopped services");
@@ -116,13 +116,11 @@ impl DeleteCommand {
                     &*status.current_profile.unwrap(),
                 )?)
             }
-            _ => {
-                Err(CliError::Unknown(
-                    "Currently there is no profile in use, please create or use a profile"
-                        .parse()
-                        .unwrap(),
-                ))
-            },
+            _ => Err(CliError::Unknown(
+                "Currently there is no profile in use, please create or use a profile"
+                    .parse()
+                    .unwrap(),
+            )),
         }
     }
     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
