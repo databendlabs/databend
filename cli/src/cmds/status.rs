@@ -562,7 +562,12 @@ impl Status {
                 .and_then(|v| {
                     Option::from(
                         v.get("config_file")
-                            .map(|val| serde_yaml::from_value::<String>(val.clone()).unwrap())
+                            .and_then(|val| {
+                                Option::from(
+                                    serde_yaml::from_value::<String>(val.clone())
+                                        .expect("cannot convert config file settingsfrom yaml"),
+                                )
+                            })
                             .unwrap(),
                     )
                 })
@@ -576,7 +581,7 @@ impl Status {
                                 serde_yaml::from_value::<
                                     databend_query::configs::config_query::QueryConfig,
                                 >(val.clone())
-                                .unwrap()
+                                .expect("cannot convert query config from yaml")
                             })
                             .unwrap(),
                     )
@@ -591,7 +596,7 @@ impl Status {
                                 serde_yaml::from_value::<
                                     databend_query::configs::config_log::LogConfig,
                                 >(val.clone())
-                                .unwrap()
+                                .expect("cannot convert log config from yaml")
                             })
                             .unwrap(),
                     )
@@ -606,7 +611,7 @@ impl Status {
                                 serde_yaml::from_value::<
                                     databend_query::configs::config_meta::MetaConfig,
                                 >(val.clone())
-                                .unwrap()
+                                .expect("cannot convert meta service config from yaml")
                             })
                             .unwrap(),
                     )
@@ -621,7 +626,7 @@ impl Status {
                                 serde_yaml::from_value::<
                                     databend_query::configs::config_storage::StorageConfig,
                                 >(val.clone())
-                                .unwrap()
+                                .expect("cannot convert storage config from yaml")
                             })
                             .unwrap(),
                     )
