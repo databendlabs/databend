@@ -63,9 +63,8 @@ use crate::state_machine::StateMachineMetaKey::LastApplied;
 use crate::state_machine::StateMachineMetaKey::LastMembership;
 use crate::state_machine::StateMachineMetaValue;
 
-/// seq number key to generate seq for the value of a `generic_kv` record.
-const SEQ_GENERIC_KV: &str = "generic_kv";
 /// seq number key to generate database id
+/// TODO(xp): remove these const and replace with SledKeySpace::NAME
 const SEQ_DATABASE_ID: &str = "database_id";
 /// seq number key to generate table id
 const SEQ_TABLE_ID: &str = "table_id";
@@ -563,7 +562,7 @@ impl StateMachine {
 
         // insert the updated record.
 
-        let new_seq = self.incr_seq(SEQ_GENERIC_KV).await?;
+        let new_seq = self.incr_seq(KS::NAME).await?;
         let seq_kv_value = (new_seq, new_kv_value);
 
         sub_tree.insert(key, &seq_kv_value).await?;
