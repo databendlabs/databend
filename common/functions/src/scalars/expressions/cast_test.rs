@@ -144,7 +144,7 @@ fn test_cast_function() -> Result<()> {
             .zip(t.column_types.iter())
             .map(|(c, t)| {
                 let dummy = DataField::new("dummy", t.clone(), false);
-                DataColumnWithField::new(c.clone(), dummy.clone())
+                DataColumnWithField::new(c.clone(), dummy)
             })
             .collect();
 

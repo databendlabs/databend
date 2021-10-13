@@ -70,15 +70,21 @@ impl ClusterDescriptor {
         new_nodes.push(Arc::new(NodeInfo::create(id.into(), 0, addr.into())));
         ClusterDescriptor {
             cluster_nodes_list: new_nodes,
-            local_node_id: self.local_node_id.clone(),
+            local_node_id: self.local_node_id,
         }
     }
 
     pub fn with_local_id(self, id: impl Into<String>) -> ClusterDescriptor {
         ClusterDescriptor {
             local_node_id: id.into(),
-            cluster_nodes_list: self.cluster_nodes_list.clone(),
+            cluster_nodes_list: self.cluster_nodes_list,
         }
+    }
+}
+
+impl Default for ClusterDescriptor {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -87,7 +93,7 @@ pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<DatabendQue
     let dummy_session = sessions.create_session("TestSession")?;
 
     let local_id = desc.local_node_id;
-    let nodes = desc.cluster_nodes_list.clone();
+    let nodes = desc.cluster_nodes_list;
 
     let context = DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
         sessions.get_conf().clone(),

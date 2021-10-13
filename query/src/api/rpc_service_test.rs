@@ -56,7 +56,7 @@ async fn test_tls_rpc_server() -> Result<()> {
     });
 
     // normal case
-    let conn = ConnectionFactory::create_flight_channel(listener_address.clone(), None, tls_conf)?;
+    let conn = ConnectionFactory::create_flight_channel(listener_address, None, tls_conf)?;
     let mut f_client = FlightServiceClient::new(conn);
     let r = f_client.list_actions(Empty {}).await;
     assert!(r.is_ok());

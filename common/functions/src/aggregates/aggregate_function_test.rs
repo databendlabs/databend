@@ -474,8 +474,7 @@ fn test_covariance_with_comparable_data_sets() -> Result<()> {
         match result {
             DataValue::Float64(Some(val)) => Ok(val),
             _ => {
-                assert!(false);
-                Ok(0.0)
+                panic!();
             }
         }
     };

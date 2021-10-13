@@ -76,7 +76,7 @@ async fn test_limitby_stream() -> Result<()> {
             0 | 1 => {
                 common_datablocks::assert_blocks_sorted_eq(expected[index].clone(), &[data_block])
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
         index += 1;
     }
@@ -116,7 +116,7 @@ async fn test_limitby_stream() -> Result<()> {
             0 | 1 => {
                 common_datablocks::assert_blocks_sorted_eq(expected[index].clone(), &[data_block])
             }
-            _ => assert!(false),
+            _ => panic!(),
         }
         index += 1;
     }

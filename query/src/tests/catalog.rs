@@ -19,6 +19,6 @@ use crate::configs::Config;
 
 pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     let conf = Config::default();
-    let catalog = DatabaseCatalog::try_create_with_config(conf.clone())?;
+    let catalog = DatabaseCatalog::try_create_with_config(conf)?;
     Ok(catalog)
 }

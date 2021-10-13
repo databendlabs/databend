@@ -30,8 +30,8 @@ fn test_data_block() -> Result<()> {
     assert_eq!(3, block.try_column_by_name("a")?.len());
     assert_eq!(3, block.column(0).len());
 
-    assert_eq!(true, block.try_column_by_name("a").is_ok());
-    assert_eq!(true, block.try_column_by_name("a_not_found").is_err());
+    assert!(block.try_column_by_name("a").is_ok());
+    assert!(block.try_column_by_name("a_not_found").is_err());
 
     // first and last test.
     assert_eq!(1, block.first("a")?.as_i64()?);

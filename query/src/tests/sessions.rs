@@ -49,43 +49,43 @@ impl SessionManagerBuilder {
     }
 
     pub fn max_sessions(self, max_sessions: u64) -> SessionManagerBuilder {
-        let mut new_config = self.config.clone();
+        let mut new_config = self.config;
         new_config.query.max_active_sessions = max_sessions;
         SessionManagerBuilder::inner_create(new_config)
     }
 
     pub fn rpc_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config.clone();
+        let mut new_config = self.config;
         new_config.query.rpc_tls_server_key = value.into();
         SessionManagerBuilder::inner_create(new_config)
     }
 
     pub fn rpc_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config.clone();
+        let mut new_config = self.config;
         new_config.query.rpc_tls_server_cert = value.into();
         SessionManagerBuilder::inner_create(new_config)
     }
 
     pub fn api_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config.clone();
+        let mut new_config = self.config;
         new_config.query.api_tls_server_key = value.into();
         SessionManagerBuilder::inner_create(new_config)
     }
 
     pub fn api_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config.clone();
+        let mut new_config = self.config;
         new_config.query.api_tls_server_cert = value.into();
         SessionManagerBuilder::inner_create(new_config)
     }
 
     pub fn api_tls_server_root_ca_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config.clone();
+        let mut new_config = self.config;
         new_config.query.api_tls_server_root_ca_cert = value.into();
         SessionManagerBuilder::inner_create(new_config)
     }
 
     pub fn log_dir_with_relative(self, path: impl Into<String>) -> SessionManagerBuilder {
-        let mut new_config = self.config.clone();
+        let mut new_config = self.config;
         new_config.log.log_dir = env::current_dir()
             .unwrap()
             .join(path.into())
@@ -96,7 +96,7 @@ impl SessionManagerBuilder {
     }
 
     pub fn build(self) -> Result<SessionManagerRef> {
-        let config = self.config.clone();
+        let config = self.config;
         let handle = std::thread::spawn(move || sync_try_create_sessions(config));
         handle.join().unwrap()
     }

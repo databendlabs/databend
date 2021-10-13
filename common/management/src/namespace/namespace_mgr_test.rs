@@ -45,7 +45,7 @@ async fn test_successfully_add_node() -> Result<()> {
             assert!(value.meta.unwrap().expire_at.unwrap() - current_time >= 60);
             assert_eq!(value.value, serde_json::to_vec(&node_info)?);
         }
-        catch @ GetKVActionReply { .. } => assert!(false, "GetKVActionReply{:?}", catch),
+        catch @ GetKVActionReply { .. } => panic!("GetKVActionReply{:?}", catch),
     }
 
     Ok(())
@@ -59,7 +59,7 @@ async fn test_already_exists_add_node() -> Result<()> {
     namespace_api.add_node(node_info.clone()).await?;
 
     match namespace_api.add_node(node_info.clone()).await {
-        Ok(_) => assert!(false, "Already exists add node must be return Err."),
+        Ok(_) => panic!("Already exists add node must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 4009),
     }
 
@@ -106,7 +106,7 @@ async fn test_unknown_node_drop_node() -> Result<()> {
         .drop_node(String::from("UNKNOWN_ID"), None)
         .await
     {
-        Ok(_) => assert!(false, "Unknown node drop node must be return Err."),
+        Ok(_) => panic!("Unknown node drop node must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 4008),
     }
 

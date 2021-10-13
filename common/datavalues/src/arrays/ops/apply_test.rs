@@ -87,17 +87,17 @@ fn test_array_apply() -> Result<()> {
     ];
 
     assert_eq!(2, values[0].null_count());
-    assert_eq!(true, values[0].is_null(0));
+    assert!(values[0].is_null(0));
     assert_eq!(11, values[0].value(1));
     assert_eq!(12, values[0].value(2));
-    assert_eq!(true, values[0].is_null(3));
+    assert!(values[0].is_null(3));
     assert_eq!(14, values[0].value(4));
 
     assert_eq!(2, values[1].null_count());
-    assert_eq!(true, values[1].is_null(0));
+    assert!(values[1].is_null(0));
     assert_eq!(11, values[1].value(1));
     assert_eq!(12, values[1].value(2));
-    assert_eq!(true, values[1].is_null(3));
+    assert!(values[1].is_null(3));
     assert_eq!(14, values[1].value(4));
 
     assert_eq!(0, values[2].null_count());
@@ -107,17 +107,17 @@ fn test_array_apply() -> Result<()> {
     assert_eq!(0, values[2].value(3));
     assert_eq!(24, values[2].value(4));
     assert_eq!(2, values[3].null_count());
-    assert_eq!(true, values[3].is_null(0));
+    assert!(values[3].is_null(0));
     assert_eq!(31, values[3].value(1));
     assert_eq!(32, values[3].value(2));
-    assert_eq!(true, values[3].is_null(3));
+    assert!(values[3].is_null(3));
     assert_eq!(34, values[3].value(4));
 
     assert_eq!(2, values[4].null_count());
-    assert_eq!(true, values[4].is_null(0));
+    assert!(values[4].is_null(0));
     assert_eq!(41, values[4].value(1));
     assert_eq!(42, values[4].value(2));
-    assert_eq!(true, values[4].is_null(3));
+    assert!(values[4].is_null(3));
     assert_eq!(44, values[4].value(4));
 
     Ok(())
@@ -129,8 +129,8 @@ fn test_boolean_array_apply() -> Result<()> {
     let array = new_test_boolean_array(5, 0, 5);
 
     let arrays = vec![
-        array.apply(|arr| arr && true),
-        array.apply_with_idx(|(_, arr)| arr && true),
+        array.apply(|arr| arr),
+        array.apply_with_idx(|(_, arr)| arr),
         array.apply_with_idx_on_opt(|(_, arr)| match arr {
             Some(v) => Some(!v),
             None => Some(true),
@@ -140,25 +140,25 @@ fn test_boolean_array_apply() -> Result<()> {
     let values = vec![arrays[0].inner(), arrays[1].inner(), arrays[2].inner()];
 
     assert_eq!(2, values[0].null_count());
-    assert_eq!(true, values[0].is_null(0));
-    assert_eq!(true, values[0].value(1));
-    assert_eq!(false, values[0].value(2));
-    assert_eq!(true, values[0].is_null(3));
-    assert_eq!(true, values[0].value(4));
+    assert!(values[0].is_null(0));
+    assert!(values[0].value(1));
+    assert!(!values[0].value(2));
+    assert!(values[0].is_null(3));
+    assert!(values[0].value(4));
 
     assert_eq!(2, values[1].null_count());
-    assert_eq!(true, values[1].is_null(0));
-    assert_eq!(true, values[1].value(1));
-    assert_eq!(false, values[1].value(2));
-    assert_eq!(true, values[1].is_null(3));
-    assert_eq!(true, values[1].value(4));
+    assert!(values[1].is_null(0));
+    assert!(values[1].value(1));
+    assert!(!values[1].value(2));
+    assert!(values[1].is_null(3));
+    assert!(values[1].value(4));
 
     assert_eq!(0, values[2].null_count());
-    assert_eq!(true, values[2].value(0));
-    assert_eq!(false, values[2].value(1));
-    assert_eq!(true, values[2].value(2));
-    assert_eq!(true, values[2].value(3));
-    assert_eq!(false, values[2].value(4));
+    assert!(values[2].value(0));
+    assert!(!values[2].value(1));
+    assert!(values[2].value(2));
+    assert!(values[2].value(3));
+    assert!(!values[2].value(4));
 
     Ok(())
 }
@@ -189,20 +189,20 @@ fn test_string_array_apply() -> Result<()> {
     let cast_values = vec![cast_arrays[0].inner(), cast_arrays[1].inner()];
 
     assert_eq!(2, values[0].null_count());
-    assert_eq!(true, values[0].is_null(0));
+    assert!(values[0].is_null(0));
     assert_eq!(b"y", values[0].value(1));
     assert_eq!(b"z", values[0].value(2));
-    assert_eq!(true, values[0].is_null(3));
+    assert!(values[0].is_null(3));
     assert_eq!(b"3", values[0].value(4));
-    assert_eq!(true, values[0].is_null(3));
+    assert!(values[0].is_null(3));
 
     assert_eq!(2, values[1].null_count());
-    assert_eq!(true, values[1].is_null(0));
+    assert!(values[1].is_null(0));
     assert_eq!(b"b", values[1].value(1));
     assert_eq!(b"c", values[1].value(2));
-    assert_eq!(true, values[1].is_null(3));
+    assert!(values[1].is_null(3));
     assert_eq!(b"1", values[1].value(4));
-    assert_eq!(true, values[1].is_null(3));
+    assert!(values[1].is_null(3));
 
     assert_eq!(0, values[2].null_count());
     assert_eq!(b"ff", values[2].value(0));
@@ -212,17 +212,17 @@ fn test_string_array_apply() -> Result<()> {
     assert_eq!(b"13", values[2].value(4));
 
     assert_eq!(2, cast_values[0].null_count());
-    assert_eq!(true, cast_values[0].is_null(0));
+    assert!(cast_values[0].is_null(0));
     assert_eq!(2, cast_values[0].value(1));
     assert_eq!(2, cast_values[0].value(2));
-    assert_eq!(true, cast_values[0].is_null(3));
+    assert!(cast_values[0].is_null(3));
     assert_eq!(2, cast_values[0].value(4));
 
     assert_eq!(2, cast_values[1].null_count());
-    assert_eq!(true, cast_values[1].is_null(0));
+    assert!(cast_values[1].is_null(0));
     assert_eq!(3, cast_values[1].value(1));
     assert_eq!(3, cast_values[1].value(2));
-    assert_eq!(true, cast_values[1].is_null(3));
+    assert!(cast_values[1].is_null(3));
     assert_eq!(3, cast_values[1].value(4));
 
     Ok(())

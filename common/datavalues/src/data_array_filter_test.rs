@@ -53,8 +53,8 @@ fn filter_batch_array() -> Result<()> {
     for t in tests {
         let result = DataArrayFilter::filter_batch_array(batch_array.clone(), &t.filter)?;
         assert_eq!(t.expect.len(), result.len());
-        for i in 0..t.expect.len() {
-            assert!(result[i].series_equal(&(t.expect[i])), "{}", t.name)
+        for (i, item) in result.iter().enumerate().take(t.expect.len()) {
+            assert!(item.series_equal(&(t.expect[i])), "{}", t.name)
         }
     }
 

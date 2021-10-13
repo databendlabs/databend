@@ -79,7 +79,7 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
         // Rejected connection
         match create_conn(listening.port()).await {
-            Ok(_) => assert!(false, "Create clickhouse connection must be reject."),
+            Ok(_) => panic!("Create clickhouse connection must be reject."),
             Err(error) => {
                 let message = error.message();
                 assert!(message.contains("NO_FREE_CONNECTION"));
@@ -110,7 +110,7 @@ async fn test_abort_clickhouse_server() -> Result<()> {
 
     // Rejected connection
     match create_conn(listening.port()).await {
-        Ok(_) => assert!(false, "Create clickhouse connection must be reject."),
+        Ok(_) => panic!("Create clickhouse connection must be reject."),
         Err(error) => {
             let message = error.message();
             assert!(message.contains("ConnectionRefused"));

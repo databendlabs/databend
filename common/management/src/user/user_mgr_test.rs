@@ -157,7 +157,7 @@ mod add {
                 .with(
                     predicate::function(move |v| v == test_key.as_str()),
                     predicate::eq(test_seq),
-                    predicate::eq(value.clone()),
+                    predicate::eq(value),
                     predicate::eq(None),
                 )
                 .times(1)
@@ -333,8 +333,9 @@ mod get_users {
 
     use super::*;
 
+    type FakeKeys = Vec<(String, SeqValue<KVValue>)>;
     type UserInfos = Vec<(u64, UserInfo)>;
-    fn prepare() -> common_exception::Result<(Vec<(String, SeqValue<KVValue>)>, UserInfos)> {
+    fn prepare() -> common_exception::Result<(FakeKeys, UserInfos)> {
         let mut names = vec![];
         let mut keys = vec![];
         let mut res = vec![];
@@ -627,7 +628,6 @@ mod update {
         // if partial update, and get_kv returns None
         // update_kv should NOT be called
         let mut kv = MockKV::new();
-        let test_key = test_key.clone();
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
@@ -654,7 +654,6 @@ mod update {
 
         // get_kv should not be called
         let mut kv = MockKV::new();
-        let test_key = test_key.clone();
 
         // upsert should be called
         kv.expect_upsert_kv()

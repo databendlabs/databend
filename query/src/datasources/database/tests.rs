@@ -47,7 +47,7 @@ async fn test_datasource() -> Result<()> {
 
         // Check
         let result = catalog.get_database("test_db");
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         // Drop database.
         catalog.drop_database(DropDatabasePlan {
@@ -57,7 +57,7 @@ async fn test_datasource() -> Result<()> {
 
         // Check.
         let result = catalog.get_database("test_db");
-        assert_eq!(true, result.is_err());
+        assert!(result.is_err());
     }
 
     Ok(())
@@ -74,7 +74,7 @@ async fn test_datasource_invalid_db_engine() -> Result<()> {
         engine: "Local".to_string(),
         options: Default::default(),
     });
-    assert_eq!(true, r.is_err());
+    assert!(r.is_err());
     let err = r.unwrap_err();
     assert_eq!(err.code(), ErrorCode::UnknownDatabaseEngine("").code());
 

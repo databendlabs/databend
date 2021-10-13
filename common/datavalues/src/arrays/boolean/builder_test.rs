@@ -20,7 +20,7 @@ fn test_empty_boolean_array() {
     let data_array: DFBooleanArray = builder.finish();
     let mut iter = data_array.into_iter();
     assert_eq!(None, iter.next());
-    assert_eq!(true, data_array.is_empty());
+    assert!(data_array.is_empty());
     assert_eq!(&DataType::Boolean, data_array.data_type());
 }
 

@@ -35,10 +35,7 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     let get_stream = dispatcher.get_stream(&stream);
 
     match get_stream {
-        Ok(_) => assert!(
-            false,
-            "Return Ok in test_get_stream_with_non_exists_stream."
-        ),
+        Ok(_) => panic!("Return Ok in test_get_stream_with_non_exists_stream."),
         Err(error) => {
             assert_eq!(error.code(), 29);
             assert_eq!(error.message(), "Stream is not found");

@@ -81,7 +81,7 @@ async fn test_skipstream() {
         let data_bock = res.unwrap();
         match index {
             0 => assert_blocks_eq(expected.clone(), &[data_bock]),
-            _ => assert!(false),
+            _ => panic!(),
         }
         index += 1;
     }

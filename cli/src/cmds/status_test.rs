@@ -86,7 +86,7 @@ fn test_status() -> Result<()> {
             status.get_local_query_configs().get(0).unwrap().clone().1,
             query_config.clone()
         );
-        assert_eq!(status.has_local_configs(), true);
+        assert!(status.has_local_configs());
         let meta_config = LocalMetaConfig {
             config: MetaConfig::empty(),
             pid: Some(123),
@@ -126,26 +126,23 @@ fn test_status() -> Result<()> {
             status.get_local_query_configs().get(1).unwrap().clone().1,
             query_config2
         );
-        assert_eq!(
-            status.get_local_meta_config().unwrap().clone().1,
-            meta_config
-        );
+        assert_eq!(status.get_local_meta_config().unwrap().1, meta_config);
         assert_eq!(status.current_profile, Some("local".to_string()));
-        assert_eq!(status.has_local_configs(), true);
+        assert!(status.has_local_configs());
         // delete status
         let mut status = Status::read(conf.clone()).unwrap();
-        let (fs, _) = status.clone().get_local_meta_config().unwrap().clone();
+        let (fs, _) = status.clone().get_local_meta_config().unwrap();
         Status::delete_local_config(&mut status, "meta".to_string(), fs).unwrap();
         for (fs, _) in status.clone().get_local_query_configs() {
             Status::delete_local_config(&mut status, "query".to_string(), fs).unwrap();
         }
         status.current_profile = None;
         status.write()?;
-        let status = Status::read(conf.clone()).unwrap();
+        let status = Status::read(conf).unwrap();
         assert_eq!(status.get_local_query_configs().len(), 0);
         assert_eq!(status.get_local_meta_config(), None);
         assert_eq!(status.current_profile, None);
-        assert_eq!(status.has_local_configs(), false);
+        assert!(!status.has_local_configs());
     }
     Ok(())
 }

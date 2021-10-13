@@ -32,7 +32,7 @@ impl TestFixture {
             .map(|_v| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-                DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])])
+                DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])])
             })
             .collect()
     }
@@ -41,7 +41,7 @@ impl TestFixture {
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+    let block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
     let r = statistic_helper::block_stats(&block)?;
     assert_eq!(1, r.len());
     let (data_type, col_stats) = r.get(&0).unwrap();

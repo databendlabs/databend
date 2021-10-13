@@ -47,7 +47,7 @@ async fn test_csv_table() -> Result<()> {
         name: "test_csv".into(),
         schema: DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
         engine: "Csv".to_string(),
-        options: options,
+        options,
         table_id: 0,
         version: 0,
     })?;
@@ -123,7 +123,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
             DataField::new("column4", DataType::UInt64, false),
         ]),
         engine: "Csv".to_string(),
-        options: options,
+        options,
         table_id: 0,
         version: 0,
     })?;
@@ -154,7 +154,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
     let stream = table.read(io_ctx, &source_plan.push_downs).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     // integer parse error will result to Null value
-    assert_eq!(false, result.is_err());
+    assert!(!result.is_err());
     assert_blocks_sorted_eq(
         vec![
             "+---------+---------+---------+---------+",

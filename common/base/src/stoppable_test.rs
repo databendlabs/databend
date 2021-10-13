@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use common_tracing::tracing;
-use tokio;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;

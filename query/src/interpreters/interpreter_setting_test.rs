@@ -34,7 +34,7 @@ async fn test_setting_interpreter() -> Result<()> {
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
     } else {
-        assert!(false)
+        panic!()
     }
 
     Ok(())
@@ -52,7 +52,7 @@ async fn test_setting_interpreter_error() -> Result<()> {
             let expect = "Code: 20, displayText = Unknown variable: \"xx\".";
             assert_eq!(expect, format!("{}", e));
         } else {
-            assert!(false);
+            panic!();
         }
     }
 

@@ -35,7 +35,7 @@ fn test_take_random() -> Result<()> {
     let taker = df_bool_array.take_rand();
     assert_eq!(Some(true), taker.get(2));
     let unsafe_val = unsafe { taker.get_unchecked(3) };
-    assert_eq!(false, unsafe_val);
+    assert!(!unsafe_val);
 
     // Test ListArray
     let mut builder = get_list_builder(&DataType::UInt16, 12, 3);

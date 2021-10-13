@@ -28,8 +28,8 @@ async fn test_single_cluster_discovery() -> Result<()> {
 
     let discover_cluster_nodes = discover_cluster.get_nodes();
     assert_eq!(discover_cluster_nodes.len(), 1);
-    assert_eq!(discover_cluster.is_empty(), true);
-    assert_eq!(discover_cluster.is_local(&discover_cluster_nodes[0]), true);
+    assert!(discover_cluster.is_empty());
+    assert!(discover_cluster.is_local(&discover_cluster_nodes[0]));
     Ok(())
 }
 
