@@ -17,18 +17,19 @@ use std::fs;
 
 use comfy_table::Cell;
 use comfy_table::Color;
+use comfy_table::Row;
 use comfy_table::Table;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
 use httpmock::MockServer;
-use tempfile::tempdir;
-use comfy_table::Row;
 use metasrv::configs::Config as MetaConfig;
+use tempfile::tempdir;
 
 use crate::cmds::clusters::create::LocalBinaryPaths;
 use crate::cmds::clusters::view::HealthStatus;
 use crate::cmds::clusters::view::ViewCommand;
-use crate::cmds::status::{LocalQueryConfig, LocalMetaConfig};
+use crate::cmds::status::LocalMetaConfig;
+use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
 use crate::cmds::CreateCommand;
 use crate::cmds::Status;
@@ -61,7 +62,15 @@ fn test_build_table() -> Result<()> {
             pid: Some(123),
             path: Some("./".to_string()),
             log_dir: Some("./".to_string()),
-        }
+        };
+        meta_config.config.admin_api_address = format!("127.0.0.1:{}", server.port());
+        Status::save_local_config(
+            &mut status,
+            "meta".parse().unwrap(),
+            "meta_1.yaml".to_string(),
+            &meta_config,
+        )
+        .unwrap();
         let mut query_config = LocalQueryConfig {
             config: QueryConfig::default(),
             pid: Some(123),
@@ -80,7 +89,8 @@ fn test_build_table() -> Result<()> {
         status.version = "build_table".to_string();
         status.write()?;
         let table = ViewCommand::build_local_table(&status);
-        let configs = status.get_local_query_configs();
+        let (meta_file, _) = status.get_local_meta_config().unwrap();
+        let query_configs = status.get_local_query_configs();
         assert!(table.is_ok());
         let table = table.unwrap();
         let mut expected = Table::new();
@@ -94,11 +104,18 @@ fn test_build_table() -> Result<()> {
             Cell::new("Config"),
         ]);
         expected.add_row(vec![
+            Cell::new("meta_1"),
+            Cell::new("local"),
+            Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
+            Cell::new("disabled"),
+            Cell::new(format!("{}", meta_file)),
+        ]);
+        expected.add_row(vec![
             Cell::new("query_1"),
             Cell::new("local"),
             Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
             Cell::new("disabled"),
-            Cell::new(format!("{}", configs.get(0).unwrap().0.clone())),
+            Cell::new(format!("{}", query_configs.get(0).unwrap().0.clone())),
         ]);
         assert_eq!(table.to_string(), expected.to_string())
     }
