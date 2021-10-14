@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::cell::RefCell;
-use std::fs;
 
 use comfy_table::Cell;
 use comfy_table::Color;
-use comfy_table::Row;
 use comfy_table::Table;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
@@ -25,13 +23,11 @@ use httpmock::MockServer;
 use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
-use crate::cmds::clusters::create::LocalBinaryPaths;
 use crate::cmds::clusters::view::HealthStatus;
 use crate::cmds::clusters::view::ViewCommand;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
-use crate::cmds::CreateCommand;
 use crate::cmds::Status;
 use crate::error::Result;
 
@@ -56,7 +52,7 @@ fn test_build_table() -> Result<()> {
             .body("health");
     });
     {
-        let mut status = Status::read(conf.clone())?;
+        let mut status = Status::read(conf)?;
         let mut meta_config = LocalMetaConfig {
             config: MetaConfig::default(),
             pid: Some(123),
@@ -108,14 +104,14 @@ fn test_build_table() -> Result<()> {
             Cell::new("local"),
             Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
             Cell::new("disabled"),
-            Cell::new(format!("{}", meta_file)),
+            Cell::new(meta_file),
         ]);
         expected.add_row(vec![
             Cell::new("query_1"),
             Cell::new("local"),
             Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
             Cell::new("disabled"),
-            Cell::new(format!("{}", query_configs.get(0).unwrap().0.clone())),
+            Cell::new(query_configs.get(0).unwrap().0.clone()),
         ]);
         assert_eq!(table.to_string(), expected.to_string())
     }
