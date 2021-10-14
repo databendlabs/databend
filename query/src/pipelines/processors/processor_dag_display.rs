@@ -6,6 +6,7 @@ use petgraph::stable_graph::NodeIndex;
 use petgraph::Direction;
 
 use crate::pipelines::processors::processor_dag::ProcessorsDAG;
+use petgraph::dot::{Config, Dot};
 
 impl ProcessorsDAG {
     pub fn display_indent(&self) -> impl Display + '_ {
@@ -17,7 +18,11 @@ impl ProcessorsDAG {
 
         impl<'a> Display for GraphvizDisplayWrap<'a> {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{:?}", self.0)
+                write!(
+                    f,
+                    "{:?}",
+                    Dot::with_config(&self.0.graph, &[Config::EdgeNoLabel])
+                )
             }
         }
 

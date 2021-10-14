@@ -33,7 +33,7 @@ use futures::Future;
 use futures::FutureExt;
 use futures::StreamExt;
 
-use crate::pipelines::processors::EmptyProcessor;
+use crate::pipelines::processors::{EmptyProcessor, ProcessorsDAGBuilder};
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::pipelines::processors::Processor;

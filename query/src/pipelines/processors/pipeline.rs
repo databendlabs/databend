@@ -34,27 +34,6 @@ impl Pipeline {
         Pipeline { ctx, pipes: vec![] }
     }
 
-    /// Reset the pipeline.
-    pub fn reset(&mut self) {
-        self.pipes.clear();
-    }
-
-    /// The number of pipes.
-    pub fn nums(&self) -> usize {
-        match self.pipes.last() {
-            None => 0,
-            Some(v) => v.nums(),
-        }
-    }
-
-    pub fn pipes(&self) -> Vec<Pipe> {
-        self.pipes.clone()
-    }
-
-    pub fn pipe_by_index(&self, index: usize) -> Pipe {
-        self.pipes[index].clone()
-    }
-
     /// Last pipe of the pipeline.
     pub fn last_pipe(&self) -> Result<&Pipe> {
         self.pipes

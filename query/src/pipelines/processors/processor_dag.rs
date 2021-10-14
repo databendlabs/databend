@@ -1,10 +1,8 @@
-use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
+use common_planners::{AggregatorFinalPlan, SubQueriesSetPlan};
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
@@ -17,15 +15,13 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::SelectPlan;
 use common_planners::SortPlan;
-use petgraph::dot::Config;
-use petgraph::dot::Dot;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 
 use crate::api::FlightTicket;
 use crate::pipelines::processors::processor::ProcessorRef;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::AggregatorFinalTransform;
+use crate::pipelines::transforms::{AggregatorFinalTransform, SubQueriesPuller, CreateSetsTransform};
 use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::ExpressionTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
@@ -51,16 +47,6 @@ impl ProcessorsDAG {
     }
 }
 
-impl Debug for ProcessorsDAG {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}",
-            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
-        )
-    }
-}
-
 // TODO(Winter): import distributed processors in DAG. We can use edge to describe them. e.g. enum EdgeAttrs { Local, Remote }
 pub struct ProcessorsDAGBuilder {
     ctx: DatabendQueryContextRef,
@@ -69,9 +55,10 @@ pub struct ProcessorsDAGBuilder {
 
     // TODO(Winter): remove this.
     limit: Option<usize>,
-    after_order_by: bool,
+    focus_data_order: bool,
 }
 
+// Visit for query PlanNode
 impl ProcessorsDAGBuilder {
     pub fn create(ctx: DatabendQueryContextRef) -> ProcessorsDAGBuilder {
         ProcessorsDAGBuilder {
@@ -79,7 +66,7 @@ impl ProcessorsDAGBuilder {
             graph: Default::default(),
             top_processors: vec![],
             limit: None,
-            after_order_by: false,
+            focus_data_order: false,
         }
     }
 
@@ -102,7 +89,7 @@ impl ProcessorsDAGBuilder {
             PlanNode::Limit(node) => self.visit_limit(node),
             PlanNode::LimitBy(node) => self.visit_limit_by(node),
             PlanNode::ReadSource(node) => self.visit_read_data_source(node),
-            // PlanNode::SubQueryExpression(node) => self.visit_create_sets(node),
+            PlanNode::SubQueryExpression(node) => self.visit_create_sets(node),
             other => Result::Err(ErrorCode::UnknownPlan(format!(
                 "Build processors DAG from the plan node unsupported:{:?}",
                 other.name()
@@ -120,7 +107,7 @@ impl ProcessorsDAGBuilder {
         self.visit_sort_for_partial(plan)?;
         self.visit_sort_for_merge_with_single_thread(plan)?;
         self.visit_sort_for_merge_with_multiple_threads(plan)?;
-        self.after_order_by = true;
+        self.focus_data_order = true;
         Ok(())
     }
 
@@ -285,6 +272,23 @@ impl ProcessorsDAGBuilder {
         }
     }
 
+    fn visit_create_sets(&mut self, plan: &SubQueriesSetPlan) -> Result<()> {
+        self.visit(&*plan.input)?;
+
+        let schema = plan.schema();
+        let context = self.ctx.clone();
+        let expressions = plan.expressions.clone();
+        let sub_queries_puller = SubQueriesPuller::create(context.clone(), expressions);
+
+        self.add_auto_graph_node(move || {
+            Ok(Arc::new(CreateSetsTransform::try_create(
+                context.clone(),
+                schema.clone(),
+                sub_queries_puller.clone(),
+            )?))
+        })
+    }
+
     fn visit_remote_source(&mut self, plan: &RemotePlan) -> Result<()> {
         if !self.top_processors.is_empty() {
             return Err(ErrorCode::LogicalError(
@@ -367,7 +371,7 @@ impl ProcessorsDAGBuilder {
     }
 
     fn add_auto_graph_node<F: Fn() -> Result<ProcessorRef>>(&mut self, f: F) -> Result<()> {
-        if self.after_order_by {
+        if self.focus_data_order {
             return self.add_simple_graph_node(f);
         }
 
