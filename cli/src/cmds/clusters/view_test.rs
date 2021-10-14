@@ -52,7 +52,7 @@ fn test_build_table() -> Result<()> {
             .body("health");
     });
     {
-        let mut status = Status::read(conf.clone())?;
+        let mut status = Status::read(conf)?;
         let mut meta_config = LocalMetaConfig {
             config: MetaConfig::default(),
             pid: Some(123),
@@ -104,14 +104,14 @@ fn test_build_table() -> Result<()> {
             Cell::new("local"),
             Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
             Cell::new("disabled"),
-            Cell::new(format!("{}", meta_file)),
+            Cell::new(meta_file),
         ]);
         expected.add_row(vec![
             Cell::new("query_1"),
             Cell::new("local"),
             Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
             Cell::new("disabled"),
-            Cell::new(format!("{}", query_configs.get(0).unwrap().0.clone())),
+            Cell::new(query_configs.get(0).unwrap().0.clone()),
         ]);
         assert_eq!(table.to_string(), expected.to_string())
     }
