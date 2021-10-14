@@ -949,23 +949,6 @@ impl MetaNode {
         Ok(())
     }
 
-    // get a file from local meta state, most business logic without strong consistency requirement should use this to access meta.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_file(&self, key: &str) -> common_exception::Result<Option<String>> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_file(key)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn list_files(&self, prefix: &str) -> common_exception::Result<Vec<String>> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.list_files(prefix)
-    }
-
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
         // inconsistent get: from local state machine

@@ -26,10 +26,8 @@ use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
-use common_meta_types::Node;
 use common_meta_types::Operation;
 use common_meta_types::SeqValue;
-use common_meta_types::Slot;
 use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -39,117 +37,9 @@ use crate::state_machine::testing::pretty_snapshot;
 use crate::state_machine::testing::pretty_snapshot_iter;
 use crate::state_machine::testing::snapshot_logs;
 use crate::state_machine::AppliedState;
-use crate::state_machine::Replication;
 use crate::state_machine::SerializableSnapshot;
 use crate::state_machine::StateMachine;
 use crate::testing::new_raft_test_context;
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
-    // - Create a state machine with 3 node 1,3,5.
-    // - Assert that expected number of nodes are assigned to a slot.
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
-    sm.nodes()
-        .append(&[
-            (1, Node::default()),
-            (3, Node::default()),
-            (5, Node::default()),
-        ])
-        .await?;
-
-    sm.slots = vec![Slot::default(), Slot::default(), Slot::default()];
-    sm.replication = Replication::Mirror(3);
-
-    // assign all node to slot 2
-    sm.assign_rand_nodes_to_slot(2)?;
-    assert_eq!(sm.slots[2].node_ids, vec![1, 3, 5]);
-
-    // assign all node again to slot 2
-    sm.assign_rand_nodes_to_slot(2)?;
-    assert_eq!(sm.slots[2].node_ids, vec![1, 3, 5]);
-
-    // assign 1 node again to slot 1
-    sm.replication = Replication::Mirror(1);
-    sm.assign_rand_nodes_to_slot(1)?;
-    assert_eq!(1, sm.slots[1].node_ids.len());
-
-    let id = sm.slots[1].node_ids[0];
-    assert!(id == 1 || id == 3 || id == 5);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_init_slots() -> anyhow::Result<()> {
-    // - Create a state machine with 3 node 1,3,5.
-    // - Initialize all slots.
-    // - Assert slot states.
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
-    sm.nodes()
-        .append(&[
-            (1, Node::default()),
-            (3, Node::default()),
-            (5, Node::default()),
-        ])
-        .await?;
-
-    sm.slots = vec![Slot::default(), Slot::default(), Slot::default()];
-    sm.replication = Replication::Mirror(1);
-
-    sm.init_slots()?;
-    for slot in sm.slots.iter() {
-        assert_eq!(1, slot.node_ids.len());
-
-        let id = slot.node_ids[0];
-        assert!(id == 1 || id == 3 || id == 5);
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_builder() -> anyhow::Result<()> {
-    // - Assert default state machine builder
-    // - Assert customized state machine builder
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    {
-        let tc = new_raft_test_context();
-        let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-        assert_eq!(3, sm.slots.len());
-        let Replication::Mirror(n) = sm.replication;
-        assert_eq!(1, n);
-    }
-
-    {
-        let tc = new_raft_test_context();
-        let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-        let sm = StateMachine::initializer()
-            .slots(5)
-            .mirror_replication(7)
-            .init(sm);
-
-        assert_eq!(5, sm.slots.len());
-        let Replication::Mirror(n) = sm.replication;
-        assert_eq!(7, n);
-    }
-
-    Ok(())
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {

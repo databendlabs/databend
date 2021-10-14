@@ -66,21 +66,15 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<GetReq>,
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
+        // TODO(xp): this method should be removed along with DFS
+
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();
-        let resp = self.meta_node.get_file(&req.key).await?;
-        let rst = match resp {
-            Some(v) => GetReply {
-                ok: true,
-                key: req.key,
-                value: v,
-            },
-            None => GetReply {
-                ok: false,
-                key: req.key,
-                value: "".into(),
-            },
+        let rst = GetReply {
+            ok: false,
+            key: req.key,
+            value: "".into(),
         };
 
         Ok(tonic::Response::new(rst))
