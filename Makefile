@@ -12,7 +12,7 @@ fmt:
 
 lint:
 	cargo fmt
-	cargo clippy -- -D warnings
+	cargo clippy --tests -- -D warnings
 
 miri:
 	cargo miri setup
