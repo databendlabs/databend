@@ -15,12 +15,12 @@
 use std::process::Command;
 
 use assert_cmd::cargo::CommandCargoExt;
-use databend_cli::error::CliError;
+use bendctl::error::CliError;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
 fn init_fusectl() -> Command {
-    let mut cmd = Command::cargo_bin("databend-cli").unwrap();
+    let mut cmd = Command::cargo_bin("bendctl").unwrap();
     cmd.current_dir("/tmp");
     cmd
 }

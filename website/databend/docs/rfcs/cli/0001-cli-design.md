@@ -2,7 +2,7 @@
 
 ## Background
 
-`databend-cli` is a command-line tool for creating, listing, logging,
+`bendctl` is a command-line tool for creating, listing, logging,
 deleting databend running instances on local or
 on cloud.
 It also supports to port forward webUI, monitoring dashboard on local
@@ -25,7 +25,7 @@ and run SQL query from command line
 
 ## Installation
 
-Use single line install script to install `databend-cli` on local machine
+Use single line install script to install `bendctl` on local machine
 
 ```bash
 curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/main/scripts/installer/install.sh | bash
@@ -38,7 +38,7 @@ curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/main/scripts/i
 Create, Configure and switch to a databend cluster using the following command:
 
 ```bash
-databend-cli cluster create --profile=<databend profile>
+bendctl cluster create --profile=<databend profile>
 ```
 
 Support three kinds of profile in alpha stage,
@@ -53,14 +53,14 @@ For example:
 Run databend instance on local and setup the api address, version, tls for it
 
 ```bash
-databend-cli cluster create --profile=local --set local.mysql_port=3307 --set local.http_address=127.0.0.1:7070 --set local.version=v0.4.88-nightly --set local.tls_key=<key file location>
+bendctl cluster create --profile=local --set local.mysql_port=3307 --set local.http_address=127.0.0.1:7070 --set local.version=v0.4.88-nightly --set local.tls_key=<key file location>
 --set local.tls_cert=<cert file location --set local.ca_cert=<ca cert location>
 ```
 
 Create and configure databend cluster through toml file or yaml file
 
 ```bash
-databend-cli cluster create -f cluster_configuration.toml
+bendctl cluster create -f cluster_configuration.toml
 ```
 
 ### Cluster List
@@ -68,7 +68,7 @@ databend-cli cluster create -f cluster_configuration.toml
 List all clusters managed by the command line (Name with * in the cluster used in current session)
 
 ```bash
-databend-cli cluster list
+bendctl cluster list
 ```
 
 ```bash
@@ -85,7 +85,7 @@ For example:
 In cluster profile:
 
 ```bash
-databend-cli cluster view
+bendctl cluster view
 | NAME | CLUSTER | COMPONENT | STATUS | TLS |
 | query-1 | GKE | databend-query | running | enabled |
 | query-2 | GKE | databend-query | running | enabled |
@@ -97,7 +97,7 @@ databend-cli cluster view
 Check on disk utilization
 
 ```bash
-databend-cli cluster df
+bendctl cluster df
 | NAME | COMPONENT | USED | ALWAYABLE | LOCATION |
 | local-disk-1 | Block| 10Gi | 90Gi | /mnt/databend-dfs |
 | s3-disk | Object| 100 Gi | 1000Gi | s3://bucket-1/mnt/databend-dfs |
@@ -108,7 +108,7 @@ databend-cli cluster df
 For local profile, pids in running instances shall be killed, and for cluster profile,  computing pods would be deleted, can add some flags to delete disk resources as well( RBAC needed)
 
 ```bash
-databend-cli cluster delete
+bendctl cluster delete
 ```
 
 ### Cluster log
@@ -118,19 +118,19 @@ Show logs in current running instance
 show all databend-query logs
 
 ```bash
-databend-cli cluster log --component=query --all
+bendctl cluster log --component=query --all
 ```
 
 The command above would show all databend-dfs logs
 
 ```bash
-databend-cli cluster log --component=dfs --all
+bendctl cluster log --component=dfs --all
 ```
 
 The command above would show databend operator logs
 
 ```bash
-databend-cli cluster log --component=operator
+bendctl cluster log --component=operator
 ```
 
 ### Cluster add
@@ -140,7 +140,7 @@ Add component to current storage
 The following command add two query nodes, each need 2 cpu resource
 
 ```bash
-databend-cli cluster add --component query --num 2 --cpu 2 --namespace=<operator namespace>
+bendctl cluster add --component query --num 2 --cpu 2 --namespace=<operator namespace>
 ```
 
 ### Cluster use
@@ -149,7 +149,7 @@ Switch to another cluster
 The Command will switch to another cluster run on GKE cloud
 
 ```bash
-databend-cli cluster use --name cloud-instance-1 --cluster GKE --kubeconfig ~/.kube/config --kubecontext gke-cloud-1
+bendctl cluster use --name cloud-instance-1 --cluster GKE --kubeconfig ~/.kube/config --kubecontext gke-cloud-1
 ```
 
 ### Cluster Check
@@ -159,13 +159,13 @@ Check whether current configuration can be deployed on given cluster
 It will check on port availability, and storage resource availability for deployment
 
 ```bash
-databend-cli cluster check --profile=local
+bendctl cluster check --profile=local
 ```
 
 It will check on cloud resources, whether compute nodes could be scheduled on given cloud platform, whether TLS configured etc
 
 ```bash
-databend-cli cluster check -f deploy.yaml
+bendctl cluster check -f deploy.yaml
 ```
 
 ### Cluster Analyze
@@ -173,7 +173,7 @@ databend-cli cluster check -f deploy.yaml
 Analyze and troubleshooting on given configuration, difference between analyze and check is that analyze is troubleshooting on a running cluster, and check mainly used for pre-fight check
 
 ```bash
-databend-cli cluster analyze --profile=local
+bendctl cluster analyze --profile=local
 ```
 
 ### Cluster Update
@@ -181,7 +181,7 @@ databend-cli cluster analyze --profile=local
 Update cluster to a newer version
 
 ```bash
-databend-cli cluster update v0.5.1-nightly
+bendctl cluster update v0.5.1-nightly
 ```
 
 ### Query
@@ -189,7 +189,7 @@ databend-cli cluster update v0.5.1-nightly
 Run query using selected client
 
 ```bash
-databend-cli query 'SELECT * FROM TABLE1' --client=mysql
+bendctl query 'SELECT * FROM TABLE1' --client=mysql
 ```
 
 

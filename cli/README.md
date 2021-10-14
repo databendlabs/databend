@@ -17,7 +17,7 @@ $ make cli-install
 ```bash
 $ # make sure bash-completion installed, otherwise follow the link to install https://github.com/scop/bash-completion#installation
 $ type _init_completion
-$ databend-cli completion bash > /tmp/databend-cli.bash && sudo mv /tmp/databend-cli.bash /usr/share/bash-completion/completions/databend-cli.bash
+$ bendctl completion bash > /tmp/bendctl.bash && sudo mv /tmp/bendctl.bash  /usr/share/bash-completion/completions/bendctl.bash 
 $ source /usr/share/bash-completion/bash_completion
 $ # you may need to open another terminal to check whether completion works
 ```
@@ -25,14 +25,14 @@ $ # you may need to open another terminal to check whether completion works
 **zsh auto-completion on Linux after install (optional)**
 please add the following line to `~/.zshrc`
 ```bash
-source <(databend-cli completion zsh)
+source <(bendctl completion zsh)
 ```
 
 ``````
 
 Usage:
 ``` 
-$ ./target/release/databend-cli 
+$ ./target/release/bendctl
 [test] > #version
 #version
 [test] > version

@@ -40,7 +40,7 @@ jobs:
       - name: Pack binaries
         run: |
           tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-          tar -C ./target/${{ matrix.config.target }}/release -czvf databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-cli
+          tar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
 
       - name: Release databend
         uses: svenstaro/upload-release-action@v2
@@ -53,12 +53,12 @@ jobs:
           overwrite: true
           body: ${{ steps.changelog_reader.outputs.log_entry }}
 
-      - name: Release databend-cli
+      - name: Release bendctl
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
-          asset_name: databend-cli-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
+          file: bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true

@@ -38,7 +38,7 @@ pub struct Config {
 
 impl Config {
     pub(crate) fn build_cli() -> App<'static> {
-        App::new("databend-cli")
+        App::new("bendctl")
             .setting(AppSettings::ColoredHelp)
             .arg(
                 Arg::new("group")
