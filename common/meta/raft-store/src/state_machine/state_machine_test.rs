@@ -22,7 +22,6 @@ use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_base::tokio;
 use common_meta_types::Cmd;
-use common_meta_types::Database;
 use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
@@ -221,28 +220,20 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
     struct T {
         name: &'static str,
-        prev: Option<Database>,
-        result: Option<Database>,
+        prev: Option<u64>,
+        result: Option<u64>,
     }
 
     fn case(name: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
-        let prev = prev.map(|id| Database {
-            database_id: id,
-            ..Default::default()
-        });
-        let result = result.map(|id| Database {
-            database_id: id,
-            ..Default::default()
-        });
         T { name, prev, result }
     }
 
     let cases: Vec<T> = vec![
         case("foo", None, Some(1)),
         case("foo", Some(1), Some(1)),
-        case("bar", None, Some(2)),
-        case("bar", Some(2), Some(2)),
-        case("wow", None, Some(3)),
+        case("bar", None, Some(3)),
+        case("bar", Some(3), Some(3)),
+        case("wow", None, Some(5)),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -251,34 +242,36 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let resp = m
             .apply_cmd(&Cmd::CreateDatabase {
                 name: c.name.to_string(),
-                if_not_exists: true,
                 db: Default::default(),
             })
             .await?;
-        assert_eq!(
-            AppliedState::DataBase {
-                prev: c.prev.clone(),
-                result: c.result.clone(),
-            },
-            resp,
-            "{}-th",
-            i
-        );
+
+        let (prev, result) = match resp {
+            AppliedState::DataBase { prev, result } => (
+                prev.map(|(_seq, kv_value)| kv_value.value.database_id),
+                result.map(|(_seq, kv_value)| kv_value.value.database_id),
+            ),
+            _ => {
+                panic!("expect AppliedState::Database")
+            }
+        };
+        assert_eq!(c.prev, prev, "{}-th", i);
+        assert_eq!(c.result, result, "{}-th", i);
 
         // get
 
-        let want = match (&c.prev, &c.result) {
-            (Some(ref a), _) => a.database_id,
-            (_, Some(ref b)) => b.database_id,
+        let want = match (&prev, &result) {
+            (Some(ref a), _) => a,
+            (_, Some(ref b)) => b,
             _ => {
                 panic!("both none");
             }
         };
 
         let got = m
-            .get_database(c.name)
-            .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name));
-        assert_eq!(want, got.unwrap().database_id);
+            .get_database(c.name)?
+            .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name))?;
+        assert_eq!(*want, got.1.value.database_id);
     }
 
     Ok(())

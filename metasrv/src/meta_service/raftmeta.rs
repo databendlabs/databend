@@ -50,7 +50,7 @@ use common_meta_raft_store::state_machine::Snapshot;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_types::Cmd;
-use common_meta_types::Database;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::Node;
@@ -1001,7 +1001,10 @@ impl MetaNode {
     /// Get a database from local meta state machine.
     /// The returned value may not be the latest written.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_database(&self, name: &str) -> Option<Database> {
+    pub async fn get_database(
+        &self,
+        name: &str,
+    ) -> Result<Option<SeqValue<KVValue<DatabaseInfo>>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -1009,12 +1012,19 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_databases(&self) -> Vec<(String, Database)> {
+    pub async fn lookup_table_id(&self, db_id: u64, name: &str) -> Option<u64> {
+        // inconsistent get: from local state machine
+
         let sm = self.sto.state_machine.read().await;
+        let res = sm.table_lookup.get(&(db_id, name.to_string()));
+        res.copied()
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_databases(&self) -> Result<Vec<(String, DatabaseInfo)>, ErrorCode> {
+        let sm = self.sto.state_machine.read().await;
+
         sm.get_databases()
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect::<Vec<_>>()
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1023,18 +1033,22 @@ impl MetaNode {
         db_name: &str,
     ) -> common_exception::Result<Vec<(u64, String, Table)>> {
         // inconsistent get: from local state machine
+
         let sm = self.sto.state_machine.read().await;
-        if let Some(db) = sm.get_database(db_name) {
-            let tbls = db
-                .tables
-                .iter()
-                .try_fold(Vec::new(), |mut acc, (tbl_name, tbl_id)| {
-                    let tbl = sm.tables.get(tbl_id).ok_or_else(|| {
-                        ErrorCode::IllegalMetaState(format!(" table of id {}, not found", tbl_id))
+        if let Some(db) = sm.get_database(db_name)? {
+            let db_id = db.1.value.database_id;
+
+            let mut tbls = vec![];
+            for ((db_id2, table_name), table_id) in sm.table_lookup.iter() {
+                if *db_id2 == db_id {
+                    let table = sm.tables.get(table_id).ok_or_else(|| {
+                        ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
                     })?;
-                    acc.push((*tbl_id, tbl_name.to_string(), tbl.clone()));
-                    Ok::<_, ErrorCode>(acc)
-                })?;
+
+                    tbls.push((*table_id, table_name.clone(), table.clone()));
+                }
+            }
+
             Ok(tbls)
         } else {
             Err(ErrorCode::UnknownDatabase(format!(

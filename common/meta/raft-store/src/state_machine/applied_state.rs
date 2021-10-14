@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use async_raft::AppDataResponse;
-use common_meta_types::Database;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::KVValue;
 use common_meta_types::Node;
 use common_meta_types::SeqValue;
@@ -43,8 +43,8 @@ pub enum AppliedState {
     },
 
     DataBase {
-        prev: Option<Database>,
-        result: Option<Database>,
+        prev: Option<SeqValue<KVValue<DatabaseInfo>>>,
+        result: Option<SeqValue<KVValue<DatabaseInfo>>>,
     },
 
     Table {
@@ -102,8 +102,10 @@ impl From<(Option<Node>, Option<Node>)> for AppliedState {
     }
 }
 
-impl From<(Option<Database>, Option<Database>)> for AppliedState {
-    fn from(v: (Option<Database>, Option<Database>)) -> Self {
+type SeqDBInfo = SeqValue<KVValue<DatabaseInfo>>;
+
+impl From<(Option<SeqDBInfo>, Option<SeqDBInfo>)> for AppliedState {
+    fn from(v: (Option<SeqDBInfo>, Option<SeqDBInfo>)) -> Self {
         AppliedState::DataBase {
             prev: v.0,
             result: v.1,
