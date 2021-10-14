@@ -1244,7 +1244,7 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-meta-api",
- "common-meta-local-store",
+ "common-meta-embedded",
  "common-meta-types",
  "common-tracing",
  "lazy_static",
@@ -1263,6 +1263,23 @@ dependencies = [
  "common-meta-types",
  "common-planners",
  "futures",
+]
+
+[[package]]
+name = "common-meta-embedded"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-api",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-tracing",
+ "futures",
+ "pretty_assertions",
+ "tempfile",
 ]
 
 [[package]]
@@ -1294,23 +1311,6 @@ dependencies = [
  "tonic",
  "tonic-build",
  "trust-dns-resolver",
-]
-
-[[package]]
-name = "common-meta-local-store"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-base",
- "common-exception",
- "common-meta-api",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-tracing",
- "futures",
- "pretty_assertions",
- "tempfile",
 ]
 
 [[package]]
@@ -1848,8 +1848,8 @@ dependencies = [
  "common-io",
  "common-management",
  "common-meta-api",
+ "common-meta-embedded",
  "common-meta-flight",
- "common-meta-local-store",
  "common-meta-types",
  "common-planners",
  "common-streams",

@@ -48,7 +48,7 @@ impl MetaClientProvider {
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
         let local = self.conf.kv_service_config.address.is_empty();
         if local {
-            let client = common_meta_local_store::KV::new_temp().await?;
+            let client = common_meta_embedded::MetaEmbedded::new_temp().await?;
             Ok(Arc::new(client))
         } else {
             let client = MetaFlightClient::try_new(&self.conf).await?;
