@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,6 +23,7 @@ use common_cache::Cache;
 use common_cache::LruCache;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -43,7 +45,7 @@ pub struct RemoteCatalogBackend {
     rt: Arc<Runtime>,
     rpc_time_out: Option<Duration>,
     table_meta_cache: Arc<Mutex<TableInfoCache>>,
-    store_api_provider: Arc<MetaClientProvider>,
+    meta_api_provider: Arc<MetaClientProvider>,
 }
 
 impl RemoteCatalogBackend {
@@ -61,117 +63,81 @@ impl RemoteCatalogBackend {
             // TODO configuration
             rpc_time_out: timeout,
             table_meta_cache: Arc::new(Mutex::new(LruCache::new(100))),
-            store_api_provider: apis_provider,
+            meta_api_provider: apis_provider,
         }
+    }
+
+    fn block_on<F, T, ResFut>(&self, f: F) -> Result<T>
+    where
+        ResFut: Future<Output = Result<T>> + Send + 'static,
+        F: FnOnce(Arc<dyn MetaApi>) -> ResFut,
+        F: Send + Sync + 'static,
+        T: Send + Sync + 'static,
+    {
+        let cli_provider = self.meta_api_provider.clone();
+
+        let fut = async move {
+            let cli = cli_provider.try_get_meta_client().await?;
+            f(cli).await
+        };
+        // Double `?`: outer Result is from `wait_in` and the inner Result is from `f(cli)`.
+        let res = fut.wait_in(&self.rt, self.rpc_time_out)??;
+        Ok(res)
     }
 }
 
 impl CatalogBackend for RemoteCatalogBackend {
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        let cli_provider = self.store_api_provider.clone();
-        let fut = async move {
-            let cli = cli_provider.try_get_meta_client().await?;
-            cli.create_database(plan).await
-        };
-        let res = fut.wait_in(&self.rt, self.rpc_time_out)??;
-        Ok(res)
+        self.block_on(move |cli| async move { cli.create_database(plan).await })
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        let cli_provider = self.store_api_provider.clone();
-        let fut = async move {
-            let cli = cli_provider.try_get_meta_client().await?;
-            cli.drop_database(plan).await
-        };
-        let _res = fut.wait_in(&self.rt, self.rpc_time_out)??;
-        Ok(())
+        self.block_on(move |cli| async move { cli.drop_database(plan).await })
     }
 
     fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>> {
-        let cli_provider = self.store_api_provider.clone();
         let db_name = db_name.to_owned();
-        let fut = async move {
-            let client = cli_provider.try_get_meta_client().await?;
-            client.get_database(&db_name).await
-        };
-        let db = fut.wait_in(&self.rt, self.rpc_time_out)??;
-
-        Ok(db)
+        self.block_on(move |cli| async move { cli.get_database(&db_name).await })
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
-        let cli_provider = self.store_api_provider.clone();
-        let fut = async move {
-            let client = cli_provider.try_get_meta_client().await?;
-            client.get_databases().await
-        };
-        let res = fut.wait_in(&self.rt, self.rpc_time_out)??;
-        Ok(res)
+        self.block_on(move |cli| async move { cli.get_databases().await })
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
         // TODO validate plan by table engine first
-        let cli = self.store_api_provider.clone();
-        let fut = async move {
-            let client = cli.try_get_meta_client().await?;
-            client.create_table(plan).await
-        };
-        let res = fut.wait_in(&self.rt, self.rpc_time_out)??;
-        Ok(res)
+        self.block_on(move |cli| async move { cli.create_table(plan).await })
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        let cli = self.store_api_provider.clone();
-        let fut = async move {
-            let client = cli.try_get_meta_client().await?;
-            client.drop_table(plan.clone()).await
-        };
-        let _res = fut.wait_in(&self.rt, self.rpc_time_out)??;
-        Ok(())
+        self.block_on(move |cli| async move { cli.drop_table(plan).await })
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>> {
-        let cli_provider = self.store_api_provider.clone();
-        let tbl_name = table_name.to_string();
+        let table_name = table_name.to_string();
         let db_name = db_name.to_string();
-        let fut = async move {
-            let client = cli_provider.try_get_meta_client().await?;
-            client.get_table(&db_name, &tbl_name).await
-        };
-        let reply = fut.wait_in(&self.rt, self.rpc_time_out)??;
-
-        Ok(reply)
+        self.block_on(move |cli| async move { cli.get_table(&db_name, &table_name).await })
     }
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
-        let cli = self.store_api_provider.clone();
         let db_name = db_name.to_owned();
-        let fut = async move {
-            let client = cli.try_get_meta_client().await?;
-            client.get_tables(&db_name).await
-        };
-        let res = fut.wait_in(&self.rt, self.rpc_time_out)??;
-        Ok(res)
+        self.block_on(move |cli| async move { cli.get_tables(&db_name).await })
     }
 
     fn get_table_by_id(
         &self,
         table_id: MetaId,
-        table_version: Option<MetaVersion>,
+        version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>> {
-        if let Some(ver) = table_version {
+        if let Some(ver) = version {
             let mut cached = self.table_meta_cache.lock();
             if let Some(meta) = cached.get(&(table_id, ver)) {
                 return Ok(meta.clone());
             }
         }
 
-        let cli = self.store_api_provider.clone();
-        let fut = async move {
-            let client = cli.try_get_meta_client().await?;
-            client.get_table_by_id(table_id, table_version).await
-        };
-        let reply = fut.wait_in(&self.rt, self.rpc_time_out)??;
+        let reply =
+            self.block_on(move |cli| async move { cli.get_table_by_id(table_id, version).await })?;
 
         let mut cache = self.table_meta_cache.lock();
         // TODO version
