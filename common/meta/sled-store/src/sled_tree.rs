@@ -119,7 +119,7 @@ impl SledTree {
             })
             .map_err_to_code(ErrorCode::MetaStoreDamaged, mes)?;
 
-        self.flush_async(true).await?;
+        self.flush(true).await?;
 
         let value = match res {
             None => None,
@@ -183,7 +183,7 @@ impl SledTree {
             .remove(KV::serialize_key(key)?)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || format!("removed: {}", key,))?;
 
-        self.flush_async(flush).await?;
+        self.flush(flush).await?;
 
         let removed = match removed {
             Some(x) => Some(KV::deserialize_value(x)?),
@@ -220,7 +220,7 @@ impl SledTree {
                 format!("batch remove: {}", range_mes,)
             })?;
 
-        self.flush_async(flush).await?;
+        self.flush(flush).await?;
 
         Ok(())
     }
@@ -365,7 +365,7 @@ impl SledTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append")?;
 
-        self.flush_async(true).await?;
+        self.flush(true).await?;
 
         Ok(())
     }
@@ -393,7 +393,7 @@ impl SledTree {
             .apply_batch(batch)
             .map_err_to_code(ErrorCode::MetaStoreDamaged, || "batch append_values")?;
 
-        self.flush_async(true).await?;
+        self.flush(true).await?;
 
         Ok(())
     }
@@ -424,7 +424,7 @@ impl SledTree {
             Some(x) => Some(KV::deserialize_value(x)?),
         };
 
-        self.flush_async(true).await?;
+        self.flush(true).await?;
 
         Ok(prev)
     }
@@ -456,11 +456,10 @@ impl SledTree {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn flush_async(&self, flush: bool) -> common_exception::Result<()> {
+    async fn flush(&self, flush: bool) -> common_exception::Result<()> {
         if flush && self.sync {
             self.tree
-                .flush_async()
-                .await
+                .flush()
                 .map_err_to_code(ErrorCode::MetaStoreDamaged, || "flush sled-tree")?;
         }
         Ok(())
