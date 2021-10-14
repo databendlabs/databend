@@ -22,6 +22,7 @@ use clap::ArgMatches;
 use crate::cmds::ClusterCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
+use crate::cmds::queries::query::QueryCommand;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -91,6 +92,7 @@ impl Config {
             .subcommand(PackageCommand::generate())
             .subcommand(VersionCommand::generate())
             .subcommand(ClusterCommand::generate())
+            .subcommand( QueryCommand::generate())
     }
     pub fn create() -> Self {
         let clap = RefCell::new(Config::build_cli().get_matches());

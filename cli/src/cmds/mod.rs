@@ -26,6 +26,7 @@ mod processor;
 mod status;
 mod versions;
 mod writer;
+mod queries;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;

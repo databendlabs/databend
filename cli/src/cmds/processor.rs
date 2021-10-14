@@ -34,6 +34,7 @@ use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
+use crate::cmds::queries::query::QueryCommand;
 
 pub struct Processor {
     env: Env,
@@ -53,6 +54,8 @@ impl Processor {
             Box::new(VersionCommand::create()),
             Box::new(CommentCommand::create()),
             Box::new(PackageCommand::create(conf.clone())),
+            Box::new(QueryCommand::create(conf.clone())),
+            Box::new(ClusterCommand::create(conf.clone())),
         ];
 
         let mut commands: Vec<Box<dyn Command>> = sub_commands.clone();
@@ -94,6 +97,15 @@ impl Processor {
                         .into_inner()
                         .subcommand_matches("cluster"),
                 );
+            }
+            Some("query") => {
+                let cmd = QueryCommand::create(self.env.conf.clone());
+                cmd.exec_match(&mut writer,                     self.env
+                    .conf
+                    .clone()
+                    .clap
+                    .into_inner()
+                    .subcommand_matches("query"))
             }
             Some("completion") => {
                 if let Some(generator) = self
