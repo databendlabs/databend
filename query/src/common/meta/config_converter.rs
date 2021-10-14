@@ -44,6 +44,7 @@ impl From<&Config> for MetaFlightClientConf {
             kv_service_config: meta_config.clone(),
             // copy meta config from query config
             meta_service_config: meta_config,
+            client_timeout_in_second: conf.meta.meta_client_timeout_in_second,
         }
     }
 }

@@ -14,6 +14,7 @@
 //
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_exception::Result;
 use common_meta_api::KVApi;
@@ -40,7 +41,8 @@ impl MetaClientProvider {
 
     /// Get meta async client, trait is defined in MetaApi.
     pub async fn try_get_meta_client(&self) -> Result<Arc<dyn MetaApi>> {
-        let client = MetaFlightClient::try_new(&self.conf).await?;
+        let mut client = MetaFlightClient::try_new(&self.conf).await?;
+        client.set_timeout(Duration::from_secs(self.conf.client_timeout_in_second));
         Ok(Arc::new(client))
     }
 
@@ -51,7 +53,8 @@ impl MetaClientProvider {
             let client = common_meta_local_store::KV::new_temp().await?;
             Ok(Arc::new(client))
         } else {
-            let client = MetaFlightClient::try_new(&self.conf).await?;
+            let mut client = MetaFlightClient::try_new(&self.conf).await?;
+            client.set_timeout(Duration::from_secs(self.conf.client_timeout_in_second));
             Ok(Arc::new(client))
         }
     }
