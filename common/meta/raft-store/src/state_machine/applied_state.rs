@@ -43,8 +43,8 @@ pub enum AppliedState {
     },
 
     DataBase {
-        prev: Option<SeqValue<KVValue<DatabaseInfo>>>,
-        result: Option<SeqValue<KVValue<DatabaseInfo>>>,
+        prev: Option<SeqDBInfo>,
+        result: Option<SeqDBInfo>,
     },
 
     Table {
