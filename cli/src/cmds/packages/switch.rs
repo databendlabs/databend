@@ -72,7 +72,7 @@ impl SwitchCommand {
                     list.exec_match(writer, args)?;
                     writer.write_err(
                         format!(
-                            "Use command databend-cli package fetch {} to retrieve this version",
+                            "Use command bendctl package fetch {} to retrieve this version",
                             current_tag
                         )
                         .as_str(),

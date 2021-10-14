@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_cli::cmds::Config;
-use databend_cli::cmds::Processor;
-use databend_cli::error::Result;
+use bendctl::cmds::Config;
+use bendctl::cmds::Processor;
+use bendctl::error::Result;
 
 fn main() -> Result<()> {
     let conf = Config::create();

@@ -489,6 +489,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "bendctl"
+version = "0.1.0"
+dependencies = [
+ "assert_cmd",
+ "clap 3.0.0-beta.4",
+ "clap_generate",
+ "colored",
+ "comfy-table",
+ "common-building",
+ "common-meta-raft-store",
+ "databend-query",
+ "dirs",
+ "dyn-clone",
+ "flate2",
+ "httpmock",
+ "indicatif",
+ "lexical-util",
+ "libc",
+ "log",
+ "metasrv",
+ "nix 0.22.2",
+ "portpicker",
+ "predicates 2.0.3",
+ "pretty_assertions",
+ "reqwest",
+ "run_script",
+ "rustyline",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "structopt",
+ "structopt-toml",
+ "sysinfo 0.20.5",
+ "tar",
+ "tempfile",
+ "thiserror",
+ "ureq",
+]
+
+[[package]]
 name = "bigdecimal"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1773,47 +1814,6 @@ name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
-
-[[package]]
-name = "databend-cli"
-version = "0.1.0"
-dependencies = [
- "assert_cmd",
- "clap 3.0.0-beta.4",
- "clap_generate",
- "colored",
- "comfy-table",
- "common-building",
- "common-meta-raft-store",
- "databend-query",
- "dirs",
- "dyn-clone",
- "flate2",
- "httpmock",
- "indicatif",
- "lexical-util",
- "libc",
- "log",
- "metasrv",
- "nix 0.22.2",
- "portpicker",
- "predicates 2.0.3",
- "pretty_assertions",
- "reqwest",
- "run_script",
- "rustyline",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "structopt",
- "structopt-toml",
- "sysinfo 0.20.5",
- "tar",
- "tempfile",
- "thiserror",
- "ureq",
-]
 
 [[package]]
 name = "databend-query"
