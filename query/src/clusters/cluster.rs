@@ -53,8 +53,8 @@ pub struct ClusterDiscovery {
 
 impl ClusterDiscovery {
     async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        let store_api_provider = MetaClientProvider::new(cfg);
-        match store_api_provider.try_get_kv_client().await {
+        let meta_api_provider = MetaClientProvider::new(cfg);
+        match meta_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create namespace api).")),
         }
@@ -62,8 +62,8 @@ impl ClusterDiscovery {
 
     pub async fn create_global(cfg: Config) -> Result<ClusterDiscoveryRef> {
         let local_id = GlobalUniqName::unique();
-        let store_client = ClusterDiscovery::create_meta_client(&cfg).await?;
-        let (lift_time, provider) = Self::create_provider(&cfg, store_client)?;
+        let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
+        let (lift_time, provider) = Self::create_provider(&cfg, meta_client)?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: local_id.clone(),
