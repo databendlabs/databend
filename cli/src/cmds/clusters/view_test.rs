@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::cell::RefCell;
-use std::fs;
 
 use comfy_table::Cell;
 use comfy_table::Color;
-use comfy_table::Row;
 use comfy_table::Table;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
@@ -25,13 +23,11 @@ use httpmock::MockServer;
 use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
-use crate::cmds::clusters::create::LocalBinaryPaths;
 use crate::cmds::clusters::view::HealthStatus;
 use crate::cmds::clusters::view::ViewCommand;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
-use crate::cmds::CreateCommand;
 use crate::cmds::Status;
 use crate::error::Result;
 

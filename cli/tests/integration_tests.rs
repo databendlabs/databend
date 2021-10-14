@@ -15,7 +15,7 @@
 use std::process::Command;
 
 use assert_cmd::cargo::CommandCargoExt;
-use databend_cli::error::CliError;
+use bendctl::error::CliError;
 use predicates::prelude::*;
 use tempfile::TempDir;
 
