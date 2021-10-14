@@ -21,6 +21,7 @@ use std::time::Duration;
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_base::tokio;
 use common_base::tokio::sync::Mutex;
+use common_base::tokio::sync::Notify;
 use common_base::tokio::task::JoinHandle;
 use common_base::tokio::time::sleep as tokio_async_sleep;
 use common_base::GlobalUniqName;
@@ -31,6 +32,8 @@ use common_management::NamespaceApi;
 use common_management::NamespaceMgr;
 use common_meta_api::KVApi;
 use common_meta_types::NodeInfo;
+use futures::future::select;
+use futures::future::Either;
 use futures::Future;
 use rand::thread_rng;
 use rand::Rng;
@@ -49,7 +52,7 @@ pub struct ClusterDiscovery {
 }
 
 impl ClusterDiscovery {
-    async fn create_store_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
+    async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
         let store_api_provider = MetaClientProvider::new(cfg);
         match store_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
@@ -59,7 +62,7 @@ impl ClusterDiscovery {
 
     pub async fn create_global(cfg: Config) -> Result<ClusterDiscoveryRef> {
         let local_id = GlobalUniqName::unique();
-        let store_client = ClusterDiscovery::create_store_client(&cfg).await?;
+        let store_client = ClusterDiscovery::create_meta_client(&cfg).await?;
         let (lift_time, provider) = Self::create_provider(&cfg, store_client)?;
 
         Ok(Arc::new(ClusterDiscovery {
@@ -223,6 +226,7 @@ impl Cluster {
 struct ClusterHeartbeat {
     timeout: Duration,
     shutdown: Arc<AtomicBool>,
+    shutdown_notify: Arc<Notify>,
     namespace_api: Arc<dyn NamespaceApi>,
     shutdown_handler: Option<JoinHandle<()>>,
 }
@@ -233,27 +237,39 @@ impl ClusterHeartbeat {
             timeout,
             namespace_api,
             shutdown: Arc::new(AtomicBool::new(false)),
+            shutdown_notify: Arc::new(Notify::new()),
             shutdown_handler: None,
         }
     }
 
     fn heartbeat_loop(&self, local_id: String) -> impl Future<Output = ()> + 'static {
         let shutdown = self.shutdown.clone();
+        let shutdown_notify = self.shutdown_notify.clone();
         let namespace_api = self.namespace_api.clone();
         let sleep_range = self.heartbeat_interval(self.timeout);
 
         async move {
+            let mut shutdown_notified = Box::pin(shutdown_notify.notified());
+
             while !shutdown.load(Ordering::Relaxed) {
                 let mills = {
                     let mut rng = thread_rng();
                     rng.gen_range(sleep_range.clone())
                 };
 
-                tokio_async_sleep(Duration::from_millis(mills as u64)).await;
+                let sleep = tokio_async_sleep(Duration::from_millis(mills as u64));
 
-                let heartbeat = namespace_api.heartbeat(local_id.clone(), None);
-                if let Err(failure) = heartbeat.await {
-                    log::error!("Cluster namespace api heartbeat failure: {:?}", failure);
+                match select(shutdown_notified, Box::pin(sleep)).await {
+                    Either::Left((_, _)) => {
+                        break;
+                    }
+                    Either::Right((_, new_shutdown_notified)) => {
+                        shutdown_notified = new_shutdown_notified;
+                        let heartbeat = namespace_api.heartbeat(local_id.clone(), None);
+                        if let Err(failure) = heartbeat.await {
+                            log::error!("Cluster namespace api heartbeat failure: {:?}", failure);
+                        }
+                    }
                 }
             }
         }
@@ -270,6 +286,7 @@ impl ClusterHeartbeat {
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(shutdown_handler) = self.shutdown_handler.take() {
             self.shutdown.store(true, Ordering::Relaxed);
+            self.shutdown_notify.notify_waiters();
             if let Err(shutdown_failure) = shutdown_handler.await {
                 return Err(ErrorCode::TokioError(format!(
                     "Cannot shutdown namespace heartbeat, cause {:?}",
