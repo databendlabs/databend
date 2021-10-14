@@ -34,7 +34,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args:  -- -D warnings
+          args:  --tests -- -D warnings
         env:
           CARGO_INCREMENTAL: '0'
 
@@ -43,13 +43,5 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
-        env:
-          CARGO_INCREMENTAL: '0'
-
-      - name: Run clippy for tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --tests -- -D warnings
         env:
           CARGO_INCREMENTAL: '0'
