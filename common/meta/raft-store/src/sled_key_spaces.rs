@@ -69,14 +69,7 @@ impl SledKeySpace for RaftStateKV {
     type V = RaftStateValue;
 }
 
-/// Key-Value Types for storing DFS files in sled::Tree:
-pub struct Files {}
-impl SledKeySpace for Files {
-    const PREFIX: u8 = 5;
-    const NAME: &'static str = "files";
-    type K = String;
-    type V = String;
-}
+// preserved PREFIX = 5
 
 /// Key-Value Types for storing general purpose kv in sled::Tree:
 pub struct GenericKV {}
