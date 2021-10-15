@@ -18,15 +18,6 @@ path = "src/bin/benctl.rs"
 databend-query = {path = "../query"}
 clap = "3.0.0-beta.4"
 clap_generate = "3.0.0-beta.4"
-common-base = { path = "../common/base" }
-clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
-common-exception = { path = "../common/exception" }
-common-infallible = { path = "../common/infallible" }
-crossbeam = "0.8"
-futures = "0.3"
-crossbeam-queue = "0.3.2"
-rand = "0.8.4"
-
 databend-meta = {path = "../metasrv" }
 common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"
