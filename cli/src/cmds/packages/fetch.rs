@@ -186,7 +186,9 @@ impl FetchCommand {
                         matches.value_of("version").unwrap().to_string()
                     };
                     writer.write_ok(format!("Tag {}", current_tag).as_str());
-                    self.download_databend(&arch, &current_tag, writer, args);
+                    if let Err(e) = self.download_databend(&arch, &current_tag, writer, args) {
+                        writer.write_err(format!("{:?}", e).as_str());
+                    }
 
                 } else {
                     writer.write_err(format!("{:?}", arch.unwrap_err()).as_str());

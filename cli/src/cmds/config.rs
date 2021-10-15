@@ -23,6 +23,9 @@ use crate::cmds::ClusterCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::queries::query::QueryCommand;
+use std::str::FromStr;
+use std::thread::sleep;
+use std::time;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -35,6 +38,60 @@ pub struct Config {
 
     pub tag_url: String,
     pub clap: RefCell<ArgMatches>,
+}
+
+pub enum MirrorType {
+    GITHUB,
+    LOCAL, // for private deployment such as local registry(TODO) and tests
+}
+
+pub trait MirrorAsset {
+    const TEST_URL: String;
+    const DATABEND_URL: String;
+    const DATABEND_TAG_URL: String;
+    const CLIENT_URL: String;
+    fn is_ok(&self) -> bool {
+        for i in 0..5 {
+            if let Ok(res) = ureq::get(GithubMirror::DATABEND_URL.as_str()).call() {
+                return res.status()%100 != 4 && res.status()%100 != 5
+            } else {
+                sleep(time::Duration::from_secs(1));
+            }
+        }
+        return false
+    }
+}
+
+pub struct GithubMirror {}
+
+impl MirrorAsset for GithubMirror {
+    const TEST_URL: String = "https://github.com".to_string();
+    const DATABEND_URL: String = "https://github.com/datafuselabs/databend/releases/download".to_string();
+    const DATABEND_TAG_URL: String = "https://api.github.com/repos/datafuselabs/databend/tags".to_string();
+    const CLIENT_URL: String = "https://github.com/ZhiHanZ/usql/releases/download".to_string();
+}
+
+struct MirrorFactory;
+impl MirrorFactory {
+    fn new_mirror(s: &MirrorType) -> Box<dyn Shape> {
+        match s {
+            MirrorType::GITHUB => Box::new(GithubMirror {}),
+            MirrorType::LOCAL => todo!(),
+        }
+    }
+}
+
+// Implement the trait
+impl FromStr for MirrorType {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<MirrorType, &'static str> {
+        match s {
+            "local" => Ok(MirrorType::LOCAL),
+            "github" => Ok(MirrorType::GITHUB),
+            _ => Err("no match for mirror"),
+        }
+    }
 }
 
 impl Config {
@@ -61,21 +118,11 @@ impl Config {
                     .value_hint(clap::ValueHint::DirPath),
             )
             .arg(
-                Arg::new("download_url")
-                    .long("download_url")
-                    .about("Sets the url to download databend binaries")
-                    .default_value("https://github.com/datafuselabs/databend/releases/download")
-                    .env("DOWNLOAD_URL")
-                    .global(true)
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("tag_url")
-                    .long("tag_url")
-                    .about("Sets the url to for databend tags")
-                    .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
-                    .env("DOWNLOAD_URL")
-                    .global(true)
+                Arg::new("databend_mirror")
+                    .long("donwload_mirror")
+                    .about("Sets the mirror type to download databend and relevant binaries")
+                    .env("DOWNLOAD_MIRROR")
+                    .possible_values(&["github"])
                     .takes_value(true),
             )
             .subcommand(
