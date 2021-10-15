@@ -21,7 +21,6 @@ pub use cmd::Cmd;
 pub use common_meta_sled_store::KVMeta;
 pub use common_meta_sled_store::KVValue;
 pub use common_meta_sled_store::SeqValue;
-pub use database_info::Database;
 pub use database_info::DatabaseInfo;
 pub use database_reply::CreateDatabaseReply;
 pub use errors::ConflictSeq;

@@ -13,16 +13,16 @@
 // limitations under the License.
 //
 
-//! Key-Value store backed with a local sled::Tree.
+//! Meta store backed with a local sled::Tree.
 //!
-//! `KV` talks the same API defined in `KVApi`.
+//! `MetaEmbedded` talks the same API defined in `KVApi`.
 //!
-//! `KV` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
+//! `MetaEmbedded` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
 //! a embedded raft `StateMachine`.
 
-mod kv;
+mod meta_embedded;
 
 #[cfg(test)]
-mod kv_test;
+mod meta_embedded_test;
 
-pub use kv::KV;
+pub use meta_embedded::MetaEmbedded;

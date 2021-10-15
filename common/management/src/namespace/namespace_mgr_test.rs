@@ -20,7 +20,7 @@ use std::time::UNIX_EPOCH;
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_api::KVApi;
-use common_meta_local_store::KV;
+use common_meta_embedded::MetaEmbedded;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::NodeInfo;
 
@@ -154,8 +154,8 @@ fn create_test_node_info() -> NodeInfo {
     }
 }
 
-async fn new_namespace_api() -> Result<(Arc<KV>, NamespaceMgr)> {
-    let test_api = Arc::new(KV::new_temp().await?);
+async fn new_namespace_api() -> Result<(Arc<MetaEmbedded>, NamespaceMgr)> {
+    let test_api = Arc::new(MetaEmbedded::new_temp().await?);
     let namespace_manager = NamespaceMgr::new(test_api.clone(), "", "", Duration::from_secs(60))?;
     Ok((test_api, namespace_manager))
 }
