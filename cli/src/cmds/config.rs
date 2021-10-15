@@ -138,7 +138,7 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     let conf = conf.clone();
     let default = GithubMirror {};
     if default.to_mirror() != conf.mirror {
-        let custom: CustomMirror = conf.mirror.clone().into();
+        let custom: CustomMirror = conf.mirror.clone();
         for _ in 0..5 {
             let custom: CustomMirror = conf.mirror.clone();
             if custom.is_ok() {
@@ -159,7 +159,7 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     let status = Status::read(conf).expect("cannot configure status");
     let mut writer = Writer::create();
     if let Some(mirror) = status.mirrors {
-        let custom: CustomMirror = mirror.clone().into();
+        let custom: CustomMirror = mirror.clone();
         if !custom.is_ok() {
             writer.write_err(&*format!(
                 "Mirror error: cannot connect to current mirror {:?}",

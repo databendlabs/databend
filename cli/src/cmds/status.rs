@@ -35,7 +35,7 @@ use serde::Serialize;
 use sysinfo::System;
 use sysinfo::SystemExt;
 
-use crate::cmds::config::{CustomMirror};
+use crate::cmds::config::CustomMirror;
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
