@@ -19,6 +19,7 @@ use crate::cmds::Config;
 pub struct Env {
     pub conf: Config,
     pub prompt: String,
+    pub multiline_prompt: String,
 }
 
 impl Env {
@@ -27,6 +28,7 @@ impl Env {
         Env {
             conf,
             prompt: format!("[{}] > ", namespace.green()),
+            multiline_prompt: format!("{} > ", " ".repeat(namespace.len() + 2)),
         }
     }
 }
