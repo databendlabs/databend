@@ -48,7 +48,7 @@ clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev 
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "cdd2ce1" }
 
 # Crates.io dependencies
-ahash = "0.7.5"
+ahash = "0.7.6"
 async-trait = "0.1"
 async-compat = "0.2.1"
 bumpalo = "3.7.1"
