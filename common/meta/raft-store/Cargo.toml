@@ -8,6 +8,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+common-arrow = {path = "../../arrow"}
 common-exception = {path = "../../exception"}
 common-tracing = {path = "../../tracing"}
 common-meta-sled-store = {path = "../sled-store"}

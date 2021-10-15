@@ -20,9 +20,12 @@
 //! `MetaEmbedded` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
 //! a embedded raft `StateMachine`.
 
+mod meta_api_impl;
 mod meta_embedded;
 
 #[cfg(test)]
-mod meta_embedded_test;
+mod kv_api_impl_test;
+#[cfg(test)]
+mod meta_api_impl_test;
 
 pub use meta_embedded::MetaEmbedded;

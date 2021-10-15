@@ -1269,15 +1269,20 @@ dependencies = [
 name = "common-meta-embedded"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "common-arrow",
  "common-base",
+ "common-datavalues",
  "common-exception",
  "common-meta-api",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
+ "common-planners",
  "common-tracing",
  "futures",
+ "maplit",
  "pretty_assertions",
  "tempfile",
 ]
@@ -1320,6 +1325,7 @@ dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
+ "common-arrow",
  "common-base",
  "common-exception",
  "common-meta-sled-store",

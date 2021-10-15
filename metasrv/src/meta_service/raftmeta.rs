@@ -57,6 +57,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqValue;
 use common_meta_types::Table;
+use common_meta_types::TableInfo;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
@@ -1011,34 +1012,11 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_tables(
-        &self,
-        db_name: &str,
-    ) -> common_exception::Result<Vec<(u64, String, Table)>> {
+    pub async fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        if let Some(db) = sm.get_database(db_name)? {
-            let db_id = db.1.value.database_id;
-
-            let mut tbls = vec![];
-            for ((db_id2, table_name), table_id) in sm.table_lookup.iter() {
-                if *db_id2 == db_id {
-                    let table = sm.tables.get(table_id).ok_or_else(|| {
-                        ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
-                    })?;
-
-                    tbls.push((*table_id, table_name.clone(), table.clone()));
-                }
-            }
-
-            Ok(tbls)
-        } else {
-            Err(ErrorCode::UnknownDatabase(format!(
-                "unknown database {}",
-                db_name
-            )))
-        }
+        sm.get_tables(db_name)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

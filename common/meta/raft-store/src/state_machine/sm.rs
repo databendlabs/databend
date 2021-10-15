@@ -13,13 +13,17 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
+use common_arrow::arrow::datatypes::Schema;
+use common_arrow::arrow_flight::FlightData;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
@@ -40,6 +44,7 @@ use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqValue;
 use common_meta_types::Table;
+use common_meta_types::TableInfo;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
@@ -622,6 +627,57 @@ impl StateMachine {
     pub fn get_table(&self, tid: &u64) -> Option<Table> {
         let x = self.tables.get(tid);
         x.cloned()
+    }
+
+    pub fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+        let db = self.get_database(db_name)?;
+        let db = match db {
+            Some(x) => x,
+            None => {
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "unknown database {}",
+                    db_name
+                )));
+            }
+        };
+
+        let db_id = db.1.value.database_id;
+
+        let mut tbls = vec![];
+        for ((got_db_id, table_name), table_id) in self.table_lookup.iter() {
+            if *got_db_id == db_id {
+                let table = self.tables.get(table_id).ok_or_else(|| {
+                    ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
+                })?;
+
+                let arrow_schema = Schema::try_from(&FlightData {
+                    data_header: table.schema.clone(),
+                    ..Default::default()
+                })
+                .map_err(|e| {
+                    ErrorCode::IllegalSchema(format!(
+                        "invalid schema of table id {}, error: {}",
+                        *table_id,
+                        e.to_string()
+                    ))
+                })?;
+
+                let table_info = TableInfo {
+                    database_id: db_id,
+                    db: db_name.to_string(),
+                    table_id: *table_id,
+                    version: 0,
+                    name: table_name.to_string(),
+                    schema: Arc::new(arrow_schema.into()),
+                    engine: table.table_engine.to_string(),
+                    options: table.table_options.clone(),
+                };
+
+                tbls.push(Arc::new(table_info));
+            }
+        }
+
+        Ok(tbls)
     }
 
     pub fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {

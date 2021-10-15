@@ -11,12 +11,15 @@ edition = "2021"
 
 [dependencies]
 # Workspace dependencies
+common-arrow = {path = "../../arrow" }
 common-base = {path = "../../base" }
+common-datavalues = {path = "../../datavalues" }
 common-exception = {path = "../../exception" }
 common-meta-api = {path = "../api" }
-common-meta-types = {path = "../types" }
-common-meta-sled-store = {path = "../sled-store" }
 common-meta-raft-store = {path = "../raft-store" }
+common-meta-sled-store = {path = "../sled-store" }
+common-meta-types = {path = "../types" }
+common-planners = {path = "../../planners" }
 common-tracing = {path = "../../tracing" }
 
 
@@ -27,5 +30,7 @@ tempfile = "3.2.0"
 
 
 [dev-dependencies]
+anyhow = "1.0.44"
+maplit = "1.0.2"
 pretty_assertions = "1.0"
 
