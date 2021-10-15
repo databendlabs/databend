@@ -25,6 +25,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
+use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
 use crate::cmds::Config;
@@ -53,6 +54,7 @@ impl Processor {
             Box::new(VersionCommand::create()),
             Box::new(CommentCommand::create()),
             Box::new(PackageCommand::create(conf.clone())),
+            Box::new(QueryCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
         ];
 
@@ -95,6 +97,18 @@ impl Processor {
                         .into_inner()
                         .subcommand_matches("cluster"),
                 );
+            }
+            Some("query") => {
+                let cmd = QueryCommand::create(self.env.conf.clone());
+                cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("query"),
+                )
             }
             Some("completion") => {
                 if let Some(generator) = self

@@ -19,10 +19,13 @@ mod clusters;
 mod command;
 mod comments;
 mod config;
+#[cfg(test)]
+mod config_test;
 mod env;
 mod helps;
 mod packages;
 mod processor;
+mod queries;
 mod status;
 mod versions;
 mod writer;

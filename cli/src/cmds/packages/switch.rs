@@ -33,7 +33,7 @@ impl SwitchCommand {
     }
 
     fn get_latest_tag(&self) -> Result<String> {
-        let tag_url = self.conf.tag_url.clone();
+        let tag_url = self.conf.mirror.databend_tag_url.clone();
         let resp = ureq::get(tag_url.as_str()).call()?;
         let json: serde_json::Value = resp.into_json().unwrap();
 

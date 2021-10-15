@@ -18,6 +18,8 @@ use std::fs;
 use tempfile::tempdir;
 
 use crate::cmds::clusters::create::LocalBinaryPaths;
+use crate::cmds::config::GithubMirror;
+use crate::cmds::config::MirrorAsset;
 use crate::cmds::Config;
 use crate::cmds::CreateCommand;
 use crate::error::Result;
@@ -27,8 +29,7 @@ fn test_generate_local_meta_config() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
-        download_url: "".to_string(),
-        tag_url: "".to_string(),
+        mirror: GithubMirror {}.to_mirror(),
         clap: RefCell::new(Default::default()),
     };
     let t = tempdir()?;
@@ -115,8 +116,7 @@ fn test_generate_local_query_config() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
-        download_url: "".to_string(),
-        tag_url: "".to_string(),
+        mirror: GithubMirror {}.to_mirror(),
         clap: RefCell::new(Default::default()),
     };
     let t = tempdir()?;
