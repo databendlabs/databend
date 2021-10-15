@@ -503,6 +503,8 @@ dependencies = [
  "common-exception",
  "common-infallible",
  "common-meta-raft-store",
+ "crossbeam 0.8.1",
+ "crossbeam-queue 0.3.2",
  "databend-meta",
  "databend-query",
  "dirs",

@@ -18,7 +18,6 @@ path = "src/bin/benctl.rs"
 databend-query = {path = "../query"}
 clap = "3.0.0-beta.4"
 clap_generate = "3.0.0-beta.4"
-<<<<<<< HEAD
 common-base = { path = "../common/base" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 common-exception = { path = "../common/exception" }
