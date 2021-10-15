@@ -26,6 +26,8 @@ use crate::cmds::queries::query::QueryCommand;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time;
+use common_base::tokio::runtime;
+use crate::error::CliError;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -42,17 +44,17 @@ pub struct Config {
 
 pub enum MirrorType {
     GITHUB,
-    LOCAL, // for private deployment such as local registry(TODO) and tests
+    LOCAL(String),
 }
 
 pub trait MirrorAsset {
-    const TEST_URL: String;
+    const BASE_URL: String;
     const DATABEND_URL: String;
     const DATABEND_TAG_URL: String;
     const CLIENT_URL: String;
     fn is_ok(&self) -> bool {
         for i in 0..5 {
-            if let Ok(res) = ureq::get(GithubMirror::DATABEND_URL.as_str()).call() {
+            if let Ok(res) = ureq::get(self.get_base_url().as_str()).call() {
                 return res.status()%100 != 4 && res.status()%100 != 5
             } else {
                 sleep(time::Duration::from_secs(1));
@@ -60,23 +62,39 @@ pub trait MirrorAsset {
         }
         return false
     }
+    fn get_base_url(&self) -> String;
+    fn get_databend_url(&self) -> String;
+    fn get_databend_tag_url(&self) -> String;
+    fn get_client_url(&self) -> String;
 }
 
 pub struct GithubMirror {}
 
 impl MirrorAsset for GithubMirror {
-    const TEST_URL: String = "https://github.com".to_string();
+    const BASE_URL: String = "https://github.com".to_string();
     const DATABEND_URL: String = "https://github.com/datafuselabs/databend/releases/download".to_string();
     const DATABEND_TAG_URL: String = "https://api.github.com/repos/datafuselabs/databend/tags".to_string();
     const CLIENT_URL: String = "https://github.com/ZhiHanZ/usql/releases/download".to_string();
+    fn get_base_url(&self) -> String {
+        return GithubMirror::BASE_URL
+    }
+    fn get_databend_url(&self) -> String {
+        return GithubMirror::DATABEND_URL
+    }
+    fn get_databend_tag_url(&self) -> String {
+        return GithubMirror::DATABEND_TAG_URL
+    }
+    fn get_client_url(&self) -> String {
+        return GithubMirror::CLIENT_URL
+    }
 }
 
 struct MirrorFactory;
 impl MirrorFactory {
-    fn new_mirror(s: &MirrorType) -> Box<dyn Shape> {
+    fn new_mirror(s: &MirrorType) -> Box<dyn MirrorAsset> {
         match s {
             MirrorType::GITHUB => Box::new(GithubMirror {}),
-            MirrorType::LOCAL => todo!(),
+            MirrorType::LOCAL(_) => todo!(),
         }
     }
 }
@@ -87,12 +105,24 @@ impl FromStr for MirrorType {
 
     fn from_str(s: &str) -> std::result::Result<MirrorType, &'static str> {
         match s {
-            "local" => Ok(MirrorType::LOCAL),
+            "local" => Ok(MirrorType::LOCAL("".to_string())),
             "github" => Ok(MirrorType::GITHUB),
             _ => Err("no match for mirror"),
         }
     }
 }
+
+// Select a mirror that could be used for asset downloading
+pub fn choose_mirror(mirrors: Vec<Box<dyn MirrorAsset>>) -> Result<Box<dyn MirrorAsset>, E>{
+
+    for mirror in mirrors {
+        if mirror.is_ok() {
+            return Ok(mirror)
+        }
+    }
+    Err(CliError::Unknown("no mirror available".to_string()))
+}
+
 
 impl Config {
     pub(crate) fn build_cli() -> App<'static> {

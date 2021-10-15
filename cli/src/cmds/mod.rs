@@ -27,6 +27,8 @@ mod status;
 mod versions;
 mod writer;
 mod queries;
+#[cfg(test)]
+mod config_test;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;
