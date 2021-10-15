@@ -30,15 +30,15 @@ use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
+use crate::cmds::config::{GithubMirror, MirrorAsset};
 
 #[test]
 fn test_build_table() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
-        download_url: "".to_string(),
-        tag_url: "".to_string(),
         clap: RefCell::new(Default::default()),
+        mirror: GithubMirror {}.to_mirror()
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();

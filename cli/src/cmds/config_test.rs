@@ -24,45 +24,61 @@ use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
-use crate::cmds::config::MirrorAsset;
-
-struct MockMirror {
-    url: String
-}
-
-impl MockMirror {
-    fn set_url(&mut self, url: String) {
-        self.url = url
-    }
-    fn get_url(&self) -> String {
-       return self.url.clone()
-    }
-}
-
-impl MirrorAsset for MockMirror {
-    const BASE_URL: String =  "".to_string();
-    const DATABEND_URL: String = "".to_string();
-    const DATABEND_TAG_URL: String = "".to_string();
-    const CLIENT_URL: String = "".to_string();
-
-    fn get_base_url(&self) -> String {
-        return self.url.clone()
-    }
-
-    fn get_databend_url(&self) -> String {
-        todo!()
-    }
-
-    fn get_databend_tag_url(&self) -> String {
-        todo!()
-    }
-
-    fn get_client_url(&self) -> String {
-        todo!()
-    }
-}
+use crate::cmds::config::{MirrorAsset, GithubMirror, choose_mirror, CustomMirror};
+use httpmock::MockServer;
+use httpmock::Method::GET;
 
 #[test]
 fn test_mirror() -> Result<()> {
+    let mut conf = Config {
+        group: "foo".to_string(),
+        databend_dir: "/tmp/.databend".to_string(),
+        clap: RefCell::new(Default::default()),
+        mirror: GithubMirror {}.to_mirror()
+    };
+    let t = tempdir()?;
+    conf.databend_dir = t.path().to_str().unwrap().to_string();
+    // Start a lightweight mock server.
+    let server = MockServer::start();
+    // Create a mock on the server.
+    let _ = server.mock(|when, then| {
+        when.method(GET).path("/v1/health");
+        then.status(200)
+            .header("content-type", "text/html")
+            .body("health");
+    });
+
+    // situation 1: user defined mirror
+    {
+        let custom = CustomMirror{
+            base_url: server.url("/v1/health"),
+            databend_url: "".to_string(),
+            databend_tag_url: "".to_string(),
+            client_url: "".to_string()
+        };
+        conf.mirror = custom.to_mirror();
+        let mirror = choose_mirror(&conf.clone()).unwrap();
+        assert_eq!(custom.to_mirror(), mirror);
+        let status = Status::read(conf.clone()).unwrap();
+        assert_eq!(status.mirrors.unwrap(), custom.to_mirror());
+    }
+    // situation 2: previous mirror
+    {
+        let status_mirror = CustomMirror{
+            base_url: server.url("/v1/health"),
+            databend_url: "".to_string(),
+            databend_tag_url: "".to_string(),
+            client_url: "".to_string()
+        };
+        let mut status = Status::read(conf.clone()).unwrap();
+        status.mirrors = Some(status_mirror.to_mirror());
+        status.write().unwrap();
+        let custom = GithubMirror{}.to_mirror();
+        conf.mirror = custom;
+        let mirror = choose_mirror(&conf.clone()).unwrap();
+        assert_eq!(mirror, status_mirror.to_mirror());
+        let status = Status::read(conf.clone()).unwrap();
+        assert_eq!(status.mirrors.unwrap(), status_mirror.to_mirror());
+    }
     Ok(())
 }

@@ -18,8 +18,10 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::cmds::ClusterCommand;
+use crate::cmds::{ClusterCommand, Status, Writer};
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::queries::query::QueryCommand;
@@ -27,7 +29,14 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time;
 use common_base::tokio::runtime;
+use std::time::Duration;
 use crate::error::CliError;
+
+const GITHUB_BASE_URL: &'static str = "https://github.com";
+const GITHUB_DATABEND_URL: &'static str = "https://github.com/datafuselabs/databend/releases/download";
+const GITHUB_DATABEND_TAG_URL: &'static str = "https://api.github.com/repos/datafuselabs/databend/tags";
+const GITHUB_CLIENT_URL: &'static str= "https://github.com/ZhiHanZ/usql/releases/download";
+
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -35,30 +44,45 @@ pub struct Config {
     pub group: String,
 
     pub databend_dir: String,
-
-    pub download_url: String,
-
-    pub tag_url: String,
+    pub mirror: Mirror,
     pub clap: RefCell<ArgMatches>,
 }
 
-pub enum MirrorType {
-    GITHUB,
-    LOCAL(String),
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct Mirror {
+    pub base_url: String,
+    pub databend_url: String,
+    pub databend_tag_url: String,
+    pub client: String,
+}
+
+impl From<CustomMirror> for Mirror {
+    fn from(asset: CustomMirror) -> Self {
+        return Mirror{
+            base_url: asset.get_base_url(),
+            databend_url: asset.get_databend_url(),
+            databend_tag_url: asset.get_databend_tag_url(),
+            client: asset.get_client_url(),
+        }
+    }
+}
+
+impl Into<CustomMirror> for Mirror {
+    fn into(self) -> CustomMirror {
+        return CustomMirror{
+            base_url:  self.base_url,
+            databend_url: self.databend_url,
+            databend_tag_url: self.databend_tag_url,
+            client_url: self.client
+        }
+    }
 }
 
 pub trait MirrorAsset {
-    const BASE_URL: String;
-    const DATABEND_URL: String;
-    const DATABEND_TAG_URL: String;
-    const CLIENT_URL: String;
     fn is_ok(&self) -> bool {
-        for i in 0..5 {
-            if let Ok(res) = ureq::get(self.get_base_url().as_str()).call() {
-                return res.status()%100 != 4 && res.status()%100 != 5
-            } else {
-                sleep(time::Duration::from_secs(1));
-            }
+        if let Ok(res) = ureq::get(self.get_base_url().as_str()).call() {
+
+            return res.status()%100 != 4 && res.status()%100 != 5
         }
         return false
     }
@@ -66,63 +90,142 @@ pub trait MirrorAsset {
     fn get_databend_url(&self) -> String;
     fn get_databend_tag_url(&self) -> String;
     fn get_client_url(&self) -> String;
+    fn to_mirror(&self) -> Mirror {
+        return Mirror{
+            base_url: self.get_base_url(),
+            databend_url: self.get_databend_url(),
+            databend_tag_url: self.get_databend_tag_url(),
+            client: self.get_client_url(),
+        }
+    }
 }
 
+#[derive(PartialEq, Debug, Clone)]
 pub struct GithubMirror {}
 
+impl PartialEq<CustomMirror> for GithubMirror {
+    fn eq(&self, other: &CustomMirror) -> bool {
+        return self.get_client_url() == other.get_client_url() && self.get_databend_url() == other.get_databend_url()
+        && self.get_base_url() == other.get_base_url() && self.get_databend_tag_url() == other.get_databend_tag_url()
+    }
+}
+
+
+
 impl MirrorAsset for GithubMirror {
-    const BASE_URL: String = "https://github.com".to_string();
-    const DATABEND_URL: String = "https://github.com/datafuselabs/databend/releases/download".to_string();
-    const DATABEND_TAG_URL: String = "https://api.github.com/repos/datafuselabs/databend/tags".to_string();
-    const CLIENT_URL: String = "https://github.com/ZhiHanZ/usql/releases/download".to_string();
     fn get_base_url(&self) -> String {
-        return GithubMirror::BASE_URL
+        return GITHUB_BASE_URL.to_string()
     }
     fn get_databend_url(&self) -> String {
-        return GithubMirror::DATABEND_URL
+        return GITHUB_DATABEND_URL.to_string()
     }
     fn get_databend_tag_url(&self) -> String {
-        return GithubMirror::DATABEND_TAG_URL
+        return GITHUB_DATABEND_TAG_URL.to_string()
     }
     fn get_client_url(&self) -> String {
-        return GithubMirror::CLIENT_URL
+        return GITHUB_CLIENT_URL.to_string()
     }
+
 }
 
-struct MirrorFactory;
-impl MirrorFactory {
-    fn new_mirror(s: &MirrorType) -> Box<dyn MirrorAsset> {
-        match s {
-            MirrorType::GITHUB => Box::new(GithubMirror {}),
-            MirrorType::LOCAL(_) => todo!(),
+impl Into<CustomMirror> for GithubMirror {
+    fn into(self) -> CustomMirror {
+        return CustomMirror{
+            base_url:  self.get_base_url(),
+            databend_url:  self.get_databend_url(),
+            databend_tag_url: self.get_databend_tag_url(),
+            client_url: self.get_client_url(),
+        }
+    }
+}
+#[derive(PartialEq, Debug, Clone)]
+pub struct CustomMirror {
+    pub(crate) base_url: String,
+    pub(crate) databend_url: String,
+    pub(crate) databend_tag_url: String,
+    pub(crate) client_url: String
+}
+
+impl CustomMirror {
+    fn new(base_url : String, databend_url : String, databend_tag_url : String, client_url : String) -> Self {
+        return CustomMirror{
+            base_url,
+            databend_url,
+            databend_tag_url,
+            client_url
         }
     }
 }
 
-// Implement the trait
-impl FromStr for MirrorType {
-    type Err = &'static str;
+impl MirrorAsset for CustomMirror {
 
-    fn from_str(s: &str) -> std::result::Result<MirrorType, &'static str> {
-        match s {
-            "local" => Ok(MirrorType::LOCAL("".to_string())),
-            "github" => Ok(MirrorType::GITHUB),
-            _ => Err("no match for mirror"),
-        }
+    fn get_base_url(&self) -> String {
+        return self.base_url.clone()
+    }
+
+    fn get_databend_url(&self) -> String {
+        return self.databend_url.clone()
+    }
+
+    fn get_databend_tag_url(&self) -> String {
+        return self.databend_tag_url.clone()
+    }
+
+    fn get_client_url(&self) -> String {
+        return self.client_url.clone()
     }
 }
 
-// Select a mirror that could be used for asset downloading
-pub fn choose_mirror(mirrors: Vec<Box<dyn MirrorAsset>>) -> Result<Box<dyn MirrorAsset>, E>{
+// choose one mirror which could be connected
+// if the mirror user provided works, it would choose it as default mirror, otherwise it would panic
+// if user have not provided a mirror, it would validate on mirror stored in status and warn
+// user if it could not be connected.
+// in default situation(no mirror stored in status), we provided a pool of possible mirrors to use.
+// it would select one working mirror as default mirror
+pub fn choose_mirror(conf: &Config) -> Result<Mirror, CliError> {
+    // try user defined mirror source at first
+    let conf = conf.clone();
+    let default = GithubMirror{};
+    if default != CustomMirror::from(conf.mirror.clone().into()) {
+        let custom : CustomMirror  = CustomMirror::from(conf.mirror.clone().into());
+        for _ in 0..5 {
+            let custom = CustomMirror::from(conf.mirror.clone().into());
+            if custom.is_ok() {
+                let mut status = Status::read(conf.clone()).expect("cannot configure status");
+                status.mirrors = Some(custom.to_mirror());
+                status.write()?;
+                return Ok(Mirror::from(custom))
+            } else {
+                sleep(Duration::from_secs(1));
+            }
+        }
+        return Err(CliError::Unknown(format!("cannot connect to the provided mirror {:?}", custom)))
+    }
 
-    for mirror in mirrors {
-        if mirror.is_ok() {
+    let status = Status::read(conf.clone()).expect("cannot configure status");
+    let mut writer = Writer::create();
+    if let Some(mirror) = status.mirrors {
+        let custom: CustomMirror = mirror.clone().into();
+        if !custom.is_ok() {
+            writer.write_err(&*format!("Mirror error: cannot connect to current mirror {:?}", mirror))
+        } else {
             return Ok(mirror)
         }
     }
-    Err(CliError::Unknown("no mirror available".to_string()))
-}
 
+    let default_mirrors : Vec<Box<dyn MirrorAsset>> = vec![Box::new(GithubMirror{})];
+    for _ in 0..5 {
+        for i in &default_mirrors {
+            if i.is_ok() {
+                return Ok(i.to_mirror())
+            } else {
+                sleep(Duration::from_secs(1));
+            }
+        }
+    }
+
+    Err(CliError::Unknown(format!("cannot find possible mirror to connect")))
+}
 
 impl Config {
     pub(crate) fn build_cli() -> App<'static> {
@@ -148,11 +251,39 @@ impl Config {
                     .value_hint(clap::ValueHint::DirPath),
             )
             .arg(
-                Arg::new("databend_mirror")
-                    .long("donwload_mirror")
-                    .about("Sets the mirror type to download databend and relevant binaries")
-                    .env("DOWNLOAD_MIRROR")
-                    .possible_values(&["github"])
+                Arg::new("download_url")
+                    .long("download_url")
+                    .about("Sets the url to download databend binaries")
+                    .default_value("https://github.com/datafuselabs/databend/releases/download")
+                    .env("DOWNLOAD_URL")
+                    .global(true)
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("tag_url")
+                    .long("tag_url")
+                    .about("Sets the url to for databend tags")
+                    .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
+                    .env("DOWNLOAD_URL")
+                    .global(true)
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("client_url")
+                    .long("client_url")
+                    .about("Sets the url to fetch databend query client")
+                    .env("DOWNLOAD_CLIENT_URL")
+                    .default_value("https://github.com/ZhiHanZ/usql/releases/download")
+                    .global(true)
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("validation_url")
+                    .long("validation_url")
+                    .about("Sets the url to validate on custom download network connection")
+                    .env("DOWNLOAD_VALIDATION_URL")
+                    .default_value("https://github.com")
+                    .global(true)
                     .takes_value(true),
             )
             .subcommand(
@@ -188,20 +319,11 @@ impl Config {
                 .unwrap()
                 .parse()
                 .unwrap(),
-            download_url: clap
-                .clone()
-                .into_inner()
-                .value_of("download_url")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            tag_url: clap
-                .clone()
-                .into_inner()
-                .value_of("tag_url")
-                .unwrap()
-                .parse()
-                .unwrap(),
+
+            mirror: CustomMirror::new(clap.clone().into_inner().value_of("validation_url").unwrap().parse().unwrap(),
+                                      clap.clone().into_inner().value_of("download_url").unwrap().parse().unwrap(),
+                                      clap.clone().into_inner().value_of("tag_url").unwrap().parse().unwrap(),
+                                      clap.clone().into_inner().value_of("client_url").unwrap().parse().unwrap(),).into(),
             clap,
         };
         Config::build(config)
@@ -209,10 +331,20 @@ impl Config {
     fn build(mut conf: Config) -> Self {
         let home_dir = dirs::home_dir().unwrap();
         let databend_dir = home_dir.join(".databend");
+
         if conf.databend_dir == "~/.databend" {
             conf.databend_dir = format!("{}/{}", databend_dir.to_str().unwrap(), conf.group);
         } else {
             conf.databend_dir = format!("{}/{}", conf.databend_dir, conf.group);
+        }
+        let res = choose_mirror(&conf);
+        if let Ok(mirror) = res {
+            conf.mirror = mirror.clone();
+            let mut status = Status::read(conf.clone()).expect("cannot read status");
+            status.mirrors = Some(mirror);
+            status.write().expect("cannot write status");
+        } else {
+            panic!("{}", format!("{:?}", res.unwrap_err()))
         }
         conf
     }
