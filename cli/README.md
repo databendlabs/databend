@@ -45,6 +45,7 @@ OS version           thinkpad 20.04 (kernel 5.10.0-1038-oem)
 version              Databend CLI version
 comment              # your comments
 package              Package command
+cluster              Cluster life cycle management
 
 [test] > package -h
 package 
