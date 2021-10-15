@@ -25,6 +25,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
+use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
 use crate::cmds::Config;
@@ -34,7 +35,6 @@ use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
-use crate::cmds::queries::query::QueryCommand;
 
 pub struct Processor {
     env: Env,
@@ -100,12 +100,15 @@ impl Processor {
             }
             Some("query") => {
                 let cmd = QueryCommand::create(self.env.conf.clone());
-                cmd.exec_match(&mut writer,                     self.env
-                    .conf
-                    .clone()
-                    .clap
-                    .into_inner()
-                    .subcommand_matches("query"))
+                cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("query"),
+                )
             }
             Some("completion") => {
                 if let Some(generator) = self

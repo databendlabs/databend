@@ -26,68 +26,77 @@ use tar::Archive;
 use crate::cmds::Config;
 use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
-use crate::error::{Result, CliError};
+use crate::error::CliError;
+use crate::error::Result;
 
 #[derive(Clone)]
 pub struct FetchCommand {
     conf: Config,
 }
 
-pub fn get_go_architecture() -> Result<(String, String)> {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
-    // Check rosetta
-    let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
-    if rosetta.contains("Darwin") && rosetta.contains("arm64") {
-        return Ok(("darwin".to_string(), "arm64".to_string()));
-    }
-    let goos = match os {
-        "darwin" => "darwin".to_string(),
-        "macos" => "darwin".to_string(),
-        "linux" => "linux".to_string(),
-        _ => {
-            return Err(CliError::Unknown(format!("Unsupported go os {}", std::env::consts::OS)));
-        },
-    };
-    let goarch = match arch {
-        "x86_64" => "amd64".to_string(),
-        "aarch_64" => "arm64".to_string(),
-        _ => {
-            return Err(CliError::Unknown(format!("Unsupported go architecture {}", std::env::consts::ARCH)));
-        },
-    };
-    return Ok((goos, goarch))
-}
+// pub fn get_go_architecture() -> Result<(String, String)> {
+//     let os = std::env::consts::OS;
+//     let arch = std::env::consts::ARCH;
+//     // Check rosetta
+//     let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
+//     if rosetta.contains("Darwin") && rosetta.contains("arm64") {
+//         return Ok(("darwin".to_string(), "arm64".to_string()));
+//     }
+//     let goos = match os {
+//         "darwin" => "darwin".to_string(),
+//         "macos" => "darwin".to_string(),
+//         "linux" => "linux".to_string(),
+//         _ => {
+//             return Err(CliError::Unknown(format!(
+//                 "Unsupported go os {}",
+//                 std::env::consts::OS
+//             )));
+//         }
+//     };
+//     let goarch = match arch {
+//         "x86_64" => "amd64".to_string(),
+//         "aarch_64" => "arm64".to_string(),
+//         _ => {
+//             return Err(CliError::Unknown(format!(
+//                 "Unsupported go architecture {}",
+//                 std::env::consts::ARCH
+//             )));
+//         }
+//     };
+//     Ok((goos, goarch))
+// }
 
-pub fn unpack(tar_file: &String, target_dir: &String) -> Result<()> {
+pub fn unpack(tar_file: &str, target_dir: &str) -> Result<()> {
     let tar_gz = File::open(tar_file)?;
     let tar = GzDecoder::new(tar_gz);
     let mut archive = Archive::new(tar);
-    let res = archive.unpack(target_dir.clone());
-    match res {
-        Ok(_) => {
-            return Ok(())
-        }
-        Err(e) => {
-            return Err(CliError::Unknown(format!("cannot unpack file {} to {}, error: {}", tar_file, target_dir, e)));
-        }
+    let res = archive.unpack(target_dir);
+    return match res {
+        Ok(_) => Ok(()),
+        Err(e) => Err(CliError::Unknown(format!(
+            "cannot unpack file {} to {}, error: {}",
+            tar_file, target_dir, e
+        ))),
     };
 }
 
-pub fn download(url: &String, target_file: &String) -> Result<()> {
-    let res = ureq::get(url.as_str()).call()?;
-    let total_size: u64 = res.header("content-length").expect("cannot fetch content length from header").parse().expect("cannot parse content header");
+pub fn download(url: &str, target_file: &str) -> Result<()> {
+    let res = ureq::get(url).call()?;
+    let total_size: u64 = res
+        .header("content-length")
+        .expect("cannot fetch content length from header")
+        .parse()
+        .expect("cannot parse content header");
     let pb = ProgressBar::new(total_size);
     pb.set_style(ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
         .progress_chars("#>-"));
 
-    let mut out = File::create(target_file.clone()).expect("cannot create target file");
-    io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).expect("cannot download to target file");
+    let mut out = File::create(target_file).expect("cannot create target file");
+    io::copy(&mut pb.wrap_read(res.into_reader()), &mut out)
+        .expect("cannot download to target file");
     Ok(())
 }
-
-
 
 //(TODO(zhihanz)) general get_architecture similar to install-databend.sh
 pub fn get_rust_architecture() -> Result<String> {
@@ -104,13 +113,21 @@ pub fn get_rust_architecture() -> Result<String> {
     // Check rosetta
     let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
     if rosetta.contains("Darwin") && rosetta.contains("arm64") {
-        return Err(CliError::Unknown( "Unsupported architecture aarch64-apple-darwin".to_string()));
+        return Err(CliError::Unknown(
+            "Unsupported architecture aarch64-apple-darwin".to_string(),
+        ));
     }
     let os = match os {
         "darwin" => "apple-darwin".to_string(),
         "macos" => "apple-darwin".to_string(),
         "linux" => format!("unknown-linux-{}", clib),
-        _ => return Err(CliError::Unknown( format!("Unsupported architecture os: {}, arch {}", std::env::consts::OS, std::env::consts::ARCH)))
+        _ => {
+            return Err(CliError::Unknown(format!(
+                "Unsupported architecture os: {}, arch {}",
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            )))
+        }
     };
 
     Ok(format!("{}-{}", arch, os))
@@ -120,8 +137,6 @@ impl FetchCommand {
         FetchCommand { conf }
     }
 
-
-
     fn get_latest_tag(&self) -> Result<String> {
         let tag_url = self.conf.mirror.databend_tag_url.clone();
         let resp = ureq::get(tag_url.as_str()).call()?;
@@ -130,18 +145,19 @@ impl FetchCommand {
         Ok(format!("{}", json[0]["name"]).replace("\"", ""))
     }
 
-    fn download_databend(&self, arch: &String, tag: &String, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    fn download_databend(
+        &self,
+        arch: &str,
+        tag: &str,
+        writer: &mut Writer,
+        args: Option<&ArgMatches>,
+    ) -> Result<()> {
         // Create download dir.
-        let bin_download_dir = format!(
-            "{}/downloads/{}",
-            self.conf.databend_dir.clone(),
-            tag
-        );
+        let bin_download_dir = format!("{}/downloads/{}", self.conf.databend_dir.clone(), tag);
         fs::create_dir_all(bin_download_dir.clone()).unwrap();
 
         // Create bin dir.
-        let bin_unpack_dir =
-            format!("{}/bin/{}", self.conf.databend_dir.clone(), tag);
+        let bin_unpack_dir = format!("{}/bin/{}", self.conf.databend_dir.clone(), tag);
         fs::create_dir_all(bin_unpack_dir.clone()).unwrap();
 
         let bin_name = format!("databend-{}-{}.tar.gz", tag, arch);
@@ -155,7 +171,11 @@ impl FetchCommand {
                 tag,
                 bin_name,
             );
-            download(&binary_url, &bin_file);
+            if let Err(e) = download(&binary_url, &bin_file) {
+                writer.write_err(
+                    format!("Cannot download from {}, error: {:?}", binary_url, e).as_str(),
+                )
+            }
         }
 
         // Unpack.
@@ -189,7 +209,6 @@ impl FetchCommand {
                     if let Err(e) = self.download_databend(&arch, &current_tag, writer, args) {
                         writer.write_err(format!("{:?}", e).as_str());
                     }
-
                 } else {
                     writer.write_err(format!("{:?}", arch.unwrap_err()).as_str());
                 }

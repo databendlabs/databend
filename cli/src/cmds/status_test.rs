@@ -19,19 +19,20 @@ use databend_query::configs::Config as QueryConfig;
 use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
+use crate::cmds::config::GithubMirror;
+use crate::cmds::config::MirrorAsset;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
-use crate::cmds::config::{GithubMirror, MirrorAsset};
 
 #[test]
 fn test_status() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
-        mirror: GithubMirror{}.to_mirror(),
+        mirror: GithubMirror {}.to_mirror(),
         clap: RefCell::new(Default::default()),
     };
     let t = tempdir()?;

@@ -19,16 +19,16 @@ mod clusters;
 mod command;
 mod comments;
 mod config;
+#[cfg(test)]
+mod config_test;
 mod env;
 mod helps;
 mod packages;
 mod processor;
+mod queries;
 mod status;
 mod versions;
 mod writer;
-mod queries;
-#[cfg(test)]
-mod config_test;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;

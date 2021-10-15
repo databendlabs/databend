@@ -35,10 +35,10 @@ use serde::Serialize;
 use sysinfo::System;
 use sysinfo::SystemExt;
 
+use crate::cmds::config::Mirror;
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
-use crate::cmds::config::Mirror;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Status {
@@ -448,7 +448,7 @@ impl Status {
                 local_configs: HashMap::new(),
                 local_config_dir,
                 current_profile: None,
-                mirrors: None
+                mirrors: None,
             };
             serde_json::to_writer(&file, &status)?;
         }

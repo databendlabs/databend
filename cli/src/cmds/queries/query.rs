@@ -15,21 +15,19 @@
 use std::borrow::Borrow;
 use std::str::FromStr;
 
-use clap::{App, Arg};
+use clap::App;
 use clap::AppSettings;
+use clap::Arg;
 use clap::ArgMatches;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::cmds::clusters::create::CreateCommand;
-use crate::cmds::clusters::delete::DeleteCommand;
-use crate::cmds::clusters::view::ViewCommand;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::Writer;
 use crate::error::Result;
 
-pub const CLI_QUERY_CLIENT :&str = "CLI_QUERY_CLIENT";
+pub const CLI_QUERY_CLIENT: &str = "CLI_QUERY_CLIENT";
 
 #[derive(Clone)]
 pub struct QueryCommand {
@@ -81,19 +79,21 @@ impl QueryCommand {
                     .about("Set the query client to run query, support clickshouse client")
                     .takes_value(true)
                     .env(CLI_QUERY_CLIENT),
-            ).arg(
-            Arg::new("query")
-                .about("Query statements to run")
-                .takes_value(true)
-                .required(true),
-        ).arg(
-            Arg::new("file")
-                .short('f')
-                .long("file")
-                .about("execute query commands from file")
-                .takes_value(true)
-                .required(false),
-        );
+            )
+            .arg(
+                Arg::new("query")
+                    .about("Query statements to run")
+                    .takes_value(true)
+                    .required(true),
+            )
+            .arg(
+                Arg::new("file")
+                    .short('f')
+                    .long("file")
+                    .about("execute query commands from file")
+                    .takes_value(true)
+                    .required(false),
+            );
         app
     }
 

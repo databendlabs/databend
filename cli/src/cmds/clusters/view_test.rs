@@ -25,12 +25,13 @@ use tempfile::tempdir;
 
 use crate::cmds::clusters::view::HealthStatus;
 use crate::cmds::clusters::view::ViewCommand;
+use crate::cmds::config::GithubMirror;
+use crate::cmds::config::MirrorAsset;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
-use crate::cmds::config::{GithubMirror, MirrorAsset};
 
 #[test]
 fn test_build_table() -> Result<()> {
@@ -38,7 +39,7 @@ fn test_build_table() -> Result<()> {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
         clap: RefCell::new(Default::default()),
-        mirror: GithubMirror {}.to_mirror()
+        mirror: GithubMirror {}.to_mirror(),
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();

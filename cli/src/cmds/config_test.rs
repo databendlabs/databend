@@ -13,20 +13,18 @@
 // limitations under the License.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 
-use databend_query::configs::Config as QueryConfig;
-use metasrv::configs::Config as MetaConfig;
+use httpmock::Method::GET;
+use httpmock::MockServer;
 use tempfile::tempdir;
 
-use crate::cmds::status::LocalMetaConfig;
-use crate::cmds::status::LocalQueryConfig;
+use crate::cmds::config::choose_mirror;
+use crate::cmds::config::CustomMirror;
+use crate::cmds::config::GithubMirror;
+use crate::cmds::config::MirrorAsset;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
-use crate::cmds::config::{MirrorAsset, GithubMirror, choose_mirror, CustomMirror};
-use httpmock::MockServer;
-use httpmock::Method::GET;
 
 #[test]
 fn test_mirror() -> Result<()> {
@@ -34,7 +32,7 @@ fn test_mirror() -> Result<()> {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
         clap: RefCell::new(Default::default()),
-        mirror: GithubMirror {}.to_mirror()
+        mirror: GithubMirror {}.to_mirror(),
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
@@ -50,34 +48,34 @@ fn test_mirror() -> Result<()> {
 
     // situation 1: user defined mirror
     {
-        let custom = CustomMirror{
+        let custom = CustomMirror {
             base_url: server.url("/v1/health"),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
-            client_url: "".to_string()
+            client_url: "".to_string(),
         };
         conf.mirror = custom.to_mirror();
-        let mirror = choose_mirror(&conf.clone()).unwrap();
+        let mirror = choose_mirror(&conf).unwrap();
         assert_eq!(custom.to_mirror(), mirror);
         let status = Status::read(conf.clone()).unwrap();
         assert_eq!(status.mirrors.unwrap(), custom.to_mirror());
     }
     // situation 2: previous mirror
     {
-        let status_mirror = CustomMirror{
+        let status_mirror = CustomMirror {
             base_url: server.url("/v1/health"),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
-            client_url: "".to_string()
+            client_url: "".to_string(),
         };
         let mut status = Status::read(conf.clone()).unwrap();
         status.mirrors = Some(status_mirror.to_mirror());
         status.write().unwrap();
-        let custom = GithubMirror{}.to_mirror();
+        let custom = GithubMirror {}.to_mirror();
         conf.mirror = custom;
-        let mirror = choose_mirror(&conf.clone()).unwrap();
+        let mirror = choose_mirror(&conf).unwrap();
         assert_eq!(mirror, status_mirror.to_mirror());
-        let status = Status::read(conf.clone()).unwrap();
+        let status = Status::read(conf).unwrap();
         assert_eq!(status.mirrors.unwrap(), status_mirror.to_mirror());
     }
     Ok(())
