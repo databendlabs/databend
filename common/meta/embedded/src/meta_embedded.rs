@@ -34,7 +34,7 @@ use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
-/// Local storage that provides the API defined by `KVApi`.
+/// Local storage that provides the API defined by `KVApi+MetaApi`.
 ///
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven metasrv.
 /// For a local kv, there is no distributed WAL involved,
@@ -42,13 +42,13 @@ use common_tracing::tracing;
 ///
 /// Since `StateMachine` is backed with sled::Tree, this impl has the same limitation as metasrv:
 /// - A sled::Db has to be a singleton, according to sled doc.
-/// - Every unit test has to generate a unique sled::Tree name to create a `LocalKVStore`.
+/// - Every unit test has to generate a unique sled::Tree name to create a `MetaEmbedded`.
 #[derive(Clone)]
-pub struct KV {
+pub struct MetaEmbedded {
     inner: Arc<Mutex<StateMachine>>,
 }
 
-impl KV {
+impl MetaEmbedded {
     /// Creates a KVApi impl backed with a `StateMachine`.
     ///
     /// A LocalKVStore is identified by the `name`.
@@ -59,7 +59,7 @@ impl KV {
     /// - `common_meta_sled_store::init_sled_db`
     /// - `common_meta_sled_store::init_temp_sled_db`
     #[allow(dead_code)]
-    pub async fn new(name: &str) -> common_exception::Result<KV> {
+    pub async fn new(name: &str) -> common_exception::Result<MetaEmbedded> {
         let mut config = RaftConfig::empty();
 
         config.sled_tree_prefix = format!("{}-local-kv", name);
@@ -69,7 +69,7 @@ impl KV {
             config.no_sync = true;
         }
 
-        Ok(KV {
+        Ok(MetaEmbedded {
             // StateMachine does not need to be replaced, thus we always use id=0
             inner: Arc::new(Mutex::new(StateMachine::open(&config, 0).await?)),
         })
@@ -77,7 +77,7 @@ impl KV {
 
     /// Creates a KVApi impl with a random and unique name.
     #[allow(dead_code)]
-    pub async fn new_temp() -> common_exception::Result<KV> {
+    pub async fn new_temp() -> common_exception::Result<MetaEmbedded> {
         let temp_dir = tempfile::tempdir()?;
         common_meta_sled_store::init_temp_sled_db(temp_dir);
 
@@ -92,13 +92,13 @@ impl KV {
         Self::new(&name).await
     }
 
-    pub fn sync_new_temp() -> common_exception::Result<KV> {
-        futures::executor::block_on(KV::new_temp())
+    pub fn sync_new_temp() -> common_exception::Result<MetaEmbedded> {
+        futures::executor::block_on(MetaEmbedded::new_temp())
     }
 }
 
 #[async_trait]
-impl KVApi for KV {
+impl KVApi for MetaEmbedded {
     async fn upsert_kv(
         &self,
         key: &str,

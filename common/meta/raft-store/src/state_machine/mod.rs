@@ -14,7 +14,6 @@
 
 pub use applied_state::AppliedState;
 pub use client_last_resp::ClientLastRespValue;
-pub use placement::Placement;
 pub use sm::Replication;
 pub use sm::SerializableSnapshot;
 pub use sm::SnapshotKeyValue;

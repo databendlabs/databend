@@ -15,8 +15,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
-use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
 use crate::cmds::config::GithubMirror;

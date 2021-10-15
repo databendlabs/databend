@@ -19,7 +19,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::table_info::Table;
-use crate::Database;
+use crate::DatabaseInfo;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
@@ -40,8 +40,7 @@ pub enum Cmd {
         // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
         // the two commands (failed `add` and successful `delete`)
         name: String,
-        if_not_exists: bool,
-        db: Database,
+        db: DatabaseInfo,
     },
 
     /// Drop a database if absent
@@ -97,16 +96,8 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::CreateDatabase {
-                name,
-                if_not_exists,
-                db,
-            } => {
-                write!(
-                    f,
-                    "create_db:{}={}, if_not_exists:{}, engine:{}",
-                    name, db, if_not_exists, db.database_engine
-                )
+            Cmd::CreateDatabase { name, db } => {
+                write!(f, "create_db:{}={:?}, engine:{}", name, db, db.engine)
             }
             Cmd::DropDatabase { name } => {
                 write!(f, "drop_db:{}", name)

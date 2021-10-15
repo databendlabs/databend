@@ -28,7 +28,7 @@ use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
-use common_meta_types::Database;
+use common_meta_types::DatabaseInfo;
 use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
@@ -39,7 +39,6 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqValue;
-use common_meta_types::Slot;
 use common_meta_types::Table;
 use common_tracing::tracing;
 use serde::Deserialize;
@@ -48,15 +47,13 @@ use sled::IVec;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
-use crate::sled_key_spaces::Files;
+use crate::sled_key_spaces::Databases;
 use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
 use crate::sled_key_spaces::StateMachineMeta;
-use crate::state_machine::placement::rand_n_from_m;
 use crate::state_machine::AppliedState;
 use crate::state_machine::ClientLastRespValue;
-use crate::state_machine::Placement;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
 use crate::state_machine::StateMachineMetaKey::LastApplied;
@@ -64,7 +61,6 @@ use crate::state_machine::StateMachineMetaKey::LastMembership;
 use crate::state_machine::StateMachineMetaValue;
 
 /// seq number key to generate database id
-/// TODO(xp): remove these const and replace with SledKeySpace::NAME
 const SEQ_DATABASE_ID: &str = "database_id";
 /// seq number key to generate table id
 const SEQ_TABLE_ID: &str = "table_id";
@@ -108,55 +104,11 @@ pub struct StateMachine {
     /// TODO(xp): migrate other in-memory fields to `sm_tree`.
     pub sm_tree: SledTree,
 
-    // cluster nodes, key distribution etc.
-    pub slots: Vec<Slot>,
-
-    pub replication: Replication,
-
-    /// db name to database mapping
-    pub databases: BTreeMap<String, Database>,
+    /// (db_id, table_name) to table id
+    pub table_lookup: BTreeMap<(u64, String), u64>,
 
     /// table id to table mapping
     pub tables: BTreeMap<u64, Table>,
-}
-
-/// Initialize state machine for the first time it is brought online.
-#[derive(Debug, Default, Clone)]
-pub struct StateMachineInitializer {
-    /// The number of slots to allocated.
-    initial_slots: Option<u64>,
-    /// The replication strategy.
-    replication: Option<Replication>,
-}
-
-impl StateMachineInitializer {
-    /// Set the number of slots to boot up a cluster.
-    pub fn slots(mut self, n: u64) -> Self {
-        self.initial_slots = Some(n);
-        self
-    }
-
-    /// Specifies the cluster to replicate by mirror `n` copies of every file.
-    pub fn mirror_replication(mut self, n: u64) -> Self {
-        self.replication = Some(Replication::Mirror(n));
-        self
-    }
-
-    /// Initialized the state machine for when it is created.
-    pub fn init(&self, mut sm: StateMachine) -> StateMachine {
-        let initial_slots = self.initial_slots.unwrap_or(3);
-        let replication = self.replication.clone().unwrap_or(Replication::Mirror(1));
-
-        sm.replication = replication;
-
-        sm.slots.clear();
-
-        for _i in 0..initial_slots {
-            sm.slots.push(Slot::default());
-        }
-
-        sm
-    }
 }
 
 /// A key-value pair in a snapshot is a vec of two `Vec<u8>`.
@@ -181,12 +133,6 @@ impl SerializableSnapshot {
 }
 
 impl StateMachine {
-    pub fn initializer() -> StateMachineInitializer {
-        StateMachineInitializer {
-            ..Default::default()
-        }
-    }
-
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=%config.config_id, prefix=%config.sled_tree_prefix))]
     pub fn tree_name(config: &RaftConfig, sm_id: u64) -> String {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
@@ -219,10 +165,7 @@ impl StateMachine {
 
             sm_tree,
 
-            slots: Vec::new(),
-
-            replication: Replication::Mirror(1),
-            databases: BTreeMap::new(),
+            table_lookup: BTreeMap::new(),
             tables: BTreeMap::new(),
         };
 
@@ -234,9 +177,6 @@ impl StateMachine {
         if inited.is_some() {
             Ok(sm)
         } else {
-            // Run the default init on a new state machine.
-            // TODO(xp): initialization should be customizable.
-            let sm = StateMachine::initializer().init(sm);
             let sm_meta = sm.sm_meta();
             sm_meta
                 .insert(&Initialized, &StateMachineMetaValue::Bool(true))
@@ -397,36 +337,40 @@ impl StateMachine {
             Cmd::CreateDatabase {
                 ref name, ref db, ..
             } => {
-                // - If the db present, return it.
-                // - Otherwise, create a new one with next seq number as database id, and add it in to store.
-                if self.databases.contains_key(name) {
-                    let prev = self.databases.get(name);
-                    Ok((prev.cloned(), prev.cloned()).into())
-                } else {
-                    let db = Database {
-                        database_id: self.incr_seq(SEQ_DATABASE_ID).await?,
-                        database_engine: db.database_engine.clone(),
-                        tables: Default::default(),
-                    };
+                let mut db = db.clone();
+                db.database_id = self.incr_seq(SEQ_DATABASE_ID).await?;
+
+                let dbs = self.databases();
+
+                let (prev, result) = self
+                    .sub_tree_upsert(dbs, name, &MatchSeq::Exact(0), Operation::Update(db), None)
+                    .await?;
+
+                // if it is just created
+                if prev.is_none() && result.is_some() {
+                    // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
-
-                    self.databases.insert(name.clone(), db.clone());
-                    tracing::debug!("applied CreateDatabase: {}={:?}", name, db);
-
-                    Ok((None, Some(db)).into())
                 }
+
+                tracing::debug!("applied create Database: {} {:?}", name, result);
+                Ok((prev, result).into())
             }
 
             Cmd::DropDatabase { ref name } => {
-                let prev = self.databases.get(name).cloned();
-                if prev.is_some() {
-                    self.databases.remove(name);
+                let dbs = self.databases();
+
+                let (prev, result) = self
+                    .sub_tree_upsert(dbs, name, &MatchSeq::Any, Operation::Delete, None)
+                    .await?;
+
+                // if it is just deleted
+                if prev.is_some() && result.is_none() {
+                    // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
-                    tracing::debug!("applied DropDatabase: {}", name);
-                    Ok((prev, None).into())
-                } else {
-                    Ok((None::<Database>, None::<Database>).into())
                 }
+
+                tracing::debug!("applied drop Database: {} {:?}", name, result);
+                Ok((prev, result).into())
             }
 
             Cmd::CreateTable {
@@ -435,18 +379,25 @@ impl StateMachine {
                 if_not_exists: _,
                 ref table,
             } => {
-                let db = self.databases.get(db_name);
-                let mut db = db.unwrap().to_owned();
+                let dbi = self
+                    .databases()
+                    .get(db_name)?
+                    .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
-                if db.tables.contains_key(table_name) {
-                    let table_id = db.tables.get(table_name).unwrap();
+                let dbi = dbi.1.value;
+                let curr_table_id = self
+                    .table_lookup
+                    .get(&(dbi.database_id, table_name.clone()));
+
+                if let Some(table_id) = curr_table_id {
                     let prev = self.tables.get(table_id);
                     Ok((prev.cloned(), prev.cloned()).into())
                 } else {
+                    let table_id = self.incr_seq(SEQ_TABLE_ID).await?;
                     let table = Table {
-                        table_id: self.incr_seq(SEQ_TABLE_ID).await?,
+                        table_id,
                         table_name: table_name.to_string(),
-                        database_id: db.database_id,
+                        database_id: dbi.database_id,
                         db_name: db_name.to_string(),
                         schema: table.schema.clone(),
                         table_engine: table.table_engine.clone(),
@@ -454,9 +405,11 @@ impl StateMachine {
                         parts: table.parts.clone(),
                     };
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
-                    db.tables.insert(table_name.clone(), table.table_id);
-                    self.databases.insert(db_name.clone(), db);
+
+                    self.table_lookup
+                        .insert((dbi.database_id, table_name.clone()), table_id);
                     self.tables.insert(table.table_id, table.clone());
+
                     tracing::debug!("applied CreateTable: {}={:?}", table_name, table);
 
                     Ok((None, Some(table)).into())
@@ -468,12 +421,22 @@ impl StateMachine {
                 ref table_name,
                 if_exists: _,
             } => {
-                let db = self.databases.get_mut(db_name).unwrap();
-                let tbl_id = db.tables.get(table_name);
-                if let Some(tbl_id) = tbl_id {
-                    let tbl_id = tbl_id.to_owned();
-                    db.tables.remove(table_name);
-                    let prev = self.tables.remove(&tbl_id);
+                let dbi = self
+                    .databases()
+                    .get(db_name)?
+                    .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+
+                let dbi = dbi.1.value;
+                let curr_table_id = self
+                    .table_lookup
+                    .get(&(dbi.database_id, table_name.clone()))
+                    .cloned();
+
+                if let Some(table_id) = curr_table_id {
+                    self.table_lookup
+                        .remove(&(dbi.database_id, table_name.clone()));
+                    let prev = self.tables.remove(&table_id);
+
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
 
                     Ok((prev, None).into())
@@ -618,59 +581,10 @@ impl StateMachine {
         Ok(Some((0, AppliedState::None)))
     }
 
-    /// Initialize slots by assign nodes to everyone of them randomly, according to replicationn config.
-    pub fn init_slots(&mut self) -> common_exception::Result<()> {
-        for i in 0..self.slots.len() {
-            self.assign_rand_nodes_to_slot(i)?;
-        }
-
-        Ok(())
-    }
-
-    /// Assign `n` random nodes to a slot thus the files associated to this slot are replicated to the corresponding nodes.
-    /// This func does not cnosider nodes load and should only be used when a Dfs cluster is initiated.
-    /// TODO(xp): add another func for load based assignment
-    pub fn assign_rand_nodes_to_slot(&mut self, slot_index: usize) -> common_exception::Result<()> {
-        let n = match self.replication {
-            Replication::Mirror(x) => x,
-        } as usize;
-
-        let mut node_ids = self.list_node_ids();
-        node_ids.sort_unstable();
-        let total = node_ids.len();
-        let node_indexes = rand_n_from_m(total, n)?;
-
-        let mut slot = self
-            .slots
-            .get_mut(slot_index)
-            .ok_or_else(|| ErrorCode::InvalidConfig(format!("slot not found: {}", slot_index)))?;
-
-        slot.node_ids = node_indexes.iter().map(|i| node_ids[*i]).collect();
-
-        Ok(())
-    }
-
+    #[allow(dead_code)]
     fn list_node_ids(&self) -> Vec<NodeId> {
         let sm_nodes = self.nodes();
         sm_nodes.range_keys(..).expect("fail to list nodes")
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub fn get_file(&self, key: &str) -> common_exception::Result<Option<String>> {
-        tracing::debug!("SM::get_file: {}", key);
-
-        let files = self.files();
-        let x = files.get(&key.to_string())?;
-
-        tracing::debug!("SM::get_file: {}={:?}", key, x);
-        Ok(x)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub fn list_files(&self, prefix: &str) -> common_exception::Result<Vec<String>> {
-        let files = self.files();
-        let fns = files.scan_prefix(&prefix.to_string())?;
-        Ok(fns.into_iter().map(|(k, _v)| k).collect())
     }
 
     pub fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
@@ -678,13 +592,25 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    pub fn get_database(&self, name: &str) -> Option<Database> {
-        let x = self.databases.get(name);
-        x.cloned()
+    pub fn get_database(
+        &self,
+        name: &str,
+    ) -> Result<Option<SeqValue<KVValue<DatabaseInfo>>>, ErrorCode> {
+        let dbs = self.databases();
+        let x = dbs.get(&name.to_string())?;
+        Ok(x)
     }
 
-    pub fn get_databases(&self) -> &BTreeMap<String, Database> {
-        &self.databases
+    pub fn get_databases(&self) -> Result<Vec<(String, DatabaseInfo)>, ErrorCode> {
+        let mut res = vec![];
+
+        let it = self.databases().range(..)?;
+        for r in it {
+            let (a, b) = r?;
+            res.push((a, b.1.value));
+        }
+
+        Ok(res)
     }
 
     pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
@@ -795,11 +721,6 @@ impl StateMachine {
         self.sm_tree.key_space()
     }
 
-    /// The file names stored in this cluster
-    pub fn files(&self) -> AsKeySpace<Files> {
-        self.sm_tree.key_space()
-    }
-
     /// A kv store of all other general purpose information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
     /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
@@ -816,14 +737,8 @@ impl StateMachine {
     pub fn client_last_resps(&self) -> AsKeySpace<ClientLastResps> {
         self.sm_tree.key_space()
     }
-}
 
-impl Placement for StateMachine {
-    fn get_slots(&self) -> &[Slot] {
-        &self.slots
-    }
-
-    fn get_placement_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
-        self.get_node(node_id)
+    pub fn databases(&self) -> AsKeySpace<Databases> {
+        self.sm_tree.key_space()
     }
 }

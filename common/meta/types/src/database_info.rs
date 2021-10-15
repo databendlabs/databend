@@ -13,28 +13,7 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
-use std::fmt;
-use std::fmt::Formatter;
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct Database {
-    pub database_id: u64,
-
-    /// engine name of db
-    pub database_engine: String,
-
-    /// tables belong to this database.
-    pub tables: HashMap<String, u64>,
-}
-
-impl fmt::Display for Database {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "database id: {}", self.database_id)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
     pub database_id: u64,
     pub db: String,

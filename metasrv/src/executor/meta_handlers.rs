@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
@@ -38,7 +37,6 @@ use common_meta_types::Cmd::DropDatabase;
 use common_meta_types::Cmd::DropTable;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
-use common_meta_types::Database;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
 use common_meta_types::Table;
@@ -63,11 +61,10 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
             txid: None,
             cmd: CreateDatabase {
                 name: db_name.clone(),
-                if_not_exists,
-                db: Database {
+                db: DatabaseInfo {
                     database_id: 0,
-                    database_engine: plan.engine.clone(),
-                    tables: HashMap::new(),
+                    db: db_name.clone(),
+                    engine: plan.engine.clone(),
                 },
             },
         };
@@ -78,28 +75,22 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        match rst {
-            AppliedState::DataBase { prev, result } => {
-                if let Some(prev) = prev {
-                    if if_not_exists {
-                        Ok(CreateDatabaseReply {
-                            database_id: prev.database_id,
-                        })
-                    } else {
-                        Err(ErrorCode::DatabaseAlreadyExists(format!(
-                            "{} database exists",
-                            db_name
-                        )))
-                    }
-                } else {
-                    Ok(CreateDatabaseReply {
-                        database_id: result.unwrap().database_id,
-                    })
-                }
-            }
+        let (prev, result) = match rst {
+            AppliedState::DataBase { prev, result } => (prev, result),
+            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        };
 
-            _ => Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        if prev.is_some() && !if_not_exists {
+            return Err(ErrorCode::DatabaseAlreadyExists(format!(
+                "{} database exists",
+                db_name
+            )));
         }
+
+        Ok(CreateDatabaseReply {
+            // TODO(xp): return DatabaseInfo?
+            database_id: result.unwrap().1.value.database_id,
+        })
     }
 }
 
@@ -107,17 +98,10 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
 impl RequestHandler<GetDatabaseAction> for ActionHandler {
     async fn handle(&self, act: GetDatabaseAction) -> common_exception::Result<DatabaseInfo> {
         let db_name = act.db;
-        let db = self.meta_node.get_database(&db_name).await;
+        let db = self.meta_node.get_database(&db_name).await?;
 
         match db {
-            Some(db) => {
-                let rst = DatabaseInfo {
-                    database_id: db.database_id,
-                    db: db_name,
-                    engine: db.database_engine,
-                };
-                Ok(rst)
-            }
+            Some(db) => Ok(db.1.value),
             None => Err(ErrorCode::UnknownDatabase(db_name)),
         }
     }
@@ -266,16 +250,21 @@ impl RequestHandler<GetTableAction> for ActionHandler {
         let db_name = &act.db;
         let table_name = &act.table;
 
-        let db = self.meta_node.get_database(db_name).await.ok_or_else(|| {
+        let x = self.meta_node.get_database(db_name).await?;
+        let db = x.ok_or_else(|| {
             ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db_name))
         })?;
 
-        let table_id = db
-            .tables
-            .get(table_name)
+        let db = db.1.value;
+        let db_id = db.database_id;
+
+        let table_id = self
+            .meta_node
+            .lookup_table_id(db_id, table_name)
+            .await
             .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table_name)))?;
 
-        let result = self.meta_node.get_table(table_id).await;
+        let result = self.meta_node.get_table(&table_id).await;
 
         match result {
             Some(table) => {
@@ -344,16 +333,11 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
         &self,
         _req: GetDatabasesAction,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        let res = self.meta_node.get_databases().await;
+        let res = self.meta_node.get_databases().await?;
+
         Ok(res
             .iter()
-            .map(|(name, db)| {
-                Arc::new(DatabaseInfo {
-                    database_id: db.database_id,
-                    db: name.to_string(),
-                    engine: db.database_engine.to_string(),
-                })
-            })
+            .map(|(_name, db)| Arc::new(db.clone()))
             .collect::<Vec<_>>())
     }
 }

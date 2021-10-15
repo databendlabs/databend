@@ -503,8 +503,7 @@ dependencies = [
  "common-exception",
  "common-infallible",
  "common-meta-raft-store",
- "crossbeam 0.8.1",
- "crossbeam-queue 0.3.2",
+ "databend-meta",
  "databend-query",
  "dirs",
  "dyn-clone",
@@ -515,7 +514,6 @@ dependencies = [
  "lexical-util",
  "libc",
  "log",
- "metasrv",
  "nix 0.22.2",
  "portpicker",
  "predicates 2.0.3",
@@ -1252,7 +1250,7 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-meta-api",
- "common-meta-local-store",
+ "common-meta-embedded",
  "common-meta-types",
  "common-tracing",
  "lazy_static",
@@ -1271,6 +1269,23 @@ dependencies = [
  "common-meta-types",
  "common-planners",
  "futures",
+]
+
+[[package]]
+name = "common-meta-embedded"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-api",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-tracing",
+ "futures",
+ "pretty_assertions",
+ "tempfile",
 ]
 
 [[package]]
@@ -1302,23 +1317,6 @@ dependencies = [
  "tonic",
  "tonic-build",
  "trust-dns-resolver",
-]
-
-[[package]]
-name = "common-meta-local-store"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-base",
- "common-exception",
- "common-meta-api",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-tracing",
- "futures",
- "pretty_assertions",
- "tempfile",
 ]
 
 [[package]]
@@ -1824,6 +1822,65 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
+name = "databend-meta"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-raft",
+ "async-trait",
+ "axum",
+ "axum-server",
+ "byteorder",
+ "common-arrow",
+ "common-base",
+ "common-building",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-flight-rpc",
+ "common-functions",
+ "common-infallible",
+ "common-meta-api",
+ "common-meta-flight",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-planners",
+ "common-tracing",
+ "env_logger 0.9.0",
+ "flaky_test",
+ "futures",
+ "indexmap",
+ "lazy_static",
+ "log",
+ "maplit",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "num",
+ "num_cpus",
+ "pretty_assertions",
+ "prost",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sled",
+ "structopt",
+ "structopt-toml",
+ "tempfile",
+ "test-env-log",
+ "thiserror",
+ "threadpool",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "tower",
+ "tracing-appender",
+ "uuid",
+]
+
+[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
@@ -1856,8 +1913,8 @@ dependencies = [
  "common-io",
  "common-management",
  "common-meta-api",
+ "common-meta-embedded",
  "common-meta-flight",
- "common-meta-local-store",
  "common-meta-types",
  "common-planners",
  "common-streams",
@@ -3506,65 +3563,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59accc507f1338036a0477ef61afdae33cde60840f4dfe481319ce3ad116ddf9"
 dependencies = [
  "autocfg 1.0.1",
-]
-
-[[package]]
-name = "metasrv"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-raft",
- "async-trait",
- "axum",
- "axum-server",
- "byteorder",
- "common-arrow",
- "common-base",
- "common-building",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-flight-rpc",
- "common-functions",
- "common-infallible",
- "common-meta-api",
- "common-meta-flight",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-planners",
- "common-tracing",
- "env_logger 0.9.0",
- "flaky_test",
- "futures",
- "indexmap",
- "lazy_static",
- "log",
- "maplit",
- "metrics",
- "metrics-exporter-prometheus",
- "num",
- "num_cpus",
- "pretty_assertions",
- "prost",
- "rand",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "sled",
- "structopt",
- "structopt-toml",
- "tempfile",
- "test-env-log",
- "thiserror",
- "threadpool",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "tower",
- "tracing-appender",
- "uuid",
 ]
 
 [[package]]
@@ -6252,14 +6250,15 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.4.8"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f60422bc7fefa2f3ec70359b8ff1caff59d785877eb70595904605bcc412470f"
+checksum = "d15a6b60cdff0cb039d81d3b37f8bc3d7e53dca09069aae3ef2502ca4834fe30"
 dependencies = [
  "futures-core",
  "futures-util",
  "indexmap",
  "pin-project",
+ "pin-project-lite",
  "rand",
  "slab",
  "tokio",

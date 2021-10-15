@@ -27,7 +27,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
-use crate::kv::KV;
+use crate::meta_embedded::MetaEmbedded;
 
 #[tokio::test]
 async fn test_kv_async_api() -> Result<()> {
@@ -38,7 +38,7 @@ async fn test_kv_async_api() -> Result<()> {
         .unwrap()
         .as_secs();
 
-    let api = KV::new_temp().await?;
+    let api = MetaEmbedded::new_temp().await?;
 
     tracing::info!("--- upsert");
 

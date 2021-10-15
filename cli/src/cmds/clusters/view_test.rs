@@ -17,10 +17,10 @@ use std::cell::RefCell;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
+use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
 use httpmock::MockServer;
-use metasrv::configs::Config as MetaConfig;
 use tempfile::tempdir;
 
 use crate::cmds::clusters::view::HealthStatus;

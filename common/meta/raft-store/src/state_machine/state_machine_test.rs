@@ -22,15 +22,12 @@ use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_base::tokio;
 use common_meta_types::Cmd;
-use common_meta_types::Database;
 use common_meta_types::KVMeta;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
-use common_meta_types::Node;
 use common_meta_types::Operation;
 use common_meta_types::SeqValue;
-use common_meta_types::Slot;
 use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -40,117 +37,9 @@ use crate::state_machine::testing::pretty_snapshot;
 use crate::state_machine::testing::pretty_snapshot_iter;
 use crate::state_machine::testing::snapshot_logs;
 use crate::state_machine::AppliedState;
-use crate::state_machine::Replication;
 use crate::state_machine::SerializableSnapshot;
 use crate::state_machine::StateMachine;
 use crate::testing::new_raft_test_context;
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_assign_rand_nodes_to_slot() -> anyhow::Result<()> {
-    // - Create a state machine with 3 node 1,3,5.
-    // - Assert that expected number of nodes are assigned to a slot.
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
-    sm.nodes()
-        .append(&[
-            (1, Node::default()),
-            (3, Node::default()),
-            (5, Node::default()),
-        ])
-        .await?;
-
-    sm.slots = vec![Slot::default(), Slot::default(), Slot::default()];
-    sm.replication = Replication::Mirror(3);
-
-    // assign all node to slot 2
-    sm.assign_rand_nodes_to_slot(2)?;
-    assert_eq!(sm.slots[2].node_ids, vec![1, 3, 5]);
-
-    // assign all node again to slot 2
-    sm.assign_rand_nodes_to_slot(2)?;
-    assert_eq!(sm.slots[2].node_ids, vec![1, 3, 5]);
-
-    // assign 1 node again to slot 1
-    sm.replication = Replication::Mirror(1);
-    sm.assign_rand_nodes_to_slot(1)?;
-    assert_eq!(1, sm.slots[1].node_ids.len());
-
-    let id = sm.slots[1].node_ids[0];
-    assert!(id == 1 || id == 3 || id == 5);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_init_slots() -> anyhow::Result<()> {
-    // - Create a state machine with 3 node 1,3,5.
-    // - Initialize all slots.
-    // - Assert slot states.
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
-    sm.nodes()
-        .append(&[
-            (1, Node::default()),
-            (3, Node::default()),
-            (5, Node::default()),
-        ])
-        .await?;
-
-    sm.slots = vec![Slot::default(), Slot::default(), Slot::default()];
-    sm.replication = Replication::Mirror(1);
-
-    sm.init_slots()?;
-    for slot in sm.slots.iter() {
-        assert_eq!(1, slot.node_ids.len());
-
-        let id = slot.node_ids[0];
-        assert!(id == 1 || id == 3 || id == 5);
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_builder() -> anyhow::Result<()> {
-    // - Assert default state machine builder
-    // - Assert customized state machine builder
-
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    {
-        let tc = new_raft_test_context();
-        let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-        assert_eq!(3, sm.slots.len());
-        let Replication::Mirror(n) = sm.replication;
-        assert_eq!(1, n);
-    }
-
-    {
-        let tc = new_raft_test_context();
-        let sm = StateMachine::open(&tc.raft_config, 1).await?;
-
-        let sm = StateMachine::initializer()
-            .slots(5)
-            .mirror_replication(7)
-            .init(sm);
-
-        assert_eq!(5, sm.slots.len());
-        let Replication::Mirror(n) = sm.replication;
-        assert_eq!(7, n);
-    }
-
-    Ok(())
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
@@ -221,28 +110,20 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
     struct T {
         name: &'static str,
-        prev: Option<Database>,
-        result: Option<Database>,
+        prev: Option<u64>,
+        result: Option<u64>,
     }
 
     fn case(name: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
-        let prev = prev.map(|id| Database {
-            database_id: id,
-            ..Default::default()
-        });
-        let result = result.map(|id| Database {
-            database_id: id,
-            ..Default::default()
-        });
         T { name, prev, result }
     }
 
     let cases: Vec<T> = vec![
         case("foo", None, Some(1)),
         case("foo", Some(1), Some(1)),
-        case("bar", None, Some(2)),
-        case("bar", Some(2), Some(2)),
-        case("wow", None, Some(3)),
+        case("bar", None, Some(3)),
+        case("bar", Some(3), Some(3)),
+        case("wow", None, Some(5)),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -251,34 +132,36 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let resp = m
             .apply_cmd(&Cmd::CreateDatabase {
                 name: c.name.to_string(),
-                if_not_exists: true,
                 db: Default::default(),
             })
             .await?;
-        assert_eq!(
-            AppliedState::DataBase {
-                prev: c.prev.clone(),
-                result: c.result.clone(),
-            },
-            resp,
-            "{}-th",
-            i
-        );
+
+        let (prev, result) = match resp {
+            AppliedState::DataBase { prev, result } => (
+                prev.map(|(_seq, kv_value)| kv_value.value.database_id),
+                result.map(|(_seq, kv_value)| kv_value.value.database_id),
+            ),
+            _ => {
+                panic!("expect AppliedState::Database")
+            }
+        };
+        assert_eq!(c.prev, prev, "{}-th", i);
+        assert_eq!(c.result, result, "{}-th", i);
 
         // get
 
-        let want = match (&c.prev, &c.result) {
-            (Some(ref a), _) => a.database_id,
-            (_, Some(ref b)) => b.database_id,
+        let want = match (&prev, &result) {
+            (Some(ref a), _) => a,
+            (_, Some(ref b)) => b,
             _ => {
                 panic!("both none");
             }
         };
 
         let got = m
-            .get_database(c.name)
-            .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name));
-        assert_eq!(want, got.unwrap().database_id);
+            .get_database(c.name)?
+            .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name))?;
+        assert_eq!(*want, got.1.value.database_id);
     }
 
     Ok(())

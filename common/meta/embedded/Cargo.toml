@@ -1,5 +1,5 @@
 [package]
-name = "common-meta-local-store"
+name = "common-meta-embedded"
 version = "0.1.0"
 description = "distributed meta data service"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]

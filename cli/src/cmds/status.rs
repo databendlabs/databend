@@ -25,10 +25,10 @@ use std::process::Stdio;
 use std::thread::sleep;
 use std::time;
 
+use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use libc::pid_t;
 use log::info;
-use metasrv::configs::Config as MetaConfig;
 use nix::unistd::Pid;
 use serde::Deserialize;
 use serde::Serialize;
@@ -172,34 +172,40 @@ impl LocalRuntime for LocalMetaConfig {
         // configure runtime by process local env settings
         // TODO(zhihanz): configure on other needed env variables for raft metastore
         command
-            .env(metasrv::configs::config::METASRV_LOG_LEVEL, conf.log_level)
-            .env(metasrv::configs::config::METASRV_LOG_DIR, conf.log_dir)
             .env(
-                metasrv::configs::config::METASRV_FLIGHT_API_ADDRESS,
+                databend_meta::configs::config::METASRV_LOG_LEVEL,
+                conf.log_level,
+            )
+            .env(
+                databend_meta::configs::config::METASRV_LOG_DIR,
+                conf.log_dir,
+            )
+            .env(
+                databend_meta::configs::config::METASRV_FLIGHT_API_ADDRESS,
                 conf.flight_api_address,
             )
             .env(
-                metasrv::configs::config::ADMIN_API_ADDRESS,
+                databend_meta::configs::config::ADMIN_API_ADDRESS,
                 conf.admin_api_address,
             )
             .env(
-                metasrv::configs::config::METASRV_METRIC_API_ADDRESS,
+                databend_meta::configs::config::METASRV_METRIC_API_ADDRESS,
                 conf.metric_api_address,
             )
             .env(
-                metasrv::configs::config::FLIGHT_TLS_SERVER_CERT,
+                databend_meta::configs::config::FLIGHT_TLS_SERVER_CERT,
                 conf.flight_tls_server_cert,
             )
             .env(
-                metasrv::configs::config::FLIGHT_TLS_SERVER_KEY,
+                databend_meta::configs::config::FLIGHT_TLS_SERVER_KEY,
                 conf.flight_tls_server_key,
             )
             .env(
-                metasrv::configs::config::ADMIN_TLS_SERVER_CERT,
+                databend_meta::configs::config::ADMIN_TLS_SERVER_CERT,
                 conf.admin_tls_server_cert,
             )
             .env(
-                metasrv::configs::config::ADMIN_TLS_SERVER_KEY,
+                databend_meta::configs::config::ADMIN_TLS_SERVER_KEY,
                 conf.admin_tls_server_key,
             )
             .env(
