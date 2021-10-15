@@ -42,37 +42,8 @@ pub struct Config {
     pub group: String,
 
     pub databend_dir: String,
-    pub mirror: Mirror,
+    pub mirror: CustomMirror,
     pub clap: RefCell<ArgMatches>,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct Mirror {
-    pub base_url: String,
-    pub databend_url: String,
-    pub databend_tag_url: String,
-    pub client: String,
-}
-
-impl From<CustomMirror> for Mirror {
-    fn from(asset: CustomMirror) -> Self {
-        Mirror {
-            base_url: asset.get_base_url(),
-            databend_url: asset.get_databend_url(),
-            databend_tag_url: asset.get_databend_tag_url(),
-            client: asset.get_client_url(),
-        }
-    }
-}
-impl From<Mirror> for CustomMirror {
-    fn from(m: Mirror) -> Self {
-        CustomMirror {
-            base_url: m.base_url,
-            databend_url: m.databend_url,
-            databend_tag_url: m.databend_tag_url,
-            client_url: m.client,
-        }
-    }
 }
 
 pub trait MirrorAsset {
@@ -86,12 +57,12 @@ pub trait MirrorAsset {
     fn get_databend_url(&self) -> String;
     fn get_databend_tag_url(&self) -> String;
     fn get_client_url(&self) -> String;
-    fn to_mirror(&self) -> Mirror {
-        Mirror {
+    fn to_mirror(&self) -> CustomMirror {
+        CustomMirror {
             base_url: self.get_base_url(),
             databend_url: self.get_databend_url(),
             databend_tag_url: self.get_databend_tag_url(),
-            client: self.get_client_url(),
+            client_url: self.get_client_url(),
         }
     }
 }
@@ -114,7 +85,7 @@ impl MirrorAsset for GithubMirror {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CustomMirror {
     pub(crate) base_url: String,
     pub(crate) databend_url: String,
@@ -162,19 +133,19 @@ impl MirrorAsset for CustomMirror {
 // user if it could not be connected.
 // in default situation(no mirror stored in status), we provided a pool of possible mirrors to use.
 // it would select one working mirror as default mirror
-pub fn choose_mirror(conf: &Config) -> Result<Mirror, CliError> {
+pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     // try user defined mirror source at first
     let conf = conf.clone();
     let default = GithubMirror {};
     if default.to_mirror() != conf.mirror {
         let custom: CustomMirror = conf.mirror.clone().into();
         for _ in 0..5 {
-            let custom: CustomMirror = conf.mirror.clone().into();
+            let custom: CustomMirror = conf.mirror.clone();
             if custom.is_ok() {
                 let mut status = Status::read(conf).expect("cannot configure status");
                 status.mirrors = Some(custom.to_mirror());
                 status.write()?;
-                return Ok(Mirror::from(custom));
+                return Ok(custom);
             } else {
                 sleep(Duration::from_secs(1));
             }
@@ -333,8 +304,7 @@ impl Config {
                     .unwrap()
                     .parse()
                     .unwrap(),
-            )
-            .into(),
+            ),
             clap,
         };
         Config::build(config)

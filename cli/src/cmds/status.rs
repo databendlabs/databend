@@ -35,7 +35,7 @@ use serde::Serialize;
 use sysinfo::System;
 use sysinfo::SystemExt;
 
-use crate::cmds::config::Mirror;
+use crate::cmds::config::{CustomMirror};
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
@@ -47,7 +47,7 @@ pub struct Status {
     pub local_configs: HashMap<String, String>,
     pub local_config_dir: String,
     pub current_profile: Option<String>,
-    pub mirrors: Option<Mirror>,
+    pub mirrors: Option<CustomMirror>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
