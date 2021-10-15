@@ -130,3 +130,104 @@ impl From<(Option<SeqValue<KVValue>>, Option<SeqValue<KVValue>>)> for AppliedSta
         }
     }
 }
+
+pub enum PrevOrResult<'a> {
+    Prev(&'a AppliedState),
+    Result(&'a AppliedState),
+}
+
+impl<'a> PrevOrResult<'a> {
+    pub fn is_some(&self) -> bool {
+        match self {
+            PrevOrResult::Prev(state) => state.prev_is_some(),
+            PrevOrResult::Result(state) => state.result_is_some(),
+        }
+    }
+    pub fn is_none(&self) -> bool {
+        !self.is_some()
+    }
+}
+
+impl AppliedState {
+    pub fn prev(&self) -> PrevOrResult {
+        PrevOrResult::Prev(self)
+    }
+
+    pub fn result(&self) -> PrevOrResult {
+        PrevOrResult::Result(self)
+    }
+
+    /// Whether the state changed
+    pub fn changed(self) -> bool {
+        match self {
+            AppliedState::String {
+                ref prev,
+                ref result,
+            } => prev != result,
+            AppliedState::Seq { .. } => true,
+            AppliedState::Node {
+                ref prev,
+                ref result,
+            } => prev != result,
+            AppliedState::DataBase {
+                ref prev,
+                ref result,
+            } => prev != result,
+            AppliedState::Table {
+                ref prev,
+                ref result,
+            } => prev != result,
+            AppliedState::KV {
+                ref prev,
+                ref result,
+            } => prev != result,
+            AppliedState::DataPartsCount {
+                ref prev,
+                ref result,
+            } => prev != result,
+            AppliedState::None => false,
+        }
+    }
+
+    pub fn prev_is_some(&self) -> bool {
+        !self.prev_is_none()
+    }
+
+    pub fn result_is_some(&self) -> bool {
+        !self.result_is_none()
+    }
+
+    pub fn is_some(&self) -> (bool, bool) {
+        (self.prev_is_some(), self.result_is_some())
+    }
+
+    pub fn is_none(&self) -> (bool, bool) {
+        (self.prev_is_none(), self.result_is_none())
+    }
+
+    pub fn prev_is_none(&self) -> bool {
+        match self {
+            AppliedState::String { ref prev, .. } => prev.is_none(),
+            AppliedState::Seq { .. } => false,
+            AppliedState::Node { ref prev, .. } => prev.is_none(),
+            AppliedState::DataBase { ref prev, .. } => prev.is_none(),
+            AppliedState::Table { ref prev, .. } => prev.is_none(),
+            AppliedState::KV { ref prev, .. } => prev.is_none(),
+            AppliedState::DataPartsCount { ref prev, .. } => prev.is_none(),
+            AppliedState::None => true,
+        }
+    }
+
+    pub fn result_is_none(&self) -> bool {
+        match self {
+            AppliedState::String { ref result, .. } => result.is_none(),
+            AppliedState::Seq { .. } => false,
+            AppliedState::Node { ref result, .. } => result.is_none(),
+            AppliedState::DataBase { ref result, .. } => result.is_none(),
+            AppliedState::Table { ref result, .. } => result.is_none(),
+            AppliedState::KV { ref result, .. } => result.is_none(),
+            AppliedState::DataPartsCount { ref result, .. } => result.is_none(),
+            AppliedState::None => true,
+        }
+    }
+}
