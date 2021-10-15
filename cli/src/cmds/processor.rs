@@ -53,6 +53,7 @@ impl Processor {
             Box::new(VersionCommand::create()),
             Box::new(CommentCommand::create()),
             Box::new(PackageCommand::create(conf.clone())),
+            Box::new(ClusterCommand::create(conf.clone())),
         ];
 
         let mut commands: Vec<Box<dyn Command>> = sub_commands.clone();
