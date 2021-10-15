@@ -346,34 +346,6 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
 impl RequestHandler<GetTablesAction> for ActionHandler {
     async fn handle(&self, req: GetTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let res = self.meta_node.get_tables(req.db.as_str()).await?;
-        Ok(res
-            .iter()
-            .try_fold(Vec::new(), |mut acc, (id, name, tbl)| {
-                let arrow_schema = ArrowSchema::try_from(&FlightData {
-                    data_header: tbl.schema.clone(),
-                    ..Default::default()
-                })
-                .map_err(|e| {
-                    ErrorCode::IllegalSchema(format!(
-                        "invalid schema of table id {}, error: {}",
-                        *id,
-                        e.to_string()
-                    ))
-                })?;
-
-                let table_info = TableInfo {
-                    database_id: tbl.database_id,
-                    db: req.db.to_string(),
-                    table_id: *id,
-                    version: 0,
-                    name: name.to_string(),
-                    schema: Arc::new(arrow_schema.into()),
-                    engine: tbl.table_engine.to_string(),
-                    options: tbl.table_options.clone(),
-                };
-
-                acc.push(Arc::new(table_info));
-                Ok::<_, ErrorCode>(acc)
-            })?)
+        Ok(res)
     }
 }

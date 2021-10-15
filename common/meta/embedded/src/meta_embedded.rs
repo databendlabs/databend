@@ -45,7 +45,7 @@ use common_tracing::tracing;
 /// - Every unit test has to generate a unique sled::Tree name to create a `MetaEmbedded`.
 #[derive(Clone)]
 pub struct MetaEmbedded {
-    inner: Arc<Mutex<StateMachine>>,
+    pub(crate) inner: Arc<Mutex<StateMachine>>,
 }
 
 impl MetaEmbedded {
@@ -76,7 +76,6 @@ impl MetaEmbedded {
     }
 
     /// Creates a KVApi impl with a random and unique name.
-    #[allow(dead_code)]
     pub async fn new_temp() -> common_exception::Result<MetaEmbedded> {
         let temp_dir = tempfile::tempdir()?;
         common_meta_sled_store::init_temp_sled_db(temp_dir);
