@@ -22,9 +22,9 @@ use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 use clap::ValueHint;
+use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use lexical_util::num::AsPrimitive;
-use metasrv::configs::Config as MetaConfig;
 use sysinfo::System;
 use sysinfo::SystemExt;
 

@@ -870,7 +870,7 @@ impl MetaNode {
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    /// When a node is initialized with boot or boot_non_voter, start it with metasrv::new().
+    /// When a node is initialized with boot or boot_non_voter, start it with databend_meta::new().
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot(
         node_id: NodeId,
