@@ -37,7 +37,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
-use metasrv::init_meta_ut;
+use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -51,7 +51,7 @@ async fn test_restart() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (mut tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (mut tc, addr) = databend_meta::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -106,7 +106,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
         // restart by opening existent meta db
         tc.config.raft_config.boot = false;
-        metasrv::tests::start_metasrv_with_context(&mut tc).await?;
+        databend_meta::tests::start_metasrv_with_context(&mut tc).await?;
     }
 
     tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
@@ -140,7 +140,7 @@ async fn test_generic_kv_mget() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -188,7 +188,7 @@ async fn test_generic_kv_list() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -236,7 +236,7 @@ async fn test_generic_kv_delete() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -304,7 +304,7 @@ async fn test_generic_kv_update() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_list");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -410,7 +410,7 @@ async fn test_generic_kv_update_meta() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_update_meta");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -516,7 +516,7 @@ async fn test_generic_kv_timeout() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv_timeout");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -630,7 +630,7 @@ async fn test_generic_kv() -> anyhow::Result<()> {
         let span = tracing::span!(tracing::Level::INFO, "test_generic_kv");
         let _ent = span.enter();
 
-        let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+        let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -702,7 +702,7 @@ async fn test_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -831,7 +831,7 @@ async fn test_database_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -860,7 +860,7 @@ async fn test_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -1028,7 +1028,7 @@ async fn test_table_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -1106,7 +1106,7 @@ async fn create_database(
 async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let test_db = "db1";
@@ -1184,7 +1184,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
 async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // Empty Database
@@ -1198,7 +1198,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
 async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
-    let (_tc, addr) = metasrv::tests::start_metasrv().await?;
+    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // create-db operation will increases meta_version

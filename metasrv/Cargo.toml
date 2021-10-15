@@ -1,5 +1,5 @@
 [package]
-name = "metasrv"
+name = "databend-meta"
 version = "0.1.0"
 description = "distributed meta data service"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
