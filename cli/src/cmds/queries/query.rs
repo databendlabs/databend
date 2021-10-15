@@ -86,6 +86,13 @@ impl QueryCommand {
                 .about("Query statements to run")
                 .takes_value(true)
                 .required(true),
+        ).arg(
+            Arg::new("file")
+                .short('f')
+                .long("file")
+                .about("execute query commands from file")
+                .takes_value(true)
+                .required(false),
         );
         app
     }
@@ -93,6 +100,7 @@ impl QueryCommand {
     pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         writer.write_ok(&*format!("{:?}", args.clone()));
         writer.write_ok(&*format!("{:?}", args.unwrap().value_of("query")));
+
         Ok(())
     }
 }

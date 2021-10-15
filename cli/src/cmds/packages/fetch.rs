@@ -26,44 +26,101 @@ use tar::Archive;
 use crate::cmds::Config;
 use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
-use crate::error::Result;
+use crate::error::{Result, CliError};
 
 #[derive(Clone)]
 pub struct FetchCommand {
     conf: Config,
 }
 
+pub fn get_go_architecture() -> Result<(String, String)> {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    // Check rosetta
+    let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
+    if rosetta.contains("Darwin") && rosetta.contains("arm64") {
+        return Ok(("darwin".to_string(), "arm64".to_string()));
+    }
+    let goos = match os {
+        "darwin" => "darwin".to_string(),
+        "macos" => "darwin".to_string(),
+        "linux" => "linux".to_string(),
+        _ => {
+            return Err(CliError::Unknown(format!("Unsupported go os {}", std::env::consts::OS)));
+        },
+    };
+    let goarch = match arch {
+        "x86_64" => "amd64".to_string(),
+        "aarch_64" => "arm64".to_string(),
+        _ => {
+            return Err(CliError::Unknown(format!("Unsupported go architecture {}", std::env::consts::ARCH)));
+        },
+    };
+    return Ok((goos, goarch))
+}
+
+pub fn unpack(tar_file: &String, target_dir: &String) -> Result<()> {
+    let tar_gz = File::open(tar_file)?;
+    let tar = GzDecoder::new(tar_gz);
+    let mut archive = Archive::new(tar);
+    let res = archive.unpack(target_dir.clone());
+    match res {
+        Ok(_) => {
+            return Ok(())
+        }
+        Err(e) => {
+            return Err(CliError::Unknown(format!("cannot unpack file {} to {}, error: {}", tar_file, target_dir, e)));
+        }
+    };
+}
+
+pub fn download(url: &String, target_file: &String) -> Result<()> {
+    let res = ureq::get(url.as_str()).call()?;
+    let total_size: u64 = res.header("content-length").expect("cannot fetch content length from header").parse().expect("cannot parse content header");
+    let pb = ProgressBar::new(total_size);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .progress_chars("#>-"));
+
+    let mut out = File::create(target_file.clone()).expect("cannot create target file");
+    io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).expect("cannot download to target file");
+    Ok(())
+}
+
+
+
+//(TODO(zhihanz)) general get_architecture similar to install-databend.sh
+pub fn get_rust_architecture() -> Result<String> {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let mut clib = "gnu";
+
+    // Check musl
+    let (_, musl, _) = run_script::run_script!(r#"ldd --version 2>&1 | grep -q 'musl'"#)?;
+    if !musl.is_empty() {
+        clib = "musl";
+    }
+
+    // Check rosetta
+    let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
+    if rosetta.contains("Darwin") && rosetta.contains("arm64") {
+        return Err(CliError::Unknown( "Unsupported architecture aarch64-apple-darwin".to_string()));
+    }
+    let os = match os {
+        "darwin" => "apple-darwin".to_string(),
+        "macos" => "apple-darwin".to_string(),
+        "linux" => format!("unknown-linux-{}", clib),
+        _ => return Err(CliError::Unknown( format!("Unsupported architecture os: {}, arch {}", std::env::consts::OS, std::env::consts::ARCH)))
+    };
+
+    Ok(format!("{}-{}", arch, os))
+}
 impl FetchCommand {
     pub fn create(conf: Config) -> Self {
         FetchCommand { conf }
     }
 
-    //(TODO(zhihanz)) general get_architecture similar to install-databend.sh
-    fn get_architecture(&self) -> Result<String> {
-        let os = std::env::consts::OS;
-        let arch = std::env::consts::ARCH;
-        let mut clib = "gnu";
 
-        // Check musl
-        let (_, musl, _) = run_script::run_script!(r#"ldd --version 2>&1 | grep -q 'musl'"#)?;
-        if !musl.is_empty() {
-            clib = "musl";
-        }
-
-        // Check rosetta
-        let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
-        if rosetta.contains("Darwin") && rosetta.contains("arm64") {
-            return Ok("aarch64-apple-darwin".to_string());
-        }
-        let os = match os {
-            "darwin" => "apple-darwin".to_string(),
-            "macos" => "apple-darwin".to_string(),
-            "linux" => format!("unknown-linux-{}", clib),
-            _ => os.to_string(),
-        };
-
-        Ok(format!("{}-{}", arch, os))
-    }
 
     fn get_latest_tag(&self) -> Result<String> {
         let tag_url = self.conf.tag_url.clone();
@@ -72,73 +129,68 @@ impl FetchCommand {
 
         Ok(format!("{}", json[0]["name"]).replace("\"", ""))
     }
+
+    fn download_databend(&self, arch: &String, tag: &String, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        // Create download dir.
+        let bin_download_dir = format!(
+            "{}/downloads/{}",
+            self.conf.databend_dir.clone(),
+            tag
+        );
+        fs::create_dir_all(bin_download_dir.clone()).unwrap();
+
+        // Create bin dir.
+        let bin_unpack_dir =
+            format!("{}/bin/{}", self.conf.databend_dir.clone(), tag);
+        fs::create_dir_all(bin_unpack_dir.clone()).unwrap();
+
+        let bin_name = format!("databend-{}-{}.tar.gz", tag, arch);
+        let bin_file = format!("{}/{}", bin_download_dir, bin_name);
+        let exists = Path::new(bin_file.as_str()).exists();
+        // Download.
+        if !exists {
+            let binary_url = format!(
+                "{}/{}/{}",
+                self.conf.download_url.clone(),
+                current_tag,
+                bin_name,
+            );
+            download(&binary_url, &bin_file);
+        }
+
+        // Unpack.
+        match unpack(&bin_file, &bin_unpack_dir) {
+            Ok(_) => {
+                writer.write_ok(format!("Unpacked {} to {}", bin_file, bin_unpack_dir).as_str());
+
+                // switch to fetched version
+                let switch = SwitchCommand::create(self.conf.clone());
+                return switch.exec_match(writer, args);
+            }
+            Err(e) => {
+                writer.write_err(format!("{:?}", e).as_str());
+            }
+        };
+        Ok(())
+    }
+
     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
-                let arch = self.get_architecture()?;
-                writer.write_ok(format!("Arch {}", arch).as_str());
+                let arch = get_rust_architecture();
+                if let Ok(arch) = arch {
+                    writer.write_ok(format!("Arch {}", arch).as_str());
+                    let current_tag = if matches.value_of("version").unwrap() == "latest" {
+                        self.get_latest_tag()?
+                    } else {
+                        matches.value_of("version").unwrap().to_string()
+                    };
+                    writer.write_ok(format!("Tag {}", current_tag).as_str());
+                    self.download_databend(&arch, &current_tag, writer, args);
 
-                let current_tag = if matches.value_of("version").unwrap() == "latest" {
-                    self.get_latest_tag()?
                 } else {
-                    matches.value_of("version").unwrap().to_string()
-                };
-                writer.write_ok(format!("Tag {}", current_tag).as_str());
-                // Create download dir.
-                let bin_download_dir = format!(
-                    "{}/downloads/{}",
-                    self.conf.databend_dir.clone(),
-                    current_tag
-                );
-                fs::create_dir_all(bin_download_dir.clone()).unwrap();
-
-                // Create bin dir.
-                let bin_unpack_dir =
-                    format!("{}/bin/{}", self.conf.databend_dir.clone(), current_tag);
-                fs::create_dir_all(bin_unpack_dir.clone()).unwrap();
-
-                let bin_name = format!("databend-{}-{}.tar.gz", current_tag, arch);
-                let bin_file = format!("{}/{}", bin_download_dir, bin_name);
-                let exists = Path::new(bin_file.as_str()).exists();
-                // Download.
-                if !exists {
-                    let binary_url = format!(
-                        "{}/{}/{}",
-                        self.conf.download_url.clone(),
-                        current_tag,
-                        bin_name,
-                    );
-                    let res = ureq::get(binary_url.as_str()).call()?;
-                    let total_size: u64 = res.header("content-length").unwrap().parse().unwrap();
-                    let pb = ProgressBar::new(total_size);
-                    pb.set_style(ProgressStyle::default_bar()
-                        .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-                        .progress_chars("#>-"));
-
-                    let mut out = File::create(bin_file.clone()).unwrap();
-                    io::copy(&mut pb.wrap_read(res.into_reader()), &mut out).unwrap();
-                    writer.write_ok(format!("Download {}", binary_url).as_str());
+                    writer.write_err(format!("{:?}", arch.unwrap_err()).as_str());
                 }
-                writer.write_ok(format!("Binary {}", bin_file).as_str());
-
-                // Unpack.
-                let tar_gz = File::open(bin_file)?;
-                let tar = GzDecoder::new(tar_gz);
-                let mut archive = Archive::new(tar);
-                let res = archive.unpack(bin_unpack_dir.clone());
-                match res {
-                    Ok(_) => {
-                        writer.write_ok(format!("Unpack {}", bin_unpack_dir).as_str());
-
-                        // switch to fetched version
-                        let switch = SwitchCommand::create(self.conf.clone());
-                        return switch.exec_match(writer, args);
-                    }
-                    Err(e) => {
-                        writer.write_err(format!("{}", e).as_str());
-                        return Ok(());
-                    }
-                };
             }
             None => {
                 println!("none ");
