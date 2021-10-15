@@ -88,7 +88,7 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
 hyper = "0.14.13"
 headers = "0.3.4"
-tokio-rustls = "0.22.0"
+tokio-rustls = "0.23.0"
 axum-server = { version = "0.2", features = ["tls-rustls"] }
 cargo-license = "0.4.2"
 cargo_metadata = "0.14.0"
