@@ -161,7 +161,9 @@ impl PlanParser {
                 };
                 self.build_from_sql(show_sql.as_str())
             }
-            DfStatement::ShowSettings(_) => self.build_from_sql("SELECT name FROM system.settings"),
+            DfStatement::ShowSettings(_) => {
+                self.build_from_sql("SELECT name, value FROM system.settings")
+            }
             DfStatement::ShowProcessList(_) => {
                 self.build_from_sql("SELECT * FROM system.processes")
             }
