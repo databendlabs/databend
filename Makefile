@@ -104,6 +104,7 @@ profile:
 clean:
 	cargo clean
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
-	rm -rf ./_local_fs/ ./_meta/ ./_logs/ ./common/stoppable/_logs/ ./query/_logs/ ./store/_logs/
+	rm -rf ./_meta/ ./_logs/ ./query/_logs/ ./metasrv/_logs/
+	rm -rf ./common/base/_logs/ ./common/meta/raft-store/_logs/ ./common/meta/sled-store/_logs/
 
 .PHONY: setup test run build fmt lint docker clean
