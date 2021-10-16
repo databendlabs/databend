@@ -35,30 +35,30 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::backends::MetaApiSync;
 use crate::common::MetaClientProvider;
 
 type TableInfoCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
 
 #[derive(Clone)]
-pub struct RemoteCatalogBackend {
+pub struct MetaRemoteSync {
     rt: Arc<Runtime>,
     rpc_time_out: Option<Duration>,
     table_meta_cache: Arc<Mutex<TableInfoCache>>,
     meta_api_provider: Arc<MetaClientProvider>,
 }
 
-impl RemoteCatalogBackend {
-    pub fn create(apis_provider: Arc<MetaClientProvider>) -> RemoteCatalogBackend {
+impl MetaRemoteSync {
+    pub fn create(apis_provider: Arc<MetaClientProvider>) -> MetaRemoteSync {
         Self::with_timeout_setting(apis_provider, Some(Duration::from_secs(5)))
     }
 
     pub fn with_timeout_setting(
         apis_provider: Arc<MetaClientProvider>,
         timeout: Option<Duration>,
-    ) -> RemoteCatalogBackend {
+    ) -> MetaRemoteSync {
         let rt = Runtime::with_worker_threads(1).expect("remote catalogs initialization failure");
-        RemoteCatalogBackend {
+        MetaRemoteSync {
             rt: Arc::new(rt),
             // TODO configuration
             rpc_time_out: timeout,
@@ -86,7 +86,7 @@ impl RemoteCatalogBackend {
     }
 }
 
-impl CatalogBackend for RemoteCatalogBackend {
+impl MetaApiSync for MetaRemoteSync {
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         self.block_on(move |cli| async move { cli.create_database(plan).await })
     }

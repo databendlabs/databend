@@ -23,7 +23,7 @@ use common_meta_types::TableInfo;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
@@ -33,7 +33,7 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 pub struct DefaultDatabase {
     db_name: String,
     engine_name: String,
-    catalog_backend: Arc<dyn CatalogBackend>,
+    meta: Arc<dyn MetaApiSync>,
     table_factory_registry: Arc<TableEngineRegistry>,
     store_api_provider: MetaClientProvider,
     stateful_table_cache: RwLock<InMemoryMetas>,
@@ -43,14 +43,14 @@ impl DefaultDatabase {
     pub fn new(
         db_name: impl Into<String>,
         engine_name: impl Into<String>,
-        catalog_backend: Arc<dyn CatalogBackend>,
+        meta: Arc<dyn MetaApiSync>,
         table_factory_registry: Arc<TableEngineRegistry>,
         store_api_provider: MetaClientProvider,
     ) -> Self {
         Self {
             db_name: db_name.into(),
             engine_name: engine_name.into(),
-            catalog_backend,
+            meta,
             table_factory_registry,
             store_api_provider,
             stateful_table_cache: RwLock::new(InMemoryMetas::create()),
@@ -100,7 +100,7 @@ impl Database for DefaultDatabase {
             }
         }
         let db_name = self.name();
-        let table_info = self.catalog_backend.get_table(db_name, table_name)?;
+        let table_info = self.meta.get_table(db_name, table_name)?;
         self.build_table_instance(table_info.as_ref())
     }
 
@@ -115,15 +115,13 @@ impl Database for DefaultDatabase {
             }
         }
 
-        let table_info = self
-            .catalog_backend
-            .get_table_by_id(table_id, table_version)?;
+        let table_info = self.meta.get_table_by_id(table_id, table_version)?;
 
         self.build_table_instance(table_info.as_ref())
     }
 
     fn get_tables(&self) -> common_exception::Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.catalog_backend.get_tables(self.name())?;
+        let table_infos = self.meta.get_tables(self.name())?;
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table_instance(item)?;
             acc.push(tbl);
@@ -133,11 +131,11 @@ impl Database for DefaultDatabase {
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
         // TODO validate table parameters by using TableFactory
-        self.catalog_backend.create_table(plan)?;
+        self.meta.create_table(plan)?;
         Ok(())
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.catalog_backend.drop_table(plan)
+        self.meta.drop_table(plan)
     }
 }

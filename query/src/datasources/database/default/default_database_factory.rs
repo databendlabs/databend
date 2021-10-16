@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::DatabaseInfo;
 
-use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
 use crate::common::MetaClientProvider;
@@ -30,17 +30,17 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 /// - creates tables by using TableFactory
 /// - keeps metadata in the given meta_backend
 pub struct DefaultDatabaseFactory {
-    catalog_backend: Arc<dyn CatalogBackend>,
+    meta: Arc<dyn MetaApiSync>,
     table_factory_registry: Arc<TableEngineRegistry>,
 }
 
 impl DefaultDatabaseFactory {
     pub fn new(
-        catalog_backend: Arc<dyn CatalogBackend>,
+        catalog_backend: Arc<dyn MetaApiSync>,
         table_factory_registry: Arc<TableEngineRegistry>,
     ) -> Self {
         Self {
-            catalog_backend,
+            meta: catalog_backend,
             table_factory_registry,
         }
     }
@@ -52,7 +52,7 @@ impl DatabaseEngine for DefaultDatabaseFactory {
         let db = DefaultDatabase::new(
             &db_info.db,
             &db_info.engine,
-            self.catalog_backend.clone(),
+            self.meta.clone(),
             self.table_factory_registry.clone(),
             client_provider,
         );
@@ -60,9 +60,6 @@ impl DatabaseEngine for DefaultDatabaseFactory {
     }
 
     fn description(&self) -> String {
-        format!(
-            "default database engine, with {}",
-            self.catalog_backend.name()
-        )
+        format!("default database engine, with {}", self.meta.name())
     }
 }

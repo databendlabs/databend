@@ -22,7 +22,7 @@ use common_meta_types::TableInfo;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::datasources::database::example::ExampleTable;
@@ -30,7 +30,7 @@ use crate::datasources::database::example::ExampleTable;
 pub struct ExampleDatabase {
     db_name: String,
     engine_name: String,
-    catalog_backend: Arc<dyn CatalogBackend>,
+    meta: Arc<dyn MetaApiSync>,
 }
 const EXAMPLE_TBL_ENGINE: &str = "ExampleNull";
 
@@ -38,12 +38,12 @@ impl ExampleDatabase {
     pub fn new(
         db_name: impl Into<String>,
         engine_name: impl Into<String>,
-        meta_store_client: Arc<dyn CatalogBackend>,
+        meta_store_client: Arc<dyn MetaApiSync>,
     ) -> Self {
         Self {
             db_name: db_name.into(),
             engine_name: engine_name.into(),
-            catalog_backend: meta_store_client,
+            meta: meta_store_client,
         }
     }
 
@@ -85,7 +85,7 @@ impl Database for ExampleDatabase {
 
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let db_name = self.name();
-        let table_info = self.catalog_backend.get_table(db_name, table_name)?;
+        let table_info = self.meta.get_table(db_name, table_name)?;
         self.build_table_instance(table_info.as_ref())
     }
 
@@ -98,7 +98,7 @@ impl Database for ExampleDatabase {
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        self.catalog_backend
+        self.meta
             .get_tables(self.name())?
             .iter()
             .map(|info| self.build_table_instance(info))
@@ -106,11 +106,11 @@ impl Database for ExampleDatabase {
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()> {
-        self.catalog_backend.create_table(plan)?;
+        self.meta.create_table(plan)?;
         Ok(())
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.catalog_backend.drop_table(plan)
+        self.meta.drop_table(plan)
     }
 }
