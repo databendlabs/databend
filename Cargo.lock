@@ -1258,11 +1258,15 @@ dependencies = [
 name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "common-datavalues",
  "common-exception",
  "common-meta-types",
  "common-planners",
+ "common-tracing",
  "futures",
+ "maplit",
 ]
 
 [[package]]
