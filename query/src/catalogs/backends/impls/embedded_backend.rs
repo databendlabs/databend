@@ -29,7 +29,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::backends::CatalogBackend;
+use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::table_id_ranges::LOCAL_TBL_ID_BEGIN;
 
 /// This catalog backend used for test only.
@@ -56,12 +56,12 @@ impl InMemoryTableInfo {
 
 type Databases = Arc<RwLock<HashMap<String, (Arc<DatabaseInfo>, InMemoryTableInfo)>>>;
 
-pub struct EmbeddedCatalogBackend {
+pub struct MetaEmbeddedSync {
     databases: Databases,
     tbl_id_seq: Arc<RwLock<u64>>,
 }
 
-impl EmbeddedCatalogBackend {
+impl MetaEmbeddedSync {
     pub fn create() -> Self {
         let tbl_id_seq = Arc::new(RwLock::new(LOCAL_TBL_ID_BEGIN));
         Self {
@@ -77,7 +77,7 @@ impl EmbeddedCatalogBackend {
     }
 }
 
-impl CatalogBackend for EmbeddedCatalogBackend {
+impl MetaApiSync for MetaEmbeddedSync {
     fn create_database(
         &self,
         plan: CreateDatabasePlan,

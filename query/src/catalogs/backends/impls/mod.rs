@@ -16,5 +16,5 @@
 mod embedded_backend;
 mod remote_backend;
 
-pub use embedded_backend::EmbeddedCatalogBackend;
-pub use remote_backend::RemoteCatalogBackend;
+pub use embedded_backend::MetaEmbeddedSync;
+pub use remote_backend::MetaRemoteSync;

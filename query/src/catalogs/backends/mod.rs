@@ -15,6 +15,6 @@
 mod backend;
 mod impls;
 
-pub use backend::CatalogBackend;
-pub use impls::EmbeddedCatalogBackend;
-pub use impls::RemoteCatalogBackend;
+pub use backend::MetaApiSync;
+pub use impls::MetaEmbeddedSync;
+pub use impls::MetaRemoteSync;

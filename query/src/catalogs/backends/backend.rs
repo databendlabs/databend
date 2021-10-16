@@ -27,7 +27,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-pub trait CatalogBackend: Send + Sync {
+pub trait MetaApiSync: Send + Sync {
     // database
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
