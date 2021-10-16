@@ -49,7 +49,6 @@ pub const DEFAULT_DB_ENGINE: &str = "Default";
 /// - Instances of `Database` are created by using database factories according to the engine
 /// - Database engines are free to save table meta in metastore or not
 pub struct MetaStoreCatalog {
-    conf: Config,
     db_engine_registry: Arc<DatabaseEngineRegistry>,
     meta: Arc<dyn MetaApiSync>,
 
@@ -85,7 +84,6 @@ impl MetaStoreCatalog {
         register_prelude_db_engines(&db_engine_registry, meta.clone(), table_engine_registry)?;
 
         let cat = MetaStoreCatalog {
-            conf,
             db_engine_registry,
             meta,
             db_instances: RwLock::new(HashMap::new()),
@@ -118,7 +116,7 @@ impl MetaStoreCatalog {
             })?;
 
         let name = db_info.db.clone();
-        let db = provider.create(&self.conf, db_info)?;
+        let db = provider.create(db_info)?;
         self.db_instances.write().insert(name, db.clone());
         Ok(db)
     }
