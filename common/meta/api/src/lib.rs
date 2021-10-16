@@ -15,6 +15,8 @@
 
 mod kv_api;
 mod meta_api;
+mod meta_api_test_suite;
 
 pub use kv_api::KVApi;
 pub use meta_api::MetaApi;
+pub use meta_api_test_suite::MetaApiTestSuite;
