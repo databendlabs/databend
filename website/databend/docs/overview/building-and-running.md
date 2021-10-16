@@ -39,7 +39,7 @@ This document describes how to build and run [DatabendQuery](https://github.com/
         numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 
     ```
-    $ mysql -h127.0.0.1 -P3307 -uroot
+    $ mysql -h127.0.0.1 -P3307
     ```
     ```markdown
     mysql> SELECT avg(number) FROM numbers(1000000000);
