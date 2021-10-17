@@ -13,17 +13,11 @@
 // limitations under the License.
 //
 
-use std::future::Future;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::BlockingWait;
-use common_base::Runtime;
-use common_cache::Cache;
-use common_cache::LruCache;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -35,117 +29,90 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
+use crate::catalogs::backends::impls::MetaCached;
+use crate::catalogs::backends::impls::MetaRemote;
+use crate::catalogs::backends::impls::MetaSync;
 use crate::catalogs::backends::MetaApiSync;
 use crate::common::MetaClientProvider;
 
-type TableInfoCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
-
+/// Meta store that provides **sync** API, equipped with cache, backed by a cluster of remote Meta server.
+///
+/// The component hierarchy is layered as:
+/// ```text
+///                                        RPC
+/// MetaSync -> MetaCached -> MetaRemote -------> Meta server      Meta server
+///                                               raft <---------> raft <----..
+///                                               MetaEmbedded     MetaEmbedded
+/// ```
 #[derive(Clone)]
 pub struct MetaRemoteSync {
-    rt: Arc<Runtime>,
-    rpc_time_out: Option<Duration>,
-    table_meta_cache: Arc<Mutex<TableInfoCache>>,
-    meta_api_provider: Arc<MetaClientProvider>,
+    pub meta_sync: MetaSync,
 }
 
 impl MetaRemoteSync {
     pub fn create(apis_provider: Arc<MetaClientProvider>) -> MetaRemoteSync {
-        Self::with_timeout_setting(apis_provider, Some(Duration::from_secs(5)))
-    }
+        // TODO(xp): config rpc timeout
+        // TODO(xp): config blocking timeout
 
-    pub fn with_timeout_setting(
-        apis_provider: Arc<MetaClientProvider>,
-        timeout: Option<Duration>,
-    ) -> MetaRemoteSync {
-        let rt = Runtime::with_worker_threads(1).expect("remote catalogs initialization failure");
-        MetaRemoteSync {
-            rt: Arc::new(rt),
-            // TODO configuration
-            rpc_time_out: timeout,
-            table_meta_cache: Arc::new(Mutex::new(LruCache::new(100))),
-            meta_api_provider: apis_provider,
-        }
-    }
+        let meta_remote = MetaRemote::create(apis_provider);
+        let meta_cached = MetaCached::create(Arc::new(meta_remote));
+        let meta_sync = MetaSync::create(Arc::new(meta_cached), Some(Duration::from_millis(5000)));
 
-    fn block_on<F, T, ResFut>(&self, f: F) -> Result<T>
-    where
-        ResFut: Future<Output = Result<T>> + Send + 'static,
-        F: FnOnce(Arc<dyn MetaApi>) -> ResFut,
-        F: Send + Sync + 'static,
-        T: Send + Sync + 'static,
-    {
-        let cli_provider = self.meta_api_provider.clone();
-
-        let fut = async move {
-            let cli = cli_provider.try_get_meta_client().await?;
-            f(cli).await
-        };
-        // Double `?`: outer Result is from `wait_in` and the inner Result is from `f(cli)`.
-        let res = fut.wait_in(&self.rt, self.rpc_time_out)??;
-        Ok(res)
+        MetaRemoteSync { meta_sync }
     }
 }
 
-impl MetaApiSync for MetaRemoteSync {
+impl Deref for MetaRemoteSync {
+    type Target = MetaSync;
+
+    fn deref(&self) -> &Self::Target {
+        &self.meta_sync
+    }
+}
+
+/// So that every type that deref to a `T: MetaApiSync` is impl with `MetaApiSync`
+impl<T: MetaApiSync, U: Deref<Target = T> + Send + Sync> MetaApiSync for U {
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        self.block_on(move |cli| async move { cli.create_database(plan).await })
+        self.deref().create_database(plan)
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        self.block_on(move |cli| async move { cli.drop_database(plan).await })
+        self.deref().drop_database(plan)
     }
 
     fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>> {
-        let db_name = db_name.to_owned();
-        self.block_on(move |cli| async move { cli.get_database(&db_name).await })
+        self.deref().get_database(db_name)
     }
 
     fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
-        self.block_on(move |cli| async move { cli.get_databases().await })
+        self.deref().get_databases()
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
-        // TODO validate plan by table engine first
-        self.block_on(move |cli| async move { cli.create_table(plan).await })
+        self.deref().create_table(plan)
     }
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.block_on(move |cli| async move { cli.drop_table(plan).await })
+        self.deref().drop_table(plan)
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>> {
-        let table_name = table_name.to_string();
-        let db_name = db_name.to_string();
-        self.block_on(move |cli| async move { cli.get_table(&db_name, &table_name).await })
+        self.deref().get_table(db_name, table_name)
     }
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
-        let db_name = db_name.to_owned();
-        self.block_on(move |cli| async move { cli.get_tables(&db_name).await })
+        self.deref().get_tables(db_name)
     }
 
     fn get_table_by_id(
         &self,
         table_id: MetaId,
-        version: Option<MetaVersion>,
+        table_version: Option<MetaVersion>,
     ) -> Result<Arc<TableInfo>> {
-        if let Some(ver) = version {
-            let mut cached = self.table_meta_cache.lock();
-            if let Some(meta) = cached.get(&(table_id, ver)) {
-                return Ok(meta.clone());
-            }
-        }
-
-        let reply =
-            self.block_on(move |cli| async move { cli.get_table_by_id(table_id, version).await })?;
-
-        let mut cache = self.table_meta_cache.lock();
-        // TODO version
-        cache.put((reply.table_id, 0), reply.clone());
-        Ok(reply)
+        self.deref().get_table_by_id(table_id, table_version)
     }
 
     fn name(&self) -> String {
-        "remote metastore backend".to_owned()
+        self.deref().name()
     }
 }
