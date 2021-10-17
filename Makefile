@@ -63,19 +63,20 @@ cli-test:
 unit-test:
 	bash ./scripts/ci/ci-run-unit-tests.sh
 
-stateless-test:
+embedded-meta-test: build-debug
+	rm -rf ./_meta_embedded
+	bash ./scripts/ci/ci-run-tests-embedded-meta.sh
+
+stateless-test: build-debug
 	rm -rf ./_meta/
-	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
-stateless-cluster-test:
+stateless-cluster-test: build-debug
 	rm -rf ./_meta/
-	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
-stateless-cluster-test-tls:
+stateless-cluster-test-tls: build-debug
 	rm -rf ./_meta/
-	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
 test: unit-test stateless-test

@@ -33,6 +33,7 @@ use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+use common_tracing::tracing;
 
 use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::backends::MetaEmbeddedSync;
@@ -75,8 +76,11 @@ impl MetaStoreCatalog {
     pub fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.meta_address.is_empty();
         let meta: Arc<dyn MetaApiSync> = if local_mode {
-            Arc::new(MetaEmbeddedSync::create())
+            tracing::info!("use embedded meta");
+            // TODO(xp): This can only be used for test: data will be removed when program quit.
+            Arc::new(MetaEmbeddedSync::create()?)
         } else {
+            tracing::info!("use remote meta");
             let store_client_provider = Arc::new(MetaClientProvider::new(&conf));
             Arc::new(MetaRemoteSync::create(store_client_provider))
         };

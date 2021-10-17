@@ -39,11 +39,11 @@ pub struct MetaEmbedded {
 impl MetaEmbedded {
     /// Creates a KVApi impl backed with a `StateMachine`.
     ///
-    /// A LocalKVStore is identified by the `name`.
+    /// A MetaEmbedded is identified by the `name`.
     /// Caveat: Two instances with the same `name` reference to the same underlying sled::Tree.
     ///
     /// One of the following has to be called to initialize a process-wise sled::Db,
-    /// before using `LocalKVStore`:
+    /// before using `MetaEmbedded`:
     /// - `common_meta_sled_store::init_sled_db`
     /// - `common_meta_sled_store::init_temp_sled_db`
     #[allow(dead_code)]
