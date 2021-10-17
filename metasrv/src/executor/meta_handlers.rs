@@ -64,7 +64,6 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
                 db: DatabaseInfo {
                     database_id: 0,
                     db: db_name.clone(),
-                    engine: plan.engine.clone(),
                 },
             },
         };

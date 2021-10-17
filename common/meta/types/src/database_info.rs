@@ -17,5 +17,4 @@
 pub struct DatabaseInfo {
     pub database_id: u64,
     pub db: String,
-    pub engine: String,
 }

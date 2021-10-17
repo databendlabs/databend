@@ -28,6 +28,7 @@ use crate::Operation;
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     /// Increment the sequence number generator specified by `key` and returns the new value.
     IncrSeq { key: String },
@@ -97,7 +98,7 @@ impl fmt::Display for Cmd {
                 write!(f, "add_node:{}={}", node_id, node)
             }
             Cmd::CreateDatabase { name, db } => {
-                write!(f, "create_db:{}={:?}, engine:{}", name, db, db.engine)
+                write!(f, "create_db:{}={:?}", name, db)
             }
             Cmd::DropDatabase { name } => {
                 write!(f, "drop_db:{}", name)

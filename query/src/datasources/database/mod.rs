@@ -18,5 +18,4 @@ mod tests;
 
 pub(crate) mod default;
 pub(crate) mod example;
-pub(crate) mod prelude;
 pub(crate) mod system;

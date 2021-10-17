@@ -29,7 +29,6 @@ use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::datasources::database::system::SystemDatabase;
-use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
 
 /// System Catalog contains ... all the system databases (no surprise :)
@@ -49,16 +48,6 @@ impl SystemCatalog {
 }
 
 impl Catalog for SystemCatalog {
-    fn register_db_engine(
-        &self,
-        _engine_name: &str,
-        _database_engine: Arc<dyn DatabaseEngine>,
-    ) -> Result<()> {
-        Err(ErrorCode::UnImplement(
-            "database engine of System Catalog is not customizable",
-        ))
-    }
-
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let r = self
             .dbs

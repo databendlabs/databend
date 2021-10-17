@@ -31,7 +31,6 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub struct DefaultDatabase {
     db_name: String,
-    engine_name: String,
     meta: Arc<dyn MetaApiSync>,
     table_factory_registry: Arc<TableEngineRegistry>,
     stateful_table_cache: RwLock<InMemoryMetas>,
@@ -40,13 +39,11 @@ pub struct DefaultDatabase {
 impl DefaultDatabase {
     pub fn new(
         db_name: impl Into<String>,
-        engine_name: impl Into<String>,
         meta: Arc<dyn MetaApiSync>,
         table_factory_registry: Arc<TableEngineRegistry>,
     ) -> Self {
         Self {
             db_name: db_name.into(),
-            engine_name: engine_name.into(),
             meta,
             table_factory_registry,
             stateful_table_cache: RwLock::new(InMemoryMetas::create()),
@@ -77,14 +74,6 @@ impl DefaultDatabase {
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
         &self.db_name
-    }
-
-    fn engine(&self) -> &str {
-        &self.engine_name
-    }
-
-    fn is_local(&self) -> bool {
-        false
     }
 
     fn get_table(&self, table_name: &str) -> common_exception::Result<Arc<dyn Table>> {

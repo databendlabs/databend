@@ -48,7 +48,6 @@ impl DatabaseEngine for DefaultDatabaseFactory {
     fn create(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let db = DefaultDatabase::new(
             &db_info.db,
-            &db_info.engine,
             self.meta.clone(),
             self.table_factory_registry.clone(),
         );

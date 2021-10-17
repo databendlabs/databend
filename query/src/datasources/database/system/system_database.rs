@@ -80,14 +80,6 @@ impl Database for SystemDatabase {
         &self.name
     }
 
-    fn engine(&self) -> &str {
-        "local"
-    }
-
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table =
             self.tables.name2table.get(table_name).ok_or_else(|| {

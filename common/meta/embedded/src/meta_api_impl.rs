@@ -48,7 +48,6 @@ impl MetaApi for MetaEmbedded {
             db: DatabaseInfo {
                 database_id: 0,
                 db: plan.db.clone(),
-                engine: plan.engine.clone(),
             },
         };
 

@@ -25,8 +25,6 @@ use crate::catalogs::Table;
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
-    fn engine(&self) -> &str;
-    fn is_local(&self) -> bool;
 
     /// Get the table by name.
     fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>>;

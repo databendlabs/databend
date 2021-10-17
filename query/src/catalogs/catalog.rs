@@ -24,7 +24,6 @@ use common_planners::DropDatabasePlan;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
-use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table_func_engine::TableArgs;
 
@@ -34,12 +33,6 @@ use crate::datasources::table_func_engine::TableArgs;
 /// When we create a new database, we first to get the engine from the registered engines,
 /// and use the engine to create them.
 pub trait Catalog {
-    fn register_db_engine(
-        &self,
-        engine_type: &str,
-        database_engine: Arc<dyn DatabaseEngine>,
-    ) -> Result<()>;
-
     // Get all the databases.
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
 
