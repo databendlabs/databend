@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod example_database;
-mod example_databases;
 mod example_table;
 
-pub use example_database::ExampleDatabase;
-pub use example_databases::ExampleDatabaseEngine;
 pub use example_table::ExampleTable;
