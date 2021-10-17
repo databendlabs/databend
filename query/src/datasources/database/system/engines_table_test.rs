@@ -41,14 +41,13 @@ async fn test_engines_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 2);
-    assert_eq!(block.num_rows(), 3);
+    assert_eq!(block.num_rows(), 2);
     // TODO rename to databend after merge
     let expected = vec![
     "+---------+-----------------------------------------------------------------------------------------------+",
     "| name    | description                                                                                   |",
     "+---------+-----------------------------------------------------------------------------------------------+",
     "| DEFAULT | default database engine, with embedded metastore backend                                      |",
-    "| EXAMPLE | The example engine is used by example databases and tables.                                   |",
     "| SYSTEM  | The system engine is used by tables in the system database, which store Databend information. |",
     "+---------+-----------------------------------------------------------------------------------------------+",
     ];

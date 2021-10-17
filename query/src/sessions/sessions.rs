@@ -28,11 +28,9 @@ use futures::future::Either;
 use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
-use crate::catalogs::Catalog;
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
-use crate::datasources::database::example::ExampleDatabaseEngine;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::users::UserManager;
@@ -53,7 +51,7 @@ pub type SessionManagerRef = Arc<SessionManager>;
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
-        catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
+        // catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
