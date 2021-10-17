@@ -19,9 +19,8 @@ use common_exception::Result;
 use common_meta_types::DatabaseInfo;
 
 use crate::catalogs::Database;
-use crate::configs::Config;
 
 pub trait DatabaseEngine: Send + Sync {
-    fn create(&self, conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>>;
+    fn create(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>>;
     fn description(&self) -> String;
 }

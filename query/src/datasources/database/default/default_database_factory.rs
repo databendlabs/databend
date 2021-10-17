@@ -21,8 +21,6 @@ use common_meta_types::DatabaseInfo;
 use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
-use crate::common::MetaClientProvider;
-use crate::configs::Config;
 use crate::datasources::database::default::default_database::DefaultDatabase;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
@@ -47,14 +45,12 @@ impl DefaultDatabaseFactory {
 }
 
 impl DatabaseEngine for DefaultDatabaseFactory {
-    fn create(&self, conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let client_provider = MetaClientProvider::new(conf);
+    fn create(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let db = DefaultDatabase::new(
             &db_info.db,
             &db_info.engine,
             self.meta.clone(),
             self.table_factory_registry.clone(),
-            client_provider,
         );
         Ok(Arc::new(db))
     }

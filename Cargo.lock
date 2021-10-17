@@ -3708,7 +3708,7 @@ dependencies = [
 [[package]]
 name = "msql-srv"
 version = "0.9.6"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=3d52211#3d52211ba1ae014c8e58b741f01d46f3f3f79574"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=e4c8f3d#e4c8f3dd4211f017027ce8ac89f871ac5ff082e1"
 dependencies = [
  "byteorder",
  "chrono",

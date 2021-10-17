@@ -21,7 +21,6 @@ use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::backends::MetaEmbeddedSync;
 use crate::catalogs::Database;
 use crate::catalogs::DatabaseEngine;
-use crate::configs::Config;
 use crate::datasources::database::example::ExampleDatabase;
 
 pub struct ExampleDatabaseEngine {
@@ -36,7 +35,7 @@ impl ExampleDatabaseEngine {
 }
 
 impl DatabaseEngine for ExampleDatabaseEngine {
-    fn create(&self, _conf: &Config, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
+    fn create(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let db = ExampleDatabase::new(&db_info.db, &db_info.engine, self.meta.clone());
         Ok(Arc::new(db))
     }

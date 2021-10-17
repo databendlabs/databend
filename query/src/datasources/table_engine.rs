@@ -16,18 +16,13 @@
 use common_meta_types::TableInfo;
 
 use crate::catalogs::Table;
-use crate::common::MetaClientProvider;
 
 // TODO maybe we should introduce a
 // `Session::store_provider(...) -> Result<StoreApiProvider>`
 // such that, we no longer need to pass store_provider to Table's constructor
 // instead, table could access apis on demand in method read_plan  and read
 pub trait TableEngine: Send + Sync {
-    fn try_create(
-        &self,
-        table_info: TableInfo,
-        store_provider: MetaClientProvider,
-    ) -> common_exception::Result<Box<dyn Table>>;
+    fn try_create(&self, table_info: TableInfo) -> common_exception::Result<Box<dyn Table>>;
 }
 
 impl<T> TableEngine for T
@@ -35,11 +30,7 @@ where
     T: Fn(TableInfo) -> common_exception::Result<Box<dyn Table>>,
     T: Send + Sync,
 {
-    fn try_create(
-        &self,
-        table_info: TableInfo,
-        _store_provider: MetaClientProvider,
-    ) -> common_exception::Result<Box<dyn Table>> {
+    fn try_create(&self, table_info: TableInfo) -> common_exception::Result<Box<dyn Table>> {
         self(table_info)
     }
 }

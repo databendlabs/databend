@@ -27,7 +27,6 @@ use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
-use crate::common::MetaClientProvider;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub struct DefaultDatabase {
@@ -35,7 +34,6 @@ pub struct DefaultDatabase {
     engine_name: String,
     meta: Arc<dyn MetaApiSync>,
     table_factory_registry: Arc<TableEngineRegistry>,
-    store_api_provider: MetaClientProvider,
     stateful_table_cache: RwLock<InMemoryMetas>,
 }
 
@@ -45,14 +43,12 @@ impl DefaultDatabase {
         engine_name: impl Into<String>,
         meta: Arc<dyn MetaApiSync>,
         table_factory_registry: Arc<TableEngineRegistry>,
-        store_api_provider: MetaClientProvider,
     ) -> Self {
         Self {
             db_name: db_name.into(),
             engine_name: engine_name.into(),
             meta,
             table_factory_registry,
-            store_api_provider,
             stateful_table_cache: RwLock::new(InMemoryMetas::create()),
         }
     }
@@ -68,9 +64,7 @@ impl DefaultDatabase {
             .ok_or_else(|| {
                 ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
             })?;
-        let tbl: Arc<dyn Table> = provider
-            .try_create(table_info.clone(), self.store_api_provider.clone())?
-            .into();
+        let tbl: Arc<dyn Table> = provider.try_create(table_info.clone())?.into();
         let stateful = tbl.is_stateful();
         if stateful {
             self.stateful_table_cache.write().insert(tbl.clone());
