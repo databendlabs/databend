@@ -54,7 +54,7 @@ impl TableEngineRegistry {
         }
     }
 
-    pub fn engine_provider(&self, table_engine: impl AsRef<str>) -> Option<Arc<dyn TableEngine>> {
+    pub fn get_table_factory(&self, table_engine: impl AsRef<str>) -> Option<Arc<dyn TableEngine>> {
         let name = table_engine.as_ref().to_uppercase();
         self.engines.read().get(&name).cloned()
     }

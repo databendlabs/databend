@@ -55,13 +55,14 @@ impl DefaultDatabase {
         table_info: &TableInfo,
     ) -> common_exception::Result<Arc<dyn Table>> {
         let engine = &table_info.engine;
-        let provider = self
+        let factory = self
             .table_factory_registry
-            .engine_provider(engine)
+            .get_table_factory(engine)
             .ok_or_else(|| {
                 ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
             })?;
-        let tbl: Arc<dyn Table> = provider.try_create(table_info.clone())?.into();
+
+        let tbl: Arc<dyn Table> = factory.try_create(table_info.clone())?.into();
         let stateful = tbl.is_stateful();
         if stateful {
             self.stateful_table_cache.write().insert(tbl.clone());
