@@ -19,4 +19,5 @@ use common_flight_rpc::FlightClientConf;
 pub struct MetaFlightClientConf {
     pub meta_service_config: FlightClientConf,
     pub kv_service_config: FlightClientConf,
+    pub client_timeout_in_second: u64,
 }

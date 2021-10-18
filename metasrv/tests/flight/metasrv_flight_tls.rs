@@ -47,7 +47,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
     };
 
     let client =
-        MetaFlightClient::with_tls_conf(addr.as_str(), "root", "xxx", Some(tls_conf)).await?;
+        MetaFlightClient::with_tls_conf(addr.as_str(), "root", "xxx", None, Some(tls_conf)).await?;
 
     let r = client.get_table("do not care", "do not care").await;
     assert!(r.is_err());
@@ -80,7 +80,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = MetaFlightClient::with_tls_conf("addr", "root", "xxx", Some(tls_conf)).await;
+    let r = MetaFlightClient::with_tls_conf("addr", "root", "xxx", None, Some(tls_conf)).await;
 
     assert!(r.is_err());
     if let Err(e) = r {

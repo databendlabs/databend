@@ -33,6 +33,7 @@ log_dir = "./_logs"
 meta_address = "0.0.0.0:9191"
 meta_username = "root"
 meta_password = "root"
+meta_client_timeout_in_second = 60
 
 # Storage config.
 [storage]

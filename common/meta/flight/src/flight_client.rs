@@ -38,11 +38,10 @@ use crate::flight_action::MetaFlightAction;
 use crate::flight_action::RequestFor;
 use crate::flight_client_conf::MetaFlightClientConf;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MetaFlightClient {
     #[allow(dead_code)]
     token: Vec<u8>,
-    pub(crate) timeout: Duration,
     pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
@@ -54,19 +53,15 @@ impl MetaFlightClient {
             &conf.meta_service_config.address,
             &conf.meta_service_config.username,
             &conf.meta_service_config.password,
+            Some(Duration::from_secs(conf.client_timeout_in_second)),
             conf.meta_service_config.tls_conf.clone(),
         )
         .await
     }
 
-    pub fn sync_try_new(conf: &MetaFlightClientConf) -> Result<MetaFlightClient> {
-        let cfg = conf.clone();
-        futures::executor::block_on(MetaFlightClient::try_new(&cfg))
-    }
-
     #[tracing::instrument(level = "debug", skip(password))]
     pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
-        Self::with_tls_conf(addr, username, password, None).await
+        Self::with_tls_conf(addr, username, password, None, None).await
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
@@ -74,42 +69,31 @@ impl MetaFlightClient {
         addr: &str,
         username: &str,
         password: &str,
+        timeout: Option<Duration>,
         conf: Option<FlightClientTlsConfig>,
     ) -> Result<Self> {
-        // TODO configuration
-        let timeout = Duration::from_secs(60);
-
-        let res = ConnectionFactory::create_flight_channel(addr, Some(timeout), conf);
+        let res = ConnectionFactory::create_flight_channel(addr, timeout, conf);
 
         tracing::debug!("connecting to {}, res: {:?}", addr, res);
 
         let channel = res?;
 
         let mut client = FlightServiceClient::new(channel.clone());
-        let token = MetaFlightClient::handshake(&mut client, timeout, username, password).await?;
+        let token = MetaFlightClient::handshake(&mut client, username, password).await?;
 
         let client = {
             let token = token.clone();
             FlightServiceClient::with_interceptor(channel, AuthInterceptor { token })
         };
 
-        let rx = Self {
-            token,
-            timeout,
-            client,
-        };
+        let rx = Self { token, client };
         Ok(rx)
-    }
-
-    pub fn set_timeout(&mut self, timeout: Duration) {
-        self.timeout = timeout;
     }
 
     /// Handshake.
     #[tracing::instrument(level = "debug", skip(client, password))]
     async fn handshake(
         client: &mut FlightServiceClient<Channel>,
-        timeout: Duration,
         username: &str,
         password: &str,
     ) -> Result<Vec<u8>> {
@@ -120,13 +104,12 @@ impl MetaFlightClient {
         let mut payload = vec![];
         auth.encode(&mut payload)?;
 
-        let mut req = Request::new(stream::once(async {
+        let req = Request::new(stream::once(async {
             HandshakeRequest {
                 payload,
                 ..HandshakeRequest::default()
             }
         }));
-        req.set_timeout(timeout);
 
         let rx = client.handshake(req).await?;
         let mut rx = rx.into_inner();
@@ -145,9 +128,7 @@ impl MetaFlightClient {
     {
         let act: MetaFlightAction = v.into();
         let req: Request<Action> = (&act).try_into()?;
-        let mut req = common_tracing::inject_span_to_tonic_request(req);
-
-        req.set_timeout(self.timeout);
+        let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut stream = self.client.clone().do_action(req).await?.into_inner();
         match stream.message().await? {

@@ -64,6 +64,7 @@ log_dir = \"./_logs\"
 meta_address = \"\"
 meta_username = \"root\"
 meta_password = \"\"
+meta_client_timeout_in_second = 10
 rpc_tls_meta_server_root_ca_cert = \"\"
 rpc_tls_meta_service_domain_name = \"localhost\"
 

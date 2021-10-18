@@ -1316,6 +1316,7 @@ dependencies = [
  "log",
  "pretty_assertions",
  "prost",
+ "rand",
  "serde",
  "serde_json",
  "tokio-stream",
