@@ -86,7 +86,6 @@ pub struct DfTruncateTable {
 pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
-    pub engine: String,
     pub options: Vec<SqlOption>,
 }
 

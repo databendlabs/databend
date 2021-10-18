@@ -392,12 +392,10 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let db_name = self.parser.parse_object_name()?;
-        let engine = self.parse_database_engine()?;
 
         let create = DfCreateDatabase {
             if_not_exists,
             name: db_name,
-            engine,
             options: vec![],
         };
 
@@ -474,16 +472,6 @@ impl<'a> DfParser<'a> {
             true => self.parse_kill(DfStatement::KillConn),
             false => self.expected("Must KILL", self.parser.peek_token()),
         }
-    }
-
-    fn parse_database_engine(&mut self) -> Result<String, ParserError> {
-        // TODO make ENGINE as a keyword
-        if !self.consume_token("ENGINE") {
-            return Ok("Default".to_string());
-        }
-
-        self.parser.expect_token(&Token::Eq)?;
-        Ok(self.parser.next_token().to_string())
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {

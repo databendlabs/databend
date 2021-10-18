@@ -50,7 +50,6 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
-            engine: "Default".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;
@@ -61,31 +60,6 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
-            engine: "Default".to_string(),
-            options: vec![],
-        });
-        expect_parse_ok(sql, expected)?;
-    }
-
-    // Local.
-    {
-        let sql = "CREATE DATABASE db1 ENGINE=Local";
-        let expected = DfStatement::CreateDatabase(DfCreateDatabase {
-            if_not_exists: false,
-            name: ObjectName(vec![Ident::new("db1")]),
-            engine: "Local".to_string(),
-            options: vec![],
-        });
-        expect_parse_ok(sql, expected)?;
-    }
-
-    // Example.
-    {
-        let sql = "CREATE DATABASE db1 ENGINE=Example";
-        let expected = DfStatement::CreateDatabase(DfCreateDatabase {
-            if_not_exists: false,
-            name: ObjectName(vec![Ident::new("db1")]),
-            engine: "Example".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;
