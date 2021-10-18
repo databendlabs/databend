@@ -44,6 +44,14 @@ pub struct MetaConfig {
 
     #[structopt(
         long,
+        default_value = "10",
+        help = "Timeout for each client request, in seconds"
+    )]
+    #[serde(default)]
+    pub meta_client_timeout_in_second: u64,
+
+    #[structopt(
+        long,
         env = "META_RPC_TLS_SERVER_ROOT_CA_CERT",
         default_value = "",
         help = "Certificate for client to identify meta rpc server"
@@ -66,6 +74,7 @@ impl MetaConfig {
             meta_address: "".to_string(),
             meta_username: "root".to_string(),
             meta_password: "".to_string(),
+            meta_client_timeout_in_second: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
         }
