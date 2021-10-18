@@ -13,12 +13,10 @@
 //  limitations under the License.
 //
 
-#[cfg(test)]
-mod s3_input_stream_test;
+pub static METRIC_S3_GETOBJECT_NUMBERS: &str = "s3.getobject_numbers";
+pub static METRIC_S3_GETOBJECT_USEDTIME: &str = "s3.getobject_usedtime";
+pub static METRIC_S3_GETOBJECT_ERRORS: &str = "s3.getobject_errors";
 
-mod metrics;
-mod s3;
-mod s3_input_stream;
-
-pub use s3::S3;
-pub use s3_input_stream::S3InputStream;
+pub static METRIC_S3_HEADOBJECT_NUMBERS: &str = "s3.headobject_numbers";
+pub static METRIC_S3_HEADOBJECT_USEDTIME: &str = "s3.headobject_usedtime";
+pub static METRIC_S3_HEADOBJECT_ERRORS: &str = "s3.headobject_errors";

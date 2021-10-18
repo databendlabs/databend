@@ -19,6 +19,7 @@ use std::io::Write;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Instant;
 
 use bytes::BufMut;
 use common_base::tokio::io::ErrorKind;
@@ -28,6 +29,8 @@ use futures::Future;
 use futures::FutureExt;
 use futures::Stream;
 use futures::StreamExt;
+use metrics::counter;
+use metrics::histogram;
 use rusoto_s3::GetObjectRequest;
 use rusoto_s3::HeadObjectRequest;
 use rusoto_s3::S3Client;
@@ -81,6 +84,7 @@ impl futures::AsyncRead for S3InputStream {
             let empty = { self.buffer.is_empty() };
             match &mut self.state {
                 State::Bare => {
+                    counter!(super::metrics::METRIC_S3_GETOBJECT_NUMBERS, 1);
                     let req = GetObjectRequest {
                         range: Some(format!("bytes={}-", self.cursor_pos)),
                         key: self.key.clone(),
@@ -89,10 +93,15 @@ impl futures::AsyncRead for S3InputStream {
                     };
                     let client = self.client.clone();
                     let resp = async move {
-                        let reply = client
-                            .get_object(req)
-                            .await
-                            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                        let start = Instant::now();
+                        let reply = client.get_object(req).await.map_err(|e| {
+                            counter!(super::metrics::METRIC_S3_GETOBJECT_ERRORS, 1);
+                            Error::new(ErrorKind::Other, e)
+                        })?;
+                        histogram!(
+                            super::metrics::METRIC_S3_GETOBJECT_USEDTIME,
+                            start.elapsed()
+                        );
                         reply
                             .body
                             .map(|s| s.fuse())
@@ -179,11 +188,17 @@ impl S3InputStream {
                         //jhead_req.key = self.key.clone();
                         //head_req.bucket = self.bucket.clone();
                         let cli = self.client.clone();
+                        counter!(super::metrics::METRIC_S3_HEADOBJECT_NUMBERS, 1);
                         let res = async move {
-                            let result = cli
-                                .head_object(head_req)
-                                .await
-                                .map_err(|e| Error::new(ErrorKind::Other, e))?;
+                            let start = Instant::now();
+                            let result = cli.head_object(head_req).await.map_err(|e| {
+                                counter!(super::metrics::METRIC_S3_HEADOBJECT_ERRORS, 1);
+                                Error::new(ErrorKind::Other, e)
+                            })?;
+                            histogram!(
+                                super::metrics::METRIC_S3_HEADOBJECT_USEDTIME,
+                                start.elapsed()
+                            );
                             result.content_length.ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "expects content-length")
                             })
