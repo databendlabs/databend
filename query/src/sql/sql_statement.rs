@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planners::DatabaseEngineType;
 use common_planners::ExplainType;
-use common_planners::TableEngineType;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_till1;
 use nom::character::complete::digit1;
@@ -22,16 +20,24 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 use sqlparser::ast::ColumnDef;
+use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement as SQLStatement;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowTables;
+pub enum DfShowTables {
+    All,
+    Like(Ident),
+    Where(Expr),
+    FromOrIn(ObjectName),
+}
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowDatabases;
+pub struct DfShowDatabases {
+    pub where_opt: Option<Expr>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowSettings;
@@ -56,7 +62,7 @@ pub struct DfCreateTable {
     /// Table name
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
-    pub engine: TableEngineType,
+    pub engine: String,
     pub options: Vec<SqlOption>,
 }
 
@@ -80,7 +86,7 @@ pub struct DfTruncateTable {
 pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
-    pub engine: DatabaseEngineType,
+    pub engine: String,
     pub options: Vec<SqlOption>,
 }
 

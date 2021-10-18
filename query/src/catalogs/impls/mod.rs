@@ -13,7 +13,12 @@
 // limitations under the License.
 //
 
-pub(crate) mod database_catalog;
-pub(crate) mod remote_meta_store_client;
-#[cfg(test)]
-mod remote_meta_store_client_test;
+pub use database_catalog::DatabaseCatalog;
+
+pub use crate::catalogs::table_id_ranges::LOCAL_TBL_ID_BEGIN;
+pub use crate::catalogs::table_id_ranges::SYS_TBL_ID_BEGIN;
+pub use crate::catalogs::table_id_ranges::SYS_TBL_ID_END;
+
+mod catalog;
+mod database_catalog;
+pub mod in_memory_meta;

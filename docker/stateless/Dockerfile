@@ -6,7 +6,7 @@ RUN make setup
 RUN make build
 
 FROM ubuntu:20.04
-COPY --from=builder /app/target/release/datafuse-query /datafuse-query
+COPY --from=builder /app/target/release/databend-query /databend-query
 COPY --from=builder /app/tests /tests
 
 RUN apt-get update -y \

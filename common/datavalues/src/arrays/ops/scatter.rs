@@ -18,11 +18,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::arrays::get_list_builder;
-use crate::arrays::BinaryArrayBuilder;
 use crate::arrays::BooleanArrayBuilder;
-use crate::arrays::DataArray;
 use crate::arrays::PrimitiveArrayBuilder;
-use crate::arrays::Utf8ArrayBuilder;
+use crate::arrays::StringArrayBuilder;
 use crate::prelude::*;
 use crate::utils::get_iter_capacity;
 
@@ -54,8 +52,8 @@ pub trait ArrayScatter: Debug {
     }
 }
 
-impl<T> ArrayScatter for DataArray<T>
-where T: DFNumericType
+impl<T> ArrayScatter for DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
     unsafe fn scatter_unchecked(
         &self,
@@ -65,51 +63,11 @@ where T: DFNumericType
     where
         Self: std::marker::Sized,
     {
-        let array = self.downcast_ref();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
             builders.push(PrimitiveArrayBuilder::<T>::with_capacity(self.len()));
-        }
-
-        match self.null_count() {
-            0 => {
-                indices.zip(0..self.len()).for_each(|(index, row)| {
-                    builders[index as usize].append_value(array.value(row));
-                });
-            }
-            _ => {
-                indices.zip(0..self.len()).for_each(|(index, row)| {
-                    if self.is_null(row) {
-                        builders[index as usize].append_null();
-                    } else {
-                        builders[index as usize].append_value(array.value(row));
-                    }
-                });
-            }
-        }
-
-        Ok(builders
-            .iter_mut()
-            .map(|builder| builder.finish())
-            .collect())
-    }
-}
-
-impl ArrayScatter for DFUtf8Array {
-    unsafe fn scatter_unchecked(
-        &self,
-        indices: &mut dyn Iterator<Item = u64>,
-        scattered_size: usize,
-    ) -> Result<Vec<Self>>
-    where
-        Self: std::marker::Sized,
-    {
-        let array = self.downcast_ref();
-        let mut builders = Vec::with_capacity(scattered_size);
-
-        for _i in 0..scattered_size {
-            builders.push(Utf8ArrayBuilder::with_capacity(self.len()));
         }
 
         match self.null_count() {
@@ -145,7 +103,7 @@ impl ArrayScatter for DFBooleanArray {
     where
         Self: std::marker::Sized,
     {
-        let array = self.downcast_ref();
+        let array = self.inner();
         let mut builders = Vec::with_capacity(scattered_size);
 
         for _i in 0..scattered_size {
@@ -189,7 +147,7 @@ impl ArrayScatter for DFListArray {
 
         let capacity = get_iter_capacity(&indices);
         for _i in 0..scattered_size {
-            let builder = get_list_builder(&self.sub_data_type(), capacity * 5, capacity);
+            let builder = get_list_builder(self.sub_data_type(), capacity * 5, capacity);
 
             builders.push(builder);
         }
@@ -220,7 +178,7 @@ impl ArrayScatter for DFListArray {
     }
 }
 
-impl ArrayScatter for DFBinaryArray {
+impl ArrayScatter for DFStringArray {
     unsafe fn scatter_unchecked(
         &self,
         indices: &mut dyn Iterator<Item = u64>,
@@ -232,14 +190,14 @@ impl ArrayScatter for DFBinaryArray {
         let mut builders = Vec::with_capacity(scattered_size);
         let guess_scattered_len = ((self.len() as f64) * 1.1 / (scattered_size as f64)) as usize;
         for _i in 0..scattered_size {
-            let builder = BinaryArrayBuilder::with_capacity(guess_scattered_len);
+            let builder = StringArrayBuilder::with_capacity(guess_scattered_len);
             builders.push(builder);
         }
 
-        let binary_data = self.downcast_ref();
+        let string_data = self.inner();
         for (i, index) in indices.enumerate() {
             if !self.is_null(i as usize) {
-                builders[index as usize].append_value(binary_data.value(i as usize));
+                builders[index as usize].append_value(string_data.value(i as usize));
             } else {
                 builders[index as usize].append_null();
             }

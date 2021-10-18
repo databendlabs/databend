@@ -15,11 +15,14 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -32,6 +35,11 @@ impl UdfExampleFunction {
         Ok(Box::new(UdfExampleFunction {
             display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
     }
 }
 
@@ -48,7 +56,7 @@ impl Function for UdfExampleFunction {
         Ok(false)
     }
 
-    fn eval(&self, _columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         Ok(DataColumn::Constant(
             DataValue::Boolean(Some(true)),
             input_rows,

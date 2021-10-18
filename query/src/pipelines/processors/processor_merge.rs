@@ -15,29 +15,76 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::tokio::sync::mpsc;
+use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio::sync::mpsc;
 use common_streams::SendableDataBlockStream;
 use log::error;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct MergeProcessor {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     inputs: Vec<Arc<dyn Processor>>,
 }
 
 impl MergeProcessor {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         MergeProcessor {
             ctx,
             inputs: vec![],
         }
+    }
+
+    pub fn merge(&self) -> Result<SendableDataBlockStream> {
+        let len = self.inputs.len();
+        if len == 0 {
+            return Result::Err(ErrorCode::IllegalTransformConnectionState(
+                "Merge processor inputs cannot be zero",
+            ));
+        }
+
+        let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(len);
+        for i in 0..len {
+            let processor = self.inputs[i].clone();
+            let sender = sender.clone();
+            self.ctx.try_spawn(async move {
+                let mut stream = match processor.execute().await {
+                    Err(e) => {
+                        if let Err(error) = sender.send(Result::Err(e)).await {
+                            error!("Merge processor cannot push data: {}", error);
+                        }
+                        return;
+                    }
+                    Ok(stream) => stream,
+                };
+
+                while let Some(item) = stream.next().await {
+                    match item {
+                        Ok(item) => {
+                            if let Err(error) = sender.send(Ok(item)).await {
+                                // Stop pulling data
+                                error!("Merge processor cannot push data: {}", error);
+                                return;
+                            }
+                        }
+                        Err(error) => {
+                            // Stop pulling data
+                            if let Err(error) = sender.send(Err(error)).await {
+                                error!("Merge processor cannot push data: {}", error);
+                            }
+                            return;
+                        }
+                    }
+                }
+            })?;
+        }
+        Ok(Box::pin(ReceiverStream::new(receiver)))
     }
 }
 
@@ -61,50 +108,9 @@ impl Processor for MergeProcessor {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let inputs = self.inputs.len();
-        match inputs {
-            0 => Result::Err(ErrorCode::IllegalTransformConnectionState(
-                "Merge processor inputs cannot be zero",
-            )),
+        match self.inputs.len() {
             1 => self.inputs[0].execute().await,
-            _ => {
-                let (sender, receiver) = mpsc::channel::<Result<DataBlock>>(inputs);
-                for i in 0..inputs {
-                    let input = self.inputs[i].clone();
-                    let sender = sender.clone();
-                    self.ctx.execute_task(async move {
-                        let mut stream = match input.execute().await {
-                            Err(e) => {
-                                if let Err(error) = sender.send(Result::Err(e)).await {
-                                    error!("Merge processor cannot push data: {}", error);
-                                }
-                                return;
-                            }
-                            Ok(stream) => stream,
-                        };
-
-                        while let Some(item) = stream.next().await {
-                            match item {
-                                Ok(item) => {
-                                    if let Err(error) = sender.send(Ok(item)).await {
-                                        // Stop pulling data
-                                        error!("Merge processor cannot push data: {}", error);
-                                        return;
-                                    }
-                                }
-                                Err(error) => {
-                                    // Stop pulling data
-                                    if let Err(error) = sender.send(Err(error)).await {
-                                        error!("Merge processor cannot push data: {}", error);
-                                    }
-                                    return;
-                                }
-                            }
-                        }
-                    })?;
-                }
-                Ok(Box::pin(ReceiverStream::new(receiver)))
-            }
+            _ => self.merge(),
         }
     }
 }

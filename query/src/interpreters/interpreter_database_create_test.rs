@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
@@ -23,19 +23,19 @@ use crate::sql::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_database_interpreter() -> Result<()> {
-    common_tracing::init_default_tracing();
+    common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::try_create_context()?;
 
     if let PlanNode::CreateDatabase(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("create database db1 Engine = Local")?
+        PlanParser::create(ctx.clone()).build_from_sql("create database db1 Engine = default")?
     {
         let executor = CreateDatabaseInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "CreateDatabaseInterpreter");
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}
     } else {
-        assert!(false)
+        panic!()
     }
 
     Ok(())

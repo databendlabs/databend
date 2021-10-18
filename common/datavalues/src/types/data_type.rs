@@ -15,14 +15,11 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::IntervalUnit as ArrowIntervalUnit;
-use common_arrow::arrow::datatypes::TimeUnit as ArrowTimeUnit;
 
 use crate::DataField;
+use crate::PhysicalDataType;
 
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DataType {
     Null,
     Boolean,
@@ -36,67 +33,48 @@ pub enum DataType {
     Int64,
     Float32,
     Float64,
-    Utf8,
     /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in days (32 bits).
+    /// in days (16 bits), it's physical type is UInt16
+    Date16,
+    /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
+    /// in days (32 bits), it's physical type is Int32
     Date32,
-    /// A 64-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in milliseconds (64 bits).
-    Date64,
-    Timestamp(TimeUnit, Option<String>),
+
+    /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
+    /// in seconds, it's physical type is UInt32
+    /// Option<String> indicates the timezone, if it's None, it's UTC
+    DateTime32(Option<String>),
+
     Interval(IntervalUnit),
+
     List(Box<DataField>),
     Struct(Vec<DataField>),
-    Binary,
+    String,
 }
 
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
-)]
-pub enum TimeUnit {
-    /// Time in seconds.
-    Second,
-    /// Time in milliseconds.
-    Millisecond,
-    /// Time in microseconds.
-    Microsecond,
-    /// Time in nanoseconds.
-    Nanosecond,
-}
-
-impl TimeUnit {
-    pub fn to_arrow(&self) -> ArrowTimeUnit {
-        unsafe { std::mem::transmute(self.clone()) }
-    }
-
-    pub fn from_arrow(iu: &ArrowTimeUnit) -> Self {
-        unsafe { std::mem::transmute(iu.clone()) }
-    }
-}
-
-/// YEAR_MONTH or DAY_TIME interval in SQL style.
 #[derive(
     serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
 )]
 pub enum IntervalUnit {
-    /// Indicates the number of elapsed whole months, stored as 4-byte integers.
     YearMonth,
-    /// Indicates the number of elapsed days and milliseconds,
-    /// stored as 2 contiguous 32-bit integers (8-bytes in total).
     DayTime,
 }
 
-impl IntervalUnit {
-    pub fn to_arrow(&self) -> ArrowIntervalUnit {
-        unsafe { std::mem::transmute(self.clone()) }
-    }
-
-    pub fn from_arrow(iu: &ArrowIntervalUnit) -> Self {
-        unsafe { std::mem::transmute(iu.clone()) }
+impl fmt::Display for IntervalUnit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let str = match self {
+            IntervalUnit::YearMonth => "YearMonth",
+            IntervalUnit::DayTime => "DayTime",
+        };
+        write!(f, "{}", str)
     }
 }
 
 impl DataType {
+    pub fn to_physical_type(&self) -> PhysicalDataType {
+        self.clone().into()
+    }
+
     pub fn to_arrow(&self) -> ArrowDataType {
         use DataType::*;
         match self {
@@ -112,17 +90,17 @@ impl DataType {
             Int64 => ArrowDataType::Int64,
             Float32 => ArrowDataType::Float32,
             Float64 => ArrowDataType::Float64,
-            Utf8 => ArrowDataType::LargeUtf8,
-            Date32 => ArrowDataType::Date32,
-            Date64 => ArrowDataType::Date64,
-            Timestamp(tu, f) => ArrowDataType::Timestamp(tu.to_arrow(), f.clone()),
-            Interval(tu) => ArrowDataType::Interval(tu.to_arrow()),
+            Date16 => ArrowDataType::UInt16,
+            Date32 => ArrowDataType::Int32,
+            // we don't use DataType::Extension because extension types are not supported in parquet
+            DateTime32(_) => ArrowDataType::UInt32,
             List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
                 ArrowDataType::Struct(arrows_fields)
             }
-            Binary => ArrowDataType::LargeBinary,
+            String => ArrowDataType::LargeBinary,
+            Interval(_) => ArrowDataType::Int64,
         }
     }
 }
@@ -153,26 +131,67 @@ impl From<&ArrowDataType> for DataType {
                 let f: DataField = (f.as_ref()).into();
                 DataType::List(Box::new(f))
             }
-            ArrowDataType::Date32 => DataType::Date32,
-            ArrowDataType::Date64 => DataType::Date64,
+            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::String,
+            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
 
-            ArrowDataType::Timestamp(tu, f) => {
-                DataType::Timestamp(TimeUnit::from_arrow(tu), f.clone())
-            }
+            ArrowDataType::Timestamp(_, tz) => DataType::DateTime32(tz.clone()),
+            ArrowDataType::Date32 => DataType::Date16,
+            ArrowDataType::Date64 => DataType::Date32,
 
-            ArrowDataType::Interval(fu) => DataType::Interval(IntervalUnit::from_arrow(fu)),
-
-            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::Utf8,
-            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::Binary,
+            ArrowDataType::Extension(name, _arrow_type, extra) => match name.as_str() {
+                "Date16" => DataType::Date16,
+                "Date32" => DataType::Date32,
+                "DateTime32" => DataType::DateTime32(extra.clone()),
+                _ => unimplemented!("data_type: {}", dt),
+            },
 
             // this is safe, because we define the datatype firstly
             _ => {
-                unimplemented!()
+                unimplemented!("data_type: {}", dt)
             }
         }
     }
 }
 
+pub fn get_physical_arrow_type(data_type: &ArrowDataType) -> &ArrowDataType {
+    if let ArrowDataType::Extension(_name, arrow_type, _extra) = data_type {
+        return get_physical_arrow_type(arrow_type.as_ref());
+    }
+
+    data_type
+}
+
+impl fmt::Debug for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => write!(f, "Null"),
+            Self::Boolean => write!(f, "Boolean"),
+            Self::UInt8 => write!(f, "UInt8"),
+            Self::UInt16 => write!(f, "UInt16"),
+            Self::UInt32 => write!(f, "UInt32"),
+            Self::UInt64 => write!(f, "UInt64"),
+            Self::Int8 => write!(f, "Int8"),
+            Self::Int16 => write!(f, "Int16"),
+            Self::Int32 => write!(f, "Int32"),
+            Self::Int64 => write!(f, "Int64"),
+            Self::Float32 => write!(f, "Float32"),
+            Self::Float64 => write!(f, "Float64"),
+            Self::Date16 => write!(f, "Date16"),
+            Self::Date32 => write!(f, "Date32"),
+            Self::DateTime32(arg0) => {
+                if let Some(tz) = arg0 {
+                    write!(f, "DateTime32({:?})", tz)
+                } else {
+                    write!(f, "DateTime32")
+                }
+            }
+            Self::List(arg0) => f.debug_tuple("List").field(arg0).finish(),
+            Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
+            Self::String => write!(f, "String"),
+            Self::Interval(unit) => write!(f, "Interval({})", unit.to_string()),
+        }
+    }
+}
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)

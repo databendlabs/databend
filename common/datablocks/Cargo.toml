@@ -1,9 +1,7 @@
-cargo-features = ["edition2021"]
-
 [package]
 name = "common-datablocks"
 version = "0.1.0"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
@@ -13,12 +11,14 @@ edition = "2021"
 common-arrow = {path = "../arrow"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
-common-infallible = {path = "../infallible"}
 common-io = {path = "../io"}
 
 
 # Github dependencies
 
 # Crates.io dependencies
-ahash = "0.7.4"
+ahash = "0.7.6"
 comfy-table = "4.1.1"
+
+[dev-dependencies]
+pretty_assertions = "1.0"

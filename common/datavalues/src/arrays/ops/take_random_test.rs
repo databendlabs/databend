@@ -15,7 +15,6 @@
 //use common_arrow::arrow::array::ListArray;
 use common_exception::Result;
 
-use crate::arrays::builders::*;
 use crate::arrays::get_list_builder;
 use crate::prelude::*;
 
@@ -36,7 +35,7 @@ fn test_take_random() -> Result<()> {
     let taker = df_bool_array.take_rand();
     assert_eq!(Some(true), taker.get(2));
     let unsafe_val = unsafe { taker.get_unchecked(3) };
-    assert_eq!(false, unsafe_val);
+    assert!(!unsafe_val);
 
     // Test ListArray
     let mut builder = get_list_builder(&DataType::UInt16, 12, 3);
@@ -53,18 +52,18 @@ fn test_take_random() -> Result<()> {
     let expected = Series::new(vec![1_u16, 2, 3]);
     assert!(result.series_equal(&expected));
 
-    // Test DFUtf8Array
-    let mut utf8_builder = Utf8ArrayBuilder::with_capacity(3);
-    utf8_builder.append_value("1a");
-    utf8_builder.append_value("2b");
-    utf8_builder.append_value("3c");
-    let df_utf8_array = &utf8_builder.finish();
+    // Test DFStringArray
+    let mut string_builder = StringArrayBuilder::with_capacity(3);
+    string_builder.append_value("1a");
+    string_builder.append_value("2b");
+    string_builder.append_value("3c");
+    let df_string_array = &string_builder.finish();
     // Create TakeRandBranch for the array
-    let taker = df_utf8_array.take_rand();
-    assert_eq!(Some("1a"), taker.get(0));
+    let taker = df_string_array.take_rand();
+    assert_eq!(Some("1a".as_bytes()), taker.get(0));
     // Test get_unchecked
     let result = unsafe { taker.get_unchecked(1) };
-    assert_eq!("2b", result);
+    assert_eq!(b"2b", result);
 
     Ok(())
 }

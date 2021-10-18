@@ -17,14 +17,15 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::tokio::sync::mpsc::Sender;
+use common_base::tokio::sync::*;
+use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::RwLock;
-use common_runtime::tokio::sync::mpsc::Sender;
-use common_runtime::tokio::sync::*;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -33,7 +34,7 @@ use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::FlightAction;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::DatafuseQueryContext;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::SessionRef;
 
 struct StreamInfo {
@@ -43,15 +44,17 @@ struct StreamInfo {
     rx: mpsc::Receiver<Result<DataBlock>>,
 }
 
-pub struct DatafuseQueryFlightDispatcher {
+pub struct DatabendQueryFlightDispatcher {
     streams: Arc<RwLock<HashMap<String, StreamInfo>>>,
     stages_notify: Arc<RwLock<HashMap<String, Arc<Notify>>>>,
     abort: Arc<AtomicBool>,
 }
 
-impl DatafuseQueryFlightDispatcher {
-    pub fn create() -> DatafuseQueryFlightDispatcher {
-        DatafuseQueryFlightDispatcher {
+pub type DatabendQueryFlightDispatcherRef = Arc<DatabendQueryFlightDispatcher>;
+
+impl DatabendQueryFlightDispatcher {
+    pub fn create() -> DatabendQueryFlightDispatcher {
+        DatabendQueryFlightDispatcher {
             streams: Arc::new(RwLock::new(HashMap::new())),
             stages_notify: Arc::new(RwLock::new(HashMap::new())),
             abort: Arc::new(AtomicBool::new(false)),
@@ -80,7 +83,7 @@ impl DatafuseQueryFlightDispatcher {
         }
     }
 
-    pub fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
+    pub async fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
         let action_sinks = action.get_sinks();
@@ -89,12 +92,15 @@ impl DatafuseQueryFlightDispatcher {
 
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
-            1 => self.one_sink_action(session, &action),
-            _ => self.action_with_scatter::<BroadcastFlightScatter>(session, &action),
+            1 => self.one_sink_action(session, &action).await,
+            _ => {
+                self.action_with_scatter::<BroadcastFlightScatter>(session, &action)
+                    .await
+            }
         }
     }
 
-    pub fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
+    pub async fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
         let action_sinks = action.get_sinks();
@@ -103,14 +109,17 @@ impl DatafuseQueryFlightDispatcher {
 
         match action.get_sinks().len() {
             0 => Err(ErrorCode::LogicalError("")),
-            1 => self.one_sink_action(session, &action),
-            _ => self.action_with_scatter::<HashFlightScatter>(session, &action),
+            1 => self.one_sink_action(session, &action).await,
+            _ => {
+                self.action_with_scatter::<HashFlightScatter>(session, &action)
+                    .await
+            }
         }
     }
 
-    fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
-        let query_context = session.create_context();
-        let action_context = DatafuseQueryContext::new(query_context.clone());
+    async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
+        let query_context = session.create_context().await?;
+        let action_context = DatabendQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
         let query_plan = action.get_plan();
@@ -129,7 +138,7 @@ impl DatafuseQueryFlightDispatcher {
         let tx_ref = self.streams.read().get(&stream_name).map(|x| x.tx.clone());
         let tx = tx_ref.ok_or_else(|| ErrorCode::NotFoundStream("Not found stream"))?;
 
-        query_context.execute_task(async move {
+        query_context.try_spawn(async move {
             let _session = session;
             wait_start(stage_name, stages_notify).await;
 
@@ -153,10 +162,16 @@ impl DatafuseQueryFlightDispatcher {
         Ok(())
     }
 
-    fn action_with_scatter<T>(&self, session: SessionRef, action: &FlightAction) -> Result<()>
-    where T: FlightScatter + Send + 'static {
-        let query_context = session.create_context();
-        let action_context = DatafuseQueryContext::new(query_context.clone());
+    async fn action_with_scatter<T>(
+        &self,
+        session: SessionRef,
+        action: &FlightAction,
+    ) -> Result<()>
+    where
+        T: FlightScatter + Send + 'static,
+    {
+        let query_context = session.create_context().await?;
+        let action_context = DatabendQueryContext::new(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
         let query_plan = action.get_plan();
@@ -197,7 +212,7 @@ impl DatafuseQueryFlightDispatcher {
             action.get_sinks().len(),
         )?;
 
-        query_context.execute_task(async move {
+        query_context.try_spawn(async move {
             let _session = session;
             wait_start(stage_name, stages_notify).await;
 

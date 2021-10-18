@@ -139,13 +139,17 @@ pub trait PlanRewriter {
                 op: op.clone(),
                 args: self.rewrite_exprs(schema, args)?,
             }),
-            Expression::AggregateFunction { op, distinct, args } => {
-                Ok(Expression::AggregateFunction {
-                    op: op.clone(),
-                    distinct: *distinct,
-                    args: self.rewrite_exprs(schema, args)?,
-                })
-            }
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => Ok(Expression::AggregateFunction {
+                op: op.clone(),
+                distinct: *distinct,
+                params: params.clone(),
+                args: self.rewrite_exprs(schema, args)?,
+            }),
             Expression::Sort {
                 expr,
                 asc,
@@ -161,9 +165,14 @@ pub trait PlanRewriter {
             }),
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
-            Expression::Literal { value, column_name } => Ok(Expression::Literal {
+            Expression::Literal {
+                value,
+                column_name,
+                data_type,
+            } => Ok(Expression::Literal {
                 value: value.clone(),
                 column_name: column_name.clone(),
+                data_type: data_type.clone(),
             }),
             Expression::Subquery { name, query_plan } => {
                 let new_subquery = self.rewrite_subquery_plan(query_plan)?;
@@ -470,7 +479,12 @@ impl RewriteHelper {
                 }
             }
 
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let new_args: Result<Vec<Expression>> = args
                     .iter()
                     .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
@@ -480,6 +494,7 @@ impl RewriteHelper {
                     Ok(v) => Ok(Expression::AggregateFunction {
                         op: op.clone(),
                         distinct: *distinct,
+                        params: params.clone(),
                         args: v,
                     }),
                     Err(v) => Err(v),
@@ -672,9 +687,15 @@ impl RewriteHelper {
                 op: op.clone(),
                 args: expressions.to_vec(),
             },
-            Expression::AggregateFunction { op, distinct, .. } => Expression::AggregateFunction {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                ..
+            } => Expression::AggregateFunction {
                 op: op.clone(),
                 distinct: *distinct,
+                params: params.clone(),
                 args: expressions.to_vec(),
             },
             other => other.clone(),

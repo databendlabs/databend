@@ -20,12 +20,13 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use crate::scalars::dates::IntervalFunctionFactory;
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -34,19 +35,17 @@ pub struct ArithmeticFunction {
 }
 
 impl ArithmeticFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-        map.insert("+".into(), ArithmeticPlusFunction::try_create_func);
-        map.insert("plus".into(), ArithmeticPlusFunction::try_create_func);
-        map.insert("-".into(), ArithmeticMinusFunction::try_create_func);
-        map.insert("minus".into(), ArithmeticMinusFunction::try_create_func);
-        map.insert("*".into(), ArithmeticMulFunction::try_create_func);
-        map.insert("multiply".into(), ArithmeticMulFunction::try_create_func);
-        map.insert("/".into(), ArithmeticDivFunction::try_create_func);
-        map.insert("divide".into(), ArithmeticDivFunction::try_create_func);
-        map.insert("%".into(), ArithmeticModuloFunction::try_create_func);
-        map.insert("modulo".into(), ArithmeticModuloFunction::try_create_func);
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("+", ArithmeticPlusFunction::desc());
+        factory.register("plus", ArithmeticPlusFunction::desc());
+        factory.register("-", ArithmeticMinusFunction::desc());
+        factory.register("minus", ArithmeticMinusFunction::desc());
+        factory.register("*", ArithmeticMulFunction::desc());
+        factory.register("multiply", ArithmeticMulFunction::desc());
+        factory.register("/", ArithmeticDivFunction::desc());
+        factory.register("divide", ArithmeticDivFunction::desc());
+        factory.register("%", ArithmeticModuloFunction::desc());
+        factory.register("modulo", ArithmeticModuloFunction::desc());
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {
@@ -61,19 +60,48 @@ impl Function for ArithmeticFunction {
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if args.len() == 1 {
-            return Ok(args[0].clone());
+            return numerical_unary_arithmetic_coercion(&self.op, &args[0]);
         }
-        common_datavalues::numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
+
+        if is_interval(&args[0]) || is_interval(&args[1]) {
+            return interval_arithmetic_coercion(&self.op, &args[0], &args[1]);
+        }
+        if is_date_or_date_time(&args[0]) || is_date_or_date_time(&args[1]) {
+            return datetime_arithmetic_coercion(&self.op, &args[0], &args[1]);
+        }
+        numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        match columns.len() {
-            1 => std::ops::Neg::neg(&columns[0]),
-            _ => columns[0].arithmetic(self.op.clone(), &columns[1]),
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let result: DataColumn = {
+            // Some logic type need DateType information, try arithmetic on column with field first.
+            if let Some(f) = IntervalFunctionFactory::try_get_arithmetic_func(columns) {
+                f(&self.op, &columns[0], &columns[1])?
+            } else {
+                match columns.len() {
+                    1 => columns[0].column().unary_arithmetic(self.op.clone()),
+                    _ => columns[0]
+                        .column()
+                        .arithmetic(self.op.clone(), columns[1].column()),
+                }?
+            }
+        };
+
+        let has_date_or_date_time = columns.iter().any(|c| is_date_or_date_time(c.data_type()));
+
+        if has_date_or_date_time {
+            let args = columns
+                .iter()
+                .map(|f| f.data_type().clone())
+                .collect::<Vec<_>>();
+            let data_type = self.return_type(&args)?;
+            result.cast_with_type(&data_type)
+        } else {
+            Ok(result)
         }
     }
 

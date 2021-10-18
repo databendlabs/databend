@@ -15,12 +15,15 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -29,6 +32,11 @@ pub struct ExistsFunction;
 impl ExistsFunction {
     pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ExistsFunction {}))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
     }
 }
 
@@ -45,8 +53,8 @@ impl Function for ExistsFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        match &columns[0] {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        match columns[0].column() {
             DataColumn::Array(_) => Err(ErrorCode::LogicalError(
                 "Logical error: subquery result set must be const.",
             )),
@@ -73,10 +81,6 @@ impl Function for ExistsFunction {
 
     fn num_arguments(&self) -> usize {
         1
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }
 

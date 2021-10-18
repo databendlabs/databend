@@ -13,7 +13,22 @@
 // limitations under the License.
 //
 
-pub(crate) mod catalog;
-pub(crate) mod impls;
-pub(crate) mod meta_store_client;
-pub(crate) mod utils;
+pub use catalog::Catalog;
+pub use database::Database;
+pub use impls::in_memory_meta::InMemoryMetas;
+pub use table::Table;
+pub use table::TablePtr;
+pub use table::ToReadDataSourcePlan;
+pub use table_function::TableFunction;
+pub use table_id_ranges::*;
+
+pub use crate::datasources::database_engine::DatabaseEngine;
+
+mod catalog;
+mod database;
+mod table;
+mod table_function;
+mod table_id_ranges;
+
+pub mod backends;
+pub mod impls;

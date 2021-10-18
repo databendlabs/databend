@@ -14,11 +14,11 @@
 
 use std::net::Shutdown;
 
+use common_base::tokio::net::TcpStream;
 use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_runtime::tokio::net::TcpStream;
 use msql_srv::MysqlIntermediary;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
@@ -38,7 +38,8 @@ impl MySQLConnection {
     }
 
     fn session_executor(session: SessionRef, blocking_stream: std::net::TcpStream) {
-        let interactive_worker = InteractiveWorker::create(session);
+        let client_addr = blocking_stream.peer_addr().unwrap().to_string();
+        let interactive_worker = InteractiveWorker::create(session, client_addr);
         if let Err(error) = MysqlIntermediary::run_on_tcp(interactive_worker, blocking_stream) {
             if error.code() != ABORT_SESSION {
                 log::error!(

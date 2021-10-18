@@ -22,6 +22,8 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -34,6 +36,11 @@ impl SipHashFunction {
         Ok(Box::new(SipHashFunction {
             display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
     }
 }
 
@@ -58,10 +65,10 @@ impl Function for SipHashFunction {
             | DataType::UInt64
             | DataType::Float32
             | DataType::Float64
+            | DataType::Date16
             | DataType::Date32
-            | DataType::Date64
-            | DataType::Utf8
-            | DataType::Binary => Ok(DataType::UInt64),
+            | DataType::DateTime32(_)
+            | DataType::String => Ok(DataType::UInt64),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function Error: {} does not support {} type parameters",
                 self.display_name, args[0]
@@ -73,8 +80,8 @@ impl Function for SipHashFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], input_rows: usize) -> Result<DataColumn> {
-        let series = columns[0].to_minimal_array()?;
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let series = columns[0].column().to_minimal_array()?;
         let hasher = DFHasher::SipHasher(DefaultHasher::new());
         let res: DataColumn = series.vec_hash(hasher)?.into();
         Ok(res.resize_constant(input_rows))

@@ -15,10 +15,13 @@
 use std::fmt;
 
 use common_datavalues::columns::DataColumn;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -29,6 +32,11 @@ impl DatabaseFunction {
     pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(DatabaseFunction {}))
     }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
+    }
 }
 
 impl Function for DatabaseFunction {
@@ -37,23 +45,19 @@ impl Function for DatabaseFunction {
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::Utf8)
+        Ok(DataType::String)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        Ok(columns[0].clone())
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        Ok(columns[0].column().clone())
     }
 
     fn num_arguments(&self) -> usize {
         1
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }
 

@@ -22,6 +22,8 @@ pub struct StateAddr {
     addr: usize,
 }
 
+pub type StateAddrs = Vec<StateAddr>;
+
 impl StateAddr {
     #[inline]
     pub fn new(addr: usize) -> StateAddr {

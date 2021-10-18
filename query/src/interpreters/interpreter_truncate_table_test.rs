@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -28,7 +28,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     // Create table.
     {
         if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("create table default.a(a bigint, b int) Engine = Memory")?
+            .build_from_sql("create table default.a(a String, b String) Engine = Memory")?
         {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute().await?;
@@ -54,15 +54,15 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             let stream = executor.execute().await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
-                "+-------+-------+",
-                "| a     | b     |",
-                "+-------+-------+",
-                "| '1,1' | '2,2' |",
-                "+-------+-------+",
+                "+-----+-----+",
+                "| a   | b   |",
+                "+-----+-----+",
+                "| 1,1 | 2,2 |",
+                "+-----+-----+",
             ];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {
-            assert!(false)
+            panic!()
         }
     }
 
@@ -79,7 +79,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {
-            assert!(false)
+            panic!()
         }
     }
 
@@ -94,7 +94,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {
-            assert!(false)
+            panic!()
         }
     }
 

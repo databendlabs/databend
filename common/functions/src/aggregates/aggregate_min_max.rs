@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -23,10 +24,11 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::dispatch_numeric_types;
+use crate::with_match_primitive_type;
 
 pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn default() -> Self;
@@ -44,22 +46,21 @@ pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn merge_result(&mut self) -> Result<DataValue>;
 }
 
-struct NumericState<T: DFNumericType> {
-    pub value: Option<T::Native>,
+struct NumericState<T: DFPrimitiveType> {
+    pub value: Option<T>,
 }
 
-struct Utf8State {
-    pub value: Option<String>,
+struct StringState {
+    pub value: Option<Vec<u8>>,
 }
 
 impl<T> NumericState<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::PartialOrd + Clone + BinarySer + BinaryDe,
-    Option<T::Native>: Into<DataValue>,
+    T: DFPrimitiveType,
+    Option<T>: Into<DataValue>,
 {
     #[inline]
-    fn merge_value(&mut self, other: T::Native, is_min: bool) {
+    fn merge_value(&mut self, other: T, is_min: bool) {
         match &self.value {
             Some(a) => {
                 let ord = a.partial_cmp(&other);
@@ -77,9 +78,8 @@ where
 
 impl<T> AggregateMinMaxState for NumericState<T>
 where
-    T: DFNumericType,
-    T::Native: std::cmp::PartialOrd + Clone + BinarySer + BinaryDe + DFTryFrom<DataValue>,
-    Option<T::Native>: Into<DataValue>,
+    T: DFPrimitiveType,
+    Option<T>: Into<DataValue>,
 {
     fn default() -> Self {
         Self { value: None }
@@ -92,8 +92,7 @@ where
         _rows: usize,
         is_min: bool,
     ) -> Result<()> {
-        let array: &DataArray<T> = series.static_cast();
-        let array = array.downcast_ref();
+        let array: &DFPrimitiveArray<T> = series.static_cast();
         array.into_iter().zip(places.iter()).for_each(|(x, place)| {
             if let Some(x) = x {
                 let place = place.next(offset);
@@ -106,7 +105,7 @@ where
 
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()> {
         let c = if is_min { series.min() } else { series.max() }?;
-        let other: Result<T::Native> = DFTryFrom::try_from(c);
+        let other: Result<T> = DFTryFrom::try_from(c);
         if let Ok(other) = other {
             self.merge_value(other, is_min);
         }
@@ -124,7 +123,7 @@ where
         self.value.serialize_to_buf(writer)
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<T::Native>::deserialize(reader)?;
+        self.value = Option::<T>::deserialize(reader)?;
         Ok(())
     }
 
@@ -133,23 +132,23 @@ where
     }
 }
 
-impl Utf8State {
-    fn merge_value(&mut self, other: &str, is_min: bool) {
+impl StringState {
+    fn merge_value(&mut self, other: &[u8], is_min: bool) {
         match &self.value {
             Some(a) => {
-                let ord = a.as_str().partial_cmp(other);
+                let ord = a.as_slice().partial_cmp(other);
                 match (ord, is_min) {
                     (Some(Ordering::Greater), true) | (Some(Ordering::Less), false) => {
-                        self.value = Some(other.to_string())
+                        self.value = Some(other.to_vec())
                     }
                     _ => {}
                 }
             }
-            _ => self.value = Some(other.to_string()),
+            _ => self.value = Some(other.to_vec()),
         }
     }
 }
-impl AggregateMinMaxState for Utf8State {
+impl AggregateMinMaxState for StringState {
     fn default() -> Self {
         Self { value: None }
     }
@@ -161,8 +160,7 @@ impl AggregateMinMaxState for Utf8State {
         _rows: usize,
         is_min: bool,
     ) -> Result<()> {
-        let array: &DataArray<Utf8Type> = series.static_cast();
-        let array = array.downcast_ref();
+        let array: &DFStringArray = series.static_cast();
         array.into_iter().zip(places.iter()).for_each(|(x, place)| {
             let place = place.next(offset);
             if let Some(x) = x {
@@ -175,16 +173,16 @@ impl AggregateMinMaxState for Utf8State {
 
     fn add_batch(&mut self, series: &Series, is_min: bool) -> Result<()> {
         let c = if is_min { series.min() } else { series.max() }?;
-        let other: Result<String> = DFTryFrom::try_from(c);
+        let other: Result<Vec<u8>> = DFTryFrom::try_from(c);
         if let Ok(other) = other {
-            self.merge_value(other.as_str(), is_min);
+            self.merge_value(other.as_slice(), is_min);
         }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()> {
         if let Some(other) = &rhs.value {
-            self.merge_value(other.as_str(), is_min);
+            self.merge_value(other.as_slice(), is_min);
         }
         Ok(())
     }
@@ -193,7 +191,7 @@ impl AggregateMinMaxState for Utf8State {
         self.value.serialize_to_buf(writer)
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<String>::deserialize(reader)?;
+        self.value = Option::<Vec<u8>>::deserialize(reader)?;
         Ok(())
     }
 
@@ -305,44 +303,49 @@ where T: AggregateMinMaxState
     }
 }
 
-macro_rules! creator {
-    ($T: ident, $data_type: expr, $is_min: expr, $display_name: expr, $arguments: expr) => {
-        if $T::data_type() == $data_type {
-            type AggState = NumericState<$T>;
-            if $is_min {
-                return AggregateMinMaxFunction::<AggState>::try_create_min(
-                    $display_name,
-                    $arguments,
-                );
-            } else {
-                return AggregateMinMaxFunction::<AggState>::try_create_max(
-                    $display_name,
-                    $arguments,
-                );
-            }
-        }
-    };
-}
-
-pub fn try_create_aggregate_minmax_function(
-    is_min: bool,
+pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
     display_name: &str,
+    _params: Vec<DataValue>,
     arguments: Vec<DataField>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
     let data_type = arguments[0].data_type();
 
-    dispatch_numeric_types! {creator, data_type.clone(), is_min, display_name, arguments}
-    if data_type == &DataType::Utf8 {
-        if is_min {
-            return AggregateMinMaxFunction::<Utf8State>::try_create_min(display_name, arguments);
+    with_match_primitive_type!(data_type, |$T| {
+        type AggState = NumericState<$T>;
+        if IS_MIN {
+            AggregateMinMaxFunction::<AggState>::try_create_min(
+                display_name,
+                arguments,
+            )
         } else {
-            return AggregateMinMaxFunction::<Utf8State>::try_create_max(display_name, arguments);
+            AggregateMinMaxFunction::<AggState>::try_create_max(
+                display_name,
+                arguments,
+            )
         }
-    }
+    },
 
-    Err(ErrorCode::BadDataValueType(format!(
-        "AggregateMinMaxFunction does not support type '{:?}'",
-        data_type
-    )))
+    {
+        if data_type == &DataType::String {
+            if IS_MIN {
+                AggregateMinMaxFunction::<StringState>::try_create_min(display_name, arguments)
+            } else {
+                AggregateMinMaxFunction::<StringState>::try_create_max(display_name, arguments)
+            }
+        } else {
+            Err(ErrorCode::BadDataValueType(format!(
+                "AggregateMinMaxFunction does not support type '{:?}'",
+                data_type
+            )))
+        }
+    })
+}
+
+pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_minmax_function::<true>))
+}
+
+pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_minmax_function::<false>))
 }

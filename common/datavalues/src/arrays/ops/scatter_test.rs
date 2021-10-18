@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::ArrayRef;
 use common_exception::Result;
 
-use crate::arrays::builders::*;
 use crate::arrays::get_list_builder;
 use crate::arrays::ops::scatter::ArrayScatter;
 use crate::prelude::*;
@@ -30,21 +28,21 @@ fn test_scatter() -> Result<()> {
     assert_eq!(df_uint16_array.len(), indices.len());
 
     let array_vec = unsafe { df_uint16_array.scatter_unchecked(&mut indices.into_iter(), 4)? };
-    assert_eq!(&[7u16, 10], array_vec[0].as_ref().values().as_slice());
-    assert_eq!(&[1u16, 4, 9], array_vec[1].as_ref().values().as_slice());
-    assert_eq!(&[2u16, 6], array_vec[2].as_ref().values().as_slice());
-    assert_eq!(&[3u16, 5, 8], array_vec[3].as_ref().values().as_slice());
+    assert_eq!(&[7u16, 10], array_vec[0].inner().values().as_slice());
+    assert_eq!(&[1u16, 4, 9], array_vec[1].inner().values().as_slice());
+    assert_eq!(&[2u16, 6], array_vec[2].inner().values().as_slice());
+    assert_eq!(&[3u16, 5, 8], array_vec[3].inner().values().as_slice());
 
-    // Test DFUint16Array
-    let df_utf8_array = DFUtf8Array::new_from_slice(&["a", "b", "c", "d"]);
+    // Test DFStringArray
+    let df_string_array = DFStringArray::new_from_slice(&["a", "b", "c", "d"]);
     let indices = vec![1, 0, 1, 1];
-    assert_eq!(df_utf8_array.len(), indices.len());
+    assert_eq!(df_string_array.len(), indices.len());
 
-    let array_vec = unsafe { df_utf8_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
-    let v1: Vec<&str> = array_vec[0].into_no_null_iter().collect();
-    let v2: Vec<&str> = array_vec[1].into_no_null_iter().collect();
-    assert_eq!(vec!["b"], v1);
-    assert_eq!(vec!["a", "c", "d"], v2);
+    let array_vec = unsafe { df_string_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
+    let v1: Vec<&[u8]> = array_vec[0].into_no_null_iter().collect();
+    let v2: Vec<&[u8]> = array_vec[1].into_no_null_iter().collect();
+    assert_eq!(vec![b"b"], v1);
+    assert_eq!(vec![b"a", b"c", b"d"], v2);
 
     // Test BooleanArray
     let df_bool_array = DFBooleanArray::new_from_slice(&[true, false, true, false]);
@@ -61,24 +59,24 @@ fn test_scatter() -> Result<()> {
         array_vec[1].into_no_null_iter().collect::<Vec<bool>>()
     );
 
-    // Test BinaryArray
-    let mut binary_builder = BinaryArrayBuilder::with_capacity(8);
-    binary_builder.append_value(&"12");
-    binary_builder.append_value(&"ab");
-    binary_builder.append_value(&"c1");
-    binary_builder.append_value(&"32");
-    let df_binary_array = binary_builder.finish();
+    // Test StringArray
+    let mut string_builder = StringArrayBuilder::with_capacity(8);
+    string_builder.append_value(&"12");
+    string_builder.append_value(&"ab");
+    string_builder.append_value(&"c1");
+    string_builder.append_value(&"32");
+    let df_string_array = string_builder.finish();
     let indices = vec![1, 0, 0, 1];
-    let array_vec = unsafe { df_binary_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
+    let array_vec = unsafe { df_string_array.scatter_unchecked(&mut indices.into_iter(), 2)? };
 
     let values: Vec<Vec<u8>> = (0..array_vec[0].len())
-        .map(|idx| array_vec[0].downcast_ref().value(idx).to_vec())
+        .map(|idx| array_vec[0].inner().value(idx).to_vec())
         .collect();
 
     assert_eq!(vec![b"ab".to_vec(), b"c1".to_vec()], values);
 
     let values: Vec<Vec<u8>> = (0..array_vec[1].len())
-        .map(|idx| array_vec[1].downcast_ref().value(idx).to_vec())
+        .map(|idx| array_vec[1].inner().value(idx).to_vec())
         .collect();
     assert_eq!(vec![b"12".to_vec(), b"32".to_vec()], values);
 
@@ -93,21 +91,21 @@ fn test_scatter() -> Result<()> {
     let indices = vec![1, 0, 0, 1];
     let array_vec = unsafe { df_list.scatter_unchecked(&mut indices.into_iter(), 2)? };
 
-    let c0: ArrayRef = Arc::from(array_vec[0].downcast_ref().value(0));
-    let c0 = DFUInt16Array::from(c0);
-    let c1: ArrayRef = Arc::from(array_vec[1].downcast_ref().value(0));
-    let c1 = DFUInt16Array::from(c1);
+    let c0 = array_vec[0].inner().value(0);
+    let c0 = DFUInt16Array::from_arrow_array(c0.as_ref());
+    let c1 = array_vec[1].inner().value(0);
+    let c1 = DFUInt16Array::from_arrow_array(c1.as_ref());
 
-    assert_eq!(&[7, 8, 9], c0.downcast_ref().values().as_slice());
-    assert_eq!(&[1, 2, 3], c1.downcast_ref().values().as_slice());
+    assert_eq!(&[7, 8, 9], c0.inner().values().as_slice());
+    assert_eq!(&[1, 2, 3], c1.inner().values().as_slice());
 
-    let c0: ArrayRef = Arc::from(array_vec[0].downcast_ref().value(1));
-    let c0 = DFUInt16Array::from(c0);
-    let c1: ArrayRef = Arc::from(array_vec[1].downcast_ref().value(1));
-    let c1 = DFUInt16Array::from(c1);
+    let c0 = array_vec[0].inner().value(1);
+    let c0 = DFUInt16Array::from_arrow_array(c0.as_ref());
+    let c1 = array_vec[1].inner().value(1);
+    let c1 = DFUInt16Array::from_arrow_array(c1.as_ref());
 
-    assert_eq!(&[10, 11, 12], c0.downcast_ref().values().as_slice());
-    assert_eq!(&[4, 5, 6], c1.downcast_ref().values().as_slice());
+    assert_eq!(&[10, 11, 12], c0.inner().values().as_slice());
+    assert_eq!(&[4, 5, 6], c1.inner().values().as_slice());
 
     Ok(())
 }

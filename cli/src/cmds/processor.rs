@@ -13,12 +13,20 @@
 // limitations under the License.
 
 use std::fs;
+use std::io;
 use std::io::Write;
 
+use clap::App;
+use clap_generate::generate;
+use clap_generate::generators::Bash;
+use clap_generate::generators::Zsh;
+use clap_generate::Generator;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
+use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
 use crate::cmds::Config;
 use crate::cmds::Env;
@@ -34,14 +42,20 @@ pub struct Processor {
     commands: Vec<Box<dyn Command>>,
 }
 
+fn print_completions<G: Generator>(app: &mut App) {
+    generate::<G, _>(app, app.get_name().to_string(), &mut io::stdout());
+}
+
 impl Processor {
     pub fn create(conf: Config) -> Self {
-        fs::create_dir_all(conf.datafuse_dir.clone()).unwrap();
+        fs::create_dir_all(conf.databend_dir.clone()).unwrap();
 
         let sub_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
             Box::new(CommentCommand::create()),
             Box::new(PackageCommand::create(conf.clone())),
+            Box::new(QueryCommand::create(conf.clone())),
+            Box::new(ClusterCommand::create(conf.clone())),
         ];
 
         let mut commands: Vec<Box<dyn Command>> = sub_commands.clone();
@@ -53,9 +67,80 @@ impl Processor {
             commands,
         }
     }
-
     pub fn process_run(&mut self) -> Result<()> {
-        let hist_path = format!("{}/history.txt", self.env.conf.datafuse_dir.clone());
+        let mut writer = Writer::create();
+        match self.env.conf.clone().clap.into_inner().subcommand_name() {
+            Some("package") => {
+                let cmd = PackageCommand::create(self.env.conf.clone());
+                return cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("package"),
+                );
+            }
+            Some("version") => {
+                let cmd = VersionCommand::create();
+                cmd.exec(&mut writer, "".parse().unwrap())
+            }
+            Some("cluster") => {
+                let cmd = ClusterCommand::create(self.env.conf.clone());
+                return cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("cluster"),
+                );
+            }
+            Some("query") => {
+                let cmd = QueryCommand::create(self.env.conf.clone());
+                cmd.exec_match(
+                    &mut writer,
+                    self.env
+                        .conf
+                        .clone()
+                        .clap
+                        .into_inner()
+                        .subcommand_matches("query"),
+                )
+            }
+            Some("completion") => {
+                if let Some(generator) = self
+                    .env
+                    .conf
+                    .clone()
+                    .clap
+                    .into_inner()
+                    .subcommand_matches("completion")
+                    .unwrap()
+                    .value_of("completion")
+                {
+                    let mut app = Config::build_cli();
+                    eprintln!("Generating completion file for {}...", generator);
+                    match generator {
+                        "bash" => print_completions::<Bash>(&mut app),
+                        "zsh" => print_completions::<Zsh>(&mut app),
+                        _ => panic!("Unknown generator"),
+                    }
+                }
+                Ok(())
+            }
+            None => self.process_run_interactive(),
+            _ => {
+                println!("Some other subcommand was used");
+                Ok(())
+            }
+        }
+    }
+
+    pub fn process_run_interactive(&mut self) -> Result<()> {
+        let hist_path = format!("{}/history.txt", self.env.conf.databend_dir.clone());
         let _ = self.readline.load_history(hist_path.as_str());
 
         loop {

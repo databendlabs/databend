@@ -137,12 +137,12 @@ impl Pipeline {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 writeln!(
                     f,
-                    "// Begin DataFuse GraphViz Pipeline (see https://graphviz.org)"
+                    "// Begin Databend GraphViz Pipeline (see https://graphviz.org)"
                 )?;
                 writeln!(f, "digraph {{")?;
                 // TODO()
                 writeln!(f, "}}")?;
-                writeln!(f, "// End DataFuse GraphViz Pipeline")?;
+                writeln!(f, "// End Databend GraphViz Pipeline")?;
                 Ok(())
             }
         }

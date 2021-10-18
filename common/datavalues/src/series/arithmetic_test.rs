@@ -108,7 +108,9 @@ fn test_arithmetic_series() {
                 Series::new(vec![5.0f64, 5.0, 5.0, 5.0]),
                 Series::new(vec![5.0f64, 5.0, 5.0, 5.0]),
             ],
-            error: vec!["Code: 10, displayText = DataValue Error: Unsupported (Utf8) plus (Utf8)."],
+            error: vec![
+                "Code: 10, displayText = DataValue Error: Unsupported (String) plus (String).",
+            ],
         },
         ArrayTest {
             name: "minus-passed",
@@ -149,7 +151,7 @@ fn test_arithmetic_series() {
                 Series::new(vec![3.0f64, 1.0, -1.0, -3.0]),
             ],
             error: vec![
-                "Code: 10, displayText = DataValue Error: Unsupported (Utf8) minus (Utf8).",
+                "Code: 10, displayText = DataValue Error: Unsupported (String) minus (String).",
             ],
         },
         ArrayTest {
@@ -189,7 +191,7 @@ fn test_arithmetic_series() {
                 Series::new(vec![4.0f64, 6.0, 6.0, 4.0]),
             ],
             error: vec![
-                "Code: 10, displayText = DataValue Error: Unsupported (Utf8) multiply (Utf8).",
+                "Code: 10, displayText = DataValue Error: Unsupported (String) multiply (String).",
             ],
         },
         ArrayTest {
@@ -253,7 +255,7 @@ fn test_arithmetic_series() {
                 Series::new(vec![4.0, 1.5, 0.6666666666666666, 0.25]),
             ],
             error: vec![
-                "Code: 10, displayText = DataValue Error: Unsupported (Utf8) divide (Utf8).",
+                "Code: 10, displayText = DataValue Error: Unsupported (String) divide (String).",
             ],
         },
         ArrayTest {
@@ -274,7 +276,7 @@ fn test_arithmetic_series() {
                 Series::new(vec![0i64, 0, 0, 0]),
             ],
             error: vec![
-                "Code: 10, displayText = DataValue Error: Unsupported (Utf8) modulo (Utf8).",
+                "Code: 10, displayText = DataValue Error: Unsupported (String) modulo (String).",
             ],
         },
     ];

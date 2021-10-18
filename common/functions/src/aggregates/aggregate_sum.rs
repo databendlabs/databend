@@ -15,6 +15,7 @@
 use std::alloc::Layout;
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
@@ -26,9 +27,10 @@ use num::traits::AsPrimitive;
 
 use super::AggregateFunctionRef;
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
-use crate::dispatch_numeric_types;
+use crate::with_match_primitive_type;
 
 struct AggregateSumState<T> {
     pub value: Option<T>,
@@ -60,42 +62,23 @@ where
 #[derive(Clone)]
 pub struct AggregateSumFunction<T, SumT> {
     display_name: String,
-    arguments: Vec<DataField>,
+    _arguments: Vec<DataField>,
     t: PhantomData<T>,
     sum_t: PhantomData<SumT>,
 }
 
 impl<T, SumT> AggregateFunction for AggregateSumFunction<T, SumT>
 where
-    T: DFNumericType,
-    SumT: DFNumericType,
-
-    T::Native: AsPrimitive<SumT::Native>
-        + DFTryFrom<DataValue>
-        + Clone
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
-    SumT::Native: DFTryFrom<DataValue>
-        + Into<DataValue>
-        + Clone
-        + Copy
-        + Default
-        + std::ops::Add<Output = SumT::Native>
-        + BinarySer
-        + BinaryDe
-        + Send
-        + Sync
-        + 'static,
-    Option<SumT::Native>: Into<DataValue>,
+    T: DFPrimitiveType + AsPrimitive<SumT>,
+    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
+    Option<SumT>: Into<DataValue>,
 {
     fn name(&self) -> &str {
         "AggregateSumFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
-        let value: DataValue = Some(SumT::Native::default()).into();
+        let value: DataValue = Some(SumT::default()).into();
 
         Ok(value.data_type())
     }
@@ -105,19 +88,19 @@ where
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateSumState::<SumT::Native> { value: None });
+        place.write(|| AggregateSumState::<SumT> { value: None });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateSumState<SumT::Native>>()
+        Layout::new::<AggregateSumState<SumT>>()
     }
 
     fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
         let value = arrays[0].sum()?;
-        let opt_sum: Result<SumT::Native> = DFTryFrom::try_from(value);
+        let opt_sum: Result<SumT> = DFTryFrom::try_from(value);
 
         if let Ok(s) = opt_sum {
-            let state = place.get::<AggregateSumState<SumT::Native>>();
+            let state = place.get::<AggregateSumState<SumT>>();
             state.add(s);
         }
 
@@ -131,54 +114,56 @@ where
         arrays: &[Series],
         _input_rows: usize,
     ) -> Result<()> {
-        let darray: &DataArray<T> = arrays[0].static_cast::<T>();
-        let array = darray.downcast_ref();
-
+        let darray: &DFPrimitiveArray<T> = arrays[0].static_cast();
         if darray.null_count() == 0 {
-            array
+            darray
+                .inner()
                 .values()
                 .as_slice()
                 .iter()
                 .zip(places.iter())
                 .for_each(|(v, place)| {
                     let place = place.next(offset);
-                    let state = place.get::<AggregateSumState<SumT::Native>>();
+                    let state = place.get::<AggregateSumState<SumT>>();
                     state.add(v.as_());
                 });
         } else {
-            array.into_iter().zip(places.iter()).for_each(|(c, place)| {
-                if let Some(v) = c {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateSumState<SumT::Native>>();
-                    state.add(v.as_());
-                }
-            });
+            darray
+                .into_iter()
+                .zip(places.iter())
+                .for_each(|(c, place)| {
+                    if let Some(v) = c {
+                        let place = place.next(offset);
+                        let state = place.get::<AggregateSumState<SumT>>();
+                        state.add(v.as_());
+                    }
+                });
         }
 
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT::Native>>();
+        let state = place.get::<AggregateSumState<SumT>>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateSumState<SumT::Native>>();
+        let state = place.get::<AggregateSumState<SumT>>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateSumState<SumT::Native>>();
+        let rhs = rhs.get::<AggregateSumState<SumT>>();
         if let Some(s) = &rhs.value {
-            let state = place.get::<AggregateSumState<SumT::Native>>();
+            let state = place.get::<AggregateSumState<SumT>>();
             state.add(*s);
         }
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        let state = place.get::<AggregateSumState<SumT::Native>>();
+        let state = place.get::<AggregateSumState<SumT>>();
         Ok(state.value.into())
     }
 }
@@ -191,28 +176,9 @@ impl<T, SumT> fmt::Display for AggregateSumFunction<T, SumT> {
 
 impl<T, SumT> AggregateSumFunction<T, SumT>
 where
-    T: DFNumericType,
-    SumT: DFNumericType,
-
-    T::Native: AsPrimitive<SumT::Native>
-        + DFTryFrom<DataValue>
-        + Clone
-        + Into<DataValue>
-        + Send
-        + Sync
-        + 'static,
-    SumT::Native: DFTryFrom<DataValue>
-        + Into<DataValue>
-        + Clone
-        + Copy
-        + Default
-        + std::ops::Add<Output = SumT::Native>
-        + BinarySer
-        + BinaryDe
-        + Send
-        + Sync
-        + 'static,
-    Option<SumT::Native>: Into<DataValue>,
+    T: DFPrimitiveType + AsPrimitive<SumT>,
+    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
+    Option<SumT>: Into<DataValue>,
 {
     pub fn try_create(
         display_name: &str,
@@ -220,35 +186,37 @@ where
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
-            arguments,
+            _arguments: arguments,
             t: PhantomData,
             sum_t: PhantomData,
         }))
     }
 }
 
-macro_rules! creator {
-    ($T: ident, $data_type: expr, $display_name: expr, $arguments: expr) => {
-        if $T::data_type() == $data_type {
-            return AggregateSumFunction::<$T, <$T as DFNumericType>::LargestType>::try_create(
-                $display_name,
-                $arguments,
-            );
-        }
-    };
-}
-
 pub fn try_create_aggregate_sum_function(
     display_name: &str,
+    _params: Vec<DataValue>,
     arguments: Vec<DataField>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
-    dispatch_numeric_types! {creator, data_type.clone(), display_name, arguments}
+    with_match_primitive_type!(data_type, |$T| {
+        AggregateSumFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
+             display_name,
+             arguments,
+        )
+    },
 
-    Err(ErrorCode::BadDataValueType(format!(
-        "AggregateSumFunction does not support type '{:?}'",
-        data_type
-    )))
+    // no matching branch
+    {
+        Err(ErrorCode::BadDataValueType(format!(
+            "AggregateSumFunction does not support type '{:?}'",
+            data_type
+        )))
+    })
+}
+
+pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_sum_function))
 }

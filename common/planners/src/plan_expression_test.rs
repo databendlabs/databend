@@ -25,17 +25,17 @@ use crate::*;
 fn test_expression_plan_format() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Utf8, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
 
     let empty_plan = EmptyPlan::create_with_schema(schema.clone());
     let expression = PlanNode::Expression(ExpressionPlan {
         exprs: vec![col("a")],
-        schema: schema.clone(),
+        schema,
         input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
         desc: "".to_string(),
     });
     let _ = expression.schema();
-    let expect = "Expression: a:Utf8 ()";
+    let expect = "Expression: a:String ()";
     let actual = format!("{:?}", expression);
     assert_eq!(expect, actual);
     Ok(())

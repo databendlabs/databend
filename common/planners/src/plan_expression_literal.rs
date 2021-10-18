@@ -20,15 +20,15 @@ pub trait Literal {
     fn to_literal(&self) -> Expression;
 }
 
-impl Literal for &str {
+impl Literal for &[u8] {
     fn to_literal(&self) -> Expression {
-        Expression::create_literal(DataValue::Utf8(Some(self.to_string())))
+        Expression::create_literal(DataValue::String(Some(self.to_vec())))
     }
 }
 
-impl Literal for String {
+impl Literal for Vec<u8> {
     fn to_literal(&self) -> Expression {
-        Expression::create_literal(DataValue::Utf8(Some(self.clone())))
+        Expression::create_literal(DataValue::String(Some(self.clone())))
     }
 }
 

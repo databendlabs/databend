@@ -32,12 +32,12 @@ use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct InterpreterFactory;
 
 impl InterpreterFactory {
-    pub fn get(ctx: DatafuseQueryContextRef, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
+    pub fn get(ctx: DatabendQueryContextRef, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),

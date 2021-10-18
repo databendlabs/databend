@@ -54,7 +54,7 @@ impl Expression {
     /// ```text
     /// pre_visit(BinaryExpr(GT))
     /// pre_visit(Column("foo"))
-    /// mutatate(Column("foo"))
+    /// mutate(Column("foo"))
     /// pre_visit(Column("bar"))
     /// mutate(Column("bar"))
     /// mutate(BinaryExpr(GT))
@@ -89,7 +89,12 @@ impl Expression {
                 }
                 Expression::ScalarFunction { op, args: new_args }
             }
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let mut new_args = Vec::with_capacity(args.len());
                 for arg in args {
                     new_args.push(arg.rewrite(rewriter)?);
@@ -97,6 +102,7 @@ impl Expression {
                 Expression::AggregateFunction {
                     op,
                     distinct,
+                    params,
                     args: new_args,
                 }
             }

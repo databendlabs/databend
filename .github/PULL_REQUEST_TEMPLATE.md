@@ -1,4 +1,4 @@
-I hereby agree to the terms of the CLA available at: https://datafuse.rs/policies/cla/
+I hereby agree to the terms of the CLA available at: https://databend.rs/policies/cla/
 
 ## Summary
 
@@ -11,8 +11,8 @@ Summary about this PR
 - Improvement
 - Performance Improvement
 - Build/Testing/CI
+- Need Documentation (Need to add documentation to https://databend.rs)
 - Documentation
-- Website
 - Other 
 - Not for changelog (changelog entry is not required)
 

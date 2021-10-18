@@ -18,69 +18,65 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
+use common_base::tokio::task::JoinHandle;
+use common_base::ProgressCallback;
+use common_base::ProgressValues;
+use common_base::Runtime;
+use common_base::TrySpawn;
+use common_context::TableIOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_metatypes::MetaId;
-use common_metatypes::MetaVersion;
+use common_meta_types::MetaId;
+use common_meta_types::MetaVersion;
+use common_meta_types::NodeInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::Statistics;
-use common_progress::ProgressCallback;
-use common_progress::ProgressValues;
-use common_runtime::tokio::task::JoinHandle;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
-use crate::catalogs::utils::TableFunctionMeta;
-use crate::catalogs::utils::TableMeta;
+use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::Catalog;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DatabaseCatalog;
-use crate::sessions::context_shared::DatafuseQueryContextShared;
+use crate::datasources::common::ContextDalBuilder;
+use crate::datasources::table_func_engine::TableArgs;
+use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
-pub struct DatafuseQueryContext {
+pub struct DatabendQueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
     version: String,
-    shared: Arc<DatafuseQueryContextShared>,
+    shared: Arc<DatabendQueryContextShared>,
 }
 
-pub type DatafuseQueryContextRef = Arc<DatafuseQueryContext>;
+pub type DatabendQueryContextRef = Arc<DatabendQueryContext>;
 
-impl DatafuseQueryContext {
-    pub fn new(other: DatafuseQueryContextRef) -> DatafuseQueryContextRef {
-        DatafuseQueryContext::from_shared(other.shared.clone())
+impl DatabendQueryContext {
+    pub fn new(other: DatabendQueryContextRef) -> DatabendQueryContextRef {
+        DatabendQueryContext::from_shared(other.shared.clone())
     }
 
-    pub fn from_shared(shared: Arc<DatafuseQueryContextShared>) -> DatafuseQueryContextRef {
+    pub fn from_shared(shared: Arc<DatabendQueryContextShared>) -> DatabendQueryContextRef {
         shared.increment_ref_count();
 
-        log::info!("Create DatafuseQueryContext");
+        log::info!("Create DatabendQueryContext");
 
-        Arc::new(DatafuseQueryContext {
+        Arc::new(DatabendQueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!(
-                "DatafuseQuery v-{}",
-                *crate::configs::config::FUSE_COMMIT_VERSION
+                "DatabendQuery v-{}",
+                *crate::configs::DATABEND_COMMIT_VERSION
             ),
             shared,
         })
-    }
-
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    /// The task will run in the current context thread_pool not the global.
-    pub fn execute_task<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        Ok(self.shared.try_get_runtime()?.spawn(task))
     }
 
     /// Set progress callback to context.
@@ -142,30 +138,33 @@ impl DatafuseQueryContext {
         Ok(())
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        self.shared.try_get_cluster()
+    pub fn get_cluster(&self) -> ClusterRef {
+        self.shared.get_cluster()
     }
 
-    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
-        self.shared.get_datasource()
+    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
+        self.shared.get_catalog()
     }
 
-    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<TableMeta>> {
-        self.get_datasource().get_table(database, table)
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        self.shared.get_table(database, table)
     }
 
-    pub async fn get_table_by_id(
+    pub fn get_table_by_id(
         &self,
-        database: &str,
         table_id: MetaId,
         table_ver: Option<MetaVersion>,
-    ) -> Result<Arc<TableMeta>> {
-        self.get_datasource()
-            .get_table_by_id(database, table_id, table_ver)
+    ) -> Result<Arc<dyn Table>> {
+        self.get_catalog().get_table_by_id(table_id, table_ver)
     }
 
-    pub fn get_table_function(&self, function_name: &str) -> Result<Arc<TableFunctionMeta>> {
-        self.get_datasource().get_table_function(function_name)
+    pub fn get_table_function(
+        &self,
+        function_name: &str,
+        tbl_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        self.get_catalog()
+            .get_table_function(function_name, tbl_args)
     }
 
     pub fn get_id(&self) -> String {
@@ -183,10 +182,7 @@ impl DatafuseQueryContext {
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        match self
-            .get_datasource()
-            .get_database(new_database_name.as_str())
-        {
+        match self.get_catalog().get_database(new_database_name.as_str()) {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -227,25 +223,76 @@ impl DatafuseQueryContext {
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.shared.session.get_sessions_manager()
     }
+
+    pub fn get_shared_runtime(&self) -> Result<Arc<Runtime>> {
+        self.shared.try_get_runtime()
+    }
+
+    /// Build a TableIOContext for single node service.
+    pub fn get_single_node_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
+        let nodes = vec![Arc::new(NodeInfo {
+            id: self.get_cluster().local_id(),
+            ..Default::default()
+        })];
+
+        let settings = self.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+
+        Ok(TableIOContext::new(
+            self.get_shared_runtime()?,
+            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
+            max_threads,
+            nodes,
+            Some(self.clone()),
+        ))
+    }
+
+    /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
+    pub fn get_cluster_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
+        let cluster = self.get_cluster();
+        let nodes = cluster.get_nodes();
+        let settings = self.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+
+        Ok(TableIOContext::new(
+            self.get_shared_runtime()?,
+            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
+            max_threads,
+            nodes,
+            Some(self.clone()),
+        ))
+    }
 }
 
-impl std::fmt::Debug for DatafuseQueryContext {
+impl TrySpawn for DatabendQueryContext {
+    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+    /// The task will run in the current context thread_pool not the global.
+    fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        Ok(self.shared.try_get_runtime()?.spawn(task))
+    }
+}
+
+impl std::fmt::Debug for DatabendQueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_settings())
     }
 }
 
-impl Drop for DatafuseQueryContext {
+impl Drop for DatabendQueryContext {
     fn drop(&mut self) {
         self.shared.destroy_context_ref()
     }
 }
 
-impl DatafuseQueryContextShared {
+impl DatabendQueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            log::info!("Destroy DatafuseQueryContext");
+            log::info!("Destroy DatabendQueryContext");
             self.session.destroy_context_shared();
         }
     }

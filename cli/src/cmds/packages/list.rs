@@ -14,6 +14,7 @@
 
 use std::fs;
 
+use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Color;
@@ -33,9 +34,8 @@ impl ListCommand {
     pub fn create(conf: Config) -> Self {
         ListCommand { conf }
     }
-
-    pub fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
-        let bin_dir = format!("{}/bin", self.conf.datafuse_dir.clone());
+    pub fn exec_match(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
+        let bin_dir = format!("{}/bin", self.conf.databend_dir.clone());
         let paths = fs::read_dir(bin_dir)?;
 
         // Status.
@@ -66,7 +66,7 @@ impl ListCommand {
 
             let mut current_marker = Cell::new("");
             if current == version {
-                current_marker = Cell::new("☑").fg(Color::Green);
+                current_marker = Cell::new("✅").fg(Color::Green);
             }
             row.push(current_marker.set_alignment(CellAlignment::Center));
             table.add_row(row);

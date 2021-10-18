@@ -18,6 +18,13 @@ mod stream_datablock_test;
 #[cfg(test)]
 mod stream_progress_test;
 
+#[cfg(test)]
+mod stream_skip_test;
+
+#[cfg(test)]
+mod stream_limit_by_test;
+
+mod sources;
 mod stream;
 mod stream_abort;
 mod stream_correct_with_schema;
@@ -27,9 +34,11 @@ mod stream_parquet;
 mod stream_progress;
 mod stream_skip;
 mod stream_sort;
+mod stream_source;
 mod stream_sub_queries;
 mod stream_take;
 
+pub use sources::*;
 pub use stream::SendableDataBlockStream;
 pub use stream_abort::AbortStream;
 pub use stream_correct_with_schema::CorrectWithSchemaStream;
@@ -39,5 +48,6 @@ pub use stream_parquet::ParquetStream;
 pub use stream_progress::ProgressStream;
 pub use stream_skip::SkipStream;
 pub use stream_sort::SortStream;
+pub use stream_source::SourceStream;
 pub use stream_sub_queries::SubQueriesStream;
 pub use stream_take::TakeStream;

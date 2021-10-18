@@ -39,9 +39,9 @@ use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;
 use crate::pipelines::transforms::CreateSetsTransform;
 use crate::pipelines::transforms::ExpressionTransform;
-use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
+use crate::pipelines::transforms::HavingTransform;
 use crate::pipelines::transforms::LimitByTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
@@ -50,16 +50,17 @@ use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::pipelines::transforms::WhereTransform;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct PipelineBuilder {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 
     limit: Option<usize>,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: DatafuseQueryContextRef) -> PipelineBuilder {
+    pub fn create(ctx: DatabendQueryContextRef) -> PipelineBuilder {
         PipelineBuilder { ctx, limit: None }
     }
 
@@ -208,10 +209,9 @@ impl PipelineBuilder {
     fn visit_filter(&mut self, node: &FilterPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(FilterTransform::try_create(
+            Ok(Box::new(WhereTransform::try_create(
                 node.schema(),
                 node.predicate.clone(),
-                false,
             )?))
         })?;
         Ok(pipeline)
@@ -220,10 +220,9 @@ impl PipelineBuilder {
     fn visit_having(&mut self, node: &HavingPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(FilterTransform::try_create(
+            Ok(Box::new(HavingTransform::try_create(
                 node.schema(),
                 node.predicate.clone(),
-                true,
             )?))
         })?;
         Ok(pipeline)

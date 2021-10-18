@@ -23,4 +23,4 @@ pub use self::mysql::MySQLHandler;
 
 mod clickhouse;
 mod mysql;
-mod server;
+pub(crate) mod server;

@@ -15,12 +15,13 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use common_base::tokio;
+use common_base::tokio::net::TcpStream;
+use common_base::tokio::task::JoinHandle;
+use common_base::Runtime;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::net::TcpStream;
-use common_runtime::tokio::task::JoinHandle;
-use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::stream::Abortable;
@@ -55,7 +56,14 @@ impl ClickHouseHandler {
     }
 
     async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
-        let listener = tokio::net::TcpListener::bind(socket).await?;
+        let listener = tokio::net::TcpListener::bind(socket).await.map_err(|e| {
+            ErrorCode::TokioError(format!(
+                "{{{}:{}}} {}",
+                socket.ip().to_string(),
+                socket.port().to_string(),
+                e
+            ))
+        })?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }

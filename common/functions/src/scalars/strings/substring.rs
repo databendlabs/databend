@@ -13,24 +13,32 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
-    display_name: String,
+    _display_name: String,
 }
 
 impl SubstringFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(SubstringFunction {
-            display_name: display_name.to_string(),
+            _display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
     }
 }
 
@@ -40,16 +48,16 @@ impl Function for SubstringFunction {
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::Utf8)
+        Ok(DataType::String)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         // TODO: make this function support column value as arguments rather than literal
-        let from_value = columns[1].try_get(0)?;
+        let from_value = columns[1].column().try_get(0)?;
         let mut from = from_value.as_i64()?;
 
         if from >= 1 {
@@ -58,11 +66,11 @@ impl Function for SubstringFunction {
 
         let mut end = None;
         if columns.len() >= 3 {
-            end = Some(columns[2].try_get(0)?.as_u64()?);
+            end = Some(columns[2].column().try_get(0)?.as_u64()?);
         }
 
         // todo, move these to datavalues
-        let value = columns[0].to_array()?;
+        let value = columns[0].column().to_array()?;
         let arrow_array = value.get_array_ref();
         let result = compute::substring::substring(arrow_array.as_ref(), from, &end)?;
         let result: ArrayRef = Arc::from(result);

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
 use common_planners::{self};
-use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 

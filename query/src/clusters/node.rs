@@ -14,7 +14,7 @@
 
 use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
 use common_exception::Result;
-use common_flights::ConnectionFactory;
+use common_store_api_sdk::ConnectionFactory;
 use serde::de::Error;
 use serde::Deserializer;
 use serde::Serializer;
@@ -72,7 +72,7 @@ impl Node {
         };
 
         let channel =
-            ConnectionFactory::create_flight_channel(self.address.clone(), None, tls_conf).await;
+            ConnectionFactory::create_flight_channel(self.address.clone(), None, tls_conf);
         channel.map(|channel| FlightClient::new(FlightServiceClient::new(channel)))
     }
 }

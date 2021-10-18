@@ -17,6 +17,16 @@ use std::fmt::Display;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
+    if actual != 1 {
+        return Err(ErrorCode::NumberArgumentsNotMatch(format!(
+            "{} expect to have single parameters, but got {}",
+            name, actual
+        )));
+    }
+    Ok(())
+}
+
 pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
@@ -55,7 +65,7 @@ pub fn assert_variadic_arguments<D: Display>(
 ) -> Result<()> {
     if actual < expected.0 || actual > expected.1 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-            "{} expect to have [{}, {}) arguments, but got {}",
+            "{} expect to have [{}, {}] arguments, but got {}",
             name, expected.0, expected.1, actual
         )));
     }

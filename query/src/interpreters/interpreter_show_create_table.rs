@@ -26,19 +26,19 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use log::debug;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ShowCreateTableInterpreter {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     plan: ShowCreateTablePlan,
 }
 
 impl ShowCreateTableInterpreter {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         plan: ShowCreateTablePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(ShowCreateTableInterpreter { ctx, plan }))
@@ -52,14 +52,12 @@ impl Interpreter for ShowCreateTableInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_datasource();
-        let database = datasource.get_database(self.plan.db.as_str())?;
-        let table_meta = database.get_table(self.plan.table.as_str())?;
-        let table = table_meta.datasource();
-
+        let catalog = self.ctx.get_catalog();
+        let database = catalog.get_database(self.plan.db.as_str())?;
+        let table = database.get_table(self.plan.table.as_str())?;
         let name = table.name();
         let engine = table.engine();
-        let schema = table.schema()?;
+        let schema = table.schema();
 
         let mut table_info = format!("CREATE TABLE `{}` (\n", name);
         for field in schema.fields().iter() {
@@ -70,14 +68,14 @@ impl Interpreter for ShowCreateTableInterpreter {
         table_info.push_str(table_engine.as_str());
 
         let show_fields = vec![
-            DataField::new("Table", DataType::Utf8, false),
-            DataField::new("Create Table", DataType::Utf8, false),
+            DataField::new("Table", DataType::String, false),
+            DataField::new("Create Table", DataType::String, false),
         ];
         let show_schema = DataSchemaRefExt::create(show_fields);
 
         let block = DataBlock::create_by_array(show_schema.clone(), vec![
-            Series::new(vec![name]),
-            Series::new(vec![table_info]),
+            Series::new(vec![name.as_bytes()]),
+            Series::new(vec![table_info.into_bytes()]),
         ]);
         debug!("Show create table executor result: {:?}", block);
 

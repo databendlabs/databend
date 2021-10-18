@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -38,10 +38,9 @@ async fn test_transform_filter() -> Result<()> {
         .build()?
     {
         pipeline.add_simple_transform(|| {
-            Ok(Box::new(FilterTransform::try_create(
+            Ok(Box::new(WhereTransform::try_create(
                 plan.input.schema(),
                 plan.predicate.clone(),
-                false,
             )?))
         })?;
     }
@@ -69,7 +68,7 @@ async fn test_transform_filter_error() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create(ctx.clone());
+    let mut pipeline = Pipeline::create(ctx);
 
     let source = test_source.number_source_transform_for_test(10000)?;
     pipeline.add_source(Arc::new(source))?;
@@ -79,7 +78,7 @@ async fn test_transform_filter_error() -> Result<()> {
         .and_then(|x| x.build())?;
 
     if let PlanNode::Filter(plan) = plan {
-        let result = FilterTransform::try_create(plan.schema(), plan.predicate.clone(), false);
+        let result = WhereTransform::try_create(plan.schema(), plan.predicate);
         let actual = format!("{}", result.err().unwrap());
         let expect = "Code: 6, displayText = Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
         assert_eq!(expect, actual);

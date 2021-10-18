@@ -17,9 +17,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::tokio;
+use common_base::tokio::sync::mpsc::Receiver;
 use common_exception::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::stream::Abortable;
 use futures::Future;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -59,6 +59,9 @@ impl ShutdownHandle {
         let sessions = self.sessions.clone();
         let join_all = futures::future::join_all(shutdown_jobs);
         async move {
+            let cluster_discovery = sessions.get_cluster_discovery();
+            cluster_discovery.unregister_to_metastore().await;
+
             join_all.await;
             sessions.shutdown(signal).await;
         }

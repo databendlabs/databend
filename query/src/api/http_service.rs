@@ -12,41 +12,205 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::BorrowMut;
+use std::fs::File;
+use std::io::BufReader;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 
+use axum::handler::get;
+use axum::routing::BoxRoute;
+use axum::AddExtensionLayer;
+use axum::Router;
+use axum_server;
+use axum_server::tls::TlsLoader;
+use axum_server::Handle;
+use common_base::tokio;
+use common_base::tokio::task::JoinHandle;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::sync::Notify;
-use common_runtime::tokio::task::JoinHandle;
-use futures::Future;
+use tokio_rustls::rustls::internal::pemfile::certs;
+use tokio_rustls::rustls::internal::pemfile::pkcs8_private_keys;
+use tokio_rustls::rustls::AllowAnyAuthenticatedClient;
+use tokio_rustls::rustls::Certificate;
+use tokio_rustls::rustls::NoClientAuth;
+use tokio_rustls::rustls::PrivateKey;
+use tokio_rustls::rustls::RootCertStore;
+use tokio_rustls::rustls::ServerConfig;
 
-use crate::api::http::router::Router;
-use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::servers::Server;
+use crate::sessions::SessionManagerRef;
 
 pub struct HttpService {
-    cfg: Config,
-    cluster: ClusterRef,
-    abort_notify: Arc<Notify>,
-    join_handle: Option<JoinHandle<()>>,
+    sessions: SessionManagerRef,
+    join_handle: Option<JoinHandle<std::io::Result<()>>>,
+    abort_handler: Handle,
 }
 
 impl HttpService {
-    pub fn create(cfg: Config, cluster: ClusterRef) -> Box<Self> {
+    pub fn create(sessions: SessionManagerRef) -> Box<HttpService> {
         Box::new(HttpService {
-            cfg,
-            cluster,
-            abort_notify: Arc::new(Notify::new()),
+            sessions,
             join_handle: None,
+            abort_handler: axum_server::Handle::new(),
         })
     }
 
-    fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
-        let notified = self.abort_notify.clone();
-        async move {
-            notified.notified().await;
+    fn build_tls(config: &Config) -> Result<ServerConfig> {
+        let tls_key = Path::new(config.query.api_tls_server_key.as_str());
+        let tls_cert = Path::new(config.query.api_tls_server_cert.as_str());
+
+        let key = HttpService::load_keys(tls_key)?.remove(0);
+        let certs = HttpService::load_certs(tls_cert)?;
+
+        let mut tls_config = ServerConfig::new(NoClientAuth::new());
+        if let Err(cause) = tls_config.set_single_cert(certs, key) {
+            return Err(ErrorCode::TLSConfigurationFailure(format!(
+                "Cannot build TLS config for http service, cause {}",
+                cause
+            )));
+        }
+
+        HttpService::add_tls_pem_files(config, tls_config)
+    }
+
+    fn add_tls_pem_files(config: &Config, mut tls_config: ServerConfig) -> Result<ServerConfig> {
+        let pem_path = &config.query.api_tls_server_root_ca_cert;
+        if let Some(pem_path) = HttpService::load_ca(pem_path) {
+            log::info!("Client Authentication for http service.");
+
+            let pem_file = File::open(pem_path.as_str())?;
+            let mut root_cert_store = RootCertStore::empty();
+
+            if root_cert_store
+                .add_pem_file(BufReader::new(pem_file).borrow_mut())
+                .is_err()
+            {
+                return Err(ErrorCode::TLSConfigurationFailure(
+                    "Cannot add client ca in for http service",
+                ));
+            }
+
+            let authenticated_client = AllowAnyAuthenticatedClient::new(root_cert_store);
+            tls_config.set_client_certificate_verifier(authenticated_client);
+        }
+
+        Ok(tls_config)
+    }
+
+    fn load_certs(path: &Path) -> Result<Vec<Certificate>> {
+        match certs(&mut BufReader::new(File::open(path)?)) {
+            Ok(certs) => Ok(certs),
+            Err(_) => Err(ErrorCode::TLSConfigurationFailure("invalid cert")),
+        }
+    }
+
+    // currently only PKCS8 key supports for TLS setup
+    fn load_keys(path: &Path) -> Result<Vec<PrivateKey>> {
+        match pkcs8_private_keys(&mut BufReader::new(File::open(path)?)) {
+            Ok(keys) => Ok(keys),
+            Err(_) => Err(ErrorCode::TLSConfigurationFailure("invalid key")),
+        }
+    }
+
+    // Client Auth(mTLS) CA certificate configuration
+    fn load_ca(ca_path: &str) -> Option<String> {
+        match Path::new(ca_path).exists() {
+            false => None,
+            true => Some(ca_path.to_string()),
+        }
+    }
+
+    fn build_router(&self) -> Router<BoxRoute> {
+        Router::new()
+            .route("/v1/health", get(super::http::v1::health::health_handler))
+            .route("/v1/config", get(super::http::v1::config::config_handler))
+            .route("/v1/logs", get(super::http::v1::logs::logs_handler))
+            .route(
+                "/v1/cluster/list",
+                get(super::http::v1::cluster::cluster_list_handler),
+            )
+            .route(
+                "/debug/home",
+                get(super::http::debug::home::debug_home_handler),
+            )
+            .route(
+                "/debug/pprof/profile",
+                get(super::http::debug::pprof::debug_pprof_handler),
+            )
+            .layer(AddExtensionLayer::new(self.sessions.clone()))
+            .boxed()
+    }
+
+    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        log::info!("Http API TLS enabled");
+
+        let loader = Self::tls_loader(self.sessions.get_conf());
+
+        let server = axum_server::bind_rustls(listening.to_string())
+            .handle(self.abort_handler.clone())
+            .loader(loader.await?)
+            .serve(self.build_router());
+
+        self.join_handle = Some(tokio::spawn(server));
+        self.abort_handler.listening().await;
+
+        match self.abort_handler.listening_addrs() {
+            None => Err(ErrorCode::CannotListenerPort("")),
+            Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
+            Some(addresses) => {
+                // 0.0.0.0, for multiple network interface, we may listen to multiple address
+                let first_address = addresses[0];
+                for address in addresses {
+                    if address.port() != first_address.port() {
+                        return Err(ErrorCode::CannotListenerPort(""));
+                    }
+                }
+
+                Ok(first_address)
+            }
+        }
+    }
+
+    async fn tls_loader(config: &Config) -> Result<TlsLoader> {
+        let mut tls_loader = TlsLoader::new();
+        tls_loader.config(Arc::new(Self::build_tls(config)?));
+
+        match tls_loader.load().await {
+            Ok(_) => Ok(tls_loader),
+            Err(cause) => Err(ErrorCode::TLSConfigurationFailure(format!(
+                "Cannot load tls config, cause {}",
+                cause
+            ))),
+        }
+    }
+
+    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        log::warn!("Http API TLS not set");
+
+        let server = axum_server::bind(listening.to_string())
+            .handle(self.abort_handler.clone())
+            .serve(self.build_router());
+
+        self.join_handle = Some(tokio::spawn(server));
+        self.abort_handler.listening().await;
+
+        match self.abort_handler.listening_addrs() {
+            None => Err(ErrorCode::CannotListenerPort("")),
+            Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
+            Some(addresses) => {
+                // 0.0.0.0, for multiple network interface, we may listen to multiple address
+                let first_address = addresses[0];
+                for address in addresses {
+                    if address.port() != first_address.port() {
+                        return Err(ErrorCode::CannotListenerPort(""));
+                    }
+                }
+
+                Ok(first_address)
+            }
         }
     }
 }
@@ -54,12 +218,12 @@ impl HttpService {
 #[async_trait::async_trait]
 impl Server for HttpService {
     async fn shutdown(&mut self) {
-        self.abort_notify.notify_waiters();
+        self.abort_handler.graceful_shutdown();
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
                 log::error!(
-                    "Unexpected error during shutdown HttpServer. cause {}",
+                    "Unexpected error during shutdown Http API handler. cause {}",
                     error
                 );
             }
@@ -67,28 +231,10 @@ impl Server for HttpService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let router = Router::create(self.cfg.clone(), self.cluster.clone());
-        let server = warp::serve(router.router()?);
-
-        let conf = self.cfg.clone();
-        let tls_cert = conf.api_tls_server_cert;
-        let tls_key = conf.api_tls_server_key;
-
-        if !tls_cert.is_empty() && !tls_key.is_empty() {
-            log::info!("Http API TLS enabled");
-            let (listening, server) = server
-                .tls()
-                .cert_path(tls_cert)
-                .key_path(tls_key)
-                .bind_with_graceful_shutdown(listening, self.shutdown_notify());
-            self.join_handle = Some(tokio::spawn(server));
-            Ok(listening)
-        } else {
-            log::warn!("Http API TLS not set");
-            let (listening, server) =
-                server.bind_with_graceful_shutdown(listening, self.shutdown_notify());
-            self.join_handle = Some(tokio::spawn(server));
-            Ok(listening)
+        let config = &self.sessions.get_conf().query;
+        match config.api_tls_server_key.is_empty() || config.api_tls_server_cert.is_empty() {
+            true => self.start_without_tls(listening).await,
+            false => self.start_with_tls(listening).await,
         }
     }
 }

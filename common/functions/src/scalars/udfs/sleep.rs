@@ -17,12 +17,15 @@ use std::time::Duration;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::is_numeric;
+use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -35,6 +38,11 @@ impl SleepFunction {
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),
         }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default())
     }
 }
 
@@ -63,8 +71,8 @@ impl Function for SleepFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        match &columns[0] {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        match columns[0].column() {
             DataColumn::Array(_) => Err(ErrorCode::BadArguments(format!(
                 "The argument of function {} must be constant.",
                 self.display_name
@@ -100,10 +108,6 @@ impl Function for SleepFunction {
                 Ok(DataColumn::Constant(DataValue::UInt8(Some(0)), *rows))
             }
         }
-    }
-
-    fn is_deterministic(&self) -> bool {
-        false
     }
 }
 

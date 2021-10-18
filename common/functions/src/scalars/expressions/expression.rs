@@ -12,54 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use common_datavalues::DataType;
-use common_exception::Result;
 
+use crate::scalars::function_factory::FactoryCreator;
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
-use crate::scalars::FactoryFuncRef;
 
 #[derive(Clone)]
 pub struct ToCastFunction;
 
 impl ToCastFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
+    fn cast_function_creator(to_type: DataType) -> FunctionDescription {
+        let function_creator: FactoryCreator = Box::new(move |display_name| {
+            CastFunction::create(display_name.to_string(), to_type.clone())
+        });
 
-        macro_rules! register_cast_funcs {
-            ( $($name:ident), *) => {{
-               $(
-                let name = format!("to{}", DataType::$name);
-                map.insert(name.into(), |display_name| {
-                    CastFunction::create(display_name.to_string(), DataType::$name)
-                });
-               )*
-            }};
-        }
+        FunctionDescription::creator(function_creator)
+            .features(FunctionFeatures::default().deterministic())
+    }
 
-        {
-            register_cast_funcs! {
-                Null,
-                Boolean,
-                UInt8,
-                UInt16,
-                UInt32,
-                UInt64,
-                Int8,
-                Int16,
-                Int32,
-                Int64,
-                Float32,
-                Float64,
-                Utf8,
-                Date32,
-                Date64,
-                Binary
-            }
-            // aliases
-            map.insert("tostring".into(), |display_name| {
-                CastFunction::create(display_name.to_string(), DataType::Utf8)
-            });
-        }
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("toNull", Self::cast_function_creator(DataType::Null));
+        factory.register("toBoolean", Self::cast_function_creator(DataType::Boolean));
+        factory.register("toUInt8", Self::cast_function_creator(DataType::UInt8));
+        factory.register("toUInt16", Self::cast_function_creator(DataType::UInt16));
+        factory.register("toUInt32", Self::cast_function_creator(DataType::UInt32));
+        factory.register("toUInt64", Self::cast_function_creator(DataType::UInt64));
+        factory.register("toInt8", Self::cast_function_creator(DataType::Int8));
+        factory.register("toInt16", Self::cast_function_creator(DataType::Int16));
+        factory.register("toInt32", Self::cast_function_creator(DataType::Int32));
+        factory.register("toInt64", Self::cast_function_creator(DataType::Int64));
+        factory.register("toFloat32", Self::cast_function_creator(DataType::Float32));
+        factory.register("toFloat64", Self::cast_function_creator(DataType::Float64));
+        factory.register("toDate16", Self::cast_function_creator(DataType::Date16));
+        factory.register("toDate32", Self::cast_function_creator(DataType::Date32));
+        factory.register("toString", Self::cast_function_creator(DataType::String));
 
-        Ok(())
+        // aliases
+        factory.register("toDate", Self::cast_function_creator(DataType::Date16));
+        factory.register(
+            "toDateTime",
+            Self::cast_function_creator(DataType::DateTime32(None)),
+        );
+        factory.register(
+            "toDateTime32",
+            Self::cast_function_creator(DataType::DateTime32(None)),
+        );
     }
 }

@@ -40,16 +40,16 @@ macro_rules! apply_scalar_ser {
 // primitive types and boolean
 apply_scalar_ser! {u8, u16, u32, u64, i8, i16, i32, i64, f32, f64, bool}
 
-impl BinarySer for String {
+impl BinarySer for Vec<u8> {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
-        let bytes = self.as_bytes();
+        let bytes = self.as_slice();
         writer.write_uvarint(bytes.len() as u64)?;
         writer.write_all(bytes)?;
         Ok(())
     }
 
     fn serialize_to_buf<W: bytes::BufMut>(&self, writer: &mut W) -> Result<()> {
-        let bytes = self.as_bytes();
+        let bytes = self.as_slice();
         writer.write_uvarint(bytes.len() as u64)?;
         writer.put_slice(bytes);
         Ok(())

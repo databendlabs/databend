@@ -100,7 +100,7 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
     if concurrency == "":
         concurrency = suit.get("concurrency", base_cfg['concurrency'])
     if bin_path == "":
-        logging.warning("you should specific path for datafuse-benchmark binary file")
+        logging.warning("you should specific path for databend-benchmark binary file")
         return
     suit_name = re.sub(r"\s+", '-', suit['name'])
     file_name = "{}-result.json".format(suit_name)
@@ -117,6 +117,8 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
 
             except CosServiceError as e:
                 if e.get_error_code() == 'NoSuchResource':
+                    logging.info("continue on test")
+                elif e.get_error_code() == 'NoSuchKey':
                     logging.info("continue on test")
                 else:
                     logging.info("other issue occured, {}".format(e.get_error_code()))
@@ -172,7 +174,7 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
 if __name__ == '__main__':
     parser = configargparse.ArgParser()
     parser.add_argument('-o', '--output', default=".", help='Perf results directory')
-    parser.add_argument('-b', '--bin', default="datafuse-benchmark", help='Fuse benchmark binary')
+    parser.add_argument('-b', '--bin', default="databend-benchmark", help='Databend benchmark binary')
     parser.add_argument('--host', default="127.0.0.1", help='Clickhouse handler Server host')
     parser.add_argument('-p', '--port', default="9001", help='Clickhouse handler Server port')
     parser.add_argument('-c', '--concurrency', default="", help='Set default concurrency for all perf tests')

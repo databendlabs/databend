@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use common_base::tokio;
 use common_exception::Result;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -55,5 +55,30 @@ async fn test_processor_mixed() -> Result<()> {
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_processor_mixed2() -> Result<()> {
+    let ctx = crate::tests::try_create_context()?;
+    let test_source = tests::NumberTestData::create(ctx.clone());
+
+    let m = 5;
+    let n = 2;
+    let mut processor0 = MixedProcessor::create(ctx, n);
+    for i in 0..m {
+        let source = test_source.number_source_transform_for_test(i + 1)?;
+        processor0.connect_to(Arc::new(source))?;
+    }
+    let processor1 = processor0.share()?;
+
+    let stream0 = processor0.execute().await?;
+    let blocks0 = stream0.try_collect::<Vec<_>>().await?;
+
+    let stream1 = processor1.execute().await?;
+    let blocks1 = stream1.try_collect::<Vec<_>>().await?;
+
+    assert_eq!(blocks0.len(), 3);
+    assert_eq!(blocks1.len(), 2);
     Ok(())
 }

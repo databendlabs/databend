@@ -17,39 +17,46 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_base::tokio;
+use common_base::tokio::net::TcpListener;
+use common_base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
-use common_runtime::tokio::net::TcpListener;
-use common_runtime::tokio::sync::Notify;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
-use crate::api::rpc::DatafuseQueryFlightDispatcher;
-use crate::api::rpc::DatafuseQueryFlightService;
+use crate::api::rpc::DatabendQueryFlightDispatcher;
+use crate::api::rpc::DatabendQueryFlightService;
 use crate::configs::Config;
-use crate::servers::Server as DatafuseQueryServer;
+use crate::servers::Server as DatabendQueryServer;
 use crate::sessions::SessionManagerRef;
 
 pub struct RpcService {
     pub(crate) sessions: SessionManagerRef,
     pub(crate) abort_notify: Arc<Notify>,
-    pub(crate) dispatcher: Arc<DatafuseQueryFlightDispatcher>,
+    pub(crate) dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
 impl RpcService {
-    pub fn create(sessions: SessionManagerRef) -> Box<dyn DatafuseQueryServer> {
+    pub fn create(sessions: SessionManagerRef) -> Box<dyn DatabendQueryServer> {
         Box::new(Self {
             sessions,
             abort_notify: Arc::new(Notify::new()),
-            dispatcher: Arc::new(DatafuseQueryFlightDispatcher::create()),
+            dispatcher: Arc::new(DatabendQueryFlightDispatcher::create()),
         })
     }
 
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
-        let listener = TcpListener::bind(listening).await?;
+        let listener = TcpListener::bind(listening).await.map_err(|e| {
+            ErrorCode::TokioError(format!(
+                "{{{}:{}}} {}",
+                listening.ip().to_string(),
+                listening.port().to_string(),
+                e
+            ))
+        })?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
@@ -62,8 +69,8 @@ impl RpcService {
     }
 
     async fn server_tls_config(conf: &Config) -> Result<ServerTlsConfig> {
-        let cert = tokio::fs::read(conf.rpc_tls_server_cert.as_str()).await?;
-        let key = tokio::fs::read(conf.rpc_tls_server_key.as_str()).await?;
+        let cert = tokio::fs::read(conf.query.rpc_tls_server_cert.as_str()).await?;
+        let key = tokio::fs::read(conf.query.rpc_tls_server_key.as_str()).await?;
         let server_identity = Identity::from_pem(cert, key);
         let tls_conf = ServerTlsConfig::new().identity(server_identity);
         Ok(tls_conf)
@@ -72,11 +79,11 @@ impl RpcService {
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
         let sessions = self.sessions.clone();
         let flight_dispatcher = self.dispatcher.clone();
-        let flight_api_service = DatafuseQueryFlightService::create(flight_dispatcher, sessions);
+        let flight_api_service = DatabendQueryFlightService::create(flight_dispatcher, sessions);
         let conf = self.sessions.get_conf();
         let builder = Server::builder();
         let mut builder = if conf.tls_rpc_server_enabled() {
-            log::info!("fuse query tls rpc enabled");
+            log::info!("databend query tls rpc enabled");
             builder
                 .tls_config(Self::server_tls_config(conf).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
@@ -98,13 +105,13 @@ impl RpcService {
             .add_service(FlightServiceServer::new(flight_api_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
-        common_runtime::tokio::spawn(server);
+        common_base::tokio::spawn(server);
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl DatafuseQueryServer for RpcService {
+impl DatabendQueryServer for RpcService {
     async fn shutdown(&mut self) {
         self.dispatcher.abort();
         // We can't turn off listening on the connection

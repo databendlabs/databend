@@ -13,8 +13,6 @@
 // limitations under the License.
 
 //! Everything you need to get started with this crate.
-pub use std::sync::Arc;
-
 pub use crate::arrays::to_primitive;
 // arrays
 pub use crate::arrays::*;
@@ -22,6 +20,8 @@ pub use crate::bit_util::*;
 // columns
 pub use crate::columns::DataColumn;
 pub use crate::columns::DataColumnCommon;
+pub use crate::columns::DataColumnWithField;
+pub use crate::columns::DataColumnsWithField;
 pub use crate::data_array_filter::*;
 pub use crate::data_value::DFTryFrom;
 // series
@@ -50,6 +50,5 @@ pub use crate::DataValueLogicOperator;
 pub use crate::DataValueLogicOperator::*;
 
 pub type AlignedVec<T> = common_arrow::arrow::buffer::MutableBuffer<T>;
-pub type LargeUtf8Array = common_arrow::arrow::array::Utf8Array<i64>;
 pub type LargeBinaryArray = common_arrow::arrow::array::BinaryArray<i64>;
 pub type LargeListArray = common_arrow::arrow::array::ListArray<i64>;

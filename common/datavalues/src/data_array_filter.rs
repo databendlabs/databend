@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::ops::BitAnd;
+use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::filter::build_filter;
 use common_exception::Result;
 
 use crate::prelude::*;
+
 pub struct DataArrayFilter;
 
 impl DataArrayFilter {
@@ -33,7 +35,7 @@ impl DataArrayFilter {
             return Self::filter_batch_array(array, &predicate);
         }
 
-        let filter = build_filter(predicate.downcast_ref())?;
+        let filter = build_filter(predicate.inner())?;
         let filtered_arrays: Vec<Series> = array
             .iter()
             .map(|a| {
@@ -49,12 +51,12 @@ impl DataArrayFilter {
 
     /// Remove null values by do a bitmask AND operation with null bits and the boolean bits.
     fn remove_null_filter(filter: &DFBooleanArray) -> DFBooleanArray {
-        let array = filter.downcast_ref();
-        let mask = array.values();
-        if let Some(v) = array.validity() {
-            let mask = mask.bitand(v);
-            return DFBooleanArray::from_arrow_array(BooleanArray::from_data(mask, None));
+        let array = filter.inner();
+        let filter_mask = array.values();
+
+        match array.validity() {
+            None => filter.clone(),
+            Some(v) => DFBooleanArray::from_arrow_data(filter_mask.bitand(v), None),
         }
-        filter.clone()
     }
 }

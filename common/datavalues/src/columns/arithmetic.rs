@@ -19,6 +19,7 @@ use std::ops::Neg;
 use std::ops::Rem;
 use std::ops::Sub;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -98,6 +99,17 @@ impl DataColumn {
             DataValueArithmeticOperator::Mul => self * rhs,
             DataValueArithmeticOperator::Div => self / rhs,
             DataValueArithmeticOperator::Modulo => self % rhs,
+        }
+    }
+
+    pub fn unary_arithmetic(&self, op: DataValueArithmeticOperator) -> Result<DataColumn> {
+        match op {
+            DataValueArithmeticOperator::Plus => Ok(self.clone()),
+            DataValueArithmeticOperator::Minus => std::ops::Neg::neg(self),
+            other => Result::Err(ErrorCode::UnknownFunction(format!(
+                "Unexpected operator:{:?} to unary function",
+                other
+            ))),
         }
     }
 }

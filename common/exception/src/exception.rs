@@ -77,6 +77,15 @@ impl ErrorCode {
         }
     }
 
+    pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
+        Self {
+            code: self.code(),
+            display_text: format!("{}{}", self.display_text, msg.as_ref()),
+            cause: self.cause,
+            backtrace: self.backtrace,
+        }
+    }
+
     pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {
         self.backtrace.clone()
     }
@@ -89,27 +98,19 @@ impl ErrorCode {
     }
 }
 
-macro_rules! as_item {
-    ($i:item) => {
-        $i
-    };
-}
-
 macro_rules! build_exceptions {
-    ($($body:tt($code:expr)),*$(,)*) => {
-        as_item! {
+    ($($body:ident($code:expr)),*$(,)*) => {
             impl ErrorCode {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
                     ErrorCode {
-                        code:$code,
+                        code: $code,
                         display_text: display_text.into(),
                         cause: None,
                         backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
                     }
                 })*
             }
-        }
     }
 }
 
@@ -168,7 +169,9 @@ build_exceptions! {
     AuthenticateFailure(51),
     TLSConfigurationFailure(52),
     UnknownSession(53),
-
+    UnexpectedError(54),
+    DateTimeParseError(55),
+    BadPredicateRows(56),
 
     // uncategorized
     UnexpectedResponseType(600),
@@ -183,7 +186,7 @@ build_exceptions! {
     FileMetaNotFound(2001),
     FileDamaged(2002),
 
-    // store node errors
+    // dfs node errors
 
     UnknownNode(2101),
 
@@ -206,14 +209,20 @@ build_exceptions! {
     MetaStoreAlreadyExists(2402),
     MetaStoreNotFound(2403),
 
-    // DatafuseStore server error
+    ConcurrentSnapshotInstall(2404),
+    IllegalSnapshot(2405),
 
-    DatafuseStoreError(2501),
+    // KVSrv server error
+
+    KVSrvError(2501),
 
     // FS error
 
     IllegalFileName(2601),
 
+    // Store server error
+
+    DatabendStoreError(2701),
 
     // TODO
     // We may need to separate front-end errors from API errors (and system errors?)
@@ -232,6 +241,12 @@ build_exceptions! {
     IllegalSchema(4005),
     IllegalMetaState(4005),
     MetaNodeInternalError(4006),
+    TruncateTableFailedError(4007),
+
+    // namespace error.
+    NamespaceUnknownNode(4008),
+    NamespaceNodeAlreadyExists(4009),
+    NamespaceIllegalNodeFormat(4010),
 
     // storage-api error codes
     IllegalScanPlan(5000),
@@ -240,6 +255,18 @@ build_exceptions! {
 
     // kv-api error codes
     UnknownKey(6000),
+
+
+    // DAL error
+    DALTransportError(7000),
+    UnknownStorageSchemeName(7001),
+
+
+    // datasource error
+    DuplicatedTableEngineProvider(8000),
+    UnknownDatabaseEngine(8001),
+    UnknownTableEngine(8002),
+    DuplicatedDatabaseEngineProvider(8003),
 
 }
 // General errors
@@ -251,6 +278,8 @@ build_exceptions! {
     // A task that already started and can not start twice.
     AlreadyStopped(7102),
 
+    // Trying to cast to a invalid type
+    InvalidCast(7201),
 }
 
 pub type Result<T> = std::result::Result<T, ErrorCode>;
@@ -313,9 +342,9 @@ impl From<anyhow::Error> for ErrorCode {
     fn from(error: anyhow::Error) -> Self {
         ErrorCode {
             code: 1002,
-            display_text: String::from(""),
+            display_text: format!("{}, source: {:?}", error, error.source()),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: None,
+            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 }

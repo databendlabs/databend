@@ -15,10 +15,12 @@
 use std::marker::PhantomData;
 use std::time::Instant;
 
+use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
+use common_io::prelude::*;
+use common_planners::PlanNode;
 use metrics::histogram;
 use msql_srv::ErrorKind;
 use msql_srv::InitWriter;
@@ -26,25 +28,104 @@ use msql_srv::MysqlShim;
 use msql_srv::ParamParser;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
+use rand::RngCore;
 use tokio_stream::StreamExt;
 
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionRef;
-use crate::sql::DfHint;
 use crate::sql::PlanParser;
 
-struct InteractiveWorkerBase<W: std::io::Write>(PhantomData<W>);
+struct InteractiveWorkerBase<W: std::io::Write> {
+    session: SessionRef,
+    generic_hold: PhantomData<W>,
+}
 
 pub struct InteractiveWorker<W: std::io::Write> {
-    base: InteractiveWorkerBase<W>,
     session: SessionRef,
+    base: InteractiveWorkerBase<W>,
+    version: String,
+    salt: [u8; 20],
+    client_addr: String,
 }
 
 impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
+
+    fn version(&self) -> &str {
+        self.version.as_str()
+    }
+
+    fn connect_id(&self) -> u32 {
+        u32::from_le_bytes([0x08, 0x00, 0x00, 0x00])
+    }
+
+    fn default_auth_plugin(&self) -> &str {
+        "mysql_native_password"
+    }
+
+    fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
+        "mysql_native_password"
+    }
+
+    fn salt(&self) -> [u8; 20] {
+        self.salt
+    }
+
+    fn authenticate(
+        &self,
+        auth_plugin: &str,
+        username: &[u8],
+        salt: &[u8],
+        auth_data: &[u8],
+    ) -> bool {
+        let user_mgr = self.session.get_user_manager();
+        let user_name = String::from_utf8_lossy(username);
+        if let Ok(user) = user_mgr.get_user(user_name.as_ref()) {
+            let encode_password = match auth_plugin {
+                "mysql_native_password" => {
+                    if auth_data.is_empty() {
+                        vec![]
+                    } else {
+                        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
+                        let mut m = sha1::Sha1::new();
+                        m.update(salt);
+                        m.update(&user.password);
+
+                        let result = m.digest().bytes();
+                        if auth_data.len() != result.len() {
+                            log::error!(
+                                "mysql authenticate failed, client_addr: {} user: {}, error: SHA1 check failed",
+                                self.client_addr,
+                                String::from_utf8_lossy(username)
+                            );
+                            return false;
+                        }
+                        let mut s = Vec::with_capacity(result.len());
+                        for i in 0..result.len() {
+                            s.push(auth_data[i] ^ result[i]);
+                        }
+                        s
+                    }
+                }
+                _ => auth_data.to_vec(),
+            };
+
+            if let Ok(res) =
+                user_mgr.auth_user(user_name.as_ref(), encode_password, &self.client_addr)
+            {
+                return res;
+            }
+        }
+        log::error!(
+            "mysql authenticate failed, client_addr: {} user: {}, error: user_mgr auth failed",
+            self.client_addr,
+            String::from_utf8_lossy(username)
+        );
+        false
+    }
 
     fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
         if self.session.is_aborting() {
@@ -58,8 +139,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base
-            .do_prepare(query, writer, self.session.create_context())
+        self.base.do_prepare(query, writer)
     }
 
     fn on_execute(
@@ -79,12 +159,11 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base
-            .do_execute(id, param, writer, self.session.create_context())
+        self.base.do_execute(id, param, writer)
     }
 
     fn on_close(&mut self, id: u32) {
-        self.base.do_close(id, self.session.create_context());
+        self.base.do_close(id);
     }
 
     fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
@@ -99,23 +178,29 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        let start = Instant::now();
-        let context = self.session.create_context();
+        let mut writer = DFQueryResultWriter::create(writer);
 
-        context.attach_query_str(query);
-        if let Err(cause) =
-            DFQueryResultWriter::create(writer).write(self.base.do_query(query, context))
-        {
-            let new_error = cause.add_message(query);
-            return Err(new_error);
-        };
+        match InteractiveWorkerBase::<W>::build_runtime() {
+            Ok(runtime) => {
+                let instant = Instant::now();
+                let blocks = runtime.block_on(self.base.do_query(query));
 
-        histogram!(
-            super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-            start.elapsed()
-        );
+                let mut write_result = writer.write(blocks);
 
-        Ok(())
+                if let Err(cause) = write_result {
+                    let suffix = format!("(while in query {})", query);
+                    write_result = Err(cause.add_message_back(suffix));
+                }
+
+                histogram!(
+                    super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
+                    instant.elapsed()
+                );
+
+                write_result
+            }
+            Err(error) => writer.write(Err(error)),
+        }
     }
 
     fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
@@ -130,21 +215,15 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        let context = self.session.create_context();
-        DFInitResultWriter::create(writer).write(self.base.do_init(database_name, context))
+        DFInitResultWriter::create(writer).write(self.base.do_init(database_name))
     }
 }
 
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
-    fn do_prepare(
-        &mut self,
-        _: &str,
-        writer: StatementMetaWriter<'_, W>,
-        _: DatafuseQueryContextRef,
-    ) -> Result<()> {
+    fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
-            "Prepare is not support in DataFuse.".as_bytes(),
+            "Prepare is not support in Databend.".as_bytes(),
         )?;
         Ok(())
     }
@@ -154,62 +233,93 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         _: u32,
         _: ParamParser<'_>,
         writer: QueryResultWriter<'_, W>,
-        _: DatafuseQueryContextRef,
     ) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
-            "Execute is not support in DataFuse.".as_bytes(),
+            "Execute is not support in Databend.".as_bytes(),
         )?;
         Ok(())
     }
 
-    fn do_close(&mut self, _: u32, _: DatafuseQueryContextRef) {}
+    fn do_close(&mut self, _: u32) {}
 
-    fn do_query(
-        &mut self,
-        query: &str,
-        context: DatafuseQueryContextRef,
-    ) -> Result<Vec<DataBlock>> {
+    async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         log::debug!("{}", query);
 
-        let runtime = Self::build_runtime()?;
-        let (plan, hints) = PlanParser::create(context.clone()).build_with_hint_from_sql(query);
+        let context = self.session.create_context().await?;
+        context.attach_query_str(query);
 
-        let fetch_query_blocks = || -> Result<Vec<DataBlock>> {
-            let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
-            let data_stream = runtime.block_on(interpreter.execute())?;
+        let query_parser = PlanParser::create(context.clone());
+        let (plan, hints) = query_parser.build_with_hint_from_sql(query);
 
-            runtime.block_on(data_stream.collect::<Result<Vec<DataBlock>>>())
-        };
-        let blocks = fetch_query_blocks();
-        match blocks {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                let hint = hints.iter().find(|v| v.error_code.is_some());
-                if let Some(DfHint {
-                    error_code: Some(code),
-                    ..
-                }) = hint
-                {
-                    if *code == e.code() {
-                        Ok(vec![DataBlock::empty()])
+        match hints
+            .iter()
+            .find(|v| v.error_code.is_some())
+            .and_then(|x| x.error_code)
+        {
+            None => Self::exec_query(plan, &context).await,
+            Some(hint_error_code) => match Self::exec_query(plan, &context).await {
+                Ok(_) => Err(ErrorCode::UnexpectedError(format!(
+                    "Expected server error code: {} but got: Ok.",
+                    hint_error_code
+                ))),
+                Err(error_code) => {
+                    if hint_error_code == error_code.code() {
+                        Ok((vec![DataBlock::empty()], String::from("")))
                     } else {
-                        let actual_code = e.code();
-                        Err(e.add_message(format!(
+                        let actual_code = error_code.code();
+                        Err(error_code.add_message(format!(
                             "Expected server error code: {} but got: {}.",
-                            code, actual_code
+                            hint_error_code, actual_code
                         )))
                     }
-                } else {
-                    Err(e)
                 }
-            }
+            },
         }
     }
 
-    fn do_init(&mut self, database_name: &str, context: DatafuseQueryContextRef) -> Result<()> {
-        self.do_query(&format!("USE {};", database_name), context)?;
-        Ok(())
+    async fn exec_query(
+        plan: Result<PlanNode>,
+        context: &DatabendQueryContextRef,
+    ) -> Result<(Vec<DataBlock>, String)> {
+        let instant = Instant::now();
+
+        let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
+        let data_stream = interpreter.execute().await?;
+        histogram!(
+            super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
+            instant.elapsed()
+        );
+
+        let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
+        let query_result = collector.await;
+        query_result.map(|data| (data, Self::extra_info(context, instant)))
+    }
+
+    fn extra_info(context: &DatabendQueryContextRef, instant: Instant) -> String {
+        let progress = context.get_progress_value();
+        let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
+        format!(
+            "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",
+            progress.read_rows,
+            convert_byte_size(progress.read_bytes as f64),
+            seconds,
+            convert_number_size((progress.read_rows as f64) / (seconds as f64)),
+            convert_byte_size((progress.read_bytes as f64) / (seconds as f64)),
+        )
+    }
+
+    fn do_init(&mut self, database_name: &str) -> Result<()> {
+        let init_query = format!("USE {};", database_name);
+        let do_query = self.do_query(&init_query);
+
+        match Self::build_runtime() {
+            Err(error_code) => Err(error_code),
+            Ok(runtime) => match runtime.block_on(do_query) {
+                Ok(_) => Ok(()),
+                Err(error_code) => Err(error_code),
+            },
+        }
     }
 
     fn build_runtime() -> Result<tokio::runtime::Runtime> {
@@ -221,10 +331,29 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorker<W> {
-    pub fn create(session: SessionRef) -> InteractiveWorker<W> {
+    pub fn create(session: SessionRef, client_addr: String) -> InteractiveWorker<W> {
+        let mut bs = vec![0u8; 20];
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(bs.as_mut());
+
+        let mut scramble: [u8; 20] = [0; 20];
+        for i in 0..20 {
+            scramble[i] = bs[i];
+            if scramble[i] == b'\0' || scramble[i] == b'$' {
+                scramble[i] += 1;
+            }
+        }
+
         InteractiveWorker::<W> {
-            session,
-            base: InteractiveWorkerBase::<W>(PhantomData::<W>),
+            session: session.clone(),
+            base: InteractiveWorkerBase::<W> {
+                session,
+                generic_hold: PhantomData::default(),
+            },
+            salt: scramble,
+            // TODO: version
+            version: crate::configs::DATABEND_COMMIT_VERSION.to_string(),
+            client_addr,
         }
     }
 }

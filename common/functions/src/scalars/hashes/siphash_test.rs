@@ -145,7 +145,12 @@ fn test_siphash_function() -> Result<()> {
         let function = SipHashFunction::try_create("siphash")?;
 
         let rows = test.input_column.len();
-        match function.eval(&[test.input_column], rows) {
+
+        let columns = vec![DataColumnWithField::new(
+            test.input_column.clone(),
+            DataField::new("dummpy", test.input_column.data_type(), false),
+        )];
+        match function.eval(&columns, rows) {
             Ok(result_column) => assert_eq!(
                 &result_column.get_array_ref()?,
                 &test.expect_output_column.get_array_ref()?,

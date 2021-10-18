@@ -9,6 +9,7 @@ header:
     - "deploy"
     - "website"
     - "tests"
+    - "tools"
     - ".github"
     - ".dockerignore"
     - ".licenserc.yaml"
@@ -26,5 +27,6 @@ header:
     - "rust-toolchain"
     - "rustfmt.toml"
     - "**/*.proto"
+    - ".cargo"
 
   comment: on-failure

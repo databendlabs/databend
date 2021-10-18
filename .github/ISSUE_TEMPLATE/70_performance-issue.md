@@ -15,7 +15,7 @@ What exactly works slower than expected?
 
 **How to reproduce**
 
-* Which Datafuse server version to use
+* Which Databend server version to use
 * Non-default settings, if any
 * Queries to run that lead to slow performance
 

@@ -32,6 +32,12 @@ impl SessionRef {
     }
 }
 
+impl Clone for SessionRef {
+    fn clone(&self) -> Self {
+        SessionRef::create(self.session.clone())
+    }
+}
+
 impl Deref for SessionRef {
     type Target = Arc<Session>;
 

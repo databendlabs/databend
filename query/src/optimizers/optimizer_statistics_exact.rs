@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_io::prelude::BinaryWrite;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -25,15 +26,16 @@ use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 use common_planners::TableScanInfo;
 
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::optimizers::Optimizer;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 struct StatisticsExactImpl<'a> {
-    ctx: &'a DatafuseQueryContextRef,
+    ctx: &'a DatabendQueryContextRef,
 }
 
 pub struct StatisticsExactOptimizer {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 }
 
 impl PlanRewriter for StatisticsExactImpl<'_> {
@@ -49,6 +51,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     ref op,
                     distinct: false,
                     ref args,
+                    ..
                 }],
                 PlanNode::Expression(ExpressionPlan { input, .. }),
             ) if op == "count" && args.len() == 1 => match (&args[0], input.as_ref()) {
@@ -57,51 +60,45 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                 {
                     let db_name = "system";
                     let table_name = "one";
-                    let table_id = 1;
-                    let table_version = None;
 
                     let dummy_read_plan =
-                        self.ctx
-                            .get_table(db_name, table_name)
-                            .and_then(|table_meta| {
-                                let table = table_meta.datasource();
-                                table
-                                    .schema()
-                                    .and_then(|ref schema| {
-                                        let tbl_scan_info = TableScanInfo {
-                                            table_name,
-                                            table_id,
-                                            table_version,
-                                            table_schema: schema.as_ref(),
-                                            table_args: None,
-                                        };
-                                        PlanBuilder::scan(db_name, tbl_scan_info, None, None)
-                                    })
-                                    .and_then(|builder| builder.build())
-                                    .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                                        PlanNode::Scan(ref dummy_scan_plan) => table
+                        self.ctx.get_table(db_name, table_name).and_then(|table| {
+                            let table_id = table.get_id();
+                            let table_version = Some(table.get_table_info().version);
+
+                            let tbl_scan_info = TableScanInfo {
+                                table_name,
+                                table_id,
+                                table_version,
+                                table_schema: &table.schema(),
+                                table_args: None,
+                            };
+                            PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+                                .and_then(|builder| builder.build())
+                                .and_then(|dummy_scan_plan| match dummy_scan_plan {
+                                    PlanNode::Scan(ref dummy_scan_plan) => {
+                                        //
+                                        let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                                        table
                                             .read_plan(
-                                                self.ctx.clone(),
-                                                dummy_scan_plan,
-                                                self.ctx.get_settings().get_max_threads()? as usize,
+                                                Arc::new(io_ctx),
+                                                Some(dummy_scan_plan.push_downs.clone()),
+                                                Some(self.ctx.get_settings().get_max_threads()?
+                                                    as usize),
                                             )
-                                            .map(PlanNode::ReadSource),
-                                        _unreachable_plan => {
-                                            panic!("Logical error: cannot downcast to scan plan")
-                                        }
-                                    })
-                            })?;
-                    let rows = read_source_plan.statistics.read_rows as u64;
-                    let states = DataValue::Struct(vec![DataValue::UInt64(Some(rows))]);
-                    let ser = serde_json::to_string(&states)?;
+                                            .map(PlanNode::ReadSource)
+                                    }
+                                    _unreachable_plan => {
+                                        panic!("Logical error: cannot downcast to scan plan")
+                                    }
+                                })
+                        })?;
+                    let mut body: Vec<u8> = Vec::new();
+                    body.write_uvarint(read_source_plan.statistics.read_rows as u64)?;
+                    let expr = Expression::create_literal(DataValue::String(Some(body)));
                     PlanBuilder::from(&dummy_read_plan)
-                        .expression(
-                            &[Expression::create_literal(DataValue::Utf8(Some(
-                                ser.clone(),
-                            )))],
-                            "Exact Statistics",
-                        )?
-                        .project(&[Expression::Column(ser).alias("count(0)")])?
+                        .expression(&[expr.clone()], "Exact Statistics")?
+                        .project(&[expr.alias("count(0)")])?
                         .build()?
                 }
                 _ => PlanNode::AggregatorPartial(plan.clone()),
@@ -142,7 +139,7 @@ impl Optimizer for StatisticsExactOptimizer {
 }
 
 impl StatisticsExactOptimizer {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         StatisticsExactOptimizer { ctx }
     }
 }

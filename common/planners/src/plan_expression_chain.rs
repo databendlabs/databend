@@ -70,10 +70,13 @@ impl ExpressionChain {
                 };
                 self.actions.push(ExpressionAction::Input(input));
             }
-            Expression::Literal { value, .. } => {
+            Expression::Literal {
+                value, data_type, ..
+            } => {
                 let value = ActionConstant {
                     name: expr.column_name(),
                     value: value.clone(),
+                    data_type: data_type.clone(),
                 };
 
                 self.actions.push(ExpressionAction::Constant(value));
@@ -143,16 +146,18 @@ impl ExpressionChain {
             } => {
                 self.add_expr(nested_expr)?;
 
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
 
                 let function = ActionFunction {
                     name: expr.column_name(),
                     func_name: op.clone(),
                     is_aggregated: false,
+                    params: vec![],
                     arg_names: vec![nested_expr.column_name()],
                     arg_types: arg_types.clone(),
                     arg_fields: vec![],
+                    is_nullable: func.nullable(self.schema.as_ref())?,
                     return_type: func.return_type(&arg_types)?,
                 };
 
@@ -163,7 +168,7 @@ impl ExpressionChain {
                 self.add_expr(left)?;
                 self.add_expr(right)?;
 
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = vec![
                     left.to_data_type(&self.schema)?,
                     right.to_data_type(&self.schema)?,
@@ -173,9 +178,11 @@ impl ExpressionChain {
                     name: expr.column_name(),
                     func_name: op.clone(),
                     is_aggregated: false,
+                    params: vec![],
                     arg_names: vec![left.column_name(), right.column_name()],
                     arg_types: arg_types.clone(),
                     arg_fields: vec![],
+                    is_nullable: func.nullable(self.schema.as_ref())?,
                     return_type: func.return_type(&arg_types)?,
                 };
 
@@ -187,7 +194,7 @@ impl ExpressionChain {
                     self.add_expr(expr)?;
                 }
 
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type(&self.schema))
@@ -197,16 +204,20 @@ impl ExpressionChain {
                     name: expr.column_name(),
                     func_name: op.clone(),
                     is_aggregated: false,
+                    params: vec![],
                     arg_names: args.iter().map(|action| action.column_name()).collect(),
                     arg_types: arg_types.clone(),
                     arg_fields: vec![],
+                    is_nullable: func.nullable(self.schema.as_ref())?,
                     return_type: func.return_type(&arg_types)?,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
             }
 
-            Expression::AggregateFunction { op, args, .. } => {
+            Expression::AggregateFunction {
+                op, params, args, ..
+            } => {
                 let mut arg_fields = Vec::with_capacity(args.len());
                 for arg in args.iter() {
                     arg_fields.push(arg.to_data_field(&self.schema)?);
@@ -219,7 +230,9 @@ impl ExpressionChain {
                     is_aggregated: true,
                     arg_types: vec![],
                     arg_names: vec![],
+                    params: params.clone(),
                     arg_fields,
+                    is_nullable: func.nullable(self.schema.as_ref())?,
                     return_type: func.return_type()?,
                 };
 
@@ -241,7 +254,9 @@ impl ExpressionChain {
                     is_aggregated: false,
                     arg_names: vec![sub_expr.column_name()],
                     arg_types: vec![sub_expr.to_data_type(&self.schema)?],
+                    params: vec![],
                     arg_fields: vec![],
+                    is_nullable: false,
                     return_type: data_type.clone(),
                 };
 

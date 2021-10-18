@@ -1,5 +1,3 @@
-docker/* linguist-vendored
-scripts/* linguist-vendored
-deploy/* linguist-vendored
-tests/* linguist-vendored
-website/* linguist-vendored
+docker/** -text
+scripts/** -text
+website/databend/** -text

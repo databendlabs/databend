@@ -1,2 +1,2 @@
-{"v":0,"name":"datafuse-query","msg":"signal received, starting graceful shutdown","level":20,"hostname":"thinkpad","pid":121242,"time":"2021-06-25T04:57:49.243264399+00:00"}
-{"v":0,"name":"datafuse-query","msg":"signal received, starting graceful shutdown","level":20,"hostname":"thinkpad","pid":121242,"time":"2021-06-25T04:57:49.243264399+00:00"}
+{"v":0,"name":"databend-query","msg":"signal received, starting graceful shutdown","level":20,"hostname":"thinkpad","pid":121242,"time":"2021-06-25T04:57:49.243264399+00:00"}
+{"v":0,"name":"databend-query","msg":"signal received, starting graceful shutdown","level":20,"hostname":"thinkpad","pid":121242,"time":"2021-06-25T04:57:49.243264399+00:00"}

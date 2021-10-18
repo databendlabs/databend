@@ -22,8 +22,8 @@ impl DFBooleanArray {
         match (self.len(), rhs.len()) {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {
-                let result = compute::boolean_kleene::and(self.downcast_ref(), rhs.downcast_ref())?;
-                Ok(DFBooleanArray::from_arrow_array(result))
+                let result = compute::boolean_kleene::and(self.inner(), rhs.inner())?;
+                Ok(DFBooleanArray::new(result))
             }
             (_, 1) => {
                 let opt_rhs = rhs.get(0);
@@ -61,8 +61,8 @@ impl DFBooleanArray {
         match (self.len(), rhs.len()) {
             // We use Kleene logic because MySQL uses Kleene logic.
             (left, right) if left == right => {
-                let result = compute::boolean_kleene::or(self.downcast_ref(), rhs.downcast_ref())?;
-                Ok(DFBooleanArray::from_arrow_array(result))
+                let result = compute::boolean_kleene::or(self.inner(), rhs.inner())?;
+                Ok(DFBooleanArray::new(result))
             }
             (_, 1) => {
                 let opt_rhs = rhs.get(0);
@@ -97,19 +97,19 @@ impl DFBooleanArray {
     }
 
     pub fn not(&self) -> Result<Self> {
-        let result = compute::boolean::not(self.downcast_ref());
-        Ok(DFBooleanArray::from_arrow_array(result))
+        let result = compute::boolean::not(self.inner());
+        Ok(DFBooleanArray::new(result))
     }
 
     /// Check if all values are true
     pub fn all_true(&self) -> bool {
-        let mut values = self.downcast_iter();
+        let mut values = self.into_iter();
         values.all(|f| f.unwrap_or(false))
     }
 
     /// Check if all values are false
     pub fn all_false(&self) -> bool {
-        let mut values = self.downcast_iter();
+        let mut values = self.into_iter();
         values.all(|f| !f.unwrap_or(true))
     }
 }

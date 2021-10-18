@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::App;
+use clap::AppSettings;
 use sha2::Digest;
 use sha2::Sha256;
 use sysinfo::SystemExt;
@@ -28,6 +30,11 @@ impl VersionCommand {
         VersionCommand {}
     }
 
+    pub fn generate() -> App<'static> {
+        return App::new("version")
+            .setting(AppSettings::ColoredHelp)
+            .about("Version info for local cli and remote cluster");
+    }
     fn cli_sha_info(&self) -> Option<String> {
         let path = std::env::current_exe().ok()?;
         let cli_bin = std::fs::read(path).ok()?;
@@ -57,7 +64,7 @@ impl Command for VersionCommand {
     }
 
     fn about(&self) -> &str {
-        "Datafuse CLI version"
+        "Databend CLI version"
     }
 
     fn is(&self, s: &str) -> bool {
@@ -73,9 +80,9 @@ impl Command for VersionCommand {
             _ => ("", "", ""),
         };
 
-        writer.writeln_width("Datafuse CLI", ver);
+        writer.writeln_width("Databend CLI", ver);
         if let Some(sha) = self.cli_sha_info() {
-            writer.writeln_width("Datafuse CLI SHA256", &sha);
+            writer.writeln_width("Databend CLI SHA256", &sha);
         }
         writer.writeln_width("Git commit", git);
         writer.writeln_width("Build date", ts);

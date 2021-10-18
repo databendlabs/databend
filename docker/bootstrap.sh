@@ -1,13 +1,13 @@
 #!/bin/bash
 
-/datafuse-store &> /tmp/datafuse-store.log  &
+/databend-meta --single true &> /tmp/databend-meta.log  &
 P1=$!
-/datafuse-query -c datafuse-query.toml &> /tmp/datafuse-query.log  &
+/databend-query -c databend-query.toml &> /tmp/databend-query.log  &
 P2=$!
 
-tail -f /tmp/datafuse-query.log &
+tail -f /tmp/databend-query.log &
 P3=$!
 
-tail -f /tmp/datafuse-store.log & 
+tail -f /tmp/databend-meta.log &
 P4=$!
 wait $P1 $P2 $P3 $P4

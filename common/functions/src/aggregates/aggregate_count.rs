@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
@@ -21,6 +22,7 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use super::StateAddr;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
 
@@ -37,6 +39,7 @@ pub struct AggregateCountFunction {
 impl AggregateCountFunction {
     pub fn try_create(
         display_name: &str,
+        _params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
@@ -44,6 +47,10 @@ impl AggregateCountFunction {
             display_name: display_name.to_string(),
             arguments,
         }))
+    }
+
+    pub fn desc() -> AggregateFunctionDescription {
+        AggregateFunctionDescription::creator(Box::new(Self::try_create))
     }
 }
 
@@ -94,15 +101,23 @@ impl AggregateFunction for AggregateCountFunction {
             return Ok(());
         }
 
-        let array = arrays[0].get_array_ref();
-        let validity = array.validity();
-        for (row, place) in places.iter().enumerate() {
-            let place = place.next(offset);
-            let state = place.get::<AggregateCountState>();
-            if let Some(v) = validity {
-                state.count += v.get_bit(row) as u64;
+        match arrays[0].get_array_ref().validity() {
+            None => {
+                for place in places.iter() {
+                    let place = place.next(offset);
+                    let state = place.get::<AggregateCountState>();
+                    state.count += 1;
+                }
+            }
+            Some(nullable_marks) => {
+                for (row, place) in places.iter().enumerate() {
+                    let place = place.next(offset);
+                    let state = place.get::<AggregateCountState>();
+                    state.count += nullable_marks.get_bit(row) as u64;
+                }
             }
         }
+
         Ok(())
     }
 

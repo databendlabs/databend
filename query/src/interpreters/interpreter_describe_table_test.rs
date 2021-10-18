@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -51,14 +51,14 @@ async fn interpreter_describe_table_test() -> Result<()> {
                 "+-------+--------+------+",
                 "| a     | Int64  | NO   |",
                 "| b     | Int32  | NO   |",
-                "| c     | Utf8   | NO   |",
+                "| c     | String | NO   |",
                 "| d     | Int16  | NO   |",
-                "| e     | Date32 | NO   |",
+                "| e     | Date16 | NO   |",
                 "+-------+--------+------+",
             ];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {
-            assert!(false)
+            panic!()
         }
     }
 

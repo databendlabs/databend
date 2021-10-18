@@ -1,34 +1,36 @@
 [workspace]
 members = [
     # Common
-    "common/allocators",
     "common/arrow",
+    "common/base",
     "common/building",
+    "common/cache",
+    "common/context",
+    "common/clickhouse-srv",
+    "common/dal",
     "common/datablocks",
     "common/datavalues",
-    "common/flights",
-    "common/functions",
-    "common/metatypes",
-    "common/infallible",
-    "common/planners",
-    "common/progress",
-    "common/runtime",
-    "common/streams",
     "common/exception",
-    "common/tracing",
-    "common/profiling",
-    "common/store-api",
-    "common/stoppable",
-    "common/management",
+    "common/flight-rpc",
+    "common/functions",
+    "common/infallible",
     "common/io",
+    "common/management",
+    "common/planners",
+    "common/meta/api",
+    "common/meta/embedded",
+    "common/meta/raft-store",
+    "common/meta/sled-store",
+    "common/meta/flight",
+    "common/meta/types",
+    "common/streams",
+    "common/tracing",
 
-    # Datafuse Query
+    # Query
     "query",
+    "metasrv",
 
-    # Datafuse Store
-    "store",
-
-    # Datafuse SQL Fuzz
+    # SQL Fuzz
     "query/fuzz",
 
     # CLI
@@ -36,10 +38,24 @@ members = [
 ]
 
 [profile.release]
-debug = true
+debug = 1
+codegen-units = 1   # Reduce number of codegen units to increase optimizations.
+
+[profile.release.package]
+arrow2 = { codegen-units = 4 }
+databend-query = { codegen-units = 4 }
 
 [profile.bench]
 debug = true
 
 [profile.dev]
 split-debuginfo = "unpacked"
+
+[profile.dev.package]
+addr2line = { opt-level = 3 }
+adler = { opt-level = 3 }
+backtrace = { opt-level = 3 }
+gimli = { opt-level = 3 }
+miniz_oxide = { opt-level = 3 }
+object = { opt-level = 3 }
+rustc-demangle = { opt-level = 3 }

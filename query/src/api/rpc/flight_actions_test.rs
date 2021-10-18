@@ -15,10 +15,10 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow_flight::Action;
+use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_runtime::tokio;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::ShuffleAction;
@@ -38,8 +38,8 @@ async fn test_shuffle_action_try_into() -> Result<()> {
     let to_action: Action = from_action.try_into()?;
     let from_action: FlightAction = to_action.try_into()?;
     match from_action {
-        FlightAction::CancelAction(_) => assert!(false),
-        FlightAction::BroadcastAction(_) => assert!(false),
+        FlightAction::CancelAction(_) => panic!(),
+        FlightAction::BroadcastAction(_) => panic!(),
         FlightAction::PrepareShuffleAction(action) => {
             assert_eq!(action.query_id, "query_id");
             assert_eq!(action.stage_id, "stage_id");

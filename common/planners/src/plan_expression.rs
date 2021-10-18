@@ -67,6 +67,9 @@ pub enum Expression {
     Literal {
         value: DataValue,
         column_name: Option<String>,
+
+        // Logic data_type for this literal
+        data_type: DataType,
     },
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
@@ -86,6 +89,7 @@ pub enum Expression {
     AggregateFunction {
         op: String,
         distinct: bool,
+        params: Vec<DataValue>,
         args: Vec<Expression>,
     },
 
@@ -121,9 +125,19 @@ pub enum Expression {
 
 impl Expression {
     pub fn create_literal(value: DataValue) -> Expression {
+        let data_type = value.data_type();
         Expression::Literal {
             value,
             column_name: None,
+            data_type,
+        }
+    }
+
+    pub fn create_literal_with_type(value: DataValue, data_type: DataType) -> Expression {
+        Expression::Literal {
+            value,
+            column_name: None,
+            data_type,
         }
     }
 
@@ -139,9 +153,20 @@ impl Expression {
             }
             Expression::Column(name) => name.clone(),
             Expression::Literal {
-                column_name: Some(name),
-                ..
-            } => name.clone(),
+                value, column_name, ..
+            } => match column_name {
+                Some(name) => name.clone(),
+                None => {
+                    if let DataValue::String(Some(v)) = value {
+                        match std::str::from_utf8(v) {
+                            Ok(v) => format!("'{}'", v),
+                            Err(_e) => format!("{:?}", value),
+                        }
+                    } else {
+                        format!("{:?}", value)
+                    }
+                }
+            },
             Expression::UnaryExpression { op, expr } => {
                 format!("({} {})", op, expr.column_name())
             }
@@ -159,12 +184,27 @@ impl Expression {
                     }
                 }
             }
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                let params_name = params
+                    .iter()
+                    .map(|v| DataValue::custom_display(v, true))
+                    .collect::<Vec<_>>();
+
+                let prefix = if params.is_empty() {
+                    op.to_string()
+                } else {
+                    format!("{}({})", op, params_name.join(", "))
+                };
 
                 match distinct {
-                    true => format!("{}(distinct {})", op, args_column_name.join(", ")),
-                    false => format!("{}({})", op, args_column_name.join(", ")),
+                    true => format!("{}(distinct {})", prefix, args_column_name.join(", ")),
+                    false => format!("{}({})", prefix, args_column_name.join(", ")),
                 }
             }
             Expression::Sort { expr, .. } => expr.column_name(),
@@ -226,7 +266,7 @@ impl Expression {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
             Expression::InList(inlist_expr) => inlist_expr.expr().to_data_type(input_schema),
-            Expression::Literal { value, .. } => Ok(value.data_type()),
+            Expression::Literal { data_type, .. } => Ok(data_type.clone()),
             Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
                 Ok(Self::to_scalar_subquery_type(query_plan))
@@ -236,13 +276,13 @@ impl Expression {
                     left.to_data_type(input_schema)?,
                     right.to_data_type(input_schema)?,
                 ];
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
 
             Expression::UnaryExpression { op, expr } => {
                 let arg_types = vec![expr.to_data_type(input_schema)?];
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
 
@@ -251,7 +291,7 @@ impl Expression {
                 for arg in args {
                     arg_types.push(arg.to_data_type(input_schema)?);
                 }
-                let func = FunctionFactory::get(op)?;
+                let func = FunctionFactory::instance().get(op)?;
                 func.return_type(&arg_types)
             }
             Expression::AggregateFunction { .. } => {
@@ -268,7 +308,12 @@ impl Expression {
 
     pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {
         match self {
-            Expression::AggregateFunction { op, distinct, args } => {
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
                 let mut func_name = op.clone();
                 if *distinct {
                     func_name += "Distinct";
@@ -278,7 +323,7 @@ impl Expression {
                 for arg in args.iter() {
                     fields.push(arg.to_data_field(schema)?);
                 }
-                AggregateFunctionFactory::get(&func_name, fields)
+                AggregateFunctionFactory::instance().get(&func_name, params.clone(), fields)
             }
             _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",
@@ -299,6 +344,24 @@ impl Expression {
                 "Expression must be aggregated function",
             )),
         }
+    }
+
+    pub fn create_scalar_function(op: &str, args: Expressions) -> Expression {
+        let op = op.to_string();
+        Expression::ScalarFunction { op, args }
+    }
+
+    pub fn create_unary_expression(op: &str, mut args: Expressions) -> Expression {
+        let op = op.to_string();
+        let expr = Box::new(args.remove(0));
+        Expression::UnaryExpression { op, expr }
+    }
+
+    pub fn create_binary_expression(op: &str, mut args: Expressions) -> Expression {
+        let op = op.to_string();
+        let left = Box::new(args.remove(0));
+        let right = Box::new(args.remove(0));
+        Expression::BinaryExpression { op, left, right }
     }
 }
 
@@ -341,18 +404,29 @@ impl fmt::Debug for Expression {
                 write!(f, ")")
             }
 
-            Expression::AggregateFunction { op, distinct, args } => {
-                write!(f, "{}(", op)?;
-                if *distinct {
-                    write!(f, "distinct ")?;
+            Expression::AggregateFunction {
+                op,
+                distinct,
+                params,
+                args,
+            } => {
+                let args_column_name = args.iter().map(Expression::column_name).collect::<Vec<_>>();
+                let params_name = params
+                    .iter()
+                    .map(|v| DataValue::custom_display(v, true))
+                    .collect::<Vec<_>>();
+
+                if params.is_empty() {
+                    write!(f, "{}", op)?;
+                } else {
+                    write!(f, "{}({})", op, params_name.join(", "))?;
+                };
+
+                match distinct {
+                    true => write!(f, "(distinct {})", args_column_name.join(", "))?,
+                    false => write!(f, "({})", args_column_name.join(", "))?,
                 }
-                for (i, _) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{:?}", args[i],)?;
-                }
-                write!(f, ")")
+                Ok(())
             }
 
             Expression::Sort { expr, .. } => write!(f, "{:?}", expr),

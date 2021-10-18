@@ -12,124 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::fmt::Formatter;
+use std::convert::Infallible;
 
-use common_exception::ErrorCode;
-use warp::reject::Reject;
-use warp::Filter;
+use axum::body::Bytes;
+use axum::body::Full;
+use axum::extract::Extension;
+use axum::http::Response;
+use axum::http::StatusCode;
+use axum::response::Html;
+use axum::response::IntoResponse;
+use common_exception::Result;
 
-use crate::clusters::ClusterRef;
+use crate::sessions::SessionManagerRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ClusterNodeRequest {
-    pub name: String,
-    // Priority is in [0, 10]
-    // Larger value means higher
-    // priority
-    pub priority: u8,
-    pub address: String,
+pub struct ClusterTemplate {
+    result: Result<String>,
 }
 
-pub fn cluster_handler(
-    cluster: ClusterRef,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    cluster_list_node(cluster.clone())
-        .or(cluster_add_node(cluster.clone()))
-        .or(cluster_remove_node(cluster))
-}
+impl IntoResponse for ClusterTemplate {
+    type Body = Full<Bytes>;
+    type BodyError = Infallible;
 
-/// GET /v1/cluster/list
-fn cluster_list_node(
-    cluster: ClusterRef,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "cluster" / "list")
-        .and(warp::get())
-        .and(with_cluster(cluster))
-        .and_then(handlers::list_node)
-}
-
-fn cluster_add_node(
-    cluster: ClusterRef,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "cluster" / "add")
-        .and(warp::post())
-        .and(json_body())
-        .and(with_cluster(cluster))
-        .and_then(handlers::add_node)
-}
-
-fn cluster_remove_node(
-    cluster: ClusterRef,
-) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    warp::path!("v1" / "cluster" / "remove")
-        .and(warp::post())
-        .and(json_body())
-        .and(with_cluster(cluster))
-        .and_then(handlers::remove_node)
-}
-
-fn with_cluster(
-    cluster: ClusterRef,
-) -> impl Filter<Extract = (ClusterRef,), Error = std::convert::Infallible> + Clone {
-    warp::any().map(move || cluster.clone())
-}
-
-fn json_body() -> impl Filter<Extract = (ClusterNodeRequest,), Error = warp::Rejection> + Clone {
-    // When accepting a body, we want a JSON body
-    // (and to reject huge payloads)...
-    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
-}
-
-mod handlers {
-    use log::info;
-
-    use crate::api::http::v1::cluster::ClusterNodeRequest;
-    use crate::api::http::v1::cluster::NoBacktraceErrorCode;
-    use crate::clusters::ClusterRef;
-
-    pub async fn list_node(
-        cluster: ClusterRef,
-    ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        // TODO(BohuTANG): error handler
-        let nodes = cluster.get_nodes().unwrap();
-        Ok(warp::reply::json(&nodes))
-    }
-
-    pub async fn add_node(
-        req: ClusterNodeRequest,
-        cluster: ClusterRef,
-    ) -> Result<impl warp::Reply, warp::Rejection> {
-        info!("Cluster add node: {:?}", req);
-        match cluster
-            .add_node(&req.name, req.priority, &req.address)
-            .await
-        {
-            Ok(_) => Ok(warp::reply::with_status(
-                "".to_string(),
-                warp::http::StatusCode::OK,
-            )),
-            Err(error_codes) => Err(warp::reject::custom(NoBacktraceErrorCode(error_codes))),
+    fn into_response(self) -> Response<Self::Body> {
+        match self.result {
+            Ok(nodes) => Html(nodes).into_response(),
+            Err(cause) => Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::from(format!(
+                    "Failed to fetch cluster nodes list. cause: {}",
+                    cause
+                )))
+                .unwrap(),
         }
     }
+}
 
-    pub async fn remove_node(
-        req: ClusterNodeRequest,
-        cluster: ClusterRef,
-    ) -> Result<impl warp::Reply, std::convert::Infallible> {
-        info!("Cluster remove node: {:?}", req);
-        // TODO(BohuTANG): error handler
-        cluster.remove_node(req.name).unwrap();
-        Ok(warp::http::StatusCode::OK)
+// GET /v1/cluster/list
+// list all nodes in current databend-query cluster
+// request: None
+// cluster_state: the shared in memory state which store all nodes known to current node
+// return: return a list of cluster node information
+pub async fn cluster_list_handler(sessions: Extension<SessionManagerRef>) -> ClusterTemplate {
+    let sessions = sessions.0;
+    ClusterTemplate {
+        result: list_nodes(sessions).await,
     }
 }
 
-struct NoBacktraceErrorCode(ErrorCode);
+async fn list_nodes(sessions: SessionManagerRef) -> Result<String> {
+    let watch_cluster_session = sessions.create_session("WatchCluster")?;
+    let watch_cluster_context = watch_cluster_session.create_context().await?;
 
-impl Debug for NoBacktraceErrorCode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
+    let nodes_list = watch_cluster_context.get_cluster().get_nodes();
+    Ok(serde_json::to_string(&nodes_list)?)
 }
-
-impl Reject for NoBacktraceErrorCode {}

@@ -15,8 +15,8 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow_flight::Ticket;
+use common_base::tokio;
 use common_exception::Result;
-use common_runtime::tokio;
 
 use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::FlightTicket;

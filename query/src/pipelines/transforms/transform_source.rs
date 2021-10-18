@@ -24,26 +24,37 @@ use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct SourceTransform {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     source_plan: ReadDataSourcePlan,
 }
 
 impl SourceTransform {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         source_plan: ReadDataSourcePlan,
     ) -> Result<Self> {
         Ok(SourceTransform { ctx, source_plan })
     }
 
-    async fn read_table(&self, db: &str) -> Result<SendableDataBlockStream> {
-        let table_id = self.source_plan.table_id;
-        let table_ver = self.source_plan.table_version;
-        let table = self.ctx.get_table_by_id(db, table_id, table_ver).await?;
-        let table_stream = table.datasource().read(self.ctx.clone(), &self.source_plan);
+    async fn read_table(&self, _db: &str) -> Result<SendableDataBlockStream> {
+        let table_id = self.source_plan.table_info.table_id;
+        let table_ver = self.source_plan.table_info.version;
+        let table = if self.source_plan.tbl_args.is_none() {
+            self.ctx.get_table_by_id(table_id, Some(table_ver))?.clone()
+        } else {
+            let func_meta = self.ctx.get_table_function(
+                &self.source_plan.table_info.name,
+                self.source_plan.tbl_args.clone(),
+            )?;
+            func_meta.as_table()
+        };
+        // TODO(xp): get_single_node_table_io_context() or
+        //           get_cluster_table_io_context()?
+        let io_ctx = Arc::new(self.ctx.get_cluster_table_io_context()?);
+        let table_stream = table.read(io_ctx, &self.source_plan.push_downs);
         Ok(Box::pin(
             self.ctx.try_create_abortable(table_stream.await?)?,
         ))
@@ -71,8 +82,8 @@ impl Processor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let db = self.source_plan.db.clone();
-        let table = self.source_plan.table.clone();
+        let db = self.source_plan.table_info.db.clone();
+        let table = self.source_plan.table_info.name.clone();
 
         tracing::debug!("execute, table:{:#}.{:#} ...", db, table);
 
@@ -80,7 +91,7 @@ impl Processor for SourceTransform {
         // Because the table may not support require columns
         Ok(Box::pin(CorrectWithSchemaStream::new(
             self.read_table(&db).await?,
-            self.source_plan.schema.clone(),
+            self.source_plan.table_info.schema.clone(),
         )))
     }
 }

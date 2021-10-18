@@ -15,56 +15,51 @@
 
 use std::convert::TryFrom;
 
-use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metatypes::SeqValue;
+use common_meta_types::SeqValue;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum AuthType {
+    None = 0,
+    PlainText = 1,
+    DoubleSha1 = 2,
+    Sha256 = 3,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct UserInfo {
     pub name: String,
-    pub password_sha256: [u8; 32],
-    pub salt_sha256: [u8; 32],
+    pub password: Vec<u8>,
+    pub auth_type: AuthType,
 }
 
-#[async_trait]
-pub trait UserMgrApi {
-    async fn add_user<U, V, W>(
-        &mut self,
-        username: U,
-        password: V,
-        salt: W,
-    ) -> common_exception::Result<u64>
-    where
-        U: AsRef<str> + Send,
-        V: AsRef<str> + Send,
-        W: AsRef<str> + Send;
+impl UserInfo {
+    pub(crate) fn new(name: String, password: Vec<u8>, auth_type: AuthType) -> Self {
+        UserInfo {
+            name,
+            password,
+            auth_type,
+        }
+    }
+}
 
-    async fn get_user<V>(
-        &mut self,
-        username: V,
+pub trait UserMgrApi: Sync + Send {
+    fn add_user(&self, user_info: UserInfo) -> Result<u64>;
+
+    fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>>;
+
+    fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>>;
+
+    fn update_user(
+        &self,
+        username: String,
+        new_password: Option<Vec<u8>>,
+        new_auth: Option<AuthType>,
         seq: Option<u64>,
-    ) -> common_exception::Result<SeqValue<UserInfo>>
-    where
-        V: AsRef<str> + Send;
+    ) -> Result<Option<u64>>;
 
-    async fn get_all_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>>;
-
-    async fn get_users<V>(&mut self, usernames: &[V]) -> Result<Vec<Option<SeqValue<UserInfo>>>>
-    where V: AsRef<str> + Sync;
-
-    async fn update_user<V>(
-        &mut self,
-        username: V,
-        new_password: Option<V>,
-        new_salt: Option<V>,
-        seq: Option<u64>,
-    ) -> Result<Option<u64>>
-    where
-        V: AsRef<str> + Sync + Send;
-
-    async fn drop_user<V>(&mut self, username: V, seq: Option<u64>) -> Result<()>
-    where V: AsRef<str> + Send;
+    fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()>;
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {

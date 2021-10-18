@@ -12,33 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_runtime::tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_tickets::StreamTicket;
-use crate::api::rpc::DatafuseQueryFlightDispatcher;
+use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
-use crate::tests::try_create_sessions;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
-    let dispatcher = DatafuseQueryFlightDispatcher::create();
+    let dispatcher = DatabendQueryFlightDispatcher::create();
 
     let stream = stream_ticket("query_id", "stage_id", "stream_id");
     let get_stream = dispatcher.get_stream(&stream);
 
     match get_stream {
-        Ok(_) => assert!(
-            false,
-            "Return Ok in test_get_stream_with_non_exists_stream."
-        ),
+        Ok(_) => panic!("Return Ok in test_get_stream_with_non_exists_stream."),
         Err(error) => {
             assert_eq!(error.code(), 29);
             assert_eq!(error.message(), "Stream is not found");
@@ -51,21 +48,23 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
-        let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
+        let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
-        let sessions = try_create_sessions()?;
+        let sessions = SessionManagerBuilder::create().build()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
-        flight_dispatcher.shuffle_action(
-            rpc_session,
-            FlightAction::PrepareShuffleAction(ShuffleAction {
-                query_id: query_id.clone(),
-                stage_id: stage_id.clone(),
-                plan: parse_query("SELECT number FROM numbers(5)")?,
-                sinks: vec![stream_id.clone()],
-                scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
-            }),
-        )?;
+        flight_dispatcher
+            .shuffle_action(
+                rpc_session,
+                FlightAction::PrepareShuffleAction(ShuffleAction {
+                    query_id: query_id.clone(),
+                    stage_id: stage_id.clone(),
+                    plan: parse_query("SELECT number FROM numbers(5)")?,
+                    sinks: vec![stream_id.clone()],
+                    scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
+                }),
+            )
+            .await?;
 
         let stream = stream_ticket(&query_id, &stage_id, &stream_id);
         let receiver = flight_dispatcher.get_stream(&stream)?;
@@ -93,21 +92,23 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
-        let flight_dispatcher = DatafuseQueryFlightDispatcher::create();
+        let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
-        let sessions = try_create_sessions()?;
+        let sessions = SessionManagerBuilder::create().build()?;
         let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
 
-        flight_dispatcher.shuffle_action(
-            rpc_session,
-            FlightAction::PrepareShuffleAction(ShuffleAction {
-                query_id: query_id.clone(),
-                stage_id: stage_id.clone(),
-                plan: parse_query("SELECT number FROM numbers(5)")?,
-                sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
-                scatters_expression: Expression::Column("number".to_string()),
-            }),
-        )?;
+        flight_dispatcher
+            .shuffle_action(
+                rpc_session,
+                FlightAction::PrepareShuffleAction(ShuffleAction {
+                    query_id: query_id.clone(),
+                    stage_id: stage_id.clone(),
+                    plan: parse_query("SELECT number FROM numbers(5)")?,
+                    sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
+                    scatters_expression: Expression::Column("number".to_string()),
+                }),
+            )
+            .await?;
 
         let stream_1 = stream_ticket(&query_id, &stage_id, "stream_1");
         let receiver = flight_dispatcher.get_stream(&stream_1)?;

@@ -19,6 +19,7 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -27,7 +28,6 @@ use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
 use crate::scalars::ComparisonNotLikeFunction;
-use crate::scalars::FactoryFuncRef;
 use crate::scalars::Function;
 
 #[derive(Clone)]
@@ -36,22 +36,16 @@ pub struct ComparisonFunction {
 }
 
 impl ComparisonFunction {
-    pub fn register(map: FactoryFuncRef) -> Result<()> {
-        let mut map = map.write();
-
-        map.insert("=".into(), ComparisonEqFunction::try_create_func);
-        map.insert("<".into(), ComparisonLtFunction::try_create_func);
-        map.insert(">".into(), ComparisonGtFunction::try_create_func);
-        map.insert("<=".into(), ComparisonLtEqFunction::try_create_func);
-        map.insert(">=".into(), ComparisonGtEqFunction::try_create_func);
-        map.insert("!=".into(), ComparisonNotEqFunction::try_create_func);
-        map.insert("<>".into(), ComparisonNotEqFunction::try_create_func);
-        map.insert("like".into(), ComparisonLikeFunction::try_create_func);
-        map.insert(
-            "not like".into(),
-            ComparisonNotLikeFunction::try_create_func,
-        );
-        Ok(())
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("=", ComparisonEqFunction::desc());
+        factory.register("<", ComparisonLtFunction::desc());
+        factory.register(">", ComparisonGtFunction::desc());
+        factory.register("<=", ComparisonLtEqFunction::desc());
+        factory.register(">=", ComparisonGtEqFunction::desc());
+        factory.register("!=", ComparisonNotEqFunction::desc());
+        factory.register("<>", ComparisonNotEqFunction::desc());
+        factory.register("like", ComparisonLikeFunction::desc());
+        factory.register("not like", ComparisonNotLikeFunction::desc());
     }
 
     pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function>> {
@@ -72,8 +66,10 @@ impl Function for ComparisonFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &[DataColumn], _input_rows: usize) -> Result<DataColumn> {
-        columns[0].compare(self.op.clone(), &columns[1])
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        columns[0]
+            .column()
+            .compare(self.op.clone(), columns[1].column())
     }
 
     fn num_arguments(&self) -> usize {

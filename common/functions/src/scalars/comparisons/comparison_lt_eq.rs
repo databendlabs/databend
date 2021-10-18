@@ -15,6 +15,8 @@
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ComparisonFunction;
 use crate::scalars::Function;
 
@@ -23,5 +25,13 @@ pub struct ComparisonLtEqFunction;
 impl ComparisonLtEqFunction {
     pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         ComparisonFunction::try_create_func(DataValueComparisonOperator::LtEq)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .negative_function(">"),
+        )
     }
 }

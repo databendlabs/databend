@@ -19,19 +19,19 @@ use common_planners::InsertIntoPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct InsertIntoInterpreter {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     plan: InsertIntoPlan,
 }
 
 impl InsertIntoInterpreter {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         plan: InsertIntoPlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
@@ -45,13 +45,14 @@ impl Interpreter for InsertIntoInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_datasource();
-        let database = datasource.get_database(self.plan.db_name.as_str())?;
-        let table = database.get_table(self.plan.tbl_name.as_str())?;
-        table
-            .datasource()
-            .append_data(self.ctx.clone(), self.plan.clone())
-            .await?;
+        let catalog = self.ctx.get_catalog();
+        let database = catalog.get_database(self.plan.db_name.as_str())?;
+        let table = database.get_table_by_id(self.plan.tbl_id, None)?;
+
+        let io_ctx = self.ctx.get_cluster_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
+
+        table.append_data(io_ctx, self.plan.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

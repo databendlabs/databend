@@ -1,13 +1,13 @@
 ---
 name: Build issue
-about: Report failed Datafuse build from master
+about: Report failed Databend build from main
 title: ''
 labels: build
 assignees: ''
 
 ---
 
-Make sure that `git diff` result is empty and you've just pulled fresh master, and run first:
+Make sure that `git diff` result is empty and you've just pulled fresh main, and run first:
 ```text
 $ make setup
 ```
@@ -22,4 +22,4 @@ $ rustc --version
 $ cargo --version
 ```
 
-**Datafuse git version**
+**Databend git version**

@@ -12,22 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_base::Progress;
+use common_base::Runtime;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_planners::PlanNode;
-use common_progress::Progress;
-use common_runtime::Runtime;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
+use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::Catalog;
+use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DatabaseCatalog;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+
+type DatabaseAndTable = (String, String);
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -38,34 +45,40 @@ use crate::sessions::Settings;
 ///         (SELECT scalar FROM table_name_3) AS scalar_3
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
-pub struct DatafuseQueryContextShared {
+pub struct DatabendQueryContextShared {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) progress: Arc<Progress>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: Arc<RwLock<Option<ClusterRef>>>,
+    pub(in crate::sessions) cluster_cache: ClusterRef,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
+    pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
 }
 
-impl DatafuseQueryContextShared {
-    pub fn try_create(conf: Config, session: Arc<Session>) -> Arc<DatafuseQueryContextShared> {
-        Arc::new(DatafuseQueryContextShared {
+impl DatabendQueryContextShared {
+    pub fn try_create(
+        conf: Config,
+        session: Arc<Session>,
+        cluster_cache: ClusterRef,
+    ) -> Arc<DatabendQueryContextShared> {
+        Arc::new(DatabendQueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
             session,
+            cluster_cache,
             runtime: Arc::new(RwLock::new(None)),
-            cluster_cache: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
             running_plan: Arc::new(RwLock::new(None)),
+            tables_refs: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -79,18 +92,8 @@ impl DatafuseQueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
-    pub fn try_get_cluster(&self) -> Result<ClusterRef> {
-        // We only get the cluster once during the query.
-        let mut cluster_cache = self.cluster_cache.write();
-
-        match &*cluster_cache {
-            Some(cached) => Ok(cached.clone()),
-            None => {
-                let cluster = self.session.try_get_cluster()?;
-                *cluster_cache = Some(cluster.clone());
-                Ok(cluster)
-            }
-        }
+    pub fn get_cluster(&self) -> ClusterRef {
+        self.cluster_cache.clone()
     }
 
     pub fn get_current_database(&self) -> String {
@@ -105,8 +108,24 @@ impl DatafuseQueryContextShared {
         self.session.get_settings()
     }
 
-    pub fn get_datasource(&self) -> Arc<DatabaseCatalog> {
-        self.session.get_datasource()
+    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
+        self.session.get_catalog()
+    }
+
+    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        // Always get same table metadata in the same query
+        let table_meta_key = (database.to_string(), table.to_string());
+
+        let mut tables_refs = self.tables_refs.lock();
+
+        Ok(match tables_refs.entry(table_meta_key) {
+            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                let catalog = self.get_catalog();
+                let table = catalog.get_table(database, table)?;
+                entry.insert(table).clone()
+            }
+        })
     }
 
     /// Init runtime when first get

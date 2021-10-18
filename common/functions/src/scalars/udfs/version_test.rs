@@ -37,20 +37,26 @@ fn test_version_function() -> Result<()> {
         nullable: false,
         func: VersionFunction::try_create("version")?,
         columns: vec![Series::new(vec![
-            "DatafuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
+            "DatabendQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
         ])
         .into()],
         expect: Series::new(vec![
-            "DatafuseQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
+            "DatabendQuery v-0.1.0-3afb26c(1.54.0-nightly-2021-06-09T07:56:09.461981495+00:00)",
         ])
         .into(),
         error: "",
     }];
 
+    let dummy = DataField::new("dummy", DataType::String, false);
     for t in tests {
         let rows = t.columns[0].len();
         let func = t.func;
-        match func.eval(&t.columns, rows) {
+        let columns = vec![DataColumnWithField::new(
+            t.columns[0].clone(),
+            dummy.clone(),
+        )];
+
+        match func.eval(&columns, rows) {
             Ok(v) => {
                 // Display check.
                 let expect_display = t.display.to_string();

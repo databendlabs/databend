@@ -7,10 +7,8 @@
 # Rust
 target/*
 distro/*
-cli/e2e/datafuse-cli
-
-# cargo
-.cargo/
+cli/e2e/bendctl
+.cargo/config.toml
 
 # profile
 flamegraph.*
@@ -22,8 +20,8 @@ perf.*
 *.out
 *.swp
 _local_fs/*
-_logs/*
 _meta/*
+**/_logs/*
 
 # for tests in mac
 *.stderr-e

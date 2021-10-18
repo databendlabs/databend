@@ -14,199 +14,160 @@
 //
 
 use std::convert::TryInto;
+use std::sync::Arc;
+use std::time::Duration;
 
-use async_trait::async_trait;
+use common_base::BlockingWait;
+use common_base::Runtime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_metatypes::MatchSeq;
-use common_metatypes::MatchSeqExt;
-use common_metatypes::SeqValue;
-use common_store_api::KVApi;
-use sha2::Digest;
+use common_meta_api::KVApi;
+use common_meta_types::MatchSeq;
+use common_meta_types::MatchSeqExt;
+use common_meta_types::SeqValue;
+use common_meta_types::UpsertKVActionReply;
 
+use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
-use crate::user::utils;
-use crate::user::utils::NewUser;
 
-pub static USER_API_KEY_PREFIX: &str = "__fd_users/";
+pub static USER_API_KEY_PREFIX: &str = "__fd_users";
 
-pub struct UserMgr<KV> {
-    kv_api: KV,
+pub struct UserMgr {
+    kv_api: Arc<dyn KVApi>,
+    user_prefix: String,
+
+    rt: Arc<Runtime>,
+    rpc_time_out: Option<Duration>,
 }
 
-impl<T> UserMgr<T>
-where T: KVApi
-{
-    #[allow(dead_code)]
-    pub fn new(kv_api: T) -> Self {
-        UserMgr { kv_api }
+impl UserMgr {
+    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
+        let rt = Runtime::with_worker_threads(1).expect("UserMgr initialization failure");
+
+        UserMgr {
+            kv_api,
+            user_prefix: format!("{}/{}", USER_API_KEY_PREFIX, tenant),
+            rt: Arc::new(rt),
+            // TODO(bh): add config.
+            rpc_time_out: Some(Duration::from_secs(5)),
+        }
     }
 }
 
-#[async_trait]
-impl<T: KVApi + Send> UserMgrApi for UserMgr<T> {
-    async fn add_user<U, V, W>(
-        &mut self,
-        username: U,
-        password: V,
-        salt: W,
-    ) -> common_exception::Result<u64>
-    where
-        U: AsRef<str> + Send,
-        V: AsRef<str> + Send,
-        W: AsRef<str> + Send,
-    {
-        let new_user = NewUser::new(username.as_ref(), password.as_ref(), salt.as_ref());
-        let ui: UserInfo = new_user.into();
-        let value = serde_json::to_vec(&ui)?;
-        let key = utils::prepend(&ui.name);
-
-        // Only when there are no record, i.e. seq=0
+impl UserMgrApi for UserMgr {
+    fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
+        let key = format!("{}/{}", self.user_prefix, user_info.name);
+        let value = serde_json::to_vec(&user_info)?;
 
-        let res = self
-            .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
-            .await?;
-
-        match (res.prev, res.result) {
-            (None, Some((s, _))) => Ok(s), // do we need to check the seq returned?
-            (Some((s, _)), None) => Err(ErrorCode::UserAlreadyExists(format!(
-                "user already exists, seq [{}]",
+        let kv_api = self.kv_api.clone();
+        let upsert_kv = async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await };
+        let res = upsert_kv.wait_in(&self.rt, self.rpc_time_out)??;
+        match res {
+            UpsertKVActionReply {
+                prev: None,
+                result: Some((s, _)),
+            } => Ok(s),
+            UpsertKVActionReply {
+                prev: Some((s, _)),
+                result: _,
+            } => Err(ErrorCode::UserAlreadyExists(format!(
+                "User already exists, seq [{}]",
                 s
             ))),
-            r @ (_, _) => Err(ErrorCode::UnknownException(format!(
+            catch_result @ UpsertKVActionReply { .. } => Err(ErrorCode::UnknownException(format!(
                 "upsert result not expected (using version 0, got {:?})",
-                r
+                catch_result
             ))),
         }
     }
 
-    async fn get_user<V: AsRef<str> + Send>(
-        &mut self,
-        username: V,
-        seq: Option<u64>,
-    ) -> Result<SeqValue<UserInfo>> {
-        let key = utils::prepend(username.as_ref());
-        let resp = self.kv_api.get_kv(&key).await?;
-
-        let seq_value = resp
+    fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>> {
+        let key = format!("{}/{}", self.user_prefix, username);
+        let kv_api = self.kv_api.clone();
+        let get_kv = async move { kv_api.get_kv(&key).await };
+        let res = get_kv.wait_in(&self.rt, self.rpc_time_out)??;
+        let seq_value = res
             .result
-            .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username.as_ref())))?;
+            .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok((seq_value.0, seq_value.1.value.try_into()?)),
-            Err(_) => Err(ErrorCode::UnknownUser(format!(
-                "username: {}",
-                username.as_ref()
-            ))),
+            Err(_) => Err(ErrorCode::UnknownUser(format!("username: {}", username))),
         }
     }
 
-    async fn get_all_users(&mut self) -> Result<Vec<SeqValue<UserInfo>>> {
-        let values = self.kv_api.prefix_list_kv(USER_API_KEY_PREFIX).await?;
+    fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>> {
+        let user_prefix = self.user_prefix.clone();
+        let kv_api = self.kv_api.clone();
+        let prefix_list_kv = async move { kv_api.prefix_list_kv(user_prefix.as_str()).await };
+        let values = prefix_list_kv.wait_in(&self.rt, self.rpc_time_out)??;
+
         let mut r = vec![];
-        for v in values {
-            let (_key, (s, val)) = v;
+        for (_key, (s, val)) in values {
             let u = serde_json::from_slice::<UserInfo>(&val.value)
                 .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
 
             r.push((s, u));
         }
+
         Ok(r)
     }
 
-    async fn get_users<V: AsRef<str> + Sync>(
-        &mut self,
-        usernames: &[V],
-    ) -> Result<Vec<Option<SeqValue<UserInfo>>>> {
-        let keys = usernames
-            .iter()
-            .map(utils::prepend)
-            .collect::<Vec<String>>();
-        let values = self.kv_api.mget_kv(&keys).await?;
-        let mut r = vec![];
-        for v in values.result {
-            match v {
-                Some(v) => {
-                    let u = serde_json::from_slice::<UserInfo>(&v.1.value)
-                        .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
-                    r.push(Some((v.0, u)));
-                }
-                None => r.push(None),
-            }
-        }
-        Ok(r)
-    }
-
-    async fn update_user<V: AsRef<str> + Sync + Send>(
-        &mut self,
-        username: V,
-        new_password: Option<V>,
-        new_salt: Option<V>,
+    fn update_user(
+        &self,
+        username: String,
+        new_password: Option<Vec<u8>>,
+        new_auth: Option<AuthType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        if new_password.is_none() && new_salt.is_none() {
+        if new_password.is_none() && new_auth.is_none() {
             return Ok(seq);
         }
-        let partial_update = new_salt.is_none() || new_password.is_none();
+        let partial_update = new_auth.is_none() || new_password.is_none();
         let user_info = if partial_update {
-            let user_val_seq = self.get_user(username.as_ref(), seq).await?;
+            let user_val_seq = self.get_user(username.clone(), seq)?;
             let user_info = user_val_seq.1;
-            UserInfo {
-                password_sha256: new_password.map_or(user_info.password_sha256, |v| {
-                    sha2::Sha256::digest(v.as_ref().as_bytes()).into()
-                }),
-                salt_sha256: new_salt.map_or(user_info.salt_sha256, |v| {
-                    sha2::Sha256::digest(v.as_ref().as_bytes()).into()
-                }),
-                name: username.as_ref().to_string(),
-            }
-        } else {
-            NewUser::new(
-                username.as_ref(),
-                new_password.unwrap().as_ref(),
-                new_salt.unwrap().as_ref(),
+            UserInfo::new(
+                username.clone(),
+                new_password.map_or(user_info.password, |v| v.to_vec()),
+                new_auth.map_or(user_info.auth_type, |v| v),
             )
-            .into()
+        } else {
+            UserInfo::new(username.clone(), new_password.unwrap(), new_auth.unwrap())
         };
 
+        let key = format!("{}/{}", self.user_prefix, user_info.name);
         let value = serde_json::to_vec(&user_info)?;
-        let key = utils::prepend(&user_info.name);
 
         let match_seq = match seq {
             None => MatchSeq::GE(1),
             Some(s) => MatchSeq::Exact(s),
         };
-        let res = self
-            .kv_api
-            .upsert_kv(&key, match_seq, Some(value), None)
-            .await?;
+
+        let kv_api = self.kv_api.clone();
+        let upsert_kv = async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await };
+        let res = upsert_kv.wait_in(&self.rt, self.rpc_time_out)??;
         match res.result {
             Some((s, _)) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
                 "unknown user, or seq not match {}",
-                username.as_ref()
+                username
             ))),
         }
     }
 
-    async fn drop_user<V: AsRef<str> + Send>(
-        &mut self,
-        username: V,
-        seq: Option<u64>,
-    ) -> Result<()> {
-        let key = utils::prepend(username.as_ref());
-        let r = self.kv_api.upsert_kv(&key, seq.into(), None, None).await?;
-        if r.prev.is_some() && r.result.is_none() {
+    fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
+        let key = format!("{}/{}", self.user_prefix, username);
+        let kv_api = self.kv_api.clone();
+        let upsert_kv = async move { kv_api.upsert_kv(&key, seq.into(), None, None).await };
+        let res = upsert_kv.wait_in(&self.rt, self.rpc_time_out)??;
+        if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownUser(format!(
-                "unknown user {}",
-                username.as_ref()
-            )))
+            Err(ErrorCode::UnknownUser(format!("unknown user {}", username)))
         }
     }
 }

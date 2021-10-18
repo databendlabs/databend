@@ -46,6 +46,7 @@ pub fn sum(other: Expression) -> Expression {
     Expression::AggregateFunction {
         op: "sum".to_string(),
         distinct: false,
+        params: vec![],
         args: vec![other],
     }
 }
@@ -55,6 +56,7 @@ pub fn avg(other: Expression) -> Expression {
     Expression::AggregateFunction {
         op: "avg".to_string(),
         distinct: false,
+        params: vec![],
         args: vec![other],
     }
 }

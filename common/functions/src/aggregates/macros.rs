@@ -13,101 +13,103 @@
 // limitations under the License.
 
 #[macro_export]
-macro_rules! dispatch_numeric_types {
+macro_rules! with_match_primitive_type {
+    (
+    $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
+) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+        use common_datavalues::prelude::DataType::*;
+
+        match $key_type {
+            Int8 => __with_ty__! { i8 },
+            Int16 => __with_ty__! { i16 },
+            Int32 => __with_ty__! { i32 },
+            Int64 => __with_ty__! { i64 },
+            UInt8 => __with_ty__! { u8 },
+            UInt16 => __with_ty__! { u16 },
+            UInt32 => __with_ty__! { u32 },
+            UInt64 => __with_ty__! { u64 },
+            Float32 => __with_ty__! { f32 },
+            Float64 => __with_ty__! { f64 },
+
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! with_match_primitive_types {
+    (
+    $type0:expr, $type1:expr, | $_a:tt $T0:ident, $_b:tt $T1:ident | $body:tt,  $nbody:tt
+) => {{
+        macro_rules! __with_types__ {
+            ( $_a $T0:ident, $_b $T1:ident ) => {
+                $body
+            };
+        }
+
+        macro_rules! __match_type__ {
+            ($t:ident) => {
+                match $type1 {
+                    Int8 => __with_types__! { $t, i8 },
+                    Int16 => __with_types__! { $t, i16 },
+                    Int32 => __with_types__! { $t, i32 },
+                    Int64 => __with_types__! { $t, i64 },
+                    UInt8 => __with_types__! { $t, u8 },
+                    UInt16 => __with_types__! { $t, u16 },
+                    UInt32 => __with_types__! { $t, u32 },
+                    UInt64 => __with_types__! { $t, u64 },
+                    Float32 => __with_types__! { $t, f32 },
+                    Float64 => __with_types__! { $t, f64 },
+                    _ => $nbody,
+                }
+            };
+        }
+
+        use common_datavalues::prelude::DataType::*;
+
+        match $type0 {
+            Int8 => __match_type__! { i8 },
+            Int16 => __match_type__! { i16 },
+            Int32 => __match_type__! { i32 },
+            Int64 => __match_type__! { i64 },
+            UInt8 => __match_type__! { u8 },
+            UInt16 => __match_type__! { u16 },
+            UInt32 => __match_type__! { u32 },
+            UInt64 => __match_type__! { u64 },
+            Float32 => __match_type__! { f32 },
+            Float64 => __match_type__! { f64 },
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! with_match_date_date_time_types {
     ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
-        $dispatch! { UInt8Type, $data_type,      $($args),* }
-        $dispatch! { UInt16Type, $data_type,     $($args),* }
-        $dispatch! { UInt32Type, $data_type,     $($args),* }
-        $dispatch! { UInt64Type, $data_type,     $($args),* }
-        $dispatch! { Int8Type, $data_type,       $($args),* }
-        $dispatch! { Int16Type, $data_type,      $($args),* }
-        $dispatch! { Int32Type, $data_type,      $($args),* }
-        $dispatch! { Int64Type, $data_type,      $($args),* }
-        $dispatch! { Float32Type, $data_type,    $($args),* }
-        $dispatch! { Float64Type, $data_type,    $($args),* }
+        use common_datavalues::prelude::DataType;
+        match $data_type {
+            DataType::Date16 => {
+                $dispatch! { u16, DataType::UInt16, $($args),* }
+            },
+            DataType::DateTime32(_) => {
+                $dispatch! { u32, DataType::UInt32, $($args),* }
+            },
+            _ => {},
+        }
     };
 }
 
 #[macro_export]
-macro_rules! apply_integer_creator {
-    ($data_type: expr, $creator: ident, $creator_fn: ident, $display_name: expr, $arguments: expr) => {{
-        match $data_type {
-            DataType::UInt8 => $creator::<u8>::$creator_fn($display_name, $arguments),
-            DataType::UInt16 => $creator::<u16>::$creator_fn($display_name, $arguments),
-            DataType::UInt32 => $creator::<u32>::$creator_fn($display_name, $arguments),
-            DataType::UInt64 => $creator::<u64>::$creator_fn($display_name, $arguments),
-            DataType::Int8 => $creator::<i8>::$creator_fn($display_name, $arguments),
-            DataType::Int16 => $creator::<i16>::$creator_fn($display_name, $arguments),
-            DataType::Int32 => $creator::<i32>::$creator_fn($display_name, $arguments),
-            DataType::Int64 => $creator::<i64>::$creator_fn($display_name, $arguments),
-
-            other => Err(ErrorCode::BadDataValueType(format!(
-                "{} does not support type '{:?}'",
-                stringify!($creator),
-                other
-            ))),
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! apply_numeric_creator {
-    ($data_type: expr, $creator: ident, $creator_fn: ident, $display_name: expr, $arguments: expr) => {{
-        match $data_type {
-            DataType::UInt8 => $creator::<u8>::$creator_fn($display_name, $arguments),
-            DataType::UInt16 => $creator::<u16>::$creator_fn($display_name, $arguments),
-            DataType::UInt32 => $creator::<u32>::$creator_fn($display_name, $arguments),
-            DataType::UInt64 => $creator::<u64>::$creator_fn($display_name, $arguments),
-            DataType::Int8 => $creator::<i8>::$creator_fn($display_name, $arguments),
-            DataType::Int16 => $creator::<i16>::$creator_fn($display_name, $arguments),
-            DataType::Int32 => $creator::<i32>::$creator_fn($display_name, $arguments),
-            DataType::Int64 => $creator::<i64>::$creator_fn($display_name, $arguments),
-            DataType::Float32 => $creator::<f32>::$creator_fn($display_name, $arguments),
-            DataType::Float64 => $creator::<f64>::$creator_fn($display_name, $arguments),
-
-            other => Err(ErrorCode::BadDataValueType(format!(
-                "{} does not support type '{:?}'",
-                stringify!($creator),
-                other
-            ))),
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! apply_string_creator {
-    ($data_type: expr, $creator: ident, $creator_fn: ident, $display_name: expr, $arguments: expr) => {{
-        match $data_type {
-            DataType::Utf8 => $creator::<String>::$creator_fn($display_name, $arguments),
-            other => Err(ErrorCode::BadDataValueType(format!(
-                "{} does not support type '{:?}'",
-                stringify!($creator),
-                other
-            ))),
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! apply_numeric_creator_with_largest_type {
-    ($data_type: expr, $creator: ident, $creator_fn: ident,  $display_name: expr, $arguments: expr) => {{
-        match $data_type {
-            DataType::UInt8 => $creator::<u8, u64>::$creator_fn($display_name, $arguments),
-            DataType::UInt16 => $creator::<u16, u64>::$creator_fn($display_name, $arguments),
-            DataType::UInt32 => $creator::<u32, u64>::$creator_fn($display_name, $arguments),
-            DataType::UInt64 => $creator::<u64, u64>::$creator_fn($display_name, $arguments),
-            DataType::Int8 => $creator::<i8, i64>::$creator_fn($display_name, $arguments),
-            DataType::Int16 => $creator::<i16, i64>::$creator_fn($display_name, $arguments),
-            DataType::Int32 => $creator::<i32, i64>::$creator_fn($display_name, $arguments),
-            DataType::Int64 => $creator::<i64, i64>::$creator_fn($display_name, $arguments),
-            DataType::Float32 => $creator::<f32, f64>::$creator_fn($display_name, $arguments),
-            DataType::Float64 => $creator::<f64, f64>::$creator_fn($display_name, $arguments),
-
-            other => Err(ErrorCode::BadDataValueType(format!(
-                "{} does not support type '{:?}'",
-                stringify!($creator),
-                other
-            ))),
-        }
-    }};
+macro_rules! with_match_unsigned_numeric_types {
+    ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
+        $dispatch! { u8, $data_type,      $($args),* }
+        $dispatch! { u16, $data_type,     $($args),* }
+        $dispatch! { u32, $data_type,     $($args),* }
+        $dispatch! { u64, $data_type,     $($args),* }
+    };
 }

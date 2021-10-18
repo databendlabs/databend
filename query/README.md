@@ -1,3 +1,3 @@
-# DatafuseQuery
+# DatabendQuery
 
-DatafuseQuery is a Distributed Query Engine at scale.
+DatabendQuery is a Distributed Query Engine at scale.

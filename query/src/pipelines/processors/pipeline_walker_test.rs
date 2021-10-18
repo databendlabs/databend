@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
-use common_runtime::tokio;
 use pretty_assertions::assert_eq;
 
 use crate::pipelines::processors::*;
@@ -26,7 +26,7 @@ async fn test_pipeline_walker() -> Result<()> {
     let plan = PlanParser::create(ctx.clone()).build_from_sql(
         "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1",
     )?;
-    let pipeline_builder = PipelineBuilder::create(ctx.clone());
+    let pipeline_builder = PipelineBuilder::create(ctx);
     let pipeline = pipeline_builder.build(&plan)?;
 
     // PreOrder.

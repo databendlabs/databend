@@ -21,16 +21,16 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct TruncateTableInterpreter {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     plan: TruncateTablePlan,
 }
 
 impl TruncateTableInterpreter {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         plan: TruncateTablePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(TruncateTableInterpreter { ctx, plan }))
@@ -47,10 +47,10 @@ impl Interpreter for TruncateTableInterpreter {
         let table = self
             .ctx
             .get_table(self.plan.db.as_str(), self.plan.table.as_str())?;
-        table
-            .datasource()
-            .truncate(self.ctx.clone(), self.plan.clone())
-            .await?;
+
+        let io_ctx = self.ctx.get_cluster_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
+        table.truncate(io_ctx, self.plan.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
-use common_datavalues::arrays::BinaryArrayBuilder;
+use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
@@ -127,13 +127,13 @@ impl Processor for AggregatorPartialTransform {
         let delta = start.elapsed();
         tracing::debug!("Aggregator partial cost: {:?}", delta);
 
-        let mut columns: Vec<Series> = vec![];
-
+        let mut columns = Vec::with_capacity(funcs.len());
         let mut bytes = BytesMut::new();
+
         for (idx, func) in funcs.iter().enumerate() {
             let place = places[idx].into();
             func.serialize(place, &mut bytes)?;
-            let mut array_builder = BinaryArrayBuilder::with_capacity(4);
+            let mut array_builder = StringArrayBuilder::with_capacity(4);
             array_builder.append_value(&bytes[..]);
             bytes.clear();
             let array = array_builder.finish();

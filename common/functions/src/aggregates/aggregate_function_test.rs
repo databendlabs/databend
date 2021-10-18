@@ -15,6 +15,7 @@
 use bumpalo::Bump;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use float_cmp::approx_eq;
 use pretty_assertions::assert_eq;
 
 use crate::aggregates::*;
@@ -24,6 +25,7 @@ fn test_aggregate_function() -> Result<()> {
     struct Test {
         name: &'static str,
         eval_nums: usize,
+        params: Vec<DataValue>,
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
@@ -46,6 +48,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "count-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "count",
             func_name: "count",
@@ -56,6 +59,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "max-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "max",
             func_name: "max",
@@ -66,6 +70,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "min-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "min",
             func_name: "min",
@@ -76,6 +81,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "avg-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "avg",
             func_name: "avg",
@@ -86,6 +92,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "sum-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sum",
@@ -96,6 +103,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "argMax-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmax",
             func_name: "argmax",
@@ -106,6 +114,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "argMin-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmin",
             func_name: "argmin",
@@ -116,6 +125,7 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "argMin-notpassed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "argmin",
             func_name: "argmin",
@@ -126,11 +136,67 @@ fn test_aggregate_function() -> Result<()> {
         Test {
             name: "uniq-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "uniq",
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
             expect: DataValue::UInt64(Some(4)),
+            error: "",
+        },
+        Test {
+            name: "std-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "std",
+            func_name: "std",
+            arrays: vec![arrays[0].clone()],
+            expect: DataValue::Float64(Some(1.118033988749895)),
+            error: "",
+        },
+        Test {
+            name: "stddev-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "stddev",
+            func_name: "stddev",
+            arrays: vec![arrays[0].clone()],
+            expect: DataValue::Float64(Some(1.118033988749895)),
+            error: "",
+        },
+        Test {
+            name: "stddev-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "stddev_pop",
+            func_name: "stddev_pop",
+            arrays: vec![arrays[0].clone()],
+            expect: DataValue::Float64(Some(1.118033988749895)),
+            error: "",
+        },
+        Test {
+            name: "covar-sample-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_samp",
+            func_name: "covar_samp",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(-1.6666666666666667)),
+            error: "",
+        },
+        Test {
+            name: "covar-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_pop",
+            func_name: "covar_pop",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(-1.25000)),
             error: "",
         },
     ];
@@ -140,7 +206,8 @@ fn test_aggregate_function() -> Result<()> {
         let rows = t.arrays[0].len();
 
         let func = || -> Result<()> {
-            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
 
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
@@ -175,6 +242,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
     struct Test {
         name: &'static str,
         eval_nums: usize,
+        params: Vec<DataValue>,
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
@@ -184,8 +252,8 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        DFInt64Array::new_from_slice(&vec![]).into_series(),
-        DFBooleanArray::new_from_slice(&vec![]).into_series(),
+        DFInt64Array::new_from_slice(&[]).into_series(),
+        DFBooleanArray::new_from_slice(&[]).into_series(),
     ];
 
     let args = vec![
@@ -197,6 +265,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "count-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "count",
             func_name: "count",
@@ -207,6 +276,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "max-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "max",
             func_name: "max",
@@ -217,6 +287,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "min-passed",
             eval_nums: 2,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "min",
             func_name: "min",
@@ -227,6 +298,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "avg-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "avg",
             func_name: "avg",
@@ -237,6 +309,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "sum-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sum",
@@ -247,6 +320,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "argMax-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmax",
             func_name: "argmax",
@@ -257,6 +331,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "argMin-passed",
             eval_nums: 1,
+            params: vec![],
             args: args.clone(),
             display: "argmin",
             func_name: "argmin",
@@ -267,11 +342,67 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         Test {
             name: "uniq-passed",
             eval_nums: 1,
+            params: vec![],
             args: vec![args[0].clone()],
             display: "uniq",
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
             expect: DataValue::UInt64(Some(0)),
+            error: "",
+        },
+        Test {
+            name: "std-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "std",
+            func_name: "std",
+            arrays: vec![arrays[0].clone()],
+            expect: DataValue::Float64(None),
+            error: "",
+        },
+        Test {
+            name: "stddev-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "stddev",
+            func_name: "stddev",
+            arrays: vec![arrays[0].clone()],
+            expect: DataValue::Float64(None),
+            error: "",
+        },
+        Test {
+            name: "stddev-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "stddev_pop",
+            func_name: "stddev_pop",
+            arrays: vec![arrays[0].clone()],
+            expect: DataValue::Float64(None),
+            error: "",
+        },
+        Test {
+            name: "covar-sample-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_samp",
+            func_name: "covar_samp",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(f64::INFINITY)),
+            error: "",
+        },
+        Test {
+            name: "covar-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_pop",
+            func_name: "covar_pop",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: DataValue::Float64(Some(f64::INFINITY)),
             error: "",
         },
     ];
@@ -281,7 +412,8 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         let rows = t.arrays[0].len();
 
         let func = || -> Result<()> {
-            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
 
@@ -307,5 +439,51 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             assert_eq!(t.error, e.to_string());
         }
     }
+    Ok(())
+}
+
+#[test]
+fn test_covariance_with_comparable_data_sets() -> Result<()> {
+    let arena = Bump::new();
+
+    let mut v0 = Vec::with_capacity(2000);
+    for _i in 0..2000 {
+        v0.push(1.0_f32)
+    }
+
+    let mut v1 = Vec::with_capacity(2000);
+    for i in 0..2000 {
+        v1.push(i as i16);
+    }
+
+    let arrays: Vec<Series> = vec![Series::new(v0), Series::new(v1)];
+
+    let args = vec![
+        DataField::new("a", DataType::Float32, false),
+        DataField::new("b", DataType::Int16, false),
+    ];
+
+    let factory = AggregateFunctionFactory::instance();
+
+    let run_test = |func_name: &'static str| -> Result<f64> {
+        let func = factory.get(func_name, vec![], args.clone())?;
+        let addr = arena.alloc_layout(func.state_layout());
+        func.init_state(addr.into());
+        func.accumulate(addr.into(), &arrays, 2000)?;
+        let result = func.merge_result(addr.into())?;
+        match result {
+            DataValue::Float64(Some(val)) => Ok(val),
+            _ => {
+                panic!();
+            }
+        }
+    };
+
+    let r = run_test("covar_samp")?;
+    approx_eq!(f64, 0.0, r, epsilon = 0.000001);
+
+    let r = run_test("covar_pop")?;
+    approx_eq!(f64, 0.0, r, epsilon = 0.000001);
+
     Ok(())
 }

@@ -18,7 +18,8 @@ pub use transform_create_sets::CreateSetsTransform;
 pub use transform_create_sets::SubQueriesPuller;
 pub use transform_expression::ExpressionTransform;
 pub use transform_expression_executor::ExpressionExecutor;
-pub use transform_filter::FilterTransform;
+pub use transform_filter::HavingTransform;
+pub use transform_filter::WhereTransform;
 pub use transform_group_by_final::GroupByFinalTransform;
 pub use transform_group_by_partial::GroupByPartialTransform;
 pub use transform_limit::LimitTransform;
@@ -67,3 +68,5 @@ mod transform_remote;
 mod transform_sort_merge;
 mod transform_sort_partial;
 mod transform_source;
+
+mod group_by;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::fmt;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
@@ -26,15 +27,26 @@ use crate::DataField;
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
+    pub(crate) metadata: HashMap<String, String>,
 }
 
 impl DataSchema {
     pub fn empty() -> Self {
-        Self { fields: vec![] }
+        Self {
+            fields: vec![],
+            metadata: HashMap::new(),
+        }
     }
 
     pub fn new(fields: Vec<DataField>) -> Self {
-        Self { fields }
+        Self {
+            fields,
+            metadata: HashMap::new(),
+        }
+    }
+
+    pub fn new_from(fields: Vec<DataField>, metadata: HashMap<String, String>) -> Self {
+        Self { fields, metadata }
     }
 
     /// Returns an immutable reference of the vector of `Field` instances.
@@ -52,6 +64,12 @@ impl DataSchema {
     /// Returns an immutable reference of a specific `Field` instance selected by name.
     pub fn field_with_name(&self, name: &str) -> Result<&DataField> {
         Ok(&self.fields[self.index_of(name)?])
+    }
+
+    /// Returns an immutable reference to field `metadata`.
+    #[inline]
+    pub const fn meta(&self) -> &HashMap<String, String> {
+        &self.metadata
     }
 
     /// Find the index of the column with the given name.
@@ -98,7 +116,7 @@ impl DataSchema {
             .map(|f| f.to_arrow())
             .collect::<Vec<_>>();
 
-        ArrowSchema::new(fields)
+        ArrowSchema::new_from(fields, self.metadata.clone())
     }
 }
 

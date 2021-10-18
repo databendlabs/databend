@@ -19,19 +19,19 @@ use common_planners::CreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct CreateTableInterpreter {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     plan: CreateTablePlan,
 }
 
 impl CreateTableInterpreter {
     pub fn try_create(
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
         plan: CreateTablePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(CreateTableInterpreter { ctx, plan }))
@@ -45,9 +45,9 @@ impl Interpreter for CreateTableInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_datasource();
+        let datasource = self.ctx.get_catalog();
         let database = datasource.get_database(self.plan.db.as_str())?;
-        database.create_table(self.plan.clone()).await?;
+        database.create_table(self.plan.clone())?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema.clone(),

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::ops::Deref;
-use std::ops::DerefMut;
 
 use common_arrow::arrow::bitmap::Bitmap;
 
@@ -41,39 +40,6 @@ fn index_of<T>(slice: &[T], item: &T) -> Option<usize> {
     }
 }
 
-/// Just a wrapper structure. Useful for certain impl specializations
-/// This is for instance use to implement
-/// `impl<T> FromIterator<T::Native> for NoNull<DataArray<T>>`
-/// as `Option<T::Native>` was already implemented:
-/// `impl<T> FromIterator<Option<T::Native>> for DataArray<T>`
-pub struct NoNull<T> {
-    inner: T,
-}
-
-impl<T> NoNull<T> {
-    pub fn new(inner: T) -> Self {
-        NoNull { inner }
-    }
-
-    pub fn into_inner(self) -> T {
-        self.inner
-    }
-}
-
-impl<T> Deref for NoNull<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T> DerefMut for NoNull<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
 pub fn get_iter_capacity<T, I: Iterator<Item = T>>(iter: &I) -> usize {
     match iter.size_hint() {
         (_lower, Some(upper)) => upper,
@@ -82,7 +48,7 @@ pub fn get_iter_capacity<T, I: Iterator<Item = T>>(iter: &I) -> usize {
     }
 }
 
-pub fn combine_validities(lhs: &Option<Bitmap>, rhs: &Option<Bitmap>) -> Option<Bitmap> {
+pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<Bitmap> {
     match (lhs, rhs) {
         (Some(lhs), None) => Some(lhs.clone()),
         (None, Some(rhs)) => Some(rhs.clone()),

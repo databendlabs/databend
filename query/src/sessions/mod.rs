@@ -26,8 +26,9 @@ mod sessions;
 mod sessions_info;
 mod settings;
 
-pub use context::DatafuseQueryContext;
-pub use context::DatafuseQueryContextRef;
+pub use context::DatabendQueryContext;
+pub use context::DatabendQueryContextRef;
+pub use context_shared::DatabendQueryContextShared;
 pub use session::Session;
 pub use session_info::ProcessInfo;
 pub use session_ref::SessionRef;

@@ -17,13 +17,20 @@ mod binary_de;
 mod binary_read;
 mod binary_ser;
 mod binary_write;
+mod buf_read;
 mod marshal;
 mod stat_buffer;
 mod unmarshal;
+mod utils;
 
 #[cfg(test)]
 mod binary_read_test;
 #[cfg(test)]
 mod binary_write_test;
 #[cfg(test)]
+mod buf_read_test;
+#[cfg(test)]
 mod marshal_test;
+
+#[cfg(test)]
+mod utils_test;

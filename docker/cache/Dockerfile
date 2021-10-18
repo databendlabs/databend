@@ -1,5 +1,6 @@
 FROM debian:bullseye
-COPY ./distro/datafuse-query /datafuse-query
-COPY ./distro/datafuse-store /datafuse-store
+COPY ./distro/databend-query /databend-query
+COPY ./distro/databend-meta /databend-meta
 COPY ./distro/bootstrap.sh /bootstrap.sh
+COPY ./distro/databend-query-docker.toml /databend-query.toml
 ENTRYPOINT ["/bootstrap.sh"]

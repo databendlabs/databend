@@ -22,28 +22,19 @@ pub enum CliError {
     Unknown(String),
 
     #[error("IO error: {0}")]
-    Io(io::Error),
+    Io(#[from] io::Error),
 
     #[error("Script error: {0}")]
-    Script(run_script::ScriptError),
+    Script(#[from] run_script::ScriptError),
 
     #[error("Http error: {0}")]
     Http(Box<ureq::Error>),
 
     #[error("Serde error: {0}")]
     Serde(Box<serde_json::Error>),
-}
 
-impl From<io::Error> for CliError {
-    fn from(err: io::Error) -> CliError {
-        CliError::Io(err)
-    }
-}
-
-impl From<run_script::ScriptError> for CliError {
-    fn from(err: run_script::ScriptError) -> CliError {
-        CliError::Script(err)
-    }
+    #[error("Nix error: {0}")]
+    Nix(Box<nix::Error>),
 }
 
 impl From<ureq::Error> for CliError {
@@ -55,5 +46,11 @@ impl From<ureq::Error> for CliError {
 impl From<serde_json::Error> for CliError {
     fn from(err: serde_json::Error) -> CliError {
         CliError::Serde(Box::new(err))
+    }
+}
+
+impl From<nix::Error> for CliError {
+    fn from(err: nix::Error) -> CliError {
+        CliError::Nix(Box::new(err))
     }
 }

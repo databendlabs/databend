@@ -15,6 +15,8 @@
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::Function;
 
@@ -23,5 +25,10 @@ pub struct ArithmeticDivFunction;
 impl ArithmeticDivFunction {
     pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Div)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic())
     }
 }

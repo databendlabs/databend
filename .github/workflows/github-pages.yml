@@ -1,7 +1,7 @@
 name: Website Build and Deploy
 on:
   push:
-    branches: master
+    branches: main
     paths:
       - "website/**/*"
 
@@ -17,6 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
       - name: Set up Python runtime
         uses: actions/setup-python@v1
         with:
@@ -24,13 +28,13 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          cd website/datafuse
+          cd website/databend
           make install
 
       - name: Deploy website
         env:
           GOOGLE_ANALYTICS_KEY: ${{ secrets.GOOGLE_ANALYTICS_KEY }}
         run: |
-          cd website/datafuse
+          cd website/databend
           make build
           make deploy

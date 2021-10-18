@@ -15,17 +15,23 @@
 #[cfg(test)]
 mod status_test;
 
+mod clusters;
 mod command;
 mod comments;
 mod config;
+#[cfg(test)]
+mod config_test;
 mod env;
 mod helps;
 mod packages;
 mod processor;
+mod queries;
 mod status;
 mod versions;
 mod writer;
 
+pub use clusters::cluster::ClusterCommand;
+pub use clusters::create::CreateCommand;
 pub use comments::comment::CommentCommand;
 pub use config::Config;
 pub use env::Env;

@@ -19,17 +19,17 @@ use clickhouse_rs::types::Complex;
 use clickhouse_rs::Block;
 use clickhouse_rs::ClientHandle;
 use clickhouse_rs::Pool;
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_runtime::tokio;
 
 use crate::servers::ClickHouseHandler;
-use crate::sessions::SessionManager;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
-    let sessions = SessionManager::try_create(1)?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -45,8 +45,8 @@ async fn test_clickhouse_handler_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_insert_data() -> Result<()> {
-    let sessions = SessionManager::try_create(1)?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -68,8 +68,8 @@ async fn test_clickhouse_insert_data() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reject_clickhouse_connection() -> Result<()> {
-    let sessions = SessionManager::try_create(1)?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -79,10 +79,10 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
         // Rejected connection
         match create_conn(listening.port()).await {
-            Ok(_) => assert!(false, "Create clickhouse connection must be reject."),
+            Ok(_) => panic!("Create clickhouse connection must be reject."),
             Err(error) => {
                 let message = error.message();
-                assert!(message.find("NO_FREE_CONNECTION").is_some());
+                assert!(message.contains("NO_FREE_CONNECTION"));
             }
         }
     }
@@ -97,8 +97,8 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_abort_clickhouse_server() -> Result<()> {
-    let sessions = SessionManager::try_create(3)?;
-    let mut handler = ClickHouseHandler::create(sessions);
+    let mut handler =
+        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(3).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -110,10 +110,10 @@ async fn test_abort_clickhouse_server() -> Result<()> {
 
     // Rejected connection
     match create_conn(listening.port()).await {
-        Ok(_) => assert!(false, "Create clickhouse connection must be reject."),
+        Ok(_) => panic!("Create clickhouse connection must be reject."),
         Err(error) => {
             let message = error.message();
-            assert!(message.find("ConnectionRefused").is_some());
+            assert!(message.contains("ConnectionRefused"));
         }
     }
 

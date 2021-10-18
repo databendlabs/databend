@@ -17,12 +17,13 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use crate::aggregates::*;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionFactory;
 
 #[test]
 fn test_aggregate_combinator_function() -> Result<()> {
     struct Test {
         name: &'static str,
+        params: Vec<DataValue>,
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
@@ -32,7 +33,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        Series::new(vec![4 as i64, 3, 2, 1, 3, 4]),
+        Series::new(vec![4_i64, 3, 2, 1, 3, 4]),
         Series::new(vec![true, true, false, true, true, true]),
     ];
 
@@ -44,6 +45,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
     let tests = vec![
         Test {
             name: "count-distinct-passed",
+            params: vec![],
             args: vec![args[0].clone()],
             display: "count",
             func_name: "countdistinct",
@@ -53,6 +55,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
         },
         Test {
             name: "sum-distinct-passed",
+            params: vec![],
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sumdistinct",
@@ -62,6 +65,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
         },
         Test {
             name: "count-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "count",
             func_name: "countif",
@@ -71,6 +75,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
         },
         Test {
             name: "min-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "min",
             func_name: "minif",
@@ -80,6 +85,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
         },
         Test {
             name: "max-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "max",
             func_name: "maxif",
@@ -89,6 +95,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
         },
         Test {
             name: "sum-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "sum",
             func_name: "sumif",
@@ -98,6 +105,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
         },
         Test {
             name: "avg-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "avg",
             func_name: "avgif",
@@ -113,7 +121,8 @@ fn test_aggregate_combinator_function() -> Result<()> {
         let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
-            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr = arena.alloc_layout(func.state_layout());
             func.init_state(addr.into());
             func.accumulate(addr.into(), &t.arrays, rows)?;
@@ -146,6 +155,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
 fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
     struct Test {
         name: &'static str,
+        params: Vec<DataValue>,
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
@@ -155,8 +165,8 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        DFInt64Array::new_from_slice(&vec![]).into_series(),
-        DFBooleanArray::new_from_slice(&vec![]).into_series(),
+        DFInt64Array::new_from_slice(&[]).into_series(),
+        DFBooleanArray::new_from_slice(&[]).into_series(),
     ];
 
     let args = vec![
@@ -167,6 +177,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
     let tests = vec![
         Test {
             name: "count-distinct-passed",
+            params: vec![],
             args: vec![args[0].clone()],
             display: "count",
             func_name: "countdistinct",
@@ -176,6 +187,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         },
         Test {
             name: "sum-distinct-passed",
+            params: vec![],
             args: vec![args[0].clone()],
             display: "sum",
             func_name: "sumdistinct",
@@ -185,6 +197,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         },
         Test {
             name: "count-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "count",
             func_name: "countif",
@@ -194,6 +207,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         },
         Test {
             name: "min-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "min",
             func_name: "minif",
@@ -203,6 +217,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         },
         Test {
             name: "max-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "max",
             func_name: "maxif",
@@ -212,6 +227,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         },
         Test {
             name: "sum-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "sum",
             func_name: "sumif",
@@ -221,6 +237,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         },
         Test {
             name: "avg-if-passed",
+            params: vec![],
             args: args.clone(),
             display: "avg",
             func_name: "avgif",
@@ -236,7 +253,8 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         let arena = Bump::new();
         let func = || -> Result<()> {
             // First.
-            let func = AggregateFunctionFactory::get(t.func_name, t.args.clone())?;
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
 

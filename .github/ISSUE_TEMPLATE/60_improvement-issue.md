@@ -1,6 +1,6 @@
 ---
 name: Improvement
-about: Suggest an improvement to an existing Datafuse feature(Enhancement/Refactor)
+about: Suggest an improvement to an existing Databend feature(Enhancement/Refactor)
 title: ''
 labels: improvement 
 assignees: ''

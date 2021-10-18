@@ -15,7 +15,11 @@
 mod data_df_type;
 mod data_type;
 mod data_type_coercion;
+mod physical_data_type;
+mod serializations;
 
 pub use data_df_type::*;
 pub use data_type::*;
 pub use data_type_coercion::*;
+pub use physical_data_type::*;
+pub use serializations::*;

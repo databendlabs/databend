@@ -44,7 +44,7 @@ fn test_logic_function() -> Result<()> {
             func_name: "AndFunction",
             display: "and",
             nullable: false,
-            func: LogicAndFunction::try_create_func("".clone())?,
+            func: LogicAndFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec![true, true, true, false]).into(),
@@ -58,7 +58,7 @@ fn test_logic_function() -> Result<()> {
             func_name: "OrFunction",
             display: "or",
             nullable: false,
-            func: LogicOrFunction::try_create_func("".clone())?,
+            func: LogicOrFunction::try_create_func("")?,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec![true, true, true, false]).into(),
@@ -72,7 +72,7 @@ fn test_logic_function() -> Result<()> {
             func_name: "NotFunction",
             display: "not",
             nullable: false,
-            func: LogicNotFunction::try_create_func("".clone())?,
+            func: LogicNotFunction::try_create_func("")?,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec![true, false]).into()],
             expect: Series::new(vec![false, true]).into(),
@@ -83,7 +83,23 @@ fn test_logic_function() -> Result<()> {
     for t in tests {
         let func = t.func;
         let rows = t.columns[0].len();
-        if let Err(e) = func.eval(&t.columns, rows) {
+
+        // Type check.
+        let mut args = vec![];
+        let mut fields = vec![];
+        for name in t.arg_names {
+            args.push(schema.field_with_name(name)?.data_type().clone());
+            fields.push(schema.field_with_name(name)?.clone());
+        }
+
+        let columns: Vec<DataColumnWithField> = t
+            .columns
+            .iter()
+            .zip(fields.iter())
+            .map(|(c, f)| DataColumnWithField::new(c.clone(), f.clone()))
+            .collect();
+
+        if let Err(e) = func.eval(&columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
 
@@ -97,13 +113,7 @@ fn test_logic_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let ref v = func.eval(&t.columns, rows)?;
-        // Type check.
-        let mut args = vec![];
-        for name in t.arg_names {
-            args.push(schema.field_with_name(name)?.data_type().clone());
-        }
-
+        let v = &(func.eval(&columns, rows)?);
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);

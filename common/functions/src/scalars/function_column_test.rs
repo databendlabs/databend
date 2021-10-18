@@ -28,7 +28,10 @@ fn test_column_function() -> Result<()> {
     // Ok.
     {
         let col = ColumnFunction::try_create("a")?;
-        let columns = vec![block.try_column_by_name("a")?.clone()];
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
         let _ = col.eval(&columns, block.num_rows())?;
     }
 

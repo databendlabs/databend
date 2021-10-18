@@ -17,10 +17,10 @@ use std::convert::TryInto;
 use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
 use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
 use common_arrow::arrow_flight::FlightData;
+use common_base::tokio::macros::support::Pin;
+use common_base::tokio::macros::support::Poll;
+use common_base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
-use common_runtime::tokio::macros::support::Pin;
-use common_runtime::tokio::macros::support::Poll;
-use common_runtime::tokio::sync::mpsc::Receiver;
 use futures::task::Context;
 use tokio_stream::Stream;
 use tonic::Status;
@@ -55,7 +55,7 @@ impl Stream for FlightDataStream {
                     match dicts.is_empty() {
                         true => Some(Ok(values)),
                         false => Some(Err(Status::unimplemented(
-                            "DatafuseQuery does not implement dicts.",
+                            "DatabendQuery does not implement dicts.",
                         ))),
                     }
                 }

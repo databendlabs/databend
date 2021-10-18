@@ -14,64 +14,54 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
-use common_planners::ScanPlan;
 
-use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Catalog;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
+use crate::tests::try_create_catalog;
 
 pub struct NumberTestData {
-    ctx: DatafuseQueryContextRef,
-    db: &'static str,
+    ctx: DatabendQueryContextRef,
     table: &'static str,
 }
 
 impl NumberTestData {
-    pub fn create(ctx: DatafuseQueryContextRef) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef) -> Self {
         NumberTestData {
             ctx,
-            db: "system",
             table: "numbers_mt",
         }
     }
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
-        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
-        datasource
-            .get_table(self.db, self.table)?
-            .datasource()
-            .schema()
+        let catalog = try_create_catalog()?;
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
+        Ok(catalog.get_table_function(self.table, tbl_arg)?.schema())
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
-        let datasource = crate::datasources::DatabaseCatalog::try_create()?;
-        let table_meta = datasource.get_table(self.db, self.table)?;
-        let table = table_meta.datasource();
-        table.read_plan(
-            self.ctx.clone(),
-            &ScanPlan {
-                schema_name: self.db.to_string(),
-                table_id: table_meta.meta_id(),
-                table_version: table_meta.meta_ver(),
-                table_schema: Arc::new(DataSchema::empty()),
-                table_args: Some(Expression::create_literal(DataValue::Int64(Some(numbers)))),
-                projected_schema: Arc::new(DataSchema::empty()),
-                push_downs: Extras::default(),
-            },
-            self.ctx.get_settings().get_max_threads()? as usize,
+        let catalog = try_create_catalog()?;
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
+            numbers,
+        )))]);
+        let table = catalog.get_table_function(self.table, tbl_arg)?;
+        let io_ctx = self.ctx.get_single_node_table_io_context()?;
+        table.clone().as_table().read_plan(
+            Arc::new(io_ctx),
+            None,
+            Some(self.ctx.get_settings().get_max_threads()? as usize),
         )
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {
         let source_plan = self.number_read_source_plan_for_test(numbers)?;
         self.ctx.try_set_partitions(source_plan.parts.clone())?;
-        SourceTransform::try_create(self.ctx.clone(), source_plan.clone())
+        SourceTransform::try_create(self.ctx.clone(), source_plan)
     }
 }

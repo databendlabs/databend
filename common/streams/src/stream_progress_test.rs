@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
+use common_base::tokio;
+use common_base::*;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_progress::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 
 use crate::*;
@@ -27,8 +27,7 @@ use crate::*;
 async fn test_progress_stream() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
 
-    let block =
-        DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1i64, 2, 3]).into()]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1i64, 2, 3])]);
 
     let input = DataBlockStream::create(Arc::new(DataSchema::empty()), None, vec![
         block.clone(),

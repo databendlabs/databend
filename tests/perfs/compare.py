@@ -253,7 +253,7 @@ def report(releaser, pull, files, type, current_log_link, ref_log_link):
 
 ## python compare.py -r xxxx -p xxxx
 if __name__ == '__main__':
-    parser = ArgumentParser(description='fuse perf results compare tools')
+    parser = ArgumentParser(description='databend perf results compare tools')
     parser.add_argument('-r', '--releaser', help='Perf results directory from release version')
     parser.add_argument('-p', '--pull',  help='Perf results directory from current build')
     parser.add_argument('-t', '--type', default="local",  help='Set storage endpoint for performance testing, support '

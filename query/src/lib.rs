@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #![feature(hash_raw_entry)]
+#![feature(core_intrinsics)]
+#![feature(arbitrary_self_types)]
 
 #[cfg(test)]
 pub mod tests;
@@ -20,6 +22,7 @@ pub mod tests;
 pub mod api;
 pub mod catalogs;
 pub mod clusters;
+pub mod common;
 pub mod configs;
 pub mod datasources;
 pub mod functions;
@@ -30,3 +33,4 @@ pub mod pipelines;
 pub mod servers;
 pub mod sessions;
 pub mod sql;
+pub mod users;

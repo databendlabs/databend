@@ -33,11 +33,11 @@ use common_planners::StageKind;
 use common_planners::StagePlan;
 
 use crate::optimizers::Optimizer;
-use crate::sessions::DatafuseQueryContext;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ScattersOptimizer {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
 }
 
 #[derive(Clone, Debug)]
@@ -47,7 +47,7 @@ enum RunningMode {
 }
 
 struct ScattersOptimizerImpl {
-    ctx: DatafuseQueryContextRef,
+    ctx: DatabendQueryContextRef,
     running_mode: RunningMode,
     before_group_by_schema: Option<DataSchemaRef>,
 
@@ -56,7 +56,7 @@ struct ScattersOptimizerImpl {
 }
 
 impl ScattersOptimizerImpl {
-    pub fn create(ctx: DatafuseQueryContextRef) -> ScattersOptimizerImpl {
+    pub fn create(ctx: DatabendQueryContextRef) -> ScattersOptimizerImpl {
         ScattersOptimizerImpl {
             ctx,
             running_mode: RunningMode::Standalone,
@@ -207,7 +207,7 @@ impl ScattersOptimizerImpl {
 
 impl PlanRewriter for ScattersOptimizerImpl {
     fn rewrite_subquery_plan(&mut self, subquery_plan: &PlanNode) -> Result<PlanNode> {
-        let subquery_ctx = DatafuseQueryContext::new(self.ctx.clone());
+        let subquery_ctx = DatabendQueryContext::new(self.ctx.clone());
         let mut subquery_optimizer = ScattersOptimizerImpl::create(subquery_ctx);
         let rewritten_subquery = subquery_optimizer.rewrite_plan_node(subquery_plan)?;
 
@@ -281,8 +281,13 @@ impl PlanRewriter for ScattersOptimizerImpl {
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         let context = self.ctx.clone();
-        let table_meta = context.get_table(&plan.db, &plan.table)?;
-        let select_table = table_meta.datasource();
+        let select_table = if plan.tbl_args.is_none() {
+            context.get_table(&plan.table_info.db, &plan.table_info.name)?
+        } else {
+            context
+                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
+                .as_table()
+        };
 
         match select_table.is_local() {
             false => self.running_mode = RunningMode::Cluster,
@@ -294,7 +299,7 @@ impl PlanRewriter for ScattersOptimizerImpl {
 }
 
 impl ScattersOptimizer {
-    pub fn create(ctx: DatafuseQueryContextRef) -> ScattersOptimizer {
+    pub fn create(ctx: DatabendQueryContextRef) -> ScattersOptimizer {
         ScattersOptimizer { ctx }
     }
 }
@@ -305,7 +310,7 @@ impl Optimizer for ScattersOptimizer {
     }
 
     fn optimize(&mut self, plan: &PlanNode) -> Result<PlanNode> {
-        if self.ctx.try_get_cluster()?.is_empty()? {
+        if self.ctx.get_cluster().is_empty() {
             // Standalone mode.
             return Ok(plan.clone());
         }

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use common_runtime::tokio;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -49,7 +49,7 @@ async fn test_explain_interpreter() -> Result<()> {
         ];
         common_datablocks::assert_blocks_eq(expected, result.as_slice());
     } else {
-        assert!(false)
+        panic!()
     }
 
     Ok(())

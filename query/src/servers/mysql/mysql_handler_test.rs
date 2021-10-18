@@ -18,10 +18,10 @@ use std::sync::Barrier;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_runtime::tokio;
 use mysql::prelude::FromRow;
 use mysql::prelude::Queryable;
 use mysql::Conn;
@@ -29,11 +29,12 @@ use mysql::FromRowError;
 use mysql::Row;
 
 use crate::servers::MySQLHandler;
-use crate::sessions::SessionManager;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_use_database_with_on_query() -> Result<()> {
-    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
@@ -49,7 +50,8 @@ async fn test_use_database_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -60,7 +62,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
 
         // Rejected connection
         match create_connection(listening.port()) {
-            Ok(_) => assert!(false, "Expected rejected connection"),
+            Ok(_) => panic!("Expected rejected connection"),
             Err(error) => {
                 assert_eq!(error.code(), 1000);
                 assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): The current accept connection has exceeded mysql_handler_thread_num config }");
@@ -107,7 +109,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         })
     }
 
-    let mut handler = MySQLHandler::create(SessionManager::try_create(1)?);
+    let mut handler =
+        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -131,7 +134,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     let mut rejected = 0;
     for join_handler in join_handlers {
         match join_handler.join() {
-            Err(error) => assert!(false, "Unexpected error: {:?}", error),
+            Err(error) => panic!("Unexpected error: {:?}", error),
             Ok(CreateServerResult::Accept) => accept += 1,
             Ok(CreateServerResult::Rejected) => rejected += 1,
         }
@@ -150,7 +153,7 @@ fn query<T: FromRow>(connection: &mut Conn, query: &str) -> Result<Vec<T>> {
 }
 
 fn create_connection(port: u16) -> Result<mysql::Conn> {
-    let uri = &format!("mysql://127.0.0.1:{}", port);
+    let uri = &format!("mysql://127.0.0.1:{}?user=default", port);
     let opts = mysql::Opts::from_url(uri).unwrap();
     mysql::Conn::new(opts).map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
 }

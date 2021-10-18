@@ -1,0 +1,21 @@
+{
+    "CN": "Databend Server",
+    "hosts": [
+        "127.0.0.1",
+        "localhost",
+        "0.0.0.0",
+        "::1"
+    ],
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "US",
+            "ST": "CA",
+            "L": "San Francisco"
+        }
+    ]
+}
+

@@ -14,10 +14,8 @@
 
 use common_exception::Result;
 
-use crate::arrays::builders::Utf8ArrayBuilder;
 use crate::prelude::*;
 use crate::series::Series;
-use crate::utils::NoNull;
 
 #[derive(Copy, Clone, Debug)]
 pub enum FillNoneStrategy {
@@ -71,81 +69,59 @@ pub trait ArrayFullNull {
     where Self: std::marker::Sized;
 }
 
-impl<T> ArrayFull<T::Native> for DataArray<T>
+impl<T> ArrayFull<T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn full(value: T::Native, length: usize) -> Self
-    where T::Native: Copy {
-        (0..length)
+    fn full(value: T, length: usize) -> Self
+    where T: Copy {
+        std::iter::repeat(value)
+            .take(length)
             .map(|_| value)
-            .trust_my_length(length)
-            .collect_trusted::<NoNull<DataArray<T>>>()
-            .into_inner()
+            .into_iter()
+            .collect_trusted::<DFPrimitiveArray<T>>()
     }
 }
 
-impl<T> ArrayFullNull for DataArray<T>
+impl<T> ArrayFullNull for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
     fn full_null(length: usize) -> Self {
-        (0..length)
-            .map(|_| None)
-            .trust_my_length(length)
+        std::iter::repeat(None)
+            .take(length)
             .collect_trusted::<Self>()
     }
 }
 impl ArrayFull<bool> for DFBooleanArray {
     fn full(value: bool, length: usize) -> Self {
-        (0..length)
-            .map(|_| value)
-            .trust_my_length(length)
+        std::iter::repeat(value)
+            .take(length)
             .collect_trusted::<DFBooleanArray>()
     }
 }
 
 impl ArrayFullNull for DFBooleanArray {
     fn full_null(length: usize) -> Self {
-        (0..length)
-            .map(|_| None)
-            .trust_my_length(length)
+        std::iter::repeat(None)
+            .take(length)
             .collect_trusted::<Self>()
     }
 }
 
-impl<'a> ArrayFull<&'a str> for DFUtf8Array {
-    fn full(value: &'a str, length: usize) -> Self {
-        let mut builder = Utf8ArrayBuilder::with_capacity(length * value.len());
-
-        for _ in 0..length {
-            builder.append_value(value);
-        }
-        builder.finish()
-    }
-}
-
-impl ArrayFullNull for DFUtf8Array {
-    fn full_null(length: usize) -> Self {
-        (0..length)
-            .map::<Option<String>, _>(|_| None)
-            .collect::<Self>()
-    }
-}
-
 impl ArrayFull<&Series> for DFListArray {
-    fn full(_value: &Series, _length: usize) -> DFListArray {
+    fn full(_value: &Series, _length: usize) -> Self {
         todo!()
     }
 }
 
 impl ArrayFullNull for DFListArray {
-    fn full_null(_length: usize) -> DFListArray {
+    fn full_null(_length: usize) -> Self {
         todo!()
     }
 }
 
-impl ArrayFull<&[u8]> for DFBinaryArray {
-    fn full(value: &[u8], length: usize) -> DFBinaryArray {
-        let mut builder = BinaryArrayBuilder::with_capacity(length);
+impl ArrayFull<&[u8]> for DFStringArray {
+    fn full(value: &[u8], length: usize) -> Self {
+        let mut builder = StringArrayBuilder::with_capacity(length);
         for _ in 0..length {
             builder.append_value(value);
         }
@@ -153,9 +129,9 @@ impl ArrayFull<&[u8]> for DFBinaryArray {
     }
 }
 
-impl ArrayFullNull for DFBinaryArray {
-    fn full_null(length: usize) -> DFBinaryArray {
-        let mut builder = BinaryArrayBuilder::with_capacity(length);
+impl ArrayFullNull for DFStringArray {
+    fn full_null(length: usize) -> Self {
+        let mut builder = StringArrayBuilder::with_capacity(length);
         for _ in 0..length {
             builder.append_null();
         }

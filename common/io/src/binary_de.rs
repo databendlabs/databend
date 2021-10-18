@@ -35,12 +35,12 @@ macro_rules! apply_scalar_de {
 // primitive types and boolean
 apply_scalar_de! {u8, u16, u32, u64, i8, i16, i32, i64, f32, f64, bool}
 
-impl BinaryDe for String {
+impl BinaryDe for Vec<u8> {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> Result<Self> {
         let str_len = reader.read_uvarint()? as usize;
         let mut buffer = vec![0_u8; str_len];
         reader.read_exact(buffer.as_mut())?;
-        Ok(String::from_utf8(buffer)?)
+        Ok(buffer)
     }
 }
 

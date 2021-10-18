@@ -44,6 +44,7 @@ pub struct ActionInput {
 pub struct ActionConstant {
     pub name: String,
     pub value: DataValue,
+    pub data_type: DataType,
 }
 
 #[derive(Debug, Clone)]
@@ -67,9 +68,11 @@ pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
     pub return_type: DataType,
+    pub is_nullable: bool,
     pub is_aggregated: bool,
 
     // for functions
+    pub params: Vec<DataValue>,
     pub arg_names: Vec<String>,
     pub arg_types: Vec<DataType>,
 
@@ -99,7 +102,7 @@ impl ActionFunction {
 
         match self.func_name.as_str() {
             "cast" => CastFunction::create(self.func_name.clone(), self.return_type.clone()),
-            _ => FunctionFactory::get(&self.func_name),
+            _ => FunctionFactory::instance().get(&self.func_name),
         }
     }
 
@@ -109,6 +112,11 @@ impl ActionFunction {
                 "Action must be aggregated function",
             ));
         }
-        AggregateFunctionFactory::get(&self.func_name, self.arg_fields.clone())
+
+        AggregateFunctionFactory::instance().get(
+            &self.func_name,
+            self.params.clone(),
+            self.arg_fields.clone(),
+        )
     }
 }

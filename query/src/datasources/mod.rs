@@ -12,23 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common::Common;
-pub use database::Database;
-pub use table::Table;
-pub use table::TablePtr;
-pub use table_function::TableFunction;
+mod index;
 
-pub use crate::catalogs::impls::database_catalog::DatabaseCatalog;
-
-#[cfg(test)]
-mod common_test;
-#[cfg(test)]
-mod tests;
-
-mod common;
-mod database;
-pub(crate) mod local;
-pub(crate) mod remote;
-pub(crate) mod system;
-mod table;
-mod table_function;
+pub(crate) mod common;
+pub(crate) mod database;
+pub(crate) mod database_engine;
+pub(crate) mod database_engine_registry;
+pub(crate) mod table;
+pub(crate) mod table_engine;
+pub(crate) mod table_engine_registry;
+pub(crate) mod table_func;
+pub(crate) mod table_func_engine;
+pub(crate) mod table_func_engine_registry;

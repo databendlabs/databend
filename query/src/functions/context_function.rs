@@ -19,7 +19,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
-use crate::sessions::DatafuseQueryContextRef;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ContextFunction;
 
@@ -28,10 +28,13 @@ impl ContextFunction {
     // such as `SELECT database()`, the arg is ctx.get_default_db()
     pub fn build_args_from_ctx(
         name: &str,
-        ctx: DatafuseQueryContextRef,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
-        if !FunctionFactory::check(name) && !AggregateFunctionFactory::check(name) {
+        let function_factory = FunctionFactory::instance();
+        let aggregate_function_factory = AggregateFunctionFactory::instance();
+
+        if !function_factory.check(name) && !aggregate_function_factory.check(name) {
             return Result::Err(ErrorCode::UnknownFunction(format!(
                 "Unsupported function: {:?}",
                 name
@@ -39,11 +42,11 @@ impl ContextFunction {
         }
 
         Ok(match name.to_lowercase().as_str() {
-            "database" => vec![Expression::create_literal(DataValue::Utf8(Some(
-                ctx.get_current_database(),
+            "database" => vec![Expression::create_literal(DataValue::String(Some(
+                ctx.get_current_database().into_bytes(),
             )))],
-            "version" => vec![Expression::create_literal(DataValue::Utf8(Some(
-                ctx.get_fuse_version(),
+            "version" => vec![Expression::create_literal(DataValue::String(Some(
+                ctx.get_fuse_version().into_bytes(),
             )))],
             _ => vec![],
         })

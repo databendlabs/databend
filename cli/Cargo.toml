@@ -1,47 +1,56 @@
-cargo-features = ["edition2021"]
-
 [package]
-name = "datafuse-cli"
+name = "bendctl"
 version = "0.1.0"
-description = "All-in-one tool for setting up, managing with Datafuse"
-authors = ["Datafuse Authors <opensource@datafuselabs.com>"]
+description = "All-in-one tool for setting up, managing with Databend"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [[bin]]
-name = "datafuse-cli"
-path = "src/bin/datafuse-cli.rs"
+name = "bendctl"
+path = "src/bin/benctl.rs"
 
 [features]
 
 [dependencies]
 # Workspace dependencies
-
-# Crates.io dependencies
-clap = "2.33.3"
+databend-query = {path = "../query"}
+clap = "3.0.0-beta.4"
+clap_generate = "3.0.0-beta.4"
+databend-meta = {path = "../metasrv" }
+common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"
 comfy-table = "4.1.1"
-dirs = "3.0.2"
+dirs = "4.0.0"
 dyn-clone = "1.0.4"
-flate2 = "1.0.20"
+flate2 = "1.0.22"
 indicatif = "0.16.2"
-run_script = "^0.8.0"
-rustyline = "8.2.0"
+run_script = "^0.9.0"
+rustyline = "9.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha2 = "0.9.5"
-structopt = "0.3"
-sysinfo = "0.20.0"
+sha2 = "0.9.8"
+sysinfo = "0.20.5"
 tar = "0.4.37"
-thiserror = "1.0.20"
-ureq = { version = "2.1.1", features = ["json"] }
+thiserror = "1.0.30"
+ureq = { version = "2.2.0", features = ["json"] }
+nix = "0.22.2"
+log = "0.4"
+serde_yaml = "0.8"
+structopt = "0.3"
+structopt-toml = "0.5.0"
+portpicker = "0.1.1"
+reqwest = { version = "0.11", features = ["json", "native-tls", "blocking"] }
+libc = "0.2"
+lexical-util = "0.8.1"
 
 [dev-dependencies]
-pretty_assertions = "0.7"
+pretty_assertions = "1.0"
 tempfile = "3.2.0"
-assert_cmd = "2.0.0"
-predicates = "2.0.1"
+assert_cmd = "2.0.2"
+predicates = "2.0.3"
+httpmock = "0.6"
 
 [build-dependencies]
 common-building = {path = "../common/building"}

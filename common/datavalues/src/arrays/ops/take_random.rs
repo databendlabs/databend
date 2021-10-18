@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 
-use crate::arrays::DataArray;
 use crate::prelude::*;
 use crate::series::IntoSeries;
 use crate::series::Series;
@@ -41,7 +40,7 @@ pub trait TakeRandom {
 }
 
 // Utility trait because associated type needs a lifetime
-pub trait TakeRandomUtf8 {
+pub trait TakeRandomString {
     type Item;
 
     /// Get a nullable value by index.
@@ -136,35 +135,32 @@ where
     }
 }
 
-impl<'a, T> IntoTakeRandom<'a> for &'a DataArray<T>
-where T: DFNumericType
+impl<'a, T> IntoTakeRandom<'a> for &'a DFPrimitiveArray<T>
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
-    type TakeRandom =
-        TakeRandBranch<NumTakeRandomCont<'a, T::Native>, NumTakeRandomSingleArray<'a, T>>;
+    type Item = T;
+    type TakeRandom = TakeRandBranch<NumTakeRandomCont<'a, T>, NumTakeRandomSingleArray<'a, T>>;
 
     #[inline]
     fn take_rand(&self) -> Self::TakeRandom {
         if self.null_count() == 0 {
             let t = NumTakeRandomCont {
-                slice: self.downcast_ref().values(),
+                slice: self.inner().values(),
             };
             TakeRandBranch::SingleNoNull(t)
         } else {
-            let t = NumTakeRandomSingleArray {
-                arr: self.downcast_ref(),
-            };
+            let t = NumTakeRandomSingleArray { arr: self.inner() };
             TakeRandBranch::Single(t)
         }
     }
 }
 
-pub struct Utf8TakeRandom<'a> {
-    arr: &'a LargeUtf8Array,
+pub struct StringTakeRandom<'a> {
+    arr: &'a LargeBinaryArray,
 }
 
-impl<'a> TakeRandom for Utf8TakeRandom<'a> {
-    type Item = &'a str;
+impl<'a> TakeRandom for StringTakeRandom<'a> {
+    type Item = &'a [u8];
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {
@@ -177,13 +173,13 @@ impl<'a> TakeRandom for Utf8TakeRandom<'a> {
     }
 }
 
-impl<'a> IntoTakeRandom<'a> for &'a DFUtf8Array {
-    type Item = &'a str;
-    type TakeRandom = TakeRandBranch<Utf8TakeRandom<'a>, Utf8TakeRandom<'a>>;
+impl<'a> IntoTakeRandom<'a> for &'a DFStringArray {
+    type Item = &'a [u8];
+    type TakeRandom = TakeRandBranch<StringTakeRandom<'a>, StringTakeRandom<'a>>;
 
     fn take_rand(&self) -> Self::TakeRandom {
-        let arr = self.downcast_ref();
-        let t = Utf8TakeRandom { arr };
+        let arr = self.inner();
+        let t = StringTakeRandom { arr };
         TakeRandBranch::Single(t)
     }
 }
@@ -193,7 +189,7 @@ impl<'a> IntoTakeRandom<'a> for &'a DFBooleanArray {
     type TakeRandom = TakeRandBranch<BoolTakeRandom<'a>, BoolTakeRandom<'a>>;
 
     fn take_rand(&self) -> Self::TakeRandom {
-        let arr = self.downcast_ref();
+        let arr = self.inner();
         let t = BoolTakeRandom { arr };
         TakeRandBranch::Single(t)
     }
@@ -204,9 +200,7 @@ impl<'a> IntoTakeRandom<'a> for &'a DFListArray {
     type TakeRandom = TakeRandBranch<ListTakeRandom<'a>, ListTakeRandom<'a>>;
 
     fn take_rand(&self) -> Self::TakeRandom {
-        let t = ListTakeRandom {
-            arr: self.downcast_ref(),
-        };
+        let t = ListTakeRandom { arr: self.inner() };
         TakeRandBranch::Single(t)
     }
 }
@@ -232,15 +226,15 @@ where T: Copy
 }
 
 pub struct NumTakeRandomSingleArray<'a, T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
-    arr: &'a PrimitiveArray<T::Native>,
+    arr: &'a PrimitiveArray<T>,
 }
 
 impl<'a, T> TakeRandom for NumTakeRandomSingleArray<'a, T>
-where T: DFNumericType
+where T: DFPrimitiveType
 {
-    type Item = T::Native;
+    type Item = T;
 
     #[inline]
     fn get(&self, index: usize) -> Option<Self::Item> {

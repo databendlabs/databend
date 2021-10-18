@@ -17,9 +17,9 @@ mod apply;
 mod boolean;
 mod cast;
 mod contain;
-mod downcast;
 mod fill;
 mod group_hash;
+mod r#if;
 mod scatter;
 mod take;
 mod take_random;
@@ -36,11 +36,11 @@ mod cast_test;
 #[cfg(test)]
 mod contain_test;
 #[cfg(test)]
-mod downcast_test;
-#[cfg(test)]
 mod fill_test;
 #[cfg(test)]
 mod group_hash_test;
+#[cfg(test)]
+mod if_test;
 #[cfg(test)]
 mod scatter_test;
 #[cfg(test)]
@@ -53,9 +53,9 @@ pub use apply::*;
 pub use boolean::*;
 pub use cast::*;
 pub use contain::*;
-pub use downcast::*;
 pub use fill::*;
 pub use group_hash::GroupHash;
+pub use r#if::*;
 pub use scatter::*;
 pub use take::*;
 pub use take_random::*;

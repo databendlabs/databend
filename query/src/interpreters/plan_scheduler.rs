@@ -17,8 +17,10 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_context::IOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::NodeInfo;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::BroadcastPlan;
@@ -46,10 +48,10 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
-use crate::clusters::Node;
-use crate::datasources::TablePtr;
-use crate::sessions::DatafuseQueryContext;
-use crate::sessions::DatafuseQueryContextRef;
+use crate::catalogs::TablePtr;
+use crate::catalogs::ToReadDataSourcePlan;
+use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 enum RunningMode {
     Cluster,
@@ -58,7 +60,7 @@ enum RunningMode {
 
 pub struct Tasks {
     plan: PlanNode,
-    context: DatafuseQueryContextRef,
+    context: DatabendQueryContextRef,
     actions: HashMap<String, VecDeque<FlightAction>>,
 }
 
@@ -69,25 +71,25 @@ pub struct PlanScheduler {
     local_pos: usize,
     nodes_plan: Vec<PlanNode>,
     running_mode: RunningMode,
-    query_context: DatafuseQueryContextRef,
+    query_context: DatabendQueryContextRef,
     subqueries_expressions: Vec<Expressions>,
 }
 
 impl PlanScheduler {
-    pub fn try_create(context: DatafuseQueryContextRef) -> Result<PlanScheduler> {
-        let cluster = context.try_get_cluster()?;
-        let cluster_nodes = cluster.get_nodes()?;
+    pub fn try_create(context: DatabendQueryContextRef) -> Result<PlanScheduler> {
+        let cluster = context.get_cluster();
+        let cluster_nodes = cluster.get_nodes();
 
         let mut local_pos = 0;
         let mut nodes_plan = Vec::new();
         let mut cluster_nodes_name = Vec::with_capacity(cluster_nodes.len());
         for index in 0..cluster_nodes.len() {
-            if cluster_nodes[index].is_local() {
+            if cluster.is_local(cluster_nodes[index].as_ref()) {
                 local_pos = index;
             }
 
             nodes_plan.push(PlanNode::Empty(EmptyPlan::create()));
-            cluster_nodes_name.push(cluster_nodes[index].name.clone());
+            cluster_nodes_name.push(cluster_nodes[index].id.clone());
         }
 
         Ok(PlanScheduler {
@@ -105,10 +107,10 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
-        let cluster = context.try_get_cluster()?;
+        let cluster = context.get_cluster();
         let mut tasks = Tasks::create(context);
 
-        match cluster.is_empty()? {
+        match cluster.is_empty() {
             true => tasks.finalize(plan),
             false => {
                 self.visit_plan_node(plan, &mut tasks)?;
@@ -119,7 +121,7 @@ impl PlanScheduler {
 }
 
 impl Tasks {
-    pub fn create(context: DatafuseQueryContextRef) -> Tasks {
+    pub fn create(context: DatabendQueryContextRef) -> Tasks {
         Tasks {
             context,
             actions: HashMap::new(),
@@ -136,12 +138,12 @@ impl Tasks {
         Ok(self)
     }
 
-    pub fn get_tasks(&self) -> Result<Vec<(Arc<Node>, FlightAction)>> {
-        let cluster = self.context.try_get_cluster()?;
+    pub fn get_tasks(&self) -> Result<Vec<(Arc<NodeInfo>, FlightAction)>> {
+        let cluster = self.context.get_cluster();
 
         let mut tasks = Vec::new();
-        for cluster_node in &cluster.get_nodes()? {
-            if let Some(actions) = self.actions.get(&cluster_node.name) {
+        for cluster_node in &cluster.get_nodes() {
+            if let Some(actions) = self.actions.get(&cluster_node.id) {
                 for action in actions {
                     tasks.push((cluster_node.clone(), action.clone()));
                 }
@@ -639,7 +641,7 @@ impl PlanScheduler {
     }
 
     fn visit_subquery(&mut self, plan: &PlanNode, tasks: &mut Tasks) -> Result<Vec<PlanNode>> {
-        let subquery_context = DatafuseQueryContext::new(self.query_context.clone());
+        let subquery_context = DatabendQueryContext::new(self.query_context.clone());
         let mut subquery_scheduler = PlanScheduler::try_create(subquery_context)?;
         subquery_scheduler.visit_plan_node(plan, tasks)?;
         Ok(subquery_scheduler.nodes_plan)
@@ -781,8 +783,14 @@ impl PlanScheduler {
     }
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
-        let table_meta = self.query_context.get_table(&plan.db, &plan.table)?;
-        let table = table_meta.datasource();
+        let table = if plan.tbl_args.is_none() {
+            self.query_context
+                .get_table(&plan.table_info.db, &plan.table_info.name)?
+        } else {
+            self.query_context
+                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
+                .as_table()
+        };
 
         match table.is_local() {
             true => self.visit_local_data_source(plan),
@@ -838,11 +846,15 @@ impl PlanScheduler {
 
 impl PlanScheduler {
     fn cluster_source(&mut self, node: &ScanPlan, table: TablePtr) -> Result<ReadDataSourcePlan> {
-        let nodes = self.cluster_nodes.clone();
-        let context = self.query_context.clone();
-        let settings = context.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-        table.read_plan(context, node, max_threads * nodes.len())
+        let io_ctx = self.query_context.get_cluster_table_io_context()?;
+
+        let io_ctx = Arc::new(io_ctx);
+
+        table.read_plan(
+            io_ctx.clone(),
+            Some(node.push_downs.clone()),
+            Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
+        )
     }
 
     fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<Partitions> {
