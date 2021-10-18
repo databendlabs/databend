@@ -185,7 +185,7 @@ impl S3InputStream {
                             bucket: self.bucket.clone(),
                             ..Default::default()
                         };
-                        //jhead_req.key = self.key.clone();
+                        //head_req.key = self.key.clone();
                         //head_req.bucket = self.bucket.clone();
                         let cli = self.client.clone();
                         counter!(super::metrics::METRIC_S3_HEADOBJECT_NUMBERS, 1);
