@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::ops::Deref;
-use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use crate::sessions::Session;
