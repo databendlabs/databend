@@ -16,6 +16,8 @@ members = [
     "common/infallible",
     "common/io",
     "common/management",
+    "common/mem",
+    "common/mem-derive",
     "common/planners",
     "common/meta/api",
     "common/meta/embedded",
