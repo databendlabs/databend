@@ -142,14 +142,27 @@ impl Processor {
     pub fn process_run_interactive(&mut self) -> Result<()> {
         let hist_path = format!("{}/history.txt", self.env.conf.databend_dir.clone());
         let _ = self.readline.load_history(hist_path.as_str());
+        let mut content = String::new();
 
         loop {
             let writer = Writer::create();
-            let readline = self.readline.readline(self.env.prompt.as_str());
+            let prompt = if content.is_empty() {
+                self.env.prompt.as_str()
+            } else {
+                self.env.multiline_prompt.as_str()
+            };
+            let readline = self.readline.readline(prompt);
             match readline {
                 Ok(line) => {
-                    self.readline.history_mut().add(line.clone());
-                    self.processor_line(writer, line)?;
+                    let line = line.trim();
+                    if line.ends_with('\\') {
+                        content.push_str(&line[0..line.len() - 1]);
+                        continue;
+                    }
+                    content.push_str(line);
+                    self.readline.history_mut().add(content.clone());
+                    self.processor_line(writer, content.clone())?;
+                    content.clear();
                 }
                 Err(ReadlineError::Interrupted) => {
                     println!("CTRL-C");
