@@ -17,7 +17,6 @@ pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use credits_table::CreditsTable;
 pub use databases_table::DatabasesTable;
-pub use engines_table::EnginesTable;
 pub use functions_table::FunctionsTable;
 pub use one_table::OneTable;
 pub use processes_table::ProcessesTable;
@@ -38,8 +37,6 @@ mod credits_table_test;
 #[cfg(test)]
 mod databases_table_test;
 #[cfg(test)]
-mod engines_table_test;
-#[cfg(test)]
 mod functions_table_test;
 #[cfg(test)]
 mod settings_table_test;
@@ -53,7 +50,6 @@ mod configs_table;
 mod contributors_table;
 mod credits_table;
 mod databases_table;
-mod engines_table;
 mod functions_table;
 mod one_table;
 mod processes_table;

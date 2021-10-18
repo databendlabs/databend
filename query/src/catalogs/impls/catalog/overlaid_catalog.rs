@@ -27,7 +27,6 @@ use crate::catalogs::Catalog;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
-use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::datasources::table_func_engine::TableFuncEngine;
 use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
@@ -134,12 +133,5 @@ impl Catalog for OverlaidCatalog {
     fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
         // drop db in BOTTOM layer only
         self.bottom.drop_database(plan)
-    }
-
-    fn get_db_engines(&self) -> common_exception::Result<Vec<EngineDescription>> {
-        let mut dbs = self.read_only.get_db_engines()?;
-        let mut other = self.bottom.get_db_engines()?;
-        dbs.append(&mut other);
-        Ok(dbs)
     }
 }

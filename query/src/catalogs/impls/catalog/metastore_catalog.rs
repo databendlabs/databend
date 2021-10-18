@@ -30,17 +30,12 @@ use crate::catalogs::backends::MetaEmbeddedSync;
 use crate::catalogs::backends::MetaRemoteSync;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
-use crate::catalogs::DatabaseEngine;
 use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::datasources::database::default::default_database::DefaultDatabase;
-use crate::datasources::database::default::default_database_factory::DefaultDatabaseFactory;
-use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
-
-pub const DEFAULT_DB_ENGINE: &str = "DEFAULT";
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -48,8 +43,6 @@ pub const DEFAULT_DB_ENGINE: &str = "DEFAULT";
 /// - Instances of `Database` are created by using database factories according to the engine
 /// - Database engines are free to save table meta in metastore or not
 pub struct MetaStoreCatalog {
-    db_engine: Arc<dyn DatabaseEngine>,
-
     table_engine_registry: Arc<TableEngineRegistry>,
 
     meta: Arc<dyn MetaApiSync>,
@@ -82,13 +75,7 @@ impl MetaStoreCatalog {
 
         register_prelude_tbl_engines(&table_engine_registry)?;
 
-        let db_engine = Arc::new(DefaultDatabaseFactory::new(
-            meta.clone(),
-            table_engine_registry.clone(),
-        ));
-
         let cat = MetaStoreCatalog {
-            db_engine,
             table_engine_registry,
             meta,
             db_instances: RwLock::new(HashMap::new()),
@@ -157,13 +144,5 @@ impl Catalog for MetaStoreCatalog {
         self.meta.drop_database(plan)?;
         self.db_instances.write().remove(&name);
         Ok(())
-    }
-
-    fn get_db_engines(&self) -> Result<Vec<EngineDescription>> {
-        let x = vec![EngineDescription {
-            name: DEFAULT_DB_ENGINE.to_string(),
-            desc: self.db_engine.description(),
-        }];
-        Ok(x)
     }
 }
