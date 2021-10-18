@@ -16,6 +16,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_dal::InMemoryData;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::CreateDatabaseReply;
@@ -46,6 +47,14 @@ pub struct MetaStoreCatalog {
     table_engine_registry: Arc<TableEngineRegistry>,
 
     meta: Arc<dyn MetaApiSync>,
+
+    /// The data layer that supports MemoryTable or else.
+    ///
+    /// TODO(xp): Introduce this field to release `Database` from managing MemoryTable data blocks.
+    ///           This should still be considered as a temp solution.
+    ///           There should be a dedicate component to serve this duty.
+    ///           Maybe as part of `Session`.
+    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 
     // this is not for performance:
     // some tables are stateful, cached in database, thus, instances of Database have to be kept as well.
@@ -78,6 +87,7 @@ impl MetaStoreCatalog {
         let cat = MetaStoreCatalog {
             table_engine_registry,
             meta,
+            in_memory_data: Default::default(),
             db_instances: RwLock::new(HashMap::new()),
         };
 
@@ -89,6 +99,7 @@ impl MetaStoreCatalog {
             &db_info.db,
             self.meta.clone(),
             self.table_engine_registry.clone(),
+            self.in_memory_data.clone(),
         );
 
         let db = Arc::new(db);

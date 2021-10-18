@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_context::DataContext;
 use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -35,7 +36,10 @@ pub struct NullTable {
 }
 
 impl NullTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        table_info: TableInfo,
+        _data_ctx: Arc<dyn DataContext<u64>>,
+    ) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self { table_info }))
     }
 }

@@ -8,7 +8,9 @@ edition = "2021"
 
 [dependencies]
 common-base = {path = "../base"}
+common-datablocks = {path = "../datablocks"}
 common-exception = {path = "../exception"}
+common-infallible = {path = "../infallible"}
 
 async-compat = "0.2.1"
 async-trait = "0.1"

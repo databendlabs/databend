@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_context::TableDataContext;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -35,16 +36,19 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = MemoryTable::try_create(TableInfo {
-        database_id: 0,
-        db: "default".into(),
-        name: "a".into(),
-        schema: schema.clone(),
-        engine: "Memory".to_string(),
-        options: TableOptions::default(),
-        table_id: 0,
-        version: 0,
-    })?;
+    let table = MemoryTable::try_create(
+        TableInfo {
+            database_id: 0,
+            db: "default".into(),
+            name: "a".into(),
+            schema: schema.clone(),
+            engine: "Memory".to_string(),
+            options: TableOptions::default(),
+            table_id: 0,
+            version: 0,
+        },
+        Arc::new(TableDataContext::default()),
+    )?;
 
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
