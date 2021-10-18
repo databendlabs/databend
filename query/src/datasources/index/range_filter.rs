@@ -20,11 +20,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::lit;
@@ -71,19 +67,48 @@ impl RangeFilter {
         })
     }
 
-    pub fn range_filter(&self, stats: Vec<HashMap<ColumnId, ColStats>>) -> Result<Vec<bool>> {
-        let data_block = build_stats_block(stats, &self.stat_columns)?;
+    pub fn range_filter(&self, stats: HashMap<ColumnId, ColStats>) -> Result<bool> {
+        let data_block = build_stats_block(self.schema.clone(), stats, self.stat_columns.clone())?;
         let executed_data_block = self.executor.execute(&data_block)?;
+        assert_eq!(executed_data_block.num_rows(), 1);
+        assert_eq!(executed_data_block.num_columns(), 1);
 
-        todo!()
+        let value = executed_data_block.column(0).to_values()?.remove(0);
+        let val = value
+            .to_array()?
+            .cast_with_type(&DataType::Boolean)?
+            .bool()?
+            .inner()
+            .value(0);
+        Ok(val)
     }
 }
 
 fn build_stats_block(
-    stats: Vec<HashMap<ColumnId, ColStats>>,
-    stat_columns: &StatColumns,
+    schema: DataSchemaRef,
+    stats: HashMap<ColumnId, ColStats>,
+    stat_columns: StatColumns,
 ) -> Result<DataBlock> {
-    todo!()
+    let columns = stat_columns
+        .iter()
+        .map(|c| {
+            let stat = stats.get(&c.column_id).ok_or_else(|| {
+                ErrorCode::UnknownException(format!(
+                    "Unable to get the colStats by ColumnId: {}",
+                    c.column_id
+                ))
+            })?;
+            let val = match c.stat_type {
+                StatType::Max => stat.max.clone(),
+                StatType::Min => stat.min.clone(),
+                StatType::Nulls => DataValue::UInt64(Some(stat.null_count as u64)),
+                StatType::Rows => DataValue::UInt64(Some(stat.row_count as u64)),
+            };
+            val.to_array()
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let block = DataBlock::create_by_array(schema, columns);
+    Ok(block)
 }
 
 fn build_verifiable_expr(
@@ -137,7 +162,7 @@ fn build_verifiable_expr(
     Ok(res)
 }
 
-// TODO: need add monotonic check for the expression.
+// TODO: need add monotonic check for the expression, will move to FunctionFactory.
 fn is_monotonic_expression(expr: &Expression) -> Monotonic {
     match expr {
         Expression::Column(_) => Monotonic {
@@ -205,21 +230,27 @@ impl fmt::Display for StatType {
 
 #[derive(Debug, Clone)]
 struct StatColumn {
-    column_name: String,
+    column_id: ColumnId,
     stat_type: StatType,
     stat_field: DataField,
 }
 
 impl StatColumn {
-    fn new(column_name: String, stat_type: StatType, field: &DataField) -> Self {
+    fn new(
+        column_name: String,
+        column_id: ColumnId,
+        stat_type: StatType,
+        field: &DataField,
+    ) -> Self {
         let column_new = format!("{}_{}", stat_type, column_name);
-        let stat_field = DataField::new(
-            column_new.as_str(),
-            field.data_type().clone(),
-            field.is_nullable(),
-        );
+        let data_type = match stat_type {
+            StatType::Nulls => DataType::UInt64,
+            StatType::Rows => DataType::UInt64,
+            _ => field.data_type().clone(),
+        };
+        let stat_field = DataField::new(column_new.as_str(), data_type, field.is_nullable());
         Self {
-            column_name,
+            column_id,
             stat_type,
             stat_field,
         }
@@ -242,7 +273,8 @@ struct Monotonic {
 struct VerifiableExprBuilder<'a> {
     args: Expressions,
     op: &'a str,
-    column: String,
+    column_name: String,
+    column_id: ColumnId,
     monotonic: Monotonic,
     field: &'a DataField,
     stat_columns: &'a mut StatColumns,
@@ -255,7 +287,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         schema: &'a DataSchema,
         stat_columns: &'a mut StatColumns,
     ) -> Result<Self> {
-        let (args, cols, operator) = match exprs.len() {
+        let (args, cols, op) = match exprs.len() {
             1 => {
                 let cols = collect_columns_from_expr(&exprs[0])?;
                 match cols.len() {
@@ -296,20 +328,25 @@ impl<'a> VerifiableExprBuilder<'a> {
                 "Only support the monotonic expression",
             ));
         }
-        let column = cols.iter().next().unwrap().clone();
-        let field = schema.field_with_name(column.as_str())?;
+        let column_name = cols.iter().next().unwrap().clone();
+        let (index, field) = schema
+            .column_with_name(column_name.as_str())
+            .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
+        let column_id = index as ColumnId;
 
         Ok(Self {
             args,
-            op: operator,
+            op,
             field,
-            column,
+            column_name,
+            column_id,
             monotonic,
             stat_columns,
         })
     }
 
     fn build(&mut self) -> Result<Expression> {
+        // TODO: support like/not like/in/not in.
         match self.op {
             "isnull" => {
                 let nulls_expr = self.nulls_column_expr()?;
@@ -359,17 +396,22 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 
     fn stat_column_expr(&mut self, stat_type: StatType) -> Result<Expression> {
-        let stat_col = StatColumn::new(self.column.clone(), stat_type, self.field);
+        let stat_col = StatColumn::new(
+            self.column_name.clone(),
+            self.column_id,
+            stat_type,
+            self.field,
+        );
         if !self
             .stat_columns
             .iter()
-            .any(|c| c.column_name.eq(&self.column) && c.stat_type == stat_type)
+            .any(|c| c.column_id == self.column_id && c.stat_type == stat_type)
         {
             self.stat_columns.push(stat_col.clone());
         }
         RewriteHelper::rewrite_column_expr(
             &self.args[0],
-            stat_col.column_name.as_str(),
+            self.column_name.as_str(),
             stat_col.stat_field.name(),
         )
     }
