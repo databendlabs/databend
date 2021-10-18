@@ -102,7 +102,6 @@ impl MetaApiSync for MetaEmbeddedSync {
             // TODO(xp): just let it pass. This file will be removed as soon as common/kv provides full meta-APIs.
             database_id: 0,
             db: db_name.to_string(),
-            engine: plan.engine.clone(),
         };
 
         db.insert(

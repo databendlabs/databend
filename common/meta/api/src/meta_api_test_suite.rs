@@ -37,7 +37,6 @@ impl MetaApiTestSuite {
             let plan = CreateDatabasePlan {
                 if_not_exists: false,
                 db: "db1".to_string(),
-                engine: "Local".to_string(),
                 options: Default::default(),
             };
 
@@ -52,7 +51,6 @@ impl MetaApiTestSuite {
             let plan = CreateDatabasePlan {
                 if_not_exists: false,
                 db: "db1".to_string(),
-                engine: "another-engine".to_string(),
                 options: Default::default(),
             };
 
@@ -67,7 +65,6 @@ impl MetaApiTestSuite {
             let plan = CreateDatabasePlan {
                 if_not_exists: false,
                 db: "db1".to_string(),
-                engine: "another-engine".to_string(),
                 options: Default::default(),
             };
 
@@ -84,7 +81,6 @@ impl MetaApiTestSuite {
             let res = res?;
             assert_eq!(1, res.database_id, "db1 id is 1");
             assert_eq!("db1".to_string(), res.db, "db1.db is db1");
-            assert_eq!("Local".to_string(), res.engine,);
         }
 
         tracing::info!("--- create db2");
@@ -92,7 +88,6 @@ impl MetaApiTestSuite {
             let plan = CreateDatabasePlan {
                 if_not_exists: false,
                 db: "db2".to_string(),
-                engine: "engine2".to_string(),
                 options: Default::default(),
             };
 
@@ -109,7 +104,6 @@ impl MetaApiTestSuite {
         {
             let res = mt.get_database("db2").await?;
             assert_eq!("db2".to_string(), res.db, "db1.db is db1");
-            assert_eq!("engine2".to_string(), res.engine,);
         }
 
         tracing::info!("--- get absent db");
@@ -179,7 +173,6 @@ impl MetaApiTestSuite {
             let plan = CreateDatabasePlan {
                 if_not_exists: false,
                 db: db_name.to_string(),
-                engine: "Local".to_string(),
                 options: Default::default(),
             };
 
@@ -391,7 +384,6 @@ impl MetaApiTestSuite {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: "Local".to_string(),
             options: Default::default(),
         };
 

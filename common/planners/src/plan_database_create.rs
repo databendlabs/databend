@@ -24,7 +24,6 @@ pub type DatabaseOptions = HashMap<String, String>;
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub db: String,
-    pub engine: String,
     pub options: DatabaseOptions,
 }
 

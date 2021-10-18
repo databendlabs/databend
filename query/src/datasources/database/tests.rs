@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
 use pretty_assertions::assert_eq;
@@ -41,7 +40,6 @@ async fn test_datasource() -> Result<()> {
         catalog.create_database(CreateDatabasePlan {
             if_not_exists: false,
             db: "test_db".to_string(),
-            engine: "default".to_string(),
             options: Default::default(),
         })?;
 
@@ -59,24 +57,6 @@ async fn test_datasource() -> Result<()> {
         let result = catalog.get_database("test_db");
         assert!(result.is_err());
     }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_datasource_invalid_db_engine() -> Result<()> {
-    let catalog = try_create_catalog()?;
-
-    // Create database.
-    let r = catalog.create_database(CreateDatabasePlan {
-        if_not_exists: false,
-        db: "test_db".to_string(),
-        engine: "Local".to_string(),
-        options: Default::default(),
-    });
-    assert!(r.is_err());
-    let err = r.unwrap_err();
-    assert_eq!(err.code(), ErrorCode::UnknownDatabaseEngine("").code());
 
     Ok(())
 }

@@ -16,7 +16,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::CreateDatabaseReply;
@@ -31,17 +30,17 @@ use crate::catalogs::backends::MetaEmbeddedSync;
 use crate::catalogs::backends::MetaRemoteSync;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
+use crate::catalogs::DatabaseEngine;
 use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
-use crate::datasources::database::prelude::register_prelude_db_engines;
-use crate::datasources::database_engine::DatabaseEngine;
-use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
+use crate::datasources::database::default::default_database::DefaultDatabase;
+use crate::datasources::database::default::default_database_factory::DefaultDatabaseFactory;
 use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
-pub const DEFAULT_DB_ENGINE: &str = "Default";
+pub const DEFAULT_DB_ENGINE: &str = "DEFAULT";
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -49,7 +48,10 @@ pub const DEFAULT_DB_ENGINE: &str = "Default";
 /// - Instances of `Database` are created by using database factories according to the engine
 /// - Database engines are free to save table meta in metastore or not
 pub struct MetaStoreCatalog {
-    db_engine_registry: Arc<DatabaseEngineRegistry>,
+    db_engine: Arc<dyn DatabaseEngine>,
+
+    table_engine_registry: Arc<TableEngineRegistry>,
+
     meta: Arc<dyn MetaApiSync>,
 
     // this is not for performance:
@@ -72,19 +74,22 @@ impl MetaStoreCatalog {
         let plan = CreateDatabasePlan {
             if_not_exists: true,
             db: "default".to_string(),
-            engine: DEFAULT_DB_ENGINE.to_string(),
             options: Default::default(),
         };
         meta.create_database(plan)?;
 
-        let db_engine_registry = Arc::new(DatabaseEngineRegistry::new());
         let table_engine_registry = Arc::new(TableEngineRegistry::new());
 
         register_prelude_tbl_engines(&table_engine_registry)?;
-        register_prelude_db_engines(&db_engine_registry, meta.clone(), table_engine_registry)?;
+
+        let db_engine = Arc::new(DefaultDatabaseFactory::new(
+            meta.clone(),
+            table_engine_registry.clone(),
+        ));
 
         let cat = MetaStoreCatalog {
-            db_engine_registry,
+            db_engine,
+            table_engine_registry,
             meta,
             db_instances: RwLock::new(HashMap::new()),
         };
@@ -92,45 +97,22 @@ impl MetaStoreCatalog {
         Ok(cat)
     }
 
-    // Get all the engines name.
-    #[allow(dead_code)]
-    pub fn engines(&self) -> Vec<String> {
-        todo!()
-    }
-
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let engine = if db_info.engine.is_empty() {
-            "default" // TODO user default table constant
-        } else {
-            &db_info.engine
-        };
+        let db = DefaultDatabase::new(
+            &db_info.db,
+            self.meta.clone(),
+            self.table_engine_registry.clone(),
+        );
 
-        let provider = self
-            .db_engine_registry
-            .engine_provider(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownDatabaseEngine(format!(
-                    "unknown database engine [{}]",
-                    db_info.engine
-                ))
-            })?;
+        let db = Arc::new(db);
 
         let name = db_info.db.clone();
-        let db = provider.create(db_info)?;
         self.db_instances.write().insert(name, db.clone());
         Ok(db)
     }
 }
 
 impl Catalog for MetaStoreCatalog {
-    fn register_db_engine(
-        &self,
-        engine_type: &str,
-        backend: Arc<dyn DatabaseEngine>,
-    ) -> Result<()> {
-        self.db_engine_registry.register(engine_type, backend)
-    }
-
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self.meta.get_databases()?;
         dbs.iter().try_fold(vec![], |mut acc, item| {
@@ -167,16 +149,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        if self.db_engine_registry.contains(&plan.engine) {
-            // TODO check if plan is valid (add validate method to database_factory)
-            self.meta.create_database(plan)
-        } else {
-            Err(ErrorCode::UnknownDatabaseEngine(format!(
-                "unknown database engine {}, supported database engines: {}",
-                plan.engine,
-                self.db_engine_registry.engine_names().join(",")
-            )))
-        }
+        self.meta.create_database(plan)
     }
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
@@ -187,7 +160,10 @@ impl Catalog for MetaStoreCatalog {
     }
 
     fn get_db_engines(&self) -> Result<Vec<EngineDescription>> {
-        let descriptions = self.db_engine_registry.descriptions();
-        Ok(descriptions)
+        let x = vec![EngineDescription {
+            name: DEFAULT_DB_ENGINE.to_string(),
+            desc: self.db_engine.description(),
+        }];
+        Ok(x)
     }
 }

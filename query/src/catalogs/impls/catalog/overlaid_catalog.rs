@@ -27,7 +27,6 @@ use crate::catalogs::Catalog;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
-use crate::datasources::database_engine::DatabaseEngine;
 use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::datasources::table_func_engine::TableFuncEngine;
@@ -61,14 +60,6 @@ impl OverlaidCatalog {
 }
 
 impl Catalog for OverlaidCatalog {
-    fn register_db_engine(
-        &self,
-        engine_type: &str,
-        database_engine: Arc<dyn DatabaseEngine>,
-    ) -> common_exception::Result<()> {
-        self.bottom.register_db_engine(engine_type, database_engine)
-    }
-
     fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.read_only.get_databases()?;
         let mut other = self.bottom.get_databases()?;
