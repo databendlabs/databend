@@ -152,3 +152,18 @@ select toDayOfWeek(toDate(18902));
 select toDayOfWeek(toDateTime(1633173324))  =  6;
 select toDayOfWeek(toDate(18902))  =  6;
 select '===toDayOfWeek===';
+
+select '===toHour===';
+select toHour(toDateTime(1634551542));
+select toHour(toDateTime(1634551542))  =  10;
+select '===toHour===';
+
+select '===toMinute===';
+select toMinute(toDateTime(1634551542));
+select toMinute(toDateTime(1634551542))  =  5;
+select '===toMinute===';
+
+select '===toSecond===';
+select toSecond(toDateTime(1634551542));
+select toSecond(toDateTime(1634551542))  =  42;
+select '===toSecond===';

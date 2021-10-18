@@ -22,7 +22,10 @@ use super::RoundFunction;
 use super::ToDayOfMonthFunction;
 use super::ToDayOfWeekFunction;
 use super::ToDayOfYearFunction;
+use super::ToHourFunction;
+use super::ToMinuteFunction;
 use super::ToMonthFunction;
+use super::ToSecondFunction;
 use super::ToStartOfISOYearFunction;
 use super::ToStartOfMonthFunction;
 use super::ToStartOfQuarterFunction;
@@ -115,6 +118,9 @@ impl DateFunction {
         factory.register("toDayOfYear", ToDayOfYearFunction::desc());
         factory.register("toDayOfMonth", ToDayOfMonthFunction::desc());
         factory.register("toDayOfWeek", ToDayOfWeekFunction::desc());
+        factory.register("toHour", ToHourFunction::desc());
+        factory.register("toMinute", ToMinuteFunction::desc());
+        factory.register("toSecond", ToSecondFunction::desc());
 
         // rounders
         factory.register("toStartOfSecond", Self::round_function_creator(1));
