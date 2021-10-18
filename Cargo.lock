@@ -115,7 +115,7 @@ dependencies = [
  "multiversion",
  "num-traits",
  "packed_simd_2",
- "parquet2",
+ "parquet2 0.5.2",
  "regex",
  "serde",
  "serde_json",
@@ -1024,7 +1024,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-flight",
  "arrow2",
- "parquet2",
+ "parquet2 0.6.0",
 ]
 
 [[package]]
@@ -2273,6 +2273,12 @@ name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "fastrand"
@@ -4272,9 +4278,22 @@ dependencies = [
  "async-stream",
  "bitpacking",
  "futures",
- "lz4",
  "parquet-format-async-temp",
  "streaming-iterator",
+]
+
+[[package]]
+name = "parquet2"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db82df54cdd88931d29b850190915b9069bb93fba8e1aefc0d59d8ca81603d6d"
+dependencies = [
+ "async-stream",
+ "bitpacking",
+ "futures",
+ "lz4",
+ "parquet-format-async-temp",
+ "streaming-decompression",
 ]
 
 [[package]]
@@ -5684,6 +5703,15 @@ name = "str_stack"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
+
+[[package]]
+name = "streaming-decompression"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bc687acd5dc742c4a7094f2927a8614a68e4743ef682e7a2f9f0f711656cc92"
+dependencies = [
+ "fallible-streaming-iterator",
+]
 
 [[package]]
 name = "streaming-iterator"
