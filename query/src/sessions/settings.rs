@@ -19,8 +19,8 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-
-#[derive(Debug)]
+use common_mem_derive::*;
+#[derive(Debug, MallocSizeOf)]
 pub struct Settings {
     inner: SettingsBase,
 }
@@ -53,7 +53,7 @@ impl Settings {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, MallocSizeOf)]
 pub struct SettingsBase {
     // DataValue is of DataValue::Struct([name, value, default_value, description])
     settings: Arc<RwLock<HashMap<&'static str, DataValue>>>,

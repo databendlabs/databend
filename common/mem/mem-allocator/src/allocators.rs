@@ -17,8 +17,8 @@ use crate::malloc_size::MallocUnconditionalSizeOf;
 #[global_allocator]
 static ALLOC: Allocator = Allocator;
 
-pub use jemalloc_sys;
 pub use platform::*;
+pub use tikv_jemalloc_sys;
 
 mod platform {
     use std::alloc::GlobalAlloc;
@@ -26,7 +26,7 @@ mod platform {
     use std::os::raw::c_int;
     use std::os::raw::c_void;
 
-    use jemalloc_sys as ffi;
+    use tikv_jemalloc_sys as ffi;
 
     use crate::malloc_size::VoidPtrToSizeFn;
 

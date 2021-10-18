@@ -1152,6 +1152,8 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-io",
+ "common-mem-allocator",
+ "common-mem-derive",
  "lexical-core 0.8.2",
  "num",
  "ordered-float 2.8.0",
@@ -1255,13 +1257,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-mem"
+name = "common-mem-allocator"
 version = "0.1.0"
 dependencies = [
  "common-infallible",
  "common-mem-derive",
- "jemalloc-sys",
  "parking_lot",
+ "tikv-jemalloc-sys",
 ]
 
 [[package]]
@@ -1936,6 +1938,8 @@ dependencies = [
  "common-infallible",
  "common-io",
  "common-management",
+ "common-mem-allocator",
+ "common-mem-derive",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-flight",
@@ -3180,17 +3184,6 @@ name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
-
-[[package]]
-name = "jemalloc-sys"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d3b9f3f5c9b31aa0f5ed3260385ac205db665baa41d49bb8338008ae94ede45"
-dependencies = [
- "cc",
- "fs_extra",
- "libc",
-]
 
 [[package]]
 name = "jobserver"
@@ -6062,6 +6055,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "tikv-jemalloc-sys"
+version = "0.4.2+5.2.1-patched.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5844e429d797c62945a566f8da4e24c7fe3fbd5d6617fd8bf7a0b7dc1ee0f22e"
+dependencies = [
+ "cc",
+ "fs_extra",
+ "libc",
 ]
 
 [[package]]

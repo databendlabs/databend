@@ -1,7 +1,7 @@
 // Copyright 2016-2017 The Servo Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
-//
+//。
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
@@ -102,9 +102,10 @@ impl MallocSizeOfOps {
         // larger than the required alignment, but small enough that it is
         // always in the first page of memory and therefore not a legitimate
         // address.
-        return ptr as *const usize as usize <= 256;
+        ptr as *const usize as usize <= 256
     }
 
+    /// # Safety
     /// Call `size_of_op` on `ptr`, first checking that the allocation isn't
     /// empty, because some types (such as `Vec`) utilize empty allocations.
     pub unsafe fn malloc_size_of<T: ?Sized>(&self, ptr: *const T) -> usize {
@@ -120,6 +121,7 @@ impl MallocSizeOfOps {
         self.enclosing_size_of_op.is_some()
     }
 
+    /// # Safety
     /// Call `enclosing_size_of_op`, which must be available, on `ptr`, which
     /// must not be empty.
     pub unsafe fn malloc_enclosing_size_of<T>(&self, ptr: *const T) -> usize {

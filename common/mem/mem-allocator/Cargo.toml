@@ -1,12 +1,12 @@
 [package]
-name = "common-mem"
+name = "common-mem-allocator"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jemalloc-sys = { version = "0.3.2" }
-common-infallible = { path = "../infallible" }
+tikv-jemalloc-sys = "0.4.2+5.2.1-patched.2"
+common-infallible = { path = "../../infallible" }
 parking_lot = "0.11"
 common-mem-derive = { path = "../mem-derive" }

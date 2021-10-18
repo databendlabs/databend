@@ -9,6 +9,7 @@
 // except according to those terms.
 
 //! A crate for deriving the MallocSizeOf trait.
+//! this is only used for databend
 
 extern crate proc_macro2;
 #[macro_use]
@@ -23,25 +24,28 @@ fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenStream
         let mut ignore = false;
         let mut conditional = false;
         for attr in binding.ast().attrs.iter() {
-            match attr.parse_meta().unwrap() {
-                syn::Meta::Path(ref path) | syn::Meta::List(syn::MetaList { ref path, .. }) => {
-                    assert!(
-                        !path.is_ident("ignore_malloc_size_of"),
-                        "#[ignore_malloc_size_of] should have an explanation, \
-                         e.g. #[ignore_malloc_size_of = \"because reasons\"]"
-                    );
-                    if path.is_ident("conditional_malloc_size_of") {
-                        conditional = true;
+            match attr.parse_meta() {
+                Err(_) => {}
+                Ok(meta) => match meta {
+                    syn::Meta::Path(ref path) | syn::Meta::List(syn::MetaList { ref path, .. }) => {
+                        assert!(
+                            !path.is_ident("ignore_malloc_size_of"),
+                            "#[ignore_malloc_size_of] should have an explanation, \
+                             e.g. #[ignore_malloc_size_of = \"because reasons\"]"
+                        );
+                        if path.is_ident("conditional_malloc_size_of") {
+                            conditional = true;
+                        }
                     }
-                }
-                syn::Meta::NameValue(syn::MetaNameValue { ref path, .. }) => {
-                    if path.is_ident("ignore_malloc_size_of") {
-                        ignore = true;
+                    syn::Meta::NameValue(syn::MetaNameValue { ref path, .. }) => {
+                        if path.is_ident("ignore_malloc_size_of") {
+                            ignore = true;
+                        }
+                        if path.is_ident("conditional_malloc_size_of") {
+                            conditional = true;
+                        }
                     }
-                    if path.is_ident("conditional_malloc_size_of") {
-                        conditional = true;
-                    }
-                }
+                },
             }
         }
 
@@ -55,9 +59,9 @@ fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenStream
         }
 
         let path = if conditional {
-            quote! { common_mem::MallocConditionalSizeOf::conditional_size_of }
+            quote! { common_mem_allocator::MallocConditionalSizeOf::conditional_size_of }
         } else {
-            quote! { common_mem::MallocSizeOf::size_of }
+            quote! { common_mem_allocator::MallocSizeOf::size_of }
         };
 
         if let syn::Type::Array(..) = binding.ast().ty {
@@ -81,14 +85,14 @@ fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenStream
         let ident = &param.ident;
         where_clause
             .predicates
-            .push(parse_quote!(#ident: common_mem::MallocSizeOf));
+            .push(parse_quote!(#ident: common_mem_allocator::MallocSizeOf));
     }
 
     let tokens = quote! {
-        impl #impl_generics common_mem::MallocSizeOf for #name #ty_generics #where_clause {
+        impl #impl_generics common_mem_allocator::MallocSizeOf for #name #ty_generics #where_clause {
             #[inline]
             #[allow(unused_variables, unused_mut, unreachable_code)]
-            fn size_of(&self, ops: &mut common_mem::MallocSizeOfOps) -> usize {
+            fn size_of(&self, ops: &mut common_mem_allocator::MallocSizeOfOps) -> usize {
                 let mut sum = 0;
                 match *self {
                     #match_body
