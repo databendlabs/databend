@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::ops::Deref;
-use std::sync::atomic::Ordering;
-use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use crate::sessions::Session;
@@ -27,7 +25,6 @@ pub struct SessionRef {
 
 impl SessionRef {
     pub fn create(session: Arc<Session>) -> SessionRef {
-        session.increment_ref_count();
         SessionRef { session }
     }
 }
@@ -53,15 +50,10 @@ impl Drop for SessionRef {
 }
 
 impl Session {
-    pub fn destroy_session_ref(self: &Arc<Self>) {
-        if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
-            std::sync::atomic::fence(Acquire);
+    fn destroy_session_ref(self: &Arc<Self>) {
+        if Arc::strong_count(&self.sessions) == 2 {
             log::debug!("Destroy session {}", self.id);
             self.sessions.destroy_session(&self.id);
         }
-    }
-
-    pub fn increment_ref_count(self: &Arc<Self>) {
-        self.ref_count.fetch_add(1, Ordering::Relaxed);
     }
 }

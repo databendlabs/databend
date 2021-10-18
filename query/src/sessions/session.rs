@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -45,7 +44,6 @@ pub struct Session {
     pub(in crate::sessions) typ: String,
     pub(in crate::sessions) config: Config,
     pub(in crate::sessions) sessions: SessionManagerRef,
-    pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) mutable_state: Arc<Mutex<MutableStatus>>,
 }
 
@@ -61,7 +59,6 @@ impl Session {
             typ,
             config,
             sessions,
-            ref_count: Arc::new(AtomicUsize::new(0)),
             mutable_state: Arc::new(Mutex::new(MutableStatus {
                 abort: false,
                 current_database: String::from("default"),
