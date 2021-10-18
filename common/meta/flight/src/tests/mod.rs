@@ -12,23 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod flight_client_test;
+mod flight_server;
 
-mod flight_client;
-#[macro_use]
-mod flight_action;
-mod flight_client_conf;
-pub(crate) mod tests;
-
-pub mod impls;
-
-pub use flight_action::*;
-pub use flight_client::MetaFlightClient;
-pub use flight_client_conf::MetaFlightClientConf;
-
-// ProtoBuf generated files.
-#[allow(clippy::all)]
-pub mod protobuf {
-    tonic::include_proto!("metaflight");
-}
+pub use flight_server::start_flight_server;
