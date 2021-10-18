@@ -13,15 +13,28 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
-use common_base::tokio;
-use common_base::tokio::sync::mpsc::Receiver;
+#[cfg(not(target_os = "windows"))]
+use common_base::tokio::signal::unix::signal;
+#[cfg(not(target_os = "windows"))]
+use common_base::tokio::signal::unix::Signal;
+#[cfg(not(target_os = "windows"))]
+use common_base::tokio::signal::unix::SignalKind;
+#[cfg(target_os = "windows")]
+use common_base::tokio::signal::windows::ctrl_c;
+#[cfg(target_os = "windows")]
+use common_base::tokio::signal::windows::CtrlC;
 use common_exception::Result;
 use futures::stream::Abortable;
 use futures::Future;
+use futures::Stream;
+use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::sessions::SessionManagerRef;
@@ -50,7 +63,7 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn shutdown(&mut self, signal: Option<Receiver<()>>) -> impl Future<Output = ()> + '_ {
+    pub fn shutdown(&mut self, signal: Option<SignalStream>) -> impl Future<Output = ()> + '_ {
         let mut shutdown_jobs = vec![];
         for service in &mut self.services {
             shutdown_jobs.push(service.shutdown());
@@ -67,34 +80,26 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn wait_for_termination_request(&mut self) -> impl Future<Output = ()> + '_ {
-        let mut receiver = Self::register_termination_handle();
-        async move {
-            receiver.recv().await;
-
-            log::info!("Received termination signal.");
-            log::info!("You can press Ctrl + C again to force shutdown.");
-            if let Ok(false) =
-                self.shutdown
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
-            {
-                let shutdown_services = self.shutdown(Some(receiver));
-                shutdown_services.await;
-            }
-        }
-    }
-
-    pub fn register_termination_handle() -> Receiver<()> {
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        ctrlc::set_handler(move || {
-            if let Err(error) = tx.blocking_send(()) {
-                log::error!("Could not send signal on channel {}", error);
+    pub async fn wait_for_termination_request(&mut self) {
+        match ShutdownSignalStream::create() {
+            Err(cause) => {
+                log::error!("Cannot set shutdown signal handler, {:?}", cause);
                 std::process::exit(1);
             }
-        })
-        .expect("Error setting Ctrl-C handler");
+            Ok(mut stream) => {
+                stream.next().await;
 
-        rx
+                log::info!("Received termination signal.");
+                log::info!("You can press Ctrl + C again to force shutdown.");
+                if let Ok(false) =
+                    self.shutdown
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+                {
+                    let shutdown_services = self.shutdown(Some(stream));
+                    shutdown_services.await;
+                }
+            }
+        }
     }
 
     pub fn add_service(&mut self, service: Box<dyn Server>) {
@@ -112,3 +117,66 @@ impl Drop for ShutdownHandle {
         }
     }
 }
+
+#[cfg(not(target_os = "windows"))]
+struct ShutdownSignalStream {
+    hangup_signal: Signal,
+    sigint_signal: Signal,
+    sigterm_signal: Signal,
+}
+
+#[cfg(target_os = "windows")]
+struct ShutdownSignalStream {
+    ctrl_c: CtrlC,
+}
+
+#[cfg(not(target_os = "windows"))]
+impl ShutdownSignalStream {
+    pub fn create() -> Result<SignalStream> {
+        Ok(Box::pin(ShutdownSignalStream {
+            hangup_signal: signal(SignalKind::hangup())?,
+            sigint_signal: signal(SignalKind::interrupt())?,
+            sigterm_signal: signal(SignalKind::terminate())?,
+        }))
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl ShutdownSignalStream {
+    pub fn create() -> Result<SignalStream> {
+        Ok(Box::pin(ShutdownSignalStream { ctrl_c: ctrl_c()? }))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+impl Stream for ShutdownSignalStream {
+    type Item = ();
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut_self = self.get_mut();
+        if let Poll::Ready(res) = mut_self.hangup_signal.poll_recv(cx) {
+            return Poll::Ready(res);
+        }
+
+        if let Poll::Ready(res) = mut_self.sigint_signal.poll_recv(cx) {
+            return Poll::Ready(res);
+        }
+
+        if let Poll::Ready(res) = mut_self.sigterm_signal.poll_recv(cx) {
+            return Poll::Ready(res);
+        }
+
+        Poll::Pending
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Stream for ShutdownSignalStream {
+    type Item = ();
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.get_mut().ctrl_c.poll_recv(cx)
+    }
+}
+
+type SignalStream = Pin<Box<dyn Stream<Item = ()>>>;

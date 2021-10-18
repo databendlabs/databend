@@ -31,6 +31,7 @@ pub const CLI_QUERY_CLIENT: &str = "CLI_QUERY_CLIENT";
 
 #[derive(Clone)]
 pub struct QueryCommand {
+    #[allow(dead_code)]
     conf: Config,
     clap: App<'static>,
 }

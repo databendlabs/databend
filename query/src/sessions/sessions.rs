@@ -16,15 +16,17 @@ use std::collections::hash_map::Entry::Occupied;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
-use common_base::tokio::sync::mpsc::Receiver;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use futures::future::Either;
+use futures::Stream;
+use futures::StreamExt;
 use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
@@ -147,12 +149,12 @@ impl SessionManager {
         self.active_sessions.write().remove(session_id);
     }
 
-    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output = ()> {
+    pub fn shutdown(self: &Arc<Self>, signal: Option<SignalStream>) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             log::info!("Waiting for current connections to close.");
             if let Some(mut signal) = signal {
-                let mut signal = Box::pin(signal.recv());
+                let mut signal = Box::pin(signal.next());
 
                 for _index in 0..5 {
                     if SessionManager::destroy_idle_sessions(&active_sessions) {
@@ -194,3 +196,5 @@ impl SessionManager {
         }
     }
 }
+
+type SignalStream = Pin<Box<dyn Stream<Item = ()>>>;
