@@ -86,10 +86,6 @@ impl Table for MemoryTable {
         self
     }
 
-    fn is_stateful(&self) -> bool {
-        true
-    }
-
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }

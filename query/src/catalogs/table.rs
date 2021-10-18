@@ -57,12 +57,6 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
-    // Some tables may have internal states, like MemoryTable
-    // their instances will be kept, instead of dropped after used
-    fn is_stateful(&self) -> bool {
-        false
-    }
-
     // defaults to generate one single part and empty statistics
     fn read_partitions(
         &self,
