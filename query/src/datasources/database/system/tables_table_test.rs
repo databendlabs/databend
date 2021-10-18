@@ -48,7 +48,6 @@ async fn test_tables_table() -> Result<()> {
         "| system   | contributors | SystemContributors |",
         "| system   | credits      | SystemCredits      |",
         "| system   | databases    | SystemDatabases    |",
-        "| system   | engines      | SystemEngines      |",
         "| system   | functions    | SystemFunctions    |",
         "| system   | one          | SystemOne          |",
         "| system   | processes    | SystemProcesses    |",

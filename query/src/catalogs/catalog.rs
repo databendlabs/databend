@@ -24,7 +24,6 @@ use common_planners::DropDatabasePlan;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
-use crate::datasources::database_engine_registry::EngineDescription;
 use crate::datasources::table_func_engine::TableArgs;
 
 /// Catalog is the global view of all the databases of the user.
@@ -61,7 +60,4 @@ pub trait Catalog {
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
 
     fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
-
-    // Get all db engines.
-    fn get_db_engines(&self) -> Result<Vec<EngineDescription>>;
 }

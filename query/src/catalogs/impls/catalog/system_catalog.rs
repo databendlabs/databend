@@ -29,7 +29,6 @@ use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::datasources::database::system::SystemDatabase;
-use crate::datasources::database_engine_registry::EngineDescription;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
@@ -94,14 +93,5 @@ impl Catalog for SystemCatalog {
 
     fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
-    }
-
-    fn get_db_engines(&self) -> Result<Vec<EngineDescription>> {
-        // system catalog is special treated, no implicit database engine provided for it.
-        let desc = EngineDescription {
-            name: "SYSTEM".to_owned(),
-            desc: "The system engine is used by tables in the system database, which store Databend information.".to_owned()
-        };
-        Ok(vec![desc])
     }
 }

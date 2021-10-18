@@ -56,7 +56,6 @@ impl SystemDatabase {
             Arc::new(system::FunctionsTable::create(next_id())),
             Arc::new(system::ContributorsTable::create(next_id())),
             Arc::new(system::CreditsTable::create(next_id())),
-            Arc::new(system::EnginesTable::create(next_id())),
             Arc::new(system::SettingsTable::create(next_id())),
             Arc::new(system::TablesTable::create(next_id())),
             Arc::new(system::ClustersTable::create(next_id())),

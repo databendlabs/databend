@@ -22,8 +22,6 @@ pub use table::ToReadDataSourcePlan;
 pub use table_function::TableFunction;
 pub use table_id_ranges::*;
 
-pub use crate::datasources::database_engine::DatabaseEngine;
-
 mod catalog;
 mod database;
 mod table;
