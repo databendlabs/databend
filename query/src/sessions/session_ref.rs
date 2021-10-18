@@ -51,7 +51,7 @@ impl Drop for SessionRef {
 }
 
 impl Session {
-    pub fn destroy_session_ref(self: &Arc<Self>) {
+    fn destroy_session_ref(self: &Arc<Self>) {
         if Arc::strong_count(&self.sessions) == 1 {
             log::debug!("Destroy session {}", self.id);
             self.sessions.destroy_session(&self.id);
