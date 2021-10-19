@@ -267,7 +267,12 @@ impl Command for QueryCommand {
     }
 
     fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
+        let words = shellwords::split(args.as_str());
+        if words.is_err() {
+            writer.write_err("cannot parse words");
+            return Ok(());
+        }
+        match self.clap.clone().try_get_matches_from(words.unwrap()) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow()));
             }
