@@ -25,8 +25,12 @@ use common_planners::DropDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
+use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
+use crate::catalogs::SYS_TBL_ID_BEGIN;
+use crate::catalogs::SYS_TBL_ID_END;
 use crate::configs::Config;
+use crate::datasources::database::system;
 use crate::datasources::database::system::SystemDatabase;
 
 /// System Catalog contains ... all the system databases (no surprise :)
@@ -34,12 +38,49 @@ use crate::datasources::database::system::SystemDatabase;
 /// "information_schema" db is supposed to held here
 pub struct SystemCatalog {
     sys_db: Arc<SystemDatabase>,
+    sys_db_meta: Arc<InMemoryMetas>,
 }
 
 impl SystemCatalog {
     pub fn try_create_with_config(_conf: &Config) -> Result<Self> {
-        let sys_db = Arc::new(SystemDatabase::create("system"));
-        Ok(Self { sys_db })
+        let mut id = SYS_TBL_ID_BEGIN;
+        let mut next_id = || -> u64 {
+            // 10000 table ids reserved for system tables
+            if id >= SYS_TBL_ID_END {
+                // Fatal error, gives up
+                panic!("system table id used up")
+            } else {
+                let r = id;
+                id += 1;
+                r
+            }
+        };
+
+        let table_list: Vec<Arc<dyn Table>> = vec![
+            Arc::new(system::OneTable::create(next_id())),
+            Arc::new(system::FunctionsTable::create(next_id())),
+            Arc::new(system::ContributorsTable::create(next_id())),
+            Arc::new(system::CreditsTable::create(next_id())),
+            Arc::new(system::SettingsTable::create(next_id())),
+            Arc::new(system::TablesTable::create(next_id())),
+            Arc::new(system::ClustersTable::create(next_id())),
+            Arc::new(system::DatabasesTable::create(next_id())),
+            Arc::new(system::TracingTable::create(next_id())),
+            Arc::new(system::ProcessesTable::create(next_id())),
+            Arc::new(system::ConfigsTable::create(next_id())),
+        ];
+
+        let mut tables = InMemoryMetas::create();
+        for tbl in table_list.into_iter() {
+            tables.insert(tbl);
+        }
+
+        let tables = Arc::new(tables);
+        let sys_db = Arc::new(SystemDatabase::create("system", tables.clone()));
+        Ok(Self {
+            sys_db,
+            sys_db_meta: tables,
+        })
     }
 }
 
@@ -59,16 +100,28 @@ impl Catalog for SystemCatalog {
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        let db = self.get_database(db_name)?;
-        db.get_table(table_name)
+        // ensure db exists
+        let _db = self.get_database(db_name)?;
+
+        let table = self
+            .sys_db_meta
+            .name_to_table
+            .get(table_name)
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
+
+        Ok(table.clone())
     }
 
     fn get_table_by_id(
         &self,
         table_id: MetaId,
-        table_version: Option<MetaVersion>,
+        _table_version: Option<MetaVersion>,
     ) -> Result<Arc<dyn Table>> {
-        self.sys_db.get_table_by_id(table_id, table_version)
+        let table =
+            self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {
+                ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
+            })?;
+        Ok(table.clone())
     }
 
     fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
