@@ -16,16 +16,15 @@ use std::collections::hash_map::Entry::Occupied;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
+use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use futures::future::Either;
-use futures::Stream;
 use futures::StreamExt;
 use metrics::counter;
 
@@ -196,5 +195,3 @@ impl SessionManager {
         }
     }
 }
-
-type SignalStream = Pin<Box<dyn Stream<Item = ()>>>;
