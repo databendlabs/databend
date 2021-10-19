@@ -98,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Metric API service.
     {
         let address = conf.query.metric_api_address.clone();
-        let mut srv = MetricService::create();
+        let mut srv = MetricService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Metric API server listening on {}", listening);
