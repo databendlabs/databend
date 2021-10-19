@@ -19,8 +19,6 @@ use common_context::TableDataContext;
 use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
-use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
@@ -80,22 +78,6 @@ impl DefaultDatabase {
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
         &self.db_name
-    }
-
-    fn get_table(&self, table_name: &str) -> common_exception::Result<Arc<dyn Table>> {
-        let db_name = self.name();
-        let table_info = self.meta.get_table(db_name, table_name)?;
-        self.build_table_instance(table_info.as_ref())
-    }
-
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
-    ) -> common_exception::Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table_by_id(table_id, table_version)?;
-
-        self.build_table_instance(table_info.as_ref())
     }
 
     fn get_tables(&self) -> common_exception::Result<Vec<Arc<dyn Table>>> {

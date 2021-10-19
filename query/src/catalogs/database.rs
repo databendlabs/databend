@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
@@ -25,16 +23,6 @@ use crate::catalogs::Table;
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
-
-    /// Get the table by name.
-    fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>>;
-
-    /// Get table by meta id
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
-    ) -> Result<Arc<dyn Table>>;
 
     /// Get all tables.
     fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>>;

@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
@@ -40,18 +38,6 @@ impl SystemDatabase {
 impl Database for SystemDatabase {
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
-        unimplemented!();
-    }
-
-    fn get_table_by_id(
-        &self,
-        _table_id: MetaId,
-        _table_version: Option<MetaVersion>,
-    ) -> Result<Arc<dyn Table>> {
-        unimplemented!();
     }
 
     fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
