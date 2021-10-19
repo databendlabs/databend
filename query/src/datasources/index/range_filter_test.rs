@@ -17,8 +17,7 @@ use std::collections::HashMap;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::col;
-use common_planners::lit;
+use common_planners::*;
 
 use crate::datasources::index::RangeFilter;
 use crate::datasources::table::fuse::util::BlockStats;
@@ -35,7 +34,7 @@ fn test_range_filter() -> Result<()> {
     stats.insert(0u32, ColStats {
         min: DataValue::Int32(Some(1)),
         max: DataValue::Int32(Some(20)),
-        null_count: 0,
+        null_count: 1,
     });
     stats.insert(1u32, ColStats {
         min: DataValue::Int32(Some(3)),
@@ -43,10 +42,56 @@ fn test_range_filter() -> Result<()> {
         null_count: 0,
     });
 
-    let expr = col("a").lt(lit(1)).and(col("b").gt(lit(3)));
-    let prune = RangeFilter::try_create(&expr, schema.clone())?;
-    let res = prune.eval(&stats)?;
-    assert_eq!(false, res);
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        expr: Expression,
+        expect: bool,
+    }
+
+    let tests: Vec<Test> = vec![
+        Test {
+            name: "a < 1 and b > 3",
+            expr: col("a").lt(lit(1)).and(col("b").gt(lit(3))),
+            expect: false,
+        },
+        Test {
+            name: "1 > -a or 3 >= b",
+            expr: lit(1).gt(neg(col("a"))).or(lit(3).gt_eq(col("b"))),
+            expect: true,
+        },
+        Test {
+            name: "a = 1 and b != 3",
+            expr: col("a").eq(lit(1)).and(col("b").not_eq(lit(3))),
+            expect: true,
+        },
+        Test {
+            name: "a is null",
+            expr: Expression::create_scalar_function("isNull", vec![col("a")]),
+            expect: true,
+        },
+        Test {
+            name: "a is not null",
+            expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
+            expect: true,
+        },
+        Test {
+            name: "b >= 0 and c like '%sys%'",
+            expr: col("b")
+                .gt_eq(lit(0))
+                .and(Expression::create_binary_expression("like", vec![
+                    col("c"),
+                    lit("%sys%".as_bytes()),
+                ])),
+            expect: true,
+        },
+    ];
+
+    for test in tests {
+        let prune = RangeFilter::try_create(&test.expr, schema.clone())?;
+        let actual = prune.eval(&stats)?;
+        assert_eq!(test.expect, actual, "{:#?}", test.name);
+    }
 
     Ok(())
 }

@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
@@ -335,8 +334,8 @@ impl<'a> VerifiableExprBuilder<'a> {
                 let min_expr = self.min_column_expr()?;
                 let max_expr = self.max_column_expr()?;
                 Ok(min_expr
-                    .gt(self.args[1].clone())
-                    .or(max_expr.lt(self.args[1].clone())))
+                    .not_eq(self.args[1].clone())
+                    .or(max_expr.not_eq(self.args[1].clone())))
             }
             ">" => {
                 let max_expr = self.max_column_expr()?;
@@ -442,7 +441,7 @@ mod tests {
             Test {
                 name: "a = 1 and b != 3",
                 expr: col("a").eq(lit(1)).and(col("b").not_eq(lit(3))),
-                expect: "(((min_a <= 1) and (max_a >= 1)) and ((min_b > 3) or (max_b < 3)))",
+                expect: "(((min_a <= 1) and (max_a >= 1)) and ((min_b != 3) or (max_b != 3)))",
             },
             Test {
                 name: "a is null",
