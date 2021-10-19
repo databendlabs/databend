@@ -14,17 +14,10 @@
 
 use std::cell::RefCell;
 
-use comfy_table::Cell;
-use comfy_table::Color;
-use comfy_table::Table;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
-use httpmock::Method::GET;
-use httpmock::MockServer;
 use tempfile::tempdir;
 
-use crate::cmds::clusters::view::HealthStatus;
-use crate::cmds::clusters::view::ViewCommand;
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
 use crate::cmds::queries::query::build_query_url;
@@ -127,7 +120,7 @@ fn test_build_query_url() -> Result<()> {
             "clickhouse",
         ]);
         build_status!(conf.clone(), 3308, 9002);
-        let status = Status::read(conf.clone()).unwrap();
+        let status = Status::read(conf).unwrap();
         let query_url = build_query_url(&matches, &status);
         assert!(query_url.is_ok());
         assert_eq!(
