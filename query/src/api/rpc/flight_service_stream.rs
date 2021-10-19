@@ -14,9 +14,9 @@
 
 use std::convert::TryInto;
 
+use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
-use common_arrow::arrow_flight::utils::flight_data_from_arrow_batch;
-use common_arrow::arrow_flight::FlightData;
+use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::macros::support::Pin;
 use common_base::tokio::macros::support::Poll;
 use common_base::tokio::sync::mpsc::Receiver;
@@ -49,8 +49,7 @@ impl Stream for FlightDataStream {
             Some(Ok(block)) => match block.try_into() {
                 Err(error) => Some(Err(Status::from(error))),
                 Ok(record_batch) => {
-                    let (dicts, values) =
-                        flight_data_from_arrow_batch(&record_batch, &self.options);
+                    let (dicts, values) = serialize_batch(&record_batch, &self.options);
 
                     match dicts.is_empty() {
                         true => Some(Ok(values)),

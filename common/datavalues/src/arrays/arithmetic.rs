@@ -98,13 +98,9 @@ where T: DFPrimitiveType
     type Output = Result<DFPrimitiveArray<T>>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(
-            self,
-            rhs,
-            basic::add::add,
-            basic::add::add_scalar,
-            |lhs, rhs| lhs + rhs,
-        )
+        arithmetic_helper(self, rhs, basic::add, basic::add_scalar, |lhs, rhs| {
+            lhs + rhs
+        })
     }
 }
 
@@ -121,13 +117,9 @@ where
     type Output = Result<DFPrimitiveArray<T>>;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(
-            self,
-            rhs,
-            basic::sub::sub,
-            basic::sub::sub_scalar,
-            |lhs, rhs| lhs - rhs,
-        )
+        arithmetic_helper(self, rhs, basic::sub, basic::sub_scalar, |lhs, rhs| {
+            lhs - rhs
+        })
     }
 }
 
@@ -145,13 +137,9 @@ where
     type Output = Result<DFPrimitiveArray<T>>;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(
-            self,
-            rhs,
-            basic::mul::mul,
-            basic::mul::mul_scalar,
-            |lhs, rhs| lhs * rhs,
-        )
+        arithmetic_helper(self, rhs, basic::mul, basic::mul_scalar, |lhs, rhs| {
+            lhs * rhs
+        })
     }
 }
 
@@ -170,13 +158,9 @@ where
     type Output = Result<DFPrimitiveArray<T>>;
 
     fn div(self, rhs: Self) -> Self::Output {
-        arithmetic_helper(
-            self,
-            rhs,
-            basic::div::div,
-            basic::div::div_scalar,
-            |lhs, rhs| lhs / rhs,
-        )
+        arithmetic_helper(self, rhs, basic::div, basic::div_scalar, |lhs, rhs| {
+            lhs / rhs
+        })
     }
 }
 
@@ -244,13 +228,10 @@ where
             }
 
             _ => {
-                let array = arithmetic_helper(
-                    self,
-                    rhs,
-                    basic::rem::rem,
-                    basic::rem::rem_scalar,
-                    |lhs, rhs| lhs % rhs,
-                )?;
+                let array =
+                    arithmetic_helper(self, rhs, basic::rem, basic::rem_scalar, |lhs, rhs| {
+                        lhs % rhs
+                    })?;
                 Ok(array.into_series())
             }
         }
@@ -388,14 +369,14 @@ where
     fn pow_f32(&self, exp: f32) -> DFFloat32Array {
         let arr = self.cast_with_type(&DataType::Float32).expect("f32 array");
         let arr = arr.f32().unwrap();
-        DFFloat32Array::new(basic::pow::powf_scalar(&arr.array, exp))
+        DFFloat32Array::new(basic::powf_scalar(&arr.array, exp))
     }
 
     fn pow_f64(&self, exp: f64) -> DFFloat64Array {
         let arr = self.cast_with_type(&DataType::Float64).expect("f64 array");
         let arr = arr.f64().unwrap();
 
-        DFFloat64Array::new(basic::pow::powf_scalar(&arr.array, exp))
+        DFFloat64Array::new(basic::powf_scalar(&arr.array, exp))
     }
 }
 

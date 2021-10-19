@@ -14,10 +14,10 @@
 
 use std::convert::TryInto;
 
-use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_arrow::arrow_flight::Action;
-use common_arrow::arrow_flight::FlightData;
-use common_arrow::arrow_flight::Ticket;
+use common_arrow::arrow_format::flight::data::Action;
+use common_arrow::arrow_format::flight::data::FlightData;
+use common_arrow::arrow_format::flight::data::Ticket;
+use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::tokio::time::Duration;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_base::tokio::sync::oneshot::Receiver;

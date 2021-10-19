@@ -16,20 +16,20 @@ use std::pin::Pin;
 use std::thread::sleep;
 use std::time::Duration;
 
-use common_arrow::arrow_flight::flight_service_server::FlightService;
-use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
-use common_arrow::arrow_flight::Action;
-use common_arrow::arrow_flight::ActionType;
-use common_arrow::arrow_flight::Criteria;
-use common_arrow::arrow_flight::Empty;
-use common_arrow::arrow_flight::FlightData;
-use common_arrow::arrow_flight::FlightDescriptor;
-use common_arrow::arrow_flight::FlightInfo;
-use common_arrow::arrow_flight::HandshakeRequest;
-use common_arrow::arrow_flight::HandshakeResponse;
-use common_arrow::arrow_flight::PutResult;
-use common_arrow::arrow_flight::SchemaResult;
-use common_arrow::arrow_flight::Ticket;
+use common_arrow::arrow_format::flight::data::Action;
+use common_arrow::arrow_format::flight::data::ActionType;
+use common_arrow::arrow_format::flight::data::Criteria;
+use common_arrow::arrow_format::flight::data::Empty;
+use common_arrow::arrow_format::flight::data::FlightData;
+use common_arrow::arrow_format::flight::data::FlightDescriptor;
+use common_arrow::arrow_format::flight::data::FlightInfo;
+use common_arrow::arrow_format::flight::data::HandshakeRequest;
+use common_arrow::arrow_format::flight::data::HandshakeResponse;
+use common_arrow::arrow_format::flight::data::PutResult;
+use common_arrow::arrow_format::flight::data::SchemaResult;
+use common_arrow::arrow_format::flight::data::Ticket;
+use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
+use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::tokio;
 use futures::Stream;
 use rand::Rng;
@@ -108,7 +108,7 @@ impl FlightService for FlightServiceForTestImpl {
 
     type DoActionStream = Pin<
         Box<
-            dyn Stream<Item = Result<common_arrow::arrow_flight::Result, Status>>
+            dyn Stream<Item = Result<common_arrow::arrow_format::flight::data::Result, Status>>
                 + Send
                 + Sync
                 + 'static,

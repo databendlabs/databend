@@ -23,7 +23,7 @@ use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
 use common_arrow::arrow::datatypes::Schema;
-use common_arrow::arrow_flight::FlightData;
+use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;

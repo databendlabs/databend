@@ -18,7 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
+use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::tokio;
 use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::Notify;

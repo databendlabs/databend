@@ -14,7 +14,7 @@
 
 use std::convert::TryInto;
 
-use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_format::flight::data::Action;
 use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
