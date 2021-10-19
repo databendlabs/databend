@@ -83,7 +83,8 @@ where
         + NumCast
         + Zero
         + Into<DataValue>
-        + AsPrimitive<T::LargestType>,
+        + AsPrimitive<T::LargestType>
+        + std::iter::Sum,
 
     T::LargestType: Into<DataValue> + AddAssign + Default,
 

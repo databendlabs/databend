@@ -14,7 +14,7 @@
 
 use std::convert::TryInto;
 
-use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_format::flight::data::Action;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_planners::Expression;

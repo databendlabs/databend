@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_arrow::arrow_flight::utils::flight_data_to_arrow_batch;
-use common_arrow::arrow_flight::FlightData;
+use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -53,10 +53,8 @@ impl FlightDataStream {
                     }
 
                     let arrow_schema = Arc::new(schema.to_arrow());
-                    Ok(
-                        flight_data_to_arrow_batch(&flight_data, arrow_schema, true, &[])
-                            .map(create_data_block)?,
-                    )
+                    Ok(deserialize_batch(&flight_data, arrow_schema, true, &[])
+                        .map(create_data_block)?)
                 }
             }
         })
@@ -83,13 +81,10 @@ impl FlightDataStream {
                     DataBlock::create(Arc::new(schema), columns)
                 }
 
-                Ok(flight_data_to_arrow_batch(
-                    &flight_data,
-                    Arc::new(schema_ref.to_arrow()),
-                    true,
-                    &[],
+                Ok(
+                    deserialize_batch(&flight_data, Arc::new(schema_ref.to_arrow()), true, &[])
+                        .map(create_data_block)?,
                 )
-                .map(create_data_block)?)
             }
         })
     }

@@ -16,7 +16,7 @@ use std::convert::TryInto;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_arrow::arrow_flight::Action;
+use common_arrow::arrow_format::flight::data::Action;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;

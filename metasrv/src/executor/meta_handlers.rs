@@ -17,9 +17,9 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::arrow::io::flight::serialize_schema;
 use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
-use common_arrow::arrow_flight::utils::flight_data_from_arrow_schema;
-use common_arrow::arrow_flight::FlightData;
+use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::ErrorCode;
 use common_meta_flight::CreateDatabaseAction;
 use common_meta_flight::CreateTableAction;
@@ -152,7 +152,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         info!("create table: {:}: {:?}", &db_name, &table_name);
 
         let options = IpcWriteOptions::default();
-        let flight_data = flight_data_from_arrow_schema(&plan.schema.to_arrow(), &options);
+        let flight_data = serialize_schema(&plan.schema.to_arrow(), &options);
 
         let table = Table {
             table_id: 0,

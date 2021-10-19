@@ -16,7 +16,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_arrow::arrow_flight::flight_service_server::FlightServiceServer;
+use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::tokio;
 use common_base::tokio::net::TcpListener;
 use common_base::tokio::sync::Notify;

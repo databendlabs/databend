@@ -14,7 +14,7 @@
 
 use std::convert::TryInto;
 
-use common_arrow::arrow_flight::Ticket;
+use common_arrow::arrow_format::flight::data::Ticket;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use tonic::Status;

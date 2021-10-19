@@ -16,8 +16,8 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_arrow::arrow_flight::Empty;
+use common_arrow::arrow_format::flight::data::Empty;
+use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::tokio;
 use common_base::tokio::net::TcpListener;
 use common_base::tokio::sync::Notify;

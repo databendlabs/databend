@@ -13,5 +13,5 @@
 // limitations under the License.
 
 pub use arrow;
-pub use arrow_flight;
+pub use arrow_format;
 pub use parquet2 as parquet;

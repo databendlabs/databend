@@ -15,9 +15,9 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use common_arrow::arrow_flight::flight_service_server::FlightService;
-use common_arrow::arrow_flight::Action;
-use common_arrow::arrow_flight::Ticket;
+use common_arrow::arrow_format::flight::data::Action;
+use common_arrow::arrow_format::flight::data::Ticket;
+use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::exception::ABORT_SESSION;

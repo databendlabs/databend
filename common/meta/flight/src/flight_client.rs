@@ -15,10 +15,10 @@
 use std::convert::TryInto;
 use std::time::Duration;
 
-use common_arrow::arrow_flight::flight_service_client::FlightServiceClient;
-use common_arrow::arrow_flight::Action;
-use common_arrow::arrow_flight::BasicAuth;
-use common_arrow::arrow_flight::HandshakeRequest;
+use common_arrow::arrow_format::flight::data::Action;
+use common_arrow::arrow_format::flight::data::BasicAuth;
+use common_arrow::arrow_format::flight::data::HandshakeRequest;
+use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::ConnectionFactory;
