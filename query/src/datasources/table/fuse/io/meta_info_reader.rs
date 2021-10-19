@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::parquet::read::read_metadata;
@@ -27,6 +28,7 @@ use crate::datasources::table::fuse::RawBlockStats;
 use crate::datasources::table::fuse::SegmentInfo;
 
 // TODO cache
+#[derive(Clone)]
 pub struct MetaInfoReader {
     da: Arc<dyn DataAccessor>,
     ctx: Arc<Runtime>,
@@ -36,6 +38,12 @@ impl MetaInfoReader {
     pub fn new(da: Arc<dyn DataAccessor>, ctx: Arc<Runtime>) -> Self {
         MetaInfoReader { da, ctx }
     }
+    pub fn data_accessor(&self) -> Arc<dyn DataAccessor> {
+        self.da.clone()
+    }
+    pub fn runtime(&self) -> &Runtime {
+        self.ctx.as_ref()
+    }
 }
 
 impl MetaInfoReader {
@@ -43,10 +51,11 @@ impl MetaInfoReader {
     // this method is called by Table::read_plan, which is sync
     pub fn read_block_statistics(&self, location: &str) -> Result<RawBlockStats> {
         let mut reader = self.da.get_reader(location, None)?;
-        let file_meta = read_metadata(&mut reader).map_err(ErrorCode::from_std_error)?; // TODO
-                                                                                        // one row group only
+        let file_meta = read_metadata(&mut reader).map_err(ErrorCode::from_std_error)?;
+
+        // one row group only
         let cols = file_meta.row_groups[0].columns();
-        let mut res = std::collections::HashMap::new();
+        let mut res = HashMap::new();
         for (id, x) in cols.iter().enumerate() {
             let s = x.statistics();
             if let Some(Ok(stats)) = s {

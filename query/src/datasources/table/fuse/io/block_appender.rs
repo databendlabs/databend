@@ -20,6 +20,7 @@ use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
@@ -36,14 +37,16 @@ pub type BlockStream =
 pub struct BlockAppender;
 
 impl BlockAppender {
+    // TODO should return a stream of SegmentInfo (batch blocks into segments)
     pub async fn append_blocks(
         data_accessor: Arc<dyn DataAccessor>,
         mut stream: BlockStream,
+        data_schema: &DataSchema,
     ) -> Result<SegmentInfo> {
         let mut stats_acc = util::StatisticsAccumulator::new();
         let mut block_meta_acc = util::BlockMetaAccumulator::new();
 
-        // accumulates the stats and save the blocks
+        // accumulate the stats and save the blocks
         while let Some(block) = stream.next().await {
             stats_acc.acc(&block)?;
             let schema = block.schema().to_arrow();
@@ -52,10 +55,10 @@ impl BlockAppender {
             block_meta_acc.acc(file_size, location, &mut stats_acc);
         }
 
-        // summary and gives back a segment_info
+        // summary and give back a segment_info
         // we need to send back a stream of segment latter
         let block_metas = block_meta_acc.blocks_metas;
-        let summary = util::column_stats_reduce(stats_acc.blocks_stats)?;
+        let summary = util::column_stats_reduce_with_schema(&stats_acc.blocks_stats, data_schema)?;
         let segment_info = SegmentInfo {
             blocks: block_metas,
             summary: Stats {
@@ -69,7 +72,7 @@ impl BlockAppender {
         Ok(segment_info)
     }
 
-    async fn save_block(
+    pub(super) async fn save_block(
         arrow_schema: &ArrowSchema,
         block: DataBlock,
         data_accessor: impl AsRef<dyn DataAccessor>,

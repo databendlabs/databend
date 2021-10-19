@@ -26,9 +26,9 @@ use crate::TableIOContext;
 
 /// A default DataAccessorBuilder impl.
 #[derive(Debug)]
-pub struct DefaultDataAccessorBuilder {}
+pub struct TestDataAccessorBuilder {}
 
-impl DataAccessorBuilder for DefaultDataAccessorBuilder {
+impl DataAccessorBuilder for TestDataAccessorBuilder {
     fn build(&self) -> Result<Arc<dyn DataAccessor>> {
         // we do not use it in unit test
         todo!()
@@ -39,7 +39,7 @@ impl DataAccessorBuilder for DefaultDataAccessorBuilder {
 fn test_table_io_context() -> Result<()> {
     let c = TableIOContext::new(
         Arc::new(Runtime::with_default_worker_threads()?),
-        Arc::new(DefaultDataAccessorBuilder {}),
+        Arc::new(TestDataAccessorBuilder {}),
         3,
         vec![],
         Some(Arc::new("foo".to_string())),

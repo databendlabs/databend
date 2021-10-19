@@ -34,7 +34,7 @@ impl FromStr for StorageScheme {
             "S3" => Ok(S3),
             "LOCAL" | "DISK" => Ok(LocalFs),
             _ => Err(ErrorCode::UnknownStorageSchemeName(format!(
-                "unknown storage scheme {}, supported schemes are S3 | Disk",
+                "unknown storage scheme [{}], supported schemes are S3 | Disk",
                 s
             ))),
         }

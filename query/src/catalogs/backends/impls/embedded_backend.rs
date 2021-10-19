@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -306,6 +307,46 @@ impl MetaApiSync for MetaEmbeddedSync {
                 }
                 Some(tbl) => {
                     return Ok(tbl.clone());
+                }
+            }
+        }
+
+        Err(ErrorCode::UnknownTable(format!(
+            "Unknown table of id: {}",
+            table_id
+        )))
+    }
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        new_table_version: MetaVersion,
+        new_snapshot_location: String,
+    ) -> common_exception::Result<CommitTableReply> {
+        let mut map = self.databases.write();
+        for (_, tbl_idx) in map.values_mut() {
+            match tbl_idx.id2meta.get(&table_id) {
+                None => {
+                    continue;
+                }
+                Some(tbl) => {
+                    if tbl.version + 1 == new_table_version {
+                        let mut new_tbl_info = tbl.as_ref().clone();
+                        new_tbl_info
+                            .options
+                            // TODO constant
+                            .insert("SNAPSHOT_LOC".to_string(), new_snapshot_location);
+                        new_tbl_info.version = new_table_version;
+                        tbl_idx.insert(new_tbl_info);
+                        return Ok(());
+                    } else {
+                        return Err(ErrorCode::CommitTableError(format!(
+                            "none-consecutive table version: prev[{}], committing [{}], table_id {}",
+                            tbl.version,
+                            new_table_version,
+                            table_id
+                        )));
+                    }
                 }
             }
         }

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -120,6 +121,17 @@ impl Catalog for OverlaidCatalog {
         // table function belongs to no/every database
         let func = factory.try_create("", func_name, *id, tbl_args)?;
         Ok(func)
+    }
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        new_table_version: MetaVersion,
+        new_snapshot_location: String,
+    ) -> common_exception::Result<CommitTableReply> {
+        // commit table in BOTTOM layer only
+        self.bottom
+            .commit_table(table_id, new_table_version, new_snapshot_location)
     }
 
     fn create_database(

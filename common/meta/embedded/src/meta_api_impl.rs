@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -257,6 +258,15 @@ impl MetaApi for MetaEmbedded {
             options: table.table_options,
         };
         Ok(Arc::new(rst))
+    }
+
+    async fn commit_table(
+        &self,
+        _table_id: MetaId,
+        _new_table_version: MetaVersion,
+        _new_snapshot_location: String,
+    ) -> Result<CommitTableReply> {
+        todo!()
     }
 
     fn name(&self) -> String {

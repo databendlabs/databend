@@ -239,14 +239,15 @@ build_exceptions! {
     TableAlreadyExists(4003),
     IllegalMetaOperationArgument(4004),
     IllegalSchema(4005),
-    IllegalMetaState(4005),
-    MetaNodeInternalError(4006),
-    TruncateTableFailedError(4007),
+    IllegalMetaState(4006),
+    MetaNodeInternalError(4007),
+    TruncateTableFailedError(4008),
+    CommitTableError(4009),
 
     // namespace error.
-    NamespaceUnknownNode(4008),
-    NamespaceNodeAlreadyExists(4009),
-    NamespaceIllegalNodeFormat(4010),
+    NamespaceUnknownNode(4058),
+    NamespaceNodeAlreadyExists(4059),
+    NamespaceIllegalNodeFormat(4050),
 
     // storage-api error codes
     IllegalScanPlan(5000),

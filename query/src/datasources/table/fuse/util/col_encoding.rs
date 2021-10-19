@@ -17,8 +17,8 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::parquet::encoding::Encoding;
 
 /// mapping from arrow DataType to Encoding
-/// From arrow2::parquet::write
 ///
+/// QUOTE: (From arrow2::parquet::write)
 /// > Note that this is whether this implementation supports it, which is a subset of
 /// > what the parquet spec allows.
 /// ~~~ignore

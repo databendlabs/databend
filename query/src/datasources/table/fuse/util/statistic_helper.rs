@@ -18,15 +18,18 @@ use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
-use common_datavalues::DataType;
+use common_datavalues::DataSchema;
 use common_exception::Result;
 
+use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::ColStats;
 use crate::datasources::table::fuse::ColumnId;
+use crate::datasources::table::fuse::Stats;
 
-type BlockStats = HashMap<ColumnId, (DataType, ColStats)>;
+// TODO move this to other crate
+pub type BlockStats = HashMap<ColumnId, ColStats>;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
@@ -58,12 +61,8 @@ impl StatisticsAccumulator {
         self.last_block_rows = block.num_rows() as u64;
         self.last_block_size = block.memory_size() as u64;
         let block_stats = block_stats(block)?;
-        let col_stats = block_stats
-            .iter()
-            .map(|(idx, v)| (*idx, v.1.clone()))
-            .collect::<HashMap<ColumnId, ColStats>>();
+        self.last_block_col_stats = Some(block_stats.clone());
         self.blocks_stats.push(block_stats);
-        self.last_block_col_stats = Some(col_stats);
         Ok(())
     }
 }
@@ -95,80 +94,16 @@ impl BlockMetaAccumulator {
     }
 }
 
-pub fn column_stats_reduce(
-    stats: Vec<HashMap<ColumnId, (DataType, ColStats)>>,
-) -> Result<HashMap<ColumnId, ColStats>> {
-    let len = stats.len();
-
-    // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>
-    let col_stat_list = stats.into_iter().fold(HashMap::new(), |acc, item| {
-        item.into_iter().fold(
-            acc,
-            |mut acc: HashMap<ColumnId, (DataType, Vec<ColStats>)>,
-             (col_id, (data_type, stats))| {
-                let entry = acc.entry(col_id);
-                match entry {
-                    Entry::Occupied(_) => {
-                        entry.and_modify(|v| v.1.push(stats));
-                    }
-                    Entry::Vacant(_) => {
-                        entry.or_insert((data_type, vec![stats]));
-                    }
-                }
-                acc
-            },
-        )
-    });
-
-    col_stat_list.iter().try_fold(
-        HashMap::with_capacity(len),
-        |mut acc, (id, (data_type, stats))| {
-            let mut min_stats = Vec::with_capacity(stats.len());
-            let mut max_stats = Vec::with_capacity(stats.len());
-            let mut null_count = 0;
-            let mut row_count = 0;
-
-            for col_stats in stats {
-                // to be optimized, with DataType and the value of data, we may
-                // able to compare the min/max here
-                min_stats.push(col_stats.min.clone());
-                max_stats.push(col_stats.max.clone());
-
-                null_count += col_stats.null_count;
-                row_count += col_stats.row_count;
-            }
-
-            let min =
-                common_datavalues::DataValue::try_into_data_array(min_stats.as_slice(), data_type)?
-                    .min()?;
-
-            let max =
-                common_datavalues::DataValue::try_into_data_array(max_stats.as_slice(), data_type)?
-                    .max()?;
-
-            acc.insert(*id, ColStats {
-                min,
-                max,
-                null_count,
-                row_count,
-            });
-            Ok(acc)
-        },
-    )
-}
-
-pub(super) fn block_stats(
-    data_block: &DataBlock,
-) -> Result<HashMap<ColumnId, (DataType, ColStats)>> {
+pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
     let row_count = data_block.num_rows();
 
     // NOTE:
     // column id is FAKED, this is OK as long as table schema is NOT changed (which is not realistic)
     // we should extend DataField with column_id ...
-    (0..).into_iter().zip(data_block.columns().iter()).try_fold(
-        HashMap::new(),
-        |mut res, (idx, col)| {
-            let data_type = col.data_type();
+    (0..)
+        .into_iter()
+        .zip(data_block.columns().iter())
+        .map(|(idx, col)| {
             let min = match col {
                 DataColumn::Array(s) => s.min(),
                 DataColumn::Constant(v, _) => Ok(v.clone()),
@@ -197,8 +132,88 @@ pub(super) fn block_stats(
                 row_count,
             };
 
-            res.insert(idx, (data_type, col_stats));
-            Ok(res)
-        },
-    )
+            Ok((idx, col_stats))
+        })
+        .collect()
+}
+
+pub fn column_stats_reduce_with_schema(
+    stats: &[HashMap<ColumnId, ColStats>],
+    schema: &DataSchema,
+) -> Result<HashMap<ColumnId, ColStats>> {
+    let len = stats.len();
+
+    // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>
+    let col_stat_list = stats.iter().fold(HashMap::new(), |acc, item| {
+        item.iter().fold(
+            acc,
+            |mut acc: HashMap<ColumnId, Vec<&ColStats>>, (col_id, stats)| {
+                let entry = acc.entry(*col_id);
+                match entry {
+                    Entry::Occupied(_) => {
+                        entry.and_modify(|v| v.push(stats));
+                    }
+                    Entry::Vacant(_) => {
+                        entry.or_insert_with(|| vec![stats]);
+                    }
+                }
+                acc
+            },
+        )
+    });
+
+    col_stat_list
+        .iter()
+        .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
+            let mut min_stats = Vec::with_capacity(stats.len());
+            let mut max_stats = Vec::with_capacity(stats.len());
+            let mut null_count = 0;
+            let mut row_count = 0;
+
+            for col_stats in stats {
+                // to be optimized, with DataType and the value of data, we may
+                // able to compare the min/max here
+                min_stats.push(col_stats.min.clone());
+                max_stats.push(col_stats.max.clone());
+
+                null_count += col_stats.null_count;
+                row_count += col_stats.row_count;
+            }
+
+            // TODO panic
+            let data_type = schema.field((*id) as usize).data_type();
+
+            // TODO
+            // for some data types, we shall balance the accuracy and the length
+            // e.g. for a string col, which max value is "xxxxxxxxxxxx....", we record the max as something like "y"
+            let min =
+                common_datavalues::DataValue::try_into_data_array(min_stats.as_slice(), data_type)?
+                    .min()?;
+
+            let max =
+                common_datavalues::DataValue::try_into_data_array(max_stats.as_slice(), data_type)?
+                    .max()?;
+
+            acc.insert(*id, ColStats {
+                min,
+                max,
+                null_count,
+                row_count,
+            });
+            Ok(acc)
+        })
+}
+
+pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> Result<Stats> {
+    let s = Stats {
+        row_count: l.row_count + r.row_count,
+        block_count: l.block_count + r.block_count,
+        uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
+        compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
+        col_stats: util::column_stats_reduce_with_schema(
+            &[l.col_stats.clone(), r.col_stats.clone()],
+            schema,
+        )?,
+    };
+    Ok(s)
 }

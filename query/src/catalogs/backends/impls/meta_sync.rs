@@ -19,6 +19,7 @@ use common_base::BlockingWait;
 use common_base::Runtime;
 use common_exception::Result;
 use common_meta_api::MetaApi;
+use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -105,6 +106,20 @@ impl MetaApiSync for MetaSync {
         let x = self.inner.clone();
         (async move { x.get_table_by_id(table_id, version).await })
             .wait_in(&self.rt, self.timeout)?
+    }
+
+    fn commit_table(
+        &self,
+        table_id: MetaId,
+        new_table_version: MetaVersion,
+        new_snapshot_location: String,
+    ) -> Result<CommitTableReply> {
+        let x = self.inner.clone();
+        (async move {
+            x.commit_table(table_id, new_table_version, new_snapshot_location)
+                .await
+        })
+        .wait_in(&self.rt, self.timeout)?
     }
 
     fn name(&self) -> String {

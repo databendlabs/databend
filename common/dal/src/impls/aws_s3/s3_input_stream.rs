@@ -255,11 +255,10 @@ impl S3InputStream {
         Ok(self.cursor_pos)
     }
 
-    fn do_read(mut self: Pin<&mut Self>, buf: &mut [u8]) -> Poll<std::io::Result<usize>> {
+    fn do_read(mut self: Pin<&mut Self>, mut buf: &mut [u8]) -> Poll<std::io::Result<usize>> {
         let available = std::cmp::min(buf.remaining_mut(), self.buffer.len());
         let bytes = self.buffer.split_to(available);
-        let mut new_buf = buf;
-        new_buf.write_all(bytes.as_ref())?;
+        buf.write_all(bytes.as_ref())?;
         let new_pos = self.cursor_pos.checked_add(available as u64);
         match new_pos {
             Some(v) => self.cursor_pos = v,
