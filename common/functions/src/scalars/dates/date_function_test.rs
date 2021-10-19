@@ -23,7 +23,10 @@ use common_exception::Result;
 use crate::scalars::dates::number_function::ToDayOfMonthFunction;
 use crate::scalars::dates::number_function::ToDayOfWeekFunction;
 use crate::scalars::dates::number_function::ToDayOfYearFunction;
+use crate::scalars::dates::number_function::ToMinuteFunction;
 use crate::scalars::dates::number_function::ToMonthFunction;
+use crate::scalars::ToHourFunction;
+use crate::scalars::ToSecondFunction;
 use crate::scalars::ToYYYYMMDDFunction;
 use crate::scalars::ToYYYYMMDDhhmmssFunction;
 use crate::scalars::ToYYYYMMFunction;
@@ -1118,6 +1121,441 @@ fn test_todayofmonth_constant_function() -> Result<()> {
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
         let expected = UInt8Array::from_slice([2; 15]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_tohour_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u16])]);
+
+    {
+        let col = ToHourFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 1]);
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0i32])]);
+
+    {
+        let col = ToHourFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // dateTime
+    // 2021-10-18 18:05:42 --- 1634551542
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1634551542u32])]);
+
+    {
+        let col = ToHourFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([10; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_tohour_constant_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt16(Some(0u16)),
+        5,
+    )]);
+    {
+        let col = ToHourFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 5);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 5]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::Int32(Some(0i32)),
+        10,
+    )]);
+    {
+        let col = ToHourFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 10);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 10]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // datetime
+    // 2021-10-18 18:05:42 --- 1634551542
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt32(Some(1634551542u32)),
+        15,
+    )]);
+    {
+        let col = ToHourFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 15);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([10; 15]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_tominute_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u16])]);
+
+    {
+        let col = ToMinuteFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 1]);
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0i32])]);
+
+    {
+        let col = ToMinuteFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // dateTime
+    // 2021-10-18 18:05:42 --- 1634551542
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1634551542u32])]);
+
+    {
+        let col = ToMinuteFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([5; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_tominute_constant_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt16(Some(0u16)),
+        5,
+    )]);
+    {
+        let col = ToMinuteFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 5);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 5]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::Int32(Some(0i32)),
+        10,
+    )]);
+    {
+        let col = ToMinuteFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 10);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 10]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // datetime
+    // 2021-10-18 18:05:42 --- 1634551542
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt32(Some(1634551542u32)),
+        15,
+    )]);
+    {
+        let col = ToMinuteFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 15);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([5; 15]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_tosecond_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0u16])]);
+
+    {
+        let col = ToSecondFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 1]);
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![0i32])]);
+
+    {
+        let col = ToSecondFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // dateTime
+    // 2021-10-18 18:05:42 --- 1634551542
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1634551542u32])]);
+
+    {
+        let col = ToSecondFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([42; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_tosecond_constant_function() -> Result<()> {
+    // date16
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt16(Some(0u16)),
+        5,
+    )]);
+    {
+        let col = ToSecondFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 5);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 5]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::Int32(Some(0i32)),
+        10,
+    )]);
+    {
+        let col = ToSecondFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 10);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([0; 10]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // datetime
+    // 2021-10-18 18:05:42 --- 1634551542
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create(schema.clone(), vec![DataColumn::Constant(
+        DataValue::UInt32(Some(1634551542u32)),
+        15,
+    )]);
+    {
+        let col = ToSecondFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 15);
+        assert_eq!(result.data_type(), DataType::UInt8);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
+        let expected = UInt8Array::from_slice([42; 15]);
 
         assert_eq!(actual, &expected);
     }

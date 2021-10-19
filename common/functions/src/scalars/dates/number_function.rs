@@ -257,6 +257,60 @@ impl NumberResultFunction<u8> for ToDayOfWeek {
     }
 }
 
+#[derive(Clone)]
+pub struct ToHour;
+
+impl NumberResultFunction<u8> for ToHour {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt8)
+    }
+    fn to_number(value: DateTime<Utc>) -> u8 {
+        value.hour() as u8
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt8(Some(Self::to_number(value)))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToMinute;
+
+impl NumberResultFunction<u8> for ToMinute {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt8)
+    }
+    fn to_number(value: DateTime<Utc>) -> u8 {
+        value.minute() as u8
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt8(Some(Self::to_number(value)))
+    }
+}
+
+#[derive(Clone)]
+pub struct ToSecond;
+
+impl NumberResultFunction<u8> for ToSecond {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::UInt8)
+    }
+    fn to_number(value: DateTime<Utc>) -> u8 {
+        value.second() as u8
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt8(Some(Self::to_number(value)))
+    }
+}
+
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
@@ -392,3 +446,7 @@ pub type ToMonthFunction = NumberFunction<ToMonth, u8>;
 pub type ToDayOfYearFunction = NumberFunction<ToDayOfYear, u16>;
 pub type ToDayOfMonthFunction = NumberFunction<ToDayOfMonth, u8>;
 pub type ToDayOfWeekFunction = NumberFunction<ToDayOfWeek, u8>;
+
+pub type ToHourFunction = NumberFunction<ToHour, u8>;
+pub type ToMinuteFunction = NumberFunction<ToMinute, u8>;
+pub type ToSecondFunction = NumberFunction<ToSecond, u8>;
