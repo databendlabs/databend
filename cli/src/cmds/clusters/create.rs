@@ -558,7 +558,10 @@ impl CreateCommand {
                         return Ok(());
                     }
                 }
-                let meta_status = meta_config.verify();
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?;
+                let meta_status = rt.block_on(meta_config.verify());
                 if meta_status.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
                     writer.write_err(&*format!(

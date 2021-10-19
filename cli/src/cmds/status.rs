@@ -25,6 +25,7 @@ use std::process::Stdio;
 use std::thread::sleep;
 use std::time;
 
+use async_trait::async_trait;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use libc::pid_t;
@@ -67,6 +68,7 @@ pub struct LocalMetaConfig {
     pub log_dir: Option<String>,
 }
 
+#[async_trait]
 pub trait LocalRuntime {
     const RETRIES: u16;
     fn kill(&self) -> Result<()> {
@@ -102,19 +104,23 @@ pub trait LocalRuntime {
         let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
-        match self.verify() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        match rt.block_on(self.verify()) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
     }
     fn get_pid(&self) -> Option<pid_t>;
-    fn verify(&self) -> Result<()>;
+    async fn verify(&self) -> Result<()>;
     fn get_path(&self) -> Option<String>;
     fn generate_command(&mut self) -> Result<Command>;
     fn set_pid(&mut self, id: pid_t);
     fn is_clean(&self) -> bool; // return true if runtime resources are cleaned
 }
 
+#[async_trait]
 impl LocalRuntime for LocalMetaConfig {
     const RETRIES: u16 = 30;
 
@@ -123,10 +129,10 @@ impl LocalRuntime for LocalMetaConfig {
     }
 
     // will check health for endpoint through http request
-    fn verify(&self) -> Result<()> {
+    async fn verify(&self) -> Result<()> {
         let (cli, url) = self.get_health_probe();
         for _ in 0..LocalMetaConfig::RETRIES {
-            let resp = cli.get(url.as_str()).send();
+            let resp = cli.get(url.as_str()).send().await;
             if resp.is_err() || !resp.unwrap().status().is_success() {
                 sleep(time::Duration::from_secs(1));
             } else {
@@ -257,6 +263,7 @@ impl LocalRuntime for LocalMetaConfig {
     }
 }
 
+#[async_trait]
 impl LocalRuntime for LocalQueryConfig {
     const RETRIES: u16 = 30;
 
@@ -264,10 +271,10 @@ impl LocalRuntime for LocalQueryConfig {
         self.pid
     }
 
-    fn verify(&self) -> Result<()> {
+    async fn verify(&self) -> Result<()> {
         let (cli, url) = self.get_health_probe();
         for _ in 0..LocalQueryConfig::RETRIES {
-            let resp = cli.get(url.as_str()).send();
+            let resp = cli.get(url.as_str()).send().await;
             if resp.is_err() || !resp.unwrap().status().is_success() {
                 sleep(time::Duration::from_secs(1));
             } else {
@@ -402,8 +409,8 @@ impl LocalRuntime for LocalQueryConfig {
 
 impl LocalQueryConfig {
     // retrieve the configured url for health check
-    pub fn get_health_probe(&self) -> (reqwest::blocking::Client, String) {
-        let client = reqwest::blocking::Client::builder()
+    pub fn get_health_probe(&self) -> (reqwest::Client, String) {
+        let client = reqwest::Client::builder()
             .build()
             .expect("Cannot build health probe for health check");
 
@@ -421,8 +428,8 @@ impl LocalQueryConfig {
 impl LocalMetaConfig {
     // retrieve the configured url for health check
     // TODO(zhihanz): http TLS endpoint
-    pub fn get_health_probe(&self) -> (reqwest::blocking::Client, String) {
-        let client = reqwest::blocking::Client::builder()
+    pub fn get_health_probe(&self) -> (reqwest::Client, String) {
+        let client = reqwest::Client::builder()
             .build()
             .expect("Cannot build health probe for health check");
 

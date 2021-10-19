@@ -576,6 +576,7 @@ name = "bendctl"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "async-trait",
  "clap 3.0.0-beta.5",
  "clap_generate",
  "colored",
@@ -610,6 +611,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "tokio",
  "ureq",
 ]
 
