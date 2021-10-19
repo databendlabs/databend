@@ -77,7 +77,7 @@ impl SystemCatalog {
         }
 
         let tables = Arc::new(tables);
-        let sys_db = Arc::new(SystemDatabase::create("system", tables.clone()));
+        let sys_db = Arc::new(SystemDatabase::create("system"));
         Ok(Self {
             sys_db,
             sys_db_meta: tables,
@@ -111,6 +111,13 @@ impl Catalog for SystemCatalog {
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
 
         Ok(table.clone())
+    }
+
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        // ensure db exists
+        let _db = self.get_database(db_name)?;
+
+        Ok(self.sys_db_meta.name_to_table.values().cloned().collect())
     }
 
     fn get_table_by_id(

@@ -99,12 +99,7 @@ impl MetaStoreCatalog {
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let db = DefaultDatabase::new(
-            &db_info.db,
-            self.meta.clone(),
-            self.table_engine_registry.clone(),
-            self.in_memory_data.clone(),
-        );
+        let db = DefaultDatabase::new(&db_info.db, self.meta.clone());
 
         let db = Arc::new(db);
 
@@ -161,6 +156,16 @@ impl Catalog for MetaStoreCatalog {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_info = self.meta.get_table(db_name, table_name)?;
         self.build_table_instance(table_info.as_ref().clone())
+    }
+
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self.meta.get_tables(db_name)?;
+
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.build_table_instance(item.as_ref().clone())?;
+            acc.push(tbl);
+            Ok(acc)
+        })
     }
 
     fn get_table_by_id(

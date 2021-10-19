@@ -99,6 +99,20 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
+    fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
+        let r = self.read_only.get_tables(db_name);
+        match r {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownDatabase("").code() {
+                    self.bottom.get_tables(db_name)
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
     fn get_table_by_id(
         &self,
         table_id: MetaId,

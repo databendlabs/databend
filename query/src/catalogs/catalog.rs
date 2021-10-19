@@ -42,6 +42,8 @@ pub trait Catalog {
     // Get one table by db and table name.
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
 
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
     fn get_table_by_id(
         &self,
         table_id: MetaId,

@@ -12,20 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
-use crate::catalogs::Table;
-
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
-
-    /// Get all tables.
-    fn get_tables(&self) -> Result<Vec<Arc<dyn Table>>>;
 
     /// DDL
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
