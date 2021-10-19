@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! `catalog` defines catalog related data types, such as table or database.
+use std::collections::HashMap;
+use std::sync::Arc;
 
-pub use table_io_context::DataContext;
-pub use table_io_context::IOContext;
-pub use table_io_context::TableDataContext;
-pub use table_io_context::TableIOContext;
+use common_datablocks::DataBlock;
+use common_infallible::RwLock;
 
-mod table_io_context;
-
-#[cfg(test)]
-mod table_io_context_test;
+/// Shared store to support memory tables.
+///
+/// Indexed by table id etc.
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;

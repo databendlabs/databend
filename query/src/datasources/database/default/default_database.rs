@@ -15,6 +15,8 @@
 
 use std::sync::Arc;
 
+use common_context::TableDataContext;
+use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
 use common_meta_types::MetaId;
@@ -34,6 +36,7 @@ pub struct DefaultDatabase {
     meta: Arc<dyn MetaApiSync>,
     table_factory_registry: Arc<TableEngineRegistry>,
     stateful_table_cache: RwLock<InMemoryMetas>,
+    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }
 
 impl DefaultDatabase {
@@ -41,12 +44,14 @@ impl DefaultDatabase {
         db_name: impl Into<String>,
         meta: Arc<dyn MetaApiSync>,
         table_factory_registry: Arc<TableEngineRegistry>,
+        in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
     ) -> Self {
         Self {
             db_name: db_name.into(),
             meta,
             table_factory_registry,
             stateful_table_cache: RwLock::new(InMemoryMetas::create()),
+            in_memory_data,
         }
     }
 
@@ -62,7 +67,15 @@ impl DefaultDatabase {
                 ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
             })?;
 
-        let tbl: Arc<dyn Table> = factory.try_create(table_info.clone())?.into();
+        let tbl: Arc<dyn Table> = factory
+            .try_create(
+                table_info.clone(),
+                Arc::new(TableDataContext {
+                    in_memory_data: self.in_memory_data.clone(),
+                }),
+            )?
+            .into();
+
         let stateful = tbl.is_stateful();
         if stateful {
             self.stateful_table_cache.write().insert(tbl.clone());
