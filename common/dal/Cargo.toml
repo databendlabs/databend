@@ -21,7 +21,11 @@ rusoto_s3 = "0.47.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 metrics = "0.17.0"
+azure_core_mirror = "0.1.0"
+azure_storage_mirror = { version = "0.1.0", features = ["blob"] }
+reqwest = "0.11"
 
 [dev-dependencies]
 pretty_assertions = "1.0"
 rand = "0.8.4"
+

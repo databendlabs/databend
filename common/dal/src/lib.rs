@@ -21,6 +21,8 @@ pub use data_accessor::InputStream;
 pub use data_accessor::SeekableReader;
 pub use impls::aws_s3::S3InputStream;
 pub use impls::aws_s3::S3;
+pub use impls::azure_blob::AzureBlobAccessor;
+pub use impls::azure_blob::AzureBlobInputStream;
 pub use impls::local::Local;
 pub use in_memory_data::InMemoryData;
 pub use schemes::StorageScheme;
