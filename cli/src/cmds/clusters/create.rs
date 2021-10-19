@@ -25,7 +25,7 @@ use clap::ValueHint;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use lexical_util::num::AsPrimitive;
-use sysinfo::System;
+use sysinfo::{System, ProcessExt, Signal};
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
@@ -144,6 +144,14 @@ impl CreateCommand {
                     // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
                     .about("Set the root directory to store all datasets")
                     .value_hint(ValueHint::DirPath),
+            )
+            .arg(
+                Arg::new("force")
+                    .long("force")
+                    // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
+                    .about("Delete existing cluster and install new cluster without check")
+                    .takes_value(false)
+                    ,
             )
     }
 
@@ -529,7 +537,7 @@ impl CreateCommand {
     }
 
     fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
-        match self.local_exec_precheck(args) {
+        match self.local_exec_precheck(writer, args) {
             Ok(_) => {
                 writer.write_ok("databend cluster precheck passed!");
                 // ensuring needed dependencies
@@ -605,8 +613,19 @@ impl CreateCommand {
     }
 
     /// precheck whether current local profile applicable for local host machine
-    fn local_exec_precheck(&self, args: &ArgMatches) -> Result<()> {
-        let status = Status::read(self.conf.clone())?;
+    fn local_exec_precheck(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
+        let mut status = Status::read(self.conf.clone())?;
+        if args.is_present("force") {
+            writer.write_ok("delete existing cluster");
+            DeleteCommand::stop_current_local_services(&mut status, writer).expect("cannot stop current services");
+            let s = System::new_all();
+            for elem  in s.process_by_name("databend-meta") {
+                elem.kill(Signal::Kill);
+            }
+            for elem  in s.process_by_name("databend-query") {
+                elem.kill(Signal::Kill);
+            }
+        }
         if status.has_local_configs() {
             return Err(CliError::Unknown(format!(
                 "❗ found previously existed cluster with config in {}",
