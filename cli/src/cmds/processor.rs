@@ -42,6 +42,13 @@ pub struct Processor {
     commands: Vec<Box<dyn Command>>,
 }
 
+enum MultilineType {
+    SingleQuote,
+    DoubleQuote,
+    BackSlash,
+    None,
+}
+
 fn print_completions<G: Generator>(gen: G, app: &mut App) {
     generate::<G, _>(gen, app, app.get_name().to_string(), &mut io::stdout());
 }
@@ -143,6 +150,7 @@ impl Processor {
         let hist_path = format!("{}/history.txt", self.env.conf.databend_dir.clone());
         let _ = self.readline.load_history(hist_path.as_str());
         let mut content = String::new();
+        let mut multiline_type = MultilineType::None;
 
         loop {
             let writer = Writer::create();
@@ -154,15 +162,54 @@ impl Processor {
             let readline = self.readline.readline(prompt);
             match readline {
                 Ok(line) => {
-                    let line = line.trim();
-                    if line.ends_with('\\') {
-                        content.push_str(&line[0..line.len() - 1]);
+                    let mut line = line.trim();
+                    if line.is_empty() {
                         continue;
+                    }
+                    match multiline_type {
+                        MultilineType::None => {
+                            if line.starts_with('\"') {
+                                multiline_type = MultilineType::DoubleQuote;
+                                content.push_str(&line[1..line.len()]);
+                                continue;
+                            } else if line.starts_with('\'') {
+                                multiline_type = MultilineType::SingleQuote;
+                                content.push_str(&line[1..line.len()]);
+                                continue;
+                            } else if line.ends_with('\\') {
+                                content.push_str(&line[0..line.len() - 1]);
+                                multiline_type = MultilineType::BackSlash;
+                                continue;
+                            }
+                        }
+                        MultilineType::DoubleQuote => {
+                            if line.ends_with('\"') {
+                                line = &line[0..line.len() - 1]
+                            } else {
+                                content.push_str(line);
+                                continue;
+                            }
+                        }
+                        MultilineType::SingleQuote => {
+                            if line.ends_with('\'') {
+                                line = &line[0..line.len() - 1]
+                            } else {
+                                content.push_str(line);
+                                continue;
+                            }
+                        }
+                        MultilineType::BackSlash => {
+                            if line.ends_with('\\') {
+                                content.push_str(&line[0..line.len() - 1]);
+                                continue;
+                            }
+                        }
                     }
                     content.push_str(line);
                     self.readline.history_mut().add(content.clone());
                     self.processor_line(writer, content.clone())?;
                     content.clear();
+                    multiline_type = MultilineType::None;
                 }
                 Err(ReadlineError::Interrupted) => {
                     println!("CTRL-C");
