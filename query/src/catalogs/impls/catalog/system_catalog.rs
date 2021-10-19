@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -34,34 +33,29 @@ use crate::datasources::database::system::SystemDatabase;
 /// Currently, this is only one database here, the "system" db.
 /// "information_schema" db is supposed to held here
 pub struct SystemCatalog {
-    dbs: HashMap<String, Arc<dyn Database>>,
+    sys_db: Arc<SystemDatabase>,
 }
 
 impl SystemCatalog {
     pub fn try_create_with_config(_conf: &Config) -> Result<Self> {
-        let mut dbs = HashMap::new();
-        let sys_db = Arc::new(SystemDatabase::create("system")) as Arc<dyn Database>;
-        dbs.insert(sys_db.name().to_owned(), sys_db);
-        Ok(Self { dbs })
+        let sys_db = Arc::new(SystemDatabase::create("system"));
+        Ok(Self { sys_db })
     }
 }
 
 impl Catalog for SystemCatalog {
     fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let r = self
-            .dbs
-            .iter()
-            .map(|(_, item)| item.clone())
-            .collect::<Vec<_>>();
-        Ok(r)
+        Ok(vec![self.sys_db.clone()])
     }
 
     fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        let db = self
-            .dbs
-            .get(db_name)
-            .ok_or_else(|| ErrorCode::UnknownDatabase(format!("unknown database {}", db_name)))?;
-        Ok(db.clone())
+        if db_name == "system" {
+            return Ok(self.sys_db.clone());
+        }
+        Err(ErrorCode::UnknownDatabase(format!(
+            "unknown database {}",
+            db_name
+        )))
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
@@ -74,17 +68,7 @@ impl Catalog for SystemCatalog {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<dyn Table>> {
-        for db in self.dbs.values() {
-            let tbl = db.get_table_by_id(table_id, table_version);
-            match tbl {
-                Ok(tbl) => return Ok(tbl),
-                Err(_) => continue,
-            }
-        }
-        Err(ErrorCode::UnknownTable(format!(
-            "unknown table of id {}",
-            table_id
-        )))
+        self.sys_db.get_table_by_id(table_id, table_version)
     }
 
     fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
