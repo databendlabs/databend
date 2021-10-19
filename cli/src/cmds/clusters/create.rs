@@ -64,8 +64,8 @@ impl CreateCommand {
                 Arg::new("profile")
                     .long("profile")
                     .about("Profile for deployment, support local and cluster")
-                    .required(true)
-                    .possible_values(&["local"]),
+                    .required(false)
+                    .possible_values(&["local"]).default_value("local"),
             )
             .arg(
                 Arg::new("meta_address")

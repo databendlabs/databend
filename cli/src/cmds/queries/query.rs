@@ -77,7 +77,8 @@ impl QueryCommand {
                     .long("profile")
                     .about("Profile to run queries")
                     .required(false)
-                    .possible_values(&["local"]),
+                    .possible_values(&["local"])
+                    .default_value("local"),
             )
             .arg(
                 Arg::new("client")
