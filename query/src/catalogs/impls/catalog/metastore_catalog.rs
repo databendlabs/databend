@@ -16,13 +16,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_context::TableDataContext;
 use common_dal::InMemoryData;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableInfo;
 use common_planners::CreateDatabasePlan;
 use common_planners::DropDatabasePlan;
 
@@ -108,6 +111,30 @@ impl MetaStoreCatalog {
         self.db_instances.write().insert(name, db.clone());
         Ok(db)
     }
+
+    fn build_table_instance(
+        &self,
+        table_info: TableInfo,
+    ) -> common_exception::Result<Arc<dyn Table>> {
+        let engine = &table_info.engine;
+        let factory = self
+            .table_engine_registry
+            .get_table_factory(engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
+            })?;
+
+        let tbl: Arc<dyn Table> = factory
+            .try_create(
+                table_info,
+                Arc::new(TableDataContext {
+                    in_memory_data: self.in_memory_data.clone(),
+                }),
+            )?
+            .into();
+
+        Ok(tbl)
+    }
 }
 
 impl Catalog for MetaStoreCatalog {
@@ -131,8 +158,8 @@ impl Catalog for MetaStoreCatalog {
     }
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        let db = self.get_database(db_name)?;
-        db.get_table(table_name)
+        let table_info = self.meta.get_table(db_name, table_name)?;
+        self.build_table_instance(table_info.as_ref().clone())
     }
 
     fn get_table_by_id(
@@ -141,9 +168,7 @@ impl Catalog for MetaStoreCatalog {
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<dyn Table>> {
         let table_info = self.meta.get_table_by_id(table_id, table_version)?;
-        // table factories are insides Database, tobe optimized latter
-        let db = self.get_database(&table_info.db)?;
-        db.get_table_by_id(table_id, table_version)
+        self.build_table_instance(table_info.as_ref().clone())
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
