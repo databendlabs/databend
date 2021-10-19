@@ -48,6 +48,7 @@ pub struct Status {
     pub local_config_dir: String,
     pub current_profile: Option<String>,
     pub mirrors: Option<CustomMirror>,
+    pub query_path: Option<String>, // the binary path to query binary file
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -115,7 +116,7 @@ pub trait LocalRuntime {
 }
 
 impl LocalRuntime for LocalMetaConfig {
-    const RETRIES: u16 = 5;
+    const RETRIES: u16 = 30;
 
     fn get_pid(&self) -> Option<pid_t> {
         self.pid
@@ -257,7 +258,7 @@ impl LocalRuntime for LocalMetaConfig {
 }
 
 impl LocalRuntime for LocalQueryConfig {
-    const RETRIES: u16 = 5;
+    const RETRIES: u16 = 30;
 
     fn get_pid(&self) -> Option<pid_t> {
         self.pid
@@ -455,6 +456,7 @@ impl Status {
                 local_config_dir,
                 current_profile: None,
                 mirrors: None,
+                query_path: None,
             };
             serde_json::to_writer(&file, &status)?;
         }
@@ -520,7 +522,7 @@ impl Status {
         if status.local_configs.get(config_type.as_str()).is_none() {
             return Ok(());
         }
-        std::fs::remove_file(file_name.clone()).expect("cannot delete config");
+        if std::fs::remove_file(file_name.clone()).is_ok() {}
         let current_status = status.clone();
         let mut vec = current_status
             .local_configs

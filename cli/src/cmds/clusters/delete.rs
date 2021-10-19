@@ -57,6 +57,9 @@ impl DeleteCommand {
         writer.write_ok("⚠ start to clean up local services");
         for (fs, query) in status.get_local_query_configs() {
             if query.kill().is_err() {
+                if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
+                    writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
+                }
                 writer.write_err(&*format!(
                     "cannot kill query service with config in {}",
                     fs.clone()
@@ -70,8 +73,12 @@ impl DeleteCommand {
         }
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
-            meta.kill()
-                .expect(&*format!("cannot kill meta service with config in {}", fs));
+            if meta.kill().is_err() {
+                writer.write_err(&*format!("cannot kill meta service with config in {}", fs));
+                if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
+                    writer.write_err(&*format!("cannot clean meta config in {}", fs))
+                }
+            }
             Status::delete_local_config(status, "meta".to_string(), fs.clone())
                 .expect("cannot clean meta config");
             writer.write_ok(format!("⚠️ stopped meta service with config in {}", fs).as_str());
