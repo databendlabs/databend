@@ -63,7 +63,6 @@ impl QueryCommand {
     }
     pub fn generate() -> App<'static> {
         let app = App::new("query")
-            .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
             .about("Query on databend cluster")
             .arg(

@@ -65,7 +65,6 @@ impl ClusterCommand {
     }
     pub fn generate() -> App<'static> {
         let app = App::new("cluster")
-            .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
             .about("Cluster life cycle management")
             .subcommand(CreateCommand::generate())

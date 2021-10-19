@@ -42,8 +42,8 @@ pub struct Processor {
     commands: Vec<Box<dyn Command>>,
 }
 
-fn print_completions<G: Generator>(app: &mut App) {
-    generate::<G, _>(app, app.get_name().to_string(), &mut io::stdout());
+fn print_completions<G: Generator>(gen: G, app: &mut App) {
+    generate::<G, _>(gen, app, app.get_name().to_string(), &mut io::stdout());
 }
 
 impl Processor {
@@ -124,8 +124,8 @@ impl Processor {
                     let mut app = Config::build_cli();
                     eprintln!("Generating completion file for {}...", generator);
                     match generator {
-                        "bash" => print_completions::<Bash>(&mut app),
-                        "zsh" => print_completions::<Zsh>(&mut app),
+                        "bash" => print_completions::<Bash>(Bash, &mut app),
+                        "zsh" => print_completions::<Zsh>(Zsh, &mut app),
                         _ => panic!("Unknown generator"),
                     }
                 }
