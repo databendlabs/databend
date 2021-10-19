@@ -103,7 +103,7 @@ impl CreateCommand {
                     .env(databend_query::configs::config_query::QUERY_NAMESPACE)
                     .takes_value(true)
                     .about("Set the namespace for query to work on")
-                    .default_value("test"),
+                    .default_value("test_cluster"),
             )
             .arg(
                 Arg::new("query_tenant")
@@ -552,21 +552,21 @@ impl CreateCommand {
                 let meta_status = meta_config.verify();
                 if meta_status.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
-                    DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                     writer.write_err(&*format!(
                         "❌ Cannot connect to meta service: {:?}",
                         meta_status.unwrap_err()
                     ));
+                    DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                     return Ok(());
                 }
                 let query_config = self.generate_local_query_config(args, bin_path, &meta_config);
                 if query_config.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
-                    DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                     writer.write_err(&*format!(
                         "❌ Cannot generate query configurations, error: {:?}",
                         query_config.as_ref().unwrap_err()
                     ));
+                    DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                 }
                 writer.write_ok(&*format!(
                     "local data would be stored in {}",
@@ -583,11 +583,11 @@ impl CreateCommand {
                     let res = self.provision_local_query_service(writer, query_config.unwrap());
                     if res.is_err() {
                         let mut status = Status::read(self.conf.clone())?;
-                        DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                         writer.write_err(&*format!(
                             "❌ Cannot provison query service, error: {:?}",
                             res.unwrap_err()
                         ));
+                        DeleteCommand::stop_current_local_services(&mut status, writer).unwrap();
                     }
                 }
                 let mut status = Status::read(self.conf.clone())?;
