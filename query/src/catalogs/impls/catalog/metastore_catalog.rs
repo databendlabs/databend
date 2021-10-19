@@ -163,6 +163,16 @@ impl Catalog for MetaStoreCatalog {
         self.build_table_instance(table_info.as_ref().clone())
     }
 
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self.meta.get_tables(db_name)?;
+
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.build_table_instance(item.as_ref().clone())?;
+            acc.push(tbl);
+            Ok(acc)
+        })
+    }
+
     fn get_table_by_id(
         &self,
         table_id: MetaId,

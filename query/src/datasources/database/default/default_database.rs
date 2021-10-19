@@ -81,12 +81,7 @@ impl Database for DefaultDatabase {
     }
 
     fn get_tables(&self) -> common_exception::Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.meta.get_tables(self.name())?;
-        table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.build_table_instance(item)?;
-            acc.push(tbl);
-            Ok(acc)
-        })
+        unimplemented!();
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {

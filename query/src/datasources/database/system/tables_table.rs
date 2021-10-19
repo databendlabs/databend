@@ -74,13 +74,14 @@ impl Table for TablesTable {
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
 
-        let databases = ctx.get_catalog().get_databases()?;
+        let cata = ctx.get_catalog();
+        let databases = cata.get_databases()?;
 
         let mut database_tables = vec![];
         for database in databases {
-            for table in database.get_tables()? {
-                let name = database.name().to_string();
-                database_tables.push((name, table));
+            let name = database.name();
+            for table in cata.get_tables(name)? {
+                database_tables.push((name.to_string(), table));
             }
         }
 
