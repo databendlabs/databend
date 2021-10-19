@@ -41,7 +41,7 @@ pub struct RangeFilter {
 }
 
 impl RangeFilter {
-    pub fn new(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
+    pub fn try_create(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
         let varifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns)?;
         let input_fields = stat_columns
@@ -68,8 +68,28 @@ impl RangeFilter {
     }
 
     pub fn range_filter(&self, stats: HashMap<ColumnId, ColStats>) -> Result<bool> {
-        let data_block = build_stats_block(self.schema.clone(), stats, self.stat_columns.clone())?;
+        let columns = self
+            .stat_columns
+            .iter()
+            .map(|c| {
+                let stat = stats.get(&c.column_id).ok_or_else(|| {
+                    ErrorCode::UnknownException(format!(
+                        "Unable to get the colStats by ColumnId: {}",
+                        c.column_id
+                    ))
+                })?;
+                let val = match c.stat_type {
+                    StatType::Max => stat.max.clone(),
+                    StatType::Min => stat.min.clone(),
+                    StatType::Nulls => DataValue::UInt64(Some(stat.null_count as u64)),
+                    StatType::Rows => DataValue::UInt64(Some(stat.row_count as u64)),
+                };
+                val.to_array()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
+
         assert_eq!(executed_data_block.num_rows(), 1);
         assert_eq!(executed_data_block.num_columns(), 1);
 
@@ -82,33 +102,6 @@ impl RangeFilter {
             .value(0);
         Ok(val)
     }
-}
-
-fn build_stats_block(
-    schema: DataSchemaRef,
-    stats: HashMap<ColumnId, ColStats>,
-    stat_columns: StatColumns,
-) -> Result<DataBlock> {
-    let columns = stat_columns
-        .iter()
-        .map(|c| {
-            let stat = stats.get(&c.column_id).ok_or_else(|| {
-                ErrorCode::UnknownException(format!(
-                    "Unable to get the colStats by ColumnId: {}",
-                    c.column_id
-                ))
-            })?;
-            let val = match c.stat_type {
-                StatType::Max => stat.max.clone(),
-                StatType::Min => stat.min.clone(),
-                StatType::Nulls => DataValue::UInt64(Some(stat.null_count as u64)),
-                StatType::Rows => DataValue::UInt64(Some(stat.row_count as u64)),
-            };
-            val.to_array()
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let block = DataBlock::create_by_array(schema, columns);
-    Ok(block)
 }
 
 fn build_verifiable_expr(
@@ -151,7 +144,7 @@ fn build_verifiable_expr(
         _ => return Ok(unhandled),
     };
 
-    let res = VerifiableExprBuilder::new(
+    let res = VerifiableExprBuilder::try_create(
         exprs,
         op.to_lowercase().as_str(),
         schema.as_ref(),
@@ -162,7 +155,7 @@ fn build_verifiable_expr(
     Ok(res)
 }
 
-// TODO: need add monotonic check for the expression, will move to FunctionFactory.
+// TODO: need add monotonic check for the expression, will move to FunctionFeatures.
 fn is_monotonic_expression(expr: &Expression) -> Monotonic {
     match expr {
         Expression::Column(_) => Monotonic {
@@ -281,7 +274,7 @@ struct VerifiableExprBuilder<'a> {
 }
 
 impl<'a> VerifiableExprBuilder<'a> {
-    fn new(
+    fn try_create(
         exprs: Expressions,
         op: &'a str,
         schema: &'a DataSchema,
@@ -456,22 +449,56 @@ mod tests {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("a", DataType::Int64, false),
             DataField::new("b", DataType::Int32, false),
-            DataField::new("c", DataType::Int32, false),
+            DataField::new("c", DataType::String, false),
         ]);
 
-        let mut stat_columns: StatColumns = Vec::new();
+        #[allow(dead_code)]
+        struct Test {
+            name: &'static str,
+            expr: Expression,
+            expect: &'static str,
+        }
 
-        let expr = col("a").lt(lit(1)).and(col("b").gt(lit(3)));
-        let res = build_verifiable_expr(&expr, schema.clone(), &mut stat_columns)?;
-        let expect = "((min_a < 1) and (max_b > 3))";
-        let actual = format!("{:?}", res);
-        assert_eq!(expect, actual);
+        let tests: Vec<Test> = vec![
+            Test {
+                name: "a < 1 and b > 3",
+                expr: col("a").lt(lit(1)).and(col("b").gt(lit(3))),
+                expect: "((min_a < 1) and (max_b > 3))",
+            },
+            Test {
+                name: "1 > -a or 3 >= b",
+                expr: lit(1).gt(neg(col("a"))).or(lit(3).gt_eq(col("b"))),
+                expect: "(((- max_a) < 1) or (min_b <= 3))",
+            },
+            Test {
+                name: "a = 1 and b != 3",
+                expr: col("a").eq(lit(1)).and(col("b").not_eq(lit(3))),
+                expect: "(((min_a <= 1) and (max_a >= 1)) and ((min_b > 3) or (max_b < 3)))",
+            },
+            Test {
+                name: "a is null",
+                expr: Expression::create_scalar_function("isNull", vec![col("a")]),
+                expect: "(nulls_a > 0)",
+            },
+            Test {
+                name: "a is not null",
+                expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
+                expect: "(nulls_a < rows_a)",
+            },
+            Test {
+                name: "b >= 0 and c like '%sys%'",
+                expr: col("b").gt_eq(lit(0)).and(Expression::create_binary_expression("like", vec![col("c"), lit("%sys%".as_bytes())])),
+                expect: "((max_b >= 0) and true)",
+            },
+        ];
 
-        let expr = neg(col("a")).lt(lit(1)).and(col("b").gt(lit(3)));
-        let res = build_verifiable_expr(&expr, schema, &mut stat_columns)?;
-        let expect = "(((- max_a) < 1) and (max_b > 3))";
-        let actual = format!("{:?}", res);
-        assert_eq!(expect, actual);
+        for test in tests {
+            let mut stat_columns: StatColumns = Vec::new();
+            let res = build_verifiable_expr(&test.expr, schema.clone(), &mut stat_columns)?;
+            let actual = format!("{:?}", res);
+            assert_eq!(test.expect, actual, "{:#?}", test.name);
+        }
+
         Ok(())
     }
 }
