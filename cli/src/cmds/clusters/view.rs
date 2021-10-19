@@ -56,7 +56,6 @@ impl ViewCommand {
     }
     pub fn generate() -> App<'static> {
         App::new("view")
-            .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
             .about("View health status of current profile")
             .arg(

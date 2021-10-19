@@ -17,6 +17,7 @@ use std::env;
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_context::TableDataContext;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -51,7 +52,7 @@ async fn test_parquet_table() -> Result<()> {
         engine: "test_parquet".into(),
         options,
     };
-    let table = ParquetTable::try_create(table_info)?;
+    let table = ParquetTable::try_create(table_info, Arc::new(TableDataContext::default()))?;
 
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);

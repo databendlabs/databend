@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_context::IOContext;
+use common_context::TableDataContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -35,17 +36,20 @@ async fn test_null_table() -> Result<()> {
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = NullTable::try_create(TableInfo {
-        database_id: 0,
-        db: "default".into(),
-        name: "a".into(),
+    let table = NullTable::try_create(
+        TableInfo {
+            database_id: 0,
+            db: "default".into(),
+            name: "a".into(),
 
-        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
-        engine: "Null".to_string(),
-        options: TableOptions::default(),
-        table_id: 0,
-        version: 0,
-    })?;
+            schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
+            engine: "Null".to_string(),
+            options: TableOptions::default(),
+            table_id: 0,
+            version: 0,
+        },
+        Arc::new(TableDataContext::default()),
+    )?;
 
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);

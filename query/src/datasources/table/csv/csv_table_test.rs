@@ -17,6 +17,7 @@ use std::env;
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_context::TableDataContext;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -41,16 +42,23 @@ async fn test_csv_table() -> Result<()> {
     .collect();
 
     let ctx = crate::tests::try_create_context()?;
-    let table = CsvTable::try_create(TableInfo {
-        database_id: 0,
-        db: "default".into(),
-        name: "test_csv".into(),
-        schema: DataSchemaRefExt::create(vec![DataField::new("column1", DataType::UInt64, false)]),
-        engine: "Csv".to_string(),
-        options,
-        table_id: 0,
-        version: 0,
-    })?;
+    let table = CsvTable::try_create(
+        TableInfo {
+            database_id: 0,
+            db: "default".into(),
+            name: "test_csv".into(),
+            schema: DataSchemaRefExt::create(vec![DataField::new(
+                "column1",
+                DataType::UInt64,
+                false,
+            )]),
+            engine: "Csv".to_string(),
+            options,
+            table_id: 0,
+            version: 0,
+        },
+        Arc::new(TableDataContext::default()),
+    )?;
 
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
@@ -112,21 +120,24 @@ async fn test_csv_table_parse_error() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
 
-    let table = CsvTable::try_create(TableInfo {
-        database_id: 0,
-        db: "default".into(),
-        name: "test_csv".into(),
-        schema: DataSchemaRefExt::create(vec![
-            DataField::new("column1", DataType::UInt64, false),
-            DataField::new("column2", DataType::UInt64, false),
-            DataField::new("column3", DataType::UInt64, false),
-            DataField::new("column4", DataType::UInt64, false),
-        ]),
-        engine: "Csv".to_string(),
-        options,
-        table_id: 0,
-        version: 0,
-    })?;
+    let table = CsvTable::try_create(
+        TableInfo {
+            database_id: 0,
+            db: "default".into(),
+            name: "test_csv".into(),
+            schema: DataSchemaRefExt::create(vec![
+                DataField::new("column1", DataType::UInt64, false),
+                DataField::new("column2", DataType::UInt64, false),
+                DataField::new("column3", DataType::UInt64, false),
+                DataField::new("column4", DataType::UInt64, false),
+            ]),
+            engine: "Csv".to_string(),
+            options,
+            table_id: 0,
+            version: 0,
+        },
+        Arc::new(TableDataContext::default()),
+    )?;
 
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),

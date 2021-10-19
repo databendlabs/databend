@@ -311,6 +311,25 @@ impl NumberResultFunction<u8> for ToSecond {
     }
 }
 
+#[derive(Clone)]
+pub struct ToMonday;
+
+impl NumberResultFunction<u16> for ToMonday {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn return_type() -> Result<DataType> {
+        Ok(DataType::Date16)
+    }
+    fn to_number(value: DateTime<Utc>) -> u16 {
+        let weekday = value.weekday();
+        (get_day(value) - weekday.num_days_from_monday()) as u16
+    }
+
+    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
+        DataValue::UInt16(Some(Self::to_number(value)))
+    }
+}
+
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
@@ -450,3 +469,5 @@ pub type ToDayOfWeekFunction = NumberFunction<ToDayOfWeek, u8>;
 pub type ToHourFunction = NumberFunction<ToHour, u8>;
 pub type ToMinuteFunction = NumberFunction<ToMinute, u8>;
 pub type ToSecondFunction = NumberFunction<ToSecond, u8>;
+
+pub type ToMondayFunction = NumberFunction<ToMonday, u16>;

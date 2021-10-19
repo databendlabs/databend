@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read;
 use common_base::tokio::task;
+use common_context::DataContext;
 use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -39,7 +40,10 @@ pub struct ParquetTable {
 }
 
 impl ParquetTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        table_info: TableInfo,
+        _data_ctx: Arc<dyn DataContext<u64>>,
+    ) -> Result<Box<dyn Table>> {
         let options = &table_info.options;
         let file = options.get("location").cloned();
         return match file {

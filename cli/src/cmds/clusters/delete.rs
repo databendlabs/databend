@@ -36,7 +36,6 @@ impl DeleteCommand {
     }
     pub fn generate() -> App<'static> {
         App::new("delete")
-            .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
             .about("Delete a databend cluster (delete current cluster by default) ")
             .arg(

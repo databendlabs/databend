@@ -17,6 +17,7 @@ use std::any::Any;
 use std::fs::File;
 use std::sync::Arc;
 
+use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_exception::ErrorCode;
@@ -40,7 +41,10 @@ pub struct CsvTable {
 }
 
 impl CsvTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        table_info: TableInfo,
+        _data_ctx: Arc<dyn DataContext<u64>>,
+    ) -> Result<Box<dyn Table>> {
         let options = &table_info.options;
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {

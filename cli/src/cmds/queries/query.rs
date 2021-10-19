@@ -37,6 +37,7 @@ pub const CLI_QUERY_CLIENT: &str = "CLI_QUERY_CLIENT";
 
 #[derive(Clone)]
 pub struct QueryCommand {
+    #[allow(dead_code)]
     conf: Config,
     clap: App<'static>,
 }
@@ -69,7 +70,6 @@ impl QueryCommand {
     }
     pub fn generate() -> App<'static> {
         let app = App::new("query")
-            .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
             .about("Query on databend cluster")
             .arg(
