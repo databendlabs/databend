@@ -25,7 +25,9 @@ use clap::ValueHint;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use lexical_util::num::AsPrimitive;
-use sysinfo::{System, ProcessExt, Signal};
+use sysinfo::ProcessExt;
+use sysinfo::Signal;
+use sysinfo::System;
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
@@ -616,12 +618,13 @@ impl CreateCommand {
         let mut status = Status::read(self.conf.clone())?;
         if args.is_present("force") {
             writer.write_ok("delete existing cluster");
-            DeleteCommand::stop_current_local_services(&mut status, writer).expect("cannot stop current services");
+            DeleteCommand::stop_current_local_services(&mut status, writer)
+                .expect("cannot stop current services");
             let s = System::new_all();
-            for elem  in s.process_by_name("databend-meta") {
+            for elem in s.process_by_name("databend-meta") {
                 elem.kill(Signal::Kill);
             }
-            for elem  in s.process_by_name("databend-query") {
+            for elem in s.process_by_name("databend-query") {
                 elem.kill(Signal::Kill);
             }
         }

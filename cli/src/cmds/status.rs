@@ -522,8 +522,7 @@ impl Status {
         if status.local_configs.get(config_type.as_str()).is_none() {
             return Ok(());
         }
-        if let Ok(_) = std::fs::remove_file(file_name.clone()) {
-        }
+        if std::fs::remove_file(file_name.clone()).is_ok() {}
         let current_status = status.clone();
         let mut vec = current_status
             .local_configs

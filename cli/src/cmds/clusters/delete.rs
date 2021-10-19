@@ -74,9 +74,9 @@ impl DeleteCommand {
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
             if meta.kill().is_err() {
-                writer.write_err(&*format!("cannot kill meta service with config in {}", fs.clone()));
+                writer.write_err(&*format!("cannot kill meta service with config in {}", fs));
                 if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
-                    writer.write_err(&*format!("cannot clean meta config in {}", fs.clone()))
+                    writer.write_err(&*format!("cannot clean meta config in {}", fs))
                 }
             }
             Status::delete_local_config(status, "meta".to_string(), fs.clone())

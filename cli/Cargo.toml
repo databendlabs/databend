@@ -22,6 +22,8 @@ common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"
 comfy-table = "4.1.1"
 dirs = "4.0.0"
+clap = "3.0.0-beta.5"
+clap_generate = "3.0.0-beta.5"
 dyn-clone = "1.0.4"
 flate2 = "1.0.22"
 indicatif = "0.16.2"
