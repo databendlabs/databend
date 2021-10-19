@@ -31,13 +31,15 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // create test table
     let crate_table_plan = TestFixture::default_crate_table_plan();
-    let db = ctx
-        .get_catalog()
-        .get_database(TestFixture::default_db().as_str())?;
+    let catalog = ctx.get_catalog();
+    let db = catalog.get_database(TestFixture::default_db().as_str())?;
     db.create_table(crate_table_plan)?;
 
     // get table
-    let table = db.get_table(TestFixture::default_table().as_str())?;
+    let table = catalog.get_table(
+        TestFixture::default_db().as_str(),
+        TestFixture::default_table().as_str(),
+    )?;
 
     // insert 10 blocks
     let io_ctx = Arc::new(ctx.get_single_node_table_io_context()?);
@@ -46,7 +48,10 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // get the latest tbl
     let prev_version = table.get_table_info().version;
-    let table = db.get_table(TestFixture::default_table().as_str())?;
+    let table = catalog.get_table(
+        TestFixture::default_db().as_str(),
+        TestFixture::default_table().as_str(),
+    )?;
     assert_ne!(prev_version, table.get_table_info().version);
 
     let (stats, parts) = table.read_partitions(io_ctx.clone(), None, None)?;
@@ -78,11 +83,13 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let ctx = fixture.ctx();
 
     let crate_table_plan = TestFixture::default_crate_table_plan();
-    let db = ctx
-        .get_catalog()
-        .get_database(TestFixture::default_db().as_str())?;
+    let catalog = ctx.get_catalog();
+    let db = catalog.get_database(TestFixture::default_db().as_str())?;
     db.create_table(crate_table_plan)?;
-    let table = db.get_table(TestFixture::default_table().as_str())?;
+    let table = catalog.get_table(
+        TestFixture::default_db().as_str(),
+        TestFixture::default_table().as_str(),
+    )?;
 
     let io_ctx = Arc::new(ctx.get_single_node_table_io_context()?);
     let truncate_plan = TruncateTablePlan {
@@ -93,7 +100,10 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // 1. truncate empty table
     let prev_version = table.get_table_info().version;
     let r = table.truncate(io_ctx.clone(), truncate_plan.clone()).await;
-    let table = db.get_table(TestFixture::default_table().as_str())?;
+    let table = catalog.get_table(
+        TestFixture::default_db().as_str(),
+        TestFixture::default_table().as_str(),
+    )?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().version);
     assert!(r.is_ok());
@@ -109,7 +119,10 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // get the latest tbl
     let prev_version = table.get_table_info().version;
-    let table = db.get_table(TestFixture::default_table().as_str())?;
+    let table = catalog.get_table(
+        TestFixture::default_db().as_str(),
+        TestFixture::default_table().as_str(),
+    )?;
     assert_ne!(prev_version, table.get_table_info().version);
 
     // ensure data ingested
@@ -124,7 +137,10 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // get the latest tbl
     let prev_version = table.get_table_info().version;
-    let table = db.get_table(TestFixture::default_table().as_str())?;
+    let table = catalog.get_table(
+        TestFixture::default_db().as_str(),
+        TestFixture::default_table().as_str(),
+    )?;
     assert_ne!(prev_version, table.get_table_info().version);
     let (stats, parts) =
         table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)?;
