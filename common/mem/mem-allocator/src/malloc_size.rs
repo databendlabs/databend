@@ -1,7 +1,17 @@
-// Copyright 2016-2017 The Servo Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
-//。
+// Copyright 2020 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
@@ -50,6 +60,7 @@ use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::mem::size_of;
+use std::mem::size_of_val;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
@@ -534,6 +545,30 @@ impl<T: MallocSizeOf> MallocSizeOf for parking_lot::RwLock<T> {
 impl<T: MallocSizeOf> MallocSizeOf for common_infallible::RwLock<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.read().size_of(ops)
+    }
+}
+
+impl<T: ?Sized> MallocShallowSizeOf for Box<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        size_of_val(&**self)
+    }
+}
+
+impl MallocSizeOf for String {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        self.capacity() * size_of::<u8>()
+    }
+}
+
+impl<T> MallocShallowSizeOf for Vec<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        self.capacity() * size_of::<T>()
+    }
+}
+
+impl<T> MallocUnconditionalShallowSizeOf for Arc<T> {
+    fn unconditional_shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        size_of::<T>()
     }
 }
 
