@@ -99,12 +99,7 @@ impl MetaStoreCatalog {
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let db = DefaultDatabase::new(
-            &db_info.db,
-            self.meta.clone(),
-            self.table_engine_registry.clone(),
-            self.in_memory_data.clone(),
-        );
+        let db = DefaultDatabase::new(&db_info.db, self.meta.clone());
 
         let db = Arc::new(db);
 

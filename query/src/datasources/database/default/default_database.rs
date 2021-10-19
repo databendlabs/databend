@@ -15,73 +15,29 @@
 
 use std::sync::Arc;
 
-use common_context::TableDataContext;
-use common_dal::InMemoryData;
-use common_exception::ErrorCode;
-use common_infallible::RwLock;
-use common_meta_types::TableInfo;
 use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
-use crate::catalogs::Table;
-use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 pub struct DefaultDatabase {
     db_name: String,
     meta: Arc<dyn MetaApiSync>,
-    table_factory_registry: Arc<TableEngineRegistry>,
-    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }
 
 impl DefaultDatabase {
-    pub fn new(
-        db_name: impl Into<String>,
-        meta: Arc<dyn MetaApiSync>,
-        table_factory_registry: Arc<TableEngineRegistry>,
-        in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-    ) -> Self {
+    pub fn new(db_name: impl Into<String>, meta: Arc<dyn MetaApiSync>) -> Self {
         Self {
             db_name: db_name.into(),
             meta,
-            table_factory_registry,
-            in_memory_data,
         }
-    }
-
-    fn build_table_instance(
-        &self,
-        table_info: &TableInfo,
-    ) -> common_exception::Result<Arc<dyn Table>> {
-        let engine = &table_info.engine;
-        let factory = self
-            .table_factory_registry
-            .get_table_factory(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
-            })?;
-
-        let tbl: Arc<dyn Table> = factory
-            .try_create(
-                table_info.clone(),
-                Arc::new(TableDataContext {
-                    in_memory_data: self.in_memory_data.clone(),
-                }),
-            )?
-            .into();
-
-        Ok(tbl)
     }
 }
 
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
         &self.db_name
-    }
-
-    fn get_tables(&self) -> common_exception::Result<Vec<Arc<dyn Table>>> {
-        unimplemented!();
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
