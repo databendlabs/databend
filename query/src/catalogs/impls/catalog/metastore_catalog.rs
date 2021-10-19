@@ -28,7 +28,9 @@ use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::backends::MetaEmbeddedSync;
@@ -99,7 +101,7 @@ impl MetaStoreCatalog {
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let db = DefaultDatabase::new(&db_info.db, self.meta.clone());
+        let db = DefaultDatabase::new(&db_info.db);
 
         let db = Arc::new(db);
 
@@ -185,6 +187,16 @@ impl Catalog for MetaStoreCatalog {
     ) -> Result<CommitTableReply> {
         self.meta
             .commit_table(table_id, new_table_version, new_snapshot_location)
+    }
+
+    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+        // TODO validate table parameters by using TableFactory
+        self.meta.create_table(plan)?;
+        Ok(())
+    }
+
+    fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
+        self.meta.drop_table(plan)
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
