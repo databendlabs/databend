@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -28,8 +27,7 @@ use common_planners::Expression;
 use common_planners::Expressions;
 use common_planners::RewriteHelper;
 
-use crate::datasources::table::fuse::ColStats;
-use crate::datasources::table::fuse::ColumnId;
+use crate::datasources::table::fuse::util::BlockStats;
 use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
@@ -43,7 +41,7 @@ pub struct RangeFilter {
 impl RangeFilter {
     pub fn try_create(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
-        let varifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns)?;
+        let varifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns);
         let input_fields = stat_columns
             .iter()
             .map(|c| c.stat_field.clone())
@@ -67,7 +65,7 @@ impl RangeFilter {
         })
     }
 
-    pub fn range_filter(&self, stats: HashMap<ColumnId, ColStats>) -> Result<bool> {
+    pub fn eval(&self, stats: &BlockStats) -> Result<bool> {
         let columns = self
             .stat_columns
             .iter()
@@ -82,7 +80,6 @@ impl RangeFilter {
                     StatType::Max => stat.max.clone(),
                     StatType::Min => stat.min.clone(),
                     StatType::Nulls => DataValue::UInt64(Some(stat.null_count as u64)),
-                    StatType::Rows => DataValue::UInt64(Some(stat.row_count as u64)),
                 };
                 val.to_array()
             })
@@ -104,55 +101,44 @@ impl RangeFilter {
     }
 }
 
+/// convert expr to Verifiable Expression
+/// Rules: (section 5.2 of http://vldb.org/pvldb/vol14/p3083-edara.pdf)
 fn build_verifiable_expr(
     expr: &Expression,
     schema: DataSchemaRef,
     stat_columns: &mut StatColumns,
-) -> Result<Expression> {
+) -> Expression {
     let unhandled = lit(true);
+
     let (exprs, op) = match expr {
-        Expression::Literal { ref value, .. } => {
-            let val = value
-                .to_array()?
-                .cast_with_type(&DataType::Boolean)?
-                .bool()?
-                .inner()
-                .value(0);
-            if val {
-                return Ok(lit(true));
-            } else {
-                return Ok(lit(false));
-            }
-        }
+        Expression::Literal { .. } => return expr.clone(),
         Expression::ScalarFunction { op, args } => (args.clone(), op.clone()),
         Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
             "and" => {
-                let left = build_verifiable_expr(left, schema.clone(), stat_columns)?;
-                let right = build_verifiable_expr(right, schema, stat_columns)?;
-                return Ok(left.and(right));
+                let left = build_verifiable_expr(left, schema.clone(), stat_columns);
+                let right = build_verifiable_expr(right, schema, stat_columns);
+                return left.and(right);
             }
             "or" => {
-                let left = build_verifiable_expr(left, schema.clone(), stat_columns)?;
-                let right = build_verifiable_expr(right, schema, stat_columns)?;
-                return Ok(left.or(right));
+                let left = build_verifiable_expr(left, schema.clone(), stat_columns);
+                let right = build_verifiable_expr(right, schema, stat_columns);
+                return left.or(right);
             }
             _ => (
                 vec![left.as_ref().clone(), right.as_ref().clone()],
                 op.clone(),
             ),
         },
-        _ => return Ok(unhandled),
+        _ => return unhandled,
     };
 
-    let res = VerifiableExprBuilder::try_create(
+    VerifiableExprBuilder::try_create(
         exprs,
         op.to_lowercase().as_str(),
         schema.as_ref(),
         stat_columns,
     )
-    .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled));
-
-    Ok(res)
+    .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
 // TODO: need add monotonic check for the expression, will move to FunctionFeatures.
@@ -201,44 +187,30 @@ enum StatType {
     Min,
     Max,
     Nulls,
-    Rows,
-}
-
-impl StatType {
-    fn to_string(&self) -> Cow<'static, str> {
-        match *self {
-            StatType::Min => "min".into(),
-            StatType::Max => "max".into(),
-            StatType::Nulls => "nulls".into(),
-            StatType::Rows => "rows".into(),
-        }
-    }
 }
 
 impl fmt::Display for StatType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            StatType::Min => write!(f, "min"),
+            StatType::Max => write!(f, "max"),
+            StatType::Nulls => write!(f, "nulls"),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 struct StatColumn {
-    column_id: ColumnId,
+    column_id: u32,
     stat_type: StatType,
     stat_field: DataField,
 }
 
 impl StatColumn {
-    fn new(
-        column_name: String,
-        column_id: ColumnId,
-        stat_type: StatType,
-        field: &DataField,
-    ) -> Self {
+    fn new(column_name: String, column_id: u32, stat_type: StatType, field: &DataField) -> Self {
         let column_new = format!("{}_{}", stat_type, column_name);
         let data_type = match stat_type {
             StatType::Nulls => DataType::UInt64,
-            StatType::Rows => DataType::UInt64,
             _ => field.data_type().clone(),
         };
         let stat_field = DataField::new(column_new.as_str(), data_type, field.is_nullable());
@@ -267,7 +239,7 @@ struct VerifiableExprBuilder<'a> {
     args: Expressions,
     op: &'a str,
     column_name: String,
-    column_id: ColumnId,
+    column_id: u32,
     monotonic: Monotonic,
     field: &'a DataField,
     stat_columns: &'a mut StatColumns,
@@ -325,7 +297,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         let (index, field) = schema
             .column_with_name(column_name.as_str())
             .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
-        let column_id = index as ColumnId;
+        let column_id = index as u32;
 
         Ok(Self {
             args,
@@ -347,9 +319,10 @@ impl<'a> VerifiableExprBuilder<'a> {
                 Ok(nulls_expr.gt(scalar_expr))
             }
             "isnotnull" => {
-                let nulls_expr = self.nulls_column_expr()?;
-                let rows_expr = self.rows_column_expr()?;
-                Ok(nulls_expr.lt(rows_expr))
+                let min_expr = self.min_column_expr()?;
+                Ok(Expression::create_scalar_function("isNotNull", vec![
+                    min_expr,
+                ]))
             }
             "=" => {
                 let min_expr = self.min_column_expr()?;
@@ -428,10 +401,6 @@ impl<'a> VerifiableExprBuilder<'a> {
     fn nulls_column_expr(&mut self) -> Result<Expression> {
         self.stat_column_expr(StatType::Nulls)
     }
-
-    fn rows_column_expr(&mut self) -> Result<Expression> {
-        self.stat_column_expr(StatType::Rows)
-    }
 }
 
 #[cfg(test)]
@@ -483,18 +452,23 @@ mod tests {
             Test {
                 name: "a is not null",
                 expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
-                expect: "(nulls_a < rows_a)",
+                expect: "isNotNull(min_a)",
             },
             Test {
                 name: "b >= 0 and c like '%sys%'",
-                expr: col("b").gt_eq(lit(0)).and(Expression::create_binary_expression("like", vec![col("c"), lit("%sys%".as_bytes())])),
+                expr: col("b")
+                    .gt_eq(lit(0))
+                    .and(Expression::create_binary_expression("like", vec![
+                        col("c"),
+                        lit("%sys%".as_bytes()),
+                    ])),
                 expect: "((max_b >= 0) and true)",
             },
         ];
 
         for test in tests {
             let mut stat_columns: StatColumns = Vec::new();
-            let res = build_verifiable_expr(&test.expr, schema.clone(), &mut stat_columns)?;
+            let res = build_verifiable_expr(&test.expr, schema.clone(), &mut stat_columns);
             let actual = format!("{:?}", res);
             assert_eq!(test.expect, actual, "{:#?}", test.name);
         }
