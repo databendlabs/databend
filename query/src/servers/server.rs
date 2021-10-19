@@ -17,11 +17,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::tokio;
-use common_base::tokio::sync::mpsc::Receiver;
+use common_base::signal_stream;
+use common_base::SignalStream;
 use common_exception::Result;
 use futures::stream::Abortable;
 use futures::Future;
+use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::sessions::SessionManagerRef;
@@ -50,7 +51,7 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn shutdown(&mut self, signal: Option<Receiver<()>>) -> impl Future<Output = ()> + '_ {
+    pub fn shutdown(&mut self, signal: Option<SignalStream>) -> impl Future<Output = ()> + '_ {
         let mut shutdown_jobs = vec![];
         for service in &mut self.services {
             shutdown_jobs.push(service.shutdown());
@@ -67,34 +68,26 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn wait_for_termination_request(&mut self) -> impl Future<Output = ()> + '_ {
-        let mut receiver = Self::register_termination_handle();
-        async move {
-            receiver.recv().await;
-
-            log::info!("Received termination signal.");
-            log::info!("You can press Ctrl + C again to force shutdown.");
-            if let Ok(false) =
-                self.shutdown
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
-            {
-                let shutdown_services = self.shutdown(Some(receiver));
-                shutdown_services.await;
-            }
-        }
-    }
-
-    pub fn register_termination_handle() -> Receiver<()> {
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        ctrlc::set_handler(move || {
-            if let Err(error) = tx.blocking_send(()) {
-                log::error!("Could not send signal on channel {}", error);
+    pub async fn wait_for_termination_request(&mut self) {
+        match signal_stream() {
+            Err(cause) => {
+                log::error!("Cannot set shutdown signal handler, {:?}", cause);
                 std::process::exit(1);
             }
-        })
-        .expect("Error setting Ctrl-C handler");
+            Ok(mut stream) => {
+                stream.next().await;
 
-        rx
+                log::info!("Received termination signal.");
+                log::info!("You can press Ctrl + C again to force shutdown.");
+                if let Ok(false) =
+                    self.shutdown
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
+                {
+                    let shutdown_services = self.shutdown(Some(stream));
+                    shutdown_services.await;
+                }
+            }
+        }
     }
 
     pub fn add_service(&mut self, service: Box<dyn Server>) {
