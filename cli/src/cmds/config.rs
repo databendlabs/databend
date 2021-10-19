@@ -189,7 +189,6 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
 impl Config {
     pub(crate) fn build_cli() -> App<'static> {
         App::new("bendctl")
-            .setting(AppSettings::ColoredHelp)
             .arg(
                 Arg::new("group")
                     .long("group")
@@ -247,7 +246,6 @@ impl Config {
             )
             .subcommand(
                 App::new("completion")
-                    .setting(AppSettings::ColoredHelp)
                     .setting(AppSettings::DisableVersionFlag)
                     .about("Generate auto completion scripts for bash or zsh terminal")
                     .arg(

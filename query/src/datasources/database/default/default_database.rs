@@ -15,6 +15,8 @@
 
 use std::sync::Arc;
 
+use common_context::TableDataContext;
+use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
 use common_meta_types::MetaId;
@@ -25,7 +27,6 @@ use common_planners::DropTablePlan;
 
 use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
-use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
@@ -33,7 +34,7 @@ pub struct DefaultDatabase {
     db_name: String,
     meta: Arc<dyn MetaApiSync>,
     table_factory_registry: Arc<TableEngineRegistry>,
-    stateful_table_cache: RwLock<InMemoryMetas>,
+    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }
 
 impl DefaultDatabase {
@@ -41,12 +42,13 @@ impl DefaultDatabase {
         db_name: impl Into<String>,
         meta: Arc<dyn MetaApiSync>,
         table_factory_registry: Arc<TableEngineRegistry>,
+        in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
     ) -> Self {
         Self {
             db_name: db_name.into(),
             meta,
             table_factory_registry,
-            stateful_table_cache: RwLock::new(InMemoryMetas::create()),
+            in_memory_data,
         }
     }
 
@@ -62,11 +64,14 @@ impl DefaultDatabase {
                 ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
             })?;
 
-        let tbl: Arc<dyn Table> = factory.try_create(table_info.clone())?.into();
-        let stateful = tbl.is_stateful();
-        if stateful {
-            self.stateful_table_cache.write().insert(tbl.clone());
-        }
+        let tbl: Arc<dyn Table> = factory
+            .try_create(
+                table_info.clone(),
+                Arc::new(TableDataContext {
+                    in_memory_data: self.in_memory_data.clone(),
+                }),
+            )?
+            .into();
 
         Ok(tbl)
     }
@@ -78,11 +83,6 @@ impl Database for DefaultDatabase {
     }
 
     fn get_table(&self, table_name: &str) -> common_exception::Result<Arc<dyn Table>> {
-        {
-            if let Some(meta) = self.stateful_table_cache.read().get_by_name(table_name) {
-                return Ok(meta);
-            }
-        }
         let db_name = self.name();
         let table_info = self.meta.get_table(db_name, table_name)?;
         self.build_table_instance(table_info.as_ref())
@@ -93,12 +93,6 @@ impl Database for DefaultDatabase {
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> common_exception::Result<Arc<dyn Table>> {
-        {
-            if let Some(tbl) = self.stateful_table_cache.read().get_by_id(&table_id) {
-                return Ok(tbl.clone());
-            }
-        }
-
         let table_info = self.meta.get_table_by_id(table_id, table_version)?;
 
         self.build_table_instance(table_info.as_ref())

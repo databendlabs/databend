@@ -57,7 +57,6 @@ impl CreateCommand {
     }
     pub fn generate() -> App<'static> {
         App::new("create")
-            .setting(AppSettings::ColoredHelp)
             .setting(AppSettings::DisableVersionFlag)
             .about("Create a databend cluster based on profile")
             .arg(

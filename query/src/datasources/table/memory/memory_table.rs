@@ -16,8 +16,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
+use common_dal::InMemoryData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,14 +40,41 @@ use crate::sessions::DatabendQueryContext;
 
 pub struct MemoryTable {
     table_info: TableInfo,
+
+    // TODO(xp): When table is dropped, remove the entry in `in_memory_data`.
+    //           This requires another trait method Table::drop to customize the drop process.
+    #[allow(dead_code)]
+    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+
     blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl MemoryTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        table_info: TableInfo,
+        data_ctx: Arc<dyn DataContext<u64>>,
+    ) -> Result<Box<dyn Table>> {
+        let table_id = &table_info.table_id;
+        let in_memory_data = data_ctx.get_in_memory_data()?;
+
+        let blocks = {
+            let mut in_mem_data = in_memory_data.write();
+
+            let x = in_mem_data.get(table_id);
+            match x {
+                None => {
+                    let blocks = Arc::new(RwLock::new(vec![]));
+                    in_mem_data.insert(*table_id, blocks.clone());
+                    blocks
+                }
+                Some(blocks) => blocks.clone(),
+            }
+        };
+
         let table = Self {
             table_info,
-            blocks: Arc::new(RwLock::new(vec![])),
+            in_memory_data,
+            blocks,
         };
         Ok(Box::new(table))
     }
@@ -55,10 +84,6 @@ impl MemoryTable {
 impl Table for MemoryTable {
     fn as_any(&self) -> &dyn Any {
         self
-    }
-
-    fn is_stateful(&self) -> bool {
-        true
     }
 
     fn get_table_info(&self) -> &TableInfo {

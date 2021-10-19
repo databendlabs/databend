@@ -17,6 +17,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_base::BlockingWait;
+use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_dal::read_obj;
@@ -38,7 +39,10 @@ pub struct FuseTable {
 }
 
 impl FuseTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(
+        table_info: TableInfo,
+        _data_ctx: Arc<dyn DataContext<u64>>,
+    ) -> Result<Box<dyn Table>> {
         Ok(Box::new(FuseTable { table_info }))
     }
 }

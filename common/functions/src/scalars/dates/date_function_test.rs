@@ -24,6 +24,7 @@ use crate::scalars::dates::number_function::ToDayOfMonthFunction;
 use crate::scalars::dates::number_function::ToDayOfWeekFunction;
 use crate::scalars::dates::number_function::ToDayOfYearFunction;
 use crate::scalars::dates::number_function::ToMinuteFunction;
+use crate::scalars::dates::number_function::ToMondayFunction;
 use crate::scalars::dates::number_function::ToMonthFunction;
 use crate::scalars::ToHourFunction;
 use crate::scalars::ToSecondFunction;
@@ -1556,6 +1557,75 @@ fn test_tosecond_constant_function() -> Result<()> {
         let actual_ref = result.get_array_ref().unwrap();
         let actual = actual_ref.as_any().downcast_ref::<UInt8Array>().unwrap();
         let expected = UInt8Array::from_slice([42; 15]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_tomonday_function() -> Result<()> {
+    // date16 2021-10-19 -> 18919
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date16, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![18919u16])]);
+
+    {
+        let col = ToMondayFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt16);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt16Array>().unwrap();
+        let expected = UInt16Array::from_slice([18918u16; 1]);
+        assert_eq!(actual, &expected);
+    }
+
+    // date32
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Date32, false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![18919i32])]);
+
+    {
+        let col = ToMondayFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt16);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt16Array>().unwrap();
+        let expected = UInt16Array::from_slice([18918u16; 1]);
+
+        assert_eq!(actual, &expected);
+    }
+
+    // dateTime
+    // 2021-10-19 11:31:58 --- 1634614318
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::DateTime32(None), false)]);
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1634614318u32])]);
+
+    {
+        let col = ToMondayFunction::try_create("a")?;
+        let columns = vec![DataColumnWithField::new(
+            block.try_column_by_name("a")?.clone(),
+            schema.field_with_name("a")?.clone(),
+        )];
+        let result = col.eval(&columns, block.num_rows())?;
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.data_type(), DataType::UInt16);
+
+        let actual_ref = result.get_array_ref().unwrap();
+        let actual = actual_ref.as_any().downcast_ref::<UInt16Array>().unwrap();
+        let expected = UInt16Array::from_slice([18918u16; 1]);
 
         assert_eq!(actual, &expected);
     }

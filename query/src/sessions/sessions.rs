@@ -20,11 +20,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
-use common_base::tokio::sync::mpsc::Receiver;
+use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use futures::future::Either;
+use futures::StreamExt;
 use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
@@ -51,7 +52,6 @@ pub type SessionManagerRef = Arc<SessionManager>;
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<SessionManagerRef> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
-        // catalog.register_db_engine("example", Arc::new(ExampleDatabaseEngine::create()))?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -147,12 +147,12 @@ impl SessionManager {
         self.active_sessions.write().remove(session_id);
     }
 
-    pub fn shutdown(self: &Arc<Self>, signal: Option<Receiver<()>>) -> impl Future<Output = ()> {
+    pub fn shutdown(self: &Arc<Self>, signal: Option<SignalStream>) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             log::info!("Waiting for current connections to close.");
             if let Some(mut signal) = signal {
-                let mut signal = Box::pin(signal.recv());
+                let mut signal = Box::pin(signal.next());
 
                 for _index in 0..5 {
                     if SessionManager::destroy_idle_sessions(&active_sessions) {

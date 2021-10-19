@@ -19,8 +19,25 @@ use std::sync::Arc;
 use common_base::Runtime;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorBuilder;
+use common_dal::InMemoryData;
 use common_exception::ErrorCode;
+use common_infallible::RwLock;
 use common_meta_types::NodeInfo;
+
+pub trait DataContext<T> {
+    fn get_in_memory_data(&self) -> Result<Arc<RwLock<InMemoryData<T>>>, ErrorCode>;
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TableDataContext {
+    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+}
+
+impl DataContext<u64> for TableDataContext {
+    fn get_in_memory_data(&self) -> Result<Arc<RwLock<InMemoryData<u64>>>, ErrorCode> {
+        Ok(self.in_memory_data.clone())
+    }
+}
 
 /// Methods for a table to get resource handles it needs to read/write.
 ///

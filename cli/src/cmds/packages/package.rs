@@ -15,7 +15,6 @@
 use std::borrow::Borrow;
 
 use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 
@@ -40,22 +39,18 @@ impl PackageCommand {
     }
     pub fn generate() -> App<'static> {
         return App::new("package")
-            .setting(AppSettings::ColoredHelp)
             .about("Package manage databend binary releases")
             .subcommand(
                 App::new("fetch")
-                    .setting(AppSettings::ColoredHelp)
                     .about("Fetch the given version binary package")
                     .arg(Arg::new("version").about("Version of databend package to fetch").default_value("latest")),
             )
             .subcommand(
                 App::new("list")
-                    .setting(AppSettings::ColoredHelp)
                     .about("List all the packages"),
             )
             .subcommand(
                 App::new("switch")
-                    .setting(AppSettings::ColoredHelp)
                     .about("Switch the active databend to a specified version")
                     .arg(Arg::new("version").required(true).about(
                         "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
