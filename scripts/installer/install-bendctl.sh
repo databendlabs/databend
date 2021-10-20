@@ -6,7 +6,7 @@ usage() {
   this=$1
   cat <<EOF
 $this: download rust binaries for datafuselabs/databend
-Usage: $this [-b] bindir [-d] [tag]
+Usage: $this [-b] bindir [-v] [tag] [-d]
   -b sets bindir or installation directory, Defaults to {HOME}/.databend/bin
   -d turns on debug logging
    [tag] is a tag from
@@ -373,6 +373,7 @@ assert_supported_architecture() {
 }
 get_latest_tag() {
   # shellcheck disable=SC2046
+  # shellcheck disable=SC2021
   curl --silent "${GITHUB_TAG}"  |  grep -Eo '"name"[^,]*' | sed -r 's/^[^:]*:(.*)$/\1/' | head -n 1 | sed -e 's/^[[:space:]]*//' | sed -e 's/[[:space:]]*$//' |  tr -d '[{}]'
 }
 
@@ -410,38 +411,39 @@ set_tag() {
   TAG=$(echo "$_tag" | tr -d '"')
 }
 
-# Download databend compressed file to a temp file
+# Download bendctl compressed file to a temp file
 #
 # @param $1: The URL of the file to download to a temporary dir
 # @return <stdout>: The path of the temporary file downloaded
-download_databend() {
+download_bendctl() {
     local _status
     local _name="$1";
     local _url="$2"; shift
     tmpdir=$(mktemp -d)
     log_debug "downloading files into ${tmpdir}"
-    log_info "😊 Start to download databend in ${_url}"
+    log_info "😊 Start to download bendctl in ${_url}"
     http_download "${tmpdir}/${_name}" "${_url}"
     _status=$?
     if [ $_status -ne 0 ]; then
-        log_err "❌ Failed to download databend!"
+        log_err "❌ Failed to download bendctl!"
         log_err "    Error downloading from ${_url}"
         rm -rf tmpdir
         abort_prompt_issue
     fi
-  log_info "✅ Successfully downloaded databend in ${_url}"
+  log_info "✅ Successfully downloaded bendctl in ${_url}"
     srcdir="${tmpdir}"
     (cd "${tmpdir}" && untar "${_name}")
     _status=$?
     if [ $_status -ne 0 ]; then
-        log_err "❌ Failed to unzip databend!"
+        log_err "❌ Failed to unzip bendctl!"
         log_err "    Error from untar ${_name}"
         rm -rf tmpdir
         abort_prompt_issue
     fi
     echo "${HOME}/${BINDIR}"
     test ! -d "${HOME}/${BINDIR}" && install -d "${HOME}/${BINDIR}"
-    for binexe in databend-query databend-meta; do
+    # shellcheck disable=SC2043
+    for binexe in bendctl; do
       #TODO(zhihanz) for windows we should add .exe suffix
       install "${srcdir}/${binexe}" "${HOME}/${BINDIR}/"
       ensure chmod +x "${HOME}/${BINDIR}/${binexe}"
@@ -460,7 +462,7 @@ http_download_curl() {
   else
     code=$(curl -w '%{http_code}' -L -H "$header" -o "$local_file" "$source_url")
   fi
-  if [ "$(expr $code / 100)" != "2" ] && [ "$(expr "$code" / 100)" != "3" ]; then
+  if [ "$(( "$code" / 100 ))" != "2" ] && [ "$(( "$code" / 100 ))" != "3" ]; then
     log_debug "http_download_curl received HTTP status $code"
     return 1
   fi
@@ -494,7 +496,7 @@ http_copy() {
 set_name_url() {
   local _arch=$1;
   local _version=$2; shift
-  NAME=databend-${_version}-${_arch}.tar.gz
+  NAME=bendctl-${_version}-${_arch}.tar.gz
   TARBALL=${NAME}
   TARBALL_URL=${GITHUB_DOWNLOAD}/${_version}/${TARBALL}
   echo "$TARBALL_URL"
@@ -503,7 +505,7 @@ set_name_url() {
 set_name() {
   local _arch=$1;
   local _version=$2; shift
-  NAME=databend--${_arch}.tar.gz
+  NAME=bendctl-${_version}-${_arch}.tar.gz
   echo "$NAME"
 }
 
@@ -535,7 +537,7 @@ path_hint() {
     # shellcheck disable=SC2016
     log_info '   For zsh : echo '\''export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'\'' >> ~/.zshrc'
     log_info ""
-    log_info "   To use databend-query or databend-meta you'll need to restart your shell or run the following:"
+    log_info "   To use bendctl you'll need to restart your shell or run the following:"
     # shellcheck disable=SC2016
     log_info '   export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'
 }
@@ -587,7 +589,7 @@ main(){
   _version="$TAG"
   _name=$(set_name "$_target" "$_version" || return 1)
   _url=$(set_name_url "$_target" "$_version" || return 1)
-  download_databend "$_name" "$_url" || return 1
+  download_bendctl "$_name" "$_url" || return 1
   log_info "🎉 Install complete!"
   path_hint
 }
@@ -605,6 +607,7 @@ while getopts ":v:b:d:" o; do
           TAG="${OPTARG}"
             ;;
         *)
+            # shellcheck disable=SC2119
             usage
             ;;
     esac
