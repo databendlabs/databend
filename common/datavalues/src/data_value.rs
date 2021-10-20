@@ -247,6 +247,26 @@ impl DataValue {
             ))),
         }
     }
+
+    pub fn as_bool(&self) -> Result<bool> {
+        match self {
+            DataValue::Boolean(v) => Ok(v.map_or(false, |v| v)),
+            DataValue::Int8(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Int16(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Int32(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Int64(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt8(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt16(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt32(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt64(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Float32(v) => Ok(v.map_or(false, |v| v != 0f32)),
+            DataValue::Float64(v) => Ok(v.map_or(false, |v| v != 0f64)),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get boolean",
+                other.data_type()
+            ))),
+        }
+    }
 }
 
 // Did not use std::convert:TryFrom

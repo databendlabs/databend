@@ -76,6 +76,11 @@ fn test_range_filter() -> Result<()> {
             expect: true,
         },
         Test {
+            name: "null",
+            expr: Expression::create_literal(DataValue::Null),
+            expect: false,
+        },
+        Test {
             name: "b >= 0 and c like '%sys%'",
             expr: col("b")
                 .gt_eq(lit(0))

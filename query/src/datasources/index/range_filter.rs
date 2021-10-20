@@ -86,17 +86,7 @@ impl RangeFilter {
         let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
 
-        assert_eq!(executed_data_block.num_rows(), 1);
-        assert_eq!(executed_data_block.num_columns(), 1);
-
-        let value = executed_data_block.column(0).to_values()?.remove(0);
-        let val = value
-            .to_array()?
-            .cast_with_type(&DataType::Boolean)?
-            .bool()?
-            .inner()
-            .value(0);
-        Ok(val)
+        executed_data_block.column(0).try_get(0)?.as_bool()
     }
 }
 
@@ -141,6 +131,7 @@ fn build_verifiable_expr(
 }
 
 // TODO: need add monotonic check for the expression, will move to FunctionFeatures.
+// ISSUE-2343: https://github.com/datafuselabs/databend/issues/2343
 fn is_monotonic_expression(expr: &Expression) -> Monotonic {
     match expr {
         Expression::Column(_) => Monotonic {
@@ -206,13 +197,15 @@ struct StatColumn {
 }
 
 impl StatColumn {
-    fn new(column_name: String, column_id: u32, stat_type: StatType, field: &DataField) -> Self {
+    fn create(column_name: String, column_id: u32, stat_type: StatType, field: &DataField) -> Self {
         let column_new = format!("{}_{}", stat_type, column_name);
-        let data_type = match stat_type {
-            StatType::Nulls => DataType::UInt64,
-            _ => field.data_type().clone(),
+        let data_type = if matches!(stat_type, StatType::Nulls) {
+            DataType::UInt64
+        } else {
+            field.data_type().clone()
         };
         let stat_field = DataField::new(column_new.as_str(), data_type, field.is_nullable());
+
         Self {
             column_id,
             stat_type,
@@ -361,7 +354,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 
     fn stat_column_expr(&mut self, stat_type: StatType) -> Result<Expression> {
-        let stat_col = StatColumn::new(
+        let stat_col = StatColumn::create(
             self.column_name.clone(),
             self.column_id,
             stat_type,
