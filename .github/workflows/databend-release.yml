@@ -9,6 +9,11 @@ jobs:
   publish:
     name: Release assets
     runs-on: ${{ matrix.config.os }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.REPO_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-2
+      AWS_DEFAULT_OUTPUT: json
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +68,21 @@ jobs:
           file_glob: true
           overwrite: true
           body: ${{ steps.changelog_reader.outputs.log_entry }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.REPO_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      - name: Sync release to S3
+        run: |
+          aws s3 cp databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz s3://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz
+          aws s3 cp bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz s3://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz
+          aws s3 cp s3://repo.databend.rs/databend/tags.json ./tags.json
+          cat ./tags.json | jq '[{"name": "${{ steps.get_version.outputs.VERSION }}"}] + .' > ./tags.json
+          cat ./tags.json
+          aws s3 cp ./tags.json s3://repo.databend.rs/databend/tags.json
   release-docker:
     name: Release assets
     runs-on: ${{ matrix.config.os }}
