@@ -25,7 +25,6 @@ use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
@@ -33,6 +32,7 @@ use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::Table;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -123,6 +123,7 @@ impl MetaApi for MetaEmbedded {
 
         let table = Table {
             table_id: 0,
+            table_version: 0,
             table_name: table_name.to_string(),
             database_id: 0, // this field is unused during the creation of table
             db_name: db_name.to_string(),
@@ -260,12 +261,13 @@ impl MetaApi for MetaEmbedded {
         Ok(Arc::new(rst))
     }
 
-    async fn commit_table(
+    async fn upsert_table_option(
         &self,
         _table_id: MetaId,
-        _new_table_version: MetaVersion,
-        _new_snapshot_location: String,
-    ) -> Result<CommitTableReply> {
+        _table_version: MetaVersion,
+        _option_key: String,
+        _option_value: String,
+    ) -> Result<UpsertTableOptionReply> {
         todo!()
     }
 

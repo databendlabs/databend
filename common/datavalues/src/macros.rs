@@ -186,7 +186,10 @@ macro_rules! try_build_array {
             match value {
                 DataValue::$SCALAR_TY(Some(v)) => builder.append_value(*v),
                 DataValue::$SCALAR_TY(None) => builder.append_null(),
-                _ => unreachable!(),
+                dv => {
+                    eprintln!("DV is {:?}", dv);
+                    unreachable!()
+                }
             }
         }
         Ok(builder.finish().into_series())

@@ -30,6 +30,7 @@ use common_meta_flight::GetDatabasesAction;
 use common_meta_flight::GetTableAction;
 use common_meta_flight::GetTableExtReq;
 use common_meta_flight::GetTablesAction;
+use common_meta_flight::UpsertTableOptionReq;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
@@ -41,6 +42,7 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
 use common_meta_types::Table;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertTableOptionReply;
 use log::info;
 
 use crate::executor::action_handler::RequestHandler;
@@ -156,6 +158,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         let table = Table {
             table_id: 0,
+            table_version: 0,
             table_name: table_name.to_string(),
             database_id: 0, // this field is unused during the creation of table
             db_name: db_name.to_string(),
@@ -277,7 +280,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
                 let rst = TableInfo {
                     database_id: db.database_id,
                     table_id: table.table_id,
-                    version: 0, // placeholder, not yet implemented in meta service
+                    version: table.table_version,
                     db: db_name.clone(),
                     name: table_name.clone(),
                     schema: Arc::new(arrow_schema.into()),
@@ -346,5 +349,21 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
     async fn handle(&self, req: GetTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let res = self.meta_node.get_tables(req.db.as_str()).await?;
         Ok(res)
+    }
+}
+#[async_trait::async_trait]
+impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
+    async fn handle(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> common_exception::Result<UpsertTableOptionReply> {
+        self.meta_node
+            .upsert_table_opt(
+                req.table_id,
+                req.table_version,
+                req.option_key,
+                req.option_value,
+            )
+            .await
     }
 }

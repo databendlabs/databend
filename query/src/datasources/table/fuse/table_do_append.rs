@@ -26,6 +26,7 @@ use common_planners::InsertIntoPlan;
 use uuid::Uuid;
 
 use crate::datasources::table::fuse::util;
+use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
@@ -79,7 +80,7 @@ impl FuseTable {
 
             // 5. commit
             let table_id = insert_plan.tbl_id;
-            commit(&io_ctx, table_id, self.table_info.version + 1, snapshot_loc)?;
+            commit(&io_ctx, table_id, self.table_info.version, snapshot_loc)?;
         }
         Ok(())
     }
@@ -109,7 +110,7 @@ fn merge_snapshot(
 fn commit(
     io_ctx: &TableIOContext,
     table_id: MetaId,
-    new_table_version: MetaVersion,
+    table_version: MetaVersion,
     new_snapshot_location: String,
 ) -> Result<()> {
     use crate::catalogs::Catalog;
@@ -117,5 +118,10 @@ fn commit(
         .get_user_data()?
         .expect("DatabendQueryContext should not be None");
     let catalog = ctx.get_catalog();
-    catalog.commit_table(table_id, new_table_version, new_snapshot_location)
+    catalog.upsert_table_option(
+        table_id,
+        table_version,
+        TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
+        new_snapshot_location,
+    )
 }

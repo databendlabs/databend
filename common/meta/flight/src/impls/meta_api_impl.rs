@@ -16,13 +16,13 @@
 use std::sync::Arc;
 
 use common_meta_api::MetaApi;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -38,6 +38,7 @@ use crate::GetTableAction;
 use crate::GetTableExtReq;
 use crate::GetTablesAction;
 use crate::MetaFlightClient;
+use crate::UpsertTableOptionReq;
 
 #[async_trait::async_trait]
 impl MetaApi for MetaFlightClient {
@@ -101,13 +102,20 @@ impl MetaApi for MetaFlightClient {
         self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
     }
 
-    async fn commit_table(
+    async fn upsert_table_option(
         &self,
-        _table_id: MetaId,
-        _new_table_version: MetaVersion,
-        _new_snapshot_location: String,
-    ) -> common_exception::Result<CommitTableReply> {
-        todo!()
+        table_id: MetaId,
+        table_version: MetaVersion,
+        option_key: String,
+        option_value: String,
+    ) -> common_exception::Result<UpsertTableOptionReply> {
+        self.do_action(UpsertTableOptionReq {
+            table_id,
+            table_version,
+            option_key,
+            option_value,
+        })
+        .await
     }
 
     fn name(&self) -> String {
