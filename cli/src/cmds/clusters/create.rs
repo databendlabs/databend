@@ -109,6 +109,7 @@ impl CreateCommand {
                     .long("profile")
                     .about("Profile for deployment, support local and cluster")
                     .required(false)
+                    .takes_value(true)
                     .possible_values(&["local"]).default_value("local"),
             )
             .arg(

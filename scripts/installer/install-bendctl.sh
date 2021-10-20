@@ -6,7 +6,7 @@ usage() {
   this=$1
   cat <<EOF
 $this: download rust binaries for datafuselabs/databend
-Usage: $this [-b] bindir [-d] [tag]
+Usage: $this [-b] bindir [-v] [tag] [-d]
   -b sets bindir or installation directory, Defaults to {HOME}/.databend/bin
   -d turns on debug logging
    [tag] is a tag from
@@ -14,23 +14,6 @@ Usage: $this [-b] bindir [-d] [tag]
    If tag is missing, then the latest will be used.
 EOF
   exit 2
-}
-
-parse_args() {
-  #BINDIR is ${HOME}/.databend/bin unless set be ENV
-  # over-ridden by flag below
-
-  BINDIR=${BINDIR:-.databend/bin}
-  while getopts "b:dh?x" arg; do
-    case "$arg" in
-      b) BINDIR="$OPTARG" ;;
-      d) log_set_priority 10 ;;
-      h | \?) usage "$0" ;;
-      x) set -x ;;
-    esac
-  done
-  shift $((OPTIND - 1))
-  TAG=$1
 }
 detect_rosetta() {
   local _cpu=$1; shift
@@ -301,6 +284,7 @@ get_architecture() {
 
     RETVAL="$_arch"
 }
+
 assert_nz() {
     if [ -z "$1" ]; then
         log_err "assert_nz $2"
@@ -379,18 +363,6 @@ assert_supported_architecture() {
             echo "x86_64-unknown-linux-gnu"
             return 0
             ;;
-        arm-unknown-linux-gnueabi)
-            echo "arm-unknown-linux-gnueabi"
-            return 0
-            ;;
-        arm-unknown-linux-gnueabihf)
-            echo "arm-unknown-linux-gnueabi" # armv7 hf not work
-            return 0
-            ;;
-        armv7-unknown-linux-gnueabihf)
-            echo "armv7-unknown-linux-gnueabihf"
-            return 0
-            ;;
         *)
           log_err "current architecture $_arch is not supported, Make sure this script is up-to-date and file request at https://github.com/$DATABEND_REPO/issues/new"
           return 1
@@ -401,7 +373,8 @@ assert_supported_architecture() {
 }
 get_latest_tag() {
   # shellcheck disable=SC2046
-  curl --silent "https://api.github.com/repos/$1/tags"  |  grep -Eo '"name"[^,]*' | sed -r 's/^[^:]*:(.*)$/\1/' | head -n 1 | sed -e 's/^[[:space:]]*//' | sed -e 's/[[:space:]]*$//'
+  # shellcheck disable=SC2021
+  curl --silent "${GITHUB_TAG}"  |  grep -Eo '"name"[^,]*' | sed -r 's/^[^:]*:(.*)$/\1/' | head -n 1 | sed -e 's/^[[:space:]]*//' | sed -e 's/[[:space:]]*$//' |  tr -d '[{}]'
 }
 
 # Untar release binary files
@@ -438,38 +411,39 @@ set_tag() {
   TAG=$(echo "$_tag" | tr -d '"')
 }
 
-# Download databend compressed file to a temp file
+# Download bendctl compressed file to a temp file
 #
 # @param $1: The URL of the file to download to a temporary dir
 # @return <stdout>: The path of the temporary file downloaded
-download_databend() {
+download_bendctl() {
     local _status
     local _name="$1";
     local _url="$2"; shift
     tmpdir=$(mktemp -d)
     log_debug "downloading files into ${tmpdir}"
-    log_info "😊 Start to download databend in ${_url}"
+    log_info "😊 Start to download bendctl in ${_url}"
     http_download "${tmpdir}/${_name}" "${_url}"
     _status=$?
     if [ $_status -ne 0 ]; then
-        log_err "❌ Failed to download databend!"
+        log_err "❌ Failed to download bendctl!"
         log_err "    Error downloading from ${_url}"
         rm -rf tmpdir
         abort_prompt_issue
     fi
-  log_info "✅ Successfully downloaded databend in ${_url}"
+  log_info "✅ Successfully downloaded bendctl in ${_url}"
     srcdir="${tmpdir}"
     (cd "${tmpdir}" && untar "${_name}")
     _status=$?
     if [ $_status -ne 0 ]; then
-        log_err "❌ Failed to unzip databend!"
+        log_err "❌ Failed to unzip bendctl!"
         log_err "    Error from untar ${_name}"
         rm -rf tmpdir
         abort_prompt_issue
     fi
     echo "${HOME}/${BINDIR}"
     test ! -d "${HOME}/${BINDIR}" && install -d "${HOME}/${BINDIR}"
-    for binexe in databend-query databend-meta; do
+    # shellcheck disable=SC2043
+    for binexe in bendctl; do
       #TODO(zhihanz) for windows we should add .exe suffix
       install "${srcdir}/${binexe}" "${HOME}/${BINDIR}/"
       ensure chmod +x "${HOME}/${BINDIR}/${binexe}"
@@ -488,7 +462,7 @@ http_download_curl() {
   else
     code=$(curl -w '%{http_code}' -L -H "$header" -o "$local_file" "$source_url")
   fi
-  if [ "$code" != "200" ]; then
+  if [ "$(( "$code" / 100 ))" != "2" ] && [ "$(( "$code" / 100 ))" != "3" ]; then
     log_debug "http_download_curl received HTTP status $code"
     return 1
   fi
@@ -522,7 +496,7 @@ http_copy() {
 set_name_url() {
   local _arch=$1;
   local _version=$2; shift
-  NAME=databend-${_version}-${_arch}.tar.gz
+  NAME=bendctl-${_version}-${_arch}.tar.gz
   TARBALL=${NAME}
   TARBALL_URL=${GITHUB_DOWNLOAD}/${_version}/${TARBALL}
   echo "$TARBALL_URL"
@@ -531,7 +505,7 @@ set_name_url() {
 set_name() {
   local _arch=$1;
   local _version=$2; shift
-  NAME=databend--${_arch}.tar.gz
+  NAME=bendctl-${_version}-${_arch}.tar.gz
   echo "$NAME"
 }
 
@@ -563,12 +537,30 @@ path_hint() {
     # shellcheck disable=SC2016
     log_info '   For zsh : echo '\''export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'\'' >> ~/.zshrc'
     log_info ""
-    log_info "   To use databend-query or databend-meta you'll need to restart your shell or run the following:"
+    log_info "   To use bendctl you'll need to restart your shell or run the following:"
     # shellcheck disable=SC2016
     log_info '   export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'
 }
+
+choose_mirror() {
+  code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "$GITHUB_TAG")
+  if [ "$(( "$code" / 100))" != "2" ] && [ "$(( "$code" / 100))" != "3" ]; then
+    echo "mirror in $GITHUB_TAG not available"
+    # switch to repo.databend.rs
+    GITHUB_DOWNLOAD=https://repo.databend.rs/databend
+    GITHUB_TAG=https://repo.databend.rs/databend/tags.json
+  fi
+  code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "$GITHUB_TAG")
+  if [ "$(( "$code" / 100))" != "2" ] && [ "$(( "$code" / 100))" != "3" ]; then
+    echo "mirror in $GITHUB_TAG not available"
+    return 1
+  fi
+  return 0
+}
+
 DATABEND_REPO=datafuselabs/databend
 GITHUB_DOWNLOAD=https://github.com/${DATABEND_REPO}/releases/download
+GITHUB_TAG=https://api.github.com/repos/${DATABEND_REPO}/tags
 
 main(){
   local _status _target _version _url _name
@@ -592,13 +584,34 @@ main(){
       abort_prompt_issue
   fi
   log_info "😊 Your Architecture ${_arch} is supported"
+  choose_mirror || return 1
   set_tag || return 1
   _version="$TAG"
   _name=$(set_name "$_target" "$_version" || return 1)
   _url=$(set_name_url "$_target" "$_version" || return 1)
-  download_databend "$_name" "$_url" || return 1
+  download_bendctl "$_name" "$_url" || return 1
   log_info "🎉 Install complete!"
   path_hint
 }
-parse_args "$@"
+
+BINDIR=${BINDIR:-.databend/bin}
+while getopts ":v:b:d:" o; do
+    case "${o}" in
+        b)
+          BINDIR="${OPTARG}"
+            ;;
+        d)
+           log_set_priority 10
+            ;;
+        v)
+          TAG="${OPTARG}"
+            ;;
+        *)
+            # shellcheck disable=SC2119
+            usage
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
 main

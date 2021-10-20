@@ -31,7 +31,7 @@ use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 
-const GITHUB_BASE_URL: &str = "https://github.com";
+const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
 const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_CLIENT_URL: &str = "https://github.com/ZhiHanZ/usql/releases/download";

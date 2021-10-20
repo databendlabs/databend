@@ -106,7 +106,7 @@ pub fn download(url: &str, target_file: &str) -> Result<()> {
     Ok(())
 }
 
-//(TODO(zhihanz)) general get_architecture similar to install-databend.sh
+//(TODO(zhihanz)) general get_architecture similar to install-bendctl.sh
 pub fn get_rust_architecture() -> Result<String> {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
