@@ -19,7 +19,6 @@ mod location_gen;
 mod statistic_helper;
 
 mod constants;
-mod falsifiable_expr;
 
 pub use col_encoding::*;
 pub use constants::TBL_OPT_KEY_SNAPSHOT_LOC;
