@@ -31,7 +31,8 @@ impl ComparisonNotLikeFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("like"),
+                .negative_function("like")
+                .bool_function(),
         )
     }
 }

@@ -250,6 +250,7 @@ impl DataValue {
 
     pub fn as_bool(&self) -> Result<bool> {
         match self {
+            DataValue::Null => Ok(false),
             DataValue::Boolean(v) => Ok(v.map_or(false, |v| v)),
             DataValue::Int8(v) => Ok(v.map_or(false, |v| v != 0)),
             DataValue::Int16(v) => Ok(v.map_or(false, |v| v != 0)),
