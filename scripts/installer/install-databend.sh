@@ -15,23 +15,6 @@ Usage: $this [-b] bindir [-d] [tag]
 EOF
   exit 2
 }
-
-parse_args() {
-  #BINDIR is ${HOME}/.databend/bin unless set be ENV
-  # over-ridden by flag below
-
-  BINDIR=${BINDIR:-.databend/bin}
-  while getopts "b:dh?x" arg; do
-    case "$arg" in
-      b) BINDIR="$OPTARG" ;;
-      d) log_set_priority 10 ;;
-      h | \?) usage "$0" ;;
-      x) set -x ;;
-    esac
-  done
-  shift $((OPTIND - 1))
-  TAG=$1
-}
 detect_rosetta() {
   local _cpu=$1; shift
   if [ "${_cpu}" = "x86_64" ]; then
@@ -301,6 +284,7 @@ get_architecture() {
 
     RETVAL="$_arch"
 }
+
 assert_nz() {
     if [ -z "$1" ]; then
         log_err "assert_nz $2"
@@ -379,18 +363,6 @@ assert_supported_architecture() {
             echo "x86_64-unknown-linux-gnu"
             return 0
             ;;
-        arm-unknown-linux-gnueabi)
-            echo "arm-unknown-linux-gnueabi"
-            return 0
-            ;;
-        arm-unknown-linux-gnueabihf)
-            echo "arm-unknown-linux-gnueabi" # armv7 hf not work
-            return 0
-            ;;
-        armv7-unknown-linux-gnueabihf)
-            echo "armv7-unknown-linux-gnueabihf"
-            return 0
-            ;;
         *)
           log_err "current architecture $_arch is not supported, Make sure this script is up-to-date and file request at https://github.com/$DATABEND_REPO/issues/new"
           return 1
@@ -401,7 +373,7 @@ assert_supported_architecture() {
 }
 get_latest_tag() {
   # shellcheck disable=SC2046
-  curl --silent "https://api.github.com/repos/$1/tags"  |  grep -Eo '"name"[^,]*' | sed -r 's/^[^:]*:(.*)$/\1/' | head -n 1 | sed -e 's/^[[:space:]]*//' | sed -e 's/[[:space:]]*$//'
+  curl --silent "${GITHUB_TAG}"  |  grep -Eo '"name"[^,]*' | sed -r 's/^[^:]*:(.*)$/\1/' | head -n 1 | sed -e 's/^[[:space:]]*//' | sed -e 's/[[:space:]]*$//' |  tr -d '[{}]'
 }
 
 # Untar release binary files
@@ -488,7 +460,7 @@ http_download_curl() {
   else
     code=$(curl -w '%{http_code}' -L -H "$header" -o "$local_file" "$source_url")
   fi
-  if [ "$code" != "200" ]; then
+  if [ "$(expr $code / 100)" != "2" ] && [ "$(expr "$code" / 100)" != "3" ]; then
     log_debug "http_download_curl received HTTP status $code"
     return 1
   fi
@@ -567,8 +539,26 @@ path_hint() {
     # shellcheck disable=SC2016
     log_info '   export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'
 }
+
+choose_mirror() {
+  code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "$GITHUB_TAG")
+  if [ "$(( "$code" / 100))" != "2" ] && [ "$(( "$code" / 100))" != "3" ]; then
+    echo "mirror in $GITHUB_TAG not available"
+    # switch to repo.databend.rs
+    GITHUB_DOWNLOAD=https://repo.databend.rs/databend
+    GITHUB_TAG=https://repo.databend.rs/databend/tags.json
+  fi
+  code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "$GITHUB_TAG")
+  if [ "$(( "$code" / 100))" != "2" ] && [ "$(( "$code" / 100))" != "3" ]; then
+    echo "mirror in $GITHUB_TAG not available"
+    return 1
+  fi
+  return 0
+}
+
 DATABEND_REPO=datafuselabs/databend
 GITHUB_DOWNLOAD=https://github.com/${DATABEND_REPO}/releases/download
+GITHUB_TAG=https://api.github.com/repos/${DATABEND_REPO}/tags
 
 main(){
   local _status _target _version _url _name
@@ -592,6 +582,7 @@ main(){
       abort_prompt_issue
   fi
   log_info "😊 Your Architecture ${_arch} is supported"
+  choose_mirror || return 1
   set_tag || return 1
   _version="$TAG"
   _name=$(set_name "$_target" "$_version" || return 1)
@@ -600,5 +591,24 @@ main(){
   log_info "🎉 Install complete!"
   path_hint
 }
-parse_args "$@"
+
+BINDIR=${BINDIR:-.databend/bin}
+while getopts ":v:b:d:" o; do
+    case "${o}" in
+        b)
+          BINDIR="${OPTARG}"
+            ;;
+        d)
+           log_set_priority 10
+            ;;
+        v)
+          TAG="${OPTARG}"
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
 main
