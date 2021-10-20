@@ -18,7 +18,7 @@ This document describes how to build and run [DatabendQuery](https://github.com/
 === "Release binary"
 
     ```markdown
-    $ curl -fsS https://raw.githubusercontent.com/datafuselabs/databend/main/scripts/installer/install-bendctl.sh | bash
+    $ curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
     $ export PATH="${HOME}/.databend/bin:${PATH}"
     $ bendctl cluster create --profile local
     ```
