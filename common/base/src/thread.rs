@@ -25,10 +25,13 @@ impl Thread {
         F: Send + 'static,
         T: Send + 'static,
     {
-        let outer_tracker = ThreadTracker::current();
+        let outer_tracker = ThreadTracker::current_opt();
         std::thread::spawn(move || {
-            // We use the same tracker for std::thread
-            ThreadTracker::set_current(outer_tracker);
+            if let Some(outer_tracker) = outer_tracker {
+                // We use the same tracker for std::thread
+                ThreadTracker::set_current(outer_tracker);
+            }
+
             f()
         })
     }

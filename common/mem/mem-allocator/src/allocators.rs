@@ -35,6 +35,7 @@ mod platform {
     use tikv_jemalloc_sys as ffi;
 
     use crate::malloc_size::VoidPtrToSizeFn;
+    use common_base::ThreadTracker;
 
     /// Get the size of a heap block.
     pub unsafe extern "C" fn usable_size(ptr: *const c_void) -> usize {
@@ -94,12 +95,20 @@ mod platform {
     unsafe impl GlobalAlloc for Allocator {
         #[inline]
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            if let Some(tracker) = ThreadTracker::current_opt() {
+                tracker.alloc_memory(layout.size());
+            }
+
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::mallocx(layout.size(), flags) as *mut u8
         }
 
         #[inline]
         unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            if let Some(tracker) = ThreadTracker::current_opt() {
+                tracker.alloc_memory(layout.size());
+            }
+
             if layout.align() <= MIN_ALIGN && layout.align() <= layout.size() {
                 ffi::calloc(1, layout.size()) as *mut u8
             } else {
@@ -110,12 +119,21 @@ mod platform {
 
         #[inline]
         unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            if let Some(tracker) = ThreadTracker::current_opt() {
+                tracker.dealloc_memory(layout.size());
+            }
+
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::sdallocx(ptr as *mut _, layout.size(), flags)
         }
 
         #[inline]
         unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            if let Some(tracker) = ThreadTracker::current_opt() {
+                tracker.dealloc_memory(layout.size());
+                tracker.alloc_memory(new_size);
+            }
+
             let flags = layout_to_flags(layout.align(), new_size);
             ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
         }

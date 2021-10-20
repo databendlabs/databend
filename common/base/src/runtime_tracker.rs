@@ -14,13 +14,13 @@
 
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 thread_local! {
     static TRACKER: RefCell<Option<Arc<ThreadTracker>>> = RefCell::new(None)
 }
 
 pub struct ThreadTracker {
-    #[allow(dead_code)]
     rt_tracker: Arc<RuntimeTracker>,
     parent_tracker: Option<Arc<ThreadTracker>>,
 }
@@ -49,13 +49,35 @@ impl ThreadTracker {
             tracker.borrow_mut().replace(value);
         });
     }
+
+    #[inline]
+    pub fn alloc_memory(&self, size: usize) {
+        self.rt_tracker.memory_usage.fetch_add(size, Ordering::Relaxed);
+
+        if let Some(parent_tracker) = &self.parent_tracker {
+            parent_tracker.alloc_memory(size);
+        }
+    }
+
+    #[inline]
+    pub fn dealloc_memory(&self, size: usize) {
+        self.rt_tracker.memory_usage.fetch_sub(size, Ordering::Relaxed);
+
+        if let Some(parent_tracker) = &self.parent_tracker {
+            parent_tracker.dealloc_memory(size);
+        }
+    }
 }
 
-pub struct RuntimeTracker {}
+pub struct RuntimeTracker {
+    pub memory_usage: AtomicUsize,
+}
 
 impl RuntimeTracker {
     pub fn create() -> Arc<RuntimeTracker> {
-        Arc::new(RuntimeTracker {})
+        Arc::new(RuntimeTracker {
+            memory_usage: AtomicUsize::new(0)
+        })
     }
 
     pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
