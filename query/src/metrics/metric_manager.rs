@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
 use metrics_exporter_prometheus::PrometheusRecorder;
@@ -48,12 +49,20 @@ impl MetricManager {
             }
             Some(recorder) => recorder,
         };
+        metrics::clear_recorder();
         match metrics::set_boxed_recorder(Box::new(recorder)) {
             Ok(_) => Ok(()),
             Err(error) => Err(ErrorCode::InitPrometheusFailure(format!(
                 "Cannot init prometheus recorder. cause: {}",
                 error
             ))),
+        }
+    }
+
+    pub fn install_recorder_or_warn(&mut self) {
+        match self.install_recorder() {
+            Ok(()) => (),
+            Err(err) => tracing::warn!("Install prometheus recorder failed: {}", err),
         }
     }
 }

@@ -63,7 +63,7 @@ impl SessionManager {
 
         // Install the metrics recorder and handle
         let mut metrics = MetricManager::create();
-        metrics.install_recorder()?;
+        metrics.install_recorder_or_warn();
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
