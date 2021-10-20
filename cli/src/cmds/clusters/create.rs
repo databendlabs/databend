@@ -53,6 +53,49 @@ pub struct LocalBinaryPaths {
     pub(crate) query: String,
     pub(crate) meta: String,
 }
+
+fn reconcile_local_meta(status: &mut Status) -> Result<()> {
+    let s = System::new_all();
+    if let Some((_, meta)) = status.get_local_meta_config() {
+        if meta.pid.is_none() || s.process(meta.pid.unwrap()).is_none() {
+            return Err(CliError::Unknown(
+                "meta service process not found".to_string(),
+            ));
+        }
+        if meta.verify().is_err() {
+            return Err(CliError::Unknown("cannot verify meta service".to_string()));
+        }
+    }
+    Ok(())
+}
+
+fn reconcile_local_query(status: &mut Status) -> Result<()> {
+    let s = System::new_all();
+    for (_, query) in status.get_local_query_configs() {
+        if query.pid.is_none() || s.process(query.pid.unwrap()).is_none() {
+            return Err(CliError::Unknown(
+                "query service process not found".to_string(),
+            ));
+        }
+        if query.verify().is_err() {
+            return Err(CliError::Unknown("cannot verify query service".to_string()));
+        }
+    }
+    Ok(())
+}
+
+fn reconcile_local(status: &mut Status) -> Result<()> {
+    if status.has_local_configs() {
+        if let Err(e) = reconcile_local_meta(status) {
+            return Err(e);
+        }
+        if let Err(e) = reconcile_local_query(status) {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
 impl CreateCommand {
     pub fn create(conf: Config) -> Self {
         CreateCommand { conf }
@@ -626,6 +669,16 @@ impl CreateCommand {
             }
             for elem in s.process_by_name("databend-query") {
                 elem.kill(Signal::Kill);
+            }
+        }
+        if let Err(e) = reconcile_local(&mut status) {
+            writer.write_ok(
+                format!("local environment has problem {:?}, start reconcile", e).as_str(),
+            );
+            if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer) {
+                writer
+                    .write_err(format!("cannot delete existing service, error: {:?}", e).as_str());
+                return Err(e);
             }
         }
         if status.has_local_configs() {
