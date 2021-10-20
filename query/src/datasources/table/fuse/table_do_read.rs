@@ -19,7 +19,6 @@ use common_context::IOContext;
 use common_context::TableIOContext;
 use common_exception::Result;
 use common_planners::Extras;
-use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
@@ -57,7 +56,6 @@ impl FuseTable {
         // TODO we need a configuration to specify the unit of dequeue operation
         let bite_size = 1;
         let iter = {
-            let ctx = ctx.clone();
             std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
                 Err(_) => None,
                 Ok(parts) if parts.is_empty() => None,
@@ -72,9 +70,6 @@ impl FuseTable {
         let stream = stream.then(move |part| {
             io::do_read(part, da.clone(), projection.clone(), arrow_schema.clone())
         });
-
-        let progress_callback = ctx.progress_callback()?;
-        let stream = ProgressStream::try_create(Box::pin(stream), progress_callback)?;
         Ok(Box::pin(stream))
     }
 }
