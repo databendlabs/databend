@@ -59,7 +59,7 @@ fn reconcile_local_meta(status: &mut Status) -> Result<()> {
     if let Some((_, meta)) = status.get_local_meta_config() {
         if meta.pid.is_none() || s.process(meta.pid.unwrap()).is_none() {
             return Err(CliError::Unknown(
-                "meta service process deleted previously".to_string(),
+                "meta service process not found".to_string(),
             ));
         }
         if meta.verify().is_err() {
@@ -74,7 +74,7 @@ fn reconcile_local_query(status: &mut Status) -> Result<()> {
     for (_, query) in status.get_local_query_configs() {
         if query.pid.is_none() || s.process(query.pid.unwrap()).is_none() {
             return Err(CliError::Unknown(
-                "query service process deleted previously".to_string(),
+                "query service process not found".to_string(),
             ));
         }
         if query.verify().is_err() {
