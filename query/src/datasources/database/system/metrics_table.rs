@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_context::IOContext;
@@ -77,15 +78,20 @@ impl MetricsTable {
                 Ok((
                     sample.metric,
                     self.display_sample_kind(&sample.value),
-                    self.display_sample_labels(&sample.labels)?,
+                    self.display_sample_labels(&*sample.labels)?,
                     self.display_sample_value(&sample.value)?,
                 ))
             })
             .collect::<Result<Vec<_>>>()
     }
 
-    fn display_sample_labels(&self, labels: &prometheus_parse::Labels) -> Result<String> {
-        Ok(format!("{:?}", labels)) // TODO: make it JSON
+    fn display_sample_labels(&self, labels: &HashMap<String, String>) -> Result<String> {
+        serde_json::to_string(labels).map_err(|err| {
+            ErrorCode::UnexpectedError(format!(
+                "Dump prometheus metrics on display labels: {}",
+                err
+            ))
+        })
     }
 
     fn display_sample_kind(&self, value: &prometheus_parse::Value) -> String {
