@@ -29,7 +29,6 @@ use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
 
 use crate::servers::Server;
@@ -38,6 +37,7 @@ use crate::sessions::SessionManagerRef;
 pub struct MetricService {
     join_handle: Option<JoinHandle<std::io::Result<()>>>,
     abort_handler: Handle,
+    prometheus_handle: PrometheusHandle,
 }
 
 pub struct MetricTemplate {
@@ -69,31 +69,16 @@ macro_rules! build_router {
 
 impl MetricService {
     // TODO add session tls handler
-    pub fn create(_sessions: SessionManagerRef) -> Box<MetricService> {
+    pub fn create(sessions: SessionManagerRef) -> Box<MetricService> {
         Box::new(MetricService {
             join_handle: None,
             abort_handler: axum_server::Handle::new(),
+            prometheus_handle: sessions.get_metric_manager().handle(),
         })
     }
 
-    fn create_prometheus_handle() -> Result<PrometheusHandle> {
-        let builder = PrometheusBuilder::new();
-        let prometheus_recorder = builder.build();
-        let prometheus_handle = prometheus_recorder.handle();
-        // TODO(zhihanz) add metrics descriptions through regist
-        match metrics::set_boxed_recorder(Box::new(prometheus_recorder)) {
-            Ok(_) => Ok(prometheus_handle),
-            Err(error) => Err(ErrorCode::InitPrometheusFailure(format!(
-                "Cannot init prometheus recorder. cause: {}",
-                error
-            ))),
-        }
-    }
-
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let handler =
-            MetricService::create_prometheus_handle().expect("cannot build prometheus handler");
-        let app = build_router!(handler);
+        let app = build_router!(self.prometheus_handle);
         let server = axum_server::bind(listening.to_string())
             .handle(self.abort_handler.clone())
             .serve(app);

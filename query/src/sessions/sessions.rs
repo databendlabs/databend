@@ -32,6 +32,7 @@ use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
+use crate::metrics::MetricManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::users::UserManager;
@@ -42,6 +43,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: ClusterDiscoveryRef,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user: UserManagerRef,
+    pub(in crate::sessions) metrics: Arc<MetricManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -59,12 +61,17 @@ impl SessionManager {
         // User manager and init the default users.
         let user = UserManager::create_global(conf.clone()).await?;
 
+        // Install the metrics recorder and handle
+        let mut metrics = MetricManager::create();
+        metrics.install_recorder()?;
+
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             catalog,
             conf,
             discovery,
             user,
+            metrics: Arc::new(metrics),
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
@@ -81,6 +88,10 @@ impl SessionManager {
     // Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
         self.user.clone()
+    }
+
+    pub fn get_metric_manager(self: &Arc<Self>) -> Arc<MetricManager> {
+        self.metrics.clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {

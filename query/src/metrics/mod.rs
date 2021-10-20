@@ -15,6 +15,8 @@
 #[cfg(test)]
 mod metric_service_test;
 
+mod metric_manager;
 mod metric_service;
 
+pub use metric_manager::MetricManager;
 pub use metric_service::MetricService;
