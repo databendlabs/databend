@@ -13,24 +13,16 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
-use common_planners::CreateTablePlan;
-use common_planners::DropTablePlan;
-
-use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::Database;
 
 pub struct DefaultDatabase {
     db_name: String,
-    meta: Arc<dyn MetaApiSync>,
 }
 
 impl DefaultDatabase {
-    pub fn new(db_name: impl Into<String>, meta: Arc<dyn MetaApiSync>) -> Self {
+    pub fn new(db_name: impl Into<String>) -> Self {
         Self {
             db_name: db_name.into(),
-            meta,
         }
     }
 }
@@ -38,15 +30,5 @@ impl DefaultDatabase {
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
         &self.db_name
-    }
-
-    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
-        // TODO validate table parameters by using TableFactory
-        self.meta.create_table(plan)?;
-        Ok(())
-    }
-
-    fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.meta.drop_table(plan)
     }
 }

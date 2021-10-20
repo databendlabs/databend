@@ -42,9 +42,8 @@ impl Interpreter for DropTableInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_catalog();
-        let database = datasource.get_database(self.plan.db.as_str())?;
-        database.drop_table(self.plan.clone())?;
+        let catalog = self.ctx.get_catalog();
+        catalog.drop_table(self.plan.clone())?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

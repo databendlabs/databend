@@ -22,7 +22,9 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
@@ -121,6 +123,14 @@ impl Catalog for OverlaidCatalog {
         self.read_only
             .get_table_by_id(table_id, table_version)
             .or_else(|_e| self.bottom.get_table_by_id(table_id, table_version))
+    }
+
+    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+        self.bottom.create_table(plan)
+    }
+
+    fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
+        self.bottom.drop_table(plan)
     }
 
     fn get_table_function(

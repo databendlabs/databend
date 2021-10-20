@@ -22,7 +22,9 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
@@ -142,6 +144,14 @@ impl Catalog for SystemCatalog {
             "commit table not allowed for system catalog {}",
             table_id
         )))
+    }
+
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+        unimplemented!("programming error: SystemCatalog does not support create table")
+    }
+
+    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+        unimplemented!("programming error: SystemCatalog does not support drop table")
     }
 
     fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
