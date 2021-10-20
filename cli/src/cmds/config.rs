@@ -108,7 +108,6 @@ impl MirrorAsset for RepoMirror {
     }
 }
 
-
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CustomMirror {
     pub(crate) base_url: String,
@@ -194,7 +193,8 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
         }
     }
 
-    let default_mirrors: Vec<Box<dyn MirrorAsset>> = vec![Box::new(GithubMirror {}), Box::new(RepoMirror{})];
+    let default_mirrors: Vec<Box<dyn MirrorAsset>> =
+        vec![Box::new(GithubMirror {}), Box::new(RepoMirror {})];
     for _ in 0..5 {
         for i in &default_mirrors {
             if i.is_ok() {
