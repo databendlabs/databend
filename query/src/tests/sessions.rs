@@ -15,6 +15,7 @@
 use std::env;
 
 use common_base::tokio::runtime::Runtime;
+use common_base::Thread;
 use common_exception::Result;
 
 use crate::configs::Config;
@@ -97,7 +98,7 @@ impl SessionManagerBuilder {
 
     pub fn build(self) -> Result<SessionManagerRef> {
         let config = self.config;
-        let handle = std::thread::spawn(move || sync_try_create_sessions(config));
+        let handle = Thread::spawn(move || sync_try_create_sessions(config));
         handle.join().unwrap()
     }
 }

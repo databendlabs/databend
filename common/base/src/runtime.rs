@@ -25,6 +25,8 @@ use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
+use crate::runtime_tracker::RuntimeTracker;
+
 /// Methods to spawn tasks.
 pub trait TrySpawn {
     /// Tries to spawn a new asynchronous task, returning a tokio::JoinHandle for it.
@@ -143,12 +145,14 @@ where
 pub struct Runtime {
     // Handle to runtime.
     handle: Handle,
+    // Runtime tracker
+    tracker: Arc<RuntimeTracker>,
     // Use to receive a drop signal when dropper is dropped.
     _dropper: Dropper,
 }
 
 impl Runtime {
-    fn create(builder: &mut tokio::runtime::Builder) -> Result<Self> {
+    fn create(tracker: Arc<RuntimeTracker>, builder: &mut tokio::runtime::Builder) -> Result<Self> {
         let runtime = builder
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))?;
@@ -162,25 +166,40 @@ impl Runtime {
 
         Ok(Runtime {
             handle,
+            tracker,
             _dropper: Dropper {
                 close: Some(send_stop),
             },
         })
     }
 
+    fn tracker_builder(rt_tracker: Arc<RuntimeTracker>) -> tokio::runtime::Builder {
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+        builder
+            .enable_all()
+            .on_thread_stop(rt_tracker.on_stop_thread())
+            .on_thread_start(rt_tracker.on_start_thread());
+
+        builder
+    }
+
+    pub fn get_tracker(&self) -> Arc<RuntimeTracker> {
+        self.tracker.clone()
+    }
+
     /// Spawns a new tokio runtime with a default thread count on a background
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
-        let mut runtime = tokio::runtime::Builder::new_multi_thread();
-        let builder = runtime.enable_all();
-        Self::create(builder)
+        let tracker = RuntimeTracker::create();
+        let mut runtime_builder = Self::tracker_builder(tracker.clone());
+        Self::create(tracker, &mut runtime_builder)
     }
 
     pub fn with_worker_threads(workers: usize) -> Result<Self> {
-        let mut runtime = tokio::runtime::Builder::new_multi_thread();
-        let builder = runtime.enable_all().worker_threads(workers);
-        Self::create(builder)
+        let tracker = RuntimeTracker::create();
+        let mut runtime_builder = Self::tracker_builder(tracker.clone());
+        Self::create(tracker, runtime_builder.worker_threads(workers))
     }
 }
 

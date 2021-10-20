@@ -30,7 +30,7 @@ use crate::sessions::SessionManagerRef;
 pub type ListeningStream = Abortable<TcpListenerStream>;
 
 #[async_trait::async_trait]
-pub trait Server {
+pub trait Server: Send {
     async fn shutdown(&mut self);
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr>;
@@ -45,8 +45,8 @@ pub struct ShutdownHandle {
 impl ShutdownHandle {
     pub fn create(sessions: SessionManagerRef) -> ShutdownHandle {
         ShutdownHandle {
-            services: vec![],
             sessions,
+            services: vec![],
             shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
