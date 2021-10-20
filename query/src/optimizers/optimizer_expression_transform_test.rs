@@ -84,6 +84,22 @@ mod tests {
                 \n  Filter: toBoolean(number)\
                 \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             },
+            Test {
+                name: "Boolean transform",
+                query: "select number from numbers_mt(10) where number",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number != 0)\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
+            Test {
+                name: "Boolean and truth transform",
+                query: "select number from numbers_mt(10) where not number",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number = 0)\
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            },
         ];
 
         for test in tests {

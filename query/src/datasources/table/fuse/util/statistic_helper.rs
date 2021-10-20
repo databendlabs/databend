@@ -95,8 +95,6 @@ impl BlockMetaAccumulator {
 }
 
 pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
-    let row_count = data_block.num_rows();
-
     // NOTE:
     // column id is FAKED, this is OK as long as table schema is NOT changed (which is not realistic)
     // we should extend DataField with column_id ...
@@ -129,7 +127,6 @@ pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
                 min,
                 max,
                 null_count,
-                row_count,
             };
 
             Ok((idx, col_stats))
@@ -168,7 +165,6 @@ pub fn column_stats_reduce_with_schema(
             let mut min_stats = Vec::with_capacity(stats.len());
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
-            let mut row_count = 0;
 
             for col_stats in stats {
                 // to be optimized, with DataType and the value of data, we may
@@ -177,7 +173,6 @@ pub fn column_stats_reduce_with_schema(
                 max_stats.push(col_stats.max.clone());
 
                 null_count += col_stats.null_count;
-                row_count += col_stats.row_count;
             }
 
             // TODO panic
@@ -198,7 +193,6 @@ pub fn column_stats_reduce_with_schema(
                 min,
                 max,
                 null_count,
-                row_count,
             });
             Ok(acc)
         })

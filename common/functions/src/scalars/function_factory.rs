@@ -38,6 +38,7 @@ pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send +
 pub struct FunctionFeatures {
     pub is_deterministic: bool,
     pub negative_function_name: Option<String>,
+    pub is_bool_func: bool,
 }
 
 impl FunctionFeatures {
@@ -45,6 +46,7 @@ impl FunctionFeatures {
         FunctionFeatures {
             is_deterministic: false,
             negative_function_name: None,
+            is_bool_func: false,
         }
     }
 
@@ -55,6 +57,11 @@ impl FunctionFeatures {
 
     pub fn negative_function(mut self, negative_name: &str) -> FunctionFeatures {
         self.negative_function_name = Some(negative_name.to_string());
+        self
+    }
+
+    pub fn bool_function(mut self) -> FunctionFeatures {
+        self.is_bool_func = true;
         self
     }
 }

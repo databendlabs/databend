@@ -674,6 +674,10 @@ impl RewriteHelper {
                 op: op.clone(),
                 right: Box::new(expressions[1].clone()),
             },
+            Expression::UnaryExpression { op, .. } => Expression::UnaryExpression {
+                op: op.clone(),
+                expr: Box::new(expressions[0].clone()),
+            },
             Expression::ScalarFunction { op, .. } => Expression::ScalarFunction {
                 op: op.clone(),
                 args: expressions.to_vec(),
@@ -768,5 +772,23 @@ impl RewriteHelper {
         };
 
         Ok(true)
+    }
+
+    pub fn rewrite_column_expr(
+        expr: &Expression,
+        column_old: &str,
+        column_new: &str,
+    ) -> Result<Expression> {
+        let expressions = Self::expression_plan_children(expr)?;
+        let expressions = expressions
+            .iter()
+            .map(|e| Self::rewrite_column_expr(e, column_old, column_new))
+            .collect::<Result<Vec<_>>>()?;
+        if let Expression::Column(name) = expr {
+            if name.eq(column_old) {
+                return Ok(Expression::Column(column_new.to_string()));
+            }
+        }
+        Ok(Self::rebuild_from_exprs(expr, &expressions))
     }
 }

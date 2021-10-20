@@ -46,7 +46,6 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let r = statistic_helper::block_stats(&block)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.row_count, 3);
     assert_eq!(col_stats.min, DataValue::Int32(Some(1)));
     assert_eq!(col_stats.max, DataValue::Int32(Some(3)));
     Ok(())
@@ -65,7 +64,6 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let r = r.unwrap();
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.row_count, 30);
     assert_eq!(col_stats.min, DataValue::Int32(Some(1)));
     assert_eq!(col_stats.max, DataValue::Int32(Some(3)));
     Ok(())
