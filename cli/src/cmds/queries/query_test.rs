@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
-
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use tempfile::tempdir;
@@ -75,7 +73,7 @@ fn test_build_query_url() -> Result<()> {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
         mirror: GithubMirror {}.to_mirror(),
-        clap: RefCell::new(Default::default()),
+        clap: Default::default(),
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();

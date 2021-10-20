@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
 use dyn_clone::DynClone;
 
 use crate::cmds::Writer;
 use crate::error::Result;
 
-pub trait Command: DynClone {
+#[async_trait]
+pub trait Command: DynClone + Send + Sync {
     fn name(&self) -> &str;
     fn about(&self) -> &str;
     fn is(&self, s: &str) -> bool;
-    fn exec(&self, writer: &mut Writer, args: String) -> Result<()>;
+    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()>;
 }
 
 dyn_clone::clone_trait_object!(Command);

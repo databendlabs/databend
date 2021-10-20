@@ -15,6 +15,7 @@
 use std::borrow::Borrow;
 use std::str::FromStr;
 
+use async_trait::async_trait;
 use clap::App;
 use clap::AppSettings;
 use clap::ArgMatches;
@@ -73,7 +74,11 @@ impl ClusterCommand {
         app
     }
 
-    pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub(crate) async fn exec_match(
+        &self,
+        writer: &mut Writer,
+        args: Option<&ArgMatches>,
+    ) -> Result<()> {
         match args {
             Some(matches) => match matches.subcommand_name() {
                 Some("create") => {
@@ -86,7 +91,8 @@ impl ClusterCommand {
                 }
                 Some("view") => {
                     let view = ViewCommand::create(self.conf.clone());
-                    view.exec_match(writer, matches.subcommand_matches("view"))?;
+                    view.exec_match(writer, matches.subcommand_matches("view"))
+                        .await?;
                 }
                 _ => writer.write_err("unknown command, usage: cluster -h"),
             },
@@ -99,6 +105,7 @@ impl ClusterCommand {
     }
 }
 
+#[async_trait]
 impl Command for ClusterCommand {
     fn name(&self) -> &str {
         "cluster"
@@ -112,10 +119,10 @@ impl Command for ClusterCommand {
         s.contains(self.name())
     }
 
-    fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
         match self.clap.clone().try_get_matches_from(args.split(' ')) {
             Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow()));
+                return self.exec_match(writer, Some(matches.borrow())).await;
             }
             Err(err) => {
                 println!("Cannot get subcommand matches: {}", err);

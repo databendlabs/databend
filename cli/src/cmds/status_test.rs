@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
+use std::time::Duration;
+use std::time::Instant;
 
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
+use httpmock::Method::GET;
+use httpmock::MockServer;
 use tempfile::tempdir;
 
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
+use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
@@ -33,7 +37,7 @@ fn test_status() -> Result<()> {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
         mirror: GithubMirror {}.to_mirror(),
-        clap: RefCell::new(Default::default()),
+        clap: Default::default(),
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
@@ -145,5 +149,52 @@ fn test_status() -> Result<()> {
         assert_eq!(status.current_profile, None);
         assert!(!status.has_local_configs());
     }
+    Ok(())
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_verify() -> Result<()> {
+    let mut conf = Config {
+        group: "foo".to_string(),
+        databend_dir: "/tmp/.databend".to_string(),
+        clap: Default::default(),
+        mirror: GithubMirror {}.to_mirror(),
+    };
+    let t = tempdir()?;
+    conf.databend_dir = t.path().to_str().unwrap().to_string();
+    // Start a lightweight mock server.
+    let server = MockServer::start();
+    // Create a mock on the server.
+    let _ = server.mock(|when, then| {
+        when.method(GET).path("/v1/health");
+        then.status(200)
+            .header("content-type", "text/html")
+            .body("health")
+            .delay(Duration::from_millis(100));
+    });
+
+    let mut meta_config = LocalMetaConfig {
+        config: MetaConfig::default(),
+        pid: Some(123),
+        path: Some("./".to_string()),
+        log_dir: Some("./".to_string()),
+    };
+    meta_config.config.admin_api_address = format!("127.0.0.1:{}", server.port());
+    let mut query_config = LocalQueryConfig {
+        config: QueryConfig::default(),
+        pid: Some(123),
+        path: Some("./".to_string()),
+        log_dir: Some("./".to_string()),
+    };
+    query_config.config.query.http_api_address = format!("127.0.0.1:{}", server.port());
+    let begin = Instant::now();
+    let mut handles = Vec::with_capacity(2);
+    handles.push(tokio::spawn(async move { meta_config.verify().await }));
+    handles.push(tokio::spawn(async move { query_config.verify().await }));
+    for handle in handles {
+        handle.await.unwrap()?;
+    }
+    let elapsed = begin.elapsed();
+    // elasped < mock_server.delay * (meta_num + query_num)
+    assert!(elapsed.as_millis() < 200);
     Ok(())
 }

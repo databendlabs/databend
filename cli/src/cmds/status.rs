@@ -134,7 +134,7 @@ impl LocalRuntime for LocalMetaConfig {
         for _ in 0..LocalMetaConfig::RETRIES {
             let resp = cli.get(url.as_str()).send().await;
             if resp.is_err() || !resp.unwrap().status().is_success() {
-                sleep(time::Duration::from_secs(1));
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             } else {
                 return Ok(());
             }
@@ -276,7 +276,7 @@ impl LocalRuntime for LocalQueryConfig {
         for _ in 0..LocalQueryConfig::RETRIES {
             let resp = cli.get(url.as_str()).send().await;
             if resp.is_err() || !resp.unwrap().status().is_success() {
-                sleep(time::Duration::from_secs(1));
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             } else {
                 return Ok(());
             }

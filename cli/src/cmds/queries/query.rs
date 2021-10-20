@@ -17,6 +17,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::str::FromStr;
 
+use async_trait::async_trait;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
@@ -253,6 +254,7 @@ fn execute_query(bin_path: String, url: String, query: String) -> Result<String>
     };
 }
 
+#[async_trait]
 impl Command for QueryCommand {
     fn name(&self) -> &str {
         "query"
@@ -266,7 +268,7 @@ impl Command for QueryCommand {
         s.contains(self.name())
     }
 
-    fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
         let words = shellwords::split(args.as_str());
         if words.is_err() {
             writer.write_err("cannot parse words");

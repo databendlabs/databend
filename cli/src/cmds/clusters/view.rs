@@ -67,9 +67,9 @@ impl ViewCommand {
             )
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
+    async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
-        let table = ViewCommand::build_local_table(&status);
+        let table = ViewCommand::build_local_table(&status).await;
         if let Ok(t) = table {
             writer.writeln(&t.trim_fmt());
         } else {
@@ -103,7 +103,7 @@ impl ViewCommand {
         row
     }
 
-    pub fn build_local_table(status: &Status) -> Result<Table> {
+    pub async fn build_local_table(status: &Status) -> Result<Table> {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
         // Title.
@@ -116,31 +116,28 @@ impl ViewCommand {
         ]);
         let meta_config = status.get_local_meta_config();
         let query_config = status.get_local_query_configs();
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()?;
-        rt.block_on(async {
-            let mut handles = Vec::with_capacity(query_config.len() + 1);
-            if let Some((fs, meta_config)) = meta_config {
-                handles.push(rt.spawn(async { ViewCommand::build_row(fs, meta_config).await }));
-            }
-            for (fs, query_config) in query_config {
-                handles.push(rt.spawn(async { ViewCommand::build_row(fs, query_config).await }));
-            }
-            for handle in handles {
-                table.add_row(handle.await.unwrap());
-            }
-        });
+        let mut handles = Vec::with_capacity(query_config.len() + 1);
+        if let Some((fs, meta_config)) = meta_config {
+            handles.push(tokio::spawn(ViewCommand::build_row(fs, meta_config)));
+        }
+        for (fs, query_config) in query_config {
+            handles.push(tokio::spawn(ViewCommand::build_row(fs, query_config)));
+        }
+        for handle in handles {
+            table.add_row(handle.await.unwrap());
+        }
         Ok(table)
     }
 
-    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let status = Status::read(self.conf.clone())?;
                 let p = utils::get_profile(status, matches.value_of("profile"));
                 match p {
-                    Ok(ClusterProfile::Local) => return self.local_exec_match(writer, matches),
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await
+                    }
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }

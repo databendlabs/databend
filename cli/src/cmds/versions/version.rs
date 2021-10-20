@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
 use clap::App;
 use sha2::Digest;
 use sha2::Sha256;
@@ -55,6 +56,7 @@ impl VersionCommand {
     }
 }
 
+#[async_trait]
 impl Command for VersionCommand {
     fn name(&self) -> &str {
         "version"
@@ -68,7 +70,7 @@ impl Command for VersionCommand {
         self.name() == s
     }
 
-    fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+    async fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
         let build_semver = option_env!("VERGEN_BUILD_SEMVER");
         let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
         let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
