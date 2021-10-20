@@ -99,7 +99,7 @@ pub async fn do_read(
     });
 
     // TODO configuration of the buffer size
-    let n = std::cmp::max(10, col_num);
+    let n = std::cmp::min(10, col_num);
     let data_cols = stream.buffer_unordered(n).try_collect().await?;
 
     let block = DataBlock::create(Arc::new(DataSchema::from(arrow_schema)), data_cols);
