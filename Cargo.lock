@@ -2060,6 +2060,7 @@ dependencies = [
  "parquet-format-async-temp",
  "paste",
  "pretty_assertions",
+ "prometheus-parse",
  "prost",
  "quantiles",
  "rand 0.8.4",
@@ -4841,6 +4842,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edc3358ebc67bc8b7fa0c007f945b0b18226f78437d61bec735a9eb96b61ee70"
 dependencies = [
  "unicode-xid",
+]
+
+[[package]]
+name = "prometheus-parse"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c918c6632cce1961ffa300c0ca7d16c6a9c8bbaefc8ee54dec0f983ab927c76"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]

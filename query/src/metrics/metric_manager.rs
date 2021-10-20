@@ -42,9 +42,9 @@ impl MetricManager {
     pub fn install_recorder(&mut self) -> Result<()> {
         let recorder = match self.recorder.take() {
             None => {
-                return Err(ErrorCode::InitPrometheusFailure(format!(
-                    "Already installed prometheus recorder"
-                )))
+                return Err(ErrorCode::InitPrometheusFailure(
+                    "Already installed prometheus recorder",
+                ))
             }
             Some(recorder) => recorder,
         };
