@@ -38,7 +38,7 @@ pub struct MemoryTableStream {
 impl MemoryTableStream {
     pub fn try_create(ctx: DatabendQueryContextRef, blocks: Vec<DataBlock>) -> Result<Self> {
         Ok(Self {
-            ctx: ctx.clone(),
+            ctx,
             block_index: 0,
             block_ranges: vec![],
             blocks,

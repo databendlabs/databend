@@ -56,7 +56,6 @@ impl FuseTable {
         // TODO we need a configuration to specify the unit of dequeue operation
         let bite_size = 1;
         let iter = {
-            let ctx = ctx.clone();
             std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
                 Err(_) => None,
                 Ok(parts) if parts.is_empty() => None,

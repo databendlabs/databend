@@ -39,7 +39,7 @@ pub struct NumbersStream {
 impl NumbersStream {
     pub fn try_create(ctx: DatabendQueryContextRef, schema: DataSchemaRef) -> Result<Self> {
         Ok(Self {
-            ctx: ctx.clone(),
+            ctx,
             schema,
             block_index: 0,
             blocks: vec![],
