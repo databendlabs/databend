@@ -19,7 +19,6 @@ use std::usize;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_streams::ProgressStream;
 use futures::stream::Stream;
 
 use crate::sessions::DatabendQueryContextRef;
@@ -38,17 +37,13 @@ pub struct NumbersStream {
 }
 
 impl NumbersStream {
-    pub fn try_create(
-        ctx: DatabendQueryContextRef,
-        schema: DataSchemaRef,
-    ) -> Result<ProgressStream> {
-        let stream = Box::pin(NumbersStream {
+    pub fn try_create(ctx: DatabendQueryContextRef, schema: DataSchemaRef) -> Result<Self> {
+        Ok(Self {
             ctx: ctx.clone(),
             schema,
             block_index: 0,
             blocks: vec![],
-        });
-        ProgressStream::try_create(stream, ctx.progress_callback()?)
+        })
     }
 
     #[inline]
