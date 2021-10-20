@@ -12,27 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod macros;
+mod allocators;
+mod malloc_size;
+// mod sizeof;
 
-mod context;
-mod context_shared;
-mod metrics;
-mod session;
-mod session_info;
-mod session_ref;
-mod session_test;
-#[allow(clippy::module_inception)]
-mod sessions;
-mod sessions_info;
-mod settings;
+pub use allocators::MallocSizeOfExt;
+pub use malloc_size::MallocShallowSizeOf;
+pub use malloc_size::MallocSizeOf;
+pub use malloc_size::MallocSizeOfOps;
 
-pub use context::DatabendQueryContext;
-pub use context::DatabendQueryContextRef;
-pub use context_shared::DatabendQueryContextShared;
-pub use session::Session;
-pub use session_info::ProcessInfo;
-pub use session_ref::SessionRef;
-pub use sessions::SessionManager;
-pub use sessions::SessionManagerRef;
-pub use settings::Settings;
+/// Heap size of structure.
+///
+/// Structure can be anything that implements MallocSizeOf.
+pub fn malloc_size<T: MallocSizeOf + ?Sized>(t: &T) -> usize {
+    MallocSizeOf::size_of(t, &mut allocators::new_malloc_size_ops())
+}

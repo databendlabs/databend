@@ -11,6 +11,8 @@ edition = "2021"
 common-arrow = {path = "../arrow"}
 common-exception = {path = "../exception"}
 common-io = {path = "../io"}
+common-mem-derive = {path = "../mem/mem-derive"}
+common-mem-allocator = {path = "../mem/mem-allocator"}
 
 # Github dependencies
 

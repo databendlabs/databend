@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_mem_allocator::malloc_size;
+use common_mem_derive::*;
 use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
@@ -30,20 +32,26 @@ use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 use crate::users::UserManagerRef;
 
+#[derive(MallocSizeOf)]
 pub(in crate::sessions) struct MutableStatus {
     pub(in crate::sessions) abort: bool,
     pub(in crate::sessions) current_database: String,
     pub(in crate::sessions) session_settings: Arc<Settings>,
+    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) client_host: Option<SocketAddr>,
+    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) io_shutdown_tx: Option<Sender<Sender<()>>>,
+    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) context_shared: Option<Arc<DatabendQueryContextShared>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: String,
+    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) config: Config,
+    #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) sessions: SessionManagerRef,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) mutable_state: Arc<Mutex<MutableStatus>>,
@@ -184,5 +192,9 @@ impl Session {
 
     pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
         self.sessions.get_user_manager()
+    }
+
+    pub fn get_memory_usage(self: &Arc<Self>) -> usize {
+        malloc_size(self)
     }
 }
