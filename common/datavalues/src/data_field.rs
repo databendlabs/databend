@@ -15,11 +15,21 @@
 use std::collections::BTreeMap;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
+use common_mem_derive::*;
 
 use crate::DataType;
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Hash,
+    Eq,
+    PartialOrd,
+    Ord,
+    MallocSizeOf,
 )]
 pub struct DataField {
     name: String,

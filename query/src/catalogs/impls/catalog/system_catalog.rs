@@ -22,7 +22,9 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
@@ -77,7 +79,7 @@ impl SystemCatalog {
         }
 
         let tables = Arc::new(tables);
-        let sys_db = Arc::new(SystemDatabase::create("system", tables.clone()));
+        let sys_db = Arc::new(SystemDatabase::create("system"));
         Ok(Self {
             sys_db,
             sys_db_meta: tables,
@@ -113,6 +115,13 @@ impl Catalog for SystemCatalog {
         Ok(table.clone())
     }
 
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        // ensure db exists
+        let _db = self.get_database(db_name)?;
+
+        Ok(self.sys_db_meta.name_to_table.values().cloned().collect())
+    }
+
     fn get_table_by_id(
         &self,
         table_id: MetaId,
@@ -135,6 +144,14 @@ impl Catalog for SystemCatalog {
             "commit table not allowed for system catalog {}",
             table_id
         )))
+    }
+
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+        unimplemented!("programming error: SystemCatalog does not support create table")
+    }
+
+    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+        unimplemented!("programming error: SystemCatalog does not support drop table")
     }
 
     fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {

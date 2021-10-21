@@ -20,7 +20,9 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -42,11 +44,17 @@ pub trait Catalog {
     // Get one table by db and table name.
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
 
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
     fn get_table_by_id(
         &self,
         table_id: MetaId,
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<dyn Table>>;
+
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 
     // Get function by name.
     fn get_table_function(

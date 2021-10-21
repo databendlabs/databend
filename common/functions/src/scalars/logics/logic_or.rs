@@ -31,7 +31,8 @@ impl LogicOrFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("and"),
+                .negative_function("and")
+                .bool_function(),
         )
     }
 }

@@ -30,10 +30,15 @@ use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 
-const GITHUB_BASE_URL: &str = "https://github.com";
+const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
 const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_CLIENT_URL: &str = "https://github.com/ZhiHanZ/usql/releases/download";
+
+const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
+const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
+const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json";
+const REPO_CLIENT_URL: &str = "https://repo.databend.rs/usql";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -81,6 +86,24 @@ impl MirrorAsset for GithubMirror {
     }
     fn get_client_url(&self) -> String {
         GITHUB_CLIENT_URL.to_string()
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct RepoMirror {}
+
+impl MirrorAsset for RepoMirror {
+    fn get_base_url(&self) -> String {
+        REPO_BASE_URL.to_string()
+    }
+    fn get_databend_url(&self) -> String {
+        REPO_DATABEND_URL.to_string()
+    }
+    fn get_databend_tag_url(&self) -> String {
+        REPO_DATABEND_TAG_URL.to_string()
+    }
+    fn get_client_url(&self) -> String {
+        REPO_CLIENT_URL.to_string()
     }
 }
 
@@ -169,7 +192,8 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
         }
     }
 
-    let default_mirrors: Vec<Box<dyn MirrorAsset>> = vec![Box::new(GithubMirror {})];
+    let default_mirrors: Vec<Box<dyn MirrorAsset>> =
+        vec![Box::new(GithubMirror {}), Box::new(RepoMirror {})];
     for _ in 0..5 {
         for i in &default_mirrors {
             if i.is_ok() {

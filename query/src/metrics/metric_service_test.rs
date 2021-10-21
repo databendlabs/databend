@@ -18,16 +18,18 @@ use common_base::tokio;
 use metrics::counter;
 
 use crate::metrics::MetricService;
+use crate::servers::server::Server;
+use crate::tests::SessionManagerBuilder;
 
 pub static METRIC_TEST: &str = "metrics.test";
 
 #[tokio::test]
 async fn test_metric_server() -> common_exception::Result<()> {
-    let mut service = MetricService::create();
+    let mut service = MetricService::create(SessionManagerBuilder::create().build()?);
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = service.start(listening).await?;
     let client = reqwest::Client::builder().build().unwrap();
-    let url = format!("http://{}", listening);
+    let url = format!("http://{}/metrics", listening);
     let resp = client.get(url.clone()).send().await;
     assert!(resp.is_ok());
     let resp = resp.unwrap();

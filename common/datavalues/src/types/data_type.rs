@@ -15,11 +15,14 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_mem_derive::*;
 
 use crate::DataField;
 use crate::PhysicalDataType;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
+)]
 pub enum DataType {
     Null,
     Boolean,
@@ -53,7 +56,16 @@ pub enum DataType {
 }
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    MallocSizeOf,
 )]
 pub enum IntervalUnit {
     YearMonth,

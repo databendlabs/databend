@@ -31,7 +31,8 @@ impl ComparisonGtFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("<="),
+                .negative_function("<=")
+                .bool_function(),
         )
     }
 }

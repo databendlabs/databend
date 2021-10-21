@@ -16,13 +16,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::Expression;
-use common_planners::Expressions;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
+use common_planners::*;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContextRef;
@@ -51,14 +45,14 @@ impl ExprTransformImpl {
         let factory = FunctionFactory::instance();
         let function_features = factory.get_features(op)?;
 
-        match function_features.negative_function_name.as_ref() {
-            Some(v) => Ok(f(v, args)),
-            None => Ok(Expression::create_unary_expression("NOT", vec![
-                origin.clone()
-            ])),
-        }
+        let expr = function_features.negative_function_name.as_ref().map_or(
+            Expression::create_unary_expression("NOT", vec![origin.clone()]),
+            |v| f(v, args),
+        );
+        Ok(expr)
     }
 
+    // Apply NOT transformation to the expression and return a new one.
     fn truth_transformer(origin: &Expression, is_negated: bool) -> Result<Expression> {
         match origin {
             // TODO: support in and not in.
@@ -110,6 +104,46 @@ impl ExprTransformImpl {
             }
         }
     }
+
+    fn make_condition(op: &str, origin: &Expression) -> Result<Expression> {
+        let factory = FunctionFactory::instance();
+        let function_features = factory.get_features(op)?;
+        if function_features.is_bool_func {
+            Ok(origin.clone())
+        } else {
+            Ok(origin.not_eq(lit(0)))
+        }
+    }
+
+    // Ensure that all expressions involved in conditions are boolean functions.
+    // Specifically, change <non-bool-expr> to (0 <> <non-bool-expr>).
+    fn boolean_transformer(origin: &Expression) -> Result<Expression> {
+        match origin {
+            Expression::Literal { .. } => Ok(origin.clone()),
+            Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
+                "and" => {
+                    let new_left = Self::boolean_transformer(left)?;
+                    let new_right = Self::boolean_transformer(right)?;
+                    Ok(new_left.and(new_right))
+                }
+                "or" => {
+                    let new_left = Self::boolean_transformer(left)?;
+                    let new_right = Self::boolean_transformer(right)?;
+                    Ok(new_left.or(new_right))
+                }
+                other => Self::make_condition(other, origin),
+            },
+            Expression::UnaryExpression { op, expr } => match op.to_lowercase().as_str() {
+                "not" => {
+                    let new_expr = Self::boolean_transformer(expr)?;
+                    Ok(not(new_expr))
+                }
+                other => Self::make_condition(other, origin),
+            },
+            Expression::ScalarFunction { op, .. } => Self::make_condition(op.as_str(), origin),
+            _ => Ok(origin.not_eq(lit(0))),
+        }
+    }
 }
 
 impl PlanRewriter for ExprTransformImpl {
@@ -149,6 +183,20 @@ impl PlanRewriter for ExprTransformImpl {
                     .build()
             }
         }
+    }
+
+    fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
+        let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+        let new_predicate = Self::boolean_transformer(&plan.predicate)?;
+        let new_predicate = Self::truth_transformer(&new_predicate, false)?;
+        PlanBuilder::from(&new_input).filter(new_predicate)?.build()
+    }
+
+    fn rewrite_having(&mut self, plan: &HavingPlan) -> Result<PlanNode> {
+        let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+        let new_predicate = Self::boolean_transformer(&plan.predicate)?;
+        let new_predicate = Self::truth_transformer(&new_predicate, false)?;
+        PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }
 }
 

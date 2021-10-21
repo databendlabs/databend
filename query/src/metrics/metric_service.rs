@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::convert::Infallible;
-use std::future::Future;
 use std::net::SocketAddr;
 
 use axum::body::Bytes;
@@ -25,26 +24,20 @@ use axum::response::Html;
 use axum::response::IntoResponse;
 use axum::AddExtensionLayer;
 use axum::Router;
+use axum_server::Handle;
 use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::future::AbortHandle;
-use futures::future::AbortRegistration;
-use futures::future::Abortable;
-use futures::StreamExt;
-use hyper::server::conn::Http;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
-use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::servers::server::ListeningStream;
 use crate::servers::Server;
+use crate::sessions::SessionManagerRef;
 
 pub struct MetricService {
-    join_handle: Option<JoinHandle<()>>,
-    abort_handle: AbortHandle,
-    abort_registration: Option<AbortRegistration>,
+    join_handle: Option<JoinHandle<std::io::Result<()>>>,
+    abort_handler: Handle,
 }
 
 pub struct MetricTemplate {
@@ -69,18 +62,17 @@ pub async fn metric_handler(prom_extension: Extension<PrometheusHandle>) -> Metr
 macro_rules! build_router {
     ($prometheus: expr) => {
         Router::new()
-            .route("/", get(metric_handler))
+            .route("/metrics", get(metric_handler))
             .layer(AddExtensionLayer::new($prometheus.clone()))
     };
 }
 
 impl MetricService {
-    pub fn create() -> Box<dyn Server> {
-        let (abort_handle, registration) = AbortHandle::new_pair();
+    // TODO add session tls handler
+    pub fn create(_sessions: SessionManagerRef) -> Box<MetricService> {
         Box::new(MetricService {
-            abort_handle,
-            abort_registration: Some(registration),
             join_handle: None,
+            abort_handler: axum_server::Handle::new(),
         })
     }
 
@@ -88,6 +80,7 @@ impl MetricService {
         let builder = PrometheusBuilder::new();
         let prometheus_recorder = builder.build();
         let prometheus_handle = prometheus_recorder.handle();
+        // TODO(zhihanz) add metrics descriptions through regist
         match metrics::set_boxed_recorder(Box::new(prometheus_recorder)) {
             Ok(_) => Ok(prometheus_handle),
             Err(error) => Err(ErrorCode::InitPrometheusFailure(format!(
@@ -97,39 +90,38 @@ impl MetricService {
         }
     }
 
-    async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
-        let listener = tokio::net::TcpListener::bind(socket).await?;
-        let listener_addr = listener.local_addr()?;
-        Ok((TcpListenerStream::new(listener), listener_addr))
-    }
-
-    // TODO(zhihanz) add TLS config for metric server
-    fn listen_loop(
-        &self,
-        stream: ListeningStream,
-        handler: PrometheusHandle,
-    ) -> impl Future<Output = ()> {
+    async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        let handler =
+            MetricService::create_prometheus_handle().expect("cannot build prometheus handler");
         let app = build_router!(handler);
-        stream.for_each(move |accept_socket| {
-            let app = app.clone();
-            async move {
-                match accept_socket {
-                    Err(error) => log::error!("Broken http connection: {}", error),
-                    Ok(socket) => {
-                        tokio::spawn(async move {
-                            Http::new().serve_connection(socket, app).await.unwrap();
-                        });
+        let server = axum_server::bind(listening.to_string())
+            .handle(self.abort_handler.clone())
+            .serve(app);
+
+        self.join_handle = Some(tokio::spawn(server));
+        self.abort_handler.listening().await;
+
+        match self.abort_handler.listening_addrs() {
+            None => Err(ErrorCode::CannotListenerPort("")),
+            Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
+            Some(addresses) => {
+                // 0.0.0.0, for multiple network interface, we may listen to multiple address
+                let first_address = addresses[0];
+                for address in addresses {
+                    if address.port() != first_address.port() {
+                        return Err(ErrorCode::CannotListenerPort(""));
                     }
-                };
+                }
+                Ok(first_address)
             }
-        })
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Server for MetricService {
     async fn shutdown(&mut self) {
-        self.abort_handle.abort();
+        self.abort_handler.graceful_shutdown();
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
@@ -142,15 +134,6 @@ impl Server for MetricService {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        match self.abort_registration.take() {
-            None => Err(ErrorCode::LogicalError("Http Service already running.")),
-            Some(registration) => {
-                let handle = MetricService::create_prometheus_handle()?;
-                let (stream, listener) = Self::listener_tcp(listening).await?;
-                let stream = Abortable::new(stream, registration);
-                self.join_handle = Some(tokio::spawn(self.listen_loop(stream, handle)));
-                Ok(listener)
-            }
-        }
+        self.start_without_tls(listening).await
     }
 }

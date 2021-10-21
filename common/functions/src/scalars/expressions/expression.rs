@@ -24,12 +24,16 @@ pub struct ToCastFunction;
 
 impl ToCastFunction {
     fn cast_function_creator(to_type: DataType) -> FunctionDescription {
+        let mut features = FunctionFeatures::default().deterministic();
+        if to_type == DataType::Boolean {
+            features = features.bool_function();
+        }
+
         let function_creator: FactoryCreator = Box::new(move |display_name| {
             CastFunction::create(display_name.to_string(), to_type.clone())
         });
 
-        FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(function_creator).features(features)
     }
 
     pub fn register(factory: &mut FunctionFactory) {

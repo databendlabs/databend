@@ -28,7 +28,9 @@ use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::backends::MetaEmbeddedSync;
@@ -99,12 +101,7 @@ impl MetaStoreCatalog {
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let db = DefaultDatabase::new(
-            &db_info.db,
-            self.meta.clone(),
-            self.table_engine_registry.clone(),
-            self.in_memory_data.clone(),
-        );
+        let db = DefaultDatabase::new(&db_info.db);
 
         let db = Arc::new(db);
 
@@ -163,6 +160,16 @@ impl Catalog for MetaStoreCatalog {
         self.build_table_instance(table_info.as_ref().clone())
     }
 
+    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self.meta.get_tables(db_name)?;
+
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.build_table_instance(item.as_ref().clone())?;
+            acc.push(tbl);
+            Ok(acc)
+        })
+    }
+
     fn get_table_by_id(
         &self,
         table_id: MetaId,
@@ -180,6 +187,16 @@ impl Catalog for MetaStoreCatalog {
     ) -> Result<CommitTableReply> {
         self.meta
             .commit_table(table_id, new_table_version, new_snapshot_location)
+    }
+
+    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+        // TODO validate table parameters by using TableFactory
+        self.meta.create_table(plan)?;
+        Ok(())
+    }
+
+    fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
+        self.meta.drop_table(plan)
     }
 
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {

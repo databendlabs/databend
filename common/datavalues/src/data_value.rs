@@ -25,6 +25,7 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
+use common_mem_derive::*;
 
 use crate::arrays::ListBooleanArrayBuilder;
 use crate::arrays::ListBuilderTrait;
@@ -36,7 +37,7 @@ use crate::series::Series;
 use crate::DataField;
 
 /// A specific value of a data type.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, MallocSizeOf)]
 pub enum DataValue {
     /// Base type.
     Null,
@@ -243,6 +244,27 @@ impl DataValue {
             DataValue::UInt64(Some(v)) => Ok(*v as i64),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get i64 number",
+                other.data_type()
+            ))),
+        }
+    }
+
+    pub fn as_bool(&self) -> Result<bool> {
+        match self {
+            DataValue::Null => Ok(false),
+            DataValue::Boolean(v) => Ok(v.map_or(false, |v| v)),
+            DataValue::Int8(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Int16(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Int32(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Int64(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt8(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt16(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt32(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::UInt64(v) => Ok(v.map_or(false, |v| v != 0)),
+            DataValue::Float32(v) => Ok(v.map_or(false, |v| v != 0f32)),
+            DataValue::Float64(v) => Ok(v.map_or(false, |v| v != 0f64)),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get boolean",
                 other.data_type()
             ))),
         }
