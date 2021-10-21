@@ -2,23 +2,6 @@
 # databend-query -c databend_query_config_spec.toml
 
 # Log
-[log]
-log_level = "DEBUG"
-log_dir = "./_logs"
-
-# Meta
-[meta]
-meta_address = "0.0.0.0:9191"
-meta_username = "root"
-meta_password = "root"
-
-# Store
-[store]
-store_address = "0.0.0.0:9191"
-store_username = "root"
-store_password = "root"
-
-# Query
 [query]
 max_active_sessions = 256
 
@@ -41,3 +24,26 @@ clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001
 
 namespace = "test_cluster"
+
+# Log
+[log]
+log_level = "DEBUG"
+log_dir = "./_logs"
+
+# Meta service.
+[meta]
+meta_address = "0.0.0.0:9191"
+meta_username = "root"
+meta_password = "root"
+meta_client_timeout_in_second = 60
+
+# Storage config.
+[storage]
+# disk|s3
+storage_type = ""
+
+# DISK storage.
+[storage.disk]
+
+# S3 storage.
+[storage.s3]

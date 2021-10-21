@@ -59,6 +59,7 @@ pub fn get_go_architecture() -> Result<(String, String)> {
     let goarch = match arch {
         "x86_64" => "amd64".to_string(),
         "aarch_64" => "arm64".to_string(),
+        "aarch64" => "arm64".to_string(),
         _ => {
             return Err(CliError::Unknown(format!(
                 "Unsupported go architecture {}",
