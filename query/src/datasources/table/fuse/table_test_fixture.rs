@@ -23,10 +23,13 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_infallible::Mutex;
+use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::InsertIntoPlan;
 use tempfile::TempDir;
+use uuid::Uuid;
 
+use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::sessions::DatabendQueryContextRef;
@@ -34,6 +37,7 @@ use crate::sessions::DatabendQueryContextRef;
 pub struct TestFixture {
     _tmp_dir: TempDir,
     ctx: DatabendQueryContextRef,
+    prefix: String,
 }
 
 impl TestFixture {
@@ -45,9 +49,21 @@ impl TestFixture {
         // use `TempDir` as root path (auto clean)
         config.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
         let ctx = crate::tests::try_create_context_with_config(config).unwrap();
+
+        let random_prefix: String = Uuid::new_v4().to_simple().to_string();
+        // prepare a randomly named default database
+        let db_name = gen_db_name(&random_prefix);
+        let plan = CreateDatabasePlan {
+            if_not_exists: false,
+            db: db_name,
+            options: Default::default(),
+        };
+        ctx.get_catalog().create_database(plan).unwrap();
+
         Self {
             _tmp_dir: tmp_dir,
             ctx,
+            prefix: random_prefix,
         }
     }
 
@@ -55,33 +71,33 @@ impl TestFixture {
         self.ctx.clone()
     }
 
-    pub fn default_db() -> String {
-        "default".to_string()
+    pub fn default_db(&self) -> String {
+        gen_db_name(&self.prefix)
     }
 
-    pub fn default_table() -> String {
-        "test_tbl".to_string()
+    pub fn default_table(&self) -> String {
+        format!("{}_test_tbl", self.prefix)
     }
 
     pub fn default_schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)])
     }
 
-    pub fn default_crate_table_plan() -> CreateTablePlan {
+    pub fn default_crate_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             if_not_exists: false,
-            db: TestFixture::default_db(),
-            table: TestFixture::default_table(),
+            db: self.default_db(),
+            table: self.default_table(),
             schema: TestFixture::default_schema(),
             engine: "FUSE".to_string(),
             options: Default::default(),
         }
     }
 
-    pub fn insert_plan_for_default_table(table: &dyn Table, block_num: u32) -> InsertIntoPlan {
+    pub fn insert_plan_of_table(&self, table: &dyn Table, block_num: u32) -> InsertIntoPlan {
         InsertIntoPlan {
-            db_name: TestFixture::default_table(),
-            tbl_name: TestFixture::default_table(),
+            db_name: self.default_db(),
+            tbl_name: self.default_table(),
             tbl_id: table.get_id(),
             schema: TestFixture::default_schema(),
             input_stream: Arc::new(Mutex::new(Some(Box::pin(futures::stream::iter(
@@ -100,4 +116,8 @@ impl TestFixture {
             })
             .collect()
     }
+}
+
+fn gen_db_name(prefix: &str) -> String {
+    format!("{}_default", prefix)
 }

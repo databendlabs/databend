@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+pub(crate) mod index;
 pub(crate) mod io;
 mod meta;
 mod table;

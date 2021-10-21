@@ -13,16 +13,9 @@
 //  limitations under the License.
 //
 
-pub use col_encoding::*;
-pub use constants::TBL_OPT_KEY_SNAPSHOT_LOC;
-pub use location_gen::*;
-pub use statistic_helper::*;
+pub use min_max::range_filter;
+pub use min_max::MinMaxIndex;
 
-mod col_encoding;
-mod location_gen;
-mod statistic_helper;
-
-mod constants;
-
+mod min_max;
 #[cfg(test)]
-mod statistic_helper_test;
+mod min_max_test;
