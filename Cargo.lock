@@ -1485,9 +1485,12 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
+ "common-exception",
  "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
+ "prometheus-parse",
+ "serde",
  "tracing",
 ]
 
@@ -4856,9 +4859,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus-parse"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c918c6632cce1961ffa300c0ca7d16c6a9c8bbaefc8ee54dec0f983ab927c76"
+checksum = "c996f3caea1c51aa034c0d2dfd8447a12c555f4567b02677ef8a865ac4cce712"
 dependencies = [
  "chrono",
  "lazy_static",

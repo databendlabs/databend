@@ -6,8 +6,14 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
-[dependencies] # In alphabetical order
+[dependencies]
+# Workspace dependencies
+common-exception = { path = "../exception" }
+
+# Crates.io dependencies
 lazy_static = "1.4.0"
 metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
 tracing = "0.1.29"
+prometheus-parse = "0.2.2"
+serde = { version = "1.0", features = ["derive"] }

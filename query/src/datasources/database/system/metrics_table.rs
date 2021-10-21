@@ -26,7 +26,7 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_metrics::PrometheusHandle;
+use common_metrics::MetricValue;
 use common_planners::Extras;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -59,30 +59,6 @@ impl MetricsTable {
         MetricsTable { table_info }
     }
 
-    fn canonicalize_metrics(
-        &self,
-        handle: PrometheusHandle,
-    ) -> Result<Vec<(String, String, String, String)>> {
-        let text = handle.render();
-        let lines = text.lines().map(|s| Ok(s.to_owned()));
-        let samples = prometheus_parse::Scrape::parse(lines)
-            .map_err(|err| {
-                ErrorCode::UnexpectedError(format!("Dump prometheus metrics failed: {:?}", err))
-            })?
-            .samples;
-        samples
-            .into_iter()
-            .map(|sample| {
-                Ok((
-                    sample.metric,
-                    self.display_sample_kind(&sample.value),
-                    self.display_sample_labels(&*sample.labels)?,
-                    self.display_sample_value(&sample.value)?,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()
-    }
-
     fn display_sample_labels(&self, labels: &HashMap<String, String>) -> Result<String> {
         serde_json::to_string(labels).map_err(|err| {
             ErrorCode::UnexpectedError(format!(
@@ -92,26 +68,13 @@ impl MetricsTable {
         })
     }
 
-    fn display_sample_kind(&self, value: &prometheus_parse::Value) -> String {
-        use prometheus_parse::Value;
+    fn display_sample_value(&self, value: &MetricValue) -> Result<String> {
         match value {
-            Value::Counter(_) => "counter",
-            Value::Gauge(_) => "gauge",
-            Value::Untyped(_) => "untyped",
-            Value::Histogram(_) => "histogram",
-            Value::Summary(_) => "summary",
-        }
-        .to_string()
-    }
-
-    fn display_sample_value(&self, value: &prometheus_parse::Value) -> Result<String> {
-        use prometheus_parse::Value;
-        match value {
-            Value::Counter(v) => serde_json::to_string(v),
-            Value::Gauge(v) => serde_json::to_string(v),
-            Value::Untyped(v) => serde_json::to_string(v),
-            Value::Histogram(v) => Ok(format!("{:?}", v)), // TODO: make it JSON
-            Value::Summary(v) => Ok(format!("{:?}", v)),   // TODO: make it JSON
+            MetricValue::Counter(v) => serde_json::to_string(v),
+            MetricValue::Gauge(v) => serde_json::to_string(v),
+            MetricValue::Untyped(v) => serde_json::to_string(v),
+            MetricValue::Histogram(v) => serde_json::to_string(v),
+            MetricValue::Summary(v) => serde_json::to_string(v),
         }
         .map_err(|err| {
             ErrorCode::UnexpectedError(format!(
@@ -141,16 +104,16 @@ impl Table for MetricsTable {
             ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
         })?;
 
-        let canonicalized_metrics = self.canonicalize_metrics(prometheus_handle)?;
-        let mut metrics: Vec<Vec<u8>> = Vec::with_capacity(canonicalized_metrics.len());
-        let mut labels: Vec<Vec<u8>> = Vec::with_capacity(canonicalized_metrics.len());
-        let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(canonicalized_metrics.len());
-        let mut values: Vec<Vec<u8>> = Vec::with_capacity(canonicalized_metrics.len());
-        for (metric_text, kind_text, labels_text, value_text) in canonicalized_metrics.into_iter() {
-            metrics.push(metric_text.clone().into_bytes());
-            kinds.push(kind_text.clone().into_bytes());
-            labels.push(labels_text.clone().into_bytes());
-            values.push(value_text.clone().into_bytes());
+        let samples = common_metrics::dump_metric_samples(prometheus_handle)?;
+        let mut metrics: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        for sample in samples.into_iter() {
+            metrics.push(sample.name.clone().into_bytes());
+            kinds.push(sample.kind.clone().into_bytes());
+            labels.push(self.display_sample_labels(&sample.labels)?.into_bytes());
+            values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
         let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![
