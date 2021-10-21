@@ -9,7 +9,7 @@ edition = "2021"
 
 [[bin]]
 name = "bendctl"
-path = "src/bin/benctl.rs"
+path = "src/bin/bendctl.rs"
 
 [features]
 
