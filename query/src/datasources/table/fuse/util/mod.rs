@@ -15,12 +15,10 @@
 
 pub use col_encoding::*;
 pub use constants::TBL_OPT_KEY_SNAPSHOT_LOC;
-pub use index_helpers::*;
 pub use location_gen::*;
 pub use statistic_helper::*;
 
 mod col_encoding;
-mod index_helpers;
 mod location_gen;
 mod statistic_helper;
 

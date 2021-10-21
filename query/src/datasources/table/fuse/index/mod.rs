@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+pub use min_max::range_filter;
 pub use min_max::MinMaxIndex;
 
 mod min_max;
