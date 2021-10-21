@@ -12,59 +12,84 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
-thread_local! {
-    static TRACKER: RefCell<Option<Arc<ThreadTracker>>> = RefCell::new(None)
-}
+#[thread_local]
+static mut TRACKER: *const ThreadTracker = std::ptr::null();
 
 pub struct ThreadTracker {
     rt_tracker: Arc<RuntimeTracker>,
-    parent_tracker: Option<Arc<ThreadTracker>>,
+    parent_tracker: *const ThreadTracker,
 }
 
 impl ThreadTracker {
-    pub(in crate::runtime_tracker) fn create(rt_tracker: Arc<RuntimeTracker>) -> ThreadTracker {
-        ThreadTracker {
+    pub fn create(rt_tracker: Arc<RuntimeTracker>) -> *mut ThreadTracker {
+        Box::into_raw(Box::new(ThreadTracker {
             rt_tracker,
-            parent_tracker: None,
+            parent_tracker: std::ptr::null(),
+        }))
+    }
+
+    #[inline]
+    pub fn current() -> *const ThreadTracker {
+        unsafe { TRACKER }
+    }
+
+    #[inline]
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn set_current(value: *const ThreadTracker) {
+        unsafe { TRACKER = value }
+    }
+
+    #[inline]
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn alloc_memory(pointer: *const Self, size: usize) {
+        unsafe {
+            if !pointer.is_null() {
+                (*pointer)
+                    .rt_tracker
+                    .memory_usage
+                    .fetch_add(size, Ordering::Relaxed);
+            }
+
+            Self::alloc_memory((*pointer).parent_tracker, size);
         }
     }
 
     #[inline]
-    pub fn current() -> Arc<ThreadTracker> {
-        Self::current_opt().unwrap()
-    }
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn dealloc_memory(pointer: *const Self, size: usize) {
+        unsafe {
+            if !pointer.is_null() {
+                (*pointer)
+                    .rt_tracker
+                    .memory_usage
+                    .fetch_sub(size, Ordering::Relaxed);
+            }
 
-    #[inline]
-    pub fn current_opt() -> Option<Arc<ThreadTracker>> {
-        TRACKER.with(|tracker| tracker.borrow().clone())
-    }
-
-    #[inline]
-    pub fn set_current(value: Arc<ThreadTracker>) {
-        TRACKER.with(move |tracker| {
-            tracker.borrow_mut().replace(value);
-        });
-    }
-
-    #[inline]
-    pub fn alloc_memory(&self, size: usize) {
-        self.rt_tracker.memory_usage.fetch_add(size, Ordering::Relaxed);
-
-        if let Some(parent_tracker) = &self.parent_tracker {
-            parent_tracker.alloc_memory(size);
+            Self::dealloc_memory((*pointer).parent_tracker, size);
         }
     }
 
     #[inline]
-    pub fn dealloc_memory(&self, size: usize) {
-        self.rt_tracker.memory_usage.fetch_sub(size, Ordering::Relaxed);
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn realloc_memory(pointer: *const Self, old_size: usize, new_size: usize) {
+        unsafe {
+            if !pointer.is_null() {
+                (*pointer)
+                    .rt_tracker
+                    .memory_usage
+                    .fetch_sub(old_size, Ordering::Relaxed);
 
-        if let Some(parent_tracker) = &self.parent_tracker {
-            parent_tracker.dealloc_memory(size);
+                (*pointer)
+                    .rt_tracker
+                    .memory_usage
+                    .fetch_add(new_size, Ordering::Relaxed);
+            }
+
+            Self::realloc_memory((*pointer).parent_tracker, old_size, new_size);
         }
     }
 }
@@ -76,7 +101,7 @@ pub struct RuntimeTracker {
 impl RuntimeTracker {
     pub fn create() -> Arc<RuntimeTracker> {
         Arc::new(RuntimeTracker {
-            memory_usage: AtomicUsize::new(0)
+            memory_usage: AtomicUsize::new(0),
         })
     }
 
@@ -89,12 +114,13 @@ impl RuntimeTracker {
         // TODO: log::info("thread {}-{} started", thread_id, thread_name);
 
         let _self = self.clone();
-        let parent_tracker = ThreadTracker::current_opt();
+        let parent_tracker = ThreadTracker::current() as usize;
 
-        move || {
+        move || unsafe {
+            let parent_tracker = parent_tracker as *const ThreadTracker;
             let mut thread_tracker = ThreadTracker::create(_self.clone());
-            thread_tracker.parent_tracker = parent_tracker.clone();
-            ThreadTracker::set_current(Arc::new(thread_tracker));
+            (*thread_tracker).parent_tracker = parent_tracker;
+            ThreadTracker::set_current(thread_tracker);
         }
     }
 }
