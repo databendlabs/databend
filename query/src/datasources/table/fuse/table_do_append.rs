@@ -15,8 +15,11 @@
 
 use std::sync::Arc;
 
+use backoff::backoff::Backoff;
+use backoff::ExponentialBackoff;
 use common_context::IOContext;
 use common_context::TableIOContext;
+use common_dal::DataAccessor;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,6 +28,7 @@ use common_meta_types::MetaVersion;
 use common_planners::InsertIntoPlan;
 use uuid::Uuid;
 
+use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::BlockAppender;
@@ -62,37 +66,55 @@ impl FuseTable {
         da.put(&seg_loc, bytes).await?;
 
         // 4. new snapshot
-        let prev_snapshot = self.table_snapshot(io_ctx.as_ref())?;
 
-        // TODO backoff retry this block
-        {
+        let ctx: Arc<DatabendQueryContext> = io_ctx
+            .get_user_data()?
+            .expect("DatabendQueryContext should not be None");
+        let mut version = self.table_info.version;
+
+        // Here we use the backoff only, `backoff::future::retry` might not that handy here (passing around the mut version)
+        let mut backoff = ExponentialBackoff::default();
+        loop {
+            let prev_snapshot = self.table_snapshot_with_version(version, io_ctx.as_ref())?;
             let new_snapshot = merge_snapshot(
                 self.table_info.schema.as_ref(),
-                prev_snapshot,
-                (segment_info, seg_loc),
+                &prev_snapshot,
+                (&segment_info, &seg_loc),
             )?;
-
-            // 4.1 save the new snapshot
-            let uuid = new_snapshot.snapshot_id;
-            let snapshot_loc = util::snapshot_location(uuid.to_simple().to_string().as_str());
-            let bytes = serde_json::to_vec(&new_snapshot)?;
-            da.put(&snapshot_loc, bytes).await?;
+            let snapshot_loc = save_snapshot(&new_snapshot, da.as_ref()).await?;
 
             // 5. commit
             let table_id = insert_plan.tbl_id;
-            commit(&io_ctx, table_id, self.table_info.version, snapshot_loc)?;
+            let commit_res = update_snapshot_location(&io_ctx, table_id, version, snapshot_loc);
+            if let Err(err) = commit_res {
+                if err.code() == ErrorCode::TableVersionMissMatch("").code() {
+                    match backoff.next_backoff() {
+                        Some(duration) => {
+                            common_base::tokio::time::sleep(duration).await;
+                            let table = ctx.get_catalog().get_table(
+                                self.table_info.db.as_str(),
+                                self.table_info.name.as_str(),
+                            )?;
+                            version = table.get_table_info().version;
+                            continue;
+                        }
+                        None => break Err(ErrorCode::CommitTableError("commit table failure")),
+                    }
+                }
+            }
+            break Ok(());
         }
-        Ok(())
     }
 }
 
 fn merge_snapshot(
     schema: &DataSchema,
-    pre: Option<TableSnapshot>,
-    (seg_info, loc): (SegmentInfo, String),
+    pre: &Option<TableSnapshot>,
+    (seg_info, loc): (&SegmentInfo, &String),
 ) -> Result<TableSnapshot> {
     if let Some(s) = pre {
-        let mut new_snapshot = s.append_segment(loc);
+        let s = s.clone();
+        let mut new_snapshot = s.append_segment(loc.clone());
         let new_stat = util::merge_stats(schema, &new_snapshot.summary, &seg_info.summary)?;
         new_snapshot.summary = new_stat;
         Ok(new_snapshot)
@@ -101,19 +123,18 @@ fn merge_snapshot(
             snapshot_id: Uuid::new_v4(),
             prev_snapshot_id: None,
             schema: schema.clone(),
-            summary: seg_info.summary,
-            segments: vec![loc],
+            summary: seg_info.summary.clone(),
+            segments: vec![loc.clone()],
         })
     }
 }
 
-fn commit(
+fn update_snapshot_location(
     io_ctx: &TableIOContext,
     table_id: MetaId,
     table_version: MetaVersion,
     new_snapshot_location: String,
 ) -> Result<()> {
-    use crate::catalogs::Catalog;
     let ctx: Arc<DatabendQueryContext> = io_ctx
         .get_user_data()?
         .expect("DatabendQueryContext should not be None");
@@ -124,4 +145,12 @@ fn commit(
         TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
         new_snapshot_location,
     )
+}
+
+async fn save_snapshot(new_snapshot: &TableSnapshot, da: &dyn DataAccessor) -> Result<String> {
+    let uuid = new_snapshot.snapshot_id;
+    let snapshot_loc = util::snapshot_location(uuid.to_simple().to_string().as_str());
+    let bytes = serde_json::to_vec(&new_snapshot).map_err(ErrorCode::from_std_error)?;
+    da.put(&snapshot_loc, bytes).await?;
+    Ok(snapshot_loc)
 }

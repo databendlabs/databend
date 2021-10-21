@@ -340,7 +340,7 @@ impl MetaApiSync for MetaEmbeddedSync {
                         tbl_idx.insert(new_tbl_info);
                         return Ok(());
                     } else {
-                        return Err(ErrorCode::CommitTableError(format!(
+                        return Err(ErrorCode::TableVersionMissMatch(format!(
                             "expecting table version: [{}], but got [{}]. (table_id {})",
                             tbl.version, table_version, table_id
                         )));

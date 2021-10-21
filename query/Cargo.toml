@@ -96,6 +96,7 @@ cargo-license = "0.4.2"
 cargo_metadata = "0.14.0"
 sha2 = "0.9.8"
 sha1 = "0.6.0"
+backoff = {version = "0.3.0", features = ["futures", "tokio"] }
 
 [dependencies.parquet-format-async-temp]
 version = "0.2.0"

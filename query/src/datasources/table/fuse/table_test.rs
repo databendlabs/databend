@@ -131,8 +131,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
         fixture.default_db().as_str(),
         fixture.default_table().as_str(),
     )?;
-    // no side effects
-    assert_eq!(prev_version, table.get_table_info().version);
+
+    assert_eq!(prev_version + 1, table.get_table_info().version);
     assert!(r.is_ok());
 
     // 2. truncate table which has data

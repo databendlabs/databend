@@ -22,6 +22,7 @@ use common_context::IOContext;
 use common_context::TableIOContext;
 use common_dal::read_obj;
 use common_exception::Result;
+use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
@@ -33,9 +34,11 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use super::util;
+use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::TableSnapshot;
+use crate::sessions::DatabendQueryContext;
 
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
@@ -99,8 +102,31 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
+    /// Get snapshot of table versioned self::version
     pub fn table_snapshot(&self, io_ctx: &TableIOContext) -> Result<Option<TableSnapshot>> {
-        let option = &self.table_info.options;
+        Self::read_snapshot(self, io_ctx)
+    }
+
+    /// Get snapshot of table versioned `version`
+    pub fn table_snapshot_with_version(
+        &self,
+        version: MetaVersion,
+        io_ctx: &TableIOContext,
+    ) -> Result<Option<TableSnapshot>> {
+        if version == self.table_info.version {
+            Self::read_snapshot(self, io_ctx)
+        } else {
+            let ctx: Arc<DatabendQueryContext> = io_ctx
+                .get_user_data()?
+                .expect("DatabendQueryContext should not be None");
+            let catalog = ctx.get_catalog();
+            let table = catalog.get_table_by_id(self.get_id(), Some(version))?;
+            Self::read_snapshot(table.as_ref(), io_ctx)
+        }
+    }
+
+    fn read_snapshot(table: &dyn Table, io_ctx: &TableIOContext) -> Result<Option<TableSnapshot>> {
+        let option = &table.get_table_info().options;
         if let Some(loc) = option.get(util::TBL_OPT_KEY_SNAPSHOT_LOC) {
             let da = io_ctx.get_data_accessor()?;
             let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime(), None)??;

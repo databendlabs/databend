@@ -24,6 +24,10 @@ mod table_do_truncate;
 pub(crate) mod util;
 
 #[cfg(test)]
+mod table_do_append_test;
+#[cfg(test)]
+mod table_do_truncate_test;
+#[cfg(test)]
 mod table_test;
 #[cfg(test)]
 mod table_test_fixture;

@@ -37,16 +37,13 @@ use common_arrow::parquet::encoding::Encoding;
 ///  ~~~
 ///
 ///
-pub fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
-    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray yet, we fallback to Plain
-    // From parquet2: Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
-    //
-    //match data_type {
-    //    ArrowDataType::Binary
-    //    | ArrowDataType::LargeBinary
-    //    | ArrowDataType::Utf8
-    //    | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
-    //    _ => Encoding::Plain,
-    //}
-    Encoding::Plain
+pub fn col_encoding(data_type: &ArrowDataType) -> Encoding {
+    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray for Binary yet, we fallback to Plain
+    // From parquet2 error message : Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
+
+    match data_type {
+        ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
+        ArrowDataType::Dictionary(_, _) => Encoding::RleDictionary,
+        _ => Encoding::Plain,
+    }
 }
