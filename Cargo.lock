@@ -2074,7 +2074,6 @@ dependencies = [
  "parquet-format-async-temp",
  "paste",
  "pretty_assertions",
- "prometheus-parse",
  "prost",
  "quantiles",
  "rand 0.8.4",
