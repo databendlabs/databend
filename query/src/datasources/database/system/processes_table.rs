@@ -122,7 +122,7 @@ impl Table for ProcessesTable {
             Series::new(processes_state),
             Series::new(processes_database),
             Series::new(processes_extra_info),
-            Series::new(processes_memory_usage)
+            Series::new(processes_memory_usage),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

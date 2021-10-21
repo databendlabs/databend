@@ -18,7 +18,6 @@ use std::sync::Arc;
 use crate::sessions::session::MutableStatus;
 use crate::sessions::Session;
 use crate::sessions::Settings;
-use std::sync::atomic::Ordering;
 
 pub struct ProcessInfo {
     pub id: String,
@@ -43,7 +42,9 @@ impl Session {
 
         if let Some(shared) = &status.context_shared {
             if let Ok(runtime) = shared.try_get_runtime() {
-                memory_usage = runtime.get_tracker().memory_usage.load(Ordering::Relaxed);
+                let runtime_tracker = runtime.get_tracker();
+                let runtime_memory_tracker = runtime_tracker.get_memory_tracker();
+                memory_usage = runtime_memory_tracker.get_memory_usage() as u64;
             }
         }
 
@@ -55,7 +56,7 @@ impl Session {
             settings: status.session_settings.clone(),
             client_address: status.client_host,
             session_extra_info: self.process_extra_info(status),
-            memory_usage: memory_usage as u64
+            memory_usage,
         }
     }
 
