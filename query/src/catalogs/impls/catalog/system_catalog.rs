@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -134,12 +134,13 @@ impl Catalog for SystemCatalog {
         Ok(table.clone())
     }
 
-    fn commit_table(
+    fn upsert_table_option(
         &self,
         table_id: MetaId,
-        _new_table_version: MetaVersion,
-        _new_snapshot_location: String,
-    ) -> Result<CommitTableReply> {
+        _table_version: MetaVersion,
+        _key: String,
+        _value: String,
+    ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(format!(
             "commit table not allowed for system catalog {}",
             table_id

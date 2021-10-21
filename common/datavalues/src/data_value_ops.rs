@@ -85,6 +85,15 @@ impl DataValue {
             }
             DataType::Boolean => try_build_array! {values},
             DataType::String => try_build_array! {String, values},
+            DataType::Date16 => {
+                try_build_array! {PrimitiveArrayBuilder, u16, UInt16, values}
+            }
+            DataType::Date32 => {
+                try_build_array! {PrimitiveArrayBuilder, i32, Int32, values}
+            }
+            DataType::DateTime32(_) => {
+                try_build_array! {PrimitiveArrayBuilder, u32, UInt32, values}
+            }
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{} for DataValue List",
                 other

@@ -21,12 +21,12 @@ use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -179,14 +179,19 @@ impl Catalog for MetaStoreCatalog {
         self.build_table_instance(table_info.as_ref().clone())
     }
 
-    fn commit_table(
+    fn upsert_table_option(
         &self,
         table_id: MetaId,
-        new_table_version: MetaVersion,
-        new_snapshot_location: String,
-    ) -> Result<CommitTableReply> {
-        self.meta
-            .commit_table(table_id, new_table_version, new_snapshot_location)
+        table_version: MetaVersion,
+        table_option_key: String,
+        table_option_value: String,
+    ) -> Result<UpsertTableOptionReply> {
+        self.meta.upsert_table_option(
+            table_id,
+            table_version,
+            table_option_key,
+            table_option_value,
+        )
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {

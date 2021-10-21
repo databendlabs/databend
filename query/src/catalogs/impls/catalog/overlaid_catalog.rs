@@ -17,10 +17,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -147,15 +147,20 @@ impl Catalog for OverlaidCatalog {
         Ok(func)
     }
 
-    fn commit_table(
+    fn upsert_table_option(
         &self,
         table_id: MetaId,
-        new_table_version: MetaVersion,
-        new_snapshot_location: String,
-    ) -> common_exception::Result<CommitTableReply> {
-        // commit table in BOTTOM layer only
-        self.bottom
-            .commit_table(table_id, new_table_version, new_snapshot_location)
+        table_version: MetaVersion,
+        table_option_key: String,
+        table_option_value: String,
+    ) -> common_exception::Result<UpsertTableOptionReply> {
+        // upsert table option in BOTTOM layer only
+        self.bottom.upsert_table_option(
+            table_id,
+            table_version,
+            table_option_key,
+            table_option_value,
+        )
     }
 
     fn create_database(

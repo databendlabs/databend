@@ -18,7 +18,7 @@ pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::Slot;
 pub use cmd::Cmd;
-pub use commit_table_reply::CommitTableReply;
+pub use commit_table_reply::UpsertTableOptionReply;
 pub use common_meta_sled_store::KVMeta;
 pub use common_meta_sled_store::KVValue;
 pub use common_meta_sled_store::SeqValue;

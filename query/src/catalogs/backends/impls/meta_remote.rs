@@ -18,13 +18,13 @@ use std::time::Duration;
 
 use common_exception::Result;
 use common_meta_api::MetaApi;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -124,13 +124,18 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn commit_table(
+    async fn upsert_table_option(
         &self,
-        _table_id: MetaId,
-        _new_table_version: MetaVersion,
-        _new_snapshot_location: String,
-    ) -> Result<CommitTableReply> {
-        todo!()
+        table_id: MetaId,
+        table_version: MetaVersion,
+        option_key: String,
+        option_value: String,
+    ) -> Result<UpsertTableOptionReply> {
+        self.query_backend(move |cli| async move {
+            cli.upsert_table_option(table_id, table_version, option_key, option_value)
+                .await
+        })
+        .await
     }
 
     fn name(&self) -> String {
