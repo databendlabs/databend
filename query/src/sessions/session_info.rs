@@ -18,6 +18,7 @@ use std::sync::Arc;
 use crate::sessions::session::MutableStatus;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use std::sync::atomic::Ordering;
 
 pub struct ProcessInfo {
     pub id: String,
@@ -28,6 +29,7 @@ pub struct ProcessInfo {
     pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
     pub session_extra_info: Option<String>,
+    pub memory_usage: u64,
 }
 
 impl Session {
@@ -37,6 +39,14 @@ impl Session {
     }
 
     fn to_process_info(self: &Arc<Self>, status: &MutableStatus) -> ProcessInfo {
+        let mut memory_usage = 0;
+
+        if let Some(shared) = &status.context_shared {
+            if let Ok(runtime) = shared.try_get_runtime() {
+                memory_usage = runtime.get_tracker().memory_usage.load(Ordering::Relaxed);
+            }
+        }
+
         ProcessInfo {
             id: self.id.clone(),
             typ: self.typ.clone(),
@@ -45,6 +55,7 @@ impl Session {
             settings: status.session_settings.clone(),
             client_address: status.client_host,
             session_extra_info: self.process_extra_info(status),
+            memory_usage: memory_usage as u64
         }
     }
 

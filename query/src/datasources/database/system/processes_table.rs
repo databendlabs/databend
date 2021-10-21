@@ -46,6 +46,7 @@ impl ProcessesTable {
             DataField::new("state", DataType::String, false),
             DataField::new("database", DataType::String, false),
             DataField::new("extra_info", DataType::String, true),
+            DataField::new("memory_usage", DataType::UInt64, true),
         ]);
 
         let table_info = TableInfo {
@@ -101,6 +102,7 @@ impl Table for ProcessesTable {
         let mut processes_state = Vec::with_capacity(processes_info.len());
         let mut processes_database = Vec::with_capacity(processes_info.len());
         let mut processes_extra_info = Vec::with_capacity(processes_info.len());
+        let mut processes_memory_usage = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
             processes_id.push(process_info.id.clone().into_bytes());
@@ -109,6 +111,7 @@ impl Table for ProcessesTable {
             processes_database.push(process_info.database.clone().into_bytes());
             processes_host.push(ProcessesTable::process_host(process_info));
             processes_extra_info.push(ProcessesTable::process_extra_info(process_info));
+            processes_memory_usage.push(process_info.memory_usage);
         }
 
         let schema = self.table_info.schema.clone();
@@ -119,6 +122,7 @@ impl Table for ProcessesTable {
             Series::new(processes_state),
             Series::new(processes_database),
             Series::new(processes_extra_info),
+            Series::new(processes_memory_usage)
         ]);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

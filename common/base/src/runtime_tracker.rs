@@ -15,6 +15,7 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::alloc::Layout;
 
 #[thread_local]
 static mut TRACKER: *const ThreadTracker = std::ptr::null();
@@ -52,9 +53,9 @@ impl ThreadTracker {
                     .rt_tracker
                     .memory_usage
                     .fetch_add(size, Ordering::Relaxed);
-            }
 
-            Self::alloc_memory((*pointer).parent_tracker, size);
+                Self::alloc_memory((*pointer).parent_tracker, size);
+            }
         }
     }
 
@@ -67,9 +68,9 @@ impl ThreadTracker {
                     .rt_tracker
                     .memory_usage
                     .fetch_sub(size, Ordering::Relaxed);
-            }
 
-            Self::dealloc_memory((*pointer).parent_tracker, size);
+                Self::dealloc_memory((*pointer).parent_tracker, size);
+            }
         }
     }
 
@@ -87,9 +88,9 @@ impl ThreadTracker {
                     .rt_tracker
                     .memory_usage
                     .fetch_add(new_size, Ordering::Relaxed);
-            }
 
-            Self::realloc_memory((*pointer).parent_tracker, old_size, new_size);
+                Self::realloc_memory((*pointer).parent_tracker, old_size, new_size);
+            }
         }
     }
 }
@@ -106,8 +107,16 @@ impl RuntimeTracker {
     }
 
     pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
-        let _self = self.clone();
-        move || { /* do nothing */ }
+        move || {
+            unsafe {
+                let tracker = std::mem::replace(&mut TRACKER, std::ptr::null());
+
+                // TODO(Winter): unsafe. because maybe the nested runtime is running?
+                // Let's assume that this is unlikely to happen, but we need to check this.
+                std::ptr::drop_in_place(tracker as usize as *mut ThreadTracker);
+                std::alloc::dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>());
+            }
+        }
     }
 
     pub fn on_start_thread(self: &Arc<Self>) -> impl Fn() {
