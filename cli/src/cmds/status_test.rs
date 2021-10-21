@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::time::Instant;
 
+use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;

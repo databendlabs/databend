@@ -16,6 +16,7 @@ path = "src/bin/benctl.rs"
 [dependencies]
 # Workspace dependencies
 databend-query = {path = "../query"}
+common-base = {path = "../common/base" }
 shellwords = "1.1.0"
 databend-meta = {path = "../metasrv" }
 common-meta-raft-store= {path = "../common/meta/raft-store"}
@@ -46,7 +47,6 @@ reqwest = { version = "0.11", features = ["json", "native-tls", "blocking"] }
 libc = "0.2"
 lexical-util = "0.8.1"
 async-trait = "0.1"
-tokio = { version = "1.12.0", features = ["macros", "rt", "rt-multi-thread", "sync", "fs"] }
 webbrowser = "0.5.5"
 
 [dev-dependencies]

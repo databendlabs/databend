@@ -15,6 +15,7 @@
 use bendctl::cmds::Config;
 use bendctl::cmds::Processor;
 use bendctl::error::Result;
+use common_base::tokio;
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -26,6 +26,7 @@ use std::thread::sleep;
 use std::time;
 
 use async_trait::async_trait;
+use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use libc::pid_t;

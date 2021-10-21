@@ -570,6 +570,7 @@ dependencies = [
  "clap_generate",
  "colored",
  "comfy-table",
+ "common-base",
  "common-building",
  "common-meta-raft-store",
  "databend-meta",
@@ -600,7 +601,6 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
- "tokio",
  "ureq",
  "webbrowser",
 ]

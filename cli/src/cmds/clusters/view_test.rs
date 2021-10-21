@@ -18,6 +18,7 @@ use std::time::Instant;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
+use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
