@@ -23,9 +23,6 @@ use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
-use common_base::tokio;
-use futures::FutureExt;
-use log::kv::ToValue;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
@@ -88,8 +85,8 @@ impl ViewCommand {
         Ok(())
     }
 
-    fn build_row(fs: &String, verify_result: &Result<()>) -> Vec<Cell> {
-        let file = Path::new(fs.as_str());
+    fn build_row(fs: &str, verify_result: &Result<()>) -> Vec<Cell> {
+        let file = Path::new(fs);
         let mut row = vec![];
         row.push(Cell::new(
             file.file_stem()

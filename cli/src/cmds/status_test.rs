@@ -19,7 +19,6 @@ use std::time::Instant;
 use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
-use futures::future;
 use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
@@ -201,15 +200,12 @@ async fn test_verify() -> Result<()> {
     let begin = Instant::now();
     // successful case should return immediately
     let t1 = meta_config
-        .verify(Some(10), Some(Duration::from_millis(100)))
-        .await;
+        .verify(Some(10), Some(Duration::from_millis(100)));
     // failed case should return after 2 times retry
     let t2 = query_config
-        .verify(Some(1), Some(Duration::from_millis(100)))
-        .await;
+        .verify(Some(1), Some(Duration::from_millis(100)));
     let t3 = query_config2
-        .verify(Some(1), Some(Duration::from_millis(100)))
-        .await;
+        .verify(Some(1), Some(Duration::from_millis(100)));
     let response = futures::future::join_all(vec![t1, t2, t3]).await;
     assert!(begin.elapsed().as_millis() > 200 && begin.elapsed().as_millis() < 400);
     assert_eq!(response.iter().filter(|e| e.is_ok()).count(), 1);

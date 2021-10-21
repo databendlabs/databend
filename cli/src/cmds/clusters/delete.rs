@@ -91,7 +91,9 @@ impl DeleteCommand {
 
     async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let mut status = Status::read(self.conf.clone())?;
-        if let Ok(_) = DeleteCommand::stop_current_local_services(&mut status, writer).await {};
+        if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer).await {
+            writer.write_err(format!("{:?}", e).as_str());
+        };
         status.current_profile = None;
         status.write()?;
         writer.write_ok("🚀 stopped services");

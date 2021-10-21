@@ -26,8 +26,6 @@ use std::thread::sleep;
 use std::time;
 
 use async_trait::async_trait;
-use common_base::tokio;
-use common_base::tokio::macros::support::Future;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use futures::future::BoxFuture;
@@ -39,7 +37,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use sysinfo::System;
 use sysinfo::SystemExt;
-use tryhard::RetryFuture;
 
 use crate::cmds::config::CustomMirror;
 use crate::cmds::Config;
@@ -88,7 +85,7 @@ async fn check_health(
             url
         )));
     } else {
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -102,10 +99,12 @@ pub trait LocalRuntime: Send + Sync {
                     Ok(_) => {
                         for _ in 0..60 {
                             if !self.is_clean() {
-                                if let Ok(_) = nix::sys::signal::kill(
+                                if nix::sys::signal::kill(
                                     Pid::from_raw(id),
                                     Some(nix::sys::signal::SIGINT),
-                                ) {}
+                                )
+                                .is_ok()
+                                {}
                                 sleep(time::Duration::from_secs(1));
                             } else {
                                 return Ok(());
@@ -141,16 +140,16 @@ pub trait LocalRuntime: Send + Sync {
         &self,
         retries: Option<u32>,
         duration: Option<std::time::Duration>,
-    ) -> BoxFuture<Result<()>> {
+    ) -> Result<()> {
         let (retries, duration) = (
             retries.unwrap_or(RETRIES as u32),
-            duration.unwrap_or(std::time::Duration::from_secs(1)),
+            duration.unwrap_or_else(|| std::time::Duration::from_secs(1)),
         );
         let (cli, url) = self.get_health_probe();
-        let result =
-            tryhard::retry_fn(move || check_health(cli.clone(), url.clone(), duration.clone()))
-                .retries(retries);
-        return result.boxed();
+        let result = tryhard::retry_fn(move || check_health(cli.clone(), url.clone(), duration))
+            .retries(retries)
+            .await;
+        return result;
     }
     fn get_path(&self) -> Option<String>;
     fn generate_command(&mut self) -> Result<Command>;
