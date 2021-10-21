@@ -88,6 +88,9 @@ impl DataValue {
             DataType::Date16 => {
                 try_build_array! {PrimitiveArrayBuilder, u16, UInt16, values}
             }
+            DataType::Date32 => {
+                try_build_array! {PrimitiveArrayBuilder, i32, Int32, values}
+            }
             DataType::DateTime32(_) => {
                 try_build_array! {PrimitiveArrayBuilder, u32, UInt32, values}
             }
