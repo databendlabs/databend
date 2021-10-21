@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
+
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -27,6 +29,7 @@ impl HelpCommand {
     }
 }
 
+#[async_trait]
 impl Command for HelpCommand {
     fn name(&self) -> &str {
         "help"
@@ -40,7 +43,7 @@ impl Command for HelpCommand {
         self.name() == s
     }
 
-    fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+    async fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
         for cmd in self.commands.iter() {
             writer.writeln_width(cmd.name(), cmd.about());
         }

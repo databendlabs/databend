@@ -74,47 +74,34 @@ impl Processor {
             commands,
         }
     }
-    pub fn process_run(&mut self) -> Result<()> {
+    pub async fn process_run(&mut self) -> Result<()> {
         let mut writer = Writer::create();
-        match self.env.conf.clone().clap.into_inner().subcommand_name() {
+        match self.env.conf.clone().clap.subcommand_name() {
             Some("package") => {
                 let cmd = PackageCommand::create(self.env.conf.clone());
                 return cmd.exec_match(
                     &mut writer,
-                    self.env
-                        .conf
-                        .clone()
-                        .clap
-                        .into_inner()
-                        .subcommand_matches("package"),
+                    self.env.conf.clone().clap.subcommand_matches("package"),
                 );
             }
             Some("version") => {
                 let cmd = VersionCommand::create();
-                cmd.exec(&mut writer, "".parse().unwrap())
+                cmd.exec(&mut writer, "".parse().unwrap()).await
             }
             Some("cluster") => {
                 let cmd = ClusterCommand::create(self.env.conf.clone());
-                return cmd.exec_match(
-                    &mut writer,
-                    self.env
-                        .conf
-                        .clone()
-                        .clap
-                        .into_inner()
-                        .subcommand_matches("cluster"),
-                );
+                return cmd
+                    .exec_match(
+                        &mut writer,
+                        self.env.conf.clone().clap.subcommand_matches("cluster"),
+                    )
+                    .await;
             }
             Some("query") => {
                 let cmd = QueryCommand::create(self.env.conf.clone());
                 cmd.exec_match(
                     &mut writer,
-                    self.env
-                        .conf
-                        .clone()
-                        .clap
-                        .into_inner()
-                        .subcommand_matches("query"),
+                    self.env.conf.clone().clap.subcommand_matches("query"),
                 )
             }
             Some("completion") => {
@@ -123,7 +110,6 @@ impl Processor {
                     .conf
                     .clone()
                     .clap
-                    .into_inner()
                     .subcommand_matches("completion")
                     .unwrap()
                     .value_of("completion")
@@ -138,7 +124,7 @@ impl Processor {
                 }
                 Ok(())
             }
-            None => self.process_run_interactive(),
+            None => self.process_run_interactive().await,
             _ => {
                 println!("Some other subcommand was used");
                 Ok(())
@@ -146,7 +132,7 @@ impl Processor {
         }
     }
 
-    pub fn process_run_interactive(&mut self) -> Result<()> {
+    pub async fn process_run_interactive(&mut self) -> Result<()> {
         let hist_path = format!("{}/history.txt", self.env.conf.databend_dir.clone());
         let _ = self.readline.load_history(hist_path.as_str());
         let mut content = String::new();
@@ -207,7 +193,7 @@ impl Processor {
                     }
                     content.push_str(line);
                     self.readline.history_mut().add(content.clone());
-                    self.processor_line(writer, content.clone())?;
+                    self.processor_line(writer, content.clone()).await?;
                     content.clear();
                     multiline_type = MultilineType::None;
                 }
@@ -229,9 +215,9 @@ impl Processor {
         Ok(())
     }
 
-    pub fn processor_line(&self, mut writer: Writer, line: String) -> Result<()> {
+    pub async fn processor_line(&self, mut writer: Writer, line: String) -> Result<()> {
         if let Some(cmd) = self.commands.iter().find(|c| c.is(&*line)) {
-            cmd.exec(&mut writer, line.trim().to_string())?;
+            cmd.exec(&mut writer, line.trim().to_string()).await?;
         } else {
             writeln!(writer, "Unknown command, usage: help").unwrap();
         }

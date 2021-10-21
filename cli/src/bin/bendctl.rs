@@ -15,9 +15,11 @@
 use bendctl::cmds::Config;
 use bendctl::cmds::Processor;
 use bendctl::error::Result;
+use common_base::tokio;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let conf = Config::create();
     let mut processor = Processor::create(conf);
-    processor.process_run()
+    processor.process_run().await
 }

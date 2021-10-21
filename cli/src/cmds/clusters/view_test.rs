@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
+use std::time::Duration;
 
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
+use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
@@ -33,12 +34,12 @@ use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
 
-#[test]
-fn test_build_table() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_build_table() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
-        clap: RefCell::new(Default::default()),
+        clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),
     };
     let t = tempdir()?;
@@ -50,7 +51,8 @@ fn test_build_table() -> Result<()> {
         when.method(GET).path("/v1/health");
         then.status(200)
             .header("content-type", "text/html")
-            .body("health");
+            .body("health")
+            .delay(Duration::from_millis(100));
     });
     {
         let mut status = Status::read(conf)?;
@@ -85,7 +87,7 @@ fn test_build_table() -> Result<()> {
         .unwrap();
         status.version = "build_table".to_string();
         status.write()?;
-        let table = ViewCommand::build_local_table(&status);
+        let table = ViewCommand::build_local_table(&status).await;
         let (meta_file, _) = status.get_local_meta_config().unwrap();
         let query_configs = status.get_local_query_configs();
         assert!(table.is_ok());

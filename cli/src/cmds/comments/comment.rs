@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
 use colored::Colorize;
 
 use crate::cmds::command::Command;
@@ -27,6 +28,7 @@ impl CommentCommand {
     }
 }
 
+#[async_trait]
 impl Command for CommentCommand {
     fn name(&self) -> &str {
         "comment"
@@ -40,7 +42,7 @@ impl Command for CommentCommand {
         s.starts_with('#')
     }
 
-    fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
         writer.writeln(format!("{}", args.green()).as_str());
         Ok(())
     }

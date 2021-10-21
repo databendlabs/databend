@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
-
 use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
@@ -31,7 +29,7 @@ fn test_mirror() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
-        clap: RefCell::new(Default::default()),
+        clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),
     };
     let t = tempdir()?;
