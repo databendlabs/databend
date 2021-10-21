@@ -1482,6 +1482,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-metrics"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "tracing",
+]
+
+[[package]]
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
@@ -2035,6 +2045,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-flight",
  "common-meta-types",
+ "common-metrics",
  "common-planners",
  "common-streams",
  "common-tracing",
@@ -2051,7 +2062,6 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "metrics-exporter-prometheus",
  "msql-srv",
  "mysql",
  "nom 7.0.0",

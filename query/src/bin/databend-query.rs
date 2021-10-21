@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_base::tokio;
+use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
@@ -51,6 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         conf.log.log_dir.as_str(),
         conf.log.log_level.as_str(),
     );
+
+    init_default_metrics_recorder();
 
     set_panic_hook();
     info!("{:?}", conf);

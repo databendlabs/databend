@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 
 use common_base::tokio;
+use common_metrics::init_default_metrics_recorder;
 use metrics::counter;
 
 use crate::metrics::MetricService;
@@ -25,6 +26,7 @@ pub static METRIC_TEST: &str = "metrics.test";
 
 #[tokio::test]
 async fn test_metric_server() -> common_exception::Result<()> {
+    init_default_metrics_recorder();
     let mut service = MetricService::create(SessionManagerBuilder::create().build()?);
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = service.start(listening).await?;

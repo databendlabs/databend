@@ -29,7 +29,7 @@ use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use metrics_exporter_prometheus::PrometheusHandle;
+use common_metrics::PrometheusHandle;
 
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
@@ -37,7 +37,6 @@ use crate::sessions::SessionManagerRef;
 pub struct MetricService {
     join_handle: Option<JoinHandle<std::io::Result<()>>>,
     abort_handler: Handle,
-    prometheus_handle: PrometheusHandle,
 }
 
 pub struct MetricTemplate {
@@ -69,16 +68,18 @@ macro_rules! build_router {
 
 impl MetricService {
     // TODO add session tls handler
-    pub fn create(sessions: SessionManagerRef) -> Box<MetricService> {
+    pub fn create(_sessions: SessionManagerRef) -> Box<MetricService> {
         Box::new(MetricService {
             join_handle: None,
             abort_handler: axum_server::Handle::new(),
-            prometheus_handle: sessions.get_metric_manager().handle(),
         })
     }
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let app = build_router!(self.prometheus_handle);
+        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
+            ErrorCode::InitPrometheusFailure("Prometheus recorder has not been initialized yet.")
+        })?;
+        let app = build_router!(prometheus_handle);
         let server = axum_server::bind(listening.to_string())
             .handle(self.abort_handler.clone())
             .serve(app);

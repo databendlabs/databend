@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod metric_service_test;
+mod recorder;
 
-mod metric_service;
-
-pub use metric_service::MetricService;
+pub use metrics_exporter_prometheus::PrometheusHandle;
+pub use recorder::init_default_metrics_recorder;
+pub use recorder::try_handle;
