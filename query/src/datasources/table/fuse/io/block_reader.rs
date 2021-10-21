@@ -30,7 +30,7 @@ use common_exception::Result;
 use common_planners::Part;
 use futures::StreamExt;
 
-// TODO move these to a dedicated crate
+// TODO move these to a dedicated mod
 mod cache_keys {
     use std::sync::Arc;
 
@@ -56,7 +56,6 @@ mod cache_keys {
     pub type BlockMetaCache = Arc<Mutex<LruCache<BlockMetaCacheKey, Vec<u8>>>>;
 }
 
-// TODO can we return a stream of DataBlock instead?
 pub async fn do_read(
     part: Part,
     data_accessor: Arc<dyn DataAccessor>,
@@ -83,7 +82,7 @@ pub async fn do_read(
 
     use futures::TryStreamExt;
     let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
-        let a = (metadata.row_groups[0].columns()[idx]).clone();
+        let column_chunk_meta = (metadata.row_groups[0].columns()[idx]).clone();
         let data_accessor = data_accessor.clone();
         async move {
             let mut reader = data_accessor.get_input_stream(loc, None)?;
@@ -93,7 +92,9 @@ pub async fn do_read(
                 .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
             let pages = col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
             // QUOTE(from arrow2): deserialize the pages. This is CPU bounded and SHOULD be done in a dedicated thread pool (e.g. Rayon)
-            let array = page_stream_to_array(pages, &a, fields[idx].data_type.clone()).await?;
+            let array =
+                page_stream_to_array(pages, &column_chunk_meta, fields[idx].data_type.clone())
+                    .await?;
             let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
             Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
         }

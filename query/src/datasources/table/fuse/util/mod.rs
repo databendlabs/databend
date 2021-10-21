@@ -27,4 +27,6 @@ pub use location_gen::*;
 pub use statistic_helper::*;
 
 #[cfg(test)]
+mod index_helper_test;
+#[cfg(test)]
 mod statistic_helper_test;
