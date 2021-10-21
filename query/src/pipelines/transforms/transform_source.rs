@@ -40,7 +40,7 @@ impl SourceTransform {
         Ok(SourceTransform { ctx, source_plan })
     }
 
-    async fn read_table(&self, _db: &str) -> Result<SendableDataBlockStream> {
+    async fn read_table(&self) -> Result<SendableDataBlockStream> {
         let table_id = self.source_plan.table_info.table_id;
         let table_ver = self.source_plan.table_info.version;
         let table = if self.source_plan.tbl_args.is_none() {
@@ -94,7 +94,7 @@ impl Processor for SourceTransform {
         // We need to keep the block struct with the schema
         // Because the table may not support require columns
         Ok(Box::pin(CorrectWithSchemaStream::new(
-            self.read_table(&db).await?,
+            self.read_table().await?,
             self.source_plan.table_info.schema.clone(),
         )))
     }
