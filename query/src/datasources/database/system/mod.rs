@@ -40,6 +40,8 @@ mod databases_table_test;
 #[cfg(test)]
 mod functions_table_test;
 #[cfg(test)]
+mod metrics_table_test;
+#[cfg(test)]
 mod settings_table_test;
 #[cfg(test)]
 mod tables_table_test;
