@@ -54,7 +54,7 @@ pub struct LocalBinaryPaths {
     pub(crate) meta: String,
 }
 
-fn reconcile_local_meta(status: &mut Status) -> Result<()> {
+async fn reconcile_local_meta(status: &mut Status) -> Result<()> {
     let s = System::new_all();
     if let Some((_, meta)) = status.get_local_meta_config() {
         if meta.pid.is_none() || s.process(meta.pid.unwrap()).is_none() {
@@ -62,14 +62,14 @@ fn reconcile_local_meta(status: &mut Status) -> Result<()> {
                 "meta service process not found".to_string(),
             ));
         }
-        if meta.verify().is_err() {
+        if meta.verify().await.is_err() {
             return Err(CliError::Unknown("cannot verify meta service".to_string()));
         }
     }
     Ok(())
 }
 
-fn reconcile_local_query(status: &mut Status) -> Result<()> {
+async fn reconcile_local_query(status: &mut Status) -> Result<()> {
     let s = System::new_all();
     for (_, query) in status.get_local_query_configs() {
         if query.pid.is_none() || s.process(query.pid.unwrap()).is_none() {
@@ -77,19 +77,19 @@ fn reconcile_local_query(status: &mut Status) -> Result<()> {
                 "query service process not found".to_string(),
             ));
         }
-        if query.verify().is_err() {
+        if query.verify().await.is_err() {
             return Err(CliError::Unknown("cannot verify query service".to_string()));
         }
     }
     Ok(())
 }
 
-fn reconcile_local(status: &mut Status) -> Result<()> {
+async fn reconcile_local(status: &mut Status) -> Result<()> {
     if status.has_local_configs() {
-        if let Err(e) = reconcile_local_meta(status) {
+        if let Err(e) = reconcile_local_meta(status).await {
             return Err(e);
         }
-        if let Err(e) = reconcile_local_query(status) {
+        if let Err(e) = reconcile_local_query(status).await {
             return Err(e);
         }
     }
@@ -521,12 +521,12 @@ impl CreateCommand {
             log_dir: Some(query_log_dir),
         })
     }
-    fn provision_local_meta_service(
+    async fn provision_local_meta_service(
         &self,
         writer: &mut Writer,
         mut meta_config: LocalMetaConfig,
     ) -> Result<()> {
-        match meta_config.start() {
+        match meta_config.start().await {
             Ok(_) => {
                 assert!(meta_config.get_pid().is_some());
                 let mut status = Status::read(self.conf.clone())?;
@@ -549,12 +549,12 @@ impl CreateCommand {
         }
     }
 
-    fn provision_local_query_service(
+    async fn provision_local_query_service(
         &self,
         writer: &mut Writer,
         mut query_config: LocalQueryConfig,
     ) -> Result<()> {
-        match query_config.start() {
+        match query_config.start().await {
             Ok(_) => {
                 assert!(query_config.get_pid().is_some());
                 let mut status = Status::read(self.conf.clone())?;
@@ -581,8 +581,8 @@ impl CreateCommand {
         }
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
-        match self.local_exec_precheck(writer, args) {
+    async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
+        match self.local_exec_precheck(writer, args).await {
             Ok(_) => {
                 writer.write_ok("databend cluster precheck passed!");
                 // ensuring needed dependencies
@@ -593,7 +593,9 @@ impl CreateCommand {
                     .generate_local_meta_config(args, bin_path.clone())
                     .expect("cannot generate metaservice config");
                 {
-                    let res = self.provision_local_meta_service(writer, meta_config.clone());
+                    let res = self
+                        .provision_local_meta_service(writer, meta_config.clone())
+                        .await;
                     if res.is_err() {
                         writer.write_err(&*format!(
                             "❌ Cannot provison meta service, error: {:?}",
@@ -602,10 +604,7 @@ impl CreateCommand {
                         return Ok(());
                     }
                 }
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()?;
-                let meta_status = rt.block_on(meta_config.verify());
+                let meta_status = meta_config.verify().await;
                 if meta_status.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
                     writer.write_err(&*format!(
@@ -636,7 +635,9 @@ impl CreateCommand {
                         .as_str()
                 ));
                 {
-                    let res = self.provision_local_query_service(writer, query_config.unwrap());
+                    let res = self
+                        .provision_local_query_service(writer, query_config.unwrap())
+                        .await;
                     if res.is_err() {
                         let mut status = Status::read(self.conf.clone())?;
                         writer.write_err(&*format!(
@@ -661,7 +662,7 @@ impl CreateCommand {
     }
 
     /// precheck whether current local profile applicable for local host machine
-    fn local_exec_precheck(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
+    async fn local_exec_precheck(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         let mut status = Status::read(self.conf.clone())?;
         if args.is_present("force") {
             writer.write_ok("delete existing cluster");
@@ -675,7 +676,7 @@ impl CreateCommand {
                 elem.kill(Signal::Kill);
             }
         }
-        if let Err(e) = reconcile_local(&mut status) {
+        if let Err(e) = reconcile_local(&mut status).await {
             writer.write_ok(
                 format!("local environment has problem {:?}, start reconcile", e).as_str(),
             );
@@ -732,13 +733,13 @@ impl CreateCommand {
         Ok(())
     }
 
-    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let profile = matches.value_of_t("profile");
                 match profile {
                     Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches);
+                        return self.local_exec_match(writer, matches).await;
                     }
                     Ok(ClusterProfile::Cluster) => {
                         todo!()

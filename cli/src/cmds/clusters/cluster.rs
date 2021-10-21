@@ -83,7 +83,9 @@ impl ClusterCommand {
             Some(matches) => match matches.subcommand_name() {
                 Some("create") => {
                     let create = CreateCommand::create(self.conf.clone());
-                    create.exec_match(writer, matches.subcommand_matches("create"))?;
+                    create
+                        .exec_match(writer, matches.subcommand_matches("create"))
+                        .await?;
                 }
                 Some("delete") => {
                     let create = DeleteCommand::create(self.conf.clone());

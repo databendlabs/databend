@@ -69,7 +69,7 @@ pub struct LocalMetaConfig {
 }
 
 #[async_trait]
-pub trait LocalRuntime {
+pub trait LocalRuntime: Send + Sync {
     const RETRIES: u16;
     fn kill(&self) -> Result<()> {
         let pid = self.get_pid();
@@ -94,7 +94,7 @@ pub trait LocalRuntime {
             None => Ok(()),
         }
     }
-    fn start(&mut self) -> Result<()> {
+    async fn start(&mut self) -> Result<()> {
         if self.get_pid().is_some() {
             return Err(CliError::Unknown(format!(
                 "current instance in path {} already started",
@@ -104,10 +104,7 @@ pub trait LocalRuntime {
         let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        match rt.block_on(self.verify()) {
+        match self.verify().await {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
