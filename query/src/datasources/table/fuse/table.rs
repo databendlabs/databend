@@ -22,6 +22,7 @@ use common_context::IOContext;
 use common_context::TableIOContext;
 use common_dal::read_obj;
 use common_exception::Result;
+use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
@@ -34,6 +35,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::util;
 use crate::catalogs::Table;
+use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::TableSnapshot;
 
@@ -98,12 +100,31 @@ impl Table for FuseTable {
     }
 }
 
+pub struct VersionSnapshotLoc {
+    pub snapshot_loc: Option<String>,
+    pub version: MetaVersion,
+}
+
 impl FuseTable {
+    /// Get snapshot of table versioned self::version
     pub fn table_snapshot(&self, io_ctx: &TableIOContext) -> Result<Option<TableSnapshot>> {
-        let option = &self.table_info.options;
-        if let Some(loc) = option.get(util::TBL_OPT_KEY_SNAPSHOT_LOC) {
+        let loc = self
+            .table_info
+            .options
+            .get(util::TBL_OPT_KEY_SNAPSHOT_LOC)
+            .cloned();
+        self.read_snapshot(loc, io_ctx)
+    }
+
+    /// Get snapshot of table versioned `version`
+    pub fn read_snapshot(
+        &self,
+        snapshot_loc: Option<String>,
+        io_ctx: &TableIOContext,
+    ) -> Result<Option<TableSnapshot>> {
+        if let Some(loc) = snapshot_loc {
             let da = io_ctx.get_data_accessor()?;
-            let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime(), None)??;
+            let r = read_obj(da, loc).wait_in(&io_ctx.get_runtime(), None)??;
             Ok(Some(r))
         } else {
             // TODO distinguish this from invalid TableSnapshot?
@@ -124,5 +145,11 @@ impl FuseTable {
                 (stats, parts)
             },
         )
+    }
+    pub(crate) fn versioned_snapshot(table_info: &TableInfo) -> VersionSnapshotLoc {
+        VersionSnapshotLoc {
+            snapshot_loc: table_info.options.get(TBL_OPT_KEY_SNAPSHOT_LOC).cloned(),
+            version: table_info.version,
+        }
     }
 }

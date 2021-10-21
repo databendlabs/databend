@@ -73,7 +73,7 @@ impl ActionHandler {
             MetaFlightAction::GetTable(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::GetTables(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::CommitTable(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::UpsertTableOption(a) => s.serialize(self.handle(a).await?),
         }
     }
 }

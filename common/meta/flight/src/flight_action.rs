@@ -72,7 +72,7 @@ pub enum MetaFlightAction {
     GetTableExt(GetTableExtReq),
     GetTables(GetTablesAction),
     GetDatabases(GetDatabasesAction),
-    CommitTable(UpsertTableOptionReq),
+    UpsertTableOption(UpsertTableOptionReq),
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
@@ -261,7 +261,7 @@ pub struct UpsertTableOptionReq {
 action_declare!(
     UpsertTableOptionReq,
     UpsertTableOptionReply,
-    MetaFlightAction::CommitTable
+    MetaFlightAction::UpsertTableOption
 );
 
 // - get tables
