@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::time::Duration;
-use std::time::Instant;
 
 use comfy_table::Cell;
 use comfy_table::Color;
