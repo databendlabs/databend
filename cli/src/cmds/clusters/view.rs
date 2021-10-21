@@ -124,11 +124,11 @@ impl ViewCommand {
         let mut handles = Vec::with_capacity(query_config.len() + 1);
         for (fs, meta_config) in meta_config.iter() {
             fs_vec.push(fs);
-            handles.push(meta_config.verify(retry, duration).await);
+            handles.push(meta_config.verify(retry, duration));
         }
         for (fs, query_config) in query_config.iter() {
             fs_vec.push(fs);
-            handles.push(query_config.verify(retry, duration).await);
+            handles.push(query_config.verify(retry, duration));
         }
         let res = futures::future::join_all(handles).await;
         for (i, fs) in fs_vec.iter().enumerate() {

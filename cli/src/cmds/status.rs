@@ -28,8 +28,6 @@ use std::time;
 use async_trait::async_trait;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
-use futures::future::BoxFuture;
-use futures::FutureExt;
 use libc::pid_t;
 use log::info;
 use nix::unistd::Pid;
@@ -130,7 +128,7 @@ pub trait LocalRuntime: Send + Sync {
         let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
-        match self.verify(None, None).await.await {
+        match self.verify(None, None).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
