@@ -17,12 +17,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
@@ -132,16 +134,25 @@ impl Catalog for SystemCatalog {
         Ok(table.clone())
     }
 
-    fn commit_table(
+    fn upsert_table_option(
         &self,
         table_id: MetaId,
-        _new_table_version: MetaVersion,
-        _new_snapshot_location: String,
-    ) -> Result<CommitTableReply> {
+        _table_version: MetaVersion,
+        _key: String,
+        _value: String,
+    ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(format!(
             "commit table not allowed for system catalog {}",
             table_id
         )))
+    }
+
+    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+        unimplemented!("programming error: SystemCatalog does not support create table")
+    }
+
+    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
+        unimplemented!("programming error: SystemCatalog does not support drop table")
     }
 
     fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {

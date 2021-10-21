@@ -36,6 +36,14 @@ pub fn not(other: Expression) -> Expression {
     }
 }
 
+// Neg.
+pub fn neg(other: Expression) -> Expression {
+    Expression::UnaryExpression {
+        op: "-".to_string(),
+        expr: Box::new(other),
+    }
+}
+
 /// Mod binary function.
 pub fn modular(left: Expression, right: Expression) -> Expression {
     binary_expr(left, "%", right)

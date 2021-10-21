@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_streams::CorrectWithSchemaStream;
+use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
@@ -55,8 +56,11 @@ impl SourceTransform {
         //           get_cluster_table_io_context()?
         let io_ctx = Arc::new(self.ctx.get_cluster_table_io_context()?);
         let table_stream = table.read(io_ctx, &self.source_plan.push_downs);
+        let progress_stream =
+            ProgressStream::try_create(table_stream.await?, self.ctx.progress_callback()?)?;
+
         Ok(Box::pin(
-            self.ctx.try_create_abortable(table_stream.await?)?,
+            self.ctx.try_create_abortable(Box::pin(progress_stream))?,
         ))
     }
 }

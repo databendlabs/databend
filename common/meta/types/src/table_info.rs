@@ -26,6 +26,8 @@ use crate::MetaVersion;
 pub struct Table {
     pub table_id: u64,
 
+    pub table_version: u64,
+
     /// name of this table
     pub table_name: String,
 

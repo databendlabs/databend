@@ -15,12 +15,14 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
+use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
+use common_planners::DropTablePlan;
 
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -50,6 +52,10 @@ pub trait Catalog {
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<dyn Table>>;
 
+    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+
+    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+
     // Get function by name.
     fn get_table_function(
         &self,
@@ -59,12 +65,13 @@ pub trait Catalog {
         unimplemented!()
     }
 
-    fn commit_table(
+    fn upsert_table_option(
         &self,
         table_id: MetaId,
-        new_table_version: MetaVersion,
-        new_snapshot_location: String,
-    ) -> common_exception::Result<CommitTableReply>;
+        table_version: MetaVersion,
+        table_option_key: String,
+        table_option_value: String,
+    ) -> common_exception::Result<UpsertTableOptionReply>;
 
     // Operation with database.
     fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;

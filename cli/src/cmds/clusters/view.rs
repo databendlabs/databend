@@ -22,6 +22,7 @@ use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
+use common_base::tokio;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
@@ -67,9 +68,9 @@ impl ViewCommand {
             )
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
+    async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
-        let table = ViewCommand::build_local_table(&status);
+        let table = ViewCommand::build_local_table(&status).await;
         if let Ok(t) = table {
             writer.writeln(&t.trim_fmt());
         } else {
@@ -84,7 +85,7 @@ impl ViewCommand {
         Ok(())
     }
 
-    fn build_row<T>(fs: String, config: T) -> Vec<Cell>
+    async fn build_row<T>(fs: String, config: T) -> Vec<Cell>
     where T: LocalRuntime {
         let file = Path::new(fs.as_str());
         let mut row = vec![];
@@ -94,7 +95,7 @@ impl ViewCommand {
                 .to_string_lossy(),
         ));
         row.push(Cell::new("local"));
-        row.push(config.verify().map_or(
+        row.push(config.verify().await.map_or(
             Cell::new(format!("{}", HealthStatus::UnReady).as_str()).fg(Color::Red),
             |_| Cell::new(format!("{}", HealthStatus::Ready).as_str()).fg(Color::Green),
         ));
@@ -103,7 +104,7 @@ impl ViewCommand {
         row
     }
 
-    pub fn build_local_table(status: &Status) -> Result<Table> {
+    pub async fn build_local_table(status: &Status) -> Result<Table> {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
         // Title.
@@ -115,24 +116,29 @@ impl ViewCommand {
             Cell::new("Config"),
         ]);
         let meta_config = status.get_local_meta_config();
+        let query_config = status.get_local_query_configs();
+        let mut handles = Vec::with_capacity(query_config.len() + 1);
         if let Some((fs, meta_config)) = meta_config {
-            let row = ViewCommand::build_row(fs, meta_config);
-            table.add_row(row);
+            handles.push(tokio::spawn(ViewCommand::build_row(fs, meta_config)));
         }
-        for (fs, query_config) in status.get_local_query_configs() {
-            let row = ViewCommand::build_row(fs, query_config);
-            table.add_row(row);
+        for (fs, query_config) in query_config {
+            handles.push(tokio::spawn(ViewCommand::build_row(fs, query_config)));
+        }
+        for handle in handles {
+            table.add_row(handle.await.unwrap());
         }
         Ok(table)
     }
 
-    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let status = Status::read(self.conf.clone())?;
                 let p = utils::get_profile(status, matches.value_of("profile"));
                 match p {
-                    Ok(ClusterProfile::Local) => return self.local_exec_match(writer, matches),
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await
+                    }
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }

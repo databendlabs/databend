@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_planners::CreateTablePlan;
-use common_planners::DropTablePlan;
-
 use crate::catalogs::Database;
 
 pub struct SystemDatabase {
@@ -33,17 +28,5 @@ impl SystemDatabase {
 impl Database for SystemDatabase {
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
-        Result::Err(ErrorCode::UnImplement(
-            "Cannot create table for system database",
-        ))
-    }
-
-    fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
-        Result::Err(ErrorCode::UnImplement(
-            "Cannot drop table for system database",
-        ))
     }
 }

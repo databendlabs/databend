@@ -40,7 +40,8 @@ impl IsNullFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("isnotnull"),
+                .negative_function("isnotnull")
+                .bool_function(),
         )
     }
 }

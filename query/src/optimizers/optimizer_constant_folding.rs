@@ -94,11 +94,11 @@ impl ConstantFoldingImpl {
         data_block: DataBlock,
         data_type: DataType,
     ) -> Result<Expression> {
-        assert_eq!(data_block.num_rows(), 1);
-        assert_eq!(data_block.num_columns(), 1);
+        debug_assert!(data_block.num_rows() == 1);
+        debug_assert!(data_block.num_columns() == 1);
 
         let column_name = Some(column_name);
-        let value = data_block.column(0).to_values()?.remove(0);
+        let value = data_block.column(0).try_get(0)?;
         Ok(Expression::Literal {
             value,
             column_name,
@@ -183,12 +183,7 @@ impl ConstantFoldingImpl {
         match new_expr {
             Expression::Literal { ref value, .. } => {
                 *is_const = true;
-                let val = value
-                    .to_array()?
-                    .cast_with_type(&DataType::Boolean)?
-                    .bool()?
-                    .inner()
-                    .value(0);
+                let val = value.as_bool()?;
                 if val {
                     if !is_and {
                         *is_remove = true;

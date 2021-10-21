@@ -32,7 +32,8 @@ impl LogicNotFunction {
             // We should need remove expression if negative function is empty
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function(""),
+                .negative_function("")
+                .bool_function(),
         )
     }
 }

@@ -32,8 +32,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     // create test table
     let crate_table_plan = TestFixture::default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    let db = catalog.get_database(TestFixture::default_db().as_str())?;
-    db.create_table(crate_table_plan)?;
+    catalog.create_table(crate_table_plan)?;
 
     // get table
     let table = catalog.get_table(
@@ -84,8 +83,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let crate_table_plan = TestFixture::default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    let db = catalog.get_database(TestFixture::default_db().as_str())?;
-    db.create_table(crate_table_plan)?;
+    catalog.create_table(crate_table_plan)?;
+
     let table = catalog.get_table(
         TestFixture::default_db().as_str(),
         TestFixture::default_table().as_str(),

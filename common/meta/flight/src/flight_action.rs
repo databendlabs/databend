@@ -30,6 +30,7 @@ use common_meta_types::MetaVersion;
 use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -71,6 +72,7 @@ pub enum MetaFlightAction {
     GetTableExt(GetTableExtReq),
     GetTables(GetTablesAction),
     GetDatabases(GetDatabasesAction),
+    CommitTable(UpsertTableOptionReq),
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
@@ -252,6 +254,19 @@ action_declare!(
     GetTableExtReq,
     Arc<TableInfo>,
     MetaFlightAction::GetTableExt
+);
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct UpsertTableOptionReq {
+    pub table_id: MetaId,
+    pub table_version: MetaVersion,
+    pub option_key: String,
+    pub option_value: String,
+}
+action_declare!(
+    UpsertTableOptionReq,
+    UpsertTableOptionReply,
+    MetaFlightAction::CommitTable
 );
 
 // - get tables

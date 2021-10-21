@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_infallible::RwLock;
-use common_meta_types::CommitTableReply;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -317,12 +317,13 @@ impl MetaApiSync for MetaEmbeddedSync {
         )))
     }
 
-    fn commit_table(
+    fn upsert_table_option(
         &self,
         table_id: MetaId,
-        new_table_version: MetaVersion,
-        new_snapshot_location: String,
-    ) -> common_exception::Result<CommitTableReply> {
+        table_version: MetaVersion,
+        table_option_name: String,
+        table_option_value: String,
+    ) -> common_exception::Result<UpsertTableOptionReply> {
         let mut map = self.databases.write();
         for (_, tbl_idx) in map.values_mut() {
             match tbl_idx.id2meta.get(&table_id) {
@@ -330,21 +331,18 @@ impl MetaApiSync for MetaEmbeddedSync {
                     continue;
                 }
                 Some(tbl) => {
-                    if tbl.version + 1 == new_table_version {
+                    if tbl.version == table_version {
                         let mut new_tbl_info = tbl.as_ref().clone();
                         new_tbl_info
                             .options
-                            // TODO constant
-                            .insert("SNAPSHOT_LOC".to_string(), new_snapshot_location);
-                        new_tbl_info.version = new_table_version;
+                            .insert(table_option_name, table_option_value);
+                        new_tbl_info.version += 1;
                         tbl_idx.insert(new_tbl_info);
                         return Ok(());
                     } else {
                         return Err(ErrorCode::CommitTableError(format!(
-                            "none-consecutive table version: prev[{}], committing [{}], table_id {}",
-                            tbl.version,
-                            new_table_version,
-                            table_id
+                            "expecting table version: [{}], but got [{}]. (table_id {})",
+                            tbl.version, table_version, table_id
                         )));
                     }
                 }

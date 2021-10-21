@@ -1028,6 +1028,35 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn upsert_table_opt(
+        &self,
+        table_id: u64,
+        table_version: u64,
+        opt_key: String,
+        opt_value: String,
+    ) -> common_exception::Result<()> {
+        // non-consensus modification, tobe fixed latter
+        let mut sm = self.sto.state_machine.write().await;
+        if let Some(tbl) = sm.tables.get_mut(&table_id) {
+            if tbl.table_version != table_version {
+                Err(ErrorCode::TableVersionMissMatch(format!(
+                    "targeting version {}, current version {}",
+                    table_version, tbl.table_version,
+                )))
+            } else {
+                tbl.table_options.insert(opt_key, opt_value);
+                tbl.table_version += 1;
+                Ok(())
+            }
+        } else {
+            Err(ErrorCode::UnknownTable(format!(
+                "unknown table of id {}",
+                table_id
+            )))
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {
         // inconsistent get: from local state machine
 

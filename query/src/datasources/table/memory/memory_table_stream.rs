@@ -18,7 +18,6 @@ use std::usize;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_streams::ProgressStream;
 use futures::stream::Stream;
 
 use crate::sessions::DatabendQueryContextRef;
@@ -37,17 +36,13 @@ pub struct MemoryTableStream {
 }
 
 impl MemoryTableStream {
-    pub fn try_create(
-        ctx: DatabendQueryContextRef,
-        blocks: Vec<DataBlock>,
-    ) -> Result<ProgressStream> {
-        let stream = Box::pin(MemoryTableStream {
-            ctx: ctx.clone(),
+    pub fn try_create(ctx: DatabendQueryContextRef, blocks: Vec<DataBlock>) -> Result<Self> {
+        Ok(Self {
+            ctx,
             block_index: 0,
             block_ranges: vec![],
             blocks,
-        });
-        ProgressStream::try_create(stream, ctx.progress_callback()?)
+        })
     }
 
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {

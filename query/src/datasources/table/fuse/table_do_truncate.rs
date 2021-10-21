@@ -24,6 +24,7 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::datasources::table::fuse::util;
+use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::FuseTable;
 use crate::sessions::DatabendQueryContext;
 
@@ -52,8 +53,13 @@ impl FuseTable {
 
             let catalog = ctx.get_catalog();
             let table_id = self.get_id();
-            let new_table_version = self.table_info.version + 1;
-            catalog.commit_table(table_id, new_table_version, new_snapshot_loc)?
+            // TODO backoff retry
+            catalog.upsert_table_option(
+                table_id,
+                self.table_info.version,
+                TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
+                new_snapshot_loc,
+            )?
         }
 
         Ok(())

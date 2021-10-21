@@ -13,4 +13,4 @@
 //  limitations under the License.
 //
 
-pub type CommitTableReply = ();
+pub type UpsertTableOptionReply = ();

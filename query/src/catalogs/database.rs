@@ -12,15 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_planners::CreateTablePlan;
-use common_planners::DropTablePlan;
-
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
-
-    /// DDL
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
-    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 }

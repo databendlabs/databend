@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -31,7 +30,7 @@ use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 
-const GITHUB_BASE_URL: &str = "https://github.com";
+const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
 const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_CLIENT_URL: &str = "https://github.com/ZhiHanZ/usql/releases/download";
@@ -48,7 +47,7 @@ pub struct Config {
 
     pub databend_dir: String,
     pub mirror: CustomMirror,
-    pub clap: RefCell<ArgMatches>,
+    pub clap: ArgMatches,
 }
 
 pub trait MirrorAsset {
@@ -284,18 +283,11 @@ impl Config {
             .subcommand(QueryCommand::generate())
     }
     pub fn create() -> Self {
-        let clap = RefCell::new(Config::build_cli().get_matches());
+        let clap = Config::build_cli().get_matches();
         let config = Config {
-            group: clap
-                .clone()
-                .into_inner()
-                .value_of("group")
-                .unwrap()
-                .parse()
-                .unwrap(),
+            group: clap.clone().value_of("group").unwrap().parse().unwrap(),
             databend_dir: clap
                 .clone()
-                .into_inner()
                 .value_of("databend_dir")
                 .unwrap()
                 .parse()
@@ -303,25 +295,17 @@ impl Config {
 
             mirror: CustomMirror::new(
                 clap.clone()
-                    .into_inner()
                     .value_of("validation_url")
                     .unwrap()
                     .parse()
                     .unwrap(),
                 clap.clone()
-                    .into_inner()
                     .value_of("download_url")
                     .unwrap()
                     .parse()
                     .unwrap(),
+                clap.clone().value_of("tag_url").unwrap().parse().unwrap(),
                 clap.clone()
-                    .into_inner()
-                    .value_of("tag_url")
-                    .unwrap()
-                    .parse()
-                    .unwrap(),
-                clap.clone()
-                    .into_inner()
                     .value_of("client_url")
                     .unwrap()
                     .parse()

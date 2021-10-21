@@ -56,6 +56,7 @@ mod cache_keys {
     pub type BlockMetaCache = Arc<Mutex<LruCache<BlockMetaCacheKey, Vec<u8>>>>;
 }
 
+// TODO can we return a stream of DataBlock instead?
 pub async fn do_read(
     part: Part,
     data_accessor: Arc<dyn DataAccessor>,
@@ -99,8 +100,9 @@ pub async fn do_read(
     });
 
     // TODO configuration of the buffer size
-    let n = std::cmp::min(10, col_num);
-    let data_cols = stream.buffer_unordered(n).try_collect().await?;
+    let buffer_size = 10;
+    let n = std::cmp::min(buffer_size, col_num);
+    let data_cols = stream.buffered(n).try_collect().await?;
 
     let block = DataBlock::create(Arc::new(DataSchema::from(arrow_schema)), data_cols);
     Ok(block)

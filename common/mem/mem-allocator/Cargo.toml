@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 common-base = {path = "../../base" }
-tikv-jemalloc-sys = "0.4.2+5.2.1-patched.2"
+tikv-jemalloc-sys = "0.4.2"
 common-infallible = { path = "../../infallible" }
 parking_lot = "0.11"
 common-mem-derive = { path = "../mem-derive" }

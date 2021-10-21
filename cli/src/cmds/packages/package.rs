@@ -14,6 +14,7 @@
 
 use std::borrow::Borrow;
 
+use async_trait::async_trait;
 use clap::App;
 use clap::Arg;
 use clap::ArgMatches;
@@ -84,6 +85,7 @@ impl PackageCommand {
     }
 }
 
+#[async_trait]
 impl Command for PackageCommand {
     fn name(&self) -> &str {
         "package"
@@ -97,7 +99,7 @@ impl Command for PackageCommand {
         s.contains(self.name())
     }
 
-    fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
         match self.clap.clone().try_get_matches_from(args.split(' ')) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow()));

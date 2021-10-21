@@ -38,10 +38,11 @@ meta_client_timeout_in_second = 60
 # Storage config.
 [storage]
 # disk|s3
-storage_type = ""
+storage_type = "disk"
 
 # DISK storage.
 [storage.disk]
+data_path = "stateless_test_data"
 
 # S3 storage.
 [storage.s3]

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
 use std::fs;
 
 use tempfile::tempdir;
@@ -30,7 +29,7 @@ fn test_generate_local_meta_config() -> Result<()> {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
         mirror: GithubMirror {}.to_mirror(),
-        clap: RefCell::new(Default::default()),
+        clap: Default::default(),
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
@@ -117,7 +116,7 @@ fn test_generate_local_query_config() -> Result<()> {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
         mirror: GithubMirror {}.to_mirror(),
-        clap: RefCell::new(Default::default()),
+        clap: Default::default(),
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();

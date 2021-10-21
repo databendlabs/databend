@@ -17,13 +17,18 @@
 mod index_min_max_test;
 #[cfg(test)]
 mod index_sparse_test;
+#[cfg(test)]
+mod range_filter_test;
 
 mod index_min_max;
 mod index_sparse;
+#[allow(dead_code)]
+pub mod range_filter;
 
 pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;
+pub use range_filter::RangeFilter;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IndexSchemaVersion {

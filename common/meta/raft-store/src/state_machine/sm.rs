@@ -401,6 +401,7 @@ impl StateMachine {
                     let table_id = self.incr_seq(SEQ_TABLE_ID).await?;
                     let table = Table {
                         table_id,
+                        table_version: 0,
                         table_name: table_name.to_string(),
                         database_id: dbi.database_id,
                         db_name: db_name.to_string(),
