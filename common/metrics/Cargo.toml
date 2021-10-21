@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 # Workspace dependencies
 common-exception = { path = "../exception" }
+common-infallible = { path = "../infallible" }
 
 # Crates.io dependencies
 lazy_static = "1.4.0"

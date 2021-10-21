@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 use std::sync::Once;
-use std::sync::RwLock;
 
+use common_infallible::RwLock;
 use lazy_static::lazy_static;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
@@ -33,7 +33,7 @@ pub fn init_default_metrics_recorder() {
 /// Init prometheus recorder.
 fn init_prometheus_recorder() {
     let recorder = PrometheusBuilder::new().build();
-    let mut h = PROMETHEUS_HANDLE.as_ref().write().unwrap();
+    let mut h = PROMETHEUS_HANDLE.as_ref().write();
     *h = Some(recorder.handle());
     metrics::clear_recorder();
     match metrics::set_boxed_recorder(Box::new(recorder)) {
@@ -43,5 +43,5 @@ fn init_prometheus_recorder() {
 }
 
 pub fn try_handle() -> Option<PrometheusHandle> {
-    PROMETHEUS_HANDLE.as_ref().read().unwrap().clone()
+    PROMETHEUS_HANDLE.as_ref().read().clone()
 }

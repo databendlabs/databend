@@ -1486,6 +1486,7 @@ name = "common-metrics"
 version = "0.1.0"
 dependencies = [
  "common-exception",
+ "common-infallible",
  "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
