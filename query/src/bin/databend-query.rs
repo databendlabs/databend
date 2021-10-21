@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::BlockingWait;
 use common_base::Runtime;
 use common_base::RuntimeTracker;
+use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
@@ -61,6 +62,8 @@ async fn async_main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::R
         conf.log.log_dir.as_str(),
         conf.log.log_level.as_str(),
     );
+
+    init_default_metrics_recorder();
 
     set_panic_hook();
     info!("{:?}", conf);

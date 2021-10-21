@@ -29,8 +29,7 @@ use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use metrics_exporter_prometheus::PrometheusBuilder;
-use metrics_exporter_prometheus::PrometheusHandle;
+use common_metrics::PrometheusHandle;
 
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
@@ -76,24 +75,11 @@ impl MetricService {
         })
     }
 
-    fn create_prometheus_handle() -> Result<PrometheusHandle> {
-        let builder = PrometheusBuilder::new();
-        let prometheus_recorder = builder.build();
-        let prometheus_handle = prometheus_recorder.handle();
-        // TODO(zhihanz) add metrics descriptions through regist
-        match metrics::set_boxed_recorder(Box::new(prometheus_recorder)) {
-            Ok(_) => Ok(prometheus_handle),
-            Err(error) => Err(ErrorCode::InitPrometheusFailure(format!(
-                "Cannot init prometheus recorder. cause: {}",
-                error
-            ))),
-        }
-    }
-
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let handler =
-            MetricService::create_prometheus_handle().expect("cannot build prometheus handler");
-        let app = build_router!(handler);
+        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
+            ErrorCode::InitPrometheusFailure("Prometheus recorder has not been initialized yet.")
+        })?;
+        let app = build_router!(prometheus_handle);
         let server = axum_server::bind(listening.to_string())
             .handle(self.abort_handler.clone())
             .serve(app);
