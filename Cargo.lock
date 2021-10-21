@@ -1484,6 +1484,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-metrics"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "common-infallible",
+ "lazy_static",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "prometheus-parse",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
@@ -2037,6 +2051,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-flight",
  "common-meta-types",
+ "common-metrics",
  "common-planners",
  "common-streams",
  "common-tracing",
@@ -2053,7 +2068,6 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "metrics-exporter-prometheus",
  "msql-srv",
  "mysql",
  "nom 7.0.0",
@@ -4843,6 +4857,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edc3358ebc67bc8b7fa0c007f945b0b18226f78437d61bec735a9eb96b61ee70"
 dependencies = [
  "unicode-xid",
+]
+
+[[package]]
+name = "prometheus-parse"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c996f3caea1c51aa034c0d2dfd8447a12c555f4567b02677ef8a865ac4cce712"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]

@@ -27,6 +27,7 @@ members = [
     "common/meta/types",
     "common/streams",
     "common/tracing",
+    "common/metrics",
 
     # Query
     "query",

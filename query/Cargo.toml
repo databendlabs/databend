@@ -44,6 +44,7 @@ common-mem-allocator = { path = "../common/mem/mem-allocator" }
 common-mem-derive = { path = "../common/mem/mem-derive" }
 common-io = { path = "../common/io" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
+common-metrics = { path = "../common/metrics" }
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
@@ -65,7 +66,6 @@ indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
 metrics = "0.17.0"
-metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
 nom = "7.0.0"
 num_cpus = "1.0"
