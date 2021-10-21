@@ -17,8 +17,8 @@ use std::collections::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use metrics_exporter_prometheus::PrometheusHandle;
-use prometheus_parse;
 
+#[derive(Debug)]
 pub struct MetricSample {
     pub name: String,
     pub kind: String,
@@ -26,7 +26,7 @@ pub struct MetricSample {
     pub value: MetricValue,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Serialize)]
 pub enum MetricValue {
     Counter(f64),
     Gauge(f64),
@@ -75,13 +75,13 @@ impl From<prometheus_parse::Value> for MetricValue {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Serialize)]
 pub struct HistogramCount {
     pub less_than: f64,
     pub count: f64,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Serialize)]
 pub struct SummaryCount {
     pub quantile: f64,
     pub count: f64,
@@ -101,7 +101,7 @@ pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>
             MetricSample {
                 name: s.metric,
                 kind: value.kind(),
-                value: value,
+                value,
                 labels: (*s.labels).clone(),
             }
         })
