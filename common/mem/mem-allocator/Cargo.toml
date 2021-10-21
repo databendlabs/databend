@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tikv-jemalloc-sys = "0.4.2+5.2.1-patched.2"
+tikv-jemalloc-sys = "0.4.2"
 common-infallible = { path = "../../infallible" }
 parking_lot = "0.11"
 common-mem-derive = { path = "../mem-derive" }
