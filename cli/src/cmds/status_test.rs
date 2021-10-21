@@ -152,7 +152,9 @@ fn test_status() -> Result<()> {
     }
     Ok(())
 }
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn test_verify() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),

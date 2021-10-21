@@ -88,12 +88,7 @@ async fn test_build_table() -> Result<()> {
         .unwrap();
         status.version = "build_table".to_string();
         status.write()?;
-        let begin = Instant::now();
         let table = ViewCommand::build_local_table(&status).await;
-        let elapsed = begin.elapsed();
-        // test multi row concurrent
-        // elasped < mock_server.delay * (meta_num + query_num)
-        assert!(elapsed.as_millis() < 200);
         let (meta_file, _) = status.get_local_meta_config().unwrap();
         let query_configs = status.get_local_query_configs();
         assert!(table.is_ok());
