@@ -147,10 +147,6 @@ impl TableFunction for NumbersTable {
         self.name()
     }
 
-    fn db(&self) -> &str {
-        self.get_table_info().db.as_str()
-    }
-
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
     where Self: 'a {
         self
