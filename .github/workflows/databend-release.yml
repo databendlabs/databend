@@ -79,10 +79,9 @@ jobs:
         run: |
           aws s3 cp databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz s3://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz
           aws s3 cp bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz s3://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz
-          aws s3 cp s3://repo.databend.rs/databend/tags.json ./tags.json
-          cat ./tags.json | jq '[{"name": "${{ steps.get_version.outputs.VERSION }}"}] + .' >> ./t1.json
-          cat ./t1.json
-          aws s3 cp ./t1.json s3://repo.databend.rs/databend/tags.json
+          curl https://api.github.com/repos/datafuselabs/databend/tags > tags.json
+          cat tags.json
+          aws s3 cp ./tags.json s3://repo.databend.rs/databend/tags.json
   release-docker:
     name: Release assets
     runs-on: ${{ matrix.config.os }}
@@ -117,7 +116,7 @@ jobs:
         with:
           push: true
           tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend:${{ steps.get_version.outputs.VERSION }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           context: .
           file: ./docker/release/Dockerfile
           build-args: |
