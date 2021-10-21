@@ -19,6 +19,7 @@ use std::time::Instant;
 use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
+use futures::future;
 use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
@@ -154,7 +155,6 @@ fn test_status() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
 async fn test_verify() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
@@ -165,14 +165,15 @@ async fn test_verify() -> Result<()> {
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
     // Start a lightweight mock server.
-    let server = MockServer::start();
-    // Create a mock on the server.
-    let _ = server.mock(|when, then| {
+    // Arrange
+    let server1 = MockServer::start();
+    let server2 = MockServer::start();
+
+    let _ = server1.mock(|when, then| {
         when.method(GET).path("/v1/health");
         then.status(200)
             .header("content-type", "text/html")
-            .body("health")
-            .delay(Duration::from_millis(100));
+            .body("health");
     });
 
     let mut meta_config = LocalMetaConfig {
@@ -181,23 +182,37 @@ async fn test_verify() -> Result<()> {
         path: Some("./".to_string()),
         log_dir: Some("./".to_string()),
     };
-    meta_config.config.admin_api_address = format!("127.0.0.1:{}", server.port());
+    meta_config.config.admin_api_address = format!("127.0.0.1:{}", server1.port());
     let mut query_config = LocalQueryConfig {
         config: QueryConfig::default(),
         pid: Some(123),
         path: Some("./".to_string()),
         log_dir: Some("./".to_string()),
     };
-    query_config.config.query.http_api_address = format!("127.0.0.1:{}", server.port());
+    query_config.config.query.http_api_address = format!("127.0.0.1:{}", server2.port());
+
+    let mut query_config2 = LocalQueryConfig {
+        config: QueryConfig::default(),
+        pid: Some(123),
+        path: Some("./".to_string()),
+        log_dir: Some("./".to_string()),
+    };
+    query_config2.config.query.http_api_address = format!("127.0.0.1:{}", server2.port());
     let begin = Instant::now();
-    let mut handles = Vec::with_capacity(2);
-    handles.push(tokio::spawn(async move { meta_config.verify().await }));
-    handles.push(tokio::spawn(async move { query_config.verify().await }));
-    for handle in handles {
-        handle.await.unwrap()?;
-    }
-    let elapsed = begin.elapsed();
-    // elasped < mock_server.delay * (meta_num + query_num)
-    assert!(elapsed.as_millis() < 200);
+    // successful case should return immediately
+    let t1 = meta_config
+        .verify(Some(10), Some(Duration::from_millis(100)))
+        .await;
+    // failed case should return after 2 times retry
+    let t2 = query_config
+        .verify(Some(1), Some(Duration::from_millis(100)))
+        .await;
+    let t3 = query_config2
+        .verify(Some(1), Some(Duration::from_millis(100)))
+        .await;
+    let response = futures::future::join_all(vec![t1, t2, t3]).await;
+    assert!(begin.elapsed().as_millis() > 200 && begin.elapsed().as_millis() < 400);
+    assert_eq!(response.iter().filter(|e| e.is_ok()).count(), 1);
+    assert_eq!(response.iter().filter(|e| e.is_err()).count(), 2);
     Ok(())
 }

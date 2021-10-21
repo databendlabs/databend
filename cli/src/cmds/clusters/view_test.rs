@@ -87,7 +87,12 @@ async fn test_build_table() -> Result<()> {
         .unwrap();
         status.version = "build_table".to_string();
         status.write()?;
-        let table = ViewCommand::build_local_table(&status).await;
+        let table = ViewCommand::build_local_table(
+            &status,
+            Some(2),
+            Option::from(Duration::from_millis(100)),
+        )
+        .await;
         let (meta_file, _) = status.get_local_meta_config().unwrap();
         let query_configs = status.get_local_query_configs();
         assert!(table.is_ok());
@@ -115,6 +120,124 @@ async fn test_build_table() -> Result<()> {
             Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
             Cell::new("disabled"),
             Cell::new(query_configs.get(0).unwrap().0.clone()),
+        ]);
+        assert_eq!(table.to_string(), expected.to_string())
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_build_table_fail() -> Result<()> {
+    let mut conf = Config {
+        group: "foo".to_string(),
+        databend_dir: "/tmp/.databend".to_string(),
+        clap: Default::default(),
+        mirror: GithubMirror {}.to_mirror(),
+    };
+    let t = tempdir()?;
+    conf.databend_dir = t.path().to_str().unwrap().to_string();
+    // Start a lightweight mock server.
+    let server = MockServer::start();
+
+    let server2 = MockServer::start();
+    // Create a mock on the server.
+    let _ = server.mock(|when, then| {
+        when.method(GET).path("/v1/health");
+        then.status(200)
+            .header("content-type", "text/html")
+            .body("health")
+            .delay(Duration::from_millis(100));
+    });
+    {
+        let mut status = Status::read(conf)?;
+        let mut meta_config = LocalMetaConfig {
+            config: MetaConfig::default(),
+            pid: Some(123),
+            path: Some("./".to_string()),
+            log_dir: Some("./".to_string()),
+        };
+        meta_config.config.admin_api_address = format!("127.0.0.1:{}", server.port());
+        Status::save_local_config(
+            &mut status,
+            "meta".parse().unwrap(),
+            "meta_1.yaml".to_string(),
+            &meta_config,
+        )
+        .unwrap();
+        let mut query_config = LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: Some(123),
+            path: Some("./".to_string()),
+            log_dir: Some("./".to_string()),
+        };
+        query_config.config.query.http_api_address = format!("127.0.0.1:{}", server2.port());
+
+        Status::save_local_config(
+            &mut status,
+            "query".parse().unwrap(),
+            "query_1.yaml".to_string(),
+            &query_config,
+        )
+        .unwrap();
+        let mut query_config2 = LocalQueryConfig {
+            config: QueryConfig::default(),
+            pid: Some(123),
+            path: Some("./".to_string()),
+            log_dir: Some("./".to_string()),
+        };
+        query_config2.config.query.http_api_address = format!("127.0.0.1:{}", server2.port());
+
+        Status::save_local_config(
+            &mut status,
+            "query".parse().unwrap(),
+            "query_2.yaml".to_string(),
+            &query_config2,
+        )
+        .unwrap();
+        status.version = "build_table".to_string();
+        status.write()?;
+        let start = std::time::Instant::now();
+        let table = ViewCommand::build_local_table(
+            &status,
+            Some(1),
+            Option::from(Duration::from_millis(100)),
+        )
+        .await;
+        assert!(start.elapsed().as_millis() > 200 && start.elapsed().as_millis() < 400);
+        let (meta_file, _) = status.get_local_meta_config().unwrap();
+        let query_configs = status.get_local_query_configs();
+        assert!(table.is_ok());
+        let table = table.unwrap();
+        let mut expected = Table::new();
+        expected.load_preset("||--+-++|    ++++++");
+        // Title.
+        expected.set_header(vec![
+            Cell::new("Name"),
+            Cell::new("Profile"),
+            Cell::new("Health"),
+            Cell::new("Tls"),
+            Cell::new("Config"),
+        ]);
+        expected.add_row(vec![
+            Cell::new("meta_1"),
+            Cell::new("local"),
+            Cell::new(format!("{}", HealthStatus::Ready)).fg(Color::Green),
+            Cell::new("disabled"),
+            Cell::new(meta_file),
+        ]);
+        expected.add_row(vec![
+            Cell::new("query_1"),
+            Cell::new("local"),
+            Cell::new(format!("{}", HealthStatus::UnReady)).fg(Color::Red),
+            Cell::new("disabled"),
+            Cell::new(query_configs.get(0).unwrap().0.clone()),
+        ]);
+        expected.add_row(vec![
+            Cell::new("query_2"),
+            Cell::new("local"),
+            Cell::new(format!("{}", HealthStatus::UnReady)).fg(Color::Red),
+            Cell::new("disabled"),
+            Cell::new(query_configs.get(1).unwrap().0.clone()),
         ]);
         assert_eq!(table.to_string(), expected.to_string())
     }
