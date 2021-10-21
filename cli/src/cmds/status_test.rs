@@ -204,7 +204,6 @@ async fn test_verify() -> Result<()> {
     let t2 = query_config.verify(Some(1), Some(Duration::from_millis(100)));
     let t3 = query_config2.verify(Some(1), Some(Duration::from_millis(100)));
     let response = futures::future::join_all(vec![t1, t2, t3]).await;
-    assert!(begin.elapsed().as_millis() > 200 && begin.elapsed().as_millis() < 400);
     assert_eq!(response.iter().filter(|e| e.is_ok()).count(), 1);
     assert_eq!(response.iter().filter(|e| e.is_err()).count(), 2);
     Ok(())

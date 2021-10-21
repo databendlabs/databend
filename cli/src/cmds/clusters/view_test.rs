@@ -203,7 +203,6 @@ async fn test_build_table_fail() -> Result<()> {
             Option::from(Duration::from_millis(100)),
         )
         .await;
-        assert!(start.elapsed().as_millis() > 200 && start.elapsed().as_millis() < 400);
         let (meta_file, _) = status.get_local_meta_config().unwrap();
         let query_configs = status.get_local_query_configs();
         assert!(table.is_ok());
