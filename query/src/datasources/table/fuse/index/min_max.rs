@@ -27,12 +27,12 @@ use crate::datasources::table::fuse::MetaInfoReader;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
 
-pub struct MinMaxIndexHelper {
+pub struct MinMaxIndex {
     table_snapshot_loc: String,
     meta_reader: MetaInfoReader,
 }
 
-impl MinMaxIndexHelper {
+impl MinMaxIndex {
     pub fn new(table_snapshot: &TableSnapshot, meta_reader: &MetaInfoReader) -> Self {
         Self {
             table_snapshot_loc: util::snapshot_location(

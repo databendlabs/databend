@@ -13,5 +13,8 @@
 //  limitations under the License.
 //
 
-mod min_max_helper;
-pub use min_max_helper::MinMaxIndexHelper;
+pub use min_max::MinMaxIndex;
+
+mod min_max;
+#[cfg(test)]
+mod min_max_test;

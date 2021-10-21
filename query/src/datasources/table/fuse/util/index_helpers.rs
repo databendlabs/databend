@@ -18,7 +18,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Extras;
 
-use crate::datasources::table::fuse::index::MinMaxIndexHelper;
+use crate::datasources::table::fuse::index::MinMaxIndex;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::MetaInfoReader;
 use crate::datasources::table::fuse::TableSnapshot;
@@ -29,7 +29,7 @@ pub fn range_filter(
     push_down: Option<Extras>,
     meta_reader: MetaInfoReader,
 ) -> Result<Vec<BlockMeta>> {
-    let range_index = MinMaxIndexHelper::new(table_snapshot, &meta_reader);
+    let range_index = MinMaxIndex::new(table_snapshot, &meta_reader);
     async move { range_index.apply(schema, push_down).await }
         .wait_in(meta_reader.runtime(), None)?
 }

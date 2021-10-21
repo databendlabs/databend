@@ -39,7 +39,7 @@ use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::MetaInfoReader;
 
 #[tokio::test]
-async fn test_index_helper() -> Result<()> {
+async fn test_min_max_index() -> Result<()> {
     let fixture = TestFixture::new();
     let ctx = fixture.ctx();
 
