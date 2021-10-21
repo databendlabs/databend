@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use std::sync::Arc;
+
+use common_base::BlockingWait;
+use common_base::Runtime;
+use common_base::RuntimeTracker;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
@@ -27,8 +31,14 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
 use log::info;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+// TODO: replace with proc macro
+fn main() {
+    let global_runtime = Runtime::with_default_worker_threads().unwrap();
+    let main_entity = async_main(global_runtime.get_tracker());
+    main_entity.wait_in(&global_runtime, None).unwrap().unwrap();
+}
+
+async fn async_main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     // First load configs from args.
     let mut conf = Config::load_from_args();
 
@@ -135,7 +145,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log::info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
-    // TODO: destroy cluster
     log::info!("Shutdown server.");
     Ok(())
 }

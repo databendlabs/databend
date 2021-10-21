@@ -32,6 +32,7 @@ mod platform {
     use std::os::raw::c_int;
     use std::os::raw::c_void;
 
+    use common_base::ThreadTracker;
     use tikv_jemalloc_sys as ffi;
 
     use crate::malloc_size::VoidPtrToSizeFn;
@@ -94,12 +95,24 @@ mod platform {
     unsafe impl GlobalAlloc for Allocator {
         #[inline]
         unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            let thread_tracker = ThreadTracker::current();
+            if !thread_tracker.is_null() {
+                let memory_tracker = ThreadTracker::get_memory_tracker(thread_tracker);
+                memory_tracker.alloc_memory(layout.size());
+            }
+
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::mallocx(layout.size(), flags) as *mut u8
         }
 
         #[inline]
         unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            let thread_tracker = ThreadTracker::current();
+            if !thread_tracker.is_null() {
+                let memory_tracker = ThreadTracker::get_memory_tracker(thread_tracker);
+                memory_tracker.alloc_memory(layout.size());
+            }
+
             if layout.align() <= MIN_ALIGN && layout.align() <= layout.size() {
                 ffi::calloc(1, layout.size()) as *mut u8
             } else {
@@ -110,12 +123,24 @@ mod platform {
 
         #[inline]
         unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            let thread_tracker = ThreadTracker::current();
+            if !thread_tracker.is_null() {
+                let memory_tracker = ThreadTracker::get_memory_tracker(thread_tracker);
+                memory_tracker.dealloc_memory(layout.size());
+            }
+
             let flags = layout_to_flags(layout.align(), layout.size());
             ffi::sdallocx(ptr as *mut _, layout.size(), flags)
         }
 
         #[inline]
         unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+            let thread_tracker = ThreadTracker::current();
+            if !thread_tracker.is_null() {
+                let memory_tracker = ThreadTracker::get_memory_tracker(thread_tracker);
+                memory_tracker.realloc_memory(layout.size(), new_size);
+            }
+
             let flags = layout_to_flags(layout.align(), new_size);
             ffi::rallocx(ptr as *mut _, new_size, flags) as *mut u8
         }

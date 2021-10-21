@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::tokio;
+use common_base::BlockingWait;
+use common_base::Runtime;
+use common_base::RuntimeTracker;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 use common_meta_sled_store::init_sled_db;
 use common_tracing::init_tracing_with_file;
 use databend_meta::api::FlightServer;
@@ -22,8 +29,14 @@ use databend_meta::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+// TODO: replace with proc macro
+fn main() {
+    let global_runtime = Runtime::with_default_worker_threads().unwrap();
+    let main_entity = async_main(global_runtime.get_tracker());
+    main_entity.wait_in(&global_runtime, None).unwrap().unwrap();
+}
+
+async fn async_main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf = Config::from_args();
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
@@ -70,7 +83,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             conf.flight_api_address
         );
         let (_stop_tx, fin_rx) = srv.start().await.expect("Databend-meta service error");
-        fin_rx.await?;
+        fin_rx.await.map_err_to_code(ErrorCode::TokioError, || {
+            "Cannot receive data from Flight API service fin_rx"
+        })?;
     }
 
     Ok(())

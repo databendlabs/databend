@@ -28,6 +28,7 @@ pub struct ProcessInfo {
     pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
     pub session_extra_info: Option<String>,
+    pub memory_usage: u64,
 }
 
 impl Session {
@@ -37,6 +38,16 @@ impl Session {
     }
 
     fn to_process_info(self: &Arc<Self>, status: &MutableStatus) -> ProcessInfo {
+        let mut memory_usage = 0;
+
+        if let Some(shared) = &status.context_shared {
+            if let Ok(runtime) = shared.try_get_runtime() {
+                let runtime_tracker = runtime.get_tracker();
+                let runtime_memory_tracker = runtime_tracker.get_memory_tracker();
+                memory_usage = runtime_memory_tracker.get_memory_usage() as u64;
+            }
+        }
+
         ProcessInfo {
             id: self.id.clone(),
             typ: self.typ.clone(),
@@ -45,6 +56,7 @@ impl Session {
             settings: status.session_settings.clone(),
             client_address: status.client_host,
             session_extra_info: self.process_extra_info(status),
+            memory_usage,
         }
     }
 

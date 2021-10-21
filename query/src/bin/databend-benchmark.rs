@@ -27,6 +27,9 @@ use std::time::Instant;
 
 use clickhouse_rs::Pool;
 use common_base::tokio;
+use common_base::BlockingWait;
+use common_base::Runtime;
+use common_base::RuntimeTracker;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -123,8 +126,16 @@ impl Stats {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+// TODO: replace with proc macro
+fn main() {
+    let global_runtime = Runtime::with_default_worker_threads().unwrap();
+    async_main(global_runtime.get_tracker())
+        .wait_in(&global_runtime, None)
+        .unwrap()
+        .unwrap();
+}
+
+async fn async_main(_global_tracker: Arc<RuntimeTracker>) -> Result<()> {
     // First load configs from args.
     let conf = Config::load_from_args();
     let address = format!("{}:{}", conf.host, conf.port)

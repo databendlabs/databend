@@ -15,6 +15,7 @@
 use std::net::Shutdown;
 
 use common_base::tokio::net::TcpStream;
+use common_base::Thread;
 use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,7 +31,7 @@ impl MySQLConnection {
     pub fn run_on_stream(session: SessionRef, stream: TcpStream) -> Result<()> {
         let blocking_stream = Self::convert_stream(stream)?;
         MySQLConnection::attach_session(&session, &blocking_stream)?;
-        std::thread::spawn(move || {
+        Thread::spawn(move || {
             MySQLConnection::session_executor(session, blocking_stream);
         });
 

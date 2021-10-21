@@ -35,7 +35,7 @@ pub enum SignalType {
     Sigterm,
 }
 
-pub type SignalStream = Pin<Box<dyn Stream<Item = SignalType>>>;
+pub type SignalStream = Pin<Box<dyn Stream<Item = SignalType> + Send>>;
 
 #[cfg(not(target_os = "windows"))]
 pub fn signal_stream() -> Result<SignalStream> {

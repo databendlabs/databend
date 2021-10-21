@@ -1346,6 +1346,7 @@ dependencies = [
 name = "common-mem-allocator"
 version = "0.1.0"
 dependencies = [
+ "common-base",
  "common-infallible",
  "common-mem-derive",
  "parking_lot",
