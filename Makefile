@@ -84,11 +84,11 @@ docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
 
 docker_release:
-	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg VERSION=v0.4.141-nightly --push
+	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg VERSION=${VERSION}--push
 
 # experiment feature: take a look at docker/README.md for detailed multi architecture image build support
 dockerx:
-	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --build-arg VERSION=v0.4.141-nightly  --push
+	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --build-arg VERSION=${VERSION} --push
 
 build-perf-tool:
 	cargo build --target x86_64-unknown-linux-gnu --bin databend-benchmark
