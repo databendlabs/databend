@@ -698,18 +698,7 @@ impl StateMachine {
                     ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
                 })?;
 
-                let tablei = table.1.value;
-
-                let table_info = TableInfo {
-                    database_id: tablei.database_id,
-                    db: tablei.db.clone(),
-                    table_id: tablei.table_id,
-                    version: tablei.version,
-                    name: tablei.name.clone(),
-                    schema: tablei.schema,
-                    engine: tablei.engine.clone(),
-                    options: tablei.options,
-                };
+                let table_info = table.1.value;
 
                 tbls.push(table_info);
             }

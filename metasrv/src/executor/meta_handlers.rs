@@ -120,18 +120,18 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        match rst {
-            AppliedState::DataBase { prev, .. } => {
-                if prev.is_some() || if_exists {
-                    Ok(())
-                } else {
-                    Err(ErrorCode::UnknownDatabase(format!(
-                        "database not found: {:}",
-                        db_name
-                    )))
-                }
-            }
-            _ => Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        let (prev, _result) = match rst {
+            AppliedState::DataBase { prev, result } => (prev, result),
+            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        };
+
+        if prev.is_some() || if_exists {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "database not found: {:}",
+                db_name
+            )))
         }
     }
 }

@@ -21,6 +21,7 @@ perf.*
 *.swp
 _local_fs/*
 _meta/*
+stateless_test_data/*
 **/_logs/*
 
 # for tests in mac
