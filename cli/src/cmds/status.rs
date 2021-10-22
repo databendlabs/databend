@@ -26,7 +26,6 @@ use std::thread::sleep;
 use std::time;
 
 use async_trait::async_trait;
-use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use libc::pid_t;
@@ -41,6 +40,8 @@ use crate::cmds::config::CustomMirror;
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
+
+const RETRIES: u16 = 30;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Status {
@@ -69,25 +70,47 @@ pub struct LocalMetaConfig {
     pub log_dir: Option<String>,
 }
 
+async fn check_health(
+    cli: reqwest::Client,
+    url: String,
+    duration: std::time::Duration,
+) -> Result<()> {
+    let resp = cli.get(url.as_str()).send().await;
+    if resp.is_err() || !resp.unwrap().status().is_success() {
+        async_std::task::sleep(duration).await;
+        return Err(CliError::Unknown(format!(
+            "cannot connect to healthiness probe: {}",
+            url
+        )));
+    } else {
+        Ok(())
+    }
+}
+
 #[async_trait]
 pub trait LocalRuntime: Send + Sync {
-    const RETRIES: u16;
-    fn kill(&self) -> Result<()> {
+    async fn kill(&self) -> Result<()> {
         let pid = self.get_pid();
         match pid {
             Some(id) => {
                 match nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT)) {
                     Ok(_) => {
-                        for _ in 0..30 {
+                        for _ in 0..60 {
                             if !self.is_clean() {
+                                if nix::sys::signal::kill(
+                                    Pid::from_raw(id),
+                                    Some(nix::sys::signal::SIGINT),
+                                )
+                                .is_ok()
+                                {}
                                 sleep(time::Duration::from_secs(1));
                             } else {
                                 return Ok(());
                             }
                         }
-                        Err(CliError::Unknown(
-                            "some resources have not been freed".to_string(),
-                        ))
+                        return Err(CliError::Unknown(
+                            "timeout from killing process".to_string(),
+                        ));
                     }
                     Err(e) => Err(CliError::from(e)),
                 }
@@ -105,42 +128,38 @@ pub trait LocalRuntime: Send + Sync {
         let mut cmd = self.generate_command().expect("cannot parse command");
         let child = cmd.spawn().expect("cannot execute command");
         self.set_pid(child.id() as pid_t);
-        match self.verify().await {
+        match self.verify(None, None).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
     }
     fn get_pid(&self) -> Option<pid_t>;
-    async fn verify(&self) -> Result<()>;
+    async fn verify(
+        &self,
+        retries: Option<u32>,
+        duration: Option<std::time::Duration>,
+    ) -> Result<()> {
+        let (retries, duration) = (
+            retries.unwrap_or(RETRIES as u32),
+            duration.unwrap_or_else(|| std::time::Duration::from_secs(1)),
+        );
+        let (cli, url) = self.get_health_probe();
+        let result = tryhard::retry_fn(move || check_health(cli.clone(), url.clone(), duration))
+            .retries(retries)
+            .await;
+        return result;
+    }
     fn get_path(&self) -> Option<String>;
     fn generate_command(&mut self) -> Result<Command>;
     fn set_pid(&mut self, id: pid_t);
     fn is_clean(&self) -> bool; // return true if runtime resources are cleaned
+    fn get_health_probe(&self) -> (reqwest::Client, String);
 }
 
 #[async_trait]
 impl LocalRuntime for LocalMetaConfig {
-    const RETRIES: u16 = 30;
-
     fn get_pid(&self) -> Option<pid_t> {
         self.pid
-    }
-
-    // will check health for endpoint through http request
-    async fn verify(&self) -> Result<()> {
-        let (cli, url) = self.get_health_probe();
-        for _ in 0..LocalMetaConfig::RETRIES {
-            let resp = cli.get(url.as_str()).send().await;
-            if resp.is_err() || !resp.unwrap().status().is_success() {
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            } else {
-                return Ok(());
-            }
-        }
-        return Err(CliError::Unknown(format!(
-            "cannot fetch healthness status for store instance: {}",
-            url
-        )));
     }
 
     fn get_path(&self) -> Option<String> {
@@ -259,32 +278,31 @@ impl LocalRuntime for LocalMetaConfig {
             )
             && s.process(pid).is_none();
     }
+    // retrieve the configured url for health check
+    // TODO(zhihanz): http TLS endpoint
+    fn get_health_probe(&self) -> (reqwest::Client, String) {
+        let client = reqwest::Client::builder()
+            .build()
+            .expect("Cannot build health probe for health check");
+
+        let url = {
+            if self.config.admin_tls_server_key.is_empty()
+                || self.config.admin_tls_server_cert.is_empty()
+            {
+                format!("http://{}/v1/health", self.config.admin_api_address)
+            } else {
+                todo!()
+            }
+        };
+        (client, url)
+    }
 }
 
 #[async_trait]
 impl LocalRuntime for LocalQueryConfig {
-    const RETRIES: u16 = 30;
-
     fn get_pid(&self) -> Option<pid_t> {
         self.pid
     }
-
-    async fn verify(&self) -> Result<()> {
-        let (cli, url) = self.get_health_probe();
-        for _ in 0..LocalQueryConfig::RETRIES {
-            let resp = cli.get(url.as_str()).send().await;
-            if resp.is_err() || !resp.unwrap().status().is_success() {
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            } else {
-                return Ok(());
-            }
-        }
-        return Err(CliError::Unknown(format!(
-            "cannot fetch healthness status for query instance: {}",
-            url
-        )));
-    }
-
     fn get_path(&self) -> Option<String> {
         self.path.clone()
     }
@@ -390,6 +408,9 @@ impl LocalRuntime for LocalQueryConfig {
         info!("executing command {:?}", command);
         Ok(command)
     }
+    fn set_pid(&mut self, id: pid_t) {
+        self.pid = Some(id)
+    }
     fn is_clean(&self) -> bool {
         if self.pid.is_none() {
             return true;
@@ -400,14 +421,8 @@ impl LocalRuntime for LocalQueryConfig {
             && portpicker::is_free(self.config.query.clickhouse_handler_port)
             && s.process(pid).is_none()
     }
-    fn set_pid(&mut self, id: pid_t) {
-        self.pid = Some(id)
-    }
-}
-
-impl LocalQueryConfig {
     // retrieve the configured url for health check
-    pub fn get_health_probe(&self) -> (reqwest::Client, String) {
+    fn get_health_probe(&self) -> (reqwest::Client, String) {
         let client = reqwest::Client::builder()
             .build()
             .expect("Cannot build health probe for health check");
@@ -415,27 +430,6 @@ impl LocalQueryConfig {
         let url = {
             if !self.config.tls_rpc_server_enabled() {
                 format!("http://{}/v1/health", self.config.query.http_api_address)
-            } else {
-                todo!()
-            }
-        };
-        (client, url)
-    }
-}
-
-impl LocalMetaConfig {
-    // retrieve the configured url for health check
-    // TODO(zhihanz): http TLS endpoint
-    pub fn get_health_probe(&self) -> (reqwest::Client, String) {
-        let client = reqwest::Client::builder()
-            .build()
-            .expect("Cannot build health probe for health check");
-
-        let url = {
-            if self.config.admin_tls_server_key.is_empty()
-                || self.config.admin_tls_server_cert.is_empty()
-            {
-                format!("http://{}/v1/health", self.config.admin_api_address)
             } else {
                 todo!()
             }

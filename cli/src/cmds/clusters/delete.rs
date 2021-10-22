@@ -53,10 +53,13 @@ impl DeleteCommand {
             )
     }
 
-    pub fn stop_current_local_services(status: &mut Status, writer: &mut Writer) -> Result<()> {
+    pub async fn stop_current_local_services(
+        status: &mut Status,
+        writer: &mut Writer,
+    ) -> Result<()> {
         writer.write_ok("⚠ start to clean up local services");
         for (fs, query) in status.get_local_query_configs() {
-            if query.kill().is_err() {
+            if query.kill().await.is_err() {
                 if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
                     writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
                 }
@@ -73,7 +76,7 @@ impl DeleteCommand {
         }
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
-            if meta.kill().is_err() {
+            if meta.kill().await.is_err() {
                 writer.write_err(&*format!("cannot kill meta service with config in {}", fs));
                 if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
                     writer.write_err(&*format!("cannot clean meta config in {}", fs))
@@ -86,9 +89,11 @@ impl DeleteCommand {
         Ok(())
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
+    async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         let mut status = Status::read(self.conf.clone())?;
-        DeleteCommand::stop_current_local_services(&mut status, writer)?;
+        if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer).await {
+            writer.write_err(format!("{:?}", e).as_str());
+        };
         status.current_profile = None;
         status.write()?;
         writer.write_ok("🚀 stopped services");
@@ -97,13 +102,15 @@ impl DeleteCommand {
         Ok(())
     }
 
-    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let status = Status::read(self.conf.clone())?;
                 let p = utils::get_profile(status, matches.value_of("profile"));
                 match p {
-                    Ok(ClusterProfile::Local) => return self.local_exec_match(writer, matches),
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await
+                    }
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
