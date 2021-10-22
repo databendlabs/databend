@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::time::Duration;
-use std::time::Instant;
 
 use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
@@ -197,7 +196,6 @@ async fn test_verify() -> Result<()> {
         log_dir: Some("./".to_string()),
     };
     query_config2.config.query.http_api_address = format!("127.0.0.1:{}", server2.port());
-    let begin = Instant::now();
     // successful case should return immediately
     let t1 = meta_config.verify(Some(10), Some(Duration::from_millis(100)));
     // failed case should return after 2 times retry

@@ -196,7 +196,6 @@ async fn test_build_table_fail() -> Result<()> {
         .unwrap();
         status.version = "build_table".to_string();
         status.write()?;
-        let start = std::time::Instant::now();
         let table = ViewCommand::build_local_table(
             &status,
             Some(1),
