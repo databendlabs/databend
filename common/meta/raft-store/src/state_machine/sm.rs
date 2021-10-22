@@ -75,19 +75,6 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 // const TREE_META: &str = "meta";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
-/// Replication defines the replication strategy.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Replication {
-    /// n-copies mode.
-    Mirror(u64),
-}
-
-impl Default for Replication {
-    fn default() -> Self {
-        Replication::Mirror(1)
-    }
-}
-
 /// The state machine of the `MemStore`.
 /// It includes user data and two raft-related informations:
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
@@ -103,8 +90,6 @@ pub struct StateMachine {
     /// The internal sled::Tree to store everything about a state machine:
     /// - Store initialization state and last applied in keyspace `StateMachineMeta`.
     /// - Every other state is store in its own keyspace such as `Nodes`.
-    ///
-    /// TODO(xp): migrate other in-memory fields to `sm_tree`.
     pub sm_tree: SledTree,
 }
 
@@ -370,7 +355,6 @@ impl StateMachine {
             Cmd::CreateTable {
                 ref db_name,
                 ref table_name,
-                if_not_exists: _,
                 ref table,
             } => {
                 let dbi = self

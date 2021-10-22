@@ -57,7 +57,6 @@ pub enum Cmd {
         // the two commands (failed `add` and successful `delete`)
         db_name: String,
         table_name: String,
-        if_not_exists: bool,
         table: TableInfo,
     },
 
@@ -106,14 +105,9 @@ impl fmt::Display for Cmd {
             Cmd::CreateTable {
                 db_name,
                 table_name,
-                if_not_exists,
                 table,
             } => {
-                write!(
-                    f,
-                    "create_table:{}-{}={}, if_not_exists:{}",
-                    db_name, table_name, table, if_not_exists
-                )
+                write!(f, "create_table:{}-{}={}", db_name, table_name, table)
             }
             Cmd::DropTable {
                 db_name,

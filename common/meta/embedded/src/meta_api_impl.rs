@@ -127,7 +127,6 @@ impl MetaApi for MetaEmbedded {
         let cr = Cmd::CreateTable {
             db_name: db_name.clone(),
             table_name: table_name.clone(),
-            if_not_exists,
             table,
         };
 

@@ -40,7 +40,6 @@ pub use raft_types::LogId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
-pub use table_info::Table;
 pub use table_info::TableInfo;
 pub use table_reply::CreateTableReply;
 
