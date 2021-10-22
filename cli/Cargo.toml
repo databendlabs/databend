@@ -37,7 +37,7 @@ sha2 = "0.9.8"
 sysinfo = "0.20.5"
 tar = "0.4.37"
 thiserror = "1.0.30"
-ureq = { version = "2.2.0", features = ["json"] }
+ureq = { version = "2.3.0", features = ["json"] }
 nix = "0.22.2"
 log = "0.4"
 serde_yaml = "0.8.21"
