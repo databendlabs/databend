@@ -44,7 +44,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 26);
+    assert_eq!(block.num_rows(), 28);
 
     let expected = vec![
         "+-----------------------------------+----------------+-------+-------------+",
@@ -57,6 +57,8 @@ async fn test_configs_table() -> Result<()> {
         "| clickhouse_handler_port           | 9000           | query |             |",
         "| flight_api_address                | 127.0.0.1:9090 | query |             |",
         "| http_api_address                  | 127.0.0.1:8080 | query |             |",
+        "| http_handler_host                 | 127.0.0.1      | query |             |",
+        "| http_handler_port                 | 8000           | query |             |",
         "| log_dir                           | ./_logs        | log   |             |",
         "| log_level                         | INFO           | log   |             |",
         "| max_active_sessions               | 256            | query |             |",

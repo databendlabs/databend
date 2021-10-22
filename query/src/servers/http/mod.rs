@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The servers module used for external communication with user, such as MySQL wired protocol, etc.
+mod http_services;
+mod v1;
 
-pub use clickhouse::ClickHouseHandler;
-pub use http::HttpHandler;
-pub use server::Server;
-pub use server::ShutdownHandle;
-
-pub use self::mysql::MySQLConnection;
-pub use self::mysql::MySQLHandler;
-
-mod clickhouse;
-mod http;
-mod http_server;
-mod mysql;
-pub(crate) mod server;
+pub use http_services::HttpHandler;

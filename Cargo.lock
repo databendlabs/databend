@@ -1117,6 +1117,7 @@ dependencies = [
  "futures",
  "pprof",
  "pretty_assertions",
+ "serde",
  "tokio",
  "uuid",
 ]
