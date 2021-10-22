@@ -139,7 +139,7 @@ impl Catalog for OverlaidCatalog {
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabase("").code() {
+                if e.code() == ErrorCode::UnknownTable("").code() {
                     self.bottom.build_table(table_info)
                 } else {
                     Err(e)
