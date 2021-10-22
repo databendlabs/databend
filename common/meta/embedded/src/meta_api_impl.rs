@@ -161,7 +161,6 @@ impl MetaApi for MetaEmbedded {
         let cr = Cmd::DropTable {
             db_name: db_name.clone(),
             table_name: table_name.clone(),
-            if_exists,
         };
 
         let mut sm = self.inner.lock().await;

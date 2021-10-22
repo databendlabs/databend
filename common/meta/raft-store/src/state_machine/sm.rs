@@ -416,7 +416,6 @@ impl StateMachine {
             Cmd::DropTable {
                 ref db_name,
                 ref table_name,
-                if_exists: _,
             } => {
                 let dbi = self
                     .databases()

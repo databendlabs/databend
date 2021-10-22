@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -162,5 +163,10 @@ impl Catalog for SystemCatalog {
 
     fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
+    }
+
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let table_id = table_info.table_id;
+        self.get_table_by_id(table_id, None)
     }
 }

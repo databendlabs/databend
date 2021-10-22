@@ -18,6 +18,7 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -55,6 +56,9 @@ pub trait Catalog {
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
 
     fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+
+    /// Build a `Arc<dyn Table>` from `TableInfo`.
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
     // Get function by name.
     fn get_table_function(
