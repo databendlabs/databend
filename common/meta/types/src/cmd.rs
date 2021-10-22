@@ -18,12 +18,12 @@ use async_raft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::table_info::Table;
 use crate::DatabaseInfo;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
+use crate::TableInfo;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
@@ -58,7 +58,7 @@ pub enum Cmd {
         db_name: String,
         table_name: String,
         if_not_exists: bool,
-        table: Table,
+        table: TableInfo,
     },
 
     /// Drop a table if absent

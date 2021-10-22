@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
@@ -108,5 +109,15 @@ impl Default for TableInfo {
             engine: "".to_string(),
             options: HashMap::new(),
         }
+    }
+}
+
+impl Display for TableInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "DB: {}-{}, Table: {}-{}, Version: {}, Engine: {}",
+            self.db, self.database_id, self.name, self.table_id, self.version, self.engine
+        )
     }
 }

@@ -22,12 +22,15 @@ use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqValue;
+use common_meta_types::TableInfo;
 
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
+use crate::state_machine::table_lookup::TableLookupValue;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
+use crate::state_machine::TableLookupKey;
 
 /// Types for raft log in SledTree
 pub struct Logs {}
@@ -98,10 +101,28 @@ impl SledKeySpace for Databases {
     type V = SeqValue<KVValue<DatabaseInfo>>;
 }
 
+pub struct Tables {}
+
+impl SledKeySpace for Tables {
+    const PREFIX: u8 = 9;
+    const NAME: &'static str = "tables";
+    type K = u64;
+    type V = SeqValue<KVValue<TableInfo>>;
+}
+
 pub struct ClientLastResps {}
 impl SledKeySpace for ClientLastResps {
-    const PREFIX: u8 = 9;
+    const PREFIX: u8 = 10;
     const NAME: &'static str = "client-last-resp";
     type K = String;
     type V = ClientLastRespValue;
+}
+
+pub struct TableLookup {}
+
+impl SledKeySpace for TableLookup {
+    const PREFIX: u8 = 11;
+    const NAME: &'static str = "table-lookup";
+    type K = TableLookupKey;
+    type V = SeqValue<KVValue<TableLookupValue>>;
 }

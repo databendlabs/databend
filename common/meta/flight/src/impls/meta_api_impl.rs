@@ -82,11 +82,13 @@ impl MetaApi for MetaFlightClient {
 
     /// Get table.
     async fn get_table(&self, db: &str, table: &str) -> common_exception::Result<Arc<TableInfo>> {
-        self.do_action(GetTableAction {
-            db: db.to_string(),
-            table: table.to_string(),
-        })
-        .await
+        let x = self
+            .do_action(GetTableAction {
+                db: db.to_string(),
+                table: table.to_string(),
+            })
+            .await?;
+        Ok(Arc::new(x))
     }
 
     /// Get tables.
@@ -99,7 +101,8 @@ impl MetaApi for MetaFlightClient {
         tbl_id: MetaId,
         tbl_ver: Option<MetaVersion>,
     ) -> common_exception::Result<Arc<TableInfo>> {
-        self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await
+        let x = self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await?;
+        Ok(Arc::new(x))
     }
 
     async fn upsert_table_option(
