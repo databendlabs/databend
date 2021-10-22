@@ -13,4 +13,6 @@
 // limitations under the License.
 
 mod http_services;
+mod v1;
+
 pub use http_services::HttpHandler;
