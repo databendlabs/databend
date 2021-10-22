@@ -51,7 +51,7 @@ impl TracingTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'tracing'".to_string(),
             name: "tracing".to_string(),
             table_id,
             schema,

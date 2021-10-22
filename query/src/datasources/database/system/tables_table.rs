@@ -42,7 +42,7 @@ impl TablesTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'tables'".to_string(),
             name: "tables".to_string(),
             table_id,
             schema,

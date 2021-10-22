@@ -116,7 +116,7 @@ impl MetaApi for MetaEmbedded {
         let table = TableInfo {
             table_id: 0,
             version: 0,
-            db: db_name.to_string(),
+            desc: format!("'{}'.'{}'", db_name, table_name),
             database_id: 0, // this field is unused during the creation of table
             schema: plan.schema.clone(),
             engine: plan.engine.clone(),
@@ -207,7 +207,7 @@ impl MetaApi for MetaEmbedded {
             database_id: tablei.database_id,
             table_id: tablei.table_id,
             version: tablei.version, // placeholder, not yet implemented in meta service
-            db: tablei.db.clone(),
+            desc: tablei.desc.clone(),
             name: tablei.name.clone(),
             schema: tablei.schema,
             engine: tablei.engine.clone(),
@@ -241,7 +241,7 @@ impl MetaApi for MetaEmbedded {
             database_id: tablei.database_id,
             table_id: tablei.table_id,
             version: tablei.version, // placeholder, not yet implemented in meta service
-            db: tablei.db.clone(),
+            desc: tablei.desc.clone(),
             name: tablei.name.clone(),
             schema: tablei.schema,
             engine: tablei.engine.clone(),

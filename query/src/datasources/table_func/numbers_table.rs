@@ -80,7 +80,7 @@ impl NumbersTable {
             database_id: 0,
             table_id,
             version: 0,
-            db: database_name.to_string(),
+            desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             schema: DataSchemaRefExt::create(vec![DataField::new(
                 "number",

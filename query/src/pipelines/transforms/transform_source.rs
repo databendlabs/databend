@@ -87,10 +87,9 @@ impl Processor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let db = self.source_plan.table_info.db.clone();
-        let table = self.source_plan.table_info.name.clone();
+        let desc = self.source_plan.table_info.desc.clone();
 
-        tracing::debug!("execute, table:{:#}.{:#} ...", db, table);
+        tracing::debug!("execute, table:{:#} ...", desc);
 
         // We need to keep the block struct with the schema
         // Because the table may not support require columns

@@ -48,7 +48,7 @@ impl MetricsTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'metrics'".to_string(),
             name: "metrics".to_string(),
             table_id,
             schema,

@@ -42,7 +42,7 @@ impl SettingsTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'settings'".to_string(),
             name: "settings".to_string(),
             table_id,
             schema,

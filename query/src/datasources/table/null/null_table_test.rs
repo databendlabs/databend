@@ -39,7 +39,7 @@ async fn test_null_table() -> Result<()> {
     let table = NullTable::try_create(
         TableInfo {
             database_id: 0,
-            db: "default".into(),
+            desc: "'default'.'a'".into(),
             name: "a".into(),
 
             schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),

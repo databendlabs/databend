@@ -167,7 +167,7 @@ impl MetaApiSync for MetaEmbeddedSync {
 
         let table_info = TableInfo {
             database_id: 0, // TODO tobe assigned to some real value
-            db: plan.db,
+            desc: format!("'{}'.'{}'", plan.db, plan.table),
             table_id: self.next_db_id(),
             version: 0,
             name: plan.table,
