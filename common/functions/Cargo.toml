@@ -26,7 +26,7 @@ num = "^0.4"
 ordered-float = "2.8"
 
 [dev-dependencies]
-bumpalo = "3.7.1"
+bumpalo = "3.8.0"
 common-datablocks = {path = "../datablocks"}
 pretty_assertions = "1.0"
 float-cmp = "0.9.0"
