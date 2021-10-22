@@ -100,7 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create();
+        let mut srv = HttpHandler::create(session_manager.clone());
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 

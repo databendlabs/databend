@@ -16,26 +16,33 @@ use std::net::SocketAddr;
 
 use axum::handler::get;
 use axum::routing::BoxRoute;
+use axum::AddExtensionLayer;
 use axum::Router;
 use common_base::tokio;
 use common_exception::Result;
 
+use crate::servers::http::v1::statement::statement_router;
 use crate::servers::http_server::HttpServer;
 use crate::servers::Server;
+use crate::sessions::SessionManagerRef;
 
 pub struct HttpHandler {
+    session_manager: SessionManagerRef,
     http_server: HttpServer,
 }
 
 impl HttpHandler {
-    pub fn create() -> Box<dyn Server> {
+    pub fn create(session_manager: SessionManagerRef) -> Box<dyn Server> {
         Box::new(HttpHandler {
+            session_manager,
             http_server: HttpServer::create(),
         })
     }
     fn build_router(&self) -> Router<BoxRoute> {
         Router::new()
             .route("/", get(|| async { "This is http handler." }))
+            .nest("/v1/statement", statement_router())
+            .layer(AddExtensionLayer::new(self.session_manager.clone()))
             .boxed()
     }
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
