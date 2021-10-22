@@ -21,13 +21,15 @@ use common_exception::Result;
 
 // TODO(youngsofun): refactor http_services in api and metrics to remove duplicated code
 pub struct HttpServer {
+    service_name: String,
     join_handle: Option<JoinHandle<std::io::Result<()>>>,
     pub(crate) abort_handler: Handle,
 }
 
 impl HttpServer {
-    pub(crate) fn create() -> HttpServer {
+    pub(crate) fn create(service_name: String) -> HttpServer {
         HttpServer {
+            service_name,
             join_handle: None,
             abort_handler: axum_server::Handle::new(),
         }
@@ -60,7 +62,8 @@ impl HttpServer {
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
                 log::error!(
-                    "Unexpected error during shutdown Http API handler. cause {}",
+                    "Unexpected error during shutdown Http Server {}. cause {}",
+                    self.service_name,
                     error
                 );
             }

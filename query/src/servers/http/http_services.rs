@@ -35,7 +35,7 @@ impl HttpHandler {
     pub fn create(session_manager: SessionManagerRef) -> Box<dyn Server> {
         Box::new(HttpHandler {
             session_manager,
-            http_server: HttpServer::create(),
+            http_server: HttpServer::create("HttpHandler".to_string()),
         })
     }
     fn build_router(&self) -> Router<BoxRoute> {
