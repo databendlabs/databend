@@ -66,7 +66,6 @@ pub enum Cmd {
         // the two commands (failed `add` and successful `delete`)
         db_name: String,
         table_name: String,
-        if_exists: bool,
     },
 
     /// Update or insert a general purpose kv store
@@ -112,7 +111,6 @@ impl fmt::Display for Cmd {
             Cmd::DropTable {
                 db_name,
                 table_name,
-                if_exists,
             } => {
                 write!(
                     f,

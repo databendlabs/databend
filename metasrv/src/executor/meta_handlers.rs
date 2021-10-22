@@ -202,7 +202,6 @@ impl RequestHandler<DropTableAction> for ActionHandler {
             cmd: DropTable {
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
-                if_exists,
             },
         };
 
