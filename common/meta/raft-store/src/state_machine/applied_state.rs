@@ -17,7 +17,7 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::KVValue;
 use common_meta_types::Node;
 use common_meta_types::SeqValue;
-use common_meta_types::Table;
+use common_meta_types::TableInfo;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -48,8 +48,8 @@ pub enum AppliedState {
     },
 
     Table {
-        prev: Option<Table>,
-        result: Option<Table>,
+        prev: Option<SeqTableInfo>,
+        result: Option<SeqTableInfo>,
     },
 
     KV {
@@ -113,8 +113,10 @@ impl From<(Option<SeqDBInfo>, Option<SeqDBInfo>)> for AppliedState {
     }
 }
 
-impl From<(Option<Table>, Option<Table>)> for AppliedState {
-    fn from(v: (Option<Table>, Option<Table>)) -> Self {
+type SeqTableInfo = SeqValue<KVValue<TableInfo>>;
+
+impl From<(Option<SeqTableInfo>, Option<SeqTableInfo>)> for AppliedState {
+    fn from(v: (Option<SeqTableInfo>, Option<SeqTableInfo>)) -> Self {
         AppliedState::Table {
             prev: v.0,
             result: v.1,

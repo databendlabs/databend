@@ -243,18 +243,14 @@ pub struct GetTableAction {
     pub table: String,
 }
 
-action_declare!(GetTableAction, Arc<TableInfo>, MetaFlightAction::GetTable);
+action_declare!(GetTableAction, TableInfo, MetaFlightAction::GetTable);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableExtReq {
     pub tbl_id: MetaId,
     pub tbl_ver: Option<MetaVersion>,
 }
-action_declare!(
-    GetTableExtReq,
-    Arc<TableInfo>,
-    MetaFlightAction::GetTableExt
-);
+action_declare!(GetTableExtReq, TableInfo, MetaFlightAction::GetTableExt);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UpsertTableOptionReq {

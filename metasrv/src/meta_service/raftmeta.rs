@@ -48,15 +48,17 @@ use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::Snapshot;
 use common_meta_raft_store::state_machine::StateMachine;
+use common_meta_raft_store::state_machine::TableLookupKey;
+use common_meta_raft_store::state_machine::TableLookupValue;
 use common_meta_sled_store::get_sled_db;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
+use common_meta_types::MatchSeq;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqValue;
-use common_meta_types::Table;
 use common_meta_types::TableInfo;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
@@ -996,12 +998,20 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn lookup_table_id(&self, db_id: u64, name: &str) -> Option<u64> {
+    pub async fn lookup_table_id(
+        &self,
+        db_id: u64,
+        name: &str,
+    ) -> Result<Option<SeqValue<KVValue<TableLookupValue>>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let res = sm.table_lookup.get(&(db_id, name.to_string()));
-        res.copied()
+        sm.table_lookup().get(
+            &(TableLookupKey {
+                database_id: db_id,
+                table_name: name.to_string(),
+            }),
+        )
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1012,7 +1022,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+    pub async fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -1020,7 +1030,10 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_table(&self, tid: &u64) -> Option<Table> {
+    pub async fn get_table(
+        &self,
+        tid: &u64,
+    ) -> Result<Option<SeqValue<KVValue<TableInfo>>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -1036,16 +1049,20 @@ impl MetaNode {
         opt_value: String,
     ) -> common_exception::Result<()> {
         // non-consensus modification, tobe fixed latter
-        let mut sm = self.sto.state_machine.write().await;
-        if let Some(tbl) = sm.tables.get_mut(&table_id) {
-            if tbl.table_version != table_version {
+        let sm = self.sto.state_machine.write().await;
+        let seq_table = sm.tables().get(&table_id)?;
+        if let Some(tbl) = seq_table {
+            let seq = tbl.0;
+            let mut tbl = tbl.1.value;
+            if tbl.version != table_version {
                 Err(ErrorCode::TableVersionMissMatch(format!(
                     "targeting version {}, current version {}",
-                    table_version, tbl.table_version,
+                    table_version, tbl.version,
                 )))
             } else {
-                tbl.table_options.insert(opt_key, opt_value);
-                tbl.table_version += 1;
+                tbl.options.insert(opt_key, opt_value);
+                tbl.version += 1;
+                sm.upsert_table(tbl, &MatchSeq::Exact(seq)).await?;
                 Ok(())
             }
         } else {
