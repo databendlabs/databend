@@ -146,6 +146,13 @@ impl DatabendQueryContext {
         self.shared.get_catalog()
     }
 
+    /// Fetch a Table by db and table name.
+    ///
+    /// It guaranteed to return a consistent result for multiple calls, in a same query.
+    /// E.g.:
+    /// ```sql
+    /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
+    /// ```
     pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
         self.shared.get_table(database, table)
     }
