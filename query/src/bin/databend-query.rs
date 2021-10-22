@@ -20,6 +20,7 @@ use databend_query::api::RpcService;
 use databend_query::configs::Config;
 use databend_query::metrics::MetricService;
 use databend_query::servers::ClickHouseHandler;
+use databend_query::servers::HttpHandler;
 use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
@@ -93,6 +94,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             listening.ip(),
             listening.port(),
         );
+    }
+    // HTTP handler.
+    {
+        let hostname = conf.query.http_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
+
+        let mut srv = HttpHandler::create();
+        let listening = srv.start(listening.parse()?).await?;
+        shutdown_handle.add_service(srv);
+
+        info!("Http handler listening on {}", listening);
     }
 
     // Metric API service.

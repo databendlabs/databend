@@ -12,18 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The servers module used for external communication with user, such as MySQL wired protocol, etc.
-
-pub use clickhouse::ClickHouseHandler;
-pub use http::HttpHandler;
-pub use server::Server;
-pub use server::ShutdownHandle;
-
-pub use self::mysql::MySQLConnection;
-pub use self::mysql::MySQLHandler;
-
-mod clickhouse;
-mod http;
-mod http_server;
-mod mysql;
-pub(crate) mod server;
+mod http_services;
+pub use http_services::HttpHandler;
