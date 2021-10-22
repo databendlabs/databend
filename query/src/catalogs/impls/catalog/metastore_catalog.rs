@@ -109,30 +109,6 @@ impl MetaStoreCatalog {
         self.db_instances.write().insert(name, db.clone());
         Ok(db)
     }
-
-    fn build_table_instance(
-        &self,
-        table_info: TableInfo,
-    ) -> common_exception::Result<Arc<dyn Table>> {
-        let engine = &table_info.engine;
-        let factory = self
-            .table_engine_registry
-            .get_table_factory(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
-            })?;
-
-        let tbl: Arc<dyn Table> = factory
-            .try_create(
-                table_info,
-                Arc::new(TableDataContext {
-                    in_memory_data: self.in_memory_data.clone(),
-                }),
-            )?
-            .into();
-
-        Ok(tbl)
-    }
 }
 
 impl Catalog for MetaStoreCatalog {
@@ -157,14 +133,14 @@ impl Catalog for MetaStoreCatalog {
 
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_info = self.meta.get_table(db_name, table_name)?;
-        self.build_table_instance(table_info.as_ref().clone())
+        self.build_table(table_info.as_ref())
     }
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.meta.get_tables(db_name)?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.build_table_instance(item.as_ref().clone())?;
+            let tbl = self.build_table(item.as_ref())?;
             acc.push(tbl);
             Ok(acc)
         })
@@ -176,7 +152,7 @@ impl Catalog for MetaStoreCatalog {
         table_version: Option<MetaVersion>,
     ) -> Result<Arc<dyn Table>> {
         let table_info = self.meta.get_table_by_id(table_id, table_version)?;
-        self.build_table_instance(table_info.as_ref().clone())
+        self.build_table(table_info.as_ref())
     }
 
     fn upsert_table_option(
@@ -213,5 +189,26 @@ impl Catalog for MetaStoreCatalog {
         self.meta.drop_database(plan)?;
         self.db_instances.write().remove(&name);
         Ok(())
+    }
+
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let engine = &table_info.engine;
+        let factory = self
+            .table_engine_registry
+            .get_table_factory(engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
+            })?;
+
+        let tbl: Arc<dyn Table> = factory
+            .try_create(
+                table_info.clone(),
+                Arc::new(TableDataContext {
+                    in_memory_data: self.in_memory_data.clone(),
+                }),
+            )?
+            .into();
+
+        Ok(tbl)
     }
 }

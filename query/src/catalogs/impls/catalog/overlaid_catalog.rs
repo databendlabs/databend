@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -131,6 +132,20 @@ impl Catalog for OverlaidCatalog {
 
     fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
         self.bottom.drop_table(plan)
+    }
+
+    fn build_table(&self, table_info: &TableInfo) -> common_exception::Result<Arc<dyn Table>> {
+        let res = self.read_only.build_table(table_info);
+        match res {
+            Ok(t) => Ok(t),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownDatabase("").code() {
+                    self.bottom.build_table(table_info)
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     fn get_table_function(

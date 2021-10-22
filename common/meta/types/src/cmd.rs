@@ -112,11 +112,7 @@ impl fmt::Display for Cmd {
                 db_name,
                 table_name,
             } => {
-                write!(
-                    f,
-                    "delete_table:{}-{}, if_exists:{}",
-                    db_name, table_name, if_exists
-                )
+                write!(f, "delete_table:{}-{}", db_name, table_name)
             }
             Cmd::UpsertKV {
                 key,
