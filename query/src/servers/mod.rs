@@ -24,6 +24,5 @@ pub use self::mysql::MySQLHandler;
 
 mod clickhouse;
 mod http;
-mod http_shutdown_handles;
 mod mysql;
 pub(crate) mod server;

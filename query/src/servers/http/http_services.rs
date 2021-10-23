@@ -21,8 +21,8 @@ use axum::Router;
 use common_base::tokio;
 use common_exception::Result;
 
+use crate::common::service::HttpShutdownHandles;
 use crate::servers::http::v1::statement::statement_router;
-use crate::servers::http_shutdown_handles::HttpShutdownHandles;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 

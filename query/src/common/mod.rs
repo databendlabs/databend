@@ -14,6 +14,7 @@
 
 mod hashtable;
 mod meta;
+pub mod service;
 
 pub use hashtable::*;
 pub use meta::MetaClientProvider;
