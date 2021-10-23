@@ -284,7 +284,7 @@ impl MetaApiTestSuite {
                     let res = mt.get_table(db_name, tbl_name).await;
                     let status = res.err().unwrap();
                     assert_eq!(
-                        format!("Code: 25, displayText = table not found: {}.", tbl_name),
+                        format!("Code: 25, displayText = Unknown table: '{:}'.", tbl_name),
                         status.to_string(),
                         "get dropped table {}",
                         tbl_name
