@@ -23,7 +23,7 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use walkdir::WalkDir;
@@ -76,7 +76,7 @@ impl Table for TracingTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: &Option<Extras>,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
 
@@ -95,9 +95,9 @@ impl Table for TracingTable {
 
         // Default limit.
         let mut limit = 100000000_usize;
-        tracing::debug!("read push_down:{:?}", push_downs);
+        tracing::debug!("read push_down:{:?}", &plan.push_downs);
 
-        if let Some(extras) = push_downs {
+        if let Some(extras) = &plan.push_downs {
             if let Some(limit_push_down) = extras.limit {
                 limit = limit_push_down;
             }

@@ -78,7 +78,7 @@ pub trait Table: Sync + Send {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
@@ -146,6 +146,8 @@ impl ToReadDataSourcePlan for dyn Table {
 
         Ok(ReadDataSourcePlan {
             table_info: table_info.clone(),
+
+            scan_fields: None,
             parts,
             statistics,
             description,

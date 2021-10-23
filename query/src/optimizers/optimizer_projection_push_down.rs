@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
@@ -118,10 +118,11 @@ impl PlanRewriter for ProjectionPushDownImpl {
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         // TODO: rewrite scan
-        self.get_projected_schema(plan.table_info.schema.as_ref())
-            .map(|projected_schema| {
+        self.get_projected_fields(plan.table_info.schema.as_ref())
+            .map(|projected_fields| {
                 PlanNode::ReadSource(ReadDataSourcePlan {
-                    table_info: plan.table_info.clone().schema(projected_schema),
+                    table_info: plan.table_info.clone(),
+                    scan_fields: Some(projected_fields),
                     parts: plan.parts.clone(),
                     statistics: plan.statistics.clone(),
                     description: plan.description.to_string(),
@@ -156,14 +157,16 @@ impl ProjectionPushDownImpl {
     fn collect_column_names_from_expr(&mut self, expr: &Expression) -> Result<()> {
         let mut visitor = RequireColumnsVisitor::default();
         visitor = expr.accept(visitor)?;
+
         for k in visitor.required_columns {
             self.required_columns.insert(k);
         }
         Ok(())
     }
 
-    fn get_projected_schema(&self, schema: &DataSchema) -> Result<DataSchemaRef> {
+    fn get_projected_fields(&self, schema: &DataSchema) -> Result<BTreeMap<usize, DataField>> {
         // Discard non-existing columns, e.g. when the column derives from aggregation
+
         let mut projection: Vec<usize> = self
             .required_columns
             .iter()
@@ -178,23 +181,17 @@ impl ProjectionPushDownImpl {
             } else {
                 // for table scan without projection
                 // just return all columns
-                projection = schema
-                    .fields()
-                    .iter()
-                    .enumerate()
-                    .map(|(i, _)| i)
-                    .collect::<Vec<usize>>();
+                return Ok(schema.fields_map());
             }
         }
-        // sort the projection to get deterministic behavior
-        projection.sort_unstable();
 
-        // create the projected schema
-        let mut projected_fields: Vec<DataField> = Vec::with_capacity(projection.len());
+        let mut res = BTreeMap::new();
+
         for i in &projection {
-            projected_fields.push(schema.fields()[*i].clone());
+            res.insert(*i, schema.fields()[*i].clone());
         }
-        Ok(DataSchemaRefExt::create(projected_fields))
+
+        Ok(res)
     }
 }
 

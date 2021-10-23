@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::fmt;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -53,6 +54,11 @@ impl DataSchema {
     #[inline]
     pub const fn fields(&self) -> &Vec<DataField> {
         &self.fields
+    }
+
+    pub fn fields_map(&self) -> BTreeMap<usize, DataField> {
+        let x = self.fields().iter().cloned().enumerate();
+        x.collect::<BTreeMap<_, _>>()
     }
 
     /// Returns an immutable reference of a specific `Field` instance selected using an

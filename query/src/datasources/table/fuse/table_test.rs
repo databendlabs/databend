@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
+use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
@@ -61,7 +62,18 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     // inject partitions to current ctx
     ctx.try_set_partitions(parts)?;
 
-    let stream = table.read(io_ctx, &None).await?;
+    let stream = table
+        .read(io_ctx, &ReadDataSourcePlan {
+            table_info: Default::default(),
+            scan_fields: None,
+            parts: Default::default(),
+            statistics: Default::default(),
+            description: "".to_string(),
+            scan_plan: Arc::new(Default::default()),
+            tbl_args: None,
+            push_downs: None,
+        })
+        .await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
     assert_eq!(rows, num_blocks as usize * 3);

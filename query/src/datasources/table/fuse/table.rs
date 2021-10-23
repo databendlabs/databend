@@ -27,6 +27,7 @@ use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::Partitions;
+use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
@@ -75,9 +76,9 @@ impl Table for FuseTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        push_downs: &Option<Extras>,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        self.do_read(io_ctx, push_downs).await
+        self.do_read(io_ctx, &plan.push_downs).await
     }
 
     async fn append_data(

@@ -23,6 +23,7 @@ use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Part;
 use common_planners::Partitions;
+use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -76,7 +77,7 @@ impl Table for OneTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block =
             DataBlock::create_by_array(self.table_info.schema.clone(), vec![Series::new(vec![

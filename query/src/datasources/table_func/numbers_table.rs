@@ -29,6 +29,7 @@ use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
+use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
@@ -132,7 +133,7 @@ impl Table for NumbersTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?

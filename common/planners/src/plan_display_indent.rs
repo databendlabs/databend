@@ -208,7 +208,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             f,
             "ReadDataSource: scan partitions: [{}], scan schema: {}, statistics: [read_rows: {:?}, read_bytes: {:?}]",
             plan.parts.len(),
-            PlanNode::display_schema(plan.table_info.schema.as_ref()),
+            PlanNode::display_scan_fields(&plan.scan_fields()),
             plan.statistics.read_rows,
             plan.statistics.read_bytes,
         )

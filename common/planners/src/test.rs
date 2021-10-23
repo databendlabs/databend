@@ -46,6 +46,7 @@ impl Test {
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
             table_info: TableInfo::simple("system", "numbers_mt", schema),
+            scan_fields: None,
             parts: Self::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
