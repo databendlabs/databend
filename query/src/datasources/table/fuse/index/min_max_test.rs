@@ -114,7 +114,7 @@ async fn test_min_max_index() -> Result<()> {
     // fully pruned
     let mut extra = Extras::default();
     let pred = col("a").gt(lit(30));
-    extra.filters = vec![pred];
+    extra.filters = Some(pred);
 
     let blocks = range_filter(
         &snapshot,
@@ -127,7 +127,7 @@ async fn test_min_max_index() -> Result<()> {
     // one block pruned
     let mut extra = Extras::default();
     let pred = col("a").gt(lit(3)).and(col("b").gt(lit(3)));
-    extra.filters = vec![pred];
+    extra.filters = Some(pred);
 
     let blocks = range_filter(
         &snapshot,

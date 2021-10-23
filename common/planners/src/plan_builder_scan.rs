@@ -61,7 +61,7 @@ impl PlanBuilder {
             table_args: table_scan_info.table_args,
             push_downs: Extras {
                 projection,
-                filters: vec![],
+                filters: None,
                 limit,
             },
         })))

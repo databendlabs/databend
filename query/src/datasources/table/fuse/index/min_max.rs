@@ -54,12 +54,11 @@ impl MinMaxIndex {
         let pred_true: fn() -> Pred = || Box::new(|_: &BlockStats| Ok(true));
 
         let block_pred: Pred = if let Some(exprs) = push_down {
-            if exprs.filters.is_empty() {
-                pred_true()
-            } else {
-                // for the time being, we only handle the first expr
-                let verifiable_expression = RangeFilter::try_create(&exprs.filters[0], schema)?;
+            if let Some(expr) = exprs.filters {
+                let verifiable_expression = RangeFilter::try_create(&expr, schema)?;
                 Box::new(move |v: &BlockStats| verifiable_expression.eval(v))
+            } else {
+                pred_true()
             }
         } else {
             pred_true()
