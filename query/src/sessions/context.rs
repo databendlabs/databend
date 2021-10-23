@@ -27,8 +27,6 @@ use common_context::TableIOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::NodeInfo;
 use common_planners::Part;
 use common_planners::Partitions;
@@ -155,14 +153,6 @@ impl DatabendQueryContext {
     /// ```
     pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
         self.shared.get_table(database, table)
-    }
-
-    pub fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_ver: Option<MetaVersion>,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_catalog().get_table_by_id(table_id, table_ver)
     }
 
     pub fn get_table_function(

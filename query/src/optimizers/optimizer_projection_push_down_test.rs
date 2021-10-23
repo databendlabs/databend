@@ -101,6 +101,7 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
                 DataField::new("c", DataType::String, false),
             ]),
         ),
+        scan_fields: None,
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
@@ -159,6 +160,7 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
                 DataField::new("g", DataType::String, false),
             ]),
         ),
+        scan_fields: None,
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(

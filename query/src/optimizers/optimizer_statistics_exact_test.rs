@@ -44,6 +44,7 @@ mod tests {
                     DataField::new("c", DataType::String, false),
                 ]),
             ),
+            scan_fields: None,
             parts: generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
