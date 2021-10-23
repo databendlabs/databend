@@ -20,28 +20,28 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 // TODO(youngsofun): refactor http_services in api and metrics to remove duplicated code
-pub struct HttpServer {
+pub struct HttpShutdownHandles {
     service_name: String,
     join_handle: Option<JoinHandle<std::io::Result<()>>>,
-    pub(crate) abort_handler: Handle,
+    pub(crate) abort_handle: Handle,
 }
 
-impl HttpServer {
-    pub(crate) fn create(service_name: String) -> HttpServer {
-        HttpServer {
+impl HttpShutdownHandles {
+    pub(crate) fn create(service_name: String) -> HttpShutdownHandles {
+        HttpShutdownHandles {
             service_name,
             join_handle: None,
-            abort_handler: axum_server::Handle::new(),
+            abort_handle: axum_server::Handle::new(),
         }
     }
-    pub async fn start_server(
+    pub async fn try_listen(
         &mut self,
         join_handler: JoinHandle<std::io::Result<()>>,
     ) -> Result<SocketAddr> {
         self.join_handle = Some(join_handler);
-        self.abort_handler.listening().await;
+        self.abort_handle.listening().await;
 
-        match self.abort_handler.listening_addrs() {
+        match self.abort_handle.listening_addrs() {
             None => Err(ErrorCode::CannotListenerPort("")),
             Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
             Some(addresses) => {
@@ -57,7 +57,7 @@ impl HttpServer {
         }
     }
     pub async fn shutdown(&mut self) {
-        self.abort_handler.graceful_shutdown();
+        self.abort_handle.graceful_shutdown();
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
