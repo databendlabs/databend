@@ -1,10 +1,12 @@
 <div align="center">
 <h1>Databend</h1>
-<strong>The Open Source Cloud Warehouse for Everyone</strong>
-<br>
- https://databend.rs
-<br>
-<br>
+<p align="center">The Open Source Cloud Warehouse for Everyone</p>
+ 
+<h4 align="center">
+  <a href="https://databend.rs">Website</a> |
+  <a href="https://github.com/datafuselabs/databend/issues/746">Roadmap</a> |
+  <a href="https://databend.rs/overview/building-and-running/">Documentation</a>
+</h4>
 
 <div>
 <a href="https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA">
