@@ -21,21 +21,21 @@ use axum::Router;
 use common_base::tokio;
 use common_exception::Result;
 
-use crate::common::service::HttpShutdownHandles;
+use crate::common::service::HttpShutdownHandler;
 use crate::servers::http::v1::statement::statement_router;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 
 pub struct HttpHandler {
     session_manager: SessionManagerRef,
-    shutdown_handles: HttpShutdownHandles,
+    shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpHandler {
     pub fn create(session_manager: SessionManagerRef) -> Box<dyn Server> {
         Box::new(HttpHandler {
             session_manager,
-            shutdown_handles: HttpShutdownHandles::create("HttpHandler".to_string()),
+            shutdown_handler: HttpShutdownHandler::create("HttpHandler".to_string()),
         })
     }
     fn build_router(&self) -> Router<BoxRoute> {
@@ -47,17 +47,17 @@ impl HttpHandler {
     }
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         let server = axum_server::bind(listening.to_string())
-            .handle(self.shutdown_handles.abort_handle.clone())
+            .handle(self.shutdown_handler.abort_handle.clone())
             .serve(self.build_router());
 
-        self.shutdown_handles.try_listen(tokio::spawn(server)).await
+        self.shutdown_handler.try_listen(tokio::spawn(server)).await
     }
 }
 
 #[async_trait::async_trait]
 impl Server for HttpHandler {
     async fn shutdown(&mut self) {
-        self.shutdown_handles.shutdown().await;
+        self.shutdown_handler.shutdown().await;
     }
 
     async fn start(&mut self, listening: SocketAddr) -> common_exception::Result<SocketAddr> {

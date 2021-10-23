@@ -19,16 +19,15 @@ use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-// TODO(youngsofun): refactor http_services in api and metrics to remove duplicated code
-pub struct HttpShutdownHandles {
+pub struct HttpShutdownHandler {
     service_name: String,
     join_handle: Option<JoinHandle<std::io::Result<()>>>,
     pub(crate) abort_handle: Handle,
 }
 
-impl HttpShutdownHandles {
-    pub(crate) fn create(service_name: String) -> HttpShutdownHandles {
-        HttpShutdownHandles {
+impl HttpShutdownHandler {
+    pub(crate) fn create(service_name: String) -> HttpShutdownHandler {
+        HttpShutdownHandler {
             service_name,
             join_handle: None,
             abort_handle: axum_server::Handle::new(),

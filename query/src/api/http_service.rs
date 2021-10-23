@@ -37,21 +37,21 @@ use tokio_rustls::rustls::PrivateKey;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::ServerConfig;
 
-use crate::common::service::HttpShutdownHandles;
+use crate::common::service::HttpShutdownHandler;
 use crate::configs::Config;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 
 pub struct HttpService {
     sessions: SessionManagerRef,
-    shutdown_handles: HttpShutdownHandles,
+    shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpService {
     pub fn create(sessions: SessionManagerRef) -> Box<HttpService> {
         Box::new(HttpService {
             sessions,
-            shutdown_handles: HttpShutdownHandles::create("HttpAPIService".to_string()),
+            shutdown_handler: HttpShutdownHandler::create("HttpAPIService".to_string()),
         })
     }
 
@@ -147,11 +147,11 @@ impl HttpService {
         let loader = Self::tls_loader(self.sessions.get_conf());
 
         let server = axum_server::bind_rustls(listening.to_string())
-            .handle(self.shutdown_handles.abort_handle.clone())
+            .handle(self.shutdown_handler.abort_handle.clone())
             .loader(loader.await?)
             .serve(self.build_router());
 
-        self.shutdown_handles.try_listen(tokio::spawn(server)).await
+        self.shutdown_handler.try_listen(tokio::spawn(server)).await
     }
 
     async fn tls_loader(config: &Config) -> Result<TlsLoader> {
@@ -171,17 +171,17 @@ impl HttpService {
         log::warn!("Http API TLS not set");
 
         let server = axum_server::bind(listening.to_string())
-            .handle(self.shutdown_handles.abort_handle.clone())
+            .handle(self.shutdown_handler.abort_handle.clone())
             .serve(self.build_router());
 
-        self.shutdown_handles.try_listen(tokio::spawn(server)).await
+        self.shutdown_handler.try_listen(tokio::spawn(server)).await
     }
 }
 
 #[async_trait::async_trait]
 impl Server for HttpService {
     async fn shutdown(&mut self) {
-        self.shutdown_handles.shutdown().await;
+        self.shutdown_handler.shutdown().await;
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {

@@ -29,12 +29,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::PrometheusHandle;
 
-use crate::common::service::HttpShutdownHandles;
+use crate::common::service::HttpShutdownHandler;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 
 pub struct MetricService {
-    shutdown_handles: HttpShutdownHandles,
+    shutdown_handler: HttpShutdownHandler,
 }
 
 pub struct MetricTemplate {
@@ -68,7 +68,7 @@ impl MetricService {
     // TODO add session tls handler
     pub fn create(_sessions: SessionManagerRef) -> Box<MetricService> {
         Box::new(MetricService {
-            shutdown_handles: HttpShutdownHandles::create("HttpHandler".to_string()),
+            shutdown_handler: HttpShutdownHandler::create("HttpHandler".to_string()),
         })
     }
 
@@ -78,16 +78,16 @@ impl MetricService {
         })?;
         let app = build_router!(prometheus_handle);
         let server = axum_server::bind(listening.to_string())
-            .handle(self.shutdown_handles.abort_handle.clone())
+            .handle(self.shutdown_handler.abort_handle.clone())
             .serve(app);
-        self.shutdown_handles.try_listen(tokio::spawn(server)).await
+        self.shutdown_handler.try_listen(tokio::spawn(server)).await
     }
 }
 
 #[async_trait::async_trait]
 impl Server for MetricService {
     async fn shutdown(&mut self) {
-        self.shutdown_handles.shutdown().await;
+        self.shutdown_handler.shutdown().await;
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
