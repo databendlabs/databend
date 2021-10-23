@@ -88,7 +88,7 @@ walkdir = "2.3.2"
 axum = {version = "0.2.8", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 byteorder = "1"
-hyper = "0.14.13"
+hyper = "0.14.14"
 headers = "0.3.4"
 tokio-rustls = "0.22.0"
 axum-server = { version = "0.2", features = ["tls-rustls"] }
