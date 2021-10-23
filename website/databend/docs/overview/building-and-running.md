@@ -8,19 +8,20 @@ This document describes how to build and run [DatabendQuery](https://github.com/
 
 ## 1. Deploy
 
-=== "Run with Docker(Recommended)"
-
-    ```markdown
-    $ docker pull datafuselabs/databend
-    $ docker run --init --rm -p 3307:3307 datafuselabs/databend
-    ```
 
 === "Release binary"
 
     ```markdown
     $ curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
     $ export PATH="${HOME}/.databend/bin:${PATH}"
-    $ bendctl cluster create --profile local
+    $ bendctl cluster create
+    ```
+
+=== "Run with Docker(Recommended)"
+
+    ```markdown
+    $ docker pull datafuselabs/databend
+    $ docker run --init --rm -p 3307:3307 datafuselabs/databend
     ```
 
 === "From source"
