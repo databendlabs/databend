@@ -462,7 +462,7 @@ http_download_curl() {
   else
     code=$(curl -w '%{http_code}' -L -H "$header" -o "$local_file" "$source_url")
   fi
-  if [ "$(( "$code" / 100 ))" != "2" ] && [ "$(( "$code" / 100 ))" != "3" ]; then
+  if [ "$(( $code / 100 ))" != 2 ] && [ "$(( $code / 100 ))" != 3 ]; then
     log_debug "http_download_curl received HTTP status $code"
     return 1
   fi
@@ -542,25 +542,27 @@ path_hint() {
     log_info '   export PATH="'"${HOME}"/"${BINDIR}"':${PATH}"'
 }
 
+
+
 choose_mirror() {
   code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "$GITHUB_TAG")
-  if [ "$(( "$code" / 100))" != "2" ] && [ "$(( "$code" / 100))" != "3" ]; then
+  if [ "$(( $code / 100))" != 2 ] && [ "$(( $code / 100))" != 3 ]; then
     echo "mirror in $GITHUB_TAG not available"
     # switch to repo.databend.rs
-    GITHUB_DOWNLOAD=https://repo.databend.rs/databend
-    GITHUB_TAG=https://repo.databend.rs/databend/tags.json
+    DATABEND_REPO=datafuselabs/databend
+    GITHUB_DOWNLOAD=https://github.com/${DATABEND_REPO}/releases/download
+    GITHUB_TAG=https://api.github.com/repos/${DATABEND_REPO}/tags
   fi
   code=$(curl -s -o /dev/null -w "%{http_code}" -m 3 "$GITHUB_TAG")
-  if [ "$(( "$code" / 100))" != "2" ] && [ "$(( "$code" / 100))" != "3" ]; then
+  if [ "$(( $code / 100))" != "2" ] && [ "$(( $code / 100))" != 3 ]; then
     echo "mirror in $GITHUB_TAG not available"
     return 1
   fi
   return 0
 }
 
-DATABEND_REPO=datafuselabs/databend
-GITHUB_DOWNLOAD=https://github.com/${DATABEND_REPO}/releases/download
-GITHUB_TAG=https://api.github.com/repos/${DATABEND_REPO}/tags
+GITHUB_DOWNLOAD=https://repo.databend.rs/databend
+GITHUB_TAG=https://repo.databend.rs/databend/tags.json
 
 main(){
   local _status _target _version _url _name
