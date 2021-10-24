@@ -105,12 +105,8 @@ impl<T: MetaApiSync, U: Deref<Target = T> + Send + Sync> MetaApiSync for U {
         self.deref().get_tables(db_name)
     }
 
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableInfo>> {
-        self.deref().get_table_by_id(table_id, table_version)
+    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>> {
+        self.deref().get_table_by_id(table_id)
     }
 
     fn upsert_table_option(

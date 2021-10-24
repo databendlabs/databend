@@ -116,14 +116,10 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
-    ) -> common_exception::Result<Arc<dyn Table>> {
+    fn get_table_by_id(&self, table_id: MetaId) -> common_exception::Result<Arc<dyn Table>> {
         self.read_only
-            .get_table_by_id(table_id, table_version)
-            .or_else(|_e| self.bottom.get_table_by_id(table_id, table_version))
+            .get_table_by_id(table_id)
+            .or_else(|_e| self.bottom.get_table_by_id(table_id))
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {

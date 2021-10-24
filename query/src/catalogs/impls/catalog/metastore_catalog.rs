@@ -146,12 +146,8 @@ impl Catalog for MetaStoreCatalog {
         })
     }
 
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
-    ) -> Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table_by_id(table_id, table_version)?;
+    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<dyn Table>> {
+        let table_info = self.meta.get_table_by_id(table_id)?;
         self.build_table(table_info.as_ref())
     }
 

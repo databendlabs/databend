@@ -225,11 +225,7 @@ impl MetaApi for MetaEmbedded {
             .collect::<Vec<_>>())
     }
 
-    async fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        _table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableInfo>> {
+    async fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>> {
         let sm = self.inner.lock().await;
         let table = sm.get_table(&table_id)?.ok_or_else(|| {
             ErrorCode::UnknownTable(format!("table of id {} not found", table_id))
