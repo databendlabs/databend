@@ -82,29 +82,10 @@ impl QueryCommand {
                     .default_value("local"),
             )
             .arg(
-                Arg::new("client")
-                    .long("client")
-                    .about(
-                        "Set the query client to run query, support mysql and clickshouse client",
-                    )
-                    .takes_value(true)
-                    .possible_values(&["mysql", "clickhouse"])
-                    .default_value("mysql")
-                    .env(CLI_QUERY_CLIENT),
-            )
-            .arg(
                 Arg::new("query")
                     .about("Query statements to run")
                     .takes_value(true)
                     .required(true),
-            )
-            .arg(
-                Arg::new("file")
-                    .short('f')
-                    .long("file")
-                    .about("execute query commands from file")
-                    .takes_value(true)
-                    .required(false),
             );
         app
     }
