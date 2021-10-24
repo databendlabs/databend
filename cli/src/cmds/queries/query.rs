@@ -33,6 +33,8 @@ use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
+use std::net::SocketAddr;
+use comfy_table::{Table, Cell, Color};
 
 pub const CLI_QUERY_CLIENT: &str = "CLI_QUERY_CLIENT";
 
@@ -90,13 +92,13 @@ impl QueryCommand {
         app
     }
 
-    pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub(crate) async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let profile = matches.value_of_t("profile");
                 match profile {
                     Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches);
+                        return self.local_exec_match(writer, matches).await;
                     }
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
@@ -111,23 +113,22 @@ impl QueryCommand {
         Ok(())
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
+    async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args) {
             Ok(_) => {
                 writer.write_ok("Query precheck passed!");
                 let status = Status::read(self.conf.clone())?;
-                if args.value_of("file").is_none() {
                     if let Some(query) = args.value_of("query") {
-                        let url = build_query_url(args, &status);
-                        if let Ok(url) = url {
+                        let res = build_query_endpoint(&status);
+                        if let Ok((cli, url)) = res {
                             writer.write_ok(format!("Execute query {} on {}", query, url).as_str());
                             match execute_query(
-                                status.query_path.unwrap(),
+                                cli,
                                 url,
                                 query.parse().unwrap(),
-                            ) {
+                            ).await {
                                 Ok(res) => {
-                                    writer.write_ok(res.as_str());
+                                    writer.writeln(res.trim_fmt().as_str());
                                 }
                                 Err(e) => {
                                     writer.write_err(format!("Query command error: cannot execute query with error: {:?}", e).as_str());
@@ -138,7 +139,7 @@ impl QueryCommand {
                             writer.write_err(
                                 format!(
                                     "Query command error: cannot parse query url with error: {:?}",
-                                    url.unwrap_err()
+                                    res.unwrap_err()
                                 )
                                 .as_str(),
                             );
@@ -147,9 +148,6 @@ impl QueryCommand {
                         writer.write_err("Query command error: cannot find SQL argument!");
                         return Ok(());
                     }
-                } else {
-                    todo!()
-                }
 
                 Ok(())
             }
@@ -179,60 +177,44 @@ impl QueryCommand {
     }
 }
 
-pub fn build_query_url(matches: &ArgMatches, status: &Status) -> Result<String> {
-    let client = matches.value_of_t("client");
+// TODO(zhihanz) mTLS support
+pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)> {
     let query_configs = status.get_local_query_configs();
 
     let (_, query) = query_configs.get(0).expect("cannot find query configs");
-    if let Ok(client) = client {
-        let url = match client {
-            QueryClient::Mysql => {
-                let scheme = "mysql";
-                format!(
-                    "{}://{}:{}@{}:{}",
-                    scheme,
-                    query.config.meta.meta_username,
-                    query.config.meta.meta_password,
-                    query.config.query.mysql_handler_host,
-                    query.config.query.mysql_handler_port
-                )
-            }
-            QueryClient::Clickhouse => {
-                let scheme = "clickhouse";
-                format!(
-                    "{}://{}:{}@{}:{}",
-                    scheme,
-                    query.config.meta.meta_username,
-                    query.config.meta.meta_password,
-                    query.config.query.clickhouse_handler_host,
-                    query.config.query.clickhouse_handler_port
-                )
-            }
-        };
-        Ok(url)
-    } else {
-        Err(CliError::Unknown(
-            "Query command error: cannot get query client".to_string(),
-        ))
-    }
+    let client = reqwest::Client::builder()
+        .build()
+        .expect("Cannot build query client");
+
+    let url = {
+        if query.config.query.api_tls_server_key.is_empty() || query.config.query.api_tls_server_cert.is_empty(){
+            let address = format!("{}:{}", query.config.query.http_handler_host, query.config.query.http_handler_port).parse::<SocketAddr>().expect("cannot build query socket address");
+            format!("http://{}:{}/v1/statement", address.ip(), address.port())
+        } else {
+            todo!()
+        }
+    };
+    Ok((client, url))
 }
 
-fn execute_query(bin_path: String, url: String, query: String) -> Result<String> {
-    let mut command = std::process::Command::new(bin_path);
-    command.args([url.as_str(), "-c", query.as_str()]);
-    // Tell the OS to record the command's output
-    command.stdout(Stdio::piped()).stderr(Stdio::null());
-    // execute the command, wait for it to complete, then capture the output
-    return match command.output() {
-        Ok(output) => {
-            let stdout = String::from_utf8(output.stdout).unwrap().trim().to_string();
-            Ok(stdout)
+async fn execute_query(cli: reqwest::Client, url: String, query: String) -> Result<Table> {
+   let ans = cli.post(url).body(query).send().await.expect("cannot post to http handler").json::<databend_query::servers::http::v1::statement::HttpQueryResult>().await;
+    if let Err(e) = ans {
+        return Err(CliError::Unknown(format!("Cannot retrieve query result: {:?}", e)))
+    } else {
+        let ans = ans.unwrap();
+        let mut table = Table::new();
+        table.load_preset("||--+-++|    ++++++");
+        if let Some(column) = ans.columns {
+            table.set_header(column.fields().iter().map(|field| Cell::new(field.name().as_str()).fg(Color::Green)));
         }
-        Err(e) => Err(CliError::Unknown(format!(
-            "Query command error: cannot execute query, error : {:?}",
-            e
-        ))),
-    };
+        if let Some(rows) = ans.data {
+            for row in rows {
+                table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
+            }
+        }
+        Ok(table)
+    }
 }
 
 #[async_trait]
@@ -257,7 +239,7 @@ impl Command for QueryCommand {
         }
         match self.clap.clone().try_get_matches_from(words.unwrap()) {
             Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow()));
+                return self.exec_match(writer, Some(matches.borrow())).await;
             }
             Err(err) => {
                 println!("Cannot get subcommand matches: {}", err);

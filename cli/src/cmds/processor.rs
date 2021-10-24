@@ -102,7 +102,7 @@ impl Processor {
                 cmd.exec_match(
                     &mut writer,
                     self.env.conf.clone().clap.subcommand_matches("query"),
-                )
+                ).await
             }
             Some("completion") => {
                 if let Some(generator) = self

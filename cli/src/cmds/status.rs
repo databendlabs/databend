@@ -406,7 +406,7 @@ impl LocalRuntime for LocalQueryConfig {
             conf.query.http_handler_host,
         ).env(
             databend_query::configs::config_query::QUERY_HTTP_HANDLER_PORT,
-            conf.query.http_handler_port,
+            conf.query.http_handler_port.to_string(),
         )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });

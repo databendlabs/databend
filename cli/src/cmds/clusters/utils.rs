@@ -19,6 +19,7 @@ use crate::cmds::Status;
 use crate::error::CliError;
 use crate::error::Result;
 
+// TODO(zhihanz) unit tests
 pub fn get_profile(status: Status, profile: Option<&str>) -> Result<ClusterProfile> {
     match profile {
         Some("local") => Ok(ClusterProfile::Local),
